@@ -2,7 +2,7 @@
 
 The definition foundation of a metadata-driven PHP data layer.
 
-`ON\Data` currently ships the standalone definition subsystem extracted from Overnight plus the support layers needed to store, restore, convert, and shallow-map data as plain PHP arrays and `stdClass` objects.
+`ON\Data` currently ships the standalone definition subsystem extracted from Overnight plus the support layers needed to store, restore, convert, and shallow-map data as plain PHP arrays, `stdClass` objects, and public-property DTOs.
 
 ## Status
 
@@ -18,7 +18,10 @@ This repository currently includes:
 - the `ON\Data\Key` value object for simple and composite identities;
 - the standalone FieldType, representation, and conversion gateway foundation under `ON\Data\Mapper`;
 - `MapperManager`, `MappingContext`, and the fluent `map()` / `MapBuilder` entry point;
-- generic collection mapping and shallow array-to-`stdClass` / `stdClass`-to-array structural mapping;
+- generic collection mapping;
+- shallow array-to-`stdClass` / `stdClass`-to-array structural mapping;
+- shallow array-to-object / object-to-array DTO mapping through public instance properties;
+- mapper attributes `MapFrom`, `MapTo`, and `Hidden` for shallow DTO mapping;
 - tests and quality tooling.
 
 Definition arrays are now canonical at creation time. Names are stored only as owner-map keys, every stored wrapper is created by its owner over a final array slot, restored arrays must already be canonical, and old caches using legacy field-level `pk` flags should be discarded and regenerated.
@@ -28,7 +31,7 @@ Not implemented yet:
 - semantic view fields and expressions;
 - query execution;
 - persistence and ORM adapters;
-- typed DTO/object structural mapping beyond shallow `stdClass` support;
+- nested DTO graphs, typed object lists, constructor hydration, and readonly-target hydration;
 - big-integer, decimal, enum, and date-oriented FieldTypes.
 
 ## Namespace

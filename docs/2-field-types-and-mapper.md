@@ -1,8 +1,8 @@
 # Field Types and Mapper Runtime
 
-`ON\Data` now includes the Phase 1 scalar conversion foundation plus the Phase 2 structural mapper runtime under `ON\Data\Mapper`.
+`ON\Data` now includes the Phase 1 scalar conversion foundation plus the Phase 2 and Phase 3A structural mapper runtime under `ON\Data\Mapper`.
 
-The current mapper layer is intentionally shallow. It supports mapper registration and selection, collection mapping, and array/`stdClass` structural mapping, but it does not yet implement typed DTO hydration, nested object graphs, or definition-aware row mapping.
+The current mapper layer is intentionally shallow. It supports mapper registration and selection, collection mapping, array/`stdClass` structural mapping, and public-property DTO mapping, but it does not yet implement nested object graphs or definition-aware row mapping.
 
 ## Canonical representations
 
@@ -183,6 +183,8 @@ The default mapper set is intentionally small:
 
 - `ON\Data\Mapper\ArrayToStdClassMapper`
 - `ON\Data\Mapper\StdClassToArrayMapper`
+- `ON\Data\Mapper\ArrayToObjectMapper`
+- `ON\Data\Mapper\ObjectToArrayMapper`
 
 Automatic selection uses each mapper's static `canMap()` method in registration order. Explicit `using()` selection skips unrelated mapper scans and validates that the chosen mapper can handle the requested operation.
 
@@ -234,6 +236,12 @@ Map to a structural target:
 
 ```php
 $user = map(['id' => 10, 'name' => 'Ada'])->to(stdClass::class);
+```
+
+Map to a shallow DTO:
+
+```php
+$user = map(['id' => 10, 'name' => 'Ada'])->to(UserDto::class);
 ```
 
 Configure the source representation explicitly:
@@ -296,17 +304,118 @@ $json = map($stdClass)->toJson();
 
 `toArray()` maps through the registered structural mappers when needed. `toJson()` encodes the resulting array as JSON and is useful for shallow export scenarios.
 
+## Public-property DTO mapping
+
+Phase 3A adds shallow mapping for concrete classes with public instance properties:
+
+```php
+use function ON\Data\Mapper\map;
+
+$dto = map([
+    'id' => 10,
+    'name' => 'Ada',
+])->to(UserDto::class);
+
+$payload = map($dto)->toArray();
+```
+
+Inbound rules:
+
+- the target must be a concrete non-enum, non-interface, non-abstract class;
+- the target constructor is bypassed with reflection and is not invoked;
+- only public instance properties are considered;
+- static, private, and protected properties are ignored;
+- unknown source keys are ignored;
+- missing keys leave defaults and uninitialized typed properties untouched;
+- `stdClass` still routes through the dedicated `stdClass` mapper.
+
+Outbound rules:
+
+- only public instance properties are exported;
+- uninitialized typed properties are skipped;
+- explicit `null` values are preserved;
+- the result is always a plain array.
+
+## Mapping attributes
+
+Phase 3A includes three property-only attributes:
+
+- `ON\Data\Mapper\Attribute\MapFrom` remaps one inbound source key to a public property name.
+- `ON\Data\Mapper\Attribute\MapTo` remaps one outbound property name to a different array key.
+- `ON\Data\Mapper\Attribute\Hidden` omits a public property from outbound object-to-array mapping.
+
+Example:
+
+```php
+use ON\Data\Mapper\Attribute\Hidden;
+use ON\Data\Mapper\Attribute\MapFrom;
+use ON\Data\Mapper\Attribute\MapTo;
+
+final class UserDto
+{
+    public int $id;
+
+    #[MapFrom('full_name')]
+    #[MapTo('full_name')]
+    public string $name;
+
+    #[Hidden]
+    public string $password;
+}
+```
+
+Empty `MapFrom` and `MapTo` names are rejected.
+
+## Representation-aware primitive conversion
+
+Structural DTO mapping stays representation-neutral by default:
+
+```php
+map(['id' => '10'])->to(UserDto::class);
+```
+
+The example above does not reinterpret scalar values automatically.
+
+Primitive conversion only happens when a representation boundary is declared explicitly:
+
+```php
+use ON\Data\Mapper\Representation\WireRepresentation;
+
+$dto = map($payload)
+    ->from(WireRepresentation::class)
+    ->to(UserInputDto::class);
+
+$array = map($dto)
+    ->as(WireRepresentation::class)
+    ->toArray();
+```
+
+Phase 3A converts only public properties declared as:
+
+- `string`
+- `int`
+- `bool`
+- `float`
+
+Nullable primitives preserve `null`. Untyped, `mixed`, union, intersection, and class-typed properties are left unchanged in this phase.
+
 ## Current shallow-mapper limitations
 
 The built-in structural mappers are intentionally narrow:
 
 - `ArrayToStdClassMapper` maps one array to one `stdClass`;
 - `StdClassToArrayMapper` maps one `stdClass` to one array;
+- `ArrayToObjectMapper` maps one array to one concrete object with public instance properties;
+- `ObjectToArrayMapper` maps one non-`stdClass` object to one array through public instance properties;
 - both mappers are shallow only;
 - nested DTO/object mapping is not implemented;
-- attributes and custom property metadata are not implemented;
-- FieldType inference is not used by the shallow structural mappers;
-- generic object-to-array mapping beyond `stdClass` is not implemented;
+- lists of typed nested objects are not implemented;
+- PHPDoc parsing is not implemented;
+- dot-path expansion is not implemented;
+- constructor-argument hydration and setters are not implemented;
+- private-property mutation is not implemented;
+- readonly-target hydration is not implemented;
+- arbitrary value-object FieldTypes are not implemented;
 - definition-aware row mapping is not implemented.
 
 ## Boundaries
@@ -328,8 +437,7 @@ Definition arrays remain plain data. Conversion runtime objects are not stored i
 
 The following are intentionally not implemented yet:
 
-- typed DTO/object mapping
 - nested object mapping
-- generic object-to-array mapping beyond `stdClass`
+- list and graph mapping for typed objects
 - definition-row mapping
-- attribute-driven mapping rules
+- constructor and readonly hydration beyond public-property assignment

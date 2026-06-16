@@ -50,6 +50,8 @@ final class MapperManager
 		$manager = new self($gateway, $constructor);
 		$manager->register(ArrayToStdClassMapper::class);
 		$manager->register(StdClassToArrayMapper::class);
+		$manager->register(ArrayToObjectMapper::class);
+		$manager->register(ObjectToArrayMapper::class);
 
 		return $manager;
 	}

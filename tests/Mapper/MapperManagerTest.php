@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Mapper;
 
+use ON\Data\Mapper\ArrayToObjectMapper;
+use ON\Data\Mapper\ArrayToStdClassMapper;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\DuplicateMapperRegistrationException;
 use ON\Data\Mapper\Exception\IncompatibleMapperException;
@@ -15,6 +17,8 @@ use ON\Data\Mapper\FieldTypeRegistry;
 use ON\Data\Mapper\MapperInterface;
 use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\ObjectToArrayMapper;
+use ON\Data\Mapper\StdClassToArrayMapper;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Fixture\CustomMapper;
@@ -153,6 +157,21 @@ final class MapperManagerTest extends TestCase
 		self::assertSame('Ada', $result->name);
 		self::assertSame(1, MapperTestState::$canMapCalls[NeverMapper::class] ?? 0);
 		self::assertSame(1, MapperTestState::$canMapCalls[SpyArrayToStdClassMapper::class] ?? 0);
+	}
+
+	public function testCreateDefaultRegistersMappersInSpecificityOrder(): void
+	{
+		$manager = MapperManager::createDefault($this->gateway());
+
+		self::assertSame(
+			[
+				ArrayToStdClassMapper::class,
+				StdClassToArrayMapper::class,
+				ArrayToObjectMapper::class,
+				ObjectToArrayMapper::class,
+			],
+			$manager->getRegisteredMappers(),
+		);
 	}
 
 	public function testExplicitUsingSelection(): void
