@@ -1,0 +1,6 @@
+/vendor/
+/.cache/
+/coverage/
+/.phpunit.result.cache
+/composer.lock
+/%TEMP%/
