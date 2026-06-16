@@ -84,13 +84,16 @@ final class RegistryCollectionTest extends TestCase
 	public function testCollectionFieldAndRowHelpersPreserveLegacyBehavior(): void
 	{
 		$registry = new Registry();
-		$collection = $registry->collection('post');
+		$collection = $registry->collection('post')->primaryKey('id');
 
-		$collection->field('id', 'int')->column('post_id')->primaryKey(true)->nullable(false)->end();
+		$collection->field('id', 'int')->column('post_id')->nullable(false)->end();
 		$collection->field('title', 'string')->column('post_title')->end();
 		$collection->field('secret', 'string')->column('secret_value')->hidden(true)->end();
 
 		self::assertSame($collection->fields->get('id'), $collection->field('id'));
+		self::assertTrue($collection->hasPrimaryKey());
+		self::assertSame(['id'], $collection->getPrimaryKey());
+		self::assertSame(['post_id'], $collection->getPrimaryKeyColumns());
 		self::assertSame(['id', 'title'], $collection->getVisibleFields());
 		self::assertSame(['post_id', 'post_title'], $collection->getVisibleColumns());
 		self::assertSame('title', $collection->getFieldNameByColumn('post_title'));
@@ -105,25 +108,30 @@ final class RegistryCollectionTest extends TestCase
 		);
 	}
 
-	public function testGetPrimaryKeyFieldsReturnsSingleFieldOrArray(): void
+	public function testGetPrimaryKeyFieldsAlwaysReturnsCanonicalArray(): void
 	{
 		$registry = new Registry();
 		$single = $registry->collection('single')
-			->field('id', 'int')->primaryKey(true)->end()
+			->primaryKey('id')
+			->field('id', 'int')->end()
 			->end()
 			->getCollection('single');
 
 		self::assertInstanceOf(CollectionInterface::class, $single);
-		self::assertSame('id', $single->getPrimaryKeyFields()->getName());
+		self::assertSame(['id'], $single->getPrimaryKey());
+		self::assertCount(1, $single->getPrimaryKeyFields());
+		self::assertSame('id', $single->getPrimaryKeyFields()[0]->getName());
 
 		$composite = $registry->collection('composite')
-			->field('tenant_id', 'int')->primaryKey(true)->end()
-			->field('slug', 'string')->primaryKey(true)->end()
+			->primaryKey('tenant_id', 'slug')
+			->field('tenant_id', 'int')->end()
+			->field('slug', 'string')->end()
 			->end()
 			->getCollection('composite');
 
 		$fields = $composite?->getPrimaryKeyFields();
 		self::assertIsArray($fields);
 		self::assertCount(2, $fields);
+		self::assertSame(['tenant_id', 'slug'], array_map(static fn ($field) => $field->getName(), $fields));
 	}
 }

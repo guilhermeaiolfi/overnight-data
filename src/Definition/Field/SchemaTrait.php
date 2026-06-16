@@ -20,7 +20,6 @@ trait SchemaTrait
 			'default_value' => null,
 			'data_type' => null,
 			'comment' => null,
-			'pk' => false,
 			'auto_increment' => false,
 			'filterable' => true,
 		];
@@ -50,19 +49,15 @@ trait SchemaTrait
 		return (bool) $this->get('auto_increment');
 	}
 
-	public function primaryKey(bool $pk): self
-	{
-		$this->set('pk', $pk);
-		if ($pk) {
-			$this->set('filterable', false);
-		}
-
-		return $this;
-	}
-
 	public function isPrimaryKey(): bool
 	{
-		return (bool) $this->get('pk');
+		$collection = $this->collection;
+
+		if (! $collection->hasPrimaryKey()) {
+			return false;
+		}
+
+		return in_array($this->getName(), $collection->getPrimaryKey(), true);
 	}
 
 	public function filterable(bool $filterable = true): self

@@ -1,5 +1,23 @@
 # Phase 2 Public API
 
+## Phase 4 Delta
+
+- `Field::primaryKey()` and `FieldInterface::primaryKey()` were removed.
+- `Collection::primaryKey(string ...$fieldNames): self` was added.
+- `Collection::hasPrimaryKey(): bool` was added.
+- `Collection::getPrimaryKey(): list<string>` now returns canonical ordered field names.
+- `Collection::getPrimaryKeyFields(): list<FieldInterface>` now always returns an array.
+- `Collection::getPrimaryKeyColumns(): list<string>` was added.
+- `Collection::isCompositePrimaryKey(): bool` was added.
+- `Collection::getKey(Key|array|string|int|float|bool): Key` was added.
+- `Collection::getKeyFromRecord(array $record, bool $allowColumnNames = true): Key` was added.
+- `ON\Data\Definition\Collection\PrimaryKeyDefinition` was removed.
+- `ON\Data\Definition\Collection\PrimaryKeyValue` was removed.
+- `ON\Data\Key` was added.
+- `Field::isPrimaryKey()` remains, but it is now derived from collection metadata.
+
+The remaining sections below still describe unchanged Phase 3 surfaces unless overridden by this delta.
+
 ## Phase 3 Delta
 
 - The public API remains behaviorally equivalent for the characterized methods in Phase 2.

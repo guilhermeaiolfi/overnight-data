@@ -15,8 +15,11 @@ final class FieldAndMapTest extends TestCase
 {
 	public function testFieldSupportsCurrentSettersGettersAndTraits(): void
 	{
-		$field = (new Registry())
+		$collection = (new Registry())
 			->collection('users')
+			->primaryKey('email');
+
+		$field = $collection
 			->field('email')
 			->alias('mail')
 			->type('string')
@@ -29,7 +32,6 @@ final class FieldAndMapTest extends TestCase
 			->validation('required|email', ['required' => 'Email is required'])
 			->description('Primary email')
 			->typecast('trim')
-			->primaryKey(true)
 			->filterable(false)
 			->autoIncrement(true)
 			->nullable(true)

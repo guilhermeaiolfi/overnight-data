@@ -30,6 +30,9 @@ final class DefinitionParityTest extends TestCase
 		$expected = [];
 		foreach ($sourceFiles as $sourceFile) {
 			$relative = substr($sourceFile, strlen(str_replace('\\', '/', $sourceRoot)) + 1);
+			if (in_array($relative, ['Collection/PrimaryKeyDefinition.php', 'Collection/PrimaryKeyValue.php'], true)) {
+				continue;
+			}
 			$expected[] = str_replace('\\', '/', $targetRoot) . '/' . ($relative === 'Display/DateTimeDisplay.php' ? 'Display/DatetimeDisplay.php' : $relative);
 		}
 

@@ -6,6 +6,7 @@ namespace ON\Data\Definition;
 
 use ON\Data\Definition\Collection\Collection;
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\Exception\ConflictingPrimaryKeyDefinitionException;
 use ON\Data\Definition\Internal\DefinitionFactory;
 use ON\Data\Support\DefinitionNode;
 
@@ -148,6 +149,7 @@ class Registry extends DefinitionNode
 			$collection['class'] ??= Collection::class;
 			$collection['name'] ??= (string) $name;
 			$collection['table'] ??= (string) $name;
+			$collection['primaryKey'] = $this->normalizePrimaryKey((string) $name, $collection);
 			$collection['fields'] ??= [];
 			$collection['relations'] ??= [];
 			$collection['metadata'] ??= [];
@@ -175,9 +177,67 @@ class Registry extends DefinitionNode
 			'description' => $collection->getDescription(),
 			'hidden' => $collection->isHidden(),
 			'fileLocation' => $collection->getFileDefinitionLocation(),
+			'primaryKey' => $collection->hasPrimaryKey() ? $collection->getPrimaryKey() : [],
 			'metadata' => [],
 			'fields' => [],
 			'relations' => [],
 		];
+	}
+
+	/**
+	 * @param array<string, mixed> $collection
+	 * @return list<string>
+	 */
+	private function normalizePrimaryKey(string $collectionName, array &$collection): array
+	{
+		$collection['fields'] ??= [];
+		$fieldPrimaryKey = [];
+
+		foreach ($collection['fields'] as $fieldName => &$field) {
+			if (! is_array($field)) {
+				continue;
+			}
+
+			$canonicalFieldName = is_string($fieldName) && $fieldName !== ''
+				? $fieldName
+				: (($field['name'] ?? null) && is_string($field['name']) ? $field['name'] : null);
+
+			if (($field['pk'] ?? false) === true && is_string($canonicalFieldName) && $canonicalFieldName !== '') {
+				$fieldPrimaryKey[] = $canonicalFieldName;
+			}
+
+			unset($field['pk']);
+		}
+
+		unset($field);
+
+		$collectionPrimaryKey = $collection['primaryKey'] ?? null;
+		if ($collectionPrimaryKey === null) {
+			return $fieldPrimaryKey;
+		}
+
+		if (! is_array($collectionPrimaryKey)) {
+			$collectionPrimaryKey = [];
+		}
+
+		$normalizedCollectionPrimaryKey = [];
+		foreach ($collectionPrimaryKey as $fieldName) {
+			if (! is_string($fieldName) || trim($fieldName) === '') {
+				continue;
+			}
+
+			$normalizedCollectionPrimaryKey[] = trim($fieldName);
+		}
+
+		if ($fieldPrimaryKey !== [] && $normalizedCollectionPrimaryKey !== [] && $fieldPrimaryKey !== $normalizedCollectionPrimaryKey) {
+			throw new ConflictingPrimaryKeyDefinitionException(
+				sprintf(
+					"Collection '%s' contains conflicting field-level and collection-level primary key definitions.",
+					$collectionName
+				)
+			);
+		}
+
+		return $normalizedCollectionPrimaryKey !== [] ? $normalizedCollectionPrimaryKey : $fieldPrimaryKey;
 	}
 }

@@ -20,6 +20,8 @@ final class DependencyTest extends TestCase
 			'Doctrine\\',
 			'ON\\ORM\\',
 			'ON\\RestApi\\',
+			'Definition\\Collection\\PrimaryKeyDefinition',
+			'Definition\\Collection\\PrimaryKeyValue',
 		];
 
 		foreach ($iterator as $file) {

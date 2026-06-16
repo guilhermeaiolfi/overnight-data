@@ -27,7 +27,7 @@ final class RegistryStorageTest extends TestCase
 		};
 
 		$users = new CustomCollection($registry);
-		$users->name('users')->table('app_users')->metadata('domain', 'accounts');
+		$users->name('users')->table('app_users')->primaryKey('id')->metadata('domain', 'accounts');
 		$registry->register($users);
 
 		$users->fields->set('id', new CustomField($users));
@@ -36,7 +36,6 @@ final class RegistryStorageTest extends TestCase
 			->type('int')
 			->column('user_id')
 			->required(true)
-			->primaryKey(true)
 			->display(CustomDisplay::class)->type('badge')->color('green')->end()
 			->interface(CustomInterface::class)->limit(32)->end()
 			->metadata('kind', 'pk');
@@ -59,6 +58,8 @@ final class RegistryStorageTest extends TestCase
 		self::assertSame(CustomRelation::class, $all['collections']['users']['relations']['manager']['class']);
 		self::assertSame(CustomDisplay::class, $all['collections']['users']['fields']['id']['display']['class']);
 		self::assertSame(CustomInterface::class, $all['collections']['users']['fields']['id']['interface']['class']);
+		self::assertSame(['id'], $all['collections']['users']['primaryKey']);
+		self::assertArrayNotHasKey('pk', $all['collections']['users']['fields']['id']);
 
 		$restored = new Registry($all);
 		$restoredUsers = $restored->getCollection('users');
@@ -70,6 +71,7 @@ final class RegistryStorageTest extends TestCase
 		self::assertInstanceOf(CustomRelation::class, $restoredUsers->relations->get('manager'));
 		self::assertInstanceOf(CustomDisplay::class, $restoredUsers->fields->get('id')->getDisplay());
 		self::assertInstanceOf(CustomInterface::class, $restoredUsers->fields->get('id')->getInterface());
+		self::assertSame(['id'], $restoredUsers->getPrimaryKey());
 	}
 
 	public function testWrappersStayBoundToMasterArrayWithStableIdentity(): void

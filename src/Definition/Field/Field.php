@@ -58,7 +58,6 @@ class Field extends DefinitionNode implements FieldInterface
 			'default_value' => null,
 			'data_type' => null,
 			'comment' => null,
-			'pk' => false,
 			'auto_increment' => false,
 			'filterable' => true,
 		];

@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Collection;
 
+use ON\Data\Definition\Exception\InvalidPrimaryKeyException;
+use ON\Data\Definition\Exception\PrimaryKeyNotDefinedException;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\BelongsToRelation;
 use ON\Data\Definition\Relation\HasManyRelation;
 use ON\Data\Definition\Relation\HasOneRelation;
 use ON\Data\Definition\Relation\RelationInterface;
+use ON\Data\Key;
 
 interface CollectionInterface
 {
@@ -64,10 +67,46 @@ interface CollectionInterface
 
 	public function belongsTo(string $name, string $targetCollection): BelongsToRelation;
 
-	/** @return FieldInterface[]|FieldInterface */
-	public function getPrimaryKeyFields(): mixed;
+	public function primaryKey(string ...$fieldNames): self;
 
-	public function getPrimaryKey(): PrimaryKeyDefinition;
+	public function hasPrimaryKey(): bool;
+
+	/**
+	 * @return non-empty-list<string>
+	 *
+	 * @throws PrimaryKeyNotDefinedException
+	 */
+	public function getPrimaryKey(): array;
+
+	/**
+	 * @return non-empty-list<FieldInterface>
+	 *
+	 * @throws PrimaryKeyNotDefinedException
+	 */
+	public function getPrimaryKeyFields(): array;
+
+	/**
+	 * @return non-empty-list<string>
+	 *
+	 * @throws PrimaryKeyNotDefinedException
+	 */
+	public function getPrimaryKeyColumns(): array;
+
+	public function isCompositePrimaryKey(): bool;
+
+	/**
+	 * @throws InvalidPrimaryKeyException
+	 * @throws PrimaryKeyNotDefinedException
+	 */
+	public function getKey(Key|array|string|int|float|bool $value): Key;
+
+	/**
+	 * @param array<string, mixed> $record
+	 *
+	 * @throws InvalidPrimaryKeyException
+	 * @throws PrimaryKeyNotDefinedException
+	 */
+	public function getKeyFromRecord(array $record, bool $allowColumnNames = true): Key;
 
 	/**
 	 * @return list<string>

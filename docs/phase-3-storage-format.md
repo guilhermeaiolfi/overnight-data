@@ -20,6 +20,9 @@
             'description' => null,
             'hidden' => false,
             'fileLocation' => '/path/to/file.php',
+            'primaryKey' => [
+                'id',
+            ],
             'metadata' => [
                 'domain' => 'accounts',
             ],
@@ -50,7 +53,6 @@
                     'default_value' => null,
                     'data_type' => null,
                     'comment' => null,
-                    'pk' => true,
                     'auto_increment' => false,
                     'filterable' => false,
                     'display' => [
@@ -98,9 +100,11 @@ Implemented rules:
    - Only `collections` is created by default.
 2. Collection keys:
    - Collection defaults are materialized when the collection entry is created.
+   - `primaryKey` is always stored at collection level as an ordered list of field names.
    - `fields`, `relations`, and `metadata` are always arrays after normalization.
 3. Field keys:
    - Basic field metadata and schema metadata are stored directly on the field array.
+   - Field arrays do not store independent primary-key flags after Registry normalization.
    - Nested display and interface definitions are stored under `display` and `interface`.
 4. Relation keys:
    - Base relation metadata is stored directly on the relation array.

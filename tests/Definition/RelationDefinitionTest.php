@@ -23,11 +23,13 @@ final class RelationDefinitionTest extends TestCase
 	{
 		$registry = new Registry();
 		$registry->collection('user')
-			->field('id', 'int')->primaryKey(true)->end()
+			->primaryKey('id')
+			->field('id', 'int')->end()
 			->end();
 
 		$relation = $registry->collection('post')
-			->field('id', 'int')->primaryKey(true)->end()
+			->primaryKey('id')
+			->field('id', 'int')->end()
 			->field('user_id', 'int')->end()
 			->belongsTo('author', 'user')->innerKey('user_id')->outerKey('id')->end()
 			->relations->get('author');
@@ -44,8 +46,9 @@ final class RelationDefinitionTest extends TestCase
 	{
 		$registry = new Registry();
 		$registry->collection('page')
-			->field('tenant_id', 'int')->primaryKey(true)->end()
-			->field('slug', 'string')->primaryKey(true)->end()
+			->primaryKey('tenant_id', 'slug')
+			->field('tenant_id', 'int')->end()
+			->field('slug', 'string')->end()
 			->end();
 
 		$relation = $registry->collection('article')
@@ -69,8 +72,9 @@ final class RelationDefinitionTest extends TestCase
 	{
 		$registry = new Registry();
 		$registry->collection('page')
-			->field('tenant_id', 'int')->primaryKey(true)->end()
-			->field('slug', 'string')->primaryKey(true)->end()
+			->primaryKey('tenant_id', 'slug')
+			->field('tenant_id', 'int')->end()
+			->field('slug', 'string')->end()
 			->end();
 
 		$this->expectException(InvalidArgumentException::class);
@@ -88,12 +92,14 @@ final class RelationDefinitionTest extends TestCase
 	{
 		$registry = new Registry();
 		$registry->collection('article')
-			->field('tenant_id', 'int')->primaryKey(true)->end()
-			->field('slug', 'string')->primaryKey(true)->end()
+			->primaryKey('tenant_id', 'slug')
+			->field('tenant_id', 'int')->end()
+			->field('slug', 'string')->end()
 			->end();
 		$registry->collection('tag')
-			->field('tenant_id', 'int')->primaryKey(true)->end()
-			->field('slug', 'string')->primaryKey(true)->end()
+			->primaryKey('tenant_id', 'slug')
+			->field('tenant_id', 'int')->end()
+			->field('slug', 'string')->end()
 			->end();
 		$registry->collection('article_tag')
 			->field('article_tenant_id', 'int')->end()
@@ -124,9 +130,10 @@ final class RelationDefinitionTest extends TestCase
 	public function testConvenienceRelationsAndMapsWorkWithCustomSubclass(): void
 	{
 		$registry = new Registry();
-		$registry->collection('profile')->field('id', 'int')->primaryKey(true)->end()->end();
+		$registry->collection('profile')->primaryKey('id')->field('id', 'int')->end()->end();
 		$collection = $registry->collection('user');
-		$collection->field('id', 'int')->primaryKey(true)->end();
+		$collection->primaryKey('id');
+		$collection->field('id', 'int')->end();
 		$collection->field('profile_id', 'int')->end();
 
 		$hasMany = $collection->hasMany('profiles', 'profile');

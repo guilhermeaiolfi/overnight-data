@@ -53,8 +53,6 @@ interface FieldInterface
 
 	public function isHidden(): bool;
 
-	public function primaryKey(bool $pk): self;
-
 	public function isPrimaryKey(): bool;
 
 	public function autoIncrement(bool $autoIncrement): self;

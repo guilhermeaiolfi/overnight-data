@@ -315,7 +315,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 
 		$target = $this->parent->getRegistry()->getCollection($this->getCollectionName());
 		if ($target !== null && $outerKeys !== []) {
-			$targetPrimaryKeyCount = count($target->getPrimaryKey()->getFieldNames());
+			$targetPrimaryKeyCount = count($target->getPrimaryKey());
 			if ($targetPrimaryKeyCount !== count($outerKeys)) {
 				throw new InvalidArgumentException(
 					sprintf(
