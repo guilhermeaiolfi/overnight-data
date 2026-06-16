@@ -6,15 +6,30 @@ namespace ON\Data\Mapper\Field;
 
 use InvalidArgumentException;
 use ON\Data\Mapper\FieldContext;
+use ON\Data\Mapper\FieldTypeInterface;
 
-final class BoolFieldType extends AbstractPrimitiveFieldType
+final class BoolFieldType implements FieldTypeInterface
 {
 	public static function storageType(): string
 	{
 		return 'bool';
 	}
 
-	protected static function normalizeToPhp(mixed $value, FieldContext $field): bool
+	public static function toPhp(string $from, mixed $value, FieldContext $field): mixed
+	{
+		SupportedRepresentation::assert($from, static::class);
+
+		return self::normalize($value, $field);
+	}
+
+	public static function fromPhp(string $to, mixed $value, FieldContext $field): mixed
+	{
+		SupportedRepresentation::assert($to, static::class);
+
+		return self::normalize($value, $field);
+	}
+
+	private static function normalize(mixed $value, FieldContext $field): bool
 	{
 		if (is_bool($value)) {
 			return $value;
@@ -53,10 +68,5 @@ final class BoolFieldType extends AbstractPrimitiveFieldType
 				sprintf("Field '%s' cannot convert ambiguous boolean value '%s'.", $field->getName(), $value)
 			),
 		};
-	}
-
-	protected static function normalizeFromPhp(mixed $value, FieldContext $field): bool
-	{
-		return static::normalizeToPhp($value, $field);
 	}
 }

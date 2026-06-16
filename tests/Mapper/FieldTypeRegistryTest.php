@@ -6,11 +6,16 @@ namespace Tests\ON\Data\Mapper;
 
 use ON\Data\Mapper\Exception\FieldTypeNotFoundException;
 use ON\Data\Mapper\Exception\InvalidFieldTypeException;
+use ON\Data\Mapper\Field\BoolFieldType;
+use ON\Data\Mapper\Field\FloatFieldType;
 use ON\Data\Mapper\Field\IntFieldType;
+use ON\Data\Mapper\Field\PassthroughFieldType;
 use ON\Data\Mapper\Field\StringFieldType;
 use ON\Data\Mapper\FieldContext;
+use ON\Data\Mapper\FieldTypeInterface;
 use ON\Data\Mapper\FieldTypeRegistry;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 use stdClass;
 use Tests\ON\Data\Fixture\CustomFieldType;
 
@@ -58,5 +63,36 @@ final class FieldTypeRegistryTest extends TestCase
 
 		$this->expectException(FieldTypeNotFoundException::class);
 		$registry->get('unknown');
+	}
+
+	public function testPrimitiveFieldTypesExposeSameDirectStaticContractAsCustomFieldTypes(): void
+	{
+		$fieldTypes = [
+			StringFieldType::class,
+			PassthroughFieldType::class,
+			BoolFieldType::class,
+			IntFieldType::class,
+			FloatFieldType::class,
+			CustomFieldType::class,
+		];
+
+		foreach ($fieldTypes as $fieldType) {
+			self::assertTrue(is_a($fieldType, FieldTypeInterface::class, true));
+
+			$storageType = new ReflectionMethod($fieldType, 'storageType');
+			self::assertTrue($storageType->isPublic());
+			self::assertTrue($storageType->isStatic());
+			self::assertSame($fieldType, $storageType->getDeclaringClass()->getName());
+
+			$toPhp = new ReflectionMethod($fieldType, 'toPhp');
+			self::assertTrue($toPhp->isPublic());
+			self::assertTrue($toPhp->isStatic());
+			self::assertSame($fieldType, $toPhp->getDeclaringClass()->getName());
+
+			$fromPhp = new ReflectionMethod($fieldType, 'fromPhp');
+			self::assertTrue($fromPhp->isPublic());
+			self::assertTrue($fromPhp->isStatic());
+			self::assertSame($fieldType, $fromPhp->getDeclaringClass()->getName());
+		}
 	}
 }

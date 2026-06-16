@@ -6,15 +6,30 @@ namespace ON\Data\Mapper\Field;
 
 use InvalidArgumentException;
 use ON\Data\Mapper\FieldContext;
+use ON\Data\Mapper\FieldTypeInterface;
 
-final class FloatFieldType extends AbstractPrimitiveFieldType
+final class FloatFieldType implements FieldTypeInterface
 {
 	public static function storageType(): string
 	{
 		return 'float';
 	}
 
-	protected static function normalizeToPhp(mixed $value, FieldContext $field): float
+	public static function toPhp(string $from, mixed $value, FieldContext $field): mixed
+	{
+		SupportedRepresentation::assert($from, static::class);
+
+		return self::normalize($value, $field);
+	}
+
+	public static function fromPhp(string $to, mixed $value, FieldContext $field): mixed
+	{
+		SupportedRepresentation::assert($to, static::class);
+
+		return self::normalize($value, $field);
+	}
+
+	private static function normalize(mixed $value, FieldContext $field): float
 	{
 		if (is_float($value)) {
 			if (! is_finite($value)) {
@@ -58,10 +73,5 @@ final class FloatFieldType extends AbstractPrimitiveFieldType
 		}
 
 		return $normalized;
-	}
-
-	protected static function normalizeFromPhp(mixed $value, FieldContext $field): float
-	{
-		return static::normalizeToPhp($value, $field);
 	}
 }

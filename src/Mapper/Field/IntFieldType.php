@@ -6,8 +6,9 @@ namespace ON\Data\Mapper\Field;
 
 use InvalidArgumentException;
 use ON\Data\Mapper\FieldContext;
+use ON\Data\Mapper\FieldTypeInterface;
 
-final class IntFieldType extends AbstractPrimitiveFieldType
+final class IntFieldType implements FieldTypeInterface
 {
 	private const FLOAT_SAFE_INTEGER_MAX = 9007199254740991;
 
@@ -16,7 +17,21 @@ final class IntFieldType extends AbstractPrimitiveFieldType
 		return 'int';
 	}
 
-	protected static function normalizeToPhp(mixed $value, FieldContext $field): int
+	public static function toPhp(string $from, mixed $value, FieldContext $field): mixed
+	{
+		SupportedRepresentation::assert($from, static::class);
+
+		return self::normalize($value, $field);
+	}
+
+	public static function fromPhp(string $to, mixed $value, FieldContext $field): mixed
+	{
+		SupportedRepresentation::assert($to, static::class);
+
+		return self::normalize($value, $field);
+	}
+
+	private static function normalize(mixed $value, FieldContext $field): int
 	{
 		if (is_int($value)) {
 			return $value;
@@ -64,11 +79,6 @@ final class IntFieldType extends AbstractPrimitiveFieldType
 		}
 
 		return (int) $trimmed;
-	}
-
-	protected static function normalizeFromPhp(mixed $value, FieldContext $field): int
-	{
-		return static::normalizeToPhp($value, $field);
 	}
 
 	private static function isWithinPlatformIntRange(string $value): bool

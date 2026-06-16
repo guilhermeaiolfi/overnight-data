@@ -5,20 +5,30 @@ declare(strict_types=1);
 namespace ON\Data\Mapper\Field;
 
 use ON\Data\Mapper\FieldContext;
+use ON\Data\Mapper\FieldTypeInterface;
 
-final class PassthroughFieldType extends AbstractPrimitiveFieldType
+final class PassthroughFieldType implements FieldTypeInterface
 {
 	public static function storageType(): string
 	{
 		return 'text';
 	}
 
-	protected static function normalizeToPhp(mixed $value, FieldContext $field): mixed
+	public static function toPhp(string $from, mixed $value, FieldContext $field): mixed
 	{
-		return $value;
+		SupportedRepresentation::assert($from, static::class);
+
+		return self::normalize($value);
 	}
 
-	protected static function normalizeFromPhp(mixed $value, FieldContext $field): mixed
+	public static function fromPhp(string $to, mixed $value, FieldContext $field): mixed
+	{
+		SupportedRepresentation::assert($to, static::class);
+
+		return self::normalize($value);
+	}
+
+	private static function normalize(mixed $value): mixed
 	{
 		return $value;
 	}

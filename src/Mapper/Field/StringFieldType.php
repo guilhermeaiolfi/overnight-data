@@ -6,15 +6,30 @@ namespace ON\Data\Mapper\Field;
 
 use InvalidArgumentException;
 use ON\Data\Mapper\FieldContext;
+use ON\Data\Mapper\FieldTypeInterface;
 
-final class StringFieldType extends AbstractPrimitiveFieldType
+final class StringFieldType implements FieldTypeInterface
 {
 	public static function storageType(): string
 	{
 		return 'string';
 	}
 
-	protected static function normalizeToPhp(mixed $value, FieldContext $field): string
+	public static function toPhp(string $from, mixed $value, FieldContext $field): mixed
+	{
+		SupportedRepresentation::assert($from, static::class);
+
+		return self::normalize($value, $field);
+	}
+
+	public static function fromPhp(string $to, mixed $value, FieldContext $field): mixed
+	{
+		SupportedRepresentation::assert($to, static::class);
+
+		return self::normalize($value, $field);
+	}
+
+	private static function normalize(mixed $value, FieldContext $field): string
 	{
 		if (is_string($value)) {
 			return $value;
@@ -27,10 +42,5 @@ final class StringFieldType extends AbstractPrimitiveFieldType
 		throw new InvalidArgumentException(
 			sprintf("Field '%s' expects a string-compatible value.", $field->getName())
 		);
-	}
-
-	protected static function normalizeFromPhp(mixed $value, FieldContext $field): string
-	{
-		return static::normalizeToPhp($value, $field);
 	}
 }
