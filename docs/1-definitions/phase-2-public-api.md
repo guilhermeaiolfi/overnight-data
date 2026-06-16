@@ -1,5 +1,13 @@
 # Public API Notes
 
+## Phase 6 Delta
+
+- `Registry::all()` now validates that exported definition data is plain data only.
+- Root collection and view names are now normalized once and rejected when empty or whitespace-only.
+- Stored class discriminators are now validated during `Registry` normalization instead of waiting for first wrapper lookup.
+- `DefinitionFactory` remains technically public for restoration mechanics but is now explicitly marked `@internal`.
+- `Registry` runtime wrapper caches are internal implementation details and no longer part of the application-facing API surface.
+
 ## Phase 5 Delta
 
 - `ON\Data\Definition\DefinitionInterface` was added.
@@ -41,3 +49,4 @@
 - Collection storage APIs such as `table()`, `database()`, `entity()`, `source()`, and primary-key methods remain collection-only.
 - View definitions currently support structure only: name, source, fields, relations, metadata, registry round-trip, and fluent `end()`.
 - View fields intentionally reuse the existing Field API surface, including storage-oriented setters, but those setters do not yet imply execution semantics for views.
+- The internal restoration helpers are intentionally not public extension APIs. In particular, `DefinitionFactory` and `DefinitionNode` rebinding hooks are for Registry-owned wrapper restoration only.
