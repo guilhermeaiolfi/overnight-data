@@ -12,7 +12,7 @@ use RecursiveIteratorIterator;
 use ReflectionClass;
 use SplFileInfo;
 
-final class MapperPhase1ArchitectureTest extends TestCase
+final class MapperPhase2ArchitectureTest extends TestCase
 {
 	public function testProductionCodeDoesNotReferenceExpandedForbiddenNamespaces(): void
 	{

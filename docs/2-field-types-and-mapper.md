@@ -1,8 +1,8 @@
-# Field Types and Conversion Gateway
+# Field Types and Mapper Runtime
 
-`ON\Data` now includes the Phase 1 scalar conversion foundation under `ON\Data\Mapper`.
+`ON\Data` now includes the Phase 1 scalar conversion foundation plus the Phase 2 structural mapper runtime under `ON\Data\Mapper`.
 
-This phase is intentionally limited to scalar conversion. Structural mapping, `MapBuilder`, `map()`, and mapper selection are deferred to later phases.
+The current mapper layer is intentionally shallow. It supports mapper registration and selection, collection mapping, and array/`stdClass` structural mapping, but it does not yet implement typed DTO hydration, nested object graphs, or definition-aware row mapping.
 
 ## Canonical representations
 
@@ -159,6 +159,156 @@ Mapping::resetDefaultGateway();
 
 If no gateway is installed, `Mapping::getDefaultGateway()` lazily creates and reuses a built-in default instance.
 
+## MapperManager
+
+Each `ConversionGateway` owns one `MapperManager`:
+
+```php
+$mappers = $gateway->getMappers();
+```
+
+The manager keeps mapper registration, selection, construction, and instance reuse in one place.
+
+Registration is lazy:
+
+- registering a mapper stores only the class string;
+- registration order is preserved;
+- duplicate registrations are rejected;
+- a mapper is instantiated only when it is selected for a mapping operation;
+- one instance is cached per mapper class;
+- `clear()` drops mapper instances but keeps registrations;
+- `warmUp()` eagerly constructs all registered mappers.
+
+The default mapper set is intentionally small:
+
+- `ON\Data\Mapper\ArrayToStdClassMapper`
+- `ON\Data\Mapper\StdClassToArrayMapper`
+
+Automatic selection uses each mapper's static `canMap()` method in registration order. Explicit `using()` selection skips unrelated mapper scans and validates that the chosen mapper can handle the requested operation.
+
+## Mapper construction
+
+Default construction for built-in and custom structural mappers is:
+
+```php
+new $mapper($gateway)
+```
+
+Custom construction can be installed before the first mapper instance is created:
+
+```php
+use ON\Data\Mapper\ConversionGateway;
+use ON\Data\Mapper\MapperInterface;
+
+$gateway->getMappers()->setConstructor(
+    static function (string $mapper, ConversionGateway $runtime): MapperInterface {
+        return new $mapper($runtime);
+    },
+);
+```
+
+The constructor callback receives the mapper class name and the active gateway. Once any mapper instance has been created, changing the constructor is rejected so the runtime stays consistent.
+
+## MappingContext
+
+`ON\Data\Mapper\MappingContext` carries immutable per-operation mapper state:
+
+- the active `ConversionGateway`;
+- source and output representation class names;
+- an explicitly selected mapper class;
+- mapper arguments;
+- collection mode;
+- the nested path currently being mapped.
+
+Collection mapping and nested mapper calls retain the active gateway through the context.
+
+## Fluent map()
+
+Import the helper once:
+
+```php
+use function ON\Data\Mapper\map;
+```
+
+Map to a structural target:
+
+```php
+$user = map(['id' => 10, 'name' => 'Ada'])->to(stdClass::class);
+```
+
+Configure the source representation explicitly:
+
+```php
+use ON\Data\Mapper\Representation\WireRepresentation;
+
+$builder = map($payload)
+    ->from(WireRepresentation::class);
+```
+
+Set the output representation for downstream mappers:
+
+```php
+$builder = map($payload)
+    ->as(WireRepresentation::class);
+```
+
+Select a mapper directly and pass mapper-specific arguments:
+
+```php
+$result = map($payload)
+    ->using(CustomMapper::class, 'extra-option')
+    ->to($target);
+```
+
+The fluent configuration methods return clones:
+
+- `from()`
+- `as()`
+- `using()`
+- `args()`
+- `collection()`
+
+Passing a representation class to `to()` is rejected. Use `as()` for representation selection and `to()` for structural targets.
+
+## Collection mapping
+
+Collection mode applies mapper selection item-by-item and returns a list:
+
+```php
+$rows = map(
+    [
+        ['id' => 1],
+        ['id' => 2],
+    ],
+)->collection()->to(stdClass::class);
+```
+
+Empty iterables map to an empty list. Non-iterable sources are rejected when collection mode is enabled.
+
+## toArray() and toJson()
+
+The fluent builder includes convenience helpers:
+
+```php
+$array = map($stdClass)->toArray();
+$json = map($stdClass)->toJson();
+```
+
+`toArray()` maps through the registered structural mappers when needed. `toJson()` encodes the resulting array as JSON and is useful for shallow export scenarios.
+
+## Current shallow-mapper limitations
+
+The built-in structural mappers are intentionally narrow:
+
+- `ArrayToStdClassMapper` maps one array to one `stdClass`;
+- `StdClassToArrayMapper` maps one `stdClass` to one array;
+- both mappers are shallow only;
+- nested DTO/object mapping is not implemented;
+- attributes and custom property metadata are not implemented;
+- FieldType inference is not used by the shallow structural mappers;
+- generic object-to-array mapping beyond `stdClass` is not implemented;
+- definition-aware row mapping is not implemented.
+
 ## Boundaries
 
 The Phase 1 implementation does not depend on:
@@ -178,11 +328,8 @@ Definition arrays remain plain data. Conversion runtime objects are not stored i
 
 The following are intentionally not implemented yet:
 
-- `MapperInterface`
-- `Mapper`
-- `MapperManager`
-- `MappingContext`
-- `MapBuilder`
-- `map()`
-- array/object structural mappers
+- typed DTO/object mapping
+- nested object mapping
+- generic object-to-array mapping beyond `stdClass`
 - definition-row mapping
+- attribute-driven mapping rules
