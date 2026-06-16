@@ -40,10 +40,12 @@ Or from a definition field:
 ```php
 use ON\Data\Mapper\FieldContext;
 
-$field = FieldContext::fromField($collection->field('id'));
+$field = FieldContext::fromField($collection->getField('id'));
 ```
 
-The context carries the field name, type, nullability flag, the original field when available, and a metadata snapshot for scalar conversion policies.
+The context carries the field name, type, nullability flag, and the original field when available.
+
+Phase 1 does not depend on copied field-definition metadata, so `FieldContext::fromField()` keeps an empty metadata array and preserves the live optional field reference through `getField()` and `hasField()`.
 
 ## Built-in FieldTypes
 
@@ -79,6 +81,29 @@ Deliberately deferred:
 - JSON and value objects
 
 Those need explicit policy decisions before they can be added safely.
+
+## Boolean input policy
+
+`BoolFieldType` accepts only these forms:
+
+- native booleans `true` and `false`
+- integers `1` and `0`
+- floats `1.0` and `0.0`
+- strings `"1"` and `"0"`
+- case-insensitive strings `"true"` and `"false"`
+- case-insensitive strings `"yes"` and `"no"`
+- case-insensitive strings `"on"` and `"off"`
+
+String inputs are trimmed before matching, so surrounding whitespace is ignored.
+
+Examples:
+
+```text
+" TRUE "  -> true
+" off "   -> false
+```
+
+Ambiguous values such as `""`, `"2"`, `"-1"`, `"enabled"`, `"disabled"`, and `"maybe"` are rejected.
 
 ## Registry and gateway usage
 

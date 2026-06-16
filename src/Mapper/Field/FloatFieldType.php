@@ -17,11 +17,24 @@ final class FloatFieldType extends AbstractPrimitiveFieldType
 	protected static function normalizeToPhp(mixed $value, FieldContext $field): float
 	{
 		if (is_float($value)) {
+			if (! is_finite($value)) {
+				throw new InvalidArgumentException(
+					sprintf("Field '%s' cannot convert non-finite float '%s'.", $field->getName(), (string) $value)
+				);
+			}
+
 			return $value;
 		}
 
 		if (is_int($value)) {
-			return (float) $value;
+			$normalized = (float) $value;
+			if (! is_finite($normalized)) {
+				throw new InvalidArgumentException(
+					sprintf("Field '%s' cannot convert non-finite float '%s'.", $field->getName(), (string) $value)
+				);
+			}
+
+			return $normalized;
 		}
 
 		if (! is_string($value)) {
@@ -37,7 +50,14 @@ final class FloatFieldType extends AbstractPrimitiveFieldType
 			);
 		}
 
-		return (float) $trimmed;
+		$normalized = (float) $trimmed;
+		if (! is_finite($normalized)) {
+			throw new InvalidArgumentException(
+				sprintf("Field '%s' cannot convert non-finite float '%s'.", $field->getName(), $value)
+			);
+		}
+
+		return $normalized;
 	}
 
 	protected static function normalizeFromPhp(mixed $value, FieldContext $field): float

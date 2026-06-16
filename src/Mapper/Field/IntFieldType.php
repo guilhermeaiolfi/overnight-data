@@ -9,6 +9,8 @@ use ON\Data\Mapper\FieldContext;
 
 final class IntFieldType extends AbstractPrimitiveFieldType
 {
+	private const FLOAT_SAFE_INTEGER_MAX = 9007199254740991;
+
 	public static function storageType(): string
 	{
 		return 'int';
@@ -20,7 +22,25 @@ final class IntFieldType extends AbstractPrimitiveFieldType
 			return $value;
 		}
 
-		if (is_float($value) && floor($value) === $value) {
+		if (is_float($value)) {
+			if (! is_finite($value) || floor($value) !== $value) {
+				throw new InvalidArgumentException(
+					sprintf("Field '%s' cannot convert '%s' to int.", $field->getName(), (string) $value)
+				);
+			}
+
+			if ($value < PHP_INT_MIN || $value > PHP_INT_MAX) {
+				throw new InvalidArgumentException(
+					sprintf("Field '%s' cannot convert out-of-range float '%s' to int.", $field->getName(), (string) $value)
+				);
+			}
+
+			if (abs($value) > self::FLOAT_SAFE_INTEGER_MAX) {
+				throw new InvalidArgumentException(
+					sprintf("Field '%s' cannot safely convert float '%s' to int.", $field->getName(), (string) $value)
+				);
+			}
+
 			return (int) $value;
 		}
 
@@ -37,11 +57,35 @@ final class IntFieldType extends AbstractPrimitiveFieldType
 			);
 		}
 
+		if (! self::isWithinPlatformIntRange($trimmed)) {
+			throw new InvalidArgumentException(
+				sprintf("Field '%s' cannot convert out-of-range integer '%s'.", $field->getName(), $value)
+			);
+		}
+
 		return (int) $trimmed;
 	}
 
 	protected static function normalizeFromPhp(mixed $value, FieldContext $field): int
 	{
 		return static::normalizeToPhp($value, $field);
+	}
+
+	private static function isWithinPlatformIntRange(string $value): bool
+	{
+		$negative = str_starts_with($value, '-');
+		$unsigned = ltrim($value, '+-');
+		$normalized = ltrim($unsigned, '0');
+		$normalized = $normalized === '' ? '0' : $normalized;
+
+		$limit = $negative
+			? ltrim((string) PHP_INT_MIN, '-')
+			: (string) PHP_INT_MAX;
+
+		if (strlen($normalized) !== strlen($limit)) {
+			return strlen($normalized) < strlen($limit);
+		}
+
+		return strcmp($normalized, $limit) <= 0;
 	}
 }

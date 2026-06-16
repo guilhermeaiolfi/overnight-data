@@ -49,14 +49,20 @@ final class ConversionGatewayTest extends TestCase
 	public static function supportedBooleanValues(): array
 	{
 		return [
+			[true, true],
+			[false, false],
 			['1', true],
 			['0', false],
 			['true', true],
 			['false', false],
+			['TRUE', true],
+			['False', false],
 			['yes', true],
 			['no', false],
 			['on', true],
 			['off', false],
+			[' yes ', true],
+			["\toff\n", false],
 			[1, true],
 			[0, false],
 			[1.0, true],
@@ -77,9 +83,58 @@ final class ConversionGatewayTest extends TestCase
 	public static function ambiguousBooleanValues(): array
 	{
 		return [
-			['truthy'],
 			['2'],
 			[''],
+			['-1'],
+			['enabled'],
+			['disabled'],
+			['maybe'],
+			['truthy'],
+		];
+	}
+
+	#[DataProvider('successfulIntegerInputs')]
+	public function testIntegerBoundaryValuesConvertSuccessfully(mixed $input, int $expected): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		self::assertSame(
+			$expected,
+			$gateway->to(StorageRepresentation::class, $input, PhpRepresentation::class, FieldContext::named('id', 'int')),
+		);
+	}
+
+	public static function successfulIntegerInputs(): array
+	{
+		return [
+			[(string) PHP_INT_MAX, PHP_INT_MAX],
+			[(string) PHP_INT_MIN, PHP_INT_MIN],
+			[PHP_INT_MAX, PHP_INT_MAX],
+			[PHP_INT_MIN, PHP_INT_MIN],
+		];
+	}
+
+	#[DataProvider('failingIntegerInputs')]
+	public function testOutOfRangeOrLossyIntegerInputsFail(mixed $input): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		$this->expectException(ConversionException::class);
+		$gateway->to(StorageRepresentation::class, $input, PhpRepresentation::class, FieldContext::named('id', 'int'));
+	}
+
+	public static function failingIntegerInputs(): array
+	{
+		return [
+			[PHP_INT_MAX . '0'],
+			['-' . PHP_INT_MAX . '0'],
+			['999999999999999999999999999999'],
+			['-999999999999999999999999999999'],
+			['1e3'],
+			[1.5],
+			[INF],
+			[-INF],
+			[NAN],
 		];
 	}
 
@@ -90,6 +145,47 @@ final class ConversionGatewayTest extends TestCase
 		self::assertSame(7, $gateway->to(PhpRepresentation::class, 7, StorageRepresentation::class, FieldContext::named('id', 'int')));
 		self::assertSame(3.5, $gateway->to(PhpRepresentation::class, 3.5, StorageRepresentation::class, FieldContext::named('price', 'float')));
 		self::assertTrue($gateway->to(PhpRepresentation::class, true, StorageRepresentation::class, FieldContext::named('active', 'bool')));
+	}
+
+	#[DataProvider('successfulFloatInputs')]
+	public function testFiniteFloatInputsConvertSuccessfully(mixed $input, float $expected): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		self::assertSame(
+			$expected,
+			$gateway->to(WireRepresentation::class, $input, PhpRepresentation::class, FieldContext::named('price', 'float')),
+		);
+	}
+
+	public static function successfulFloatInputs(): array
+	{
+		return [
+			[1, 1.0],
+			[1.5, 1.5],
+			['3.25', 3.25],
+			['1e3', 1000.0],
+		];
+	}
+
+	#[DataProvider('nonFiniteFloatInputs')]
+	public function testNonFiniteFloatInputsFail(mixed $input): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		$this->expectException(ConversionException::class);
+		$gateway->to(WireRepresentation::class, $input, PhpRepresentation::class, FieldContext::named('price', 'float'));
+	}
+
+	public static function nonFiniteFloatInputs(): array
+	{
+		return [
+			[INF],
+			[-INF],
+			[NAN],
+			['1e9999'],
+			['-1e9999'],
+		];
 	}
 
 	public function testPhpValuesConvertToWire(): void
@@ -158,6 +254,21 @@ final class ConversionGatewayTest extends TestCase
 		$result = $gateway->to(StorageRepresentation::class, '10', PhpRepresentation::class, FieldContext::fromField($field));
 
 		self::assertSame(10, $result);
+		self::assertSame($before, $registry->all());
+	}
+
+	public function testFieldContextFromFieldPreservesFieldReferenceAndUsesNoPhaseOneMetadata(): void
+	{
+		$registry = new Registry();
+		$field = $registry->collection('users')->field('id', 'int')->nullable(true)->description('ignored in phase 1');
+		$before = $registry->all();
+
+		$context = FieldContext::fromField($field);
+
+		self::assertTrue($context->hasField());
+		self::assertSame($field, $context->getField());
+		self::assertNull($context->getMetadata('description'));
+		self::assertSame('fallback', $context->getMetadata('missing', 'fallback'));
 		self::assertSame($before, $registry->all());
 	}
 

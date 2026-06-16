@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper;
 
-use ON\Data\Definition\Field\Field;
 use ON\Data\Definition\Field\FieldInterface;
 
 final class FieldContext
@@ -24,40 +23,12 @@ final class FieldContext
 
 	public static function fromField(FieldInterface $field): self
 	{
-		$metadata = [
-			'alias' => $field->getAlias(),
-			'column' => $field->getColumn(),
-			'generatedFromRelation' => $field->getGeneratedFromRelation(),
-			'required' => $field->isRequired(),
-			'searchable' => $field->isSearchable(),
-			'sensible' => $field->getSensible(),
-			'description' => $field->getDescription(),
-			'typecast' => $field->getTypecast(),
-			'validation' => $field->getValidation(),
-			'validationMessages' => $field->getValidationMessages(),
-			'filterable' => $field->isFilterable(),
-			'autoIncrement' => $field->isAutoIncrement(),
-			'unique' => $field->isUnique(),
-			'indexed' => $field->isIndexed(),
-			'comment' => $field->getComment(),
-			'numericPrecision' => $field->getNumericPrecision(),
-			'isPrimaryKey' => $field->isPrimaryKey(),
-		];
-
-		if ($field instanceof Field) {
-			$metadata['default'] = $field->getDefault();
-			$metadata['castDefault'] = $field->castDefault();
-			$metadata['dataType'] = $field->getDataType();
-			$metadata['defaultValue'] = $field->getDefaultValue();
-			$metadata['maxLength'] = $field->getMaxLength();
-		}
-
 		return new self(
 			name: $field->getName(),
 			type: $field->getType(),
 			nullable: $field->isNullable(),
 			field: $field,
-			metadata: $metadata,
+			metadata: [],
 		);
 	}
 
