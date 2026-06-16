@@ -22,6 +22,9 @@ use ON\Data\Definition\View\ViewDefinition;
 use ON\Data\Definition\View\ViewDefinitionInterface;
 use ON\Data\Support\DefinitionNode;
 
+/**
+ * @internal Restores and rebinds array-backed definition wrappers owned by Registry.
+ */
 final class DefinitionFactory
 {
 	/**
@@ -29,7 +32,7 @@ final class DefinitionFactory
 	 */
 	public static function collection(Registry $registry, array &$items): CollectionInterface
 	{
-		$class = self::normalizeClass($items, 'class', Collection::class, CollectionInterface::class, 'collection');
+		$class = self::normalizeStoredClass($items, 'class', Collection::class, CollectionInterface::class, 'collection');
 
 		/** @var CollectionInterface&DefinitionNode $collection */
 		$collection = new $class($registry);
@@ -43,7 +46,7 @@ final class DefinitionFactory
 	 */
 	public static function view(Registry $registry, array &$items): ViewDefinitionInterface
 	{
-		$class = self::normalizeClass($items, 'class', ViewDefinition::class, ViewDefinitionInterface::class, 'view');
+		$class = self::normalizeStoredClass($items, 'class', ViewDefinition::class, ViewDefinitionInterface::class, 'view');
 
 		/** @var ViewDefinitionInterface&DefinitionNode $view */
 		$view = new $class($registry);
@@ -57,7 +60,7 @@ final class DefinitionFactory
 	 */
 	public static function field(DefinitionInterface $definition, array &$items): FieldInterface
 	{
-		$class = self::normalizeClass($items, 'class', Field::class, FieldInterface::class, 'field');
+		$class = self::normalizeStoredClass($items, 'class', Field::class, FieldInterface::class, 'field');
 
 		/** @var FieldInterface&DefinitionNode $field */
 		$field = new $class($definition);
@@ -75,7 +78,7 @@ final class DefinitionFactory
 			throw new InvalidDefinitionClassException('Relation definition is missing required class discriminator.');
 		}
 
-		$class = self::normalizeClass($items, 'class', null, RelationInterface::class, 'relation');
+		$class = self::normalizeStoredClass($items, 'class', null, RelationInterface::class, 'relation');
 
 		/** @var RelationInterface&DefinitionNode $relation */
 		$relation = new $class($definition);
@@ -89,7 +92,7 @@ final class DefinitionFactory
 	 */
 	public static function display(mixed $parent, array &$items): DisplayInterface
 	{
-		$class = self::normalizeClass($items, 'class', RawDisplay::class, DisplayInterface::class, 'display');
+		$class = self::normalizeStoredClass($items, 'class', RawDisplay::class, DisplayInterface::class, 'display');
 
 		/** @var DisplayInterface&DefinitionNode $display */
 		$display = new $class($parent);
@@ -103,7 +106,7 @@ final class DefinitionFactory
 	 */
 	public static function interface(mixed $parent, array &$items): InterfaceInterface
 	{
-		$class = self::normalizeClass($items, 'class', null, InterfaceInterface::class, 'interface');
+		$class = self::normalizeStoredClass($items, 'class', null, InterfaceInterface::class, 'interface');
 
 		/** @var InterfaceInterface&DefinitionNode $interface */
 		$interface = new $class($parent);
@@ -141,11 +144,20 @@ final class DefinitionFactory
 	}
 
 	/**
+	 * @param class-string $class
+	 * @return array<string, mixed>
+	 */
+	public static function materializeDefinitionArray(array $items, string $class): array
+	{
+		return self::mergeArrays(self::definitionDefaultsFor($class), $items);
+	}
+
+	/**
 	 * @param array<string, mixed> $items
 	 * @param class-string|null $defaultClass
 	 * @return class-string
 	 */
-	private static function normalizeClass(
+	public static function normalizeStoredClass(
 		array &$items,
 		string $key,
 		?string $defaultClass,
@@ -168,5 +180,49 @@ final class DefinitionFactory
 		$items[$key] = $class;
 
 		return $class;
+	}
+
+	/**
+	 * @param class-string $class
+	 * @return array<string, mixed>
+	 */
+	private static function definitionDefaultsFor(string $class): array
+	{
+		/** @var Closure(class-string): array<string, mixed> $reader */
+		$reader = Closure::bind(
+			static function (string $class): array {
+				return $class::definitionDefaults();
+			},
+			null,
+			$class
+		);
+
+		return $reader($class);
+	}
+
+	/**
+	 * @param array<string, mixed> $left
+	 * @param array<string, mixed> $right
+	 * @return array<string, mixed>
+	 */
+	private static function mergeArrays(array $left, array $right): array
+	{
+		foreach ($right as $key => $value) {
+			if (! is_string($key)) {
+				$left[$key] = $value;
+
+				continue;
+			}
+
+			if (isset($left[$key]) && is_array($left[$key]) && is_array($value)) {
+				$left[$key] = self::mergeArrays($left[$key], $value);
+
+				continue;
+			}
+
+			$left[$key] = $value;
+		}
+
+		return $left;
 	}
 }

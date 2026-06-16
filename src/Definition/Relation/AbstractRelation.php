@@ -22,7 +22,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 	use MetadataTrait;
 
 	public function __construct(
-		public DefinitionInterface $parent,
+		protected DefinitionInterface $parent,
 	) {
 		parent::__construct();
 	}

@@ -20,7 +20,7 @@ class M2MRelation extends AbstractRelation
 	}
 
 	public function __construct(
-		public DefinitionInterface $parent,
+		DefinitionInterface $parent,
 	) {
 		parent::__construct($parent);
 

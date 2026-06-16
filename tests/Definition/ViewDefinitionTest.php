@@ -53,6 +53,19 @@ final class ViewDefinitionTest extends TestCase
 		$registry->view('users');
 	}
 
+	public function testDefinitionsRejectEmptyNamesButAllowLiteralDotsDashesAndSpaces(): void
+	{
+		$registry = new Registry();
+		$registry->collection('sales.report-v1');
+		$registry->view('sales report/v1');
+
+		self::assertTrue($registry->hasCollection('sales.report-v1'));
+		self::assertTrue($registry->hasView('sales report/v1'));
+
+		$this->expectException(InvalidArgumentException::class);
+		$registry->collection('   ');
+	}
+
 	public function testRestoringConflictingCollectionAndViewNamesThrows(): void
 	{
 		$this->expectException(DefinitionNameConflictException::class);
@@ -133,6 +146,39 @@ final class ViewDefinitionTest extends TestCase
 
 		$this->expectException(DefinitionNotFoundException::class);
 		$future->getSource();
+	}
+
+	public function testReadOnlyDefinitionLookupsDoNotMutateCanonicalArray(): void
+	{
+		$registry = new Registry([
+			'collections' => [
+				'users' => [
+					'name' => 'users',
+					'fields' => [
+						'id' => ['name' => 'id', 'type' => 'int'],
+					],
+					'relations' => [],
+				],
+			],
+			'views' => [
+				'summary' => [
+					'name' => 'summary',
+					'source' => 'users',
+					'fields' => [
+						'id' => ['name' => 'id', 'type' => 'int'],
+					],
+					'relations' => [],
+				],
+			],
+		]);
+		$before = $registry->all();
+
+		$registry->getCollection('users')?->getField('id');
+		$registry->getView('summary')?->getField('id');
+		$registry->getDefinition('users');
+		$registry->getDefinition('summary');
+
+		self::assertSame($before, $registry->all());
 	}
 
 	public function testCollectionOnlyRelationRejectsViewParentExplicitly(): void

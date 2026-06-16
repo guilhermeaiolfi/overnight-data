@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Definition;
 
+use ON\Data\Definition\Exception\InvalidDefinitionClassException;
+use ON\Data\Definition\Exception\InvalidDefinitionDataException;
 use ON\Data\Definition\Registry;
 use PHPUnit\Framework\TestCase;
+use stdClass;
 use Tests\ON\Data\Fixture\CustomCollection;
 use Tests\ON\Data\Fixture\CustomDisplay;
 use Tests\ON\Data\Fixture\CustomField;
@@ -103,5 +106,77 @@ final class RegistryStorageTest extends TestCase
 
 		self::assertTrue($field->isRequired());
 		self::assertSame('orange', $field->getDisplay()->getColor());
+	}
+
+	public function testNormalizedRegistryArrayRoundTripsIdempotently(): void
+	{
+		$legacy = [
+			'collections' => [
+				' post.user ' => [
+					'name' => ' post.user ',
+					'fields' => [
+						'id' => ['name' => 'id', 'type' => 'int', 'pk' => true],
+					],
+				],
+			],
+			'views' => [
+				' report summary ' => [
+					'name' => ' report summary ',
+					'source' => ' post.user ',
+					'fields' => [
+						'label' => ['name' => 'label', 'type' => 'string'],
+					],
+				],
+			],
+		];
+
+		$normalized = (new Registry($legacy))->all();
+		$restored = (new Registry($normalized))->all();
+
+		self::assertSame($normalized, $restored);
+		self::assertArrayHasKey('post.user', $normalized['collections']);
+		self::assertArrayHasKey('report summary', $normalized['views']);
+	}
+
+	public function testRegistryExportRejectsObjectMetadata(): void
+	{
+		$registry = new Registry();
+		$registry->collection('users')
+			->metadata('payload', new stdClass());
+
+		$this->expectException(InvalidDefinitionDataException::class);
+		$registry->all();
+	}
+
+	public function testRegistryNormalizationRejectsInvalidStoredClassDiscriminatorsEarly(): void
+	{
+		$this->expectException(InvalidDefinitionClassException::class);
+
+		new Registry([
+			'collections' => [
+				'users' => [
+					'class' => stdClass::class,
+					'name' => 'users',
+				],
+			],
+		]);
+	}
+
+	public function testRelationDefinitionsRequireClassDiscriminatorDuringNormalization(): void
+	{
+		$this->expectException(InvalidDefinitionClassException::class);
+
+		new Registry([
+			'collections' => [
+				'users' => [
+					'name' => 'users',
+					'relations' => [
+						'manager' => [
+							'name' => 'manager',
+						],
+					],
+				],
+			],
+		]);
 	}
 }
