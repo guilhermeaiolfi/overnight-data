@@ -66,10 +66,10 @@ final class MapperPhase1ArchitectureTest extends TestCase
 		self::assertTrue($mappingReflection->hasProperty('defaultGateway'));
 	}
 
-	public function testPhaseTwoApisAreNotStartedYet(): void
+	public function testPhaseTwoApisNowExist(): void
 	{
 		$root = dirname(__DIR__, 2) . '/src/Mapper';
-		$forbiddenFiles = [
+		$requiredFiles = [
 			'/MapperInterface.php',
 			'/Mapper.php',
 			'/MapperManager.php',
@@ -78,8 +78,8 @@ final class MapperPhase1ArchitectureTest extends TestCase
 			'/functions.php',
 		];
 
-		foreach ($forbiddenFiles as $suffix) {
-			self::assertFileDoesNotExist($root . $suffix);
+		foreach ($requiredFiles as $suffix) {
+			self::assertFileExists($root . $suffix);
 		}
 	}
 }

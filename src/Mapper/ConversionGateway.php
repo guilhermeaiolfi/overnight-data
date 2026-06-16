@@ -20,6 +20,8 @@ final class ConversionGateway
 	 */
 	private array $representations = [];
 
+	private MapperManager $mappers;
+
 	public function __construct(
 		private readonly FieldTypeRegistry $fieldTypes,
 		RepresentationInterface ...$representations,
@@ -35,6 +37,8 @@ final class ConversionGateway
 		foreach ($representations as $representation) {
 			$this->registerRepresentation($representation);
 		}
+
+		$this->mappers = MapperManager::createDefault($this);
 	}
 
 	public static function createDefault(): self
@@ -52,6 +56,11 @@ final class ConversionGateway
 	public function getFieldTypes(): FieldTypeRegistry
 	{
 		return $this->fieldTypes;
+	}
+
+	public function getMappers(): MapperManager
+	{
+		return $this->mappers;
 	}
 
 	/**
