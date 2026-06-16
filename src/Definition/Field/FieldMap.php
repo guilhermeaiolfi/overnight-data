@@ -9,6 +9,7 @@ use Countable;
 use IteratorAggregate;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Exception\FieldException;
+use ON\Data\Definition\Exception\InvalidDefinitionClassException;
 use ON\Data\Definition\Internal\DefinitionFactory;
 use Traversable;
 
@@ -38,7 +39,7 @@ final class FieldMap implements IteratorAggregate, Countable
 		$this->items = $items;
 		foreach ($this->fields as $name => $field) {
 			$this->fields[$name] = clone $field;
-			$this->items[$name] = $this->fields[$name]->all();
+			$this->items[$name] = DefinitionFactory::export($this->fields[$name], FieldInterface::class, 'field');
 		}
 	}
 
@@ -134,14 +135,16 @@ final class FieldMap implements IteratorAggregate, Countable
 			throw new FieldException("Field `{$name}` already exists.");
 		}
 
-		$this->items[$name] = $field instanceof Field ? $field->all() : [];
+		$this->items[$name] = $this->exportFieldDefinition($field);
 		unset($this->fields[$name]);
-		if ($this->parent !== null && is_array($this->items[$name])) {
+		if ($this->parent !== null) {
 			$items = &$this->items[$name];
 			$this->fields[$name] = DefinitionFactory::field($this->parent, $items);
-		} else {
-			$this->fields[$name] = $field;
+
+			return $this;
 		}
+
+		$this->fields[$name] = $field;
 
 		return $this;
 	}
@@ -155,12 +158,16 @@ final class FieldMap implements IteratorAggregate, Countable
 
 	public function replace(string $name, FieldInterface $field): self
 	{
-		$this->items[$name] = $field instanceof Field ? $field->all() : [];
+		$this->items[$name] = $this->exportFieldDefinition($field);
 		unset($this->fields[$name]);
-		if ($this->parent !== null && is_array($this->items[$name])) {
+		if ($this->parent !== null) {
 			$items = &$this->items[$name];
 			$this->fields[$name] = DefinitionFactory::field($this->parent, $items);
+
+			return $this;
 		}
+
+		$this->fields[$name] = $field;
 
 		return $this;
 	}
@@ -173,5 +180,21 @@ final class FieldMap implements IteratorAggregate, Countable
 		}
 
 		return new ArrayIterator($fields);
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function exportFieldDefinition(FieldInterface $field): array
+	{
+		try {
+			return DefinitionFactory::export($field, FieldInterface::class, 'field');
+		} catch (InvalidDefinitionClassException $exception) {
+			throw new InvalidDefinitionClassException(
+				sprintf('Field "%s" must be an array-backed %s wrapper.', $field->getName(), FieldInterface::class),
+				0,
+				$exception
+			);
+		}
 	}
 }

@@ -7,6 +7,8 @@ namespace Tests\ON\Data\Definition;
 use ON\Data\Definition\Exception\InvalidDefinitionClassException;
 use ON\Data\Definition\Exception\InvalidDefinitionDataException;
 use ON\Data\Definition\Registry;
+use ON\Data\Definition\View\ViewDefinition;
+use ON\Data\Definition\View\ViewField;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Fixture\CustomCollection;
@@ -108,34 +110,41 @@ final class RegistryStorageTest extends TestCase
 		self::assertSame('orange', $field->getDisplay()->getColor());
 	}
 
-	public function testNormalizedRegistryArrayRoundTripsIdempotently(): void
+	public function testCanonicalRegistryArrayRoundTripsIdempotently(): void
 	{
-		$legacy = [
+		$canonical = [
 			'collections' => [
 				' post.user ' => [
+					'class' => CustomCollection::class,
 					'name' => ' post.user ',
+					'table' => ' post.user ',
+					'primaryKey' => [],
 					'fields' => [
-						'id' => ['name' => 'id', 'type' => 'int', 'pk' => true],
+						'id' => ['class' => CustomField::class, 'name' => 'id', 'type' => 'int'],
 					],
+					'relations' => [],
+					'metadata' => [],
 				],
 			],
 			'views' => [
 				' report summary ' => [
+					'class' => ViewDefinition::class,
 					'name' => ' report summary ',
 					'source' => ' post.user ',
 					'fields' => [
-						'label' => ['name' => 'label', 'type' => 'string'],
+						'label' => ['class' => ViewField::class, 'name' => 'label', 'type' => 'string'],
 					],
+					'relations' => [],
+					'metadata' => [],
 				],
 			],
 		];
 
-		$normalized = (new Registry($legacy))->all();
-		$restored = (new Registry($normalized))->all();
+		$restored = (new Registry($canonical))->all();
 
-		self::assertSame($normalized, $restored);
-		self::assertArrayHasKey('post.user', $normalized['collections']);
-		self::assertArrayHasKey('report summary', $normalized['views']);
+		self::assertSame($canonical, $restored);
+		self::assertArrayHasKey(' post.user ', $restored['collections']);
+		self::assertArrayHasKey(' report summary ', $restored['views']);
 	}
 
 	public function testRegistryExportRejectsObjectMetadata(): void

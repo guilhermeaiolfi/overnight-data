@@ -1,0 +1,88 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\ON\Data\Architecture;
+
+use ON\Data\Definition\Internal\DefinitionFactory;
+use ON\Data\Definition\Registry;
+use PHPUnit\Framework\TestCase;
+use ReflectionClass;
+
+final class Phase7ArchitectureTest extends TestCase
+{
+	public function testRegistryNoLongerContainsRecursiveNormalizationMethods(): void
+	{
+		$reflection = new ReflectionClass(Registry::class);
+
+		foreach (
+			[
+				'normalizeDefinitions',
+				'normalizeCollectionDefinitions',
+				'normalizeViewDefinitions',
+				'normalizeFields',
+				'normalizeRelations',
+				'normalizeNestedDisplay',
+				'normalizeNestedInterface',
+				'normalizePlainArray',
+				'normalizePrimaryKey',
+				'exportCollection',
+			] as $method
+		) {
+			self::assertFalse($reflection->hasMethod($method), sprintf('Registry still exposes %s().', $method));
+		}
+	}
+
+	public function testDefinitionFactoryNoLongerContainsNormalizationHelpersOrThroughMethod(): void
+	{
+		$reflection = new ReflectionClass(DefinitionFactory::class);
+
+		foreach (
+			[
+				'materializeDefinitionArray',
+				'normalizeStoredClass',
+				'through',
+			] as $method
+		) {
+			self::assertFalse($reflection->hasMethod($method), sprintf('DefinitionFactory still exposes %s().', $method));
+		}
+
+		self::assertTrue($reflection->hasMethod('node'));
+		self::assertTrue($reflection->hasMethod('requireStoredClass'));
+		self::assertTrue($reflection->hasMethod('export'));
+	}
+
+	public function testGenericInfrastructureNoLongerHardCodesConcreteFieldRelationOrThroughTypes(): void
+	{
+		$checks = [
+			'src/Definition/Registry.php' => [
+				'Field',
+				'ViewField',
+				'RawDisplay',
+				'InterfaceInterface',
+				'M2MThrough',
+			],
+			'src/Definition/Field/FieldMap.php' => [
+				'instanceof Field',
+			],
+			'src/Definition/Relation/RelationMap.php' => [
+				'instanceof AbstractRelation',
+			],
+		];
+
+		$root = dirname(__DIR__, 2);
+
+		foreach ($checks as $relativePath => $forbiddenStrings) {
+			$contents = file_get_contents($root . '/' . $relativePath);
+			self::assertNotFalse($contents);
+
+			foreach ($forbiddenStrings as $forbidden) {
+				self::assertStringNotContainsString(
+					$forbidden,
+					$contents,
+					sprintf('Forbidden phase-7 coupling "%s" found in %s', $forbidden, $relativePath),
+				);
+			}
+		}
+	}
+}

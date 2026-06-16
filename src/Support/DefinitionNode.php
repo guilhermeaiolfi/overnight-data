@@ -12,6 +12,24 @@ namespace ON\Data\Support;
 class DefinitionNode extends Dot
 {
 	/**
+	 * Create a complete standalone definition array using this class's defaults.
+	 *
+	 * @internal
+	 *
+	 * @param array<array-key, mixed> $values
+	 * @return array<array-key, mixed>
+	 */
+	public static function createDefinition(array $values = []): array
+	{
+		/**
+		 * @var array<array-key, mixed> $merged
+		 */
+		$merged = self::mergeDefinitionArrays(static::definitionDefaults(), $values);
+
+		return $merged;
+	}
+
+	/**
 	 * @return array<array-key, mixed>
 	 */
 	protected static function definitionDefaults(): array
@@ -31,7 +49,7 @@ class DefinitionNode extends Dot
 		/**
 		 * @var array<array-key, mixed> $merged
 		 */
-		$merged = self::mergeArrays(static::definitionDefaults(), $this->getArrayItems($items));
+		$merged = static::createDefinition($this->getArrayItems($items));
 
 		parent::__construct($merged, $parse, $delimiter);
 	}
@@ -53,7 +71,6 @@ class DefinitionNode extends Dot
 	 */
 	protected function bind(array &$items): void
 	{
-		$items = self::mergeArrays(static::definitionDefaults(), $items);
 		$this->setReference($items);
 	}
 
@@ -91,17 +108,17 @@ class DefinitionNode extends Dot
 	 * @param array<array-key, mixed> $right
 	 * @return array<array-key, mixed>
 	 */
-	private static function mergeArrays(array $left, array $right): array
+	private static function mergeDefinitionArrays(array $left, array $right): array
 	{
 		foreach ($right as $key => $value) {
-			if (is_int($key)) {
-				$left[] = $value;
-
-				continue;
-			}
-
-			if (isset($left[$key]) && is_array($left[$key]) && is_array($value)) {
-				$left[$key] = self::mergeArrays($left[$key], $value);
+			if (
+				array_key_exists($key, $left)
+				&& is_array($left[$key])
+				&& is_array($value)
+				&& ! array_is_list($left[$key])
+				&& ! array_is_list($value)
+			) {
+				$left[$key] = self::mergeDefinitionArrays($left[$key], $value);
 
 				continue;
 			}

@@ -14,7 +14,14 @@ class ViewDefinition extends AbstractDefinition implements ViewDefinitionInterfa
 {
 	protected static function definitionDefaults(): array
 	{
-		return static::defaultDefinition('');
+		return [
+			'class' => static::class,
+			'name' => '',
+			'source' => null,
+			'fields' => [],
+			'relations' => [],
+			'metadata' => [],
+		];
 	}
 
 	/**
@@ -22,14 +29,9 @@ class ViewDefinition extends AbstractDefinition implements ViewDefinitionInterfa
 	 */
 	public static function defaultDefinition(string $name): array
 	{
-		return [
-			'class' => static::class,
+		return static::createDefinition([
 			'name' => $name,
-			'source' => null,
-			'fields' => [],
-			'relations' => [],
-			'metadata' => [],
-		];
+		]);
 	}
 
 	public function name(string $name): self

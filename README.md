@@ -12,11 +12,13 @@ This repository currently includes:
 - `ON\Data\Support\Dot`;
 - `ON\Data\Support\DefinitionNode`;
 - the extracted `ON\Data\Definition` subsystem;
-- collection-owned primary-key metadata with round-trip normalization from legacy field `pk` flags;
+- collection-owned primary-key metadata;
 - shared `DefinitionInterface` support for collections and views;
 - registry-managed `ViewDefinition` and `ViewField` wrappers backed by the same master-array storage;
 - the `ON\Data\Key` value object for simple and composite identities;
 - tests and quality tooling.
+
+Definition arrays are now canonical at creation time. Each node class owns its own defaults, restored arrays must already be canonical, and old caches using legacy field-level `pk` flags should be discarded and regenerated.
 
 Not implemented yet:
 

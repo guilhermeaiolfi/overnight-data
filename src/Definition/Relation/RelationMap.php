@@ -7,6 +7,7 @@ namespace ON\Data\Definition\Relation;
 use ArrayIterator;
 use IteratorAggregate;
 use ON\Data\Definition\DefinitionInterface;
+use ON\Data\Definition\Exception\InvalidDefinitionClassException;
 use ON\Data\Definition\Exception\RelationException;
 use ON\Data\Definition\Internal\DefinitionFactory;
 use Traversable;
@@ -37,7 +38,7 @@ final class RelationMap implements IteratorAggregate
 		$this->items = $items;
 		foreach ($this->relations as $name => $relation) {
 			$this->relations[$name] = clone $relation;
-			$this->items[$name] = $this->relations[$name]->all();
+			$this->items[$name] = DefinitionFactory::export($this->relations[$name], RelationInterface::class, 'relation');
 		}
 	}
 
@@ -72,14 +73,16 @@ final class RelationMap implements IteratorAggregate
 			throw new RelationException("Relation `{$name}` already exists");
 		}
 
-		$this->items[$name] = $relation instanceof AbstractRelation ? $relation->all() : [];
+		$this->items[$name] = $this->exportRelationDefinition($relation);
 		unset($this->relations[$name]);
-		if ($this->parent !== null && is_array($this->items[$name])) {
+		if ($this->parent !== null) {
 			$items = &$this->items[$name];
 			$this->relations[$name] = DefinitionFactory::relation($this->parent, $items);
-		} else {
-			$this->relations[$name] = $relation;
+
+			return $this;
 		}
+
+		$this->relations[$name] = $relation;
 
 		return $this;
 	}
@@ -93,12 +96,16 @@ final class RelationMap implements IteratorAggregate
 
 	public function replace(string $name, RelationInterface $relation): self
 	{
-		$this->items[$name] = $relation instanceof AbstractRelation ? $relation->all() : [];
+		$this->items[$name] = $this->exportRelationDefinition($relation);
 		unset($this->relations[$name]);
-		if ($this->parent !== null && is_array($this->items[$name])) {
+		if ($this->parent !== null) {
 			$items = &$this->items[$name];
 			$this->relations[$name] = DefinitionFactory::relation($this->parent, $items);
+
+			return $this;
 		}
+
+		$this->relations[$name] = $relation;
 
 		return $this;
 	}
@@ -114,5 +121,21 @@ final class RelationMap implements IteratorAggregate
 		}
 
 		return new ArrayIterator($relations);
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function exportRelationDefinition(RelationInterface $relation): array
+	{
+		try {
+			return DefinitionFactory::export($relation, RelationInterface::class, 'relation');
+		} catch (InvalidDefinitionClassException $exception) {
+			throw new InvalidDefinitionClassException(
+				sprintf('Relation "%s" must be an array-backed %s wrapper.', $relation->getName(), RelationInterface::class),
+				0,
+				$exception
+			);
+		}
 	}
 }

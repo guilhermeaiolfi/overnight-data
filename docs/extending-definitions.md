@@ -1,6 +1,6 @@
 # Extending Definitions
 
-The supported extension model is class-based and round-trip oriented.
+The supported extension model is class-based and array-backed.
 
 ## Supported extension points
 
@@ -10,42 +10,26 @@ The supported extension model is class-based and round-trip oriented.
 - custom `ViewField` subclasses;
 - custom relation subclasses;
 - custom display subclasses;
-- custom interface-definition subclasses.
+- custom interface-definition subclasses;
+- custom nested child nodes owned by those subclasses.
 
-## How extension works
+## Required contract
 
-Store the subclass as the definition `class` discriminator inside the Registry array. On restoration, `Registry` delegates reconstruction to the internal `DefinitionFactory`, which validates the discriminator before instantiating the wrapper.
+Stored wrappers that must round-trip through `Registry` need to:
 
-Supported expectations:
+- extend `ON\Data\Support\DefinitionNode`;
+- implement the expected public interface;
+- define canonical defaults through `definitionDefaults()`;
+- accept their logical parent in the public constructor;
+- keep exported state as plain array data only;
+- rebuild any nested wrapper caches from `afterBindDefinitionArray()` when they own nested children.
 
-- subclasses must preserve the parent contract of the base type they extend;
-- exported definition state must remain plain data only;
-- `all()` round-trip equality should hold across `new Registry($registry->all())`;
-- custom relation subclasses may opt into view compatibility by accepting a `ViewDefinition` parent and avoiding collection-only assumptions.
+`DefinitionFactory` validates and binds stored wrappers, but it does not normalize or materialize missing defaults during restoration.
+
+## Important boundary
+
+Implementations that satisfy only `FieldInterface`, `RelationInterface`, or another public interface are not enough for Registry restoration by themselves. If the wrapper does not extend `DefinitionNode`, the Registry cannot store and restore it as canonical array-backed definition data.
 
 ## Plain-data rule
 
-Definition exports may contain only:
-
-- arrays;
-- strings;
-- ints;
-- floats;
-- bools;
-- `null`.
-
-Objects, closures, and resources are rejected by `Registry::all()`.
-
-## Parent compatibility
-
-- `Field` subclasses work under `Collection` and `ViewDefinition`.
-- `ViewField` is the default field class for views.
-- Collection-only relation subclasses should reject `ViewDefinition` parents explicitly with `InvalidRelationParentException`.
-
-## Not public extension APIs
-
-The following are implementation details, not supported application extension APIs:
-
-- `DefinitionFactory`;
-- `DefinitionNode` rebinding hooks;
-- runtime wrapper caches.
+Definition exports may contain only arrays, strings, ints, floats, bools, and `null`. Objects, closures, and resources are rejected by `Registry::all()`.

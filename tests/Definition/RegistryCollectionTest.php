@@ -41,7 +41,8 @@ final class RegistryCollectionTest extends TestCase
 
 		$registry->register($replacement);
 
-		self::assertSame($replacement, $registry->getCollection('article'));
+		self::assertNotSame($replacement, $registry->getCollection('article'));
+		self::assertSame($replacement->all(), $registry->getCollection('article')?->all());
 		self::assertNotSame($original, $registry->getCollection('article'));
 	}
 

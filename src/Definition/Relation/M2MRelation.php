@@ -23,20 +23,12 @@ class M2MRelation extends AbstractRelation
 		DefinitionInterface $parent,
 	) {
 		parent::__construct($parent);
-
-		if (is_array($this->get('through'))) {
-			$throughItems = &$this->items['through'];
-			$this->through = DefinitionFactory::through($this, $throughItems);
-		}
 	}
 
 	public function __clone()
 	{
 		parent::__clone();
-		if (is_array($this->get('through'))) {
-			$throughItems = &$this->items['through'];
-			$this->through = DefinitionFactory::through($this, $throughItems);
-		}
+		$this->restoreThroughWrapper();
 	}
 
 	public function getCardinality(): string
@@ -51,9 +43,9 @@ class M2MRelation extends AbstractRelation
 
 	public function through(string $collection): M2MThrough
 	{
-		$this->set('through', []);
+		$this->items['through'] = M2MThrough::createDefinition();
 		$throughItems = &$this->items['through'];
-		$this->through = DefinitionFactory::through($this, $throughItems);
+		$this->through = DefinitionFactory::node($this, $throughItems, M2MThrough::class, 'through');
 		$this->through->collection($collection);
 
 		return $this->through;
@@ -69,5 +61,22 @@ class M2MRelation extends AbstractRelation
 	public function getCollectionFactory(): string
 	{
 		return (string) $this->get('collection_factory');
+	}
+
+	protected function afterBindDefinitionArray(): void
+	{
+		parent::afterBindDefinitionArray();
+		unset($this->through);
+		$this->restoreThroughWrapper();
+	}
+
+	private function restoreThroughWrapper(): void
+	{
+		if (! is_array($this->get('through'))) {
+			return;
+		}
+
+		$throughItems = &$this->items['through'];
+		$this->through = DefinitionFactory::node($this, $throughItems, M2MThrough::class, 'through');
 	}
 }

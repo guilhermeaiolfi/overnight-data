@@ -7,22 +7,13 @@ namespace ON\Data\Definition;
 use InvalidArgumentException;
 use ON\Data\Definition\Collection\Collection;
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\Display\DisplayInterface;
-use ON\Data\Definition\Display\RawDisplay;
-use ON\Data\Definition\Exception\ConflictingPrimaryKeyDefinitionException;
 use ON\Data\Definition\Exception\DefinitionNameConflictException;
 use ON\Data\Definition\Exception\ForeignRegistryDefinitionException;
 use ON\Data\Definition\Exception\InvalidDefinitionClassException;
 use ON\Data\Definition\Exception\InvalidDefinitionDataException;
-use ON\Data\Definition\Field\Field;
-use ON\Data\Definition\Field\FieldInterface;
-use ON\Data\Definition\Interface\InterfaceInterface;
 use ON\Data\Definition\Internal\DefinitionFactory;
-use ON\Data\Definition\Relation\M2MThrough;
-use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Definition\View\ViewDefinition;
 use ON\Data\Definition\View\ViewDefinitionInterface;
-use ON\Data\Definition\View\ViewField;
 use ON\Data\Support\DefinitionNode;
 
 class Registry extends DefinitionNode
@@ -39,7 +30,10 @@ class Registry extends DefinitionNode
 	public function __construct(?array $items = null)
 	{
 		parent::__construct($items ?? []);
-		$this->normalizeDefinitions();
+		$this->assertRootArrays();
+		$this->assertRootDefinitions('collections', CollectionInterface::class, 'collection');
+		$this->assertRootDefinitions('views', ViewDefinitionInterface::class, 'view');
+		$this->assertNoDefinitionNameConflicts();
 	}
 
 	protected static function definitionDefaults(): array
@@ -52,28 +46,29 @@ class Registry extends DefinitionNode
 
 	public function register(CollectionInterface $collection): void
 	{
-		$data = $collection instanceof Collection ? $collection->all() : $this->exportCollection($collection);
-		$name = $data['name'] ?? $collection->getName();
-		$data['name'] = $name;
-		$data['class'] = $data['class'] ?? $collection::class;
+		$this->requireLocalDefinition($collection);
 
+		$data = DefinitionFactory::export($collection, CollectionInterface::class, 'collection');
+		self::assertPlainData($data);
+
+		$name = $data['name'] ?? null;
+		$contextName = is_string($name) ? $name : $collection->getName();
+		$name = $this->requireDefinitionName($name, 'collection');
+		$this->assertDefinitionNameAvailable($name, 'collection');
+		$this->assertCollectionRootClass($data, $contextName);
+
+		$data['name'] = $name;
 		$this->items['collections'][$name] = $data;
+
 		foreach ($this->collections as $cachedName => $cachedCollection) {
-			if ($cachedCollection === $collection) {
+			if ($cachedCollection === $collection && $cachedName !== $name) {
 				unset($this->collections[$cachedName]);
 			}
 		}
 
-		if ($collection instanceof Collection) {
-			$items = &$this->items['collections'][$name];
-			DefinitionFactory::rebind($collection, $items);
-			$this->collections[$name] = $collection;
-
-			return;
-		}
-
 		unset($this->collections[$name]);
-		$this->getCollection($name);
+		$items = &$this->items['collections'][$name];
+		$this->collections[$name] = DefinitionFactory::collection($this, $items);
 	}
 
 	public function getDefinitionFiles(): array
@@ -105,22 +100,18 @@ class Registry extends DefinitionNode
 
 	public function collection(string $name): CollectionInterface
 	{
-		$name = $this->normalizeDefinitionName($name, 'collection');
+		$name = $this->requireDefinitionName($name, 'collection');
 		$this->assertDefinitionNameAvailable($name, 'collection');
 		$this->items['collections'][$name] = Collection::defaultDefinition($name);
 		unset($this->collections[$name]);
 
-		$collection = $this->getCollection($name);
-		if ($collection === null) {
-			$collection = new Collection($this);
-			$this->register($collection->name($name)->table($name));
-			$collection = $this->getCollection($name);
-		}
+		$items = &$this->items['collections'][$name];
+		$this->collections[$name] = DefinitionFactory::collection($this, $items);
 
 		$trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
-		$collection?->setFileDefinitionLocation($trace[1]['file'] ?? __FILE__);
+		$this->collections[$name]->setFileDefinitionLocation($trace[1]['file'] ?? __FILE__);
 
-		return $collection ?? new Collection($this);
+		return $this->collections[$name];
 	}
 
 	public function getCollection(string|CollectionInterface $name): ?CollectionInterface
@@ -143,7 +134,7 @@ class Registry extends DefinitionNode
 		return $this->collections[$name];
 	}
 
-	/** @var CollectionInterface[] */
+	/** @return CollectionInterface[] */
 	public function getCollections(): array
 	{
 		$collections = [];
@@ -164,14 +155,15 @@ class Registry extends DefinitionNode
 
 	public function view(string $name): ViewDefinitionInterface
 	{
-		$name = $this->normalizeDefinitionName($name, 'view');
+		$name = $this->requireDefinitionName($name, 'view');
 		$this->assertDefinitionNameAvailable($name, 'view');
 		$this->items['views'][$name] = ViewDefinition::defaultDefinition($name);
 		unset($this->views[$name]);
 
-		$view = $this->getView($name);
+		$items = &$this->items['views'][$name];
+		$this->views[$name] = DefinitionFactory::view($this, $items);
 
-		return $view ?? new ViewDefinition($this);
+		return $this->views[$name];
 	}
 
 	public function getView(string|ViewDefinitionInterface $view): ?ViewDefinitionInterface
@@ -253,317 +245,61 @@ class Registry extends DefinitionNode
 		return $this->items;
 	}
 
-	private function normalizeDefinitions(): void
+	private function assertRootArrays(): void
 	{
-		$this->items['collections'] = $this->normalizeCollectionDefinitions($this->items['collections']);
-		$this->items['views'] = $this->normalizeViewDefinitions($this->items['views']);
-		$this->assertNoDefinitionNameConflicts();
-	}
-
-	/**
-	 * @return array<string, mixed>
-	 */
-	private function exportCollection(CollectionInterface $collection): array
-	{
-		if ($collection instanceof DefinitionNode) {
-			$all = $collection->all();
-			self::assertPlainData($all);
-
-			return $all;
+		if (! is_array($this->items['collections'])) {
+			throw new InvalidArgumentException('Registry collections must be an array.');
 		}
 
-		return [
-			'class' => $collection::class,
-			'name' => $collection->getName(),
-			'table' => $collection->getTable(),
-			'database' => $collection->getDatabase(),
-			'entity' => $collection->getEntity(),
-			'parentCollection' => $collection->getParentCollection(),
-			'scope' => $collection->getScope(),
-			'repository' => $collection->getRepository(),
-			'mapper' => $collection->getMapper(),
-			'source' => $collection->getSource(),
-			'note' => $collection->getNote(),
-			'description' => $collection->getDescription(),
-			'hidden' => $collection->isHidden(),
-			'fileLocation' => $collection->getFileDefinitionLocation(),
-			'primaryKey' => $collection->hasPrimaryKey() ? $collection->getPrimaryKey() : [],
-			'metadata' => [],
-			'fields' => [],
-			'relations' => [],
-		];
+		if (! is_array($this->items['views'])) {
+			throw new InvalidArgumentException('Registry views must be an array.');
+		}
 	}
 
 	/**
-	 * @param array<string, mixed> $definitions
-	 * @return array<string, array<string, mixed>>
+	 * @param class-string $expectedType
 	 */
-	private function normalizeCollectionDefinitions(array $definitions): array
+	private function assertRootDefinitions(string $rootKey, string $expectedType, string $context): void
 	{
-		$normalized = [];
+		foreach ($this->items[$rootKey] as $name => $definition) {
+			if (! is_array($definition)) {
+				throw new InvalidArgumentException(sprintf('%s definition "%s" must be an array.', ucfirst($context), (string) $name));
+			}
 
-		foreach ($definitions as $key => $definition) {
-			$collection = is_array($definition) ? $definition : [];
-			$name = $this->normalizeDefinitionName($collection['name'] ?? $key, 'collection');
-			$collection['name'] = $name;
-			$collection['class'] = DefinitionFactory::normalizeStoredClass(
-				$collection,
-				'class',
-				Collection::class,
-				CollectionInterface::class,
-				'collection',
-			);
-			$collection = DefinitionFactory::materializeDefinitionArray($collection, $collection['class']);
-			$collection['name'] = $name;
-			$collection['table'] = is_string($collection['table'] ?? null) && $collection['table'] !== ''
-				? $collection['table']
-				: $name;
-			$collection['fields'] = $this->normalizeFields($collection['fields'] ?? [], Field::class);
-			$collection['relations'] = $this->normalizeRelations($collection['relations'] ?? []);
-			$collection['metadata'] = $this->normalizePlainArray($collection['metadata'] ?? []);
-			$collection['primaryKey'] = $this->normalizePrimaryKey($name, $collection);
-
-			if (isset($normalized[$name])) {
-				throw new DefinitionNameConflictException(
-					sprintf("Collection name '%s' is defined more than once.", $name)
+			$storedName = $this->requireDefinitionName($definition['name'] ?? null, $context);
+			if ((string) $name !== $storedName) {
+				throw new InvalidArgumentException(
+					sprintf("Stored %s name '%s' must match root key '%s'.", $context, $storedName, (string) $name)
 				);
 			}
 
-			$normalized[$name] = $collection;
+			DefinitionFactory::requireStoredClass($definition, $expectedType, $context);
 		}
-
-		return $normalized;
 	}
 
 	/**
-	 * @param array<string, mixed> $definitions
-	 * @return array<string, array<string, mixed>>
+	 * @param array<string, mixed> $data
 	 */
-	private function normalizeViewDefinitions(array $definitions): array
+	private function assertCollectionRootClass(array $data, string $contextName): void
 	{
-		$normalized = [];
-
-		foreach ($definitions as $key => $definition) {
-			$view = is_array($definition) ? $definition : [];
-			$name = $this->normalizeDefinitionName($view['name'] ?? $key, 'view');
-			$view['name'] = $name;
-			$view['class'] = DefinitionFactory::normalizeStoredClass(
-				$view,
-				'class',
-				ViewDefinition::class,
-				ViewDefinitionInterface::class,
-				'view',
-			);
-			$view = DefinitionFactory::materializeDefinitionArray($view, $view['class']);
-			$view['name'] = $name;
-			$view['source'] = isset($view['source']) && is_string($view['source']) && trim($view['source']) !== ''
-				? trim($view['source'])
-				: null;
-			$view['fields'] = $this->normalizeFields($view['fields'] ?? [], ViewField::class);
-			$view['relations'] = $this->normalizeRelations($view['relations'] ?? []);
-			$view['metadata'] = $this->normalizePlainArray($view['metadata'] ?? []);
-
-			if (isset($normalized[$name])) {
-				throw new DefinitionNameConflictException(
-					sprintf("View name '%s' is defined more than once.", $name)
-				);
-			}
-
-			$normalized[$name] = $view;
-		}
-
-		return $normalized;
-	}
-
-	/**
-	 * @param mixed $definitions
-	 * @return array<string, array<string, mixed>>
-	 */
-	private function normalizeFields(mixed $definitions, string $defaultClass): array
-	{
-		$normalized = [];
-		if (! is_array($definitions)) {
-			return $normalized;
-		}
-
-		foreach ($definitions as $key => $definition) {
-			$field = is_array($definition) ? $definition : [];
-			$name = $this->normalizeDefinitionName($field['name'] ?? $key, 'field');
-			$field['name'] = $name;
-			$field['class'] = DefinitionFactory::normalizeStoredClass(
-				$field,
-				'class',
-				$defaultClass,
-				FieldInterface::class,
-				'field',
-			);
-			$field = DefinitionFactory::materializeDefinitionArray($field, $field['class']);
-			$field['name'] = $name;
-			$field['metadata'] = $this->normalizePlainArray($field['metadata'] ?? []);
-			$this->normalizeNestedDisplay($field);
-			$this->normalizeNestedInterface($field);
-			$normalized[$name] = $field;
-		}
-
-		return $normalized;
-	}
-
-	/**
-	 * @param mixed $definitions
-	 * @return array<string, array<string, mixed>>
-	 */
-	private function normalizeRelations(mixed $definitions): array
-	{
-		$normalized = [];
-		if (! is_array($definitions)) {
-			return $normalized;
-		}
-
-		foreach ($definitions as $key => $definition) {
-			$relation = is_array($definition) ? $definition : [];
-			if (! array_key_exists('class', $relation)) {
-				throw new InvalidDefinitionClassException('Relation definition is missing required class discriminator.');
-			}
-
-			$name = $this->normalizeDefinitionName($relation['name'] ?? $key, 'relation');
-			$relation['name'] = $name;
-			$relation['class'] = DefinitionFactory::normalizeStoredClass(
-				$relation,
-				'class',
-				null,
-				RelationInterface::class,
-				'relation',
-			);
-			$relation = DefinitionFactory::materializeDefinitionArray($relation, $relation['class']);
-			$relation['name'] = $name;
-			$relation['metadata'] = $this->normalizePlainArray($relation['metadata'] ?? []);
-			if (isset($relation['through']) && is_array($relation['through'])) {
-				$relation['through'] = DefinitionFactory::materializeDefinitionArray($relation['through'], M2MThrough::class);
-			}
-			$this->normalizeNestedDisplay($relation);
-			$this->normalizeNestedInterface($relation);
-			$normalized[$name] = $relation;
-		}
-
-		return $normalized;
-	}
-
-	/**
-	 * @param array<string, mixed> $definition
-	 */
-	private function normalizeNestedDisplay(array &$definition): void
-	{
-		if (! array_key_exists('display', $definition) || ! is_array($definition['display'])) {
-			return;
-		}
-
-		$display = $definition['display'];
-		$display['class'] = DefinitionFactory::normalizeStoredClass(
-			$display,
-			'class',
-			RawDisplay::class,
-			DisplayInterface::class,
-			'display',
-		);
-		$display = DefinitionFactory::materializeDefinitionArray($display, $display['class']);
-		$definition['display'] = $display;
-	}
-
-	/**
-	 * @param array<string, mixed> $definition
-	 */
-	private function normalizeNestedInterface(array &$definition): void
-	{
-		if (! array_key_exists('interface', $definition) || ! is_array($definition['interface'])) {
-			return;
-		}
-
-		$interface = $definition['interface'];
-		$interface['class'] = DefinitionFactory::normalizeStoredClass(
-			$interface,
-			'class',
-			null,
-			InterfaceInterface::class,
-			'interface',
-		);
-		$interface = DefinitionFactory::materializeDefinitionArray($interface, $interface['class']);
-		$definition['interface'] = $interface;
-	}
-
-	/**
-	 * @param mixed $value
-	 * @return array<string, mixed>
-	 */
-	private function normalizePlainArray(mixed $value): array
-	{
-		return is_array($value) ? $value : [];
-	}
-
-	/**
-	 * @param array<string, mixed> $collection
-	 * @return list<string>
-	 */
-	private function normalizePrimaryKey(string $collectionName, array &$collection): array
-	{
-		$collection['fields'] ??= [];
-		$fieldPrimaryKey = [];
-
-		foreach ($collection['fields'] as $fieldName => &$field) {
-			if (! is_array($field)) {
-				continue;
-			}
-
-			$canonicalFieldName = is_string($fieldName) && $fieldName !== ''
-				? $fieldName
-				: (($field['name'] ?? null) && is_string($field['name']) ? $field['name'] : null);
-
-			if (($field['pk'] ?? false) === true && is_string($canonicalFieldName) && $canonicalFieldName !== '') {
-				$fieldPrimaryKey[] = $canonicalFieldName;
-			}
-
-			unset($field['pk']);
-		}
-
-		unset($field);
-
-		$collectionPrimaryKey = $collection['primaryKey'] ?? null;
-		if ($collectionPrimaryKey === null) {
-			return $fieldPrimaryKey;
-		}
-
-		if (! is_array($collectionPrimaryKey)) {
-			$collectionPrimaryKey = [];
-		}
-
-		$normalizedCollectionPrimaryKey = [];
-		foreach ($collectionPrimaryKey as $fieldName) {
-			if (! is_string($fieldName) || trim($fieldName) === '') {
-				continue;
-			}
-
-			$normalizedCollectionPrimaryKey[] = trim($fieldName);
-		}
-
-		if ($fieldPrimaryKey !== [] && $normalizedCollectionPrimaryKey !== [] && $fieldPrimaryKey !== $normalizedCollectionPrimaryKey) {
-			throw new ConflictingPrimaryKeyDefinitionException(
-				sprintf(
-					"Collection '%s' contains conflicting field-level and collection-level primary key definitions.",
-					$collectionName
-				)
+		try {
+			DefinitionFactory::requireStoredClass($data, CollectionInterface::class, 'collection');
+		} catch (InvalidDefinitionClassException $exception) {
+			throw new InvalidDefinitionClassException(
+				sprintf('Invalid collection "%s": %s', $contextName, $exception->getMessage()),
+				0,
+				$exception
 			);
 		}
-
-		return $normalizedCollectionPrimaryKey !== [] ? $normalizedCollectionPrimaryKey : $fieldPrimaryKey;
 	}
 
-	private function normalizeDefinitionName(mixed $name, string $context): string
+	private function requireDefinitionName(mixed $name, string $context): string
 	{
 		if (! is_string($name)) {
 			throw new InvalidArgumentException(sprintf('%s name must be a string.', ucfirst($context)));
 		}
 
-		$name = trim($name);
-		if ($name === '') {
+		if (trim($name) === '') {
 			throw new InvalidArgumentException(sprintf('%s name cannot be empty.', ucfirst($context)));
 		}
 

@@ -30,6 +30,7 @@ final class ViewDefinitionTest extends TestCase
 		$registry = new Registry([
 			'collections' => [
 				'users' => [
+					'class' => Collection::class,
 					'name' => 'users',
 					'table' => 'users',
 				],
@@ -73,12 +74,14 @@ final class ViewDefinitionTest extends TestCase
 		new Registry([
 			'collections' => [
 				'users' => [
+					'class' => Collection::class,
 					'name' => 'users',
 					'table' => 'users',
 				],
 			],
 			'views' => [
 				'users' => [
+					'class' => CustomViewDefinition::class,
 					'name' => 'users',
 				],
 			],
@@ -153,19 +156,21 @@ final class ViewDefinitionTest extends TestCase
 		$registry = new Registry([
 			'collections' => [
 				'users' => [
+					'class' => Collection::class,
 					'name' => 'users',
 					'fields' => [
-						'id' => ['name' => 'id', 'type' => 'int'],
+						'id' => ['class' => Field::class, 'name' => 'id', 'type' => 'int'],
 					],
 					'relations' => [],
 				],
 			],
 			'views' => [
 				'summary' => [
+					'class' => CustomViewDefinition::class,
 					'name' => 'summary',
 					'source' => 'users',
 					'fields' => [
-						'id' => ['name' => 'id', 'type' => 'int'],
+						'id' => ['class' => CustomViewField::class, 'name' => 'id', 'type' => 'int'],
 					],
 					'relations' => [],
 				],

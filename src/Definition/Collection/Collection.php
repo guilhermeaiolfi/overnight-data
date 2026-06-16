@@ -19,18 +19,10 @@ class Collection extends AbstractDefinition implements CollectionInterface
 {
 	protected static function definitionDefaults(): array
 	{
-		return static::defaultDefinition('');
-	}
-
-	/**
-	 * @return array<string, mixed>
-	 */
-	public static function defaultDefinition(string $name): array
-	{
 		return [
 			'class' => static::class,
-			'name' => $name,
-			'table' => $name,
+			'name' => '',
+			'table' => '',
 			'database' => 'default',
 			'entity' => stdClass::class,
 			'parentCollection' => null,
@@ -47,6 +39,17 @@ class Collection extends AbstractDefinition implements CollectionInterface
 			'fields' => [],
 			'relations' => [],
 		];
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	public static function defaultDefinition(string $name): array
+	{
+		return static::createDefinition([
+			'name' => $name,
+			'table' => $name,
+		]);
 	}
 
 	public function table(string $table): self

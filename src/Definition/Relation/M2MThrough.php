@@ -21,6 +21,7 @@ class M2MThrough extends DefinitionNode
 	protected static function definitionDefaults(): array
 	{
 		return [
+			'class' => static::class,
 			'collectionName' => '',
 			'inner_keys' => [],
 			'outer_keys' => [],
@@ -80,7 +81,7 @@ class M2MThrough extends DefinitionNode
 			throw new LogicException('getInnerField() is only available for single-key through relations. Use throughInnerKeys() instead.');
 		}
 
-		return $this->getCollection()->fields->get($keys[0]);
+		return $this->getCollection()->getFields()->get($keys[0]);
 	}
 
 	public function outerKey(string|array $fieldName): self
@@ -108,7 +109,7 @@ class M2MThrough extends DefinitionNode
 			throw new LogicException('getOuterField() is only available for single-key through relations. Use throughOuterKeys() instead.');
 		}
 
-		return $this->getCollection()->fields->get($keys[0]);
+		return $this->getCollection()->getFields()->get($keys[0]);
 	}
 
 	public function throughInnerKeys(): array

@@ -109,4 +109,55 @@ final class DefinitionNodeTest extends TestCase
 
 		self::assertPlainData($node->all());
 	}
+
+	public function testCreateDefinitionMergesAssociativeArraysAndReplacesLists(): void
+	{
+		$definition = TestDefaultDefinitionNode::createDefinition([
+			'name' => 'users',
+			'primaryKey' => ['tenant_id', 'id'],
+			'metadata' => [
+				'label' => 'Users',
+			],
+		]);
+
+		self::assertSame(
+			[
+				'class' => TestDefaultDefinitionNode::class,
+				'name' => 'users',
+				'primaryKey' => ['tenant_id', 'id'],
+				'metadata' => [
+					'visible' => true,
+					'label' => 'Users',
+				],
+			],
+			$definition,
+		);
+	}
+
+	public function testFromReferenceDoesNotMaterializeMissingDefaults(): void
+	{
+		$items = [
+			'name' => 'users',
+		];
+
+		$node = TestDefaultDefinitionNode::fromReference($items);
+
+		self::assertSame(['name' => 'users'], $node->all());
+		self::assertSame(['name' => 'users'], $items);
+	}
+}
+
+final class TestDefaultDefinitionNode extends DefinitionNode
+{
+	protected static function definitionDefaults(): array
+	{
+		return [
+			'class' => static::class,
+			'name' => '',
+			'primaryKey' => ['id'],
+			'metadata' => [
+				'visible' => true,
+			],
+		];
+	}
 }

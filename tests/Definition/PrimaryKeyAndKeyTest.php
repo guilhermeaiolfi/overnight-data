@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Definition;
 
 use ON\Data\Definition\Exception\CompositeKeyException;
-use ON\Data\Definition\Exception\ConflictingPrimaryKeyDefinitionException;
 use ON\Data\Definition\Exception\InvalidPrimaryKeyException;
 use ON\Data\Definition\Exception\PrimaryKeyNotDefinedException;
 use ON\Data\Definition\Registry;
@@ -215,32 +214,21 @@ final class PrimaryKeyAndKeyTest extends TestCase
 		self::assertTrue($rebound->equals($first));
 	}
 
-	public function testOldFieldLevelPrimaryKeyFlagsAreMigratedAndConflictsAreRejected(): void
+	public function testLegacyFieldLevelPrimaryKeyFlagsAreNotMigrated(): void
 	{
 		$registry = new Registry([
 			'collections' => [
-				'post_user' => [
-					'fields' => [
-						'post_id' => ['class' => 'ON\\Data\\Definition\\Field\\Field', 'name' => 'post_id', 'type' => 'int', 'pk' => true],
-						'user_id' => ['class' => 'ON\\Data\\Definition\\Field\\Field', 'name' => 'user_id', 'type' => 'int', 'pk' => true],
-					],
-				],
-			],
-		]);
-
-		self::assertSame(['post_id', 'user_id'], $registry->all()['collections']['post_user']['primaryKey']);
-		self::assertArrayNotHasKey('pk', $registry->all()['collections']['post_user']['fields']['post_id']);
-
-		$this->expectException(ConflictingPrimaryKeyDefinitionException::class);
-		new Registry([
-			'collections' => [
 				'users' => [
-					'primaryKey' => ['uuid'],
+					'class' => 'ON\\Data\\Definition\\Collection\\Collection',
+					'name' => 'users',
 					'fields' => [
 						'id' => ['class' => 'ON\\Data\\Definition\\Field\\Field', 'name' => 'id', 'type' => 'int', 'pk' => true],
 					],
 				],
 			],
 		]);
+
+		self::assertArrayNotHasKey('primaryKey', $registry->all()['collections']['users']);
+		self::assertTrue($registry->all()['collections']['users']['fields']['id']['pk']);
 	}
 }

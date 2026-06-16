@@ -191,7 +191,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 			throw new LogicException('getInnerField() is only available for single-key relations. Use innerKeys() instead.');
 		}
 
-		return $this->parent->fields->get($keys[0]);
+		return $this->parent->getFields()->get($keys[0]);
 	}
 
 	public function outerKey(string|array $fieldName): self
@@ -229,7 +229,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 			throw new LogicException('getOuterField() is only available for single-key relations. Use outerKeys() instead.');
 		}
 
-		return $this->getCollection()->fields->get($keys[0]);
+		return $this->getCollection()->getFields()->get($keys[0]);
 	}
 
 	public function loader(string $loader): self
@@ -333,5 +333,12 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 				);
 			}
 		}
+	}
+
+	protected function afterBindDefinitionArray(): void
+	{
+		$this->display = null;
+		$this->interface = null;
+		$this->metadataMap = null;
 	}
 }

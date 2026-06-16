@@ -264,4 +264,11 @@ class Field extends DefinitionNode implements FieldInterface
 	{
 		return $this->parent;
 	}
+
+	protected function afterBindDefinitionArray(): void
+	{
+		$this->display = null;
+		$this->interface = null;
+		$this->metadataMap = null;
+	}
 }

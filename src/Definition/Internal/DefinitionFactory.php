@@ -5,25 +5,19 @@ declare(strict_types=1);
 namespace ON\Data\Definition\Internal;
 
 use Closure;
-use ON\Data\Definition\Collection\Collection;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Display\DisplayInterface;
-use ON\Data\Definition\Display\RawDisplay;
 use ON\Data\Definition\Exception\InvalidDefinitionClassException;
-use ON\Data\Definition\Field\Field;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Interface\InterfaceInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\Definition\Relation\M2MRelation;
-use ON\Data\Definition\Relation\M2MThrough;
 use ON\Data\Definition\Relation\RelationInterface;
-use ON\Data\Definition\View\ViewDefinition;
 use ON\Data\Definition\View\ViewDefinitionInterface;
 use ON\Data\Support\DefinitionNode;
 
 /**
- * @internal Restores and rebinds array-backed definition wrappers owned by Registry.
+ * @internal Restores and rebinds canonical array-backed definition wrappers.
  */
 final class DefinitionFactory
 {
@@ -32,11 +26,8 @@ final class DefinitionFactory
 	 */
 	public static function collection(Registry $registry, array &$items): CollectionInterface
 	{
-		$class = self::normalizeStoredClass($items, 'class', Collection::class, CollectionInterface::class, 'collection');
-
-		/** @var CollectionInterface&DefinitionNode $collection */
-		$collection = new $class($registry);
-		self::rebind($collection, $items);
+		/** @var CollectionInterface $collection */
+		$collection = self::node($registry, $items, CollectionInterface::class, 'collection');
 
 		return $collection;
 	}
@@ -46,11 +37,8 @@ final class DefinitionFactory
 	 */
 	public static function view(Registry $registry, array &$items): ViewDefinitionInterface
 	{
-		$class = self::normalizeStoredClass($items, 'class', ViewDefinition::class, ViewDefinitionInterface::class, 'view');
-
-		/** @var ViewDefinitionInterface&DefinitionNode $view */
-		$view = new $class($registry);
-		self::rebind($view, $items);
+		/** @var ViewDefinitionInterface $view */
+		$view = self::node($registry, $items, ViewDefinitionInterface::class, 'view');
 
 		return $view;
 	}
@@ -60,11 +48,8 @@ final class DefinitionFactory
 	 */
 	public static function field(DefinitionInterface $definition, array &$items): FieldInterface
 	{
-		$class = self::normalizeStoredClass($items, 'class', Field::class, FieldInterface::class, 'field');
-
-		/** @var FieldInterface&DefinitionNode $field */
-		$field = new $class($definition);
-		self::rebind($field, $items);
+		/** @var FieldInterface $field */
+		$field = self::node($definition, $items, FieldInterface::class, 'field');
 
 		return $field;
 	}
@@ -74,15 +59,8 @@ final class DefinitionFactory
 	 */
 	public static function relation(DefinitionInterface $definition, array &$items): RelationInterface
 	{
-		if (! array_key_exists('class', $items)) {
-			throw new InvalidDefinitionClassException('Relation definition is missing required class discriminator.');
-		}
-
-		$class = self::normalizeStoredClass($items, 'class', null, RelationInterface::class, 'relation');
-
-		/** @var RelationInterface&DefinitionNode $relation */
-		$relation = new $class($definition);
-		self::rebind($relation, $items);
+		/** @var RelationInterface $relation */
+		$relation = self::node($definition, $items, RelationInterface::class, 'relation');
 
 		return $relation;
 	}
@@ -92,11 +70,8 @@ final class DefinitionFactory
 	 */
 	public static function display(mixed $parent, array &$items): DisplayInterface
 	{
-		$class = self::normalizeStoredClass($items, 'class', RawDisplay::class, DisplayInterface::class, 'display');
-
-		/** @var DisplayInterface&DefinitionNode $display */
-		$display = new $class($parent);
-		self::rebind($display, $items);
+		/** @var DisplayInterface $display */
+		$display = self::node($parent, $items, DisplayInterface::class, 'display');
 
 		return $display;
 	}
@@ -106,24 +81,48 @@ final class DefinitionFactory
 	 */
 	public static function interface(mixed $parent, array &$items): InterfaceInterface
 	{
-		$class = self::normalizeStoredClass($items, 'class', null, InterfaceInterface::class, 'interface');
-
-		/** @var InterfaceInterface&DefinitionNode $interface */
-		$interface = new $class($parent);
-		self::rebind($interface, $items);
+		/** @var InterfaceInterface $interface */
+		$interface = self::node($parent, $items, InterfaceInterface::class, 'interface');
 
 		return $interface;
 	}
 
 	/**
+	 * @template T of object
+	 *
+	 * @param class-string<T> $expectedType
 	 * @param array<string, mixed> $items
+	 * @return T
+	 *
+	 * @internal
 	 */
-	public static function through(M2MRelation $relation, array &$items): M2MThrough
-	{
-		$through = new M2MThrough($relation);
-		self::rebind($through, $items);
+	public static function node(
+		object $parent,
+		array &$items,
+		string $expectedType,
+		string $context,
+	): object {
+		$class = self::requireStoredClass($items, $expectedType, $context);
 
-		return $through;
+		/** @var T&DefinitionNode $node */
+		$node = new $class($parent);
+		self::rebind($node, $items);
+
+		return $node;
+	}
+
+	/**
+	 * @param class-string $expectedType
+	 * @return array<string, mixed>
+	 *
+	 * @internal
+	 */
+	public static function export(object $node, string $expectedType, string $context): array
+	{
+		self::assertDefinitionNodeInstance($node, $expectedType, $context);
+
+		/** @var DefinitionNode $node */
+		return $node->all();
 	}
 
 	/**
@@ -144,29 +143,15 @@ final class DefinitionFactory
 	}
 
 	/**
-	 * @param class-string $class
-	 * @return array<string, mixed>
-	 */
-	public static function materializeDefinitionArray(array $items, string $class): array
-	{
-		return self::mergeArrays(self::definitionDefaultsFor($class), $items);
-	}
-
-	/**
 	 * @param array<string, mixed> $items
-	 * @param class-string|null $defaultClass
+	 * @param class-string $expectedType
 	 * @return class-string
 	 */
-	public static function normalizeStoredClass(
-		array &$items,
-		string $key,
-		?string $defaultClass,
-		string $expectedType,
-		string $context,
-	): string {
-		$class = $items[$key] ?? $defaultClass;
+	public static function requireStoredClass(array $items, string $expectedType, string $context): string
+	{
+		$class = $items['class'] ?? null;
 		if (! is_string($class) || $class === '') {
-			throw new InvalidDefinitionClassException(sprintf('Invalid %s class discriminator.', $context));
+			throw new InvalidDefinitionClassException(sprintf('%s definition is missing required class discriminator.', ucfirst($context)));
 		}
 
 		if (! class_exists($class)) {
@@ -177,52 +162,30 @@ final class DefinitionFactory
 			throw new InvalidDefinitionClassException(sprintf('Invalid %s class "%s".', $context, $class));
 		}
 
-		$items[$key] = $class;
+		if (! is_a($class, DefinitionNode::class, true)) {
+			throw new InvalidDefinitionClassException(
+				sprintf('Stored %s class "%s" must extend %s.', $context, $class, DefinitionNode::class)
+			);
+		}
 
 		return $class;
 	}
 
 	/**
-	 * @param class-string $class
-	 * @return array<string, mixed>
+	 * @param class-string $expectedType
 	 */
-	private static function definitionDefaultsFor(string $class): array
+	private static function assertDefinitionNodeInstance(object $node, string $expectedType, string $context): void
 	{
-		/** @var Closure(class-string): array<string, mixed> $reader */
-		$reader = Closure::bind(
-			static function (string $class): array {
-				return $class::definitionDefaults();
-			},
-			null,
-			$class
-		);
-
-		return $reader($class);
-	}
-
-	/**
-	 * @param array<string, mixed> $left
-	 * @param array<string, mixed> $right
-	 * @return array<string, mixed>
-	 */
-	private static function mergeArrays(array $left, array $right): array
-	{
-		foreach ($right as $key => $value) {
-			if (! is_string($key)) {
-				$left[$key] = $value;
-
-				continue;
-			}
-
-			if (isset($left[$key]) && is_array($left[$key]) && is_array($value)) {
-				$left[$key] = self::mergeArrays($left[$key], $value);
-
-				continue;
-			}
-
-			$left[$key] = $value;
+		if (! $node instanceof $expectedType) {
+			throw new InvalidDefinitionClassException(
+				sprintf('Invalid %s instance "%s".', $context, $node::class)
+			);
 		}
 
-		return $left;
+		if (! $node instanceof DefinitionNode) {
+			throw new InvalidDefinitionClassException(
+				sprintf('Stored %s instance "%s" must extend %s.', $context, $node::class, DefinitionNode::class)
+			);
+		}
 	}
 }

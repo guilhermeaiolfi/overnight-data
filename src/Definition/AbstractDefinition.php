@@ -46,12 +46,12 @@ abstract class AbstractDefinition extends DefinitionNode implements DefinitionIn
 
 		$class = $this->defaultFieldClass();
 		$field = new $class($this);
-		$this->fields->set($name, $field);
-		$field = $this->fields->get($name);
 		$field->name($name);
 		if ($type !== null) {
 			$field->type($type);
 		}
+		$this->fields->set($name, $field);
+		$field = $this->fields->get($name);
 
 		return $field;
 	}
@@ -74,9 +74,9 @@ abstract class AbstractDefinition extends DefinitionNode implements DefinitionIn
 	public function relation(string $name, string $type): RelationInterface
 	{
 		$relation = new $type($this);
+		$relation->name($name);
 		$this->relations->replace($name, $relation);
 		$relation = $this->relations->get($name);
-		$relation->name($name);
 
 		return $relation;
 	}
