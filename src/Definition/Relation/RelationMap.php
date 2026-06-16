@@ -18,28 +18,19 @@ use Traversable;
 final class RelationMap implements IteratorAggregate
 {
 	/** @var array<string, mixed> */
-	private array $items = [];
+	private array $items;
 
 	/** @var array<string, RelationInterface> */
 	private array $relations = [];
 
+	/**
+	 * @param array<string, mixed> $items
+	 */
 	public function __construct(
-		private ?DefinitionInterface $parent = null,
-		?array &$items = null,
+		private DefinitionInterface $parent,
+		array &$items,
 	) {
-		if ($items !== null) {
-			$this->items = &$items;
-		}
-	}
-
-	public function __clone()
-	{
-		$items = $this->items;
-		$this->items = $items;
-		foreach ($this->relations as $name => $relation) {
-			$this->relations[$name] = clone $relation;
-			$this->items[$name] = DefinitionFactory::export($this->relations[$name], RelationInterface::class, 'relation');
-		}
+		$this->items = &$items;
 	}
 
 	public function has(string $name): bool
@@ -49,65 +40,36 @@ final class RelationMap implements IteratorAggregate
 
 	public function get(string $name): RelationInterface
 	{
-		if (! $this->has($name)) {
+		if (! $this->has($name) || ! is_array($this->items[$name])) {
 			throw new RelationException("Undefined relation `{$name}`");
 		}
 
-		if (isset($this->relations[$name])) {
-			return $this->relations[$name];
+		if (! isset($this->relations[$name])) {
+			$items = &$this->items[$name];
+			$this->relations[$name] = DefinitionFactory::restoreRelation($this->parent, $name, $items);
 		}
-
-		if ($this->parent === null || ! is_array($this->items[$name])) {
-			throw new RelationException("Undefined relation `{$name}`");
-		}
-
-		$items = &$this->items[$name];
-		$this->relations[$name] = DefinitionFactory::relation($this->parent, $items);
 
 		return $this->relations[$name];
 	}
 
-	public function set(string $name, RelationInterface $relation): self
+	public function createOrReturn(string $name, string $class, array $values = []): RelationInterface
 	{
 		if ($this->has($name)) {
-			throw new RelationException("Relation `{$name}` already exists");
+			$relation = $this->get($name);
+			if ($relation::class !== $class) {
+				throw new InvalidDefinitionClassException(
+					sprintf("Cannot redefine relation '%s' with class '%s'; stored class is '%s'.", $name, $class, $relation::class)
+				);
+			}
+
+			return $relation;
 		}
 
-		$this->items[$name] = $this->exportRelationDefinition($relation);
-		unset($this->relations[$name]);
-		if ($this->parent !== null) {
-			$items = &$this->items[$name];
-			$this->relations[$name] = DefinitionFactory::relation($this->parent, $items);
+		$this->items[$name] = [];
+		$items = &$this->items[$name];
+		$this->relations[$name] = DefinitionFactory::createRelation($this->parent, $name, $items, $class, $values);
 
-			return $this;
-		}
-
-		$this->relations[$name] = $relation;
-
-		return $this;
-	}
-
-	public function remove(string $name): self
-	{
-		unset($this->items[$name], $this->relations[$name]);
-
-		return $this;
-	}
-
-	public function replace(string $name, RelationInterface $relation): self
-	{
-		$this->items[$name] = $this->exportRelationDefinition($relation);
-		unset($this->relations[$name]);
-		if ($this->parent !== null) {
-			$items = &$this->items[$name];
-			$this->relations[$name] = DefinitionFactory::relation($this->parent, $items);
-
-			return $this;
-		}
-
-		$this->relations[$name] = $relation;
-
-		return $this;
+		return $this->relations[$name];
 	}
 
 	/**
@@ -121,21 +83,5 @@ final class RelationMap implements IteratorAggregate
 		}
 
 		return new ArrayIterator($relations);
-	}
-
-	/**
-	 * @return array<string, mixed>
-	 */
-	private function exportRelationDefinition(RelationInterface $relation): array
-	{
-		try {
-			return DefinitionFactory::export($relation, RelationInterface::class, 'relation');
-		} catch (InvalidDefinitionClassException $exception) {
-			throw new InvalidDefinitionClassException(
-				sprintf('Relation "%s" must be an array-backed %s wrapper.', $relation->getName(), RelationInterface::class),
-				0,
-				$exception
-			);
-		}
 	}
 }

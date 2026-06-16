@@ -15,7 +15,7 @@ interface DefinitionInterface
 
 	public function getRegistry(): Registry;
 
-	public function field(string $name, ?string $type = null): FieldInterface;
+	public function field(string $name, ?string $type = null, ?string $class = null): FieldInterface;
 
 	public function getField(string $name): ?FieldInterface;
 

@@ -43,8 +43,6 @@ interface CollectionInterface extends DefinitionInterface
 
 	public function getMapper(): ?string;
 
-	public function name(string $name): self;
-
 	public function hidden(bool $hidden): self;
 
 	public function isHidden(): bool;

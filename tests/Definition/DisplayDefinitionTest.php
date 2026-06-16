@@ -23,13 +23,13 @@ final class DisplayDefinitionTest extends TestCase
 	{
 		$field = (new Registry())->collection('post')->field('title', 'string');
 
-		$raw = new RawDisplay($field);
+		$raw = $field->display(RawDisplay::class);
 		$raw->type('raw');
 		self::assertSame('raw', $raw->getType());
 		self::assertSame([], $raw->getOptions());
 		self::assertSame($field, $raw->end());
 
-		$boolean = (new BooleanDisplay($field))
+		$boolean = $field->end()->field('active', 'bool')->display(BooleanDisplay::class)
 			->labelOn('On')
 			->labelOff('Off')
 			->iconOn('check')
@@ -43,14 +43,14 @@ final class DisplayDefinitionTest extends TestCase
 		self::assertSame('green', $boolean->getColorOn());
 		self::assertSame('red', $boolean->getColorOff());
 
-		self::assertSame('long', (new DatetimeDisplay($field))->getFormat());
-		self::assertSame('short', (new DatetimeDisplay($field))->format('short')->getFormat());
-		self::assertSame([], (new FileDisplay($field))->getOptions());
-		self::assertSame('blue', (new FormattedDisplay($field))->color('blue')->getColor());
-		self::assertSame('{{title}}', (new FormattedJSONDisplay($field))->template('{{title}}')->getTemplate());
-		self::assertTrue((new IconDisplay($field))->filled(true)->isFilled());
-		self::assertTrue((new ImageDisplay($field))->displayAsCircle(true)->shouldDisplayAsCircle());
-		self::assertFalse((new LabelsDisplay($field))->formatEachLabel(false)->isFormatEachLabel());
-		self::assertSame('{{title}}', (new RelatedDisplay($field))->template('{{title}}')->getTemplate());
+		self::assertSame('long', $field->end()->field('created_at', 'datetime')->display(DatetimeDisplay::class)->getFormat());
+		self::assertSame('short', $field->end()->field('updated_at', 'datetime')->display(DatetimeDisplay::class)->format('short')->getFormat());
+		self::assertSame([], $field->end()->field('attachment', 'file')->display(FileDisplay::class)->getOptions());
+		self::assertSame('blue', $field->end()->field('formatted', 'string')->display(FormattedDisplay::class)->color('blue')->getColor());
+		self::assertSame('{{title}}', $field->end()->field('json', 'string')->display(FormattedJSONDisplay::class)->template('{{title}}')->getTemplate());
+		self::assertTrue($field->end()->field('icon', 'string')->display(IconDisplay::class)->filled(true)->isFilled());
+		self::assertTrue($field->end()->field('avatar', 'string')->display(ImageDisplay::class)->displayAsCircle(true)->shouldDisplayAsCircle());
+		self::assertFalse($field->end()->field('labels', 'string')->display(LabelsDisplay::class)->formatEachLabel(false)->isFormatEachLabel());
+		self::assertSame('{{title}}', $field->end()->field('related', 'string')->display(RelatedDisplay::class)->template('{{title}}')->getTemplate());
 	}
 }

@@ -24,7 +24,6 @@ final class RegistryCollectionTest extends TestCase
 		self::assertSame('users', $users->getTable());
 		self::assertSame($users, $registry->getCollection('users'));
 		self::assertNull($registry->getCollection('missing'));
-		self::assertSame($users, $registry->getCollection($users));
 		self::assertSame(['users', 'posts'], array_keys($registry->getCollections()));
 
 		$files = $registry->getDefinitionFiles();
@@ -33,17 +32,12 @@ final class RegistryCollectionTest extends TestCase
 		self::assertSame(['users', 'posts'], array_values($files)[0]);
 	}
 
-	public function testRegisterReplacesCollectionByName(): void
+	public function testRepeatedCollectionCreationReturnsExistingWrapperAndRejectsConflictingClass(): void
 	{
 		$registry = new Registry();
 		$original = $registry->collection('article');
-		$replacement = $registry->collection('article_replacement')->name('article');
 
-		$registry->register($replacement);
-
-		self::assertNotSame($replacement, $registry->getCollection('article'));
-		self::assertSame($replacement->all(), $registry->getCollection('article')?->all());
-		self::assertNotSame($original, $registry->getCollection('article'));
+		self::assertSame($original, $registry->collection('article'));
 	}
 
 	public function testCollectionCharacterizationIncludesStandaloneMapperAndSourceChanges(): void

@@ -20,11 +20,12 @@ Stored wrappers that must round-trip through `Registry` need to:
 - extend `ON\Data\Support\DefinitionNode`;
 - implement the expected public interface;
 - define canonical defaults through `definitionDefaults()`;
-- accept their logical parent in the public constructor;
+- inherit the built-in owner/name/array constructor contract;
+- avoid declaring a custom constructor;
 - keep exported state as plain array data only;
-- rebuild any nested wrapper caches from `afterBindDefinitionArray()` when they own nested children.
+- initialize runtime-only caches from `initializeRuntimeState()` when they own nested children.
 
-`DefinitionFactory` validates and binds stored wrappers, but it does not normalize or materialize missing defaults during restoration.
+`DefinitionFactory` validates classes and constructs wrappers directly over final array slots. It does not normalize, rebind, or cache wrappers globally.
 
 ## Important boundary
 
@@ -33,3 +34,10 @@ Implementations that satisfy only `FieldInterface`, `RelationInterface`, or anot
 ## Plain-data rule
 
 Definition exports may contain only arrays, strings, ints, floats, bools, and `null`. Objects, closures, and resources are rejected by `Registry::all()`.
+
+## Ownership rules
+
+- Do not create orphan stored nodes and attach them later.
+- Create custom nodes through the owning API and class-string extension points.
+- Names come from owner map keys and are not mutable.
+- Stored definition nodes cannot be cloned.

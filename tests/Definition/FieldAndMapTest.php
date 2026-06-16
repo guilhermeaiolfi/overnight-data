@@ -6,7 +6,6 @@ namespace Tests\ON\Data\Definition;
 
 use ON\Data\Definition\Display\BooleanDisplay;
 use ON\Data\Definition\Exception\FieldException;
-use ON\Data\Definition\Field\FieldMap;
 use ON\Data\Definition\Interface\TextareaInterface;
 use ON\Data\Definition\Registry;
 use PHPUnit\Framework\TestCase;
@@ -88,14 +87,12 @@ final class FieldAndMapTest extends TestCase
 		$field->getType();
 	}
 
-	public function testFieldMapPreservesInsertionOrderAndCloneBehavior(): void
+	public function testFieldMapPreservesInsertionOrderAndCachedIdentity(): void
 	{
 		$collection = (new Registry())->collection('users');
 		$id = $collection->field('id', 'int')->column('user_id');
 		$name = $collection->field('name', 'string');
-		$map = new FieldMap();
-		$map->set('id', $id);
-		$map->set('name', $name);
+		$map = $collection->getFields();
 
 		self::assertCount(2, $map);
 		self::assertTrue($map->has('id'));
@@ -107,11 +104,6 @@ final class FieldAndMapTest extends TestCase
 		self::assertSame('id', $map->getKeyByColumnName('user_id'));
 		self::assertSame($id, $map->getByColumnName('user_id'));
 		self::assertSame(['id', 'name'], array_keys(iterator_to_array($map)));
-
-		$cloned = clone $map;
-		self::assertNotSame($map->get('id'), $cloned->get('id'));
-
-		$this->expectException(FieldException::class);
-		$map->set('id', $collection->field('other_id', 'int'));
+		self::assertSame($id, $collection->field('id'));
 	}
 }

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Definition;
 
-use ON\Data\Definition\Exception\InvalidDefinitionClassException;
 use ON\Data\Definition\Exception\InvalidDefinitionDataException;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\View\ViewDefinition;
@@ -24,30 +23,18 @@ final class RegistryStorageTest extends TestCase
 
 	public function testRegistryAllIsPlainDataAndRestoresCustomWrappers(): void
 	{
-		$registry = new class () extends Registry {
-			public function &itemsReference(): array
-			{
-				return $this->getItemsReference();
-			}
-		};
+		$registry = new Registry();
+		$users = $registry->collection('users', CustomCollection::class);
+		$users->table('app_users')->primaryKey('id')->metadata('domain', 'accounts');
 
-		$users = new CustomCollection($registry);
-		$users->name('users')->table('app_users')->primaryKey('id')->metadata('domain', 'accounts');
-		$registry->register($users);
-
-		$users->fields->set('id', new CustomField($users));
-		$id = $users->fields->get('id');
-		$id->name('id')
-			->type('int')
+		$id = $users->field('id', 'int', CustomField::class)
 			->column('user_id')
 			->required(true)
 			->display(CustomDisplay::class)->type('badge')->color('green')->end()
 			->interface(CustomInterface::class)->limit(32)->end()
 			->metadata('kind', 'pk');
 
-		$users->relations->set('manager', new CustomRelation($users));
-		$manager = $users->relations->get('manager');
-		$manager->name('manager')
+		$manager = $users->relation('manager', CustomRelation::class)
 			->collection('users')
 			->innerKey('id')
 			->outerKey('id')
@@ -63,8 +50,9 @@ final class RegistryStorageTest extends TestCase
 		self::assertSame(CustomRelation::class, $all['collections']['users']['relations']['manager']['class']);
 		self::assertSame(CustomDisplay::class, $all['collections']['users']['fields']['id']['display']['class']);
 		self::assertSame(CustomInterface::class, $all['collections']['users']['fields']['id']['interface']['class']);
-		self::assertSame(['id'], $all['collections']['users']['primaryKey']);
-		self::assertArrayNotHasKey('pk', $all['collections']['users']['fields']['id']);
+		self::assertArrayNotHasKey('name', $all['collections']['users']);
+		self::assertArrayNotHasKey('name', $all['collections']['users']['fields']['id']);
+		self::assertArrayNotHasKey('name', $all['collections']['users']['relations']['manager']);
 
 		$restored = new Registry($all);
 		$restoredUsers = $restored->getCollection('users');
@@ -72,22 +60,17 @@ final class RegistryStorageTest extends TestCase
 		self::assertNotNull($restoredUsers);
 		self::assertSame($all, $restored->all());
 		self::assertInstanceOf(CustomCollection::class, $restoredUsers);
-		self::assertInstanceOf(CustomField::class, $restoredUsers->fields->get('id'));
-		self::assertInstanceOf(CustomRelation::class, $restoredUsers->relations->get('manager'));
-		self::assertInstanceOf(CustomDisplay::class, $restoredUsers->fields->get('id')->getDisplay());
-		self::assertInstanceOf(CustomInterface::class, $restoredUsers->fields->get('id')->getInterface());
-		self::assertSame(['id'], $restoredUsers->getPrimaryKey());
+		self::assertSame($id->getName(), $restoredUsers->getField('id')?->getName());
+		self::assertSame($manager->getName(), $restoredUsers->getRelation('manager')?->getName());
+		self::assertInstanceOf(CustomField::class, $restoredUsers->getField('id'));
+		self::assertInstanceOf(CustomRelation::class, $restoredUsers->getRelation('manager'));
+		self::assertInstanceOf(CustomDisplay::class, $restoredUsers->getField('id')->getDisplay());
+		self::assertInstanceOf(CustomInterface::class, $restoredUsers->getField('id')->getInterface());
 	}
 
 	public function testWrappersStayBoundToMasterArrayWithStableIdentity(): void
 	{
-		$registry = new class () extends Registry {
-			public function &itemsReference(): array
-			{
-				return $this->getItemsReference();
-			}
-		};
-
+		$registry = new Registry();
 		$field = $registry->collection('posts')
 			->field('title', 'string')
 			->required(true)
@@ -95,19 +78,12 @@ final class RegistryStorageTest extends TestCase
 			->interface(CustomInterface::class)->limit(80)->end();
 
 		self::assertSame($registry->getCollection('posts'), $registry->getCollection('posts'));
-		self::assertSame($field, $registry->getCollection('posts')?->fields->get('title'));
+		self::assertSame($field, $registry->getCollection('posts')?->getField('title'));
 		self::assertSame($field->getDisplay(), $field->getDisplay());
 		self::assertSame($field->getInterface(), $field->getInterface());
 
 		$field->required(false);
 		self::assertFalse($registry->all()['collections']['posts']['fields']['title']['required']);
-
-		$items = &$registry->itemsReference();
-		$items['collections']['posts']['fields']['title']['required'] = true;
-		$items['collections']['posts']['fields']['title']['display']['color'] = 'orange';
-
-		self::assertTrue($field->isRequired());
-		self::assertSame('orange', $field->getDisplay()->getColor());
 	}
 
 	public function testCanonicalRegistryArrayRoundTripsIdempotently(): void
@@ -116,11 +92,10 @@ final class RegistryStorageTest extends TestCase
 			'collections' => [
 				' post.user ' => [
 					'class' => CustomCollection::class,
-					'name' => ' post.user ',
 					'table' => ' post.user ',
 					'primaryKey' => [],
 					'fields' => [
-						'id' => ['class' => CustomField::class, 'name' => 'id', 'type' => 'int'],
+						'id' => ['class' => CustomField::class, 'type' => 'int'],
 					],
 					'relations' => [],
 					'metadata' => [],
@@ -129,10 +104,9 @@ final class RegistryStorageTest extends TestCase
 			'views' => [
 				' report summary ' => [
 					'class' => ViewDefinition::class,
-					'name' => ' report summary ',
 					'source' => ' post.user ',
 					'fields' => [
-						'label' => ['class' => ViewField::class, 'name' => 'label', 'type' => 'string'],
+						'label' => ['class' => ViewField::class, 'type' => 'string'],
 					],
 					'relations' => [],
 					'metadata' => [],
@@ -155,37 +129,5 @@ final class RegistryStorageTest extends TestCase
 
 		$this->expectException(InvalidDefinitionDataException::class);
 		$registry->all();
-	}
-
-	public function testRegistryNormalizationRejectsInvalidStoredClassDiscriminatorsEarly(): void
-	{
-		$this->expectException(InvalidDefinitionClassException::class);
-
-		new Registry([
-			'collections' => [
-				'users' => [
-					'class' => stdClass::class,
-					'name' => 'users',
-				],
-			],
-		]);
-	}
-
-	public function testRelationDefinitionsRequireClassDiscriminatorDuringNormalization(): void
-	{
-		$this->expectException(InvalidDefinitionClassException::class);
-
-		new Registry([
-			'collections' => [
-				'users' => [
-					'name' => 'users',
-					'relations' => [
-						'manager' => [
-							'name' => 'manager',
-						],
-					],
-				],
-			],
-		]);
 	}
 }

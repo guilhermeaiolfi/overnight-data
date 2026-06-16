@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Relation;
 
-use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Internal\DefinitionFactory;
 
 class M2MRelation extends AbstractRelation
 {
-	public M2MThrough $through;
+	public ?M2MThrough $through = null;
 
 	protected static function definitionDefaults(): array
 	{
@@ -17,18 +16,6 @@ class M2MRelation extends AbstractRelation
 			'collection_factory' => '',
 			'through' => null,
 		]);
-	}
-
-	public function __construct(
-		DefinitionInterface $parent,
-	) {
-		parent::__construct($parent);
-	}
-
-	public function __clone()
-	{
-		parent::__clone();
-		$this->restoreThroughWrapper();
 	}
 
 	public function getCardinality(): string
@@ -43,9 +30,20 @@ class M2MRelation extends AbstractRelation
 
 	public function through(string $collection): M2MThrough
 	{
-		$this->items['through'] = M2MThrough::createDefinition();
-		$throughItems = &$this->items['through'];
-		$this->through = DefinitionFactory::node($this, $throughItems, M2MThrough::class, 'through');
+		if (! isset($this->items['through']) || ! is_array($this->items['through'])) {
+			$this->items['through'] = [];
+			$throughItems = &$this->items['through'];
+			$this->through = DefinitionFactory::create(
+				$this,
+				'through',
+				$throughItems,
+				M2MThrough::class,
+				M2MThrough::class,
+				'through',
+			);
+		}
+
+		$this->through ??= $this->restoreThrough();
 		$this->through->collection($collection);
 
 		return $this->through;
@@ -63,20 +61,29 @@ class M2MRelation extends AbstractRelation
 		return (string) $this->get('collection_factory');
 	}
 
-	protected function afterBindDefinitionArray(): void
+	protected function initializeRuntimeState(): void
 	{
-		parent::afterBindDefinitionArray();
-		unset($this->through);
-		$this->restoreThroughWrapper();
+		parent::initializeRuntimeState();
+		$this->through = $this->restoreThrough();
 	}
 
-	private function restoreThroughWrapper(): void
+	private function restoreThrough(): ?M2MThrough
 	{
-		if (! is_array($this->get('through'))) {
-			return;
+		if (! isset($this->items['through']) || ! is_array($this->items['through'])) {
+			return null;
 		}
 
 		$throughItems = &$this->items['through'];
-		$this->through = DefinitionFactory::node($this, $throughItems, M2MThrough::class, 'through');
+
+		/** @var M2MThrough $through */
+		$through = DefinitionFactory::restore(
+			$this,
+			'through',
+			$throughItems,
+			M2MThrough::class,
+			'through',
+		);
+
+		return $through;
 	}
 }

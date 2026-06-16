@@ -18,7 +18,7 @@ final class InterfaceDefinitionTest extends TestCase
 	{
 		$field = (new Registry())->collection('post')->field('title', 'string');
 
-		$many = new ManyToManyInterface($field);
+		$many = $field->interface(ManyToManyInterface::class);
 		$many
 			->type('table')
 			->template('{{title}}')
@@ -41,7 +41,7 @@ final class InterfaceDefinitionTest extends TestCase
 		self::assertSame(25, $many->getItemsPerPage());
 		self::assertSame($field, $many->end());
 
-		$tags = new TagsInterface($field);
+		$tags = $field->end()->field('tags', 'string')->interface(TagsInterface::class);
 		$tags
 			->whitespace(TagsInterface::WHITESPACE_REPLACE_WITH_HYPHEN)
 			->capitalization(TagsInterface::CAPITALIZATION_CONVERT_LOWERCASE)
@@ -56,8 +56,8 @@ final class InterfaceDefinitionTest extends TestCase
 		self::assertSame(['news'], $tags->getPresetTags());
 		self::assertSame('Pick tags', $tags->getplaceholder());
 
-		self::assertSame('map-default', (new MapInterface($field))->defaultView('map-default')->getDefaultView());
-		self::assertSame('root', (new WYSIWYGInterface($field))->getFolder());
-		self::assertSame('Enabled', (new ToggleInterface($field))->label('Enabled')->getLabel());
+		self::assertSame('map-default', $field->end()->field('map', 'string')->interface(MapInterface::class)->defaultView('map-default')->getDefaultView());
+		self::assertSame('root', $field->end()->field('body', 'string')->interface(WYSIWYGInterface::class)->getFolder());
+		self::assertSame('Enabled', $field->end()->field('enabled', 'bool')->interface(ToggleInterface::class)->label('Enabled')->getLabel());
 	}
 }

@@ -4,15 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Fixture;
 
+use LogicException;
 use ON\Data\Support\DefinitionNode;
 
 final class CustomRelationOptions extends DefinitionNode
 {
-	public function __construct(private CustomOwnedRelation $relation)
-	{
-		parent::__construct();
-	}
-
 	protected static function definitionDefaults(): array
 	{
 		return [
@@ -50,6 +46,10 @@ final class CustomRelationOptions extends DefinitionNode
 
 	public function end(): CustomOwnedRelation
 	{
-		return $this->relation;
+		$owner = $this->owner();
+
+		return $owner instanceof CustomOwnedRelation
+			? $owner
+			: throw new LogicException('Custom relation options owner is invalid.');
 	}
 }

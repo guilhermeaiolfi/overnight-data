@@ -6,7 +6,6 @@ namespace ON\Data\Definition\Interface;
 
 use ON\Data\Definition\Exception\InvalidDefinitionClassException;
 use ON\Data\Definition\Internal\DefinitionFactory;
-use ON\Data\Support\DefinitionNode;
 
 trait InterfaceTrait
 {
@@ -19,16 +18,18 @@ trait InterfaceTrait
 	 */
 	public function interface(string $className): InterfaceInterface
 	{
-		$interface = new $className($this);
-		if (! $interface instanceof InterfaceInterface || ! $interface instanceof DefinitionNode) {
-			throw new InvalidDefinitionClassException(
-				sprintf('Invalid interface class "%s".', $className)
-			);
+		if (isset($this->items['interface']) && is_array($this->items['interface'])) {
+			$interface = $this->getInterface();
+			if ($interface::class !== $className) {
+				throw new InvalidDefinitionClassException(sprintf('Invalid interface class "%s".', $className));
+			}
+
+			return $interface;
 		}
 
-		$this->items['interface'] = $interface->all();
+		$this->items['interface'] = [];
 		$interfaceItems = &$this->items['interface'];
-		$this->interface = DefinitionFactory::interface($this, $interfaceItems);
+		$this->interface = DefinitionFactory::createInterface($this, 'interface', $interfaceItems, $className);
 
 		return $this->interface;
 	}
@@ -39,8 +40,12 @@ trait InterfaceTrait
 			return $this->interface;
 		}
 
+		if (! isset($this->items['interface']) || ! is_array($this->items['interface'])) {
+			throw new InvalidDefinitionClassException('Interface definition is not configured.');
+		}
+
 		$interfaceItems = &$this->items['interface'];
-		$this->interface = DefinitionFactory::interface($this, $interfaceItems);
+		$this->interface = DefinitionFactory::restoreInterface($this, 'interface', $interfaceItems);
 
 		return $this->interface;
 	}

@@ -19,86 +19,57 @@ abstract class AbstractDefinition extends DefinitionNode implements DefinitionIn
 
 	public RelationMap $relations;
 
-	public function __construct(protected Registry $registry)
+	public function field(string $name, ?string $type = null, ?string $class = null): FieldInterface
 	{
-		parent::__construct();
-		$this->initializeChildMaps();
-	}
+		$this->fields = $this->getFields();
 
-	public function __clone()
-	{
-		$items = self::detachArray($this->all());
-		$this->setArray($items);
-		$this->initializeChildMaps();
-		$this->metadataMap = null;
-	}
-
-	public function getRegistry(): Registry
-	{
-		return $this->registry;
-	}
-
-	public function field(string $name, ?string $type = null): FieldInterface
-	{
-		if ($this->fields->has($name)) {
-			return $this->fields->get($name);
-		}
-
-		$class = $this->defaultFieldClass();
-		$field = new $class($this);
-		$field->name($name);
-		if ($type !== null) {
-			$field->type($type);
-		}
-		$this->fields->set($name, $field);
-		$field = $this->fields->get($name);
-
-		return $field;
+		return $this->fields->createOrReturn(
+			$name,
+			$class ?? $this->defaultFieldClass(),
+			$type === null ? [] : ['type' => $type],
+		);
 	}
 
 	public function getField(string $name): ?FieldInterface
 	{
-		return $this->fields->has($name) ? $this->fields->get($name) : null;
+		return $this->getFields()->has($name) ? $this->getFields()->get($name) : null;
 	}
 
 	public function hasField(string $name): bool
 	{
-		return $this->fields->has($name);
+		return $this->getFields()->has($name);
 	}
 
 	public function getFields(): FieldMap
 	{
-		return $this->fields;
+		return $this->fields ??= new FieldMap($this, $this->items['fields']);
 	}
 
 	public function relation(string $name, string $type): RelationInterface
 	{
-		$relation = new $type($this);
-		$relation->name($name);
-		$this->relations->replace($name, $relation);
-		$relation = $this->relations->get($name);
+		$this->relations = $this->getRelations();
 
-		return $relation;
+		return $this->relations->createOrReturn($name, $type);
 	}
 
 	public function getRelation(string $name): ?RelationInterface
 	{
-		return $this->relations->has($name) ? $this->relations->get($name) : null;
+		return $this->getRelations()->has($name) ? $this->getRelations()->get($name) : null;
 	}
 
 	public function hasRelation(string $name): bool
 	{
-		return $this->relations->has($name);
+		return $this->getRelations()->has($name);
 	}
 
 	public function getRelations(): RelationMap
 	{
-		return $this->relations;
+		return $this->relations ??= new RelationMap($this, $this->items['relations']);
 	}
 
 	public function end(): Registry
 	{
-		return $this->registry;
+		return $this->getRegistry();
 	}
 
 	/**
@@ -109,16 +80,20 @@ abstract class AbstractDefinition extends DefinitionNode implements DefinitionIn
 		return Field::class;
 	}
 
-	protected function afterBindDefinitionArray(): void
+	protected function initializeRuntimeState(): void
 	{
-		$this->initializeChildMaps();
-		$this->metadataMap = null;
-	}
+		if (isset($this->items['fields']) && is_array($this->items['fields'])) {
+			$fieldItems = &$this->items['fields'];
+		} else {
+			$fieldItems = [];
+		}
 
-	private function initializeChildMaps(): void
-	{
-		$fieldItems = &$this->items['fields'];
-		$relationItems = &$this->items['relations'];
+		if (isset($this->items['relations']) && is_array($this->items['relations'])) {
+			$relationItems = &$this->items['relations'];
+		} else {
+			$relationItems = [];
+		}
+
 		$this->fields = new FieldMap($this, $fieldItems);
 		$this->relations = new RelationMap($this, $relationItems);
 	}

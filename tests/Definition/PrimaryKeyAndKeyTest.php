@@ -220,12 +220,12 @@ final class PrimaryKeyAndKeyTest extends TestCase
 			'collections' => [
 				'users' => [
 					'class' => 'ON\\Data\\Definition\\Collection\\Collection',
-					'name' => 'users',
 					'fields' => [
-						'id' => ['class' => 'ON\\Data\\Definition\\Field\\Field', 'name' => 'id', 'type' => 'int', 'pk' => true],
+						'id' => ['class' => 'ON\\Data\\Definition\\Field\\Field', 'type' => 'int', 'pk' => true],
 					],
 				],
 			],
+			'views' => [],
 		]);
 
 		self::assertArrayNotHasKey('primaryKey', $registry->all()['collections']['users']);

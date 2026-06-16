@@ -10,7 +10,6 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Exception\DefinitionNameConflictException;
 use ON\Data\Definition\Exception\DefinitionNotFoundException;
-use ON\Data\Definition\Exception\ForeignRegistryDefinitionException;
 use ON\Data\Definition\Exception\InvalidRelationParentException;
 use ON\Data\Definition\Field\Field;
 use ON\Data\Definition\Field\FieldInterface;
@@ -31,10 +30,10 @@ final class ViewDefinitionTest extends TestCase
 			'collections' => [
 				'users' => [
 					'class' => Collection::class,
-					'name' => 'users',
 					'table' => 'users',
 				],
 			],
+			'views' => [],
 		]);
 
 		self::assertSame([], $registry->all()['views']);
@@ -75,14 +74,12 @@ final class ViewDefinitionTest extends TestCase
 			'collections' => [
 				'users' => [
 					'class' => Collection::class,
-					'name' => 'users',
 					'table' => 'users',
 				],
 			],
 			'views' => [
 				'users' => [
 					'class' => CustomViewDefinition::class,
-					'name' => 'users',
 				],
 			],
 		]);
@@ -157,9 +154,8 @@ final class ViewDefinitionTest extends TestCase
 			'collections' => [
 				'users' => [
 					'class' => Collection::class,
-					'name' => 'users',
 					'fields' => [
-						'id' => ['class' => Field::class, 'name' => 'id', 'type' => 'int'],
+						'id' => ['class' => Field::class, 'type' => 'int'],
 					],
 					'relations' => [],
 				],
@@ -167,10 +163,9 @@ final class ViewDefinitionTest extends TestCase
 			'views' => [
 				'summary' => [
 					'class' => CustomViewDefinition::class,
-					'name' => 'summary',
 					'source' => 'users',
 					'fields' => [
-						'id' => ['class' => CustomViewField::class, 'name' => 'id', 'type' => 'int'],
+						'id' => ['class' => CustomViewField::class, 'type' => 'int'],
 					],
 					'relations' => [],
 				],
@@ -196,20 +191,17 @@ final class ViewDefinitionTest extends TestCase
 		$view->relation('manager', HasOneRelation::class);
 	}
 
-	public function testViewRejectsEmptyAndForeignSources(): void
+	public function testViewRejectsEmptySources(): void
 	{
 		$registry = new Registry();
-		$foreign = (new Registry())->view('foreign');
 		$view = $registry->view('local');
 
 		try {
 			$view->source('  ');
 			self::fail('Expected empty source rejection.');
 		} catch (InvalidArgumentException) {
+			self::assertTrue(true);
 		}
-
-		$this->expectException(ForeignRegistryDefinitionException::class);
-		$view->source($foreign);
 	}
 
 	public function testCustomViewSubclassesSurviveRoundTrip(): void
@@ -218,13 +210,11 @@ final class ViewDefinitionTest extends TestCase
 			'collections' => [
 				'users' => [
 					'class' => Collection::class,
-					'name' => 'users',
 					'table' => 'users',
 					'primaryKey' => ['id'],
 					'fields' => [
 						'id' => [
 							'class' => Field::class,
-							'name' => 'id',
 							'type' => 'int',
 						],
 					],
@@ -235,12 +225,10 @@ final class ViewDefinitionTest extends TestCase
 			'views' => [
 				'custom_view' => [
 					'class' => CustomViewDefinition::class,
-					'name' => 'custom_view',
 					'source' => 'users',
 					'fields' => [
 						'title' => [
 							'class' => CustomViewField::class,
-							'name' => 'title',
 							'type' => 'string',
 						],
 					],
@@ -255,24 +243,11 @@ final class ViewDefinitionTest extends TestCase
 		self::assertInstanceOf(CustomViewField::class, $view?->getField('title'));
 	}
 
-	public function testClonedViewDetachesFromRegistryMasterArray(): void
-	{
-		$registry = new Registry();
-		$view = $registry->view('user_summary');
-		$view->field('name', 'string')->metadata('label', 'Original');
-
-		$clone = clone $view;
-		$clone->field('name')->metadata('label', 'Clone');
-
-		self::assertSame('Original', $registry->all()['views']['user_summary']['fields']['name']['metadata']['label']);
-		self::assertSame('Clone', $clone->all()['fields']['name']['metadata']['label']);
-	}
-
 	#[DataProvider('definitionProvider')]
 	public function testCommonDefinitionContractWorksForCollectionsAndViews(DefinitionInterface $definition): void
 	{
 		self::assertInstanceOf(Registry::class, $definition->getRegistry());
-		self::assertSame($definition, $definition->getRegistry()->getDefinition($definition));
+		self::assertSame($definition, $definition->getRegistry()->getDefinition($definition->getName()));
 
 		$field = $definition->field('title', 'string');
 		self::assertInstanceOf(FieldInterface::class, $field);

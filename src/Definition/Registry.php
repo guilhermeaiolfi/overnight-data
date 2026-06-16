@@ -8,15 +8,13 @@ use InvalidArgumentException;
 use ON\Data\Definition\Collection\Collection;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Exception\DefinitionNameConflictException;
-use ON\Data\Definition\Exception\ForeignRegistryDefinitionException;
-use ON\Data\Definition\Exception\InvalidDefinitionClassException;
 use ON\Data\Definition\Exception\InvalidDefinitionDataException;
 use ON\Data\Definition\Internal\DefinitionFactory;
 use ON\Data\Definition\View\ViewDefinition;
 use ON\Data\Definition\View\ViewDefinitionInterface;
-use ON\Data\Support\DefinitionNode;
+use ON\Data\Support\Dot;
 
-class Registry extends DefinitionNode
+final class Registry extends Dot
 {
 	/** @var array<string, CollectionInterface> */
 	private array $collections = [];
@@ -29,46 +27,147 @@ class Registry extends DefinitionNode
 	 */
 	public function __construct(?array $items = null)
 	{
-		parent::__construct($items ?? []);
+		parent::__construct($items ?? self::definitionDefaults());
 		$this->assertRootArrays();
-		$this->assertRootDefinitions('collections', CollectionInterface::class, 'collection');
-		$this->assertRootDefinitions('views', ViewDefinitionInterface::class, 'view');
 		$this->assertNoDefinitionNameConflicts();
 	}
 
-	protected static function definitionDefaults(): array
+	/**
+	 * @return array<string, mixed>
+	 */
+	public function all(): array
 	{
-		return [
-			'collections' => [],
-			'views' => [],
-		];
+		$items = parent::all();
+		self::assertPlainData($items);
+
+		return $items;
 	}
 
-	public function register(CollectionInterface $collection): void
+	public function collection(string $name, ?string $class = null): CollectionInterface
 	{
-		$this->requireLocalDefinition($collection);
-
-		$data = DefinitionFactory::export($collection, CollectionInterface::class, 'collection');
-		self::assertPlainData($data);
-
-		$name = $data['name'] ?? null;
-		$contextName = is_string($name) ? $name : $collection->getName();
 		$name = $this->requireDefinitionName($name, 'collection');
-		$this->assertDefinitionNameAvailable($name, 'collection');
-		$this->assertCollectionRootClass($data, $contextName);
 
-		$data['name'] = $name;
-		$this->items['collections'][$name] = $data;
+		if (isset($this->items['collections'][$name]) && is_array($this->items['collections'][$name])) {
+			$this->assertStoredClassMatches($this->items['collections'][$name], $class, 'collection');
 
-		foreach ($this->collections as $cachedName => $cachedCollection) {
-			if ($cachedCollection === $collection && $cachedName !== $name) {
-				unset($this->collections[$cachedName]);
+			return $this->getCollection($name) ?? throw new InvalidArgumentException(sprintf("Collection '%s' is not defined.", $name));
+		}
+
+		$this->assertDefinitionNameAvailable($name);
+		$class ??= Collection::class;
+		$this->items['collections'][$name] = [];
+		$slot = &$this->items['collections'][$name];
+		$this->collections[$name] = DefinitionFactory::createCollection($this, $name, $slot, $class, [
+			'table' => $name,
+		]);
+
+		$trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
+		$this->collections[$name]->setFileDefinitionLocation($trace[1]['file'] ?? __FILE__);
+
+		return $this->collections[$name];
+	}
+
+	public function getCollection(string $name): ?CollectionInterface
+	{
+		if (isset($this->collections[$name])) {
+			return $this->collections[$name];
+		}
+
+		if (! isset($this->items['collections'][$name]) || ! is_array($this->items['collections'][$name])) {
+			return null;
+		}
+
+		$items = &$this->items['collections'][$name];
+		$this->collections[$name] = DefinitionFactory::restoreCollection($this, $name, $items);
+
+		return $this->collections[$name];
+	}
+
+	/**
+	 * @return array<string, CollectionInterface>
+	 */
+	public function getCollections(): array
+	{
+		$collections = [];
+		foreach (array_keys($this->items['collections']) as $name) {
+			$collection = $this->getCollection((string) $name);
+			if ($collection !== null) {
+				$collections[$name] = $collection;
 			}
 		}
 
-		unset($this->collections[$name]);
-		$items = &$this->items['collections'][$name];
-		$this->collections[$name] = DefinitionFactory::collection($this, $items);
+		return $collections;
+	}
+
+	public function hasCollection(string $name): bool
+	{
+		return isset($this->items['collections'][$name]) && is_array($this->items['collections'][$name]);
+	}
+
+	public function view(string $name, ?string $class = null): ViewDefinitionInterface
+	{
+		$name = $this->requireDefinitionName($name, 'view');
+
+		if (isset($this->items['views'][$name]) && is_array($this->items['views'][$name])) {
+			$this->assertStoredClassMatches($this->items['views'][$name], $class, 'view');
+
+			return $this->getView($name) ?? throw new InvalidArgumentException(sprintf("View '%s' is not defined.", $name));
+		}
+
+		$this->assertDefinitionNameAvailable($name);
+		$class ??= ViewDefinition::class;
+		$this->items['views'][$name] = [];
+		$slot = &$this->items['views'][$name];
+		$this->views[$name] = DefinitionFactory::createView($this, $name, $slot, $class);
+
+		return $this->views[$name];
+	}
+
+	public function getView(string $name): ?ViewDefinitionInterface
+	{
+		if (isset($this->views[$name])) {
+			return $this->views[$name];
+		}
+
+		if (! isset($this->items['views'][$name]) || ! is_array($this->items['views'][$name])) {
+			return null;
+		}
+
+		$items = &$this->items['views'][$name];
+		$this->views[$name] = DefinitionFactory::restoreView($this, $name, $items);
+
+		return $this->views[$name];
+	}
+
+	/**
+	 * @return array<string, ViewDefinitionInterface>
+	 */
+	public function getViews(): array
+	{
+		$views = [];
+		foreach (array_keys($this->items['views']) as $name) {
+			$view = $this->getView((string) $name);
+			if ($view !== null) {
+				$views[$name] = $view;
+			}
+		}
+
+		return $views;
+	}
+
+	public function hasView(string $name): bool
+	{
+		return isset($this->items['views'][$name]) && is_array($this->items['views'][$name]);
+	}
+
+	public function getDefinition(string $name): ?DefinitionInterface
+	{
+		return $this->getCollection($name) ?? $this->getView($name);
+	}
+
+	public function hasDefinition(string $name): bool
+	{
+		return $this->hasCollection($name) || $this->hasView($name);
 	}
 
 	public function getDefinitionFiles(): array
@@ -90,159 +189,12 @@ class Registry extends DefinitionNode
 	/**
 	 * @return array<string, mixed>
 	 */
-	public function all(): array
+	protected static function definitionDefaults(): array
 	{
-		$items = parent::all();
-		self::assertPlainData($items);
-
-		return $items;
-	}
-
-	public function collection(string $name): CollectionInterface
-	{
-		$name = $this->requireDefinitionName($name, 'collection');
-		$this->assertDefinitionNameAvailable($name, 'collection');
-		$this->items['collections'][$name] = Collection::defaultDefinition($name);
-		unset($this->collections[$name]);
-
-		$items = &$this->items['collections'][$name];
-		$this->collections[$name] = DefinitionFactory::collection($this, $items);
-
-		$trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
-		$this->collections[$name]->setFileDefinitionLocation($trace[1]['file'] ?? __FILE__);
-
-		return $this->collections[$name];
-	}
-
-	public function getCollection(string|CollectionInterface $name): ?CollectionInterface
-	{
-		if ($name instanceof CollectionInterface) {
-			return $this->requireLocalDefinition($name);
-		}
-
-		if (isset($this->collections[$name])) {
-			return $this->collections[$name];
-		}
-
-		if (! isset($this->items['collections'][$name]) || ! is_array($this->items['collections'][$name])) {
-			return null;
-		}
-
-		$items = &$this->items['collections'][$name];
-		$this->collections[$name] = DefinitionFactory::collection($this, $items);
-
-		return $this->collections[$name];
-	}
-
-	/** @return CollectionInterface[] */
-	public function getCollections(): array
-	{
-		$collections = [];
-		foreach (array_keys($this->get('collections')) as $name) {
-			$collection = $this->getCollection((string) $name);
-			if ($collection !== null) {
-				$collections[$name] = $collection;
-			}
-		}
-
-		return $collections;
-	}
-
-	public function getInheritedCollections(): array
-	{
-		return [];
-	}
-
-	public function view(string $name): ViewDefinitionInterface
-	{
-		$name = $this->requireDefinitionName($name, 'view');
-		$this->assertDefinitionNameAvailable($name, 'view');
-		$this->items['views'][$name] = ViewDefinition::defaultDefinition($name);
-		unset($this->views[$name]);
-
-		$items = &$this->items['views'][$name];
-		$this->views[$name] = DefinitionFactory::view($this, $items);
-
-		return $this->views[$name];
-	}
-
-	public function getView(string|ViewDefinitionInterface $view): ?ViewDefinitionInterface
-	{
-		if ($view instanceof ViewDefinitionInterface) {
-			return $this->requireLocalDefinition($view);
-		}
-
-		if (isset($this->views[$view])) {
-			return $this->views[$view];
-		}
-
-		if (! isset($this->items['views'][$view]) || ! is_array($this->items['views'][$view])) {
-			return null;
-		}
-
-		$items = &$this->items['views'][$view];
-		$this->views[$view] = DefinitionFactory::view($this, $items);
-
-		return $this->views[$view];
-	}
-
-	public function hasView(string $name): bool
-	{
-		return isset($this->items['views'][$name]) && is_array($this->items['views'][$name]);
-	}
-
-	/**
-	 * @return array<string, ViewDefinitionInterface>
-	 */
-	public function getViews(): array
-	{
-		$views = [];
-		foreach (array_keys($this->get('views')) as $name) {
-			$view = $this->getView((string) $name);
-			if ($view !== null) {
-				$views[$name] = $view;
-			}
-		}
-
-		return $views;
-	}
-
-	public function getDefinition(string|DefinitionInterface $definition): ?DefinitionInterface
-	{
-		if ($definition instanceof DefinitionInterface) {
-			return $this->requireLocalDefinition($definition);
-		}
-
-		return $this->getCollection($definition) ?? $this->getView($definition);
-	}
-
-	public function hasDefinition(string $name): bool
-	{
-		return $this->hasCollection($name) || $this->hasView($name);
-	}
-
-	public function hasCollection(string $name): bool
-	{
-		return isset($this->items['collections'][$name]) && is_array($this->items['collections'][$name]);
-	}
-
-	public function requireLocalDefinition(DefinitionInterface $definition): DefinitionInterface
-	{
-		if ($definition->getRegistry() !== $this) {
-			throw new ForeignRegistryDefinitionException(
-				sprintf("Definition '%s' belongs to a different registry.", $definition->getName())
-			);
-		}
-
-		return $definition;
-	}
-
-	/**
-	 * @return array<string, mixed>
-	 */
-	protected function &getItemsReference(): array
-	{
-		return $this->items;
+		return [
+			'collections' => [],
+			'views' => [],
+		];
 	}
 
 	private function assertRootArrays(): void
@@ -253,43 +205,6 @@ class Registry extends DefinitionNode
 
 		if (! is_array($this->items['views'])) {
 			throw new InvalidArgumentException('Registry views must be an array.');
-		}
-	}
-
-	/**
-	 * @param class-string $expectedType
-	 */
-	private function assertRootDefinitions(string $rootKey, string $expectedType, string $context): void
-	{
-		foreach ($this->items[$rootKey] as $name => $definition) {
-			if (! is_array($definition)) {
-				throw new InvalidArgumentException(sprintf('%s definition "%s" must be an array.', ucfirst($context), (string) $name));
-			}
-
-			$storedName = $this->requireDefinitionName($definition['name'] ?? null, $context);
-			if ((string) $name !== $storedName) {
-				throw new InvalidArgumentException(
-					sprintf("Stored %s name '%s' must match root key '%s'.", $context, $storedName, (string) $name)
-				);
-			}
-
-			DefinitionFactory::requireStoredClass($definition, $expectedType, $context);
-		}
-	}
-
-	/**
-	 * @param array<string, mixed> $data
-	 */
-	private function assertCollectionRootClass(array $data, string $contextName): void
-	{
-		try {
-			DefinitionFactory::requireStoredClass($data, CollectionInterface::class, 'collection');
-		} catch (InvalidDefinitionClassException $exception) {
-			throw new InvalidDefinitionClassException(
-				sprintf('Invalid collection "%s": %s', $contextName, $exception->getMessage()),
-				0,
-				$exception
-			);
 		}
 	}
 
@@ -306,13 +221,11 @@ class Registry extends DefinitionNode
 		return $name;
 	}
 
-	private function assertDefinitionNameAvailable(string $name, string $type): void
+	private function assertDefinitionNameAvailable(string $name): void
 	{
-		$conflictingType = $type === 'collection' ? 'view' : 'collection';
-		$conflicts = $type === 'collection' ? $this->hasView($name) : $this->hasCollection($name);
-		if ($conflicts) {
+		if ($this->hasDefinition($name)) {
 			throw new DefinitionNameConflictException(
-				sprintf("Cannot create %s '%s' because a %s with that name already exists.", $type, $name, $conflictingType)
+				sprintf("Definition name '%s' is already in use.", $name)
 			);
 		}
 	}
@@ -329,6 +242,28 @@ class Registry extends DefinitionNode
 		throw new DefinitionNameConflictException(
 			sprintf("Definition name '%s' is used by both a collection and a view.", $name)
 		);
+	}
+
+	/**
+	 * @param array<string, mixed> $items
+	 */
+	private function assertStoredClassMatches(array $items, ?string $class, string $context): void
+	{
+		if ($class === null) {
+			return;
+		}
+
+		$storedClass = DefinitionFactory::requireStoredClass(
+			$items,
+			$context === 'collection' ? CollectionInterface::class : ViewDefinitionInterface::class,
+			$context
+		);
+
+		if ($storedClass !== $class) {
+			throw new InvalidArgumentException(
+				sprintf("Cannot redefine %s with class '%s'; stored class is '%s'.", $context, $class, $storedClass)
+			);
+		}
 	}
 
 	private static function assertPlainData(mixed $value, string $path = 'root'): void

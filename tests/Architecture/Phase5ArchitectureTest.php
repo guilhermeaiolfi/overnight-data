@@ -41,7 +41,7 @@ final class Phase5ArchitectureTest extends TestCase
 
 		foreach ($classes as $class) {
 			$constructor = new ReflectionMethod($class, '__construct');
-			self::assertLessThanOrEqual(1, $constructor->getNumberOfParameters(), $class . ' still exposes hydration parameters.');
+			self::assertFalse($constructor->isPublic(), $class . ' still exposes a public constructor.');
 		}
 	}
 

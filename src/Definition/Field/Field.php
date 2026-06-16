@@ -18,17 +18,10 @@ class Field extends DefinitionNode implements FieldInterface
 	use SchemaTrait;
 	use MetadataTrait;
 
-	public function __construct(
-		protected DefinitionInterface $parent,
-	) {
-		parent::__construct();
-	}
-
 	protected static function definitionDefaults(): array
 	{
 		return [
 			'class' => static::class,
-			'name' => '',
 			'column' => null,
 			'type' => null,
 			'alias' => null,
@@ -55,14 +48,6 @@ class Field extends DefinitionNode implements FieldInterface
 			'auto_increment' => false,
 			'filterable' => true,
 		];
-	}
-
-	public function __clone()
-	{
-		$this->setArray(self::detachArray($this->all()));
-		$this->display = null;
-		$this->interface = null;
-		$this->metadataMap = null;
 	}
 
 	public function setGeneratedFromRelation(?string $relation_name): self
@@ -102,18 +87,6 @@ class Field extends DefinitionNode implements FieldInterface
 		return (bool) $this->get('castDefault');
 	}
 
-	public function name(string $name): self
-	{
-		$this->set('name', $name);
-
-		return $this;
-	}
-
-	public function getName(): string
-	{
-		return (string) $this->get('name');
-	}
-
 	public function alias(string $alias): self
 	{
 		$this->set('alias', $alias);
@@ -139,7 +112,7 @@ class Field extends DefinitionNode implements FieldInterface
 	{
 		$type = $this->get('type');
 		if (! is_string($type) || $type === '') {
-			throw new FieldException('Field(' . $this->getName() . ') type must be set in definition: ' . $this->parent->getName());
+			throw new FieldException('Field(' . $this->getName() . ') type must be set in definition: ' . $this->getParent()->getName());
 		}
 
 		return $type;
@@ -257,15 +230,21 @@ class Field extends DefinitionNode implements FieldInterface
 
 	public function getParent(): DefinitionInterface
 	{
-		return $this->parent;
+		$owner = $this->owner();
+
+		if (! $owner instanceof DefinitionInterface) {
+			throw new FieldException(sprintf("Field '%s' parent is invalid.", $this->getName()));
+		}
+
+		return $owner;
 	}
 
 	public function end(): DefinitionInterface
 	{
-		return $this->parent;
+		return $this->getParent();
 	}
 
-	protected function afterBindDefinitionArray(): void
+	protected function initializeRuntimeState(): void
 	{
 		$this->display = null;
 		$this->interface = null;

@@ -41,15 +41,17 @@ final class Phase7ArchitectureTest extends TestCase
 			[
 				'materializeDefinitionArray',
 				'normalizeStoredClass',
+				'node',
+				'export',
 				'through',
 			] as $method
 		) {
 			self::assertFalse($reflection->hasMethod($method), sprintf('DefinitionFactory still exposes %s().', $method));
 		}
 
-		self::assertTrue($reflection->hasMethod('node'));
 		self::assertTrue($reflection->hasMethod('requireStoredClass'));
-		self::assertTrue($reflection->hasMethod('export'));
+		self::assertTrue($reflection->hasMethod('create'));
+		self::assertTrue($reflection->hasMethod('restore'));
 	}
 
 	public function testGenericInfrastructureNoLongerHardCodesConcreteFieldRelationOrThroughTypes(): void

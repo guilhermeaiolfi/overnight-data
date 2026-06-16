@@ -21,12 +21,6 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 	use InterfaceTrait;
 	use MetadataTrait;
 
-	public function __construct(
-		protected DefinitionInterface $parent,
-	) {
-		parent::__construct();
-	}
-
 	protected static function definitionDefaults(): array
 	{
 		return [
@@ -37,7 +31,6 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 			'inner_keys' => [],
 			'outer_keys' => [],
 			'collectionName' => '',
-			'name' => '',
 			'where' => [],
 			'orderBy' => [],
 			'loader' => null,
@@ -45,29 +38,15 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 		];
 	}
 
-	public function __clone()
-	{
-		$this->setArray(self::detachArray($this->all()));
-		$this->display = null;
-		$this->interface = null;
-		$this->metadataMap = null;
-	}
-
 	public function getParent(): DefinitionInterface
 	{
-		return $this->parent;
-	}
+		$owner = $this->owner();
 
-	public function name(string $name): self
-	{
-		$this->set('name', $name);
+		if (! $owner instanceof DefinitionInterface) {
+			throw new LogicException(sprintf("Relation '%s' parent is invalid.", $this->getName()));
+		}
 
-		return $this;
-	}
-
-	public function getName(): string
-	{
-		return (string) $this->get('name');
+		return $owner;
 	}
 
 	public function collection(string $collectionName): self
@@ -84,7 +63,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 
 	public function getCollection(): CollectionInterface
 	{
-		$collection = $this->parent->getRegistry()->getCollection($this->getCollectionName());
+		$collection = $this->getParent()->getRegistry()->getCollection($this->getCollectionName());
 		if ($collection === null) {
 			throw new LogicException("Target collection {$this->getCollectionName()} is not registered.");
 		}
@@ -191,7 +170,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 			throw new LogicException('getInnerField() is only available for single-key relations. Use innerKeys() instead.');
 		}
 
-		return $this->parent->getFields()->get($keys[0]);
+		return $this->getParent()->getFields()->get($keys[0]);
 	}
 
 	public function outerKey(string|array $fieldName): self
@@ -258,18 +237,19 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 
 	public function end(): DefinitionInterface
 	{
-		return $this->parent;
+		return $this->getParent();
 	}
 
 	protected function requireCollectionParent(string $context): CollectionInterface
 	{
-		if (! $this->parent instanceof CollectionInterface) {
+		$parent = $this->getParent();
+		if (! $parent instanceof CollectionInterface) {
 			throw new InvalidRelationParentException(
-				sprintf("%s requires a collection parent, '%s' given.", $context, $this->parent::class)
+				sprintf("%s requires a collection parent, '%s' given.", $context, $parent::class)
 			);
 		}
 
-		return $this->parent;
+		return $parent;
 	}
 
 	protected function normalizeKeys(string|array $fieldNames, string $context): array
@@ -318,7 +298,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 			throw new InvalidArgumentException("Relation '{$this->getName()}' contains duplicate outer keys.");
 		}
 
-		$target = $this->parent->getRegistry()->getCollection($this->getCollectionName());
+		$target = $this->getParent()->getRegistry()->getCollection($this->getCollectionName());
 		if ($target !== null && $outerKeys !== []) {
 			$targetPrimaryKeyCount = count($target->getPrimaryKey());
 			if ($targetPrimaryKeyCount !== count($outerKeys)) {
@@ -335,7 +315,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 		}
 	}
 
-	protected function afterBindDefinitionArray(): void
+	protected function initializeRuntimeState(): void
 	{
 		$this->display = null;
 		$this->interface = null;

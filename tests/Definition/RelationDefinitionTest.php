@@ -6,14 +6,12 @@ namespace Tests\ON\Data\Definition;
 
 use InvalidArgumentException;
 use LogicException;
-use ON\Data\Definition\Exception\RelationException;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\BelongsToRelation;
 use ON\Data\Definition\Relation\FirstOfManyRelation;
 use ON\Data\Definition\Relation\HasManyRelation;
 use ON\Data\Definition\Relation\HasOneRelation;
 use ON\Data\Definition\Relation\M2MRelation;
-use ON\Data\Definition\Relation\RelationMap;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\Fixture\CustomRelation;
 
@@ -147,20 +145,16 @@ final class RelationDefinitionTest extends TestCase
 		self::assertInstanceOf(CustomRelation::class, $custom);
 		self::assertSame('profile', $hasMany->getCollectionName());
 
-		$map = new RelationMap();
-		$map->set('profiles', $hasMany);
+		$map = $collection->getRelations();
 		self::assertTrue($map->has('profiles'));
 		self::assertSame($hasMany, $map->get('profiles'));
-		self::assertSame(['profiles'], array_keys(iterator_to_array($map)));
-		self::assertNotSame($map->get('profiles'), (clone $map)->get('profiles'));
-
-		$this->expectException(RelationException::class);
-		$map->set('profiles', $belongsTo);
+		self::assertSame(['profiles', 'main_profile', 'owner', 'custom'], array_keys(iterator_to_array($map)));
+		self::assertSame($custom, $collection->relation('custom', CustomRelation::class));
 	}
 
 	public function testFirstOfManyRelationKeepsManyCardinalityWithoutJunction(): void
 	{
-		$relation = new FirstOfManyRelation((new Registry())->collection('user'));
+		$relation = (new Registry())->collection('user')->relation('featured', FirstOfManyRelation::class);
 
 		self::assertSame('single', $relation->getCardinality());
 		self::assertFalse($relation->isJunction());

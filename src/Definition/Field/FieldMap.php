@@ -19,28 +19,19 @@ use Traversable;
 final class FieldMap implements IteratorAggregate, Countable
 {
 	/** @var array<string, mixed> */
-	private array $items = [];
+	private array $items;
 
 	/** @var array<string, FieldInterface> */
 	private array $fields = [];
 
+	/**
+	 * @param array<string, mixed> $items
+	 */
 	public function __construct(
-		private ?DefinitionInterface $parent = null,
-		?array &$items = null,
+		private DefinitionInterface $parent,
+		array &$items,
 	) {
-		if ($items !== null) {
-			$this->items = &$items;
-		}
-	}
-
-	public function __clone()
-	{
-		$items = $this->items;
-		$this->items = $items;
-		foreach ($this->fields as $name => $field) {
-			$this->fields[$name] = clone $field;
-			$this->items[$name] = DefinitionFactory::export($this->fields[$name], FieldInterface::class, 'field');
-		}
+		$this->items = &$items;
 	}
 
 	public function count(): int
@@ -88,23 +79,36 @@ final class FieldMap implements IteratorAggregate, Countable
 
 	public function get(string $name): FieldInterface
 	{
-		if (! $this->has($name)) {
+		if (! $this->has($name) || ! is_array($this->items[$name])) {
 			throw new FieldException("Undefined field `{$name}`.");
 		}
 
-		if (isset($this->fields[$name])) {
-			return $this->fields[$name];
+		if (! isset($this->fields[$name])) {
+			$items = &$this->items[$name];
+			$this->fields[$name] = DefinitionFactory::restoreField($this->parent, $name, $items);
 		}
 
-		if ($this->parent === null || ! is_array($this->items[$name])) {
-			throw new FieldException("Undefined field `{$name}`.");
+		return $this->fields[$name];
+	}
+
+	public function createOrReturn(string $name, string $class, array $values = []): FieldInterface
+	{
+		if ($this->has($name)) {
+			$field = $this->get($name);
+			if ($field::class !== $class) {
+				throw new InvalidDefinitionClassException(
+					sprintf("Cannot redefine field '%s' with class '%s'; stored class is '%s'.", $name, $class, $field::class)
+				);
+			}
+
+			return $field;
 		}
 
+		$this->items[$name] = [];
 		$items = &$this->items[$name];
-		$field = DefinitionFactory::field($this->parent, $items);
-		$this->fields[$name] = $field;
+		$this->fields[$name] = DefinitionFactory::createField($this->parent, $name, $items, $class, $values);
 
-		return $field;
+		return $this->fields[$name];
 	}
 
 	public function getKeyByColumnName(string $name): string
@@ -129,49 +133,6 @@ final class FieldMap implements IteratorAggregate, Countable
 		throw new FieldException("Undefined field with column name `{$name}`.");
 	}
 
-	public function set(string $name, FieldInterface $field): self
-	{
-		if ($this->has($name)) {
-			throw new FieldException("Field `{$name}` already exists.");
-		}
-
-		$this->items[$name] = $this->exportFieldDefinition($field);
-		unset($this->fields[$name]);
-		if ($this->parent !== null) {
-			$items = &$this->items[$name];
-			$this->fields[$name] = DefinitionFactory::field($this->parent, $items);
-
-			return $this;
-		}
-
-		$this->fields[$name] = $field;
-
-		return $this;
-	}
-
-	public function remove(string $name): self
-	{
-		unset($this->items[$name], $this->fields[$name]);
-
-		return $this;
-	}
-
-	public function replace(string $name, FieldInterface $field): self
-	{
-		$this->items[$name] = $this->exportFieldDefinition($field);
-		unset($this->fields[$name]);
-		if ($this->parent !== null) {
-			$items = &$this->items[$name];
-			$this->fields[$name] = DefinitionFactory::field($this->parent, $items);
-
-			return $this;
-		}
-
-		$this->fields[$name] = $field;
-
-		return $this;
-	}
-
 	public function getIterator(): Traversable
 	{
 		$fields = [];
@@ -180,21 +141,5 @@ final class FieldMap implements IteratorAggregate, Countable
 		}
 
 		return new ArrayIterator($fields);
-	}
-
-	/**
-	 * @return array<string, mixed>
-	 */
-	private function exportFieldDefinition(FieldInterface $field): array
-	{
-		try {
-			return DefinitionFactory::export($field, FieldInterface::class, 'field');
-		} catch (InvalidDefinitionClassException $exception) {
-			throw new InvalidDefinitionClassException(
-				sprintf('Field "%s" must be an array-backed %s wrapper.', $field->getName(), FieldInterface::class),
-				0,
-				$exception
-			);
-		}
 	}
 }

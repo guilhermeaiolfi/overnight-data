@@ -6,7 +6,6 @@ namespace ON\Data\Definition\Display;
 
 use ON\Data\Definition\Exception\InvalidDefinitionClassException;
 use ON\Data\Definition\Internal\DefinitionFactory;
-use ON\Data\Support\DefinitionNode;
 
 trait DisplayTrait
 {
@@ -19,16 +18,18 @@ trait DisplayTrait
 	 */
 	public function display(string $type = RawDisplay::class): DisplayInterface
 	{
-		$display = new $type($this);
-		if (! $display instanceof DisplayInterface || ! $display instanceof DefinitionNode) {
-			throw new InvalidDefinitionClassException(
-				sprintf('Invalid display class "%s".', $type)
-			);
+		if (isset($this->items['display']) && is_array($this->items['display'])) {
+			$display = $this->getDisplay();
+			if ($display::class !== $type) {
+				throw new InvalidDefinitionClassException(sprintf('Invalid display class "%s".', $type));
+			}
+
+			return $display;
 		}
 
-		$this->items['display'] = $display->all();
+		$this->items['display'] = [];
 		$displayItems = &$this->items['display'];
-		$this->display = DefinitionFactory::display($this, $displayItems);
+		$this->display = DefinitionFactory::createDisplay($this, 'display', $displayItems, $type);
 
 		return $this->display;
 	}
@@ -39,8 +40,12 @@ trait DisplayTrait
 			return $this->display;
 		}
 
+		if (! isset($this->items['display']) || ! is_array($this->items['display'])) {
+			return $this->display(RawDisplay::class);
+		}
+
 		$displayItems = &$this->items['display'];
-		$this->display = DefinitionFactory::display($this, $displayItems);
+		$this->display = DefinitionFactory::restoreDisplay($this, 'display', $displayItems);
 
 		return $this->display;
 	}

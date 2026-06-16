@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Internal;
 
-use Closure;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Display\DisplayInterface;
@@ -17,72 +16,150 @@ use ON\Data\Definition\View\ViewDefinitionInterface;
 use ON\Data\Support\DefinitionNode;
 
 /**
- * @internal Restores and rebinds canonical array-backed definition wrappers.
+ * @internal Creates and restores canonical array-backed definition wrappers.
  */
 final class DefinitionFactory
 {
 	/**
-	 * @param array<string, mixed> $items
+	 * @param class-string<CollectionInterface> $class
+	 * @param array<string, mixed> $slot
+	 * @param array<string, mixed> $values
 	 */
-	public static function collection(Registry $registry, array &$items): CollectionInterface
+	public static function createCollection(Registry $owner, string $name, array &$slot, string $class, array $values = []): CollectionInterface
 	{
 		/** @var CollectionInterface $collection */
-		$collection = self::node($registry, $items, CollectionInterface::class, 'collection');
+		$collection = self::create($owner, $name, $slot, $class, CollectionInterface::class, 'collection', $values);
 
 		return $collection;
 	}
 
 	/**
-	 * @param array<string, mixed> $items
+	 * @param class-string<ViewDefinitionInterface> $class
+	 * @param array<string, mixed> $slot
+	 * @param array<string, mixed> $values
 	 */
-	public static function view(Registry $registry, array &$items): ViewDefinitionInterface
+	public static function createView(Registry $owner, string $name, array &$slot, string $class, array $values = []): ViewDefinitionInterface
 	{
 		/** @var ViewDefinitionInterface $view */
-		$view = self::node($registry, $items, ViewDefinitionInterface::class, 'view');
+		$view = self::create($owner, $name, $slot, $class, ViewDefinitionInterface::class, 'view', $values);
 
 		return $view;
 	}
 
 	/**
-	 * @param array<string, mixed> $items
+	 * @param array<string, mixed> $slot
 	 */
-	public static function field(DefinitionInterface $definition, array &$items): FieldInterface
+	public static function restoreCollection(Registry $owner, string $name, array &$slot): CollectionInterface
+	{
+		/** @var CollectionInterface $collection */
+		$collection = self::restore($owner, $name, $slot, CollectionInterface::class, 'collection');
+
+		return $collection;
+	}
+
+	/**
+	 * @param array<string, mixed> $slot
+	 */
+	public static function restoreView(Registry $owner, string $name, array &$slot): ViewDefinitionInterface
+	{
+		/** @var ViewDefinitionInterface $view */
+		$view = self::restore($owner, $name, $slot, ViewDefinitionInterface::class, 'view');
+
+		return $view;
+	}
+
+	/**
+	 * @param class-string<FieldInterface> $class
+	 * @param array<string, mixed> $slot
+	 * @param array<string, mixed> $values
+	 */
+	public static function createField(DefinitionInterface $owner, string $name, array &$slot, string $class, array $values = []): FieldInterface
 	{
 		/** @var FieldInterface $field */
-		$field = self::node($definition, $items, FieldInterface::class, 'field');
+		$field = self::create($owner, $name, $slot, $class, FieldInterface::class, 'field', $values);
 
 		return $field;
 	}
 
 	/**
-	 * @param array<string, mixed> $items
+	 * @param array<string, mixed> $slot
 	 */
-	public static function relation(DefinitionInterface $definition, array &$items): RelationInterface
+	public static function restoreField(DefinitionInterface $owner, string $name, array &$slot): FieldInterface
+	{
+		/** @var FieldInterface $field */
+		$field = self::restore($owner, $name, $slot, FieldInterface::class, 'field');
+
+		return $field;
+	}
+
+	/**
+	 * @param class-string<RelationInterface> $class
+	 * @param array<string, mixed> $slot
+	 * @param array<string, mixed> $values
+	 */
+	public static function createRelation(DefinitionInterface $owner, string $name, array &$slot, string $class, array $values = []): RelationInterface
 	{
 		/** @var RelationInterface $relation */
-		$relation = self::node($definition, $items, RelationInterface::class, 'relation');
+		$relation = self::create($owner, $name, $slot, $class, RelationInterface::class, 'relation', $values);
 
 		return $relation;
 	}
 
 	/**
-	 * @param array<string, mixed> $items
+	 * @param array<string, mixed> $slot
 	 */
-	public static function display(mixed $parent, array &$items): DisplayInterface
+	public static function restoreRelation(DefinitionInterface $owner, string $name, array &$slot): RelationInterface
+	{
+		/** @var RelationInterface $relation */
+		$relation = self::restore($owner, $name, $slot, RelationInterface::class, 'relation');
+
+		return $relation;
+	}
+
+	/**
+	 * @param class-string<DisplayInterface> $class
+	 * @param array<string, mixed> $slot
+	 * @param array<string, mixed> $values
+	 */
+	public static function createDisplay(DefinitionNode $owner, string $name, array &$slot, string $class, array $values = []): DisplayInterface
 	{
 		/** @var DisplayInterface $display */
-		$display = self::node($parent, $items, DisplayInterface::class, 'display');
+		$display = self::create($owner, $name, $slot, $class, DisplayInterface::class, 'display', $values);
 
 		return $display;
 	}
 
 	/**
-	 * @param array<string, mixed> $items
+	 * @param array<string, mixed> $slot
 	 */
-	public static function interface(mixed $parent, array &$items): InterfaceInterface
+	public static function restoreDisplay(DefinitionNode $owner, string $name, array &$slot): DisplayInterface
+	{
+		/** @var DisplayInterface $display */
+		$display = self::restore($owner, $name, $slot, DisplayInterface::class, 'display');
+
+		return $display;
+	}
+
+	/**
+	 * @param class-string<InterfaceInterface> $class
+	 * @param array<string, mixed> $slot
+	 * @param array<string, mixed> $values
+	 */
+	public static function createInterface(DefinitionNode $owner, string $name, array &$slot, string $class, array $values = []): InterfaceInterface
 	{
 		/** @var InterfaceInterface $interface */
-		$interface = self::node($parent, $items, InterfaceInterface::class, 'interface');
+		$interface = self::create($owner, $name, $slot, $class, InterfaceInterface::class, 'interface', $values);
+
+		return $interface;
+	}
+
+	/**
+	 * @param array<string, mixed> $slot
+	 */
+	public static function restoreInterface(DefinitionNode $owner, string $name, array &$slot): InterfaceInterface
+	{
+		/** @var InterfaceInterface $interface */
+		$interface = self::restore($owner, $name, $slot, InterfaceInterface::class, 'interface');
 
 		return $interface;
 	}
@@ -90,56 +167,50 @@ final class DefinitionFactory
 	/**
 	 * @template T of object
 	 *
+	 * @param class-string<T> $class
 	 * @param class-string<T> $expectedType
-	 * @param array<string, mixed> $items
+	 * @param array<string, mixed> $slot
+	 * @param array<string, mixed> $values
 	 * @return T
-	 *
-	 * @internal
 	 */
-	public static function node(
-		object $parent,
-		array &$items,
+	public static function create(
+		Registry|DefinitionNode $owner,
+		string $name,
+		array &$slot,
+		string $class,
 		string $expectedType,
 		string $context,
+		array $values = [],
 	): object {
-		$class = self::requireStoredClass($items, $expectedType, $context);
+		self::assertClass($class, $expectedType, $context);
+		$slot = $class::createDefinition($values);
 
 		/** @var T&DefinitionNode $node */
-		$node = new $class($parent);
-		self::rebind($node, $items);
+		$node = $class::fromDefinition($owner, $name, $slot);
 
 		return $node;
 	}
 
 	/**
-	 * @param class-string $expectedType
-	 * @return array<string, mixed>
+	 * @template T of object
 	 *
-	 * @internal
+	 * @param class-string<T> $expectedType
+	 * @param array<string, mixed> $slot
+	 * @return T
 	 */
-	public static function export(object $node, string $expectedType, string $context): array
-	{
-		self::assertDefinitionNodeInstance($node, $expectedType, $context);
+	public static function restore(
+		Registry|DefinitionNode $owner,
+		string $name,
+		array &$slot,
+		string $expectedType,
+		string $context,
+	): object {
+		$class = self::requireStoredClass($slot, $expectedType, $context);
 
-		/** @var DefinitionNode $node */
-		return $node->all();
-	}
+		/** @var T&DefinitionNode $node */
+		$node = $class::fromDefinition($owner, $name, $slot);
 
-	/**
-	 * @param array<string, mixed> $items
-	 */
-	public static function rebind(DefinitionNode $node, array &$items): void
-	{
-		/** @var Closure(DefinitionNode, array<string, mixed>&): void $binder */
-		$binder = Closure::bind(
-			static function (DefinitionNode $node, array &$items): void {
-				$node->rebindDefinitionArray($items);
-			},
-			null,
-			DefinitionNode::class
-		);
-
-		$binder($node, $items);
+		return $node;
 	}
 
 	/**
@@ -154,6 +225,16 @@ final class DefinitionFactory
 			throw new InvalidDefinitionClassException(sprintf('%s definition is missing required class discriminator.', ucfirst($context)));
 		}
 
+		self::assertClass($class, $expectedType, $context);
+
+		return $class;
+	}
+
+	/**
+	 * @param class-string $expectedType
+	 */
+	private static function assertClass(string $class, string $expectedType, string $context): void
+	{
 		if (! class_exists($class)) {
 			throw new InvalidDefinitionClassException(sprintf('Unknown %s class "%s".', $context, $class));
 		}
@@ -165,26 +246,6 @@ final class DefinitionFactory
 		if (! is_a($class, DefinitionNode::class, true)) {
 			throw new InvalidDefinitionClassException(
 				sprintf('Stored %s class "%s" must extend %s.', $context, $class, DefinitionNode::class)
-			);
-		}
-
-		return $class;
-	}
-
-	/**
-	 * @param class-string $expectedType
-	 */
-	private static function assertDefinitionNodeInstance(object $node, string $expectedType, string $context): void
-	{
-		if (! $node instanceof $expectedType) {
-			throw new InvalidDefinitionClassException(
-				sprintf('Invalid %s instance "%s".', $context, $node::class)
-			);
-		}
-
-		if (! $node instanceof DefinitionNode) {
-			throw new InvalidDefinitionClassException(
-				sprintf('Stored %s instance "%s" must extend %s.', $context, $node::class, DefinitionNode::class)
 			);
 		}
 	}

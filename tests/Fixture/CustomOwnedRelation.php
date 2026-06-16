@@ -23,16 +23,10 @@ final class CustomOwnedRelation extends DefinitionNode implements RelationInterf
 
 	private ?CustomRelationOptions $options = null;
 
-	public function __construct(private DefinitionInterface $parent)
-	{
-		parent::__construct();
-	}
-
 	protected static function definitionDefaults(): array
 	{
 		return [
 			'class' => static::class,
-			'name' => '',
 			'collectionName' => '',
 			'nullable' => false,
 			'cascade' => true,
@@ -47,31 +41,13 @@ final class CustomOwnedRelation extends DefinitionNode implements RelationInterf
 		];
 	}
 
-	public function __clone()
-	{
-		$this->setArray(self::detachArray($this->all()));
-		$this->display = null;
-		$this->interface = null;
-		$this->metadataMap = null;
-		$this->options = null;
-		$this->restoreOptions();
-	}
-
 	public function getParent(): DefinitionInterface
 	{
-		return $this->parent;
-	}
+		$owner = $this->owner();
 
-	public function name(string $name): self
-	{
-		$this->set('name', $name);
-
-		return $this;
-	}
-
-	public function getName(): string
-	{
-		return (string) $this->get('name');
+		return $owner instanceof DefinitionInterface
+			? $owner
+			: throw new LogicException("Relation '{$this->getName()}' parent is invalid.");
 	}
 
 	public function collection(string $collectionName): self
@@ -88,7 +64,7 @@ final class CustomOwnedRelation extends DefinitionNode implements RelationInterf
 
 	public function getCollection(): CollectionInterface
 	{
-		$collection = $this->parent->getRegistry()->getCollection($this->getCollectionName());
+		$collection = $this->getParent()->getRegistry()->getCollection($this->getCollectionName());
 		if ($collection === null) {
 			throw new LogicException("Target collection {$this->getCollectionName()} is not registered.");
 		}
@@ -155,7 +131,7 @@ final class CustomOwnedRelation extends DefinitionNode implements RelationInterf
 
 	public function getInnerField(): FieldInterface
 	{
-		return $this->parent->getField((string) $this->getInnerKey()) ?? throw new LogicException('Inner field is not defined.');
+		return $this->getParent()->getField((string) $this->getInnerKey()) ?? throw new LogicException('Inner field is not defined.');
 	}
 
 	public function outerKey(string|array $fieldName): self
@@ -242,37 +218,49 @@ final class CustomOwnedRelation extends DefinitionNode implements RelationInterf
 			return $this->options;
 		}
 
-		if (! is_array($this->get('options'))) {
-			$this->items['options'] = CustomRelationOptions::createDefinition();
+		if (! isset($this->items['options']) || ! is_array($this->items['options'])) {
+			$this->items['options'] = [];
+			$optionItems = &$this->items['options'];
+			$this->options = DefinitionFactory::create(
+				$this,
+				'options',
+				$optionItems,
+				CustomRelationOptions::class,
+				CustomRelationOptions::class,
+				'relation options',
+			);
+
+			return $this->options;
 		}
 
 		$optionItems = &$this->items['options'];
-		$this->options = DefinitionFactory::node($this, $optionItems, CustomRelationOptions::class, 'relation options');
 
-		return $this->options;
+		/** @var CustomRelationOptions $options */
+		$options = DefinitionFactory::restore(
+			$this,
+			'options',
+			$optionItems,
+			CustomRelationOptions::class,
+			'relation options',
+		);
+
+		return $this->options = $options;
 	}
 
 	public function end(): DefinitionInterface
 	{
-		return $this->parent;
+		return $this->getParent();
 	}
 
-	protected function afterBindDefinitionArray(): void
+	protected function initializeRuntimeState(): void
 	{
 		$this->display = null;
 		$this->interface = null;
 		$this->metadataMap = null;
 		$this->options = null;
-		$this->restoreOptions();
-	}
 
-	private function restoreOptions(): void
-	{
-		if (! is_array($this->get('options'))) {
-			return;
+		if (isset($this->items['options']) && is_array($this->items['options'])) {
+			$this->options();
 		}
-
-		$optionItems = &$this->items['options'];
-		$this->options = DefinitionFactory::node($this, $optionItems, CustomRelationOptions::class, 'relation options');
 	}
 }

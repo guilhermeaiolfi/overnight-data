@@ -6,12 +6,10 @@ namespace Tests\ON\Data\Definition;
 
 use ON\Data\Definition\Collection\Collection;
 use ON\Data\Definition\Exception\InvalidDefinitionClassException;
-use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Interface\TextareaInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\Definition\Relation\M2MThrough;
-use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Definition\View\ViewDefinition;
 use ON\Data\Definition\View\ViewField;
 use PHPUnit\Framework\TestCase;
@@ -25,22 +23,12 @@ final class FinalDefinitionsArchitectureTest extends TestCase
 {
 	public function testFieldMapRejectsNonArrayBackedImplementations(): void
 	{
-		$field = $this->createMock(FieldInterface::class);
-		$field->method('getName')->willReturn('title');
-
-		$this->expectException(InvalidDefinitionClassException::class);
-
-		(new Registry())->collection('posts')->fields->set('title', $field);
+		self::assertFalse(method_exists((new Registry())->collection('posts')->fields, 'set'));
 	}
 
 	public function testRelationMapRejectsNonArrayBackedImplementations(): void
 	{
-		$relation = $this->createMock(RelationInterface::class);
-		$relation->method('getName')->willReturn('author');
-
-		$this->expectException(InvalidDefinitionClassException::class);
-
-		(new Registry())->collection('posts')->relations->set('author', $relation);
+		self::assertFalse(method_exists((new Registry())->collection('posts')->relations, 'set'));
 	}
 
 	public function testDisplayAndInterfaceCreationStoreCompleteDefinitionsImmediately(): void
@@ -71,15 +59,13 @@ final class FinalDefinitionsArchitectureTest extends TestCase
 			'collections' => [
 				'users' => [
 					'class' => Collection::class,
-					'name' => 'users',
 					'table' => 'users',
 					'fields' => [
-						'id' => ['name' => 'id', 'type' => 'int'],
+						'id' => ['type' => 'int'],
 					],
 					'relations' => [
 						'manager' => [
 							'class' => stdClass::class,
-							'name' => 'manager',
 						],
 					],
 				],
@@ -87,11 +73,9 @@ final class FinalDefinitionsArchitectureTest extends TestCase
 			'views' => [
 				'summary' => [
 					'class' => ViewDefinition::class,
-					'name' => 'summary',
 					'fields' => [
 						'title' => [
 							'class' => ViewField::class,
-							'name' => 'title',
 							'type' => 'string',
 							'display' => ['class' => stdClass::class],
 							'interface' => ['class' => stdClass::class],

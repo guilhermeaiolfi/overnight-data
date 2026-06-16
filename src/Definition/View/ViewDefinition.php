@@ -16,7 +16,6 @@ class ViewDefinition extends AbstractDefinition implements ViewDefinitionInterfa
 	{
 		return [
 			'class' => static::class,
-			'name' => '',
 			'source' => null,
 			'fields' => [],
 			'relations' => [],
@@ -29,21 +28,7 @@ class ViewDefinition extends AbstractDefinition implements ViewDefinitionInterfa
 	 */
 	public static function defaultDefinition(string $name): array
 	{
-		return static::createDefinition([
-			'name' => $name,
-		]);
-	}
-
-	public function name(string $name): self
-	{
-		$this->set('name', $name);
-
-		return $this;
-	}
-
-	public function getName(): string
-	{
-		return (string) $this->get('name');
+		return static::createDefinition();
 	}
 
 	public function source(string|DefinitionInterface $source): self
@@ -51,10 +36,6 @@ class ViewDefinition extends AbstractDefinition implements ViewDefinitionInterfa
 		$sourceName = $source instanceof DefinitionInterface ? $source->getName() : trim($source);
 		if ($sourceName === '') {
 			throw new InvalidArgumentException('View source name cannot be empty.');
-		}
-
-		if ($source instanceof DefinitionInterface) {
-			$this->getRegistry()->requireLocalDefinition($source);
 		}
 
 		$this->set('source', $sourceName);

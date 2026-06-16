@@ -11,22 +11,11 @@ use ON\Data\Support\DefinitionNode;
 
 abstract class AbstractInterface extends DefinitionNode implements InterfaceInterface
 {
-	public function __construct(
-		protected mixed $parent,
-	) {
-		parent::__construct();
-	}
-
 	protected static function definitionDefaults(): array
 	{
 		return [
 			'class' => static::class,
 		];
-	}
-
-	public function __clone()
-	{
-		$this->setArray(self::detachArray($this->all()));
 	}
 
 	public function setOptions(array $options): self
@@ -58,6 +47,6 @@ abstract class AbstractInterface extends DefinitionNode implements InterfaceInte
 	/** @return RelationInterface|FieldInterface */
 	public function end(): mixed
 	{
-		return $this->parent;
+		return $this->owner();
 	}
 }

@@ -9,12 +9,6 @@ use ON\Data\Definition\Field\FieldInterface;
 
 class HasOneRelation extends AbstractRelation
 {
-	public function __construct(DefinitionInterface $parent)
-	{
-		parent::__construct($parent);
-		$this->requireCollectionParent(static::class);
-	}
-
 	protected static function definitionDefaults(): array
 	{
 		return array_replace(parent::definitionDefaults(), [
@@ -73,5 +67,11 @@ class HasOneRelation extends AbstractRelation
 	public function getLoader(): ?string
 	{
 		return parent::getLoader();
+	}
+
+	protected function initializeRuntimeState(): void
+	{
+		parent::initializeRuntimeState();
+		$this->requireCollectionParent(static::class);
 	}
 }

@@ -18,7 +18,7 @@ This repository currently includes:
 - the `ON\Data\Key` value object for simple and composite identities;
 - tests and quality tooling.
 
-Definition arrays are now canonical at creation time. Each node class owns its own defaults, restored arrays must already be canonical, and old caches using legacy field-level `pk` flags should be discarded and regenerated.
+Definition arrays are now canonical at creation time. Names are stored only as owner-map keys, every stored wrapper is created by its owner over a final array slot, restored arrays must already be canonical, and old caches using legacy field-level `pk` flags should be discarded and regenerated.
 
 Not implemented yet:
 

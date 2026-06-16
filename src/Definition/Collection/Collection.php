@@ -21,7 +21,6 @@ class Collection extends AbstractDefinition implements CollectionInterface
 	{
 		return [
 			'class' => static::class,
-			'name' => '',
 			'table' => '',
 			'database' => 'default',
 			'entity' => stdClass::class,
@@ -47,7 +46,6 @@ class Collection extends AbstractDefinition implements CollectionInterface
 	public static function defaultDefinition(string $name): array
 	{
 		return static::createDefinition([
-			'name' => $name,
 			'table' => $name,
 		]);
 	}
@@ -142,18 +140,6 @@ class Collection extends AbstractDefinition implements CollectionInterface
 		$value = $this->get('mapper');
 
 		return is_string($value) ? $value : null;
-	}
-
-	public function name(string $name): self
-	{
-		$this->set('name', $name);
-
-		return $this;
-	}
-
-	public function getName(): string
-	{
-		return (string) $this->get('name');
 	}
 
 	public function note(string $note): self

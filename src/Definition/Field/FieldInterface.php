@@ -29,8 +29,6 @@ interface FieldInterface
 
 	public function getInterface(): InterfaceInterface;
 
-	public function name(string $name): self;
-
 	public function getName(): string;
 
 	public function alias(string $alias): self;

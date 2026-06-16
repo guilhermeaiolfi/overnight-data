@@ -23,8 +23,6 @@ interface RelationInterface
 
 	public function getParent(): DefinitionInterface;
 
-	public function name(string $name): self;
-
 	public function getName(): string;
 
 	public function collection(string $collectionName): self;

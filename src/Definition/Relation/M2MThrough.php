@@ -12,12 +12,6 @@ use ON\Data\Support\DefinitionNode;
 
 class M2MThrough extends DefinitionNode
 {
-	public function __construct(
-		protected M2MRelation $m2m,
-	) {
-		parent::__construct();
-	}
-
 	protected static function definitionDefaults(): array
 	{
 		return [
@@ -27,11 +21,6 @@ class M2MThrough extends DefinitionNode
 			'outer_keys' => [],
 			'where' => [],
 		];
-	}
-
-	public function __clone()
-	{
-		$this->setArray(self::detachArray($this->all()));
 	}
 
 	public function collection(string $collectionName): self
@@ -48,7 +37,7 @@ class M2MThrough extends DefinitionNode
 
 	public function getCollection(): CollectionInterface
 	{
-		$collection = $this->m2m->getParent()->getRegistry()->getCollection($this->getCollectionName());
+		$collection = $this->relation()->getParent()->getRegistry()->getCollection($this->getCollectionName());
 		if ($collection === null) {
 			throw new LogicException("Target collection {$this->getCollectionName()} is not registered.");
 		}
@@ -148,7 +137,16 @@ class M2MThrough extends DefinitionNode
 
 	public function end(): M2MRelation
 	{
-		return $this->m2m;
+		return $this->relation();
+	}
+
+	private function relation(): M2MRelation
+	{
+		$owner = $this->owner();
+
+		return $owner instanceof M2MRelation
+			? $owner
+			: throw new LogicException('Many-to-many through owner is invalid.');
 	}
 
 	private function normalizeKeys(string|array $fieldNames, string $context): array
@@ -188,7 +186,7 @@ class M2MThrough extends DefinitionNode
 		}
 
 		try {
-			$relationInnerKeys = $this->m2m->innerKeys();
+			$relationInnerKeys = $this->relation()->innerKeys();
 			if ($innerKeys !== [] && count($innerKeys) !== count($relationInnerKeys)) {
 				throw new InvalidArgumentException(
 					sprintf(
@@ -202,7 +200,7 @@ class M2MThrough extends DefinitionNode
 		}
 
 		try {
-			$relationOuterKeys = $this->m2m->outerKeys();
+			$relationOuterKeys = $this->relation()->outerKeys();
 			if ($outerKeys !== [] && count($outerKeys) !== count($relationOuterKeys)) {
 				throw new InvalidArgumentException(
 					sprintf(

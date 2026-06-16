@@ -4,13 +4,30 @@ declare(strict_types=1);
 
 namespace ON\Data\Support;
 
+use LogicException;
+use ON\Data\Definition\Registry;
+
 /**
- * Minimal array-backed node for future definition wrappers.
+ * Minimal array-backed node bound directly to a registry-owned array slot.
  *
  * @phpstan-consistent-constructor
  */
-class DefinitionNode extends Dot
+abstract class DefinitionNode extends Dot
 {
+	private readonly Registry|self $owner;
+
+	private readonly string $name;
+
+	final protected function __construct(Registry|self $owner, string $name, array &$items)
+	{
+		$this->owner = $owner;
+		$this->name = $name;
+
+		parent::__construct([]);
+		$this->setReference($items);
+		$this->initializeRuntimeState();
+	}
+
 	/**
 	 * Create a complete standalone definition array using this class's defaults.
 	 *
@@ -19,14 +36,43 @@ class DefinitionNode extends Dot
 	 * @param array<array-key, mixed> $values
 	 * @return array<array-key, mixed>
 	 */
-	public static function createDefinition(array $values = []): array
+	final public static function createDefinition(array $values = []): array
 	{
 		/**
 		 * @var array<array-key, mixed> $merged
 		 */
 		$merged = self::mergeDefinitionArrays(static::definitionDefaults(), $values);
+		$merged['class'] = static::class;
 
 		return $merged;
+	}
+
+	/**
+	 * @internal
+	 *
+	 * @param array<array-key, mixed> $items
+	 * @return static
+	 */
+	final public static function fromDefinition(Registry|self $owner, string $name, array &$items): static
+	{
+		return new static($owner, $name, $items);
+	}
+
+	final public function getName(): string
+	{
+		return $this->name;
+	}
+
+	final public function getRegistry(): Registry
+	{
+		return $this->owner instanceof Registry
+			? $this->owner
+			: $this->owner->getRegistry();
+	}
+
+	final public function __clone()
+	{
+		throw new LogicException('Definition nodes cannot be cloned.');
 	}
 
 	/**
@@ -34,73 +80,16 @@ class DefinitionNode extends Dot
 	 */
 	protected static function definitionDefaults(): array
 	{
-		$defaults = get_class_vars(static::class);
-		unset($defaults['items'], $defaults['delimiter']);
-
-		return $defaults;
+		return [];
 	}
 
-	/**
-	 * @param array<array-key, mixed>|object|null $items
-	 * @param string $delimiter
-	 */
-	public function __construct(array|object|null $items = [], bool $parse = false, string $delimiter = '.')
-	{
-		/**
-		 * @var array<array-key, mixed> $merged
-		 */
-		$merged = static::createDefinition($this->getArrayItems($items));
-
-		parent::__construct($merged, $parse, $delimiter);
-	}
-
-	/**
-	 * @param array<array-key, mixed> $items
-	 * @param string $delimiter
-	 */
-	public static function fromReference(array &$items, string $delimiter = '.'): static
-	{
-		$instance = new static([], false, $delimiter);
-		$instance->bind($items);
-
-		return $instance;
-	}
-
-	/**
-	 * @param array<array-key, mixed> $items
-	 */
-	protected function bind(array &$items): void
-	{
-		$this->setReference($items);
-	}
-
-	/**
-	 * @internal Rebinds the wrapper to a registry-owned nested definition array.
-	 *
-	 * @param array<array-key, mixed> $items
-	 */
-	protected function rebindDefinitionArray(array &$items): void
-	{
-		$this->bind($items);
-		$this->afterBindDefinitionArray();
-	}
-
-	/**
-	 * @internal Allows subclasses to rebuild nested wrapper caches after rebinding.
-	 */
-	protected function afterBindDefinitionArray(): void
+	protected function initializeRuntimeState(): void
 	{
 	}
 
-	/**
-	 * @param array<array-key, mixed> $items
-	 * @return array<array-key, mixed>
-	 */
-	protected static function detachArray(array $items): array
+	protected function owner(): Registry|self
 	{
-		$detached = unserialize(serialize($items), ['allowed_classes' => false]);
-
-		return is_array($detached) ? $detached : [];
+		return $this->owner;
 	}
 
 	/**

@@ -11,23 +11,12 @@ use ON\Data\Support\DefinitionNode;
 
 class RawDisplay extends DefinitionNode implements DisplayInterface
 {
-	public function __construct(
-		protected mixed $parent,
-	) {
-		parent::__construct();
-	}
-
 	protected static function definitionDefaults(): array
 	{
 		return [
 			'class' => static::class,
 			'type' => '',
 		];
-	}
-
-	public function __clone()
-	{
-		$this->setArray(self::detachArray($this->all()));
 	}
 
 	public function type(string $type): self
@@ -45,7 +34,7 @@ class RawDisplay extends DefinitionNode implements DisplayInterface
 	/** @return RelationInterface|FieldInterface */
 	public function end(): mixed
 	{
-		return $this->parent;
+		return $this->owner();
 	}
 
 	public function setOptions(array $options): self
