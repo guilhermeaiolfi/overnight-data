@@ -1,8 +1,8 @@
 # Overnight Data
 
-A standalone metadata-driven data layer for PHP.
+The definition foundation of a metadata-driven PHP data layer.
 
-`ON\Data` currently contains the mechanically extracted definition subsystem from Overnight plus the Phase 1 support layer used for later migrations.
+`ON\Data` currently ships the standalone definition subsystem extracted from Overnight plus the small support layer needed to store, restore, and extend definitions as plain PHP arrays.
 
 ## Status
 
@@ -18,7 +18,12 @@ This repository currently includes:
 - the `ON\Data\Key` value object for simple and composite identities;
 - tests and quality tooling.
 
-Future phases will still add semantic view expressions, query execution, and FieldType-backed normalization. Those changes are not implemented yet.
+Not implemented yet:
+
+- semantic view fields and expressions;
+- query execution;
+- persistence and ORM adapters;
+- FieldType-backed value normalization.
 
 ## Namespace
 
@@ -37,8 +42,16 @@ composer require guilhermeaiolfi/overnight-data:dev-main
 
 ```bash
 composer install
+composer validate --strict
+composer dump-autoload
 composer test
 composer analyse
 composer check-style
 composer check
 ```
+
+## Docs
+
+- `docs/definitions.md` covers the current public definition API.
+- `docs/extending-definitions.md` covers supported subclass-based extension points.
+- `docs/release-0.1-checklist.md` summarizes the pre-release checklist for the definitions-only package.

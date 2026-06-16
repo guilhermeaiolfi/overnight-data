@@ -1,8 +1,14 @@
 {
     "name": "guilhermeaiolfi/overnight-data",
-    "description": "A standalone metadata-driven data layer for PHP.",
+    "description": "The definition foundation of a metadata-driven PHP data layer.",
     "type": "library",
     "license": "MIT",
+    "keywords": [
+        "php",
+        "metadata",
+        "definitions",
+        "data-layer"
+    ],
     "require": {
         "php": ">=8.1"
     },
