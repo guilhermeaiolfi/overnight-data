@@ -1,0 +1,181 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\ON\Data\Mapper;
+
+use ON\Data\Definition\Registry;
+use ON\Data\Mapper\ConversionGateway;
+use ON\Data\Mapper\Exception\ConversionException;
+use ON\Data\Mapper\Exception\FieldTypeNotFoundException;
+use ON\Data\Mapper\Exception\UnsupportedConversionException;
+use ON\Data\Mapper\FieldContext;
+use ON\Data\Mapper\FieldTypeRegistry;
+use ON\Data\Mapper\Representation\PhpRepresentation;
+use ON\Data\Mapper\Representation\StorageRepresentation;
+use ON\Data\Mapper\Representation\WireRepresentation;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+use stdClass;
+use Tests\ON\Data\Fixture\CustomFieldType;
+
+final class ConversionGatewayTest extends TestCase
+{
+	public function testStorageIntegerStringConvertsToPhpInteger(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+		$field = FieldContext::named('id', 'int');
+
+		self::assertSame(10, $gateway->to(StorageRepresentation::class, '10', PhpRepresentation::class, $field));
+	}
+
+	public function testWireIntegerStringConvertsToPhpInteger(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+		$field = FieldContext::named('id', 'integer');
+
+		self::assertSame(42, $gateway->to(WireRepresentation::class, '42', PhpRepresentation::class, $field));
+	}
+
+	#[DataProvider('supportedBooleanValues')]
+	public function testSupportedBooleanInputsConvertDeterministically(mixed $input, bool $expected): void
+	{
+		$gateway = ConversionGateway::createDefault();
+		$field = FieldContext::named('active', 'bool');
+
+		self::assertSame($expected, $gateway->to(WireRepresentation::class, $input, PhpRepresentation::class, $field));
+	}
+
+	public static function supportedBooleanValues(): array
+	{
+		return [
+			['1', true],
+			['0', false],
+			['true', true],
+			['false', false],
+			['yes', true],
+			['no', false],
+			['on', true],
+			['off', false],
+			[1, true],
+			[0, false],
+			[1.0, true],
+			[0.0, false],
+		];
+	}
+
+	#[DataProvider('ambiguousBooleanValues')]
+	public function testAmbiguousBooleanStringsFail(string $input): void
+	{
+		$gateway = ConversionGateway::createDefault();
+		$field = FieldContext::named('active', 'bool');
+
+		$this->expectException(ConversionException::class);
+		$gateway->to(WireRepresentation::class, $input, PhpRepresentation::class, $field);
+	}
+
+	public static function ambiguousBooleanValues(): array
+	{
+		return [
+			['truthy'],
+			['2'],
+			[''],
+		];
+	}
+
+	public function testPhpValuesConvertToStorage(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		self::assertSame(7, $gateway->to(PhpRepresentation::class, 7, StorageRepresentation::class, FieldContext::named('id', 'int')));
+		self::assertSame(3.5, $gateway->to(PhpRepresentation::class, 3.5, StorageRepresentation::class, FieldContext::named('price', 'float')));
+		self::assertTrue($gateway->to(PhpRepresentation::class, true, StorageRepresentation::class, FieldContext::named('active', 'bool')));
+	}
+
+	public function testPhpValuesConvertToWire(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		self::assertSame('hello', $gateway->to(PhpRepresentation::class, 'hello', WireRepresentation::class, FieldContext::named('name', 'string')));
+		self::assertSame(9, $gateway->to(PhpRepresentation::class, 9, WireRepresentation::class, FieldContext::named('id', 'primary')));
+		self::assertFalse($gateway->to(PhpRepresentation::class, false, WireRepresentation::class, FieldContext::named('active', 'boolean')));
+	}
+
+	public function testSameRepresentationConversionReturnsOriginalValue(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+		$value = new stdClass();
+
+		self::assertSame($value, $gateway->to(PhpRepresentation::class, $value, PhpRepresentation::class, FieldContext::named('payload', 'text')));
+	}
+
+	public function testNullPassesThroughUnchanged(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		self::assertNull($gateway->to(StorageRepresentation::class, null, PhpRepresentation::class, FieldContext::named('id', 'int')));
+	}
+
+	public function testUnknownRepresentationsFail(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		$this->expectException(UnsupportedConversionException::class);
+		$gateway->to(stdClass::class, '10', PhpRepresentation::class, FieldContext::named('id', 'int'));
+	}
+
+	public function testConversionErrorsRetainPreviousExceptions(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+		$field = FieldContext::named('active', 'bool');
+
+		try {
+			$gateway->to(WireRepresentation::class, 'maybe', PhpRepresentation::class, $field);
+			self::fail('Expected conversion exception was not thrown.');
+		} catch (ConversionException $exception) {
+			self::assertNotNull($exception->getPrevious());
+			self::assertStringContainsString("field 'active'", $exception->getMessage());
+			self::assertStringContainsString('from ' . WireRepresentation::class, $exception->getMessage());
+			self::assertStringContainsString('to ' . PhpRepresentation::class, $exception->getMessage());
+		}
+	}
+
+	public function testUnknownFieldTypeResolutionIsExplicit(): void
+	{
+		$gateway = new ConversionGateway(new FieldTypeRegistry());
+
+		$this->expectException(FieldTypeNotFoundException::class);
+		$gateway->to(StorageRepresentation::class, '10', PhpRepresentation::class, FieldContext::named('id', 'int'));
+	}
+
+	public function testConversionDoesNotMutateRegistryDefinitions(): void
+	{
+		$registry = new Registry();
+		$field = $registry->collection('users')->field('id', 'int')->nullable(true);
+		$before = $registry->all();
+
+		$gateway = ConversionGateway::createDefault();
+		$result = $gateway->to(StorageRepresentation::class, '10', PhpRepresentation::class, FieldContext::fromField($field));
+
+		self::assertSame(10, $result);
+		self::assertSame($before, $registry->all());
+	}
+
+	public function testRestoredDefinitionsBehaveIdentically(): void
+	{
+		$registry = new Registry();
+		$registry->collection('users')->field('id', 'int')->nullable(true);
+		$restored = new Registry($registry->all());
+
+		$originalField = $registry->collection('users')->field('id');
+		$restoredField = $restored->collection('users')->field('id');
+		$gateway = new ConversionGateway(
+			FieldTypeRegistry::createDefault()->register('custom', CustomFieldType::class),
+		);
+
+		self::assertSame(
+			$gateway->to(StorageRepresentation::class, '15', PhpRepresentation::class, FieldContext::fromField($originalField)),
+			$gateway->to(StorageRepresentation::class, '15', PhpRepresentation::class, FieldContext::fromField($restoredField)),
+		);
+	}
+}

@@ -16,16 +16,18 @@ This repository currently includes:
 - shared `DefinitionInterface` support for collections and views;
 - registry-managed `ViewDefinition` and `ViewField` wrappers backed by the same master-array storage;
 - the `ON\Data\Key` value object for simple and composite identities;
+- the standalone FieldType, representation, and conversion gateway foundation under `ON\Data\Mapper`;
 - tests and quality tooling.
 
 Definition arrays are now canonical at creation time. Names are stored only as owner-map keys, every stored wrapper is created by its owner over a final array slot, restored arrays must already be canonical, and old caches using legacy field-level `pk` flags should be discarded and regenerated.
 
 Not implemented yet:
 
+- structural mappers and the fluent `map()` entry point;
 - semantic view fields and expressions;
 - query execution;
 - persistence and ORM adapters;
-- FieldType-backed value normalization.
+- big-integer, decimal, enum, and date-oriented FieldTypes.
 
 ## Namespace
 
@@ -56,4 +58,5 @@ composer check
 
 - `docs/definitions.md` covers the current public definition API.
 - `docs/extending-definitions.md` covers supported subclass-based extension points.
+- `docs/2-field-types-and-mapper.md` covers the implemented scalar FieldType and conversion runtime.
 - `docs/release-0.1-checklist.md` summarizes the pre-release checklist for the definitions-only package.
