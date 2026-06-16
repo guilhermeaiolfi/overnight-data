@@ -7,22 +7,45 @@ namespace ON\Data\Definition\Interface;
 use Exception;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
+use ON\Data\Support\DefinitionNode;
 
-abstract class AbstractInterface implements InterfaceInterface
+abstract class AbstractInterface extends DefinitionNode implements InterfaceInterface
 {
 	public function __construct(
-		protected mixed $parent
+		protected mixed $parent,
+		?array &$items = null,
 	) {
+		if ($items === null) {
+			parent::__construct();
 
+			return;
+		}
+
+		parent::__construct([]);
+		$this->bind($items);
+	}
+
+	protected static function definitionDefaults(): array
+	{
+		return [
+			'class' => static::class,
+		];
+	}
+
+	public function __clone()
+	{
+		$this->setArray($this->all());
 	}
 
 	public function setOptions(array $options): self
 	{
+		$current = $this->all();
 		foreach ($options as $key => $value) {
-			if (! isset($this->$key)) {
+			if (! isset($current[$key])) {
 				throw new Exception("There is no property {$key} in " . self::class);
 			}
-			$this->$key = $value;
+
+			$this->set((string) $key, $value);
 		}
 
 		return $this;
@@ -30,11 +53,9 @@ abstract class AbstractInterface implements InterfaceInterface
 
 	public function getOptions(): array
 	{
-		$properties = get_object_vars($this);
-
-		$exclude = ["parent"];
+		$properties = $this->all();
 		foreach ($properties as $key => $value) {
-			if (in_array($key, $exclude) || $properties[$key] == null) {
+			if ($key === 'class' || $properties[$key] == null) {
 				unset($properties[$key]);
 			}
 		}

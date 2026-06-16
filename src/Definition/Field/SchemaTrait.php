@@ -8,59 +8,53 @@ use ON\Data\Definition\Relation\RelationInterface;
 
 trait SchemaTrait
 {
-	protected bool $nullable = false;
-
-	protected bool $hidden = false;
-
-	protected bool $unique = false;
-
-	protected bool $indexed = false;
-
-	protected int $max_length = 255;
-
-	protected int $numeric_precision = 2;
-
-	protected mixed $default_value = null;
-
-	protected ?string $data_type = null;
-
-	protected ?string $comment = null;
-
-	protected bool $pk = false;
-
-	protected bool $auto_increment = false;
-
-	protected bool $filterable = true;
+	public static function schemaDefaults(): array
+	{
+		return [
+			'nullable' => false,
+			'hidden' => false,
+			'unique' => false,
+			'indexed' => false,
+			'max_length' => 255,
+			'numeric_precision' => 2,
+			'default_value' => null,
+			'data_type' => null,
+			'comment' => null,
+			'pk' => false,
+			'auto_increment' => false,
+			'filterable' => true,
+		];
+	}
 
 	public function numericPrecision(int $numeric_precision): self
 	{
-		$this->numeric_precision = $numeric_precision;
+		$this->set('numeric_precision', $numeric_precision);
 
 		return $this;
 	}
 
 	public function getNumericPrecision(): int
 	{
-		return $this->numeric_precision;
+		return (int) $this->get('numeric_precision');
 	}
 
 	public function autoIncrement(bool $auto_increment): self
 	{
-		$this->auto_increment = $auto_increment;
+		$this->set('auto_increment', $auto_increment);
 
 		return $this;
 	}
 
 	public function isAutoIncrement(): bool
 	{
-		return $this->auto_increment;
+		return (bool) $this->get('auto_increment');
 	}
 
 	public function primaryKey(bool $pk): self
 	{
-		$this->pk = $pk;
+		$this->set('pk', $pk);
 		if ($pk) {
-			$this->filterable = false;
+			$this->set('filterable', false);
 		}
 
 		return $this;
@@ -68,115 +62,117 @@ trait SchemaTrait
 
 	public function isPrimaryKey(): bool
 	{
-		return $this->pk;
+		return (bool) $this->get('pk');
 	}
 
 	public function filterable(bool $filterable = true): self
 	{
-		$this->filterable = $filterable;
+		$this->set('filterable', $filterable);
 
 		return $this;
 	}
 
 	public function isFilterable(): bool
 	{
-		return $this->filterable;
+		return (bool) $this->get('filterable');
 	}
 
 	public function dataType(mixed $data_type): self
 	{
-		$this->data_type = $data_type ;
+		$this->set('data_type', $data_type);
 
 		return $this;
 	}
 
 	public function getDataType(): mixed
 	{
-		return $this->data_type;
+		return $this->get('data_type');
 	}
 
 	public function defaultValue(mixed $default_value): self
 	{
-		$this->default_value = $default_value ;
+		$this->set('default_value', $default_value);
 
 		return $this;
 	}
 
 	public function getDefaultValue(): mixed
 	{
-		return $this->default_value;
+		return $this->get('default_value');
 	}
 
 	public function maxLength(int $max_length): self
 	{
-		$this->max_length = $max_length ;
+		$this->set('max_length', $max_length);
 
 		return $this;
 	}
 
 	public function getMaxLength(): int
 	{
-		return $this->max_length;
+		return (int) $this->get('max_length');
 	}
 
 	public function nullable(bool $nullable): self
 	{
-		$this->nullable = $nullable;
+		$this->set('nullable', $nullable);
 
 		return $this;
 	}
 
 	public function isNullable(): bool
 	{
-		return $this->nullable;
+		return (bool) $this->get('nullable');
 	}
 
 	public function hidden(bool $hidden): self
 	{
-		$this->hidden = $hidden;
+		$this->set('hidden', $hidden);
 
 		return $this;
 	}
 
 	public function isHidden(): bool
 	{
-		return $this->hidden;
+		return (bool) $this->get('hidden');
 	}
 
 	public function unique(bool $unique): self
 	{
-		$this->unique = $unique;
+		$this->set('unique', $unique);
 
 		return $this;
 	}
 
 	public function isUnique(): bool
 	{
-		return $this->unique;
+		return (bool) $this->get('unique');
 	}
 
 	public function indexed(bool $indexed): self
 	{
-		$this->indexed = $indexed;
+		$this->set('indexed', $indexed);
 
 		return $this;
 	}
 
 	public function isIndexed(): bool
 	{
-		return $this->indexed;
+		return (bool) $this->get('indexed');
 	}
 
 	public function comment(string $comment): self
 	{
-		$this->comment = $comment;
+		$this->set('comment', $comment);
 
 		return $this;
 	}
 
 	public function getComment(): ?string
 	{
-		return $this->comment;
+		$value = $this->get('comment');
+
+		return is_string($value) ? $value : null;
 	}
 
 	public function end(): FieldInterface|RelationInterface

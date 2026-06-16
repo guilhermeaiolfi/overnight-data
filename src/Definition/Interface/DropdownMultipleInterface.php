@@ -4,85 +4,78 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Interface;
 
-// Allow selection of many items
 class DropdownMultipleInterface extends AbstractInterface
 {
-	protected ?string $placeholder = null;
-
-	protected ?string $icon = null;
-
-	/**
-	 * [
-	 * 		text: '',
-	 * 		value: '',
-	 * 		icon: '',
-	 * 		color: ''
-	 * ]
-	 */
-
-	protected array $choices = [];
-
-	protected bool $allow_other = true;
-
-	protected bool $allow_none = true;
+	protected static function definitionDefaults(): array
+	{
+		return array_replace(parent::definitionDefaults(), [
+			'placeholder' => null,
+			'icon' => null,
+			'choices' => [],
+			'allow_other' => true,
+			'allow_none' => true,
+		]);
+	}
 
 	public function choices(array $choices): self
 	{
-		$this->choices = $choices;
+		$this->set('choices', $choices);
 
 		return $this;
 	}
 
 	public function getChoices(): array
 	{
-		return $this->choices;
+		$value = $this->get('choices');
+
+		return is_array($value) ? $value : [];
 	}
 
 	public function allowOther(bool $allow_other): self
 	{
-		$this->allow_other = $allow_other;
+		$this->set('allow_other', $allow_other);
 
 		return $this;
 	}
 
 	public function isAllowOther(): bool
 	{
-		return $this->allow_other;
+		return (bool) $this->get('allow_other');
 	}
 
 	public function allowNone(bool $allow_none): self
 	{
-		$this->allow_none = $allow_none;
+		$this->set('allow_none', $allow_none);
 
 		return $this;
 	}
 
 	public function isAllowNone(): bool
 	{
-		return $this->allow_none;
+		return (bool) $this->get('allow_none');
 	}
 
 	public function placeholder(array $placeholder): self
 	{
-		$this->placeholder = $placeholder;
+		$this->set('placeholder', $placeholder);
 
 		return $this;
 	}
 
 	public function getPlaceholder(): ?string
 	{
-		return $this->placeholder;
+		return is_string($this->get('placeholder')) ? $this->get('placeholder') : null;
 	}
 
 	public function icon(array $icon): self
 	{
-		$this->icon = $icon;
+		$this->set('icon', $icon);
 
 		return $this;
 	}
 
 	public function getIcon(): ?string
 	{
-		return $this->icon;
+		return is_string($this->get('icon')) ? $this->get('icon') : null;
 	}
 }

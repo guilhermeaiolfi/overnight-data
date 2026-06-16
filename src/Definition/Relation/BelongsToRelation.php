@@ -7,5 +7,10 @@ namespace ON\Data\Definition\Relation;
 // TODO: I need to really think about it to make sure that's the right behavior.
 class BelongsToRelation extends HasOneRelation
 {
-	protected bool $nullable = true;
+	protected static function definitionDefaults(): array
+	{
+		return array_replace(parent::definitionDefaults(), [
+			'nullable' => true,
+		]);
+	}
 }

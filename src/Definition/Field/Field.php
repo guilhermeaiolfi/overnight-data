@@ -9,132 +9,152 @@ use ON\Data\Definition\Display\DisplayTrait;
 use ON\Data\Definition\Exception\FieldException;
 use ON\Data\Definition\Interface\InterfaceTrait;
 use ON\Data\Definition\MetadataTrait;
+use ON\Data\Support\DefinitionNode;
 
-class Field implements FieldInterface
+class Field extends DefinitionNode implements FieldInterface
 {
 	use DisplayTrait;
 	use InterfaceTrait;
 	use SchemaTrait;
 	use MetadataTrait;
 
-	protected string $name;
-
-	protected ?string $column = null;
-
-	protected ?string $type = null;
-
-	protected ?string $alias = null;
-
-	protected bool $required = false;
-
-	protected ?bool $searchable = null;
-
-	protected bool $sensible = false;
-
-	protected mixed $default = null;
-
-	protected bool $castDefault = false;
-
-	protected ?string $generatedFromRelation = null;
-
-	protected ?string $validation = null;
-
-	/** @var array<string, string> */
-	protected array $validationMessages = [];
-
-	protected ?string $description = null;
-
-	/**
-	 * @var callable-array|string|null
-	 */
-	private array|string|null $typecast = null;
-
 	public function __construct(
-		protected CollectionInterface $collection
+		protected CollectionInterface $collection,
+		?array &$items = null,
 	) {
+		if ($items === null) {
+			parent::__construct();
+		} else {
+			parent::__construct([]);
+			$this->bind($items);
+		}
+	}
 
+	protected static function definitionDefaults(): array
+	{
+		return [
+			'class' => static::class,
+			'name' => '',
+			'column' => null,
+			'type' => null,
+			'alias' => null,
+			'required' => false,
+			'searchable' => null,
+			'sensible' => false,
+			'default' => null,
+			'castDefault' => false,
+			'generatedFromRelation' => null,
+			'validation' => null,
+			'validationMessages' => [],
+			'description' => null,
+			'typecast' => null,
+			'metadata' => [],
+			'nullable' => false,
+			'hidden' => false,
+			'unique' => false,
+			'indexed' => false,
+			'max_length' => 255,
+			'numeric_precision' => 2,
+			'default_value' => null,
+			'data_type' => null,
+			'comment' => null,
+			'pk' => false,
+			'auto_increment' => false,
+			'filterable' => true,
+		];
+	}
+
+	public function __clone()
+	{
+		$this->setArray($this->all());
+		$this->display = null;
+		$this->interface = null;
+		$this->metadataMap = null;
 	}
 
 	public function setGeneratedFromRelation(?string $relation_name): self
 	{
-		$this->generatedFromRelation = $relation_name;
+		$this->set('generatedFromRelation', $relation_name);
 
 		return $this;
 	}
 
 	public function getGeneratedFromRelation(): ?string
 	{
-		return $this->generatedFromRelation;
+		$value = $this->get('generatedFromRelation');
+
+		return is_string($value) ? $value : null;
 	}
 
 	public function default(mixed $default, bool $castDefault = true): self
 	{
-		$this->default = $default;
-
-		$this->castDefault = $castDefault;
+		$this->set('default', $default);
+		$this->set('castDefault', $castDefault);
 
 		return $this;
 	}
 
 	public function getDefault(): mixed
 	{
-		return $this->default;
+		return $this->get('default');
 	}
 
 	public function hasDefault(): bool
 	{
-		return $this->default !== null;
+		return $this->get('default') !== null;
 	}
 
 	public function castDefault(): bool
 	{
-		return $this->castDefault;
+		return (bool) $this->get('castDefault');
 	}
 
 	public function name(string $name): self
 	{
-		$this->name = $name;
+		$this->set('name', $name);
 
 		return $this;
 	}
 
 	public function getName(): string
 	{
-		return $this->name;
+		return (string) $this->get('name');
 	}
 
 	public function alias(string $alias): self
 	{
-		$this->alias = $alias;
+		$this->set('alias', $alias);
 
 		return $this;
 	}
 
 	public function getAlias(): string
 	{
-		return $this->alias ?? $this->name;
+		$alias = $this->get('alias');
+
+		return is_string($alias) ? $alias : $this->getName();
 	}
 
 	public function type(string $type): self
 	{
-		$this->type = $type;
+		$this->set('type', $type);
 
 		return $this;
 	}
 
 	public function getType(): string
 	{
-		if (empty($this->type)) {
-
+		$type = $this->get('type');
+		if (! is_string($type) || $type === '') {
 			throw new FieldException('Field(' . $this->getName() . ') type must be set in collection: ' . $this->collection->getName());
 		}
 
-		return $this->type;
+		return $type;
 	}
 
 	public function sensible(bool $sensible): self
 	{
-		$this->sensible = $sensible;
+		$this->set('sensible', $sensible);
 		if ($sensible) {
 			$this->hidden(true);
 		}
@@ -144,100 +164,102 @@ class Field implements FieldInterface
 
 	public function getSensible(): bool
 	{
-		return $this->sensible;
+		return (bool) $this->get('sensible');
 	}
 
 	public function column(string $column): self
 	{
-		$this->column = $column;
+		$this->set('column', $column);
 
 		return $this;
 	}
 
 	public function getColumn(): string
 	{
-		if (! isset($this->column)) {
-			return $this->name;
-		}
+		$column = $this->get('column');
 
-		return $this->column;
+		return is_string($column) ? $column : $this->getName();
 	}
 
 	public function required(bool $required): self
 	{
-		$this->required = $required;
+		$this->set('required', $required);
 
 		return $this;
 	}
 
 	public function isRequired(): bool
 	{
-		return $this->required;
+		return (bool) $this->get('required');
 	}
 
 	public function searchable(bool $searchable = true): self
 	{
-		$this->searchable = $searchable;
+		$this->set('searchable', $searchable);
 
 		return $this;
 	}
 
 	public function isSearchable(): ?bool
 	{
-		return $this->searchable;
+		$value = $this->get('searchable');
+
+		return is_bool($value) ? $value : null;
 	}
 
 	public function hasTypecast(): bool
 	{
-		return $this->typecast !== null;
+		return $this->get('typecast') !== null;
 	}
 
-	/**
-	 * @param callable-array|string|null $typecast
-	 */
 	public function typecast(array|string|null $typecast): self
 	{
-		$this->typecast = $typecast;
+		$this->set('typecast', $typecast);
 
 		return $this;
 	}
 
-	/**
-	 * @return callable-array|string|null
-	 */
 	public function getTypecast(): array|string|null
 	{
-		return $this->typecast;
+		$value = $this->get('typecast');
+
+		return is_array($value) || is_string($value) || $value === null ? $value : null;
 	}
 
 	public function validation(?string $rules, array $messages = []): self
 	{
-		$this->validation = $rules;
-		$this->validationMessages = $rules === null ? [] : $messages;
+		$this->set('validation', $rules);
+		$this->set('validationMessages', $rules === null ? [] : $messages);
 
 		return $this;
 	}
 
 	public function getValidation(): ?string
 	{
-		return $this->validation;
+		$value = $this->get('validation');
+
+		return is_string($value) ? $value : null;
 	}
 
 	public function getValidationMessages(): array
 	{
-		return $this->validationMessages;
+		$value = $this->get('validationMessages');
+
+		return is_array($value) ? $value : [];
 	}
 
 	public function description(?string $description): self
 	{
-		$this->description = $description;
+		$this->set('description', $description);
 
 		return $this;
 	}
 
 	public function getDescription(): ?string
 	{
-		return $this->description;
+		$value = $this->get('description');
+
+		return is_string($value) ? $value : null;
 	}
 
 	public function end(): CollectionInterface

@@ -12,7 +12,13 @@ trait MetadataTrait
 
 	protected function getMetadataMap(): MetadataMap
 	{
-		return $this->metadataMap ??= new MetadataMap();
+		if (! isset($this->items['metadata']) || ! is_array($this->items['metadata'])) {
+			$this->items['metadata'] = [];
+		}
+
+		$metadata = &$this->items['metadata'];
+
+		return $this->metadataMap ??= new MetadataMap($metadata);
 	}
 
 	public function metadata(string $key, mixed $value = null): mixed

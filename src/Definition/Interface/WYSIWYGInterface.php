@@ -6,45 +6,50 @@ namespace ON\Data\Definition\Interface;
 
 class WYSIWYGInterface extends AbstractInterface
 {
-	protected array $toolbar = [];
-
-	protected string $folder = "root";
-
-	protected int $limit = 255;
+	protected static function definitionDefaults(): array
+	{
+		return array_replace(parent::definitionDefaults(), [
+			'toolbar' => [],
+			'folder' => 'root',
+			'limit' => 255,
+		]);
+	}
 
 	public function toolbar(array $toolbar): self
 	{
-		$this->toolbar = $toolbar;
+		$this->set('toolbar', $toolbar);
 
 		return $this;
 	}
 
 	public function getToolbar(): ?array
 	{
-		return $this->toolbar;
+		$value = $this->get('toolbar');
+
+		return is_array($value) ? $value : null;
 	}
 
 	public function folder(array $folder): self
 	{
-		$this->folder = $folder;
+		$this->set('folder', $folder);
 
 		return $this;
 	}
 
 	public function getFolder(): string
 	{
-		return $this->folder;
+		return (string) $this->get('folder');
 	}
 
 	public function limit(int $limit): self
 	{
-		$this->limit = $limit;
+		$this->set('limit', $limit);
 
 		return $this;
 	}
 
 	public function getLimit(): int
 	{
-		return $this->limit;
+		return (int) $this->get('limit');
 	}
 }

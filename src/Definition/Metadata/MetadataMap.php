@@ -6,44 +6,62 @@ namespace ON\Data\Definition\Metadata;
 
 use ArrayIterator;
 use IteratorAggregate;
+use ON\Data\Support\DefinitionNode;
 use Traversable;
 
-final class MetadataMap implements IteratorAggregate
+final class MetadataMap extends DefinitionNode implements IteratorAggregate
 {
-	/** @var array<string, mixed> */
-	private array $metadata = [];
-
-	public function has(string $key): bool
+	protected static function definitionDefaults(): array
 	{
-		return isset($this->metadata[$key]);
+		return [];
 	}
 
-	public function get(string $key, mixed $default = null): mixed
+	/**
+	 * @param array<string, mixed>|null $metadata
+	 */
+	public function __construct(?array &$metadata = null)
 	{
-		return $this->metadata[$key] ?? $default;
+		if ($metadata === null) {
+			parent::__construct();
+
+			return;
+		}
+
+		parent::__construct([]);
+		$this->bind($metadata);
 	}
 
-	public function set(string $key, mixed $value): self
+	public function has(array|int|string $key): bool
 	{
-		$this->metadata[$key] = $value;
+		return parent::has($key);
+	}
+
+	public function get(string|int|null $key = null, mixed $default = null): mixed
+	{
+		return parent::get($key, $default);
+	}
+
+	public function set(array|int|string $key, mixed $value = null): static
+	{
+		parent::set($key, $value);
 
 		return $this;
 	}
 
 	public function remove(string $key): self
 	{
-		unset($this->metadata[$key]);
+		$this->delete($key);
 
 		return $this;
 	}
 
 	public function all(): array
 	{
-		return $this->metadata;
+		return parent::all();
 	}
 
 	public function getIterator(): Traversable
 	{
-		return new ArrayIterator($this->metadata);
+		return new ArrayIterator($this->all());
 	}
 }

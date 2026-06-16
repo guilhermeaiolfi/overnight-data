@@ -4,21 +4,24 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Display;
 
-// Used to display an item when it is a complex field, like a many-to-many relation
 class RelatedDisplay extends RawDisplay
 {
-	// something like: {{title}}
-	protected ?string $template = null;
+	protected static function definitionDefaults(): array
+	{
+		return array_replace(parent::definitionDefaults(), [
+			'template' => null,
+		]);
+	}
 
 	public function template(string $template): self
 	{
-		$this->template = $template;
+		$this->set('template', $template);
 
 		return $this;
 	}
 
 	public function getTemplate(): ?string
 	{
-		return $this->template;
+		return is_string($this->get('template')) ? $this->get('template') : null;
 	}
 }

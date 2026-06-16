@@ -6,84 +6,87 @@ namespace ON\Data\Definition\Display;
 
 class BooleanDisplay extends RawDisplay
 {
-	protected ?string $labelOn = null;
-	protected ?string $labelOff = null;
-
-	protected ?string $iconOn = null;
-	protected ?string $iconOff = null;
-
-	protected ?string $colorOn = null;
-	protected ?string $colorOff = null;
+	protected static function definitionDefaults(): array
+	{
+		return array_replace(parent::definitionDefaults(), [
+			'labelOn' => null,
+			'labelOff' => null,
+			'iconOn' => null,
+			'iconOff' => null,
+			'colorOn' => null,
+			'colorOff' => null,
+		]);
+	}
 
 	public function labelOn(string $label): self
 	{
-		$this->labelOn = $label;
+		$this->set('labelOn', $label);
 
 		return $this;
 	}
 
 	public function getLabelOn(): ?string
 	{
-		return $this->labelOn;
+		return is_string($this->get('labelOn')) ? $this->get('labelOn') : null;
 	}
 
 	public function labelOff(string $label): self
 	{
-		$this->labelOff = $label;
+		$this->set('labelOff', $label);
 
 		return $this;
 	}
 
 	public function getLabelOff(): ?string
 	{
-		return $this->labelOff;
+		return is_string($this->get('labelOff')) ? $this->get('labelOff') : null;
 	}
 
 	public function iconOn(string $icon): self
 	{
-		$this->iconOn = $icon;
+		$this->set('iconOn', $icon);
 
 		return $this;
 	}
 
 	public function getIconOn(): ?string
 	{
-		return $this->iconOn;
+		return is_string($this->get('iconOn')) ? $this->get('iconOn') : null;
 	}
 
 	public function iconOff(string $icon): self
 	{
-		$this->iconOff = $icon;
+		$this->set('iconOff', $icon);
 
 		return $this;
 	}
 
 	public function getIconOff(): ?string
 	{
-		return $this->iconOff;
+		return is_string($this->get('iconOff')) ? $this->get('iconOff') : null;
 	}
 
 	public function colorOn(string $color): self
 	{
-		$this->colorOn = $color;
+		$this->set('colorOn', $color);
 
 		return $this;
 	}
 
 	public function getColorOn(): ?string
 	{
-		return $this->colorOn;
+		return is_string($this->get('colorOn')) ? $this->get('colorOn') : null;
 	}
 
 	public function colorOff(string $color): self
 	{
-		$this->colorOff = $color;
+		$this->set('colorOff', $color);
 
 		return $this;
 	}
 
 	public function getColorOff(): ?string
 	{
-		return $this->colorOff;
+		return is_string($this->get('colorOff')) ? $this->get('colorOff') : null;
 	}
 }

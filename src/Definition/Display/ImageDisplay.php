@@ -6,17 +6,22 @@ namespace ON\Data\Definition\Display;
 
 class ImageDisplay extends RawDisplay
 {
-	protected bool $displayAsCircle = false;
+	protected static function definitionDefaults(): array
+	{
+		return array_replace(parent::definitionDefaults(), [
+			'displayAsCircle' => false,
+		]);
+	}
 
 	public function displayAsCircle(bool $displayAsCircle): self
 	{
-		$this->displayAsCircle = $displayAsCircle;
+		$this->set('displayAsCircle', $displayAsCircle);
 
 		return $this;
 	}
 
 	public function shouldDisplayAsCircle(): bool
 	{
-		return $this->displayAsCircle;
+		return (bool) $this->get('displayAsCircle');
 	}
 }

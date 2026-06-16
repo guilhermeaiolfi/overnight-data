@@ -6,7 +6,9 @@ namespace ON\Data\Definition\Relation;
 
 use ArrayIterator;
 use IteratorAggregate;
+use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Exception\RelationException;
+use ON\Data\Definition\Internal\DefinitionFactory;
 use Traversable;
 
 /**
@@ -14,19 +16,34 @@ use Traversable;
  */
 final class RelationMap implements IteratorAggregate
 {
+	/** @var array<string, mixed> */
+	private array $items = [];
+
 	/** @var array<string, RelationInterface> */
 	private array $relations = [];
 
+	public function __construct(
+		private ?CollectionInterface $parent = null,
+		?array &$items = null,
+	) {
+		if ($items !== null) {
+			$this->items = &$items;
+		}
+	}
+
 	public function __clone()
 	{
+		$items = $this->items;
+		$this->items = $items;
 		foreach ($this->relations as $name => $relation) {
 			$this->relations[$name] = clone $relation;
+			$this->items[$name] = $this->relations[$name]->all();
 		}
 	}
 
 	public function has(string $name): bool
 	{
-		return isset($this->relations[$name]);
+		return array_key_exists($name, $this->items);
 	}
 
 	public function get(string $name): RelationInterface
@@ -34,6 +51,17 @@ final class RelationMap implements IteratorAggregate
 		if (! $this->has($name)) {
 			throw new RelationException("Undefined relation `{$name}`");
 		}
+
+		if (isset($this->relations[$name])) {
+			return $this->relations[$name];
+		}
+
+		if ($this->parent === null || ! is_array($this->items[$name])) {
+			throw new RelationException("Undefined relation `{$name}`");
+		}
+
+		$items = &$this->items[$name];
+		$this->relations[$name] = DefinitionFactory::relation($this->parent, $items);
 
 		return $this->relations[$name];
 	}
@@ -44,14 +72,33 @@ final class RelationMap implements IteratorAggregate
 			throw new RelationException("Relation `{$name}` already exists");
 		}
 
-		$this->relations[$name] = $relation;
+		$this->items[$name] = $relation instanceof AbstractRelation ? $relation->all() : [];
+		unset($this->relations[$name]);
+		if ($this->parent !== null && is_array($this->items[$name])) {
+			$items = &$this->items[$name];
+			$this->relations[$name] = DefinitionFactory::relation($this->parent, $items);
+		} else {
+			$this->relations[$name] = $relation;
+		}
 
 		return $this;
 	}
 
 	public function remove(string $name): self
 	{
+		unset($this->items[$name], $this->relations[$name]);
+
+		return $this;
+	}
+
+	public function replace(string $name, RelationInterface $relation): self
+	{
+		$this->items[$name] = $relation instanceof AbstractRelation ? $relation->all() : [];
 		unset($this->relations[$name]);
+		if ($this->parent !== null && is_array($this->items[$name])) {
+			$items = &$this->items[$name];
+			$this->relations[$name] = DefinitionFactory::relation($this->parent, $items);
+		}
 
 		return $this;
 	}
@@ -61,6 +108,11 @@ final class RelationMap implements IteratorAggregate
 	 */
 	public function getIterator(): Traversable
 	{
-		return new ArrayIterator($this->relations);
+		$relations = [];
+		foreach (array_keys($this->items) as $name) {
+			$relations[$name] = $this->get((string) $name);
+		}
+
+		return new ArrayIterator($relations);
 	}
 }

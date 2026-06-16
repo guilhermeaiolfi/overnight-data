@@ -7,28 +7,47 @@ namespace ON\Data\Definition\Display;
 use Exception;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
+use ON\Data\Support\DefinitionNode;
 
-class RawDisplay implements DisplayInterface
+class RawDisplay extends DefinitionNode implements DisplayInterface
 {
-	protected string $type;
-	protected ?array $options = null;
-
 	public function __construct(
-		protected mixed $parent
+		protected mixed $parent,
+		?array &$items = null,
 	) {
+		if ($items === null) {
+			parent::__construct();
 
+			return;
+		}
+
+		parent::__construct([]);
+		$this->bind($items);
+	}
+
+	protected static function definitionDefaults(): array
+	{
+		return [
+			'class' => static::class,
+			'type' => '',
+		];
+	}
+
+	public function __clone()
+	{
+		$this->setArray($this->all());
 	}
 
 	public function type(string $type): self
 	{
-		$this->type = $type;
+		$this->set('type', $type);
 
 		return $this;
 	}
 
 	public function getType(): string
 	{
-		return $this->type;
+		return (string) $this->get('type');
 	}
 
 	/** @return RelationInterface|FieldInterface */
@@ -39,11 +58,13 @@ class RawDisplay implements DisplayInterface
 
 	public function setOptions(array $options): self
 	{
+		$current = $this->all();
 		foreach ($options as $key => $value) {
-			if (! isset($this->$key)) {
+			if (! isset($current[$key])) {
 				throw new Exception("There is no property {$key} in " . self::class);
 			}
-			$this->$key = $value;
+
+			$this->set((string) $key, $value);
 		}
 
 		return $this;
@@ -51,11 +72,10 @@ class RawDisplay implements DisplayInterface
 
 	public function getOptions(): array
 	{
-		$properties = get_object_vars($this);
-
-		$exclude = ["type", "parent"];
+		$properties = $this->all();
+		$exclude = ['class', 'type'];
 		foreach ($properties as $key => $value) {
-			if (in_array($key, $exclude) || $properties[$key] == null) {
+			if (in_array($key, $exclude, true) || $properties[$key] == null) {
 				unset($properties[$key]);
 			}
 		}

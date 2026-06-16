@@ -4,34 +4,39 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Interface;
 
-// Allow selection of a calor
 class ColorInterface extends AbstractInterface
 {
-	protected array $presets = [];
-
-	protected bool $opacity = false;
+	protected static function definitionDefaults(): array
+	{
+		return array_replace(parent::definitionDefaults(), [
+			'presets' => [],
+			'opacity' => false,
+		]);
+	}
 
 	public function presets(array $presets): self
 	{
-		$this->presets = $presets;
+		$this->set('presets', $presets);
 
 		return $this;
 	}
 
 	public function getPresets(): array
 	{
-		return $this->presets;
+		$value = $this->get('presets');
+
+		return is_array($value) ? $value : [];
 	}
 
 	public function opacity(bool $opacity): self
 	{
-		$this->opacity = $opacity;
+		$this->set('opacity', $opacity);
 
 		return $this;
 	}
 
 	public function getOpacity(): bool
 	{
-		return $this->opacity;
+		return (bool) $this->get('opacity');
 	}
 }

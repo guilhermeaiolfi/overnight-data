@@ -11,40 +11,52 @@ use ON\Data\Definition\Display\DisplayTrait;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Interface\InterfaceTrait;
 use ON\Data\Definition\MetadataTrait;
+use ON\Data\Support\DefinitionNode;
 
-abstract class AbstractRelation implements RelationInterface
+abstract class AbstractRelation extends DefinitionNode implements RelationInterface
 {
 	use DisplayTrait;
 	use InterfaceTrait;
 	use MetadataTrait;
-	// Defines if relation can be nullable (child can have no parent). Defaults to false
-	protected bool $nullable = false;
-
-	// Automatically save related data with parent entity. Defaults to true
-	protected bool $cascade = true;
-
-	// lazy || eager
-	protected string $load = "lazy";
-
-	protected array $inner_keys = [];
-
-	protected array $outer_keys = [];
-
-	protected string $collectionName;
-
-	protected string $name;
-
-	protected array $where = [];
-
-	// format: ['key1' => 'asc', 'key2' => 'asc']
-	protected array $orderBy = [];
-
-	protected ?string $loader = null;
 
 	public function __construct(
-		public CollectionInterface $parent
+		public CollectionInterface $parent,
+		?array &$items = null,
 	) {
+		if ($items === null) {
+			parent::__construct();
 
+			return;
+		}
+
+		parent::__construct([]);
+		$this->bind($items);
+	}
+
+	protected static function definitionDefaults(): array
+	{
+		return [
+			'class' => static::class,
+			'nullable' => false,
+			'cascade' => true,
+			'load' => 'lazy',
+			'inner_keys' => [],
+			'outer_keys' => [],
+			'collectionName' => '',
+			'name' => '',
+			'where' => [],
+			'orderBy' => [],
+			'loader' => null,
+			'metadata' => [],
+		];
+	}
+
+	public function __clone()
+	{
+		$this->setArray($this->all());
+		$this->display = null;
+		$this->interface = null;
+		$this->metadataMap = null;
 	}
 
 	public function getParent(): CollectionInterface
@@ -54,33 +66,33 @@ abstract class AbstractRelation implements RelationInterface
 
 	public function name(string $name): self
 	{
-		$this->name = $name;
+		$this->set('name', $name);
 
 		return $this;
 	}
 
 	public function getName(): string
 	{
-		return $this->name;
+		return (string) $this->get('name');
 	}
 
 	public function collection(string $collectionName): self
 	{
-		$this->collectionName = $collectionName;
+		$this->set('collectionName', $collectionName);
 
 		return $this;
 	}
 
 	public function getCollectionName(): string
 	{
-		return $this->collectionName;
+		return (string) $this->get('collectionName');
 	}
 
 	public function getCollection(): CollectionInterface
 	{
-		$collection = $this->parent->getRegistry()->getCollection($this->collectionName);
+		$collection = $this->parent->getRegistry()->getCollection($this->getCollectionName());
 		if ($collection === null) {
-			throw new LogicException("Target collection {$this->collectionName} is not registered.");
+			throw new LogicException("Target collection {$this->getCollectionName()} is not registered.");
 		}
 
 		return $collection;
@@ -88,67 +100,71 @@ abstract class AbstractRelation implements RelationInterface
 
 	public function nullable(bool $nullable): self
 	{
-		$this->nullable = $nullable;
+		$this->set('nullable', $nullable);
 
 		return $this;
 	}
 
 	public function isNullable(): bool
 	{
-		return $this->nullable;
+		return (bool) $this->get('nullable');
 	}
 
 	public function where(array $where): self
 	{
-		$this->where = $where;
+		$this->set('where', $where);
 
 		return $this;
 	}
 
 	public function getWhere(): array
 	{
-		return $this->where;
+		$where = $this->get('where');
+
+		return is_array($where) ? $where : [];
 	}
 
 	public function orderBy(array $orderBy): self
 	{
-		$this->orderBy = $orderBy;
+		$this->set('orderBy', $orderBy);
 
 		return $this;
 	}
 
 	public function getOrderBy(): array
 	{
-		return $this->orderBy;
+		$orderBy = $this->get('orderBy');
+
+		return is_array($orderBy) ? $orderBy : [];
 	}
 
 	public function cascade(bool $cascade): self
 	{
-		$this->cascade = $cascade;
+		$this->set('cascade', $cascade);
 
 		return $this;
 	}
 
 	public function isCascade(): bool
 	{
-		return $this->cascade;
+		return (bool) $this->get('cascade');
 	}
 
 	public function load(string $load): self
 	{
-		$this->load = $load;
+		$this->set('load', $load);
 
 		return $this;
 	}
 
 	public function getLoadStrategy(): string
 	{
-		return $this->load;
+		return (string) $this->get('load');
 	}
 
 	public function innerKey(string|array $fieldName): self
 	{
-		$this->inner_keys = $this->normalizeKeys($fieldName, 'innerKey');
+		$this->set('inner_keys', $this->normalizeKeys($fieldName, 'innerKey'));
 		$this->validateRelationKeys();
 
 		return $this;
@@ -166,11 +182,12 @@ abstract class AbstractRelation implements RelationInterface
 
 	public function innerKeys(): array
 	{
-		if ($this->inner_keys === []) {
-			throw new LogicException("Inner key is not defined for relation {$this->name}.");
+		$keys = $this->get('inner_keys');
+		if (! is_array($keys) || $keys === []) {
+			throw new LogicException("Inner key is not defined for relation {$this->getName()}.");
 		}
 
-		return $this->inner_keys;
+		return $keys;
 	}
 
 	public function getInnerField(): FieldInterface
@@ -185,7 +202,7 @@ abstract class AbstractRelation implements RelationInterface
 
 	public function outerKey(string|array $fieldName): self
 	{
-		$this->outer_keys = $this->normalizeKeys($fieldName, 'outerKey');
+		$this->set('outer_keys', $this->normalizeKeys($fieldName, 'outerKey'));
 		$this->validateRelationKeys();
 
 		return $this;
@@ -203,11 +220,12 @@ abstract class AbstractRelation implements RelationInterface
 
 	public function outerKeys(): array
 	{
-		if ($this->outer_keys === []) {
-			throw new LogicException("Outer key is not defined for relation {$this->name}.");
+		$keys = $this->get('outer_keys');
+		if (! is_array($keys) || $keys === []) {
+			throw new LogicException("Outer key is not defined for relation {$this->getName()}.");
 		}
 
-		return $this->outer_keys;
+		return $keys;
 	}
 
 	public function getOuterField(): FieldInterface
@@ -222,14 +240,16 @@ abstract class AbstractRelation implements RelationInterface
 
 	public function loader(string $loader): self
 	{
-		$this->loader = $loader;
+		$this->set('loader', $loader);
 
 		return $this;
 	}
 
 	public function getLoader(): ?string
 	{
-		return $this->loader;
+		$value = $this->get('loader');
+
+		return is_string($value) ? $value : null;
 	}
 
 	public function getCardinality(): string
@@ -271,34 +291,37 @@ abstract class AbstractRelation implements RelationInterface
 
 	protected function validateRelationKeys(): void
 	{
-		if ($this->inner_keys !== [] && $this->outer_keys !== [] && count($this->inner_keys) !== count($this->outer_keys)) {
+		$innerKeys = (array) $this->get('inner_keys');
+		$outerKeys = (array) $this->get('outer_keys');
+
+		if ($innerKeys !== [] && $outerKeys !== [] && count($innerKeys) !== count($outerKeys)) {
 			throw new InvalidArgumentException(
 				sprintf(
 					"Relation '%s' key count mismatch: innerKeys has %d entries and outerKeys has %d.",
-					$this->name ?? '(unnamed)',
-					count($this->inner_keys),
-					count($this->outer_keys)
+					$this->getName() ?: '(unnamed)',
+					count($innerKeys),
+					count($outerKeys)
 				)
 			);
 		}
 
-		if ($this->inner_keys !== [] && count($this->inner_keys) !== count(array_unique($this->inner_keys))) {
-			throw new InvalidArgumentException("Relation '{$this->name}' contains duplicate inner keys.");
+		if ($innerKeys !== [] && count($innerKeys) !== count(array_unique($innerKeys))) {
+			throw new InvalidArgumentException("Relation '{$this->getName()}' contains duplicate inner keys.");
 		}
 
-		if ($this->outer_keys !== [] && count($this->outer_keys) !== count(array_unique($this->outer_keys))) {
-			throw new InvalidArgumentException("Relation '{$this->name}' contains duplicate outer keys.");
+		if ($outerKeys !== [] && count($outerKeys) !== count(array_unique($outerKeys))) {
+			throw new InvalidArgumentException("Relation '{$this->getName()}' contains duplicate outer keys.");
 		}
 
-		$target = $this->parent->getRegistry()->getCollection($this->collectionName ?? '');
-		if ($target !== null && $this->outer_keys !== []) {
+		$target = $this->parent->getRegistry()->getCollection($this->getCollectionName());
+		if ($target !== null && $outerKeys !== []) {
 			$targetPrimaryKeyCount = count($target->getPrimaryKey()->getFieldNames());
-			if ($targetPrimaryKeyCount !== count($this->outer_keys)) {
+			if ($targetPrimaryKeyCount !== count($outerKeys)) {
 				throw new InvalidArgumentException(
 					sprintf(
 						"Relation '%s' outerKeys count %d does not match target collection '%s' primary key count %d.",
-						$this->name ?? '(unnamed)',
-						count($this->outer_keys),
+						$this->getName() ?: '(unnamed)',
+						count($outerKeys),
 						$target->getName(),
 						$targetPrimaryKeyCount
 					)

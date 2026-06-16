@@ -13,87 +13,93 @@ class TagsInterface extends AbstractInterface
 	public const CAPITALIZATION_CONVERT_UPPERCASE = 1;
 	public const CAPITALIZATION_CONVERT_LOWERCASE = 2;
 
-	protected array $preset_tags = [];
-
-	protected bool $allow_other = false;
-
-	protected bool $az = false;
-
-	protected ?int $whitespace = null;
-
-	protected ?int $capitalization = null;
-
-	protected ?string $placeholder = null;
+	protected static function definitionDefaults(): array
+	{
+		return array_replace(parent::definitionDefaults(), [
+			'preset_tags' => [],
+			'allow_other' => false,
+			'az' => false,
+			'whitespace' => null,
+			'capitalization' => null,
+			'placeholder' => null,
+		]);
+	}
 
 	public function whitespace(int $whitespace): self
 	{
-		$this->whitespace = $whitespace;
+		$this->set('whitespace', $whitespace);
 
 		return $this;
 	}
 
 	public function getWhitespace(): ?int
 	{
-		return $this->whitespace;
+		$value = $this->get('whitespace');
+
+		return is_int($value) ? $value : null;
 	}
 
 	public function capitalization(int $capitalization): self
 	{
-		$this->capitalization = $capitalization;
+		$this->set('capitalization', $capitalization);
 
 		return $this;
 	}
 
 	public function getCapitalization(): ?int
 	{
-		return $this->capitalization;
+		$value = $this->get('capitalization');
+
+		return is_int($value) ? $value : null;
 	}
 
 	public function allowOther(bool $allow_other): self
 	{
-		$this->allow_other = $allow_other;
+		$this->set('allow_other', $allow_other);
 
 		return $this;
 	}
 
 	public function isAllowOther(): bool
 	{
-		return $this->allow_other;
+		return (bool) $this->get('allow_other');
 	}
 
 	public function az(bool $az): self
 	{
-		$this->az = $az;
+		$this->set('az', $az);
 
 		return $this;
 	}
 
 	public function isAZ(): bool
 	{
-		return $this->az;
+		return (bool) $this->get('az');
 	}
 
 	public function presetTags(array $tags): self
 	{
-		$this->preset_tags = $tags;
+		$this->set('preset_tags', $tags);
 
 		return $this;
 	}
 
 	public function getPresetTags(): ?array
 	{
-		return $this->preset_tags;
+		$value = $this->get('preset_tags');
+
+		return is_array($value) ? $value : null;
 	}
 
 	public function placeholder(string $placeholder): self
 	{
-		$this->placeholder = $placeholder;
+		$this->set('placeholder', $placeholder);
 
 		return $this;
 	}
 
 	public function getplaceholder(): ?string
 	{
-		return $this->placeholder;
+		return is_string($this->get('placeholder')) ? $this->get('placeholder') : null;
 	}
 }

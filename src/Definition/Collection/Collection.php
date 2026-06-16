@@ -14,203 +14,256 @@ use ON\Data\Definition\Relation\HasManyRelation;
 use ON\Data\Definition\Relation\HasOneRelation;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Definition\Relation\RelationMap;
+use ON\Data\Support\DefinitionNode;
 use stdClass;
 
-class Collection implements CollectionInterface
+class Collection extends DefinitionNode implements CollectionInterface
 {
 	use MetadataTrait;
-	protected string $name;
-	protected ?string $note = null;
-	protected ?string $description = null;
-	protected ?string $source = null;
-	protected bool $hidden = false;
-	protected ?string $mapper = null;
-	protected string $database = "default";
-	protected ?string $parentCollection = null;
-	protected string $entity = stdClass::class;
-	protected ?string $table = null;
+
 	public FieldMap $fields;
+
 	public RelationMap $relations;
-	protected ?string $fileLocation = null;
 
 	public function __construct(
-		protected Registry $registry
+		protected Registry $registry,
+		?array &$items = null,
 	) {
-		$this->fields = new FieldMap();
-		$this->relations = new RelationMap();
+		if ($items === null) {
+			parent::__construct();
+		} else {
+			parent::__construct([]);
+			$this->bind($items);
+		}
+
+		$fieldItems = &$this->items['fields'];
+		$relationItems = &$this->items['relations'];
+		$this->fields = new FieldMap($this, $fieldItems);
+		$this->relations = new RelationMap($this, $relationItems);
+	}
+
+	protected static function definitionDefaults(): array
+	{
+		return static::defaultDefinition('');
+	}
+
+	public function bindDefinitionArray(array &$items): void
+	{
+		$this->bind($items);
+		$fieldItems = &$this->items['fields'];
+		$relationItems = &$this->items['relations'];
+		$this->fields = new FieldMap($this, $fieldItems);
+		$this->relations = new RelationMap($this, $relationItems);
+		$this->metadataMap = null;
 	}
 
 	/**
-	 * @var class-string|null
+	 * @return array<string, mixed>
 	 */
-	protected ?string $scope = null;
+	public static function defaultDefinition(string $name): array
+	{
+		return [
+			'class' => static::class,
+			'name' => $name,
+			'table' => $name,
+			'database' => 'default',
+			'entity' => stdClass::class,
+			'parentCollection' => null,
+			'scope' => null,
+			'repository' => null,
+			'mapper' => null,
+			'source' => null,
+			'note' => null,
+			'description' => null,
+			'hidden' => false,
+			'fileLocation' => null,
+			'metadata' => [],
+			'fields' => [],
+			'relations' => [],
+		];
+	}
 
-	/**
-	 * @var class-string|null
-	 */
-	private ?string $repository = null;
+	public function __clone()
+	{
+		$items = $this->all();
+		$this->setArray($items);
+		$fieldItems = &$this->items['fields'];
+		$relationItems = &$this->items['relations'];
+		$this->fields = new FieldMap($this, $fieldItems);
+		$this->relations = new RelationMap($this, $relationItems);
+		$this->metadataMap = null;
+	}
 
 	public function table(string $table): self
 	{
-		$this->table = $table;
+		$this->set('table', $table);
 
 		return $this;
 	}
 
 	public function getTable(): string
 	{
-		return $this->table;
+		return (string) $this->get('table');
 	}
 
 	public function entity(string $entity): self
 	{
-		$this->entity = $entity;
+		$this->set('entity', $entity);
 
 		return $this;
 	}
 
 	public function getEntity(): string
 	{
-		return $this->entity;
+		return (string) $this->get('entity');
 	}
 
 	public function database(string $database): self
 	{
-		$this->database = $database;
+		$this->set('database', $database);
 
 		return $this;
 	}
 
 	public function getDatabase(): string
 	{
-		return $this->database;
+		return (string) $this->get('database');
 	}
 
 	public function parentCollection(string $parentCollection): self
 	{
-		$this->parentCollection = $parentCollection;
+		$this->set('parentCollection', $parentCollection);
 
 		return $this;
 	}
 
 	public function getParentCollection(): ?string
 	{
-		return $this->parentCollection;
+		$value = $this->get('parentCollection');
+
+		return is_string($value) ? $value : null;
 	}
 
 	public function scope(string $scope): self
 	{
-		$this->scope = $scope;
+		$this->set('scope', $scope);
 
 		return $this;
 	}
 
 	public function getScope(): ?string
 	{
-		return $this->scope;
+		$value = $this->get('scope');
+
+		return is_string($value) ? $value : null;
 	}
 
 	public function repository(?string $repository): self
 	{
-		$this->repository = $repository;
+		$this->set('repository', $repository);
 
 		return $this;
 	}
 
 	public function getRepository(): ?string
 	{
-		return $this->repository;
+		$value = $this->get('repository');
+
+		return is_string($value) ? $value : null;
 	}
 
 	public function mapper(?string $mapper): self
 	{
-		$this->mapper = $mapper;
+		$this->set('mapper', $mapper);
 
 		return $this;
 	}
 
 	public function getMapper(): ?string
 	{
-		return $this->mapper;
+		$value = $this->get('mapper');
+
+		return is_string($value) ? $value : null;
 	}
 
 	public function name(string $name): self
 	{
-		$this->name = $name;
+		$this->set('name', $name);
 
 		return $this;
 	}
 
 	public function getName(): string
 	{
-		return $this->name;
+		return (string) $this->get('name');
 	}
 
 	public function note(string $note): self
 	{
-		$this->note = $note;
+		$this->set('note', $note);
 
 		return $this;
 	}
 
 	public function getNote(): ?string
 	{
-		return $this->note;
+		$value = $this->get('note');
+
+		return is_string($value) ? $value : null;
 	}
 
 	public function description(?string $description): self
 	{
-		$this->description = $description;
+		$this->set('description', $description);
 
 		return $this;
 	}
 
 	public function getDescription(): ?string
 	{
-		return $this->description;
+		$value = $this->get('description');
+
+		return is_string($value) ? $value : null;
 	}
 
 	public function source(?string $source): self
 	{
-		$this->source = $source;
+		$this->set('source', $source);
 
 		return $this;
 	}
 
 	public function getSource(): ?string
 	{
-		return $this->source;
+		$value = $this->get('source');
+
+		return is_string($value) ? $value : null;
 	}
 
 	public function hidden(bool $hidden): self
 	{
-		$this->hidden = $hidden;
+		$this->set('hidden', $hidden);
 
 		return $this;
 	}
 
 	public function isHidden(): bool
 	{
-		return $this->hidden;
+		return (bool) $this->get('hidden');
 	}
 
 	public function field(string $name, ?string $type = null): FieldInterface
 	{
-		$field = null;
-
-		// it could get in here when generating fields because of relations
-		// but that field could also be a primary field that's already defined
 		if ($this->fields->has($name)) {
-			$field = $this->fields->get($name);
-		} else {
-			$field = new Field($this);
-			$this->fields->set($name, $field);
-			if (isset($name)) {
-				$field->name($name);
-			}
-			if (isset($type)) {
-				$field->type($type);
-			}
+			return $this->fields->get($name);
+		}
+
+		$field = new Field($this);
+		$this->fields->set($name, $field);
+		$field = $this->fields->get($name);
+		$field->name($name);
+		if ($type !== null) {
+			$field->type($type);
 		}
 
 		return $field;
@@ -220,11 +273,12 @@ class Collection implements CollectionInterface
 	 * @template T
 	 * @param class-string<T> $type
 	 * @return T
-	 * */
+	 */
 	public function relation(string $name, string $type = HasOneRelation::class): RelationInterface
 	{
 		$relation = new $type($this);
 		$this->relations->set($name, $relation);
+		$relation = $this->relations->get($name);
 		$relation->name($name);
 
 		return $relation;
@@ -261,12 +315,13 @@ class Collection implements CollectionInterface
 	public function getPrimaryKeyFields(): mixed
 	{
 		$pk = [];
-		foreach ($this->fields as $name => $field) {
+		foreach ($this->fields as $field) {
 			if ($field->isPrimaryKey()) {
 				$pk[] = $field;
 			}
 		}
-		if (count($pk) == 1) {
+
+		if (count($pk) === 1) {
 			return $pk[0];
 		}
 
@@ -354,11 +409,13 @@ class Collection implements CollectionInterface
 
 	public function setFileDefinitionLocation(?string $file = null): void
 	{
-		$this->fileLocation = $file;
+		$this->set('fileLocation', $file);
 	}
 
 	public function getFileDefinitionLocation(): ?string
 	{
-		return $this->fileLocation;
+		$value = $this->get('fileLocation');
+
+		return is_string($value) ? $value : null;
 	}
 }

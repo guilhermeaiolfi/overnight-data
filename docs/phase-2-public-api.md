@@ -1,5 +1,11 @@
 # Phase 2 Public API
 
+## Phase 3 Delta
+
+- The public API remains behaviorally equivalent for the characterized methods in Phase 2.
+- Constructor signatures for concrete definition wrappers now accept an optional second array-reference hydration argument used internally for registry restoration.
+- `ON\Data\Definition\Collection\Collection` now also exposes `bindDefinitionArray(array &$items): void` as restoration infrastructure used by `Registry::register()`.
+
 ## `ON\Data\Definition\Collection\Collection`
 
 - Type: class

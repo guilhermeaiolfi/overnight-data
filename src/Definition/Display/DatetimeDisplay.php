@@ -6,17 +6,22 @@ namespace ON\Data\Definition\Display;
 
 class DatetimeDisplay extends RawDisplay
 {
-	protected string $format = "long";
+	protected static function definitionDefaults(): array
+	{
+		return array_replace(parent::definitionDefaults(), [
+			'format' => 'long',
+		]);
+	}
 
 	public function format(string $format): self
 	{
-		$this->format = $format;
+		$this->set('format', $format);
 
 		return $this;
 	}
 
 	public function getFormat(): string
 	{
-		return $this->format;
+		return (string) $this->get('format');
 	}
 }

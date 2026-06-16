@@ -6,71 +6,74 @@ namespace ON\Data\Definition\Interface;
 
 class ToggleInterface extends AbstractInterface
 {
-	protected ?string $label = null;
-
-	protected ?string $icon_on = null;
-	protected ?string $icon_off = null;
-
-	protected ?string $color_on = null;
-	protected ?string $color_off = null;
+	protected static function definitionDefaults(): array
+	{
+		return array_replace(parent::definitionDefaults(), [
+			'label' => null,
+			'icon_on' => null,
+			'icon_off' => null,
+			'color_on' => null,
+			'color_off' => null,
+		]);
+	}
 
 	public function label(string $label): self
 	{
-		$this->label = $label;
+		$this->set('label', $label);
 
 		return $this;
 	}
 
 	public function getLabel(): ?string
 	{
-		return $this->label;
+		return is_string($this->get('label')) ? $this->get('label') : null;
 	}
 
 	public function iconOn(bool $icon): self
 	{
-		$this->icon_on = $icon;
+		$this->set('icon_on', $icon);
 
 		return $this;
 	}
 
 	public function getIconOn(): ?string
 	{
-		return $this->icon_on;
+		return is_string($this->get('icon_on')) ? $this->get('icon_on') : null;
 	}
 
 	public function iconOff(bool $icon): self
 	{
-		$this->icon_off = $icon;
+		$this->set('icon_off', $icon);
 
 		return $this;
 	}
 
 	public function getIconOff(): ?string
 	{
-		return $this->icon_off;
+		return is_string($this->get('icon_off')) ? $this->get('icon_off') : null;
 	}
 
 	public function colorOn(bool $color): self
 	{
-		$this->color_on = $color;
+		$this->set('color_on', $color);
 
 		return $this;
 	}
 
 	public function getColorOn(): ?string
 	{
-		return $this->color_on;
+		return is_string($this->get('color_on')) ? $this->get('color_on') : null;
 	}
 
 	public function colorOff(bool $color): self
 	{
-		$this->color_off = $color;
+		$this->set('color_off', $color);
 
 		return $this;
 	}
 
 	public function getColorOff(): ?string
 	{
-		return $this->color_off;
+		return is_string($this->get('color_off')) ? $this->get('color_off') : null;
 	}
 }

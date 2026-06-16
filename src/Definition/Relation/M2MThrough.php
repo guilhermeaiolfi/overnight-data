@@ -8,37 +8,56 @@ use InvalidArgumentException;
 use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
+use ON\Data\Support\DefinitionNode;
 
-class M2MThrough
+class M2MThrough extends DefinitionNode
 {
-	protected string $collectionName;
-	protected array $inner_keys = [];
-	protected array $outer_keys = [];
-	protected array $where = [];
-
 	public function __construct(
-		protected M2MRelation $m2m
+		protected M2MRelation $m2m,
+		?array &$items = null,
 	) {
+		if ($items === null) {
+			parent::__construct();
 
+			return;
+		}
+
+		parent::__construct([]);
+		$this->bind($items);
+	}
+
+	protected static function definitionDefaults(): array
+	{
+		return [
+			'collectionName' => '',
+			'inner_keys' => [],
+			'outer_keys' => [],
+			'where' => [],
+		];
+	}
+
+	public function __clone()
+	{
+		$this->setArray($this->all());
 	}
 
 	public function collection(string $collectionName): self
 	{
-		$this->collectionName = $collectionName;
+		$this->set('collectionName', $collectionName);
 
 		return $this;
 	}
 
 	public function getCollectionName(): string
 	{
-		return $this->collectionName;
+		return (string) $this->get('collectionName');
 	}
 
 	public function getCollection(): CollectionInterface
 	{
-		$collection = $this->m2m->getParent()->getRegistry()->getCollection($this->collectionName);
+		$collection = $this->m2m->getParent()->getRegistry()->getCollection($this->getCollectionName());
 		if ($collection === null) {
-			throw new LogicException("Target collection {$this->collectionName} is not registered.");
+			throw new LogicException("Target collection {$this->getCollectionName()} is not registered.");
 		}
 
 		return $collection;
@@ -46,7 +65,7 @@ class M2MThrough
 
 	public function innerKey(string|array $fieldName): self
 	{
-		$this->inner_keys = $this->normalizeKeys($fieldName, 'throughInnerKey');
+		$this->set('inner_keys', $this->normalizeKeys($fieldName, 'throughInnerKey'));
 		$this->validateKeyCounts();
 
 		return $this;
@@ -74,7 +93,7 @@ class M2MThrough
 
 	public function outerKey(string|array $fieldName): self
 	{
-		$this->outer_keys = $this->normalizeKeys($fieldName, 'throughOuterKey');
+		$this->set('outer_keys', $this->normalizeKeys($fieldName, 'throughOuterKey'));
 		$this->validateKeyCounts();
 
 		return $this;
@@ -102,32 +121,36 @@ class M2MThrough
 
 	public function throughInnerKeys(): array
 	{
-		if ($this->inner_keys === []) {
+		$keys = $this->get('inner_keys');
+		if (! is_array($keys) || $keys === []) {
 			throw new LogicException('Inner key is not defined for many-to-many through relation.');
 		}
 
-		return $this->inner_keys;
+		return $keys;
 	}
 
 	public function throughOuterKeys(): array
 	{
-		if ($this->outer_keys === []) {
+		$keys = $this->get('outer_keys');
+		if (! is_array($keys) || $keys === []) {
 			throw new LogicException('Outer key is not defined for many-to-many through relation.');
 		}
 
-		return $this->outer_keys;
+		return $keys;
 	}
 
 	public function where(array $where): self
 	{
-		$this->where = $where;
+		$this->set('where', $where);
 
 		return $this;
 	}
 
 	public function getWhere(): array
 	{
-		return $this->where;
+		$where = $this->get('where');
+
+		return is_array($where) ? $where : [];
 	}
 
 	public function end(): M2MRelation
@@ -159,24 +182,26 @@ class M2MThrough
 
 	private function validateKeyCounts(): void
 	{
-		if ($this->inner_keys !== [] && $this->outer_keys !== [] && count($this->inner_keys) !== count($this->outer_keys)) {
+		$innerKeys = (array) $this->get('inner_keys');
+		$outerKeys = (array) $this->get('outer_keys');
+		if ($innerKeys !== [] && $outerKeys !== [] && count($innerKeys) !== count($outerKeys)) {
 			throw new InvalidArgumentException(
 				sprintf(
 					'Many-to-many through key count mismatch: throughInnerKeys has %d entries and throughOuterKeys has %d.',
-					count($this->inner_keys),
-					count($this->outer_keys)
+					count($innerKeys),
+					count($outerKeys)
 				)
 			);
 		}
 
 		try {
 			$relationInnerKeys = $this->m2m->innerKeys();
-			if ($this->inner_keys !== [] && count($this->inner_keys) !== count($relationInnerKeys)) {
+			if ($innerKeys !== [] && count($innerKeys) !== count($relationInnerKeys)) {
 				throw new InvalidArgumentException(
 					sprintf(
 						'Many-to-many through inner key count mismatch: relation innerKeys has %d entries and throughInnerKeys has %d.',
 						count($relationInnerKeys),
-						count($this->inner_keys)
+						count($innerKeys)
 					)
 				);
 			}
@@ -185,12 +210,12 @@ class M2MThrough
 
 		try {
 			$relationOuterKeys = $this->m2m->outerKeys();
-			if ($this->outer_keys !== [] && count($this->outer_keys) !== count($relationOuterKeys)) {
+			if ($outerKeys !== [] && count($outerKeys) !== count($relationOuterKeys)) {
 				throw new InvalidArgumentException(
 					sprintf(
 						'Many-to-many through outer key count mismatch: relation outerKeys has %d entries and throughOuterKeys has %d.',
 						count($relationOuterKeys),
-						count($this->outer_keys)
+						count($outerKeys)
 					)
 				);
 			}

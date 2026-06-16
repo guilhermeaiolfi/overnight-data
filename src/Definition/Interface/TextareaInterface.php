@@ -6,45 +6,48 @@ namespace ON\Data\Definition\Interface;
 
 class TextareaInterface extends AbstractInterface
 {
-	protected bool $trim = false;
-
-	protected ?string $placeholder = null;
-
-	protected int $limit = 255;
+	protected static function definitionDefaults(): array
+	{
+		return array_replace(parent::definitionDefaults(), [
+			'trim' => false,
+			'placeholder' => null,
+			'limit' => 255,
+		]);
+	}
 
 	public function placeholder(array $placeholder): self
 	{
-		$this->placeholder = $placeholder;
+		$this->set('placeholder', $placeholder);
 
 		return $this;
 	}
 
 	public function getPlaceholder(): ?string
 	{
-		return $this->placeholder;
+		return is_string($this->get('placeholder')) ? $this->get('placeholder') : null;
 	}
 
 	public function trim(bool $trim): self
 	{
-		$this->trim = $trim;
+		$this->set('trim', $trim);
 
 		return $this;
 	}
 
 	public function getTrim(): bool
 	{
-		return $this->trim;
+		return (bool) $this->get('trim');
 	}
 
 	public function limit(int $limit): self
 	{
-		$this->limit = $limit;
+		$this->set('limit', $limit);
 
 		return $this;
 	}
 
 	public function getLimit(): int
 	{
-		return $this->limit;
+		return (int) $this->get('limit');
 	}
 }

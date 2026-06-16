@@ -6,17 +6,24 @@ namespace ON\Data\Definition\Display;
 
 class LabelsDisplay extends RawDisplay
 {
-	protected bool $formatEachLabel = true;
+	protected static function definitionDefaults(): array
+	{
+		return array_replace(parent::definitionDefaults(), [
+			'formatEachLabel' => true,
+		]);
+	}
 
 	public function formatEachLabel(bool $formatEachLabel): self
 	{
-		$this->formatEachLabel = $formatEachLabel;
+		$this->set('formatEachLabel', $formatEachLabel);
 
 		return $this;
 	}
 
 	public function isFormatEachLabel(): ?bool
 	{
-		return $this->formatEachLabel;
+		$value = $this->get('formatEachLabel');
+
+		return is_bool($value) ? $value : null;
 	}
 }

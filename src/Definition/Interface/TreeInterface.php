@@ -6,22 +6,24 @@ namespace ON\Data\Definition\Interface;
 
 class TreeInterface extends AbstractInterface
 {
-	// can show fields from the target collection, like {{title}}
-	protected ?string $template = null;
-
-	protected bool $allow_creation = false;
-
-	protected bool $allow_selection = false;
+	protected static function definitionDefaults(): array
+	{
+		return array_replace(parent::definitionDefaults(), [
+			'template' => null,
+			'allow_creation' => false,
+			'allow_selection' => false,
+		]);
+	}
 
 	public function template(string $template): self
 	{
-		$this->template = $template;
+		$this->set('template', $template);
 
 		return $this;
 	}
 
 	public function getTemplate(): ?string
 	{
-		return $this->template;
+		return is_string($this->get('template')) ? $this->get('template') : null;
 	}
 }

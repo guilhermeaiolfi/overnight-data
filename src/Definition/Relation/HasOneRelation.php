@@ -9,18 +9,23 @@ use ON\Data\Definition\Field\FieldInterface;
 
 class HasOneRelation extends AbstractRelation
 {
-	protected bool $exclusive = false;
+	protected static function definitionDefaults(): array
+	{
+		return array_replace(parent::definitionDefaults(), [
+			'exclusive' => false,
+		]);
+	}
 
 	public function exclusive(bool $exclusive): self
 	{
-		$this->exclusive = $exclusive;
+		$this->set('exclusive', $exclusive);
 
 		return $this;
 	}
 
 	public function isExclusive(): bool
 	{
-		return $this->exclusive;
+		return (bool) $this->get('exclusive');
 	}
 
 	public function end(): CollectionInterface
@@ -33,11 +38,14 @@ class HasOneRelation extends AbstractRelation
 	// creates the field into the parent collection
 	public function generateField(): ?FieldInterface
 	{
-		if ($this->inner_keys === [] || $this->outer_keys === []) {
+		$innerKeys = (array) $this->get('inner_keys');
+		$outerKeys = (array) $this->get('outer_keys');
+
+		if ($innerKeys === [] || $outerKeys === []) {
 			return null;
 		}
 
-		if (count($this->inner_keys) !== 1 || count($this->outer_keys) !== 1) {
+		if (count($innerKeys) !== 1 || count($outerKeys) !== 1) {
 			return null;
 		}
 
@@ -59,6 +67,6 @@ class HasOneRelation extends AbstractRelation
 
 	public function getLoader(): ?string
 	{
-		return $this->loader;
+		return parent::getLoader();
 	}
 }

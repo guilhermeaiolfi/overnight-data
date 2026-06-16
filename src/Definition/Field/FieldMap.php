@@ -7,81 +7,76 @@ namespace ON\Data\Definition\Field;
 use ArrayIterator;
 use Countable;
 use IteratorAggregate;
+use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Exception\FieldException;
+use ON\Data\Definition\Internal\DefinitionFactory;
 use Traversable;
 
 /**
- * Manage the set of fields associated with the entity.
- *
  * @implements IteratorAggregate<string, FieldInterface>
  */
 final class FieldMap implements IteratorAggregate, Countable
 {
-	/** @var array<string, FieldInterface> */
-	private $fields = [];
+	/** @var array<string, mixed> */
+	private array $items = [];
 
-	/**
-	 * Cloning.
-	 */
-	public function __clone()
-	{
-		foreach ($this->fields as $name => $field) {
-			$this->fields[$name] = clone $field;
+	/** @var array<string, FieldInterface> */
+	private array $fields = [];
+
+	public function __construct(
+		private ?CollectionInterface $parent = null,
+		?array &$items = null,
+	) {
+		if ($items !== null) {
+			$this->items = &$items;
 		}
 	}
 
-	/**
-	 * @return int
-	 */
-	public function count(): int
+	public function __clone()
 	{
-		return count($this->fields);
+		$items = $this->items;
+		$this->items = $items;
+		foreach ($this->fields as $name => $field) {
+			$this->fields[$name] = clone $field;
+			$this->items[$name] = $this->fields[$name]->all();
+		}
 	}
 
-	/**
-	 * Get field column names
-	 */
+	public function count(): int
+	{
+		return count($this->items);
+	}
+
 	public function getColumnNames(): array
 	{
 		return array_values(array_map(static function (FieldInterface $field) {
 			return $field->getColumn();
-		}, $this->fields));
+		}, iterator_to_array($this)));
 	}
 
 	public function getFieldNameColumnNameMap(): array
 	{
 		$data = [];
-		foreach ($this->fields as $name => $field) {
+		foreach ($this as $field) {
 			$data[$field->getName()] = $field->getColumn();
 		}
 
 		return $data;
 	}
 
-	/**
-	 * Get property names
-	 */
 	public function getNames(): array
 	{
-		return array_keys($this->fields);
+		return array_keys($this->items);
 	}
 
-	/**
-	 * @param string $name
-	 *
-	 * @return bool
-	 */
 	public function has(string $name): bool
 	{
-		return isset($this->fields[$name]);
+		return array_key_exists($name, $this->items);
 	}
 
-	/**
-	 * Check if field with given column name exist
-	 */
 	public function hasColumn(string $name): bool
 	{
-		foreach ($this->fields as $field) {
+		foreach ($this as $field) {
 			if ($field->getColumn() === $name) {
 				return true;
 			}
@@ -90,24 +85,30 @@ final class FieldMap implements IteratorAggregate, Countable
 		return false;
 	}
 
-	/**
-	 * Get field by property name
-	 */
 	public function get(string $name): Field
 	{
 		if (! $this->has($name)) {
 			throw new FieldException("Undefined field `{$name}`.");
 		}
 
-		return $this->fields[$name];
+		if (isset($this->fields[$name])) {
+			return $this->fields[$name];
+		}
+
+		if ($this->parent === null || ! is_array($this->items[$name])) {
+			throw new FieldException("Undefined field `{$name}`.");
+		}
+
+		$items = &$this->items[$name];
+		$field = DefinitionFactory::field($this->parent, $items);
+		$this->fields[$name] = $field;
+
+		return $field;
 	}
 
-	/**
-	 * Get property name by column name
-	 */
 	public function getKeyByColumnName(string $name): string
 	{
-		foreach ($this->fields as $key => $field) {
+		foreach ($this as $key => $field) {
 			if ($field->getColumn() === $name) {
 				return $key;
 			}
@@ -116,12 +117,9 @@ final class FieldMap implements IteratorAggregate, Countable
 		throw new FieldException("Undefined field with column name `{$name}`.");
 	}
 
-	/**
-	 * Get field by column name
-	 */
 	public function getByColumnName(string $name): FieldInterface
 	{
-		foreach ($this->fields as $field) {
+		foreach ($this as $field) {
 			if ($field->getColumn() === $name) {
 				return $field;
 			}
@@ -130,37 +128,50 @@ final class FieldMap implements IteratorAggregate, Countable
 		throw new FieldException("Undefined field with column name `{$name}`.");
 	}
 
-	/**
-	 * @param string $name
-	 * @param FieldInterface  $field
-	 *
-	 * @return FieldMap
-	 */
 	public function set(string $name, FieldInterface $field): self
 	{
 		if ($this->has($name)) {
 			throw new FieldException("Field `{$name}` already exists.");
 		}
 
-		$this->fields[$name] = $field;
+		$this->items[$name] = $field instanceof Field ? $field->all() : [];
+		unset($this->fields[$name]);
+		if ($this->parent !== null && is_array($this->items[$name])) {
+			$items = &$this->items[$name];
+			$this->fields[$name] = DefinitionFactory::field($this->parent, $items);
+		} else {
+			$this->fields[$name] = $field;
+		}
 
 		return $this;
 	}
 
-	/**
-	 * @param string $name
-	 *
-	 * @return FieldMap
-	 */
 	public function remove(string $name): self
 	{
+		unset($this->items[$name], $this->fields[$name]);
+
+		return $this;
+	}
+
+	public function replace(string $name, FieldInterface $field): self
+	{
+		$this->items[$name] = $field instanceof Field ? $field->all() : [];
 		unset($this->fields[$name]);
+		if ($this->parent !== null && is_array($this->items[$name])) {
+			$items = &$this->items[$name];
+			$this->fields[$name] = DefinitionFactory::field($this->parent, $items);
+		}
 
 		return $this;
 	}
 
 	public function getIterator(): Traversable
 	{
-		return new ArrayIterator($this->fields);
+		$fields = [];
+		foreach (array_keys($this->items) as $name) {
+			$fields[$name] = $this->get((string) $name);
+		}
+
+		return new ArrayIterator($fields);
 	}
 }

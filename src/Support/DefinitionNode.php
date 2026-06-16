@@ -12,24 +12,28 @@ namespace ON\Data\Support;
 class DefinitionNode extends Dot
 {
 	/**
+	 * @return array<array-key, mixed>
+	 */
+	protected static function definitionDefaults(): array
+	{
+		$defaults = get_class_vars(static::class);
+		unset($defaults['items'], $defaults['delimiter']);
+
+		return $defaults;
+	}
+
+	/**
 	 * @param array<array-key, mixed>|object|null $items
 	 * @param string $delimiter
 	 */
 	public function __construct(array|object|null $items = [], bool $parse = false, string $delimiter = '.')
 	{
-		$defaults = get_class_vars(static::class);
-		unset($defaults['items'], $defaults['delimiter']);
-
 		/**
 		 * @var array<array-key, mixed> $merged
 		 */
-		$merged = self::mergeArrays($defaults, $this->getArrayItems($items));
+		$merged = self::mergeArrays(static::definitionDefaults(), $this->getArrayItems($items));
 
 		parent::__construct($merged, $parse, $delimiter);
-
-		foreach (array_keys($defaults) as $name) {
-			unset($this->{$name});
-		}
 	}
 
 	/**
@@ -49,6 +53,7 @@ class DefinitionNode extends Dot
 	 */
 	protected function bind(array &$items): void
 	{
+		$items = self::mergeArrays(static::definitionDefaults(), $items);
 		$this->setReference($items);
 	}
 
