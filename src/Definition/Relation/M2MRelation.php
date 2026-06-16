@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Relation;
 
-use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\DefinitionInterface;
+use ON\Data\Definition\Internal\DefinitionFactory;
 
 class M2MRelation extends AbstractRelation
 {
@@ -19,14 +20,13 @@ class M2MRelation extends AbstractRelation
 	}
 
 	public function __construct(
-		public CollectionInterface $parent,
-		?array &$items = null,
+		public DefinitionInterface $parent,
 	) {
-		parent::__construct($parent, $items);
+		parent::__construct($parent);
 
 		if (is_array($this->get('through'))) {
 			$throughItems = &$this->items['through'];
-			$this->through = new M2MThrough($this, $throughItems);
+			$this->through = DefinitionFactory::through($this, $throughItems);
 		}
 	}
 
@@ -35,7 +35,7 @@ class M2MRelation extends AbstractRelation
 		parent::__clone();
 		if (is_array($this->get('through'))) {
 			$throughItems = &$this->items['through'];
-			$this->through = new M2MThrough($this, $throughItems);
+			$this->through = DefinitionFactory::through($this, $throughItems);
 		}
 	}
 
@@ -53,7 +53,7 @@ class M2MRelation extends AbstractRelation
 	{
 		$this->set('through', []);
 		$throughItems = &$this->items['through'];
-		$this->through = new M2MThrough($this, $throughItems);
+		$this->through = DefinitionFactory::through($this, $throughItems);
 		$this->through->collection($collection);
 
 		return $this->through;

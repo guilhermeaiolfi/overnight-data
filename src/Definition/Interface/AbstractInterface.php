@@ -13,16 +13,8 @@ abstract class AbstractInterface extends DefinitionNode implements InterfaceInte
 {
 	public function __construct(
 		protected mixed $parent,
-		?array &$items = null,
 	) {
-		if ($items === null) {
-			parent::__construct();
-
-			return;
-		}
-
-		parent::__construct([]);
-		$this->bind($items);
+		parent::__construct();
 	}
 
 	protected static function definitionDefaults(): array
@@ -34,7 +26,7 @@ abstract class AbstractInterface extends DefinitionNode implements InterfaceInte
 
 	public function __clone()
 	{
-		$this->setArray($this->all());
+		$this->setArray(self::detachArray($this->all()));
 	}
 
 	public function setOptions(array $options): self

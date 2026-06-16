@@ -13,10 +13,12 @@ This repository currently includes:
 - `ON\Data\Support\DefinitionNode`;
 - the extracted `ON\Data\Definition` subsystem;
 - collection-owned primary-key metadata with round-trip normalization from legacy field `pk` flags;
+- shared `DefinitionInterface` support for collections and views;
+- registry-managed `ViewDefinition` and `ViewField` wrappers backed by the same master-array storage;
 - the `ON\Data\Key` value object for simple and composite identities;
 - tests and quality tooling.
 
-Future phases will still add view definitions and FieldType-backed normalization. Those changes are not implemented yet.
+Future phases will still add semantic view expressions, query execution, and FieldType-backed normalization. Those changes are not implemented yet.
 
 ## Namespace
 

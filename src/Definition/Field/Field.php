@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Field;
 
-use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Display\DisplayTrait;
 use ON\Data\Definition\Exception\FieldException;
 use ON\Data\Definition\Interface\InterfaceTrait;
@@ -19,15 +19,9 @@ class Field extends DefinitionNode implements FieldInterface
 	use MetadataTrait;
 
 	public function __construct(
-		protected CollectionInterface $collection,
-		?array &$items = null,
+		protected DefinitionInterface $parent,
 	) {
-		if ($items === null) {
-			parent::__construct();
-		} else {
-			parent::__construct([]);
-			$this->bind($items);
-		}
+		parent::__construct();
 	}
 
 	protected static function definitionDefaults(): array
@@ -65,7 +59,7 @@ class Field extends DefinitionNode implements FieldInterface
 
 	public function __clone()
 	{
-		$this->setArray($this->all());
+		$this->setArray(self::detachArray($this->all()));
 		$this->display = null;
 		$this->interface = null;
 		$this->metadataMap = null;
@@ -145,7 +139,7 @@ class Field extends DefinitionNode implements FieldInterface
 	{
 		$type = $this->get('type');
 		if (! is_string($type) || $type === '') {
-			throw new FieldException('Field(' . $this->getName() . ') type must be set in collection: ' . $this->collection->getName());
+			throw new FieldException('Field(' . $this->getName() . ') type must be set in definition: ' . $this->parent->getName());
 		}
 
 		return $type;
@@ -261,8 +255,13 @@ class Field extends DefinitionNode implements FieldInterface
 		return is_string($value) ? $value : null;
 	}
 
-	public function end(): CollectionInterface
+	public function getParent(): DefinitionInterface
 	{
-		return $this->collection;
+		return $this->parent;
+	}
+
+	public function end(): DefinitionInterface
+	{
+		return $this->parent;
 	}
 }

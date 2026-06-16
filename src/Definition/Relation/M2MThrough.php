@@ -14,16 +14,8 @@ class M2MThrough extends DefinitionNode
 {
 	public function __construct(
 		protected M2MRelation $m2m,
-		?array &$items = null,
 	) {
-		if ($items === null) {
-			parent::__construct();
-
-			return;
-		}
-
-		parent::__construct([]);
-		$this->bind($items);
+		parent::__construct();
 	}
 
 	protected static function definitionDefaults(): array
@@ -38,7 +30,7 @@ class M2MThrough extends DefinitionNode
 
 	public function __clone()
 	{
-		$this->setArray($this->all());
+		$this->setArray(self::detachArray($this->all()));
 	}
 
 	public function collection(string $collectionName): self

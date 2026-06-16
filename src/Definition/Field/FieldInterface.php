@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Field;
 
-use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Display\DisplayInterface;
 use ON\Data\Definition\Display\RawDisplay;
 use ON\Data\Definition\Interface\InterfaceInterface;
@@ -126,5 +126,7 @@ interface FieldInterface
 
 	public function getDescription(): ?string;
 
-	public function end(): CollectionInterface;
+	public function getParent(): DefinitionInterface;
+
+	public function end(): DefinitionInterface;
 }

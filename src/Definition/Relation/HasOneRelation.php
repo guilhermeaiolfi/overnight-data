@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Relation;
 
-use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 
 class HasOneRelation extends AbstractRelation
 {
+	public function __construct(DefinitionInterface $parent)
+	{
+		parent::__construct($parent);
+		$this->requireCollectionParent(static::class);
+	}
+
 	protected static function definitionDefaults(): array
 	{
 		return array_replace(parent::definitionDefaults(), [
@@ -28,7 +34,7 @@ class HasOneRelation extends AbstractRelation
 		return (bool) $this->get('exclusive');
 	}
 
-	public function end(): CollectionInterface
+	public function end(): DefinitionInterface
 	{
 		$this->generateField();
 
@@ -38,6 +44,7 @@ class HasOneRelation extends AbstractRelation
 	// creates the field into the parent collection
 	public function generateField(): ?FieldInterface
 	{
+		$parentCollection = $this->requireCollectionParent(static::class);
 		$innerKeys = (array) $this->get('inner_keys');
 		$outerKeys = (array) $this->get('outer_keys');
 
@@ -48,8 +55,6 @@ class HasOneRelation extends AbstractRelation
 		if (count($innerKeys) !== 1 || count($outerKeys) !== 1) {
 			return null;
 		}
-
-		$parentCollection = $this->parent;
 
 		$innerField = $this->getInnerField();
 		$outerField = $this->getOuterField();

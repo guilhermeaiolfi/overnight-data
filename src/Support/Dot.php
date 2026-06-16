@@ -200,6 +200,7 @@ class Dot implements ArrayAccess, Countable, IteratorAggregate, JsonSerializable
 	 */
 	public function setArray(array $items): static
 	{
+		unset($this->items);
 		$this->items = $items;
 
 		return $this;

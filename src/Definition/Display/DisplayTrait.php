@@ -20,7 +20,7 @@ trait DisplayTrait
 		$items = ['class' => $type];
 		$this->set('display', $items);
 		$displayItems = &$this->items['display'];
-		$this->display = new $type($this, $displayItems);
+		$this->display = DefinitionFactory::display($this, $displayItems);
 
 		return $this->display;
 	}

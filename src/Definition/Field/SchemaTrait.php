@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Field;
 
+use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 
 trait SchemaTrait
@@ -51,13 +52,11 @@ trait SchemaTrait
 
 	public function isPrimaryKey(): bool
 	{
-		$collection = $this->collection;
+		$parent = $this->getParent();
 
-		if (! $collection->hasPrimaryKey()) {
-			return false;
-		}
-
-		return in_array($this->getName(), $collection->getPrimaryKey(), true);
+		return $parent instanceof CollectionInterface
+			&& $parent->hasPrimaryKey()
+			&& in_array($this->getName(), $parent->getPrimaryKey(), true);
 	}
 
 	public function filterable(bool $filterable = true): self

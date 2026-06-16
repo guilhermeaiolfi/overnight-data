@@ -1,4 +1,6 @@
-# Phase 3 Storage Format
+# Registry Storage Format
+
+Phase 5 extends the Phase 3 master-array model with a `views` root while preserving the existing collection shape.
 
 `Registry::all()` now returns one plain master array with this implemented shape:
 
@@ -91,30 +93,62 @@
             ],
         ],
     ],
+    'views' => [
+        'user_summary' => [
+            'class' => 'App\\CustomViewDefinition',
+            'name' => 'user_summary',
+            'source' => 'users',
+            'metadata' => [
+                'label' => 'User summary',
+            ],
+            'fields' => [
+                'name' => [
+                    'class' => 'App\\CustomViewField',
+                    'name' => 'name',
+                    'type' => 'string',
+                    'metadata' => [],
+                ],
+            ],
+            'relations' => [
+                'manager' => [
+                    'class' => 'App\\CustomViewRelation',
+                    'collectionName' => 'users',
+                    'name' => 'manager',
+                    'inner_keys' => ['name'],
+                    'outer_keys' => ['id'],
+                    'metadata' => [],
+                ],
+            ],
+        ],
+    ],
 ]
 ```
 
 Implemented rules:
 
 1. Root keys:
-   - Only `collections` is created by default.
+   - `collections` and `views` are always present after normalization.
 2. Collection keys:
    - Collection defaults are materialized when the collection entry is created.
    - `primaryKey` is always stored at collection level as an ordered list of field names.
    - `fields`, `relations`, and `metadata` are always arrays after normalization.
-3. Field keys:
+3. View keys:
+   - Views store `class`, `name`, `source`, `fields`, `relations`, and `metadata`.
+   - `source` stores only the source definition name and may point to either a collection or another view.
+   - Collections and views share one definition-name namespace, so duplicate root names are rejected.
+4. Field keys:
    - Basic field metadata and schema metadata are stored directly on the field array.
    - Field arrays do not store independent primary-key flags after Registry normalization.
    - Nested display and interface definitions are stored under `display` and `interface`.
-4. Relation keys:
+5. Relation keys:
    - Base relation metadata is stored directly on the relation array.
    - `M2MRelation` adds `collection_factory` and nested `through` data.
-5. Class discriminator behavior:
-   - `class` is used for collection, field, relation, display, and interface restoration.
-   - Missing collection/field classes are normalized to the default concrete class.
+6. Class discriminator behavior:
+   - `class` is used for collection, view, field, relation, display, and interface restoration.
+   - Missing collection, view, and field classes are normalized to their default concrete classes.
    - Missing relation class restoration is rejected.
-6. Metadata format:
-   - Collection, field, and relation metadata stays under a plain nested `metadata` array.
-7. Restoration rules:
-   - `Registry`, `Collection`, `Field`, `Relation`, `Display`, `Interface`, and `M2MThrough` wrappers bind to the nested arrays by reference.
+7. Metadata format:
+   - Collection, view, field, and relation metadata stays under a plain nested `metadata` array.
+8. Restoration rules:
+   - `Registry`, `Collection`, `ViewDefinition`, `Field`, `ViewField`, `Relation`, `Display`, `Interface`, and `M2MThrough` wrappers bind to the nested arrays by reference.
    - Wrapper caches are runtime-only and do not appear in `all()`.

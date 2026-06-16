@@ -4,61 +4,22 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Collection;
 
+use ON\Data\Definition\AbstractDefinition;
 use ON\Data\Definition\Exception\InvalidPrimaryKeyException;
 use ON\Data\Definition\Exception\PrimaryKeyNotDefinedException;
-use ON\Data\Definition\Field\Field;
 use ON\Data\Definition\Field\FieldInterface;
-use ON\Data\Definition\Field\FieldMap;
-use ON\Data\Definition\MetadataTrait;
-use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\BelongsToRelation;
 use ON\Data\Definition\Relation\HasManyRelation;
 use ON\Data\Definition\Relation\HasOneRelation;
 use ON\Data\Definition\Relation\RelationInterface;
-use ON\Data\Definition\Relation\RelationMap;
 use ON\Data\Key;
-use ON\Data\Support\DefinitionNode;
 use stdClass;
 
-class Collection extends DefinitionNode implements CollectionInterface
+class Collection extends AbstractDefinition implements CollectionInterface
 {
-	use MetadataTrait;
-
-	public FieldMap $fields;
-
-	public RelationMap $relations;
-
-	public function __construct(
-		protected Registry $registry,
-		?array &$items = null,
-	) {
-		if ($items === null) {
-			parent::__construct();
-		} else {
-			parent::__construct([]);
-			$this->bind($items);
-		}
-
-		$fieldItems = &$this->items['fields'];
-		$relationItems = &$this->items['relations'];
-		$this->fields = new FieldMap($this, $fieldItems);
-		$this->relations = new RelationMap($this, $relationItems);
-	}
-
 	protected static function definitionDefaults(): array
 	{
 		return static::defaultDefinition('');
-	}
-
-	/** @internal */
-	public function bindDefinitionArray(array &$items): void
-	{
-		$this->bind($items);
-		$fieldItems = &$this->items['fields'];
-		$relationItems = &$this->items['relations'];
-		$this->fields = new FieldMap($this, $fieldItems);
-		$this->relations = new RelationMap($this, $relationItems);
-		$this->metadataMap = null;
 	}
 
 	/**
@@ -86,17 +47,6 @@ class Collection extends DefinitionNode implements CollectionInterface
 			'fields' => [],
 			'relations' => [],
 		];
-	}
-
-	public function __clone()
-	{
-		$items = $this->all();
-		$this->setArray($items);
-		$fieldItems = &$this->items['fields'];
-		$relationItems = &$this->items['relations'];
-		$this->fields = new FieldMap($this, $fieldItems);
-		$this->relations = new RelationMap($this, $relationItems);
-		$this->metadataMap = null;
 	}
 
 	public function table(string $table): self
@@ -257,36 +207,14 @@ class Collection extends DefinitionNode implements CollectionInterface
 		return (bool) $this->get('hidden');
 	}
 
-	public function field(string $name, ?string $type = null): FieldInterface
-	{
-		if ($this->fields->has($name)) {
-			return $this->fields->get($name);
-		}
-
-		$field = new Field($this);
-		$this->fields->set($name, $field);
-		$field = $this->fields->get($name);
-		$field->name($name);
-		if ($type !== null) {
-			$field->type($type);
-		}
-
-		return $field;
-	}
-
 	/**
-	 * @template T
+	 * @template T of RelationInterface
 	 * @param class-string<T> $type
 	 * @return T
 	 */
 	public function relation(string $name, string $type = HasOneRelation::class): RelationInterface
 	{
-		$relation = new $type($this);
-		$this->relations->set($name, $relation);
-		$relation = $this->relations->get($name);
-		$relation->name($name);
-
-		return $relation;
+		return parent::relation($name, $type);
 	}
 
 	public function hasMany(string $name, string $targetCollection): HasManyRelation
@@ -514,16 +442,6 @@ class Collection extends DefinitionNode implements CollectionInterface
 		}
 
 		return $item;
-	}
-
-	public function end(): Registry
-	{
-		return $this->registry;
-	}
-
-	public function getRegistry(): Registry
-	{
-		return $this->registry;
 	}
 
 	public function setFileDefinitionLocation(?string $file = null): void

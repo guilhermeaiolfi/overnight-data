@@ -7,7 +7,7 @@ namespace ON\Data\Definition\Field;
 use ArrayIterator;
 use Countable;
 use IteratorAggregate;
-use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Exception\FieldException;
 use ON\Data\Definition\Internal\DefinitionFactory;
 use Traversable;
@@ -24,7 +24,7 @@ final class FieldMap implements IteratorAggregate, Countable
 	private array $fields = [];
 
 	public function __construct(
-		private ?CollectionInterface $parent = null,
+		private ?DefinitionInterface $parent = null,
 		?array &$items = null,
 	) {
 		if ($items !== null) {
@@ -85,7 +85,7 @@ final class FieldMap implements IteratorAggregate, Countable
 		return false;
 	}
 
-	public function get(string $name): Field
+	public function get(string $name): FieldInterface
 	{
 		if (! $this->has($name)) {
 			throw new FieldException("Undefined field `{$name}`.");

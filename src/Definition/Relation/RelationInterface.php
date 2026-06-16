@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Definition\Relation;
 
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Display\DisplayInterface;
 use ON\Data\Definition\Display\RawDisplay;
 use ON\Data\Definition\Field\FieldInterface;
@@ -19,6 +20,8 @@ interface RelationInterface
 	public function interface(string $className): InterfaceInterface;
 
 	public function getInterface(): InterfaceInterface;
+
+	public function getParent(): DefinitionInterface;
 
 	public function name(string $name): self;
 
@@ -80,5 +83,5 @@ interface RelationInterface
 	 */
 	public function isJunction(): bool;
 
-	public function end(): CollectionInterface;
+	public function end(): DefinitionInterface;
 }

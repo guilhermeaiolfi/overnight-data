@@ -6,7 +6,7 @@ namespace ON\Data\Definition\Relation;
 
 use ArrayIterator;
 use IteratorAggregate;
-use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Exception\RelationException;
 use ON\Data\Definition\Internal\DefinitionFactory;
 use Traversable;
@@ -23,7 +23,7 @@ final class RelationMap implements IteratorAggregate
 	private array $relations = [];
 
 	public function __construct(
-		private ?CollectionInterface $parent = null,
+		private ?DefinitionInterface $parent = null,
 		?array &$items = null,
 	) {
 		if ($items !== null) {

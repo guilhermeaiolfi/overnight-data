@@ -84,7 +84,7 @@ final class FieldAndMapTest extends TestCase
 		$field = (new Registry())->collection('users')->field('email');
 
 		$this->expectException(FieldException::class);
-		$this->expectExceptionMessage('Field(email) type must be set in collection: users');
+		$this->expectExceptionMessage('Field(email) type must be set in definition: users');
 		$field->getType();
 	}
 

@@ -13,16 +13,8 @@ class RawDisplay extends DefinitionNode implements DisplayInterface
 {
 	public function __construct(
 		protected mixed $parent,
-		?array &$items = null,
 	) {
-		if ($items === null) {
-			parent::__construct();
-
-			return;
-		}
-
-		parent::__construct([]);
-		$this->bind($items);
+		parent::__construct();
 	}
 
 	protected static function definitionDefaults(): array
@@ -35,7 +27,7 @@ class RawDisplay extends DefinitionNode implements DisplayInterface
 
 	public function __clone()
 	{
-		$this->setArray($this->all());
+		$this->setArray(self::detachArray($this->all()));
 	}
 
 	public function type(string $type): self

@@ -20,7 +20,7 @@ trait InterfaceTrait
 		$items = ['class' => $className];
 		$this->set('interface', $items);
 		$interfaceItems = &$this->items['interface'];
-		$this->interface = new $className($this, $interfaceItems);
+		$this->interface = DefinitionFactory::interface($this, $interfaceItems);
 
 		return $this->interface;
 	}

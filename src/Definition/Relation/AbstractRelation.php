@@ -7,7 +7,9 @@ namespace ON\Data\Definition\Relation;
 use InvalidArgumentException;
 use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Display\DisplayTrait;
+use ON\Data\Definition\Exception\InvalidRelationParentException;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Interface\InterfaceTrait;
 use ON\Data\Definition\MetadataTrait;
@@ -20,17 +22,9 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 	use MetadataTrait;
 
 	public function __construct(
-		public CollectionInterface $parent,
-		?array &$items = null,
+		public DefinitionInterface $parent,
 	) {
-		if ($items === null) {
-			parent::__construct();
-
-			return;
-		}
-
-		parent::__construct([]);
-		$this->bind($items);
+		parent::__construct();
 	}
 
 	protected static function definitionDefaults(): array
@@ -53,13 +47,13 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 
 	public function __clone()
 	{
-		$this->setArray($this->all());
+		$this->setArray(self::detachArray($this->all()));
 		$this->display = null;
 		$this->interface = null;
 		$this->metadataMap = null;
 	}
 
-	public function getParent(): CollectionInterface
+	public function getParent(): DefinitionInterface
 	{
 		return $this->parent;
 	}
@@ -262,8 +256,19 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 		return false;
 	}
 
-	public function end(): CollectionInterface
+	public function end(): DefinitionInterface
 	{
+		return $this->parent;
+	}
+
+	protected function requireCollectionParent(string $context): CollectionInterface
+	{
+		if (! $this->parent instanceof CollectionInterface) {
+			throw new InvalidRelationParentException(
+				sprintf("%s requires a collection parent, '%s' given.", $context, $this->parent::class)
+			);
+		}
+
 		return $this->parent;
 	}
 

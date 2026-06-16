@@ -4,17 +4,16 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Collection;
 
+use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Exception\InvalidPrimaryKeyException;
 use ON\Data\Definition\Exception\PrimaryKeyNotDefinedException;
 use ON\Data\Definition\Field\FieldInterface;
-use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\BelongsToRelation;
 use ON\Data\Definition\Relation\HasManyRelation;
 use ON\Data\Definition\Relation\HasOneRelation;
-use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Key;
 
-interface CollectionInterface
+interface CollectionInterface extends DefinitionInterface
 {
 	public function entity(string $entity): self;
 
@@ -46,20 +45,9 @@ interface CollectionInterface
 
 	public function name(string $name): self;
 
-	public function getName(): string;
-
 	public function hidden(bool $hidden): self;
 
 	public function isHidden(): bool;
-
-	public function field(string $name, ?string $type = null): FieldInterface;
-
-	/**
-	 * @template T
-	 * @param class-string<T> $type
-	 * @return T
-	 * */
-	public function relation(string $name, string $type = HasOneRelation::class): RelationInterface;
 
 	public function hasMany(string $name, string $targetCollection): HasManyRelation;
 
@@ -140,10 +128,6 @@ interface CollectionInterface
 
 	public function getDescription(): ?string;
 
-	public function end(): Registry;
-
-	public function getRegistry(): Registry;
-
 	public function parentCollection(string $parentCollection): self;
 
 	public function getParentCollection(): ?string;
@@ -151,6 +135,4 @@ interface CollectionInterface
 	public function setFileDefinitionLocation(?string $file = null): void;
 
 	public function getFileDefinitionLocation(): ?string;
-
-	public function metadata(string $key, mixed $value = null): mixed;
 }

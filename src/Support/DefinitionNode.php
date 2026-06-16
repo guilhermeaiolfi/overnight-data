@@ -58,6 +58,35 @@ class DefinitionNode extends Dot
 	}
 
 	/**
+	 * @internal Rebinds the wrapper to a registry-owned nested definition array.
+	 *
+	 * @param array<array-key, mixed> $items
+	 */
+	protected function rebindDefinitionArray(array &$items): void
+	{
+		$this->bind($items);
+		$this->afterBindDefinitionArray();
+	}
+
+	/**
+	 * @internal Allows subclasses to rebuild nested wrapper caches after rebinding.
+	 */
+	protected function afterBindDefinitionArray(): void
+	{
+	}
+
+	/**
+	 * @param array<array-key, mixed> $items
+	 * @return array<array-key, mixed>
+	 */
+	protected static function detachArray(array $items): array
+	{
+		$detached = unserialize(serialize($items), ['allowed_classes' => false]);
+
+		return is_array($detached) ? $detached : [];
+	}
+
+	/**
 	 * @param array<array-key, mixed> $left
 	 * @param array<array-key, mixed> $right
 	 * @return array<array-key, mixed>
