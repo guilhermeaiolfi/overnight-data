@@ -13,9 +13,7 @@ use ON\Data\Mapper\Representation\WireRepresentation;
 use ON\Data\Mapper\Walker\ArrayWalkerOptions;
 use PHPUnit\Framework\TestCase;
 use stdClass;
-use Tests\ON\Data\Fixture\ArgumentDrivenNodeResolver;
 use Tests\ON\Data\Fixture\AuthorDto;
-use Tests\ON\Data\Fixture\CustomNodeResolverArgument;
 use Tests\ON\Data\Fixture\ParentAwareWriter;
 use Tests\ON\Data\Fixture\PostDto;
 use Tests\ON\Data\Fixture\ScalarRelationPostDto;
@@ -121,18 +119,6 @@ final class RecursiveMappingTest extends TestCase
 		$this->expectExceptionMessage("path 'self'");
 
 		map($source)->to([]);
-	}
-
-	public function testCustomNodeResolverSupportsBlueprintLikeExtension(): void
-	{
-		$result = map([
-			'child' => ['id' => 9],
-		])
-			->nodeResolver(ArgumentDrivenNodeResolver::class)
-			->args(new CustomNodeResolverArgument('child', []))
-			->to([]);
-
-		self::assertSame(['child' => ['id' => 9]], $result);
 	}
 
 	public function testWriterReceivesCompletedNestedValuesAndParentContexts(): void

@@ -13,12 +13,8 @@ use ON\Data\Mapper\Exception\MapperComponentConfigurationException;
 use ON\Data\Mapper\Exception\NoWalkerFoundException;
 use ON\Data\Mapper\Exception\NoWriterFoundException;
 use ON\Data\Mapper\Resolver\DefinitionFieldResolver;
-use ON\Data\Mapper\Resolver\DefinitionRelationMappingNodeResolver;
 use ON\Data\Mapper\Resolver\FieldResolverInterface;
-use ON\Data\Mapper\Resolver\MappingNodeResolverInterface;
-use ON\Data\Mapper\Resolver\ReflectionMappingNodeResolver;
 use ON\Data\Mapper\Resolver\ReflectionPropertyFieldResolver;
-use ON\Data\Mapper\Resolver\StructuralValueMappingNodeResolver;
 use ON\Data\Mapper\Walker\ArrayWalker;
 use ON\Data\Mapper\Walker\ObjectWalker;
 use ON\Data\Mapper\Walker\WalkerInterface;
@@ -42,11 +38,6 @@ final class MapperManager
 	 * @var list<class-string<FieldResolverInterface>>
 	 */
 	private array $resolvers = [];
-
-	/**
-	 * @var list<class-string<MappingNodeResolverInterface>>
-	 */
-	private array $nodeResolvers = [];
 
 	/**
 	 * @var array<class-string<WalkerInterface>, WalkerInterface>
@@ -81,9 +72,6 @@ final class MapperManager
 		$manager->register(ObjectWriter::class);
 		$manager->register(DefinitionFieldResolver::class);
 		$manager->register(ReflectionPropertyFieldResolver::class);
-		$manager->register(DefinitionRelationMappingNodeResolver::class);
-		$manager->register(ReflectionMappingNodeResolver::class);
-		$manager->register(StructuralValueMappingNodeResolver::class);
 
 		return $manager;
 	}
@@ -106,8 +94,7 @@ final class MapperManager
 	{
 		return in_array($component, $this->walkers, true)
 			|| in_array($component, $this->writers, true)
-			|| in_array($component, $this->resolvers, true)
-			|| in_array($component, $this->nodeResolvers, true);
+			|| in_array($component, $this->resolvers, true);
 	}
 
 	/**
@@ -132,14 +119,6 @@ final class MapperManager
 	public function getRegisteredResolvers(): array
 	{
 		return $this->resolvers;
-	}
-
-	/**
-	 * @return list<class-string<MappingNodeResolverInterface>>
-	 */
-	public function getRegisteredMappingNodeResolvers(): array
-	{
-		return $this->nodeResolvers;
 	}
 
 	/**
@@ -240,24 +219,6 @@ final class MapperManager
 		);
 	}
 
-	/**
-	 * @return list<MappingNodeResolverInterface>
-	 */
-	public function createMappingNodeResolverCoordinator(MappingContext $context): array
-	{
-		$chain = [];
-
-		foreach ($context->getNodeResolverClasses() as $resolverClass) {
-			$chain[] = $this->constructNodeResolver($resolverClass);
-		}
-
-		foreach ($this->nodeResolvers as $resolverClass) {
-			$chain[] = $this->constructNodeResolver($resolverClass);
-		}
-
-		return $chain;
-	}
-
 	public function resolveWalker(
 		mixed $source,
 		MappingContext $context,
@@ -350,16 +311,6 @@ final class MapperManager
 		return $this->constructTypedComponent($resolverClass, FieldResolverInterface::class, 'resolver');
 	}
 
-	/**
-	 * @param class-string<MappingNodeResolverInterface> $resolverClass
-	 */
-	private function constructNodeResolver(string $resolverClass): MappingNodeResolverInterface
-	{
-		$this->assertRoleOrThrow($resolverClass, MappingNodeResolverInterface::class);
-
-		return $this->constructTypedComponent($resolverClass, MappingNodeResolverInterface::class, 'node resolver');
-	}
-
 	private function addComponent(string $component, bool $append): void
 	{
 		$role = $this->detectRole($component);
@@ -431,19 +382,14 @@ final class MapperManager
 			$roles[] = 'resolver';
 		}
 
-		if (is_a($component, MappingNodeResolverInterface::class, true)) {
-			$roles[] = 'node resolver';
-		}
-
 		if (count($roles) !== 1) {
 			throw new InvalidMapperComponentException(
 				sprintf(
-					"Mapper component '%s' must implement exactly one of %s, %s, %s, or %s.",
+					"Mapper component '%s' must implement exactly one of %s, %s, or %s.",
 					$component,
 					WalkerInterface::class,
 					WriterInterface::class,
 					FieldResolverInterface::class,
-					MappingNodeResolverInterface::class,
 				),
 			);
 		}
@@ -464,11 +410,7 @@ final class MapperManager
 			return $this->writers;
 		}
 
-		if ($role === 'resolver') {
-			return $this->resolvers;
-		}
-
-		return $this->nodeResolvers;
+		return $this->resolvers;
 	}
 
 	private function assertRoleOrThrow(string $component, string $requiredInterface): void

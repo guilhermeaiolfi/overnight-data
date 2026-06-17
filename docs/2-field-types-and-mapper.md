@@ -162,8 +162,7 @@ The runtime is composed from independent component roles:
 
 ```text
 Input
-  -> Walker
-  -> MappingNode resolver chain
+  -> Walker, including recursive traversal decisions
   -> Resolver chain
   -> Representation conversion
   -> Writer
@@ -173,7 +172,6 @@ Input
 Responsibilities:
 
 - walker: enumerate source nodes, own collection traversal, and initiate recursive mapping
-- mapping-node resolver: decide whether a node should recurse and what child target it should use
 - resolver: inspect the current leaf node and return a `FieldContext` when capable
 - conversion: move scalar values between representations only when a boundary was declared
 - writer: prepare the target and perform only the final per-node assignment
@@ -187,7 +185,6 @@ Default registered order:
 - walkers: `ArrayWalker`, `ObjectWalker`
 - writers: `ArrayWriter`, `ObjectWriter`
 - resolvers: `DefinitionFieldResolver`, `ReflectionPropertyFieldResolver`
-- mapping-node resolvers: `DefinitionRelationMappingNodeResolver`, `ReflectionMappingNodeResolver`, `StructuralValueMappingNodeResolver`
 
 This supports the built-in recursive matrix:
 
@@ -311,7 +308,6 @@ Override components for one mapping:
 ```php
 $result = map($source)
     ->walker(CustomWalker::class)
-    ->nodeResolver(CustomNodeResolver::class)
     ->resolver(CustomFieldResolver::class)
     ->writer(CustomWriter::class)
     ->args($customEvidence)
@@ -329,6 +325,7 @@ The fluent configuration methods return clones:
 - `collection()`
 
 Passing a representation class to `to()` is rejected. Use `as()` for representation selection and `to()` for structural targets.
+Custom traversal behavior belongs in a custom walker rather than a second per-node extension chain.
 
 ## Definition-aware scalar conversion
 

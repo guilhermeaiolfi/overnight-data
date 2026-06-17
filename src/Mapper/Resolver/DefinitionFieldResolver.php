@@ -8,6 +8,7 @@ use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\Support\DefinitionArgumentLocator;
 
 final class DefinitionFieldResolver implements FieldResolverInterface
 {
@@ -16,6 +17,11 @@ final class DefinitionFieldResolver implements FieldResolverInterface
 	private ?DefinitionInterface $definition = null;
 
 	private ?MappingException $ambiguity = null;
+
+	public function __construct(
+		private readonly ?DefinitionArgumentLocator $locator = null,
+	) {
+	}
 
 	public function resolve(MappingNode $node): ?FieldContext
 	{
@@ -49,34 +55,11 @@ final class DefinitionFieldResolver implements FieldResolverInterface
 	{
 		$this->discoveryComplete = true;
 
-		$definitions = [];
-		foreach ($node->getContext()->getArguments() as $argument) {
-			if ($argument instanceof DefinitionInterface) {
-				$definitions[] = $argument;
-			}
+		try {
+			$this->definition = ($this->locator ?? new DefinitionArgumentLocator())
+				->getDefinition($node->getContext()->getArguments());
+		} catch (MappingException $exception) {
+			$this->ambiguity = $exception;
 		}
-
-		if ($definitions === []) {
-			return;
-		}
-
-		if (count($definitions) === 1) {
-			$this->definition = $definitions[0];
-
-			return;
-		}
-
-		$names = array_map(
-			static fn (DefinitionInterface $definition): string => sprintf('"%s"', $definition->getName()),
-			$definitions,
-		);
-
-		$this->ambiguity = new MappingException(
-			sprintf(
-				'Definition field resolution is ambiguous: mapping arguments contain %d definitions %s.',
-				count($definitions),
-				implode(' and ', $names),
-			),
-		);
 	}
 }

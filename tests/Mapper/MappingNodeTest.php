@@ -8,7 +8,6 @@ use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
 use PHPUnit\Framework\TestCase;
-use stdClass;
 
 final class MappingNodeTest extends TestCase
 {
@@ -22,8 +21,6 @@ final class MappingNodeTest extends TestCase
 		self::assertSame(['id' => 2], $node->getValue());
 		self::assertSame($context, $node->getContext());
 		self::assertSame($arguments, $node->getArguments());
-		self::assertFalse($node->hasChildMapping());
-		self::assertSame($context->getArguments(), $node->getChildArguments());
 	}
 
 	public function testWithContextReturnsImmutableClone(): void
@@ -36,18 +33,5 @@ final class MappingNodeTest extends TestCase
 		self::assertNotSame($node, $updated);
 		self::assertSame('', $node->getContext()->getPath());
 		self::assertSame('author', $updated->getContext()->getPath());
-	}
-
-	public function testForChildSupportsSingularAndCollectionInstructions(): void
-	{
-		$context = new MappingContext(ConversionGateway::createDefault());
-		$node = new MappingNode('authors', [['id' => 2]], $context);
-
-		$child = $node->forChild(stdClass::class, true, ['custom']);
-
-		self::assertTrue($child->hasChildMapping());
-		self::assertSame(stdClass::class, $child->getChildTarget());
-		self::assertTrue($child->isChildCollection());
-		self::assertSame(['custom'], $child->getChildArguments());
 	}
 }

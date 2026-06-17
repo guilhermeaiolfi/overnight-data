@@ -17,10 +17,7 @@ use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\Representation\WireRepresentation;
 use ON\Data\Mapper\Resolver\DefinitionFieldResolver;
-use ON\Data\Mapper\Resolver\DefinitionRelationMappingNodeResolver;
-use ON\Data\Mapper\Resolver\ReflectionMappingNodeResolver;
 use ON\Data\Mapper\Resolver\ReflectionPropertyFieldResolver;
-use ON\Data\Mapper\Resolver\StructuralValueMappingNodeResolver;
 use ON\Data\Mapper\Walker\ArrayWalker;
 use ON\Data\Mapper\Walker\ObjectWalker;
 use ON\Data\Mapper\Writer\ArrayWriter;
@@ -28,7 +25,6 @@ use ON\Data\Mapper\Writer\ObjectWriter;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use stdClass;
-use Tests\ON\Data\Fixture\ArgumentDrivenNodeResolver;
 use Tests\ON\Data\Fixture\ComponentTestState;
 use Tests\ON\Data\Fixture\ContractDto;
 use Tests\ON\Data\Fixture\CustomMapper;
@@ -60,12 +56,10 @@ final class MapperManagerTest extends TestCase
 		$manager->register(SpyArrayWalker::class);
 		$manager->register(SpyArrayWriter::class);
 		$manager->register(SpyResolver::class);
-		$manager->register(ArgumentDrivenNodeResolver::class);
 
 		self::assertSame([SpyArrayWalker::class], $manager->getRegisteredWalkers());
 		self::assertSame([SpyArrayWriter::class], $manager->getRegisteredWriters());
 		self::assertSame([SpyResolver::class], $manager->getRegisteredResolvers());
-		self::assertSame([ArgumentDrivenNodeResolver::class], $manager->getRegisteredMappingNodeResolvers());
 		self::assertSame([], ComponentTestState::$constructed);
 	}
 
@@ -341,14 +335,6 @@ final class MapperManagerTest extends TestCase
 		self::assertSame(
 			[DefinitionFieldResolver::class, ReflectionPropertyFieldResolver::class],
 			$manager->getRegisteredResolvers(),
-		);
-		self::assertSame(
-			[
-				DefinitionRelationMappingNodeResolver::class,
-				ReflectionMappingNodeResolver::class,
-				StructuralValueMappingNodeResolver::class,
-			],
-			$manager->getRegisteredMappingNodeResolvers(),
 		);
 	}
 

@@ -7,7 +7,6 @@ namespace ON\Data\Mapper;
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Resolver\FieldResolverInterface;
-use ON\Data\Mapper\Resolver\MappingNodeResolverInterface;
 use ON\Data\Mapper\Walker\WalkerInterface;
 use ON\Data\Mapper\Writer\WriterInterface;
 
@@ -19,7 +18,6 @@ final class MappingContext
 	 * @param class-string<WalkerInterface>|null $walkerClass
 	 * @param class-string<WriterInterface>|null $writerClass
 	 * @param list<class-string<FieldResolverInterface>> $resolverClasses
-	 * @param list<class-string<MappingNodeResolverInterface>> $nodeResolverClasses
 	 * @param list<mixed> $arguments
 	 * @param array<int, true> $sourceObjectIds
 	 */
@@ -30,7 +28,6 @@ final class MappingContext
 		private ?string $walkerClass = null,
 		private ?string $writerClass = null,
 		private array $resolverClasses = [],
-		private array $nodeResolverClasses = [],
 		private array $arguments = [],
 		private bool $collection = false,
 		private string $path = '',
@@ -85,14 +82,6 @@ final class MappingContext
 	public function getResolverClasses(): array
 	{
 		return $this->resolverClasses;
-	}
-
-	/**
-	 * @return list<class-string<MappingNodeResolverInterface>>
-	 */
-	public function getNodeResolverClasses(): array
-	{
-		return $this->nodeResolverClasses;
 	}
 
 	/**
@@ -195,28 +184,6 @@ final class MappingContext
 	{
 		$clone = clone $this;
 		$clone->resolverClasses[] = $resolverClass;
-
-		return $clone;
-	}
-
-	/**
-	 * @param list<class-string<MappingNodeResolverInterface>> $resolverClasses
-	 */
-	public function withNodeResolverClasses(array $resolverClasses): self
-	{
-		$clone = clone $this;
-		$clone->nodeResolverClasses = $resolverClasses;
-
-		return $clone;
-	}
-
-	/**
-	 * @param class-string<MappingNodeResolverInterface> $resolverClass
-	 */
-	public function withAddedNodeResolverClass(string $resolverClass): self
-	{
-		$clone = clone $this;
-		$clone->nodeResolverClasses[] = $resolverClass;
 
 		return $clone;
 	}
