@@ -90,7 +90,7 @@ final class ObjectWriter implements WriterInterface
 			throw $this->wrapPropertyFailure(
 				new ReflectionClass($target),
 				$property,
-				$node->getContext(),
+				$node->getPath(),
 				$exception,
 			);
 		}
@@ -170,7 +170,7 @@ final class ObjectWriter implements WriterInterface
 	private function wrapPropertyFailure(
 		ReflectionClass $reflection,
 		ReflectionProperty $property,
-		MappingContext $context,
+		string $path,
 		Throwable $exception,
 	): MappingException {
 		return new MappingException(
@@ -178,7 +178,7 @@ final class ObjectWriter implements WriterInterface
 				"Failed mapping '%s::$%s' at path '%s'.",
 				$reflection->getName(),
 				$property->getName(),
-				$context->getPath(),
+				$path,
 			),
 			0,
 			$exception,

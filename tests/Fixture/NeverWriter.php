@@ -28,7 +28,7 @@ final class NeverWriter implements WriterInterface
 		mixed $target,
 		MappingContext $context,
 	): mixed {
-		ComponentTestState::recordRuntime(self::class, $context->getPath());
+		ComponentTestState::recordRuntime(self::class);
 
 		return $target;
 	}

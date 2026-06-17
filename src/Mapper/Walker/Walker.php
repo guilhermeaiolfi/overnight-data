@@ -10,7 +10,6 @@ use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\MapperManager;
-use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Support\DefinitionArgumentLocator;
@@ -22,81 +21,68 @@ use stdClass;
 abstract class Walker implements WalkerInterface
 {
 	final public function walk(
-		mixed $source,
-		mixed $target,
-		MappingContext $context,
+		MappingNode $node,
 		MapperManager $mappers,
 	): mixed {
-		if ($context->isCollection()) {
-			if (! is_iterable($source)) {
+		if ($node->isCollection()) {
+			if (! is_iterable($node->getValue())) {
 				throw new MappingException('Collection mapping requires an iterable source.');
 			}
 
 			$results = [];
-			foreach ($source as $key => $item) {
+			foreach ($node->getValue() as $key => $item) {
+				$targetClass = is_string($node->getTarget()) ? $node->getTarget() : null;
+
 				if (
-					is_string($target)
-					&& $target !== stdClass::class
+					$targetClass !== null
+					&& $targetClass !== stdClass::class
 					&& is_object($item)
-					&& $item instanceof $target
+					&& $item instanceof $targetClass
 				) {
 					$results[] = $item;
 
 					continue;
 				}
 
-				$results[] = $mappers->map(
-					$item,
-					$target,
-					$context
-						->forChild($item, $context->getArguments(), false, true)
-						->withPathSegment((string) $key),
+				$results[] = $mappers->mapNode(
+					$node
+						->child((string) $key, $item)
+						->forMapping($node->getTarget(), $node->getArguments(), false, true),
 				);
 			}
 
 			return $results;
 		}
 
-		$writer = $mappers->resolveWriter($target, $context);
-		$result = $writer->prepare($target, $context);
-		$levelContext = $context->enter($source, $result);
-		$fieldCoordinator = $mappers->createFieldConversionCoordinator($levelContext);
+		$writer = $mappers->resolveWriter($node->getTarget(), $node->getContext());
+		$result = $writer->prepare($node->getTarget(), $node->getContext());
+		$frame = $node->withTarget($result);
+		$fieldCoordinator = $mappers->createFieldConversionCoordinator($frame->getContext());
 
-		foreach ($this->getNodes($source, $levelContext) as $node) {
-			$node = $node->withContext($levelContext->withPathSegment((string) $node->getName()));
-			$nestedMapping = $this->getNestedMapping($node);
+		foreach ($this->getNodes($frame) as $child) {
+			$nestedNode = $this->getNestedNode($child);
 
-			if ($nestedMapping !== null && $node->getValue() !== null) {
-				$value = $mappers->map(
-					$node->getValue(),
-					$nestedMapping->getTarget(),
-					$levelContext->forChild(
-						$node->getValue(),
-						$nestedMapping->getArguments(),
-						$nestedMapping->isCollection(),
-					)->withPath($node->getContext()->getPath()),
-				);
+			if ($nestedNode !== null && $child->getValue() !== null) {
+				$nestedNode->assertNoObjectCycle();
+				$value = $mappers->mapNode($nestedNode);
 			} else {
-				$field = $fieldCoordinator->resolveField($node);
-				$value = $fieldCoordinator->convertScalar($node->getValue(), $field, $node->getContext());
+				$field = $fieldCoordinator->resolveField($child);
+				$value = $fieldCoordinator->convertScalar($child->getValue(), $field, $child);
 			}
 
-			$result = $writer->write($result, $node, $value);
-			$levelContext = $levelContext->enter($source, $result);
+			$result = $writer->write($result, $child, $value);
+			$frame = $frame->withTarget($result);
 		}
 
-		return $writer->finish($result, $levelContext);
+		return $writer->finish($result, $frame->getContext());
 	}
 
 	/**
 	 * @return iterable<MappingNode>
 	 */
-	abstract protected function getNodes(
-		mixed $source,
-		MappingContext $context,
-	): iterable;
+	abstract protected function getNodes(MappingNode $node): iterable;
 
-	private function getNestedMapping(MappingNode $node): ?NestedMapping
+	private function getNestedNode(MappingNode $node): ?MappingNode
 	{
 		if (! $this->isStructuralValue($node->getValue())) {
 			return null;
@@ -105,63 +91,72 @@ abstract class Walker implements WalkerInterface
 		$propertyFinder = new MappingNodePropertyFinder();
 		$targetProperty = $propertyFinder->findTargetProperty($node);
 		$sourceProperty = $propertyFinder->findSourceProperty($node);
-		$activeDefinition = $this->getActiveDefinition($node->getContext()->getArguments());
+		$activeDefinition = $this->getActiveDefinition($node->getArguments());
 		$relation = $this->getRelation($activeDefinition, $node);
-
-		$reflectionMapping = $this->getReflectionNestedMapping($node, $targetProperty, $sourceProperty);
-		$genericTarget = $this->getGenericChildTarget($node->getContext()->getTarget());
+		$reflectionTarget = $this->getReflectionNestedTarget($node, $targetProperty, $sourceProperty);
+		$genericTarget = $this->getGenericChildTarget($node->getParentTarget());
 
 		if ($relation !== null) {
-			$target = $reflectionMapping?->getTarget() ?? $genericTarget;
+			$target = $reflectionTarget['target'] ?? $genericTarget;
 			if ($target === null) {
 				return null;
 			}
 
-			return new NestedMapping(
+			return $node->forMapping(
 				$target,
-				$relation->getCardinality() === 'many',
 				$this->replaceDefinitionArguments(
-					$node->getContext()->getArguments(),
+					$node->getArguments(),
 					$activeDefinition,
 					$relation->getCollection(),
 				),
+				$relation->getCardinality() === 'many',
 			);
 		}
 
-		if ($reflectionMapping !== null) {
-			return $reflectionMapping;
+		if ($reflectionTarget !== null) {
+			return $node->forMapping(
+				$reflectionTarget['target'],
+				$reflectionTarget['arguments'],
+				$reflectionTarget['collection'],
+			);
 		}
 
 		if ($genericTarget === null) {
 			return null;
 		}
 
-		return new NestedMapping($genericTarget, false, $node->getContext()->getArguments());
+		return $node->forMapping($genericTarget, $node->getArguments());
 	}
 
-	private function getReflectionNestedMapping(
+	/**
+	 * @return array{target: mixed, collection: bool, arguments: list<mixed>}|null
+	 */
+	private function getReflectionNestedTarget(
 		MappingNode $node,
 		?ReflectionProperty $targetProperty,
 		?ReflectionProperty $sourceProperty,
-	): ?NestedMapping {
+	): ?array {
 		if ($targetProperty !== null) {
-			$mapping = $this->getTargetPropertyNestedMapping($node, $targetProperty);
-			if ($mapping !== null) {
-				return $mapping;
+			$target = $this->getTargetPropertyNestedTarget($node, $targetProperty);
+			if ($target !== null) {
+				return $target;
 			}
 		}
 
 		if ($sourceProperty !== null) {
-			return $this->getSourcePropertyNestedMapping($node, $sourceProperty);
+			return $this->getSourcePropertyNestedTarget($node, $sourceProperty);
 		}
 
 		return null;
 	}
 
-	private function getTargetPropertyNestedMapping(
+	/**
+	 * @return array{target: mixed, collection: bool, arguments: list<mixed>}|null
+	 */
+	private function getTargetPropertyNestedTarget(
 		MappingNode $node,
 		ReflectionProperty $property,
-	): ?NestedMapping {
+	): ?array {
 		$type = $property->getType();
 		if (! $type instanceof ReflectionNamedType) {
 			return null;
@@ -174,73 +169,77 @@ abstract class Walker implements WalkerInterface
 				return null;
 			}
 
-			return new NestedMapping(
-				$class,
-				false,
-				$this->withoutDirectDefinitions($node->getContext()->getArguments()),
-			);
+			return $this->nestedTarget($class, false, $this->withoutDirectDefinitions($node->getArguments()));
 		}
 
 		if ($type->getName() === 'array') {
 			$listTarget = $this->resolvePhpDocListTarget($property);
 			if ($listTarget !== null) {
-				return new NestedMapping(
-					$listTarget,
-					true,
-					$this->withoutDirectDefinitions($node->getContext()->getArguments()),
-				);
+				return $this->nestedTarget($listTarget, true, $this->withoutDirectDefinitions($node->getArguments()));
 			}
 
-			return new NestedMapping(
-				[],
-				false,
-				$this->withoutDirectDefinitions($node->getContext()->getArguments()),
-			);
+			return $this->nestedTarget([], false, $this->withoutDirectDefinitions($node->getArguments()));
 		}
 
 		if ($type->getName() === 'object') {
-			return new NestedMapping(
-				stdClass::class,
-				false,
-				$this->withoutDirectDefinitions($node->getContext()->getArguments()),
-			);
+			return $this->nestedTarget(stdClass::class, false, $this->withoutDirectDefinitions($node->getArguments()));
 		}
 
 		return null;
 	}
 
-	private function getSourcePropertyNestedMapping(
+	/**
+	 * @return array{target: mixed, collection: bool, arguments: list<mixed>}|null
+	 */
+	private function getSourcePropertyNestedTarget(
 		MappingNode $node,
 		ReflectionProperty $property,
-	): ?NestedMapping {
-		$genericTarget = $this->getGenericChildTarget($node->getContext()->getTarget());
+	): ?array {
+		$genericTarget = $this->getGenericChildTarget($node->getParentTarget());
 		if ($genericTarget === null) {
 			return null;
 		}
 
 		$type = $property->getType();
 		if (! $type instanceof ReflectionNamedType) {
-			return new NestedMapping($genericTarget, false, $node->getContext()->getArguments());
+			return $this->nestedTarget($genericTarget, false, $node->getArguments());
 		}
 
 		if (! $type->isBuiltin()) {
-			return new NestedMapping($genericTarget, false, $node->getContext()->getArguments());
+			return $this->nestedTarget($genericTarget, false, $node->getArguments());
 		}
 
 		if ($type->getName() === 'array') {
 			$listTarget = $this->resolvePhpDocListTarget($property);
 			if ($listTarget !== null) {
-				return new NestedMapping($genericTarget, true, $node->getContext()->getArguments());
+				return $this->nestedTarget($genericTarget, true, $node->getArguments());
 			}
 
-			return new NestedMapping($genericTarget, false, $node->getContext()->getArguments());
+			return $this->nestedTarget($genericTarget, false, $node->getArguments());
 		}
 
 		if ($type->getName() === 'object') {
-			return new NestedMapping($genericTarget, false, $node->getContext()->getArguments());
+			return $this->nestedTarget($genericTarget, false, $node->getArguments());
 		}
 
 		return null;
+	}
+
+	/**
+	 * @param list<mixed> $arguments
+	 *
+	 * @return array{target: mixed, collection: bool, arguments: list<mixed>}
+	 */
+	private function nestedTarget(
+		mixed $target,
+		bool $collection,
+		array $arguments,
+	): array {
+		return [
+			'target' => $target,
+			'collection' => $collection,
+			'arguments' => $arguments,
+		];
 	}
 
 	private function getGenericChildTarget(mixed $target): mixed

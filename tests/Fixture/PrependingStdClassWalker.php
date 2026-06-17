@@ -26,11 +26,10 @@ final class PrependingStdClassWalker extends Walker
 	}
 
 	protected function getNodes(
-		mixed $source,
-		MappingContext $context,
+		MappingNode $node,
 	): iterable {
-		ComponentTestState::recordRuntime(self::class, $context->getPath());
+		ComponentTestState::recordRuntime(self::class, $node->getPath());
 
-		yield new MappingNode('specialized', 'walker', $context);
+		yield $node->child('specialized', 'walker');
 	}
 }

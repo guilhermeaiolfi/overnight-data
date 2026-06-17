@@ -57,7 +57,7 @@ final class DefinitionFieldResolver implements FieldResolverInterface
 
 		try {
 			$this->definition = ($this->locator ?? new DefinitionArgumentLocator())
-				->getDefinition($node->getContext()->getArguments());
+				->getDefinition($node->getArguments());
 		} catch (MappingException $exception) {
 			$this->ambiguity = $exception;
 		}

@@ -35,12 +35,13 @@ final class FieldConversionCoordinator
 	public function convertScalar(
 		mixed $value,
 		?FieldContext $field,
-		MappingContext $context,
+		MappingNode $node,
 	): mixed {
 		if ($field === null) {
 			return $value;
 		}
 
+		$context = $node->getContext();
 		$from = $context->getSourceRepresentation();
 		$to = $context->getOutputRepresentation();
 
@@ -56,12 +57,12 @@ final class FieldConversionCoordinator
 				$field,
 			);
 		} catch (MappingException $exception) {
-			if ($context->getPath() === '') {
+			if ($node->getPath() === '') {
 				throw $exception;
 			}
 
 			throw new MappingException(
-				sprintf("Failed converting value at path '%s'.", $context->getPath()),
+				sprintf("Failed converting value at path '%s'.", $node->getPath()),
 				0,
 				$exception,
 			);

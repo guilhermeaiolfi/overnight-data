@@ -28,12 +28,12 @@ final class ObjectWalker extends Walker
 	}
 
 	protected function getNodes(
-		mixed $source,
-		MappingContext $context,
+		MappingNode $node,
 	): iterable {
+		$source = $node->getValue();
 		if ($source instanceof stdClass) {
 			foreach (get_object_vars($source) as $name => $value) {
-				yield new MappingNode($name, $value, $context);
+				yield $node->child($name, $value);
 			}
 
 			return;
@@ -47,7 +47,7 @@ final class ObjectWalker extends Walker
 			}
 
 			$name = $this->resolveName($property);
-			yield new MappingNode($name, $property->getValue($source), $context, $property);
+			yield $node->child($name, $property->getValue($source), $property);
 		}
 	}
 

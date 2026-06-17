@@ -28,7 +28,7 @@ final class PrependingContractWriter implements WriterInterface
 		mixed $target,
 		MappingContext $context,
 	): ContractDto {
-		ComponentTestState::recordRuntime(self::class, $context->getPath());
+		ComponentTestState::recordRuntime(self::class);
 
 		return new ContractDto();
 	}

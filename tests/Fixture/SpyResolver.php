@@ -17,7 +17,7 @@ final class SpyResolver implements FieldResolverInterface
 
 	public function resolve(MappingNode $node): ?FieldContext
 	{
-		ComponentTestState::recordRuntime(self::class, $node->getContext()->getPath());
+		ComponentTestState::recordRuntime(self::class, $node->getPath());
 
 		if ($node->getName() !== 'id') {
 			return null;

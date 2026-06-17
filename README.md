@@ -17,7 +17,7 @@ This repository currently includes:
 - registry-managed `ViewDefinition` and `ViewField` wrappers backed by the same master-array storage;
 - the `ON\Data\Key` value object for simple and composite identities;
 - the standalone FieldType, representation, and conversion gateway foundation under `ON\Data\Mapper`;
-- `MapperManager`, `MappingContext`, `MappingNode`, walkers, writers, field resolvers, mapping-node resolvers, and the fluent `map()` / `MapBuilder` entry point;
+- `MapperManager`, `MappingContext`, `MappingNode`, walkers, writers, field resolvers, and the fluent `map()` / `MapBuilder` entry point;
 - default definition-aware field resolution through `->args($definition)` for scalar conversion;
 - generic collection mapping through the same composable runtime;
 - recursive array, `stdClass`, and public-property object combinations selected independently by source walker and target writer;

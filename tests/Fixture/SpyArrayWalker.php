@@ -25,13 +25,12 @@ final class SpyArrayWalker extends Walker
 	}
 
 	protected function getNodes(
-		mixed $source,
-		MappingContext $context,
+		MappingNode $node,
 	): iterable {
-		ComponentTestState::recordRuntime(self::class, $context->getPath());
+		ComponentTestState::recordRuntime(self::class, $node->getPath());
 
-		foreach ($source as $name => $value) {
-			yield new MappingNode($name, $value, $context);
+		foreach ($node->getValue() as $name => $value) {
+			yield $node->child($name, $value);
 		}
 	}
 }

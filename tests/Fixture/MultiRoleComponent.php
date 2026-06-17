@@ -20,9 +20,7 @@ final class MultiRoleComponent implements WalkerInterface, WriterInterface
 	}
 
 	public function walk(
-		mixed $source,
-		mixed $target,
-		MappingContext $context,
+		MappingNode $node,
 		MapperManager $mappers,
 	): mixed {
 		return null;

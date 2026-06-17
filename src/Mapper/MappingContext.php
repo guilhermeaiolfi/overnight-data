@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper;
 
-use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Resolver\FieldResolverInterface;
 use ON\Data\Mapper\Walker\WalkerInterface;
@@ -19,7 +18,6 @@ final class MappingContext
 	 * @param class-string<WriterInterface>|null $writerClass
 	 * @param list<class-string<FieldResolverInterface>> $resolverClasses
 	 * @param list<mixed> $arguments
-	 * @param array<int, true> $sourceObjectIds
 	 */
 	public function __construct(
 		private readonly ConversionGateway $gateway,
@@ -30,12 +28,6 @@ final class MappingContext
 		private array $resolverClasses = [],
 		private array $arguments = [],
 		private bool $collection = false,
-		private string $path = '',
-		private mixed $source = null,
-		private mixed $target = null,
-		private mixed $parentSource = null,
-		private mixed $parentTarget = null,
-		private array $sourceObjectIds = [],
 	) {
 	}
 
@@ -95,31 +87,6 @@ final class MappingContext
 	public function isCollection(): bool
 	{
 		return $this->collection;
-	}
-
-	public function getPath(): string
-	{
-		return $this->path;
-	}
-
-	public function getSource(): mixed
-	{
-		return $this->source;
-	}
-
-	public function getTarget(): mixed
-	{
-		return $this->target;
-	}
-
-	public function getParentSource(): mixed
-	{
-		return $this->parentSource;
-	}
-
-	public function getParentTarget(): mixed
-	{
-		return $this->parentTarget;
 	}
 
 	/**
@@ -208,77 +175,6 @@ final class MappingContext
 	{
 		$clone = clone $this;
 		$clone->collection = $collection;
-
-		return $clone;
-	}
-
-	public function withPathSegment(string $segment): self
-	{
-		$clone = clone $this;
-		$clone->path = $this->path === '' ? $segment : $this->path . '.' . $segment;
-
-		return $clone;
-	}
-
-	public function withPath(string $path): self
-	{
-		$clone = clone $this;
-		$clone->path = $path;
-
-		return $clone;
-	}
-
-	public function enter(
-		mixed $source,
-		mixed $target,
-	): self {
-		$clone = clone $this;
-		$clone->source = $source;
-		$clone->target = $target;
-
-		if (is_object($source)) {
-			if (
-				$this->target !== null
-				&& is_object($this->source)
-				&& spl_object_id($this->source) === spl_object_id($source)
-			) {
-				return $clone;
-			}
-
-			$id = spl_object_id($source);
-			if (isset($clone->sourceObjectIds[$id])) {
-				$path = $clone->path === '' ? '(root)' : $clone->path;
-
-				throw new MappingException(sprintf("Detected object cycle at path '%s'.", $path));
-			}
-
-			$clone->sourceObjectIds[$id] = true;
-		}
-
-		return $clone;
-	}
-
-	/**
-	 * @param list<mixed> $arguments
-	 */
-	public function forChild(
-		mixed $source,
-		array $arguments,
-		bool $collection = false,
-		bool $preserveComponentOverrides = false,
-	): self {
-		$clone = clone $this;
-		$clone->parentSource = $this->source;
-		$clone->parentTarget = $this->target;
-		$clone->source = $source;
-		$clone->target = null;
-		$clone->arguments = $arguments;
-		$clone->collection = $collection;
-
-		if (! $preserveComponentOverrides) {
-			$clone->walkerClass = null;
-			$clone->writerClass = null;
-		}
 
 		return $clone;
 	}

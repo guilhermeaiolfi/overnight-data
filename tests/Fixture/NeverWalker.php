@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Fixture;
 
 use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Walker\Walker;
 
 final class NeverWalker extends Walker
@@ -24,10 +25,9 @@ final class NeverWalker extends Walker
 	}
 
 	protected function getNodes(
-		mixed $source,
-		MappingContext $context,
+		MappingNode $node,
 	): iterable {
-		ComponentTestState::recordRuntime(self::class, $context->getPath());
+		ComponentTestState::recordRuntime(self::class, $node->getPath());
 
 		return [];
 	}

@@ -13,12 +13,12 @@ final class MappingNodePropertyFinder
 {
 	public function findSourceProperty(MappingNode $node): ?ReflectionProperty
 	{
-		return $this->extractReflectionProperty($node->getArguments());
+		return $node->getSourceProperty();
 	}
 
 	public function findTargetProperty(MappingNode $node): ?ReflectionProperty
 	{
-		$target = $node->getContext()->getTarget();
+		$target = $node->getParentTarget();
 		if (! is_object($target) || $target instanceof stdClass) {
 			return null;
 		}
@@ -26,25 +26,5 @@ final class MappingNodePropertyFinder
 		$matcher = new ObjectPropertyMatcher(new ReflectionClass($target));
 
 		return $matcher->match($node->getName());
-	}
-
-	private function extractReflectionProperty(mixed $argument): ?ReflectionProperty
-	{
-		if ($argument instanceof ReflectionProperty) {
-			return $argument;
-		}
-
-		if (! is_array($argument)) {
-			return null;
-		}
-
-		foreach ($argument as $value) {
-			$property = $this->extractReflectionProperty($value);
-			if ($property instanceof ReflectionProperty) {
-				return $property;
-			}
-		}
-
-		return null;
 	}
 }

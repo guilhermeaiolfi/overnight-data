@@ -6,6 +6,7 @@ namespace ON\Data\Mapper\Walker;
 
 use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingNode;
 
 interface WalkerInterface
 {
@@ -14,10 +15,5 @@ interface WalkerInterface
 		MappingContext $context,
 	): bool;
 
-	public function walk(
-		mixed $source,
-		mixed $target,
-		MappingContext $context,
-		MapperManager $mappers,
-	): mixed;
+	public function walk(MappingNode $node, MapperManager $mappers): mixed;
 }

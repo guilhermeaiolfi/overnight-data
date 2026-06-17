@@ -257,7 +257,7 @@ final class ConversionGatewayTest extends TestCase
 		self::assertSame($before, $registry->all());
 	}
 
-	public function testFieldContextFromFieldPreservesFieldReferenceAndUsesNoPhaseOneMetadata(): void
+	public function testFieldContextFromFieldRetainsOnlyNameTypeAndNullability(): void
 	{
 		$registry = new Registry();
 		$field = $registry->collection('users')->field('id', 'int')->nullable(true)->description('ignored in phase 1');
@@ -265,10 +265,9 @@ final class ConversionGatewayTest extends TestCase
 
 		$context = FieldContext::fromField($field);
 
-		self::assertTrue($context->hasField());
-		self::assertSame($field, $context->getField());
-		self::assertNull($context->getMetadata('description'));
-		self::assertSame('fallback', $context->getMetadata('missing', 'fallback'));
+		self::assertSame('id', $context->getName());
+		self::assertSame('int', $context->getType());
+		self::assertTrue($context->isNullable());
 		self::assertSame($before, $registry->all());
 	}
 

@@ -148,8 +148,8 @@ final class RecursiveMappingTest extends TestCase
 			],
 			[
 				'path' => 'author',
-				'hasParentSource' => false,
-				'hasParentTarget' => false,
+				'hasParentSource' => true,
+				'hasParentTarget' => true,
 				'valueType' => 'array',
 			],
 		], ParentAwareWriter::$writes);

@@ -28,7 +28,7 @@ final class SpyArrayWriter implements WriterInterface
 		mixed $target,
 		MappingContext $context,
 	): array {
-		ComponentTestState::recordRuntime(self::class, $context->getPath());
+		ComponentTestState::recordRuntime(self::class);
 
 		return is_array($target) ? $target : [];
 	}

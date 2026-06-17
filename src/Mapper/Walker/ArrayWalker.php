@@ -24,27 +24,27 @@ final class ArrayWalker extends Walker
 	}
 
 	protected function getNodes(
-		mixed $source,
-		MappingContext $context,
+		MappingNode $node,
 	): iterable {
+		$source = $node->getValue();
 		if (! is_array($source)) {
 			throw new MappingException('ArrayWalker can only enumerate array sources.');
 		}
 
-		$normalized = $this->shouldExpandDottedKeys($context)
+		$normalized = $this->shouldExpandDottedKeys($node)
 			? ($this->pathExpander ?? new ArrayPathExpander())->expand($source)
 			: $source;
 
 		foreach ($normalized as $name => $value) {
-			yield new MappingNode($name, $value, $context);
+			yield $node->child($name, $value);
 		}
 	}
 
-	private function shouldExpandDottedKeys(MappingContext $context): bool
+	private function shouldExpandDottedKeys(MappingNode $node): bool
 	{
 		$options = [];
 
-		foreach ($context->getArguments() as $argument) {
+		foreach ($node->getArguments() as $argument) {
 			if ($argument instanceof ArrayWalkerOptions) {
 				$options[] = $argument;
 			}

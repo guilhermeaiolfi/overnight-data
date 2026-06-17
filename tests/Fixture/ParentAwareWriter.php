@@ -40,9 +40,9 @@ final class ParentAwareWriter implements WriterInterface
 		mixed $value,
 	): array {
 		self::$writes[] = [
-			'path' => $node->getContext()->getPath(),
-			'hasParentSource' => $node->getContext()->getParentSource() !== null,
-			'hasParentTarget' => $node->getContext()->getParentTarget() !== null,
+			'path' => $node->getPath(),
+			'hasParentSource' => $node->getParentSource() !== null,
+			'hasParentTarget' => $node->getParentTarget() !== null,
 			'valueType' => is_object($value) ? $value::class : get_debug_type($value),
 		];
 

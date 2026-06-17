@@ -46,8 +46,7 @@ final class DefinitionFieldResolverTest extends TestCase
 		self::assertSame('id', $resolved->getName());
 		self::assertSame('int', $resolved->getType());
 		self::assertTrue($resolved->isNullable());
-		self::assertTrue($resolved->hasField());
-		self::assertSame($field, $resolved->getField());
+		self::assertSame('id', $field->getName());
 	}
 
 	public function testResolvesViewDefinitionFieldsToo(): void
@@ -60,7 +59,7 @@ final class DefinitionFieldResolverTest extends TestCase
 
 		self::assertSame('title', $resolved?->getName());
 		self::assertSame('string', $resolved?->getType());
-		self::assertSame($field, $resolved?->getField());
+		self::assertSame('title', $field->getName());
 	}
 
 	public function testMissingFieldReturnsNull(): void
@@ -124,11 +123,7 @@ final class DefinitionFieldResolverTest extends TestCase
 
 	private function node(string|int $name, mixed $value, array $arguments = []): MappingNode
 	{
-		return new MappingNode(
-			$name,
-			$value,
-			$this->context()->withArguments($arguments)->withPathSegment((string) $name),
-		);
+		return MappingNode::root([], [], $this->context(), $arguments)->child($name, $value);
 	}
 
 	private function context(): MappingContext

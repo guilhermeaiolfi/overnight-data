@@ -43,9 +43,9 @@ use ON\Data\Mapper\FieldContext;
 $field = FieldContext::fromField($collection->getField('id'));
 ```
 
-The context carries the field name, type, nullability flag, and the original field when available.
+The context carries only the field name, type, and nullability flag.
 
-`FieldContext::fromField()` keeps an empty metadata array in the current implementation and preserves the live optional field reference through `getField()` and `hasField()`.
+`FieldContext::fromField()` reads a definition field and copies only those three conversion facts. It does not retain the original `FieldInterface` wrapper or a generic metadata snapshot.
 
 ## Built-in FieldTypes
 
@@ -252,12 +252,27 @@ Explicit per-call fluent resolvers still run before every registered default res
 - an explicit walker class
 - an explicit writer class
 - explicit resolver classes
-- explicit mapping-node resolver classes
 - mapping arguments
 - collection mode
-- current path
-- current source and prepared runtime target
-- parent source and parent target
+
+`MappingContext` is mapping-wide configuration only. It no longer stores traversal path, current source, prepared target, parent scope, or cycle state.
+
+## MappingNode
+
+`ON\Data\Mapper\MappingNode` is the current traversal frame.
+
+It carries:
+
+- the current node name, with the root using no name
+- the current source value
+- the requested or prepared structural target for that node
+- the active `MappingContext`
+- the parent node when one exists
+- the effective mapping arguments
+- the current collection mode
+- walker-provided source `ReflectionProperty` evidence when available
+
+Derived data such as path, parent source, parent target, and ancestor-chain cycle inspection now comes from the node tree rather than `MappingContext`.
 
 ## Fluent map()
 
@@ -500,16 +515,18 @@ $result = map($source)->to(TargetPost::class);
 
 ## Parent and cycle context
 
-`MappingContext` now exposes:
+`MappingNode` now exposes or derives:
 
-- `getSource()`
+- `getValue()`
 - `getTarget()`
+- `getParent()`
+- `getPath()`
 - `getParentSource()`
 - `getParentTarget()`
 
-Writers and custom node resolvers can inspect both the current and parent scope. Parent object targets are the same live object instance; parent array targets are value snapshots only.
+Writers and resolver helpers can inspect both the current and parent scope through the node tree. Parent object targets are the same live object instance; parent array targets are value snapshots only.
 
-Recursive mapping also includes mapping-local object cycle protection. Re-encountering the same source object in the current ancestor chain throws `MappingException` with the current path.
+Recursive mapping also includes mapping-local object cycle protection. Re-encountering the same source object in the current ancestor chain throws `MappingException` with the current path. Sibling branches may reuse the same object without being treated as a cycle.
 
 ## Representation-aware primitive conversion
 

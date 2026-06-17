@@ -18,11 +18,10 @@ final class OtherArrayWalker extends Walker
 	}
 
 	protected function getNodes(
-		mixed $source,
-		MappingContext $context,
+		MappingNode $node,
 	): iterable {
-		foreach ($source as $name => $value) {
-			yield new MappingNode($name, $value, $context);
+		foreach ($node->getValue() as $name => $value) {
+			yield $node->child($name, $value);
 		}
 	}
 }
