@@ -6,94 +6,28 @@ namespace ON\Data\Mapper;
 
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\Representation\PhpRepresentation;
+use ON\Data\Mapper\Resolver\FieldResolverInterface;
 
 final class FieldConversionCoordinator
 {
 	/**
-	 * @var list<FieldContextResolverInterface>
-	 */
-	private array $resolvers = [];
-
-	/**
-	 * @param list<FieldContextResolverInterface> $resolvers
+	 * @param list<FieldResolverInterface> $resolvers
 	 */
 	public function __construct(
 		private readonly ConversionGateway $gateway,
-		array $resolvers = [],
+		private readonly array $resolvers,
 	) {
-		foreach ($resolvers as $resolver) {
-			$this->addResolver($resolver);
-		}
 	}
 
-	public function addResolver(
-		FieldContextResolverInterface $resolver,
-	): self {
-		$this->resolvers[] = $resolver;
-
-		return $this;
-	}
-
-	public function convertInbound(
+	public function resolveField(
+		MappingContext $mapping,
+		string $path,
+		string|int $fieldName,
 		mixed $value,
-		mixed $fieldSource,
-		MappingContext $context,
-	): mixed {
-		$representation = $context->getSourceRepresentation();
-		if ($representation === null) {
-			return $value;
-		}
-
-		$field = $this->resolveFieldContext($fieldSource, $context);
-		if ($field === null) {
-			return $value;
-		}
-
-		try {
-			return $this->gateway->to(
-				$representation,
-				$value,
-				PhpRepresentation::class,
-				$field,
-			);
-		} catch (MappingException $exception) {
-			throw $this->wrapConversionFailure($context, $exception);
-		}
-	}
-
-	public function convertOutbound(
-		mixed $value,
-		mixed $fieldSource,
-		MappingContext $context,
-	): mixed {
-		$representation = $context->getOutputRepresentation();
-		if ($representation === null) {
-			return $value;
-		}
-
-		$field = $this->resolveFieldContext($fieldSource, $context);
-		if ($field === null) {
-			return $value;
-		}
-
-		try {
-			return $this->gateway->to(
-				PhpRepresentation::class,
-				$value,
-				$representation,
-				$field,
-			);
-		} catch (MappingException $exception) {
-			throw $this->wrapConversionFailure($context, $exception);
-		}
-	}
-
-	private function resolveFieldContext(
-		mixed $fieldSource,
-		MappingContext $context,
+		mixed $extra = null,
 	): ?FieldContext {
 		foreach ($this->resolvers as $resolver) {
-			$field = $resolver->resolve($fieldSource, $context);
+			$field = $resolver->resolve($mapping, $path, $fieldName, $value, $extra);
 			if ($field !== null) {
 				return $field;
 			}
@@ -102,18 +36,39 @@ final class FieldConversionCoordinator
 		return null;
 	}
 
-	private function wrapConversionFailure(
-		MappingContext $context,
-		MappingException $exception,
-	): MappingException {
-		if ($context->getPath() === '') {
-			return $exception;
+	public function convertScalar(
+		mixed $value,
+		?FieldContext $field,
+		MappingContext $mapping,
+	): mixed {
+		if ($field === null) {
+			return $value;
 		}
 
-		return new MappingException(
-			sprintf("Failed converting value at path '%s'.", $context->getPath()),
-			0,
-			$exception,
-		);
+		$from = $mapping->getSourceRepresentation();
+		$to = $mapping->getOutputRepresentation();
+
+		if ($from === null && $to === null) {
+			return $value;
+		}
+
+		try {
+			return $this->gateway->to(
+				$from ?? PhpRepresentation::class,
+				$value,
+				$to ?? PhpRepresentation::class,
+				$field,
+			);
+		} catch (MappingException $exception) {
+			if ($mapping->getPath() === '') {
+				throw $exception;
+			}
+
+			throw new MappingException(
+				sprintf("Failed converting value at path '%s'.", $mapping->getPath()),
+				0,
+				$exception,
+			);
+		}
 	}
 }

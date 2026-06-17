@@ -5,31 +5,52 @@ declare(strict_types=1);
 namespace ON\Data\Mapper;
 
 use Closure;
-use ON\Data\Mapper\Exception\DuplicateMapperRegistrationException;
-use ON\Data\Mapper\Exception\IncompatibleMapperException;
-use ON\Data\Mapper\Exception\InvalidMapperClassException;
-use ON\Data\Mapper\Exception\MapperConfigurationException;
-use ON\Data\Mapper\Exception\MapperNotFoundException;
+use ON\Data\Mapper\Exception\DuplicateMapperComponentRegistrationException;
+use ON\Data\Mapper\Exception\IncompatibleWalkerException;
+use ON\Data\Mapper\Exception\IncompatibleWriterException;
+use ON\Data\Mapper\Exception\InvalidMapperComponentException;
+use ON\Data\Mapper\Exception\MapperComponentConfigurationException;
 use ON\Data\Mapper\Exception\MappingException;
-use ON\Data\Mapper\Exception\NoMapperFoundException;
+use ON\Data\Mapper\Exception\NoWalkerFoundException;
+use ON\Data\Mapper\Exception\NoWriterFoundException;
+use ON\Data\Mapper\Resolver\FieldResolverInterface;
+use ON\Data\Mapper\Resolver\ReflectionPropertyFieldResolver;
+use ON\Data\Mapper\Walker\ArrayWalker;
+use ON\Data\Mapper\Walker\ObjectWalker;
+use ON\Data\Mapper\Walker\WalkerInterface;
+use ON\Data\Mapper\Writer\ArrayWriter;
+use ON\Data\Mapper\Writer\ObjectWriter;
+use ON\Data\Mapper\Writer\WriterInterface;
 
 final class MapperManager
 {
 	/**
-	 * @var list<class-string<MapperInterface>>
+	 * @var list<class-string<WalkerInterface>>
 	 */
-	private array $mappers = [];
+	private array $walkers = [];
 
 	/**
-	 * @var array<class-string<MapperInterface>, MapperInterface>
+	 * @var list<class-string<WriterInterface>>
 	 */
-	private array $instances = [];
+	private array $writers = [];
 
 	/**
-	 * @param null|Closure(
-	 *     class-string<MapperInterface>,
-	 *     ConversionGateway
-	 * ): MapperInterface $constructor
+	 * @var list<class-string<FieldResolverInterface>>
+	 */
+	private array $resolvers = [];
+
+	/**
+	 * @var array<class-string<WalkerInterface>, WalkerInterface>
+	 */
+	private array $walkerInstances = [];
+
+	/**
+	 * @var array<class-string<WriterInterface>, WriterInterface>
+	 */
+	private array $writerInstances = [];
+
+	/**
+	 * @param null|Closure(string, ConversionGateway): object $constructor
 	 */
 	public function __construct(
 		private readonly ConversionGateway $gateway,
@@ -38,66 +59,77 @@ final class MapperManager
 	}
 
 	/**
-	 * @param null|Closure(
-	 *     class-string<MapperInterface>,
-	 *     ConversionGateway
-	 * ): MapperInterface $constructor
+	 * @param null|Closure(string, ConversionGateway): object $constructor
 	 */
 	public static function createDefault(
 		ConversionGateway $gateway,
 		?Closure $constructor = null,
 	): self {
 		$manager = new self($gateway, $constructor);
-		$manager->register(ArrayToStdClassMapper::class);
-		$manager->register(StdClassToArrayMapper::class);
-		$manager->register(ArrayToObjectMapper::class);
-		$manager->register(ObjectToArrayMapper::class);
+		$manager->register(ArrayWalker::class);
+		$manager->register(ObjectWalker::class);
+		$manager->register(ArrayWriter::class);
+		$manager->register(ObjectWriter::class);
+		$manager->register(ReflectionPropertyFieldResolver::class);
 
 		return $manager;
 	}
 
-	/**
-	 * @param class-string<MapperInterface> $mapper
-	 */
-	public function register(string $mapper): self
+	public function register(string $component): self
 	{
-		$this->assertValidMapperClass($mapper);
+		$role = $this->detectRole($component);
+		$bucket = &$this->bucketFor($role);
 
-		if ($this->has($mapper)) {
-			throw new DuplicateMapperRegistrationException(
-				sprintf("Mapper '%s' is already registered.", $mapper)
+		if (in_array($component, $bucket, true)) {
+			throw new DuplicateMapperComponentRegistrationException(
+				sprintf("Mapper component '%s' is already registered.", $component),
 			);
 		}
 
-		$this->mappers[] = $mapper;
+		$bucket[] = $component;
 
 		return $this;
 	}
 
-	public function has(string $mapper): bool
+	public function has(string $component): bool
 	{
-		return in_array($mapper, $this->mappers, true);
+		return in_array($component, $this->walkers, true)
+			|| in_array($component, $this->writers, true)
+			|| in_array($component, $this->resolvers, true);
 	}
 
 	/**
-	 * @return list<class-string<MapperInterface>>
+	 * @return list<class-string<WalkerInterface>>
 	 */
-	public function getRegisteredMappers(): array
+	public function getRegisteredWalkers(): array
 	{
-		return $this->mappers;
+		return $this->walkers;
 	}
 
 	/**
-	 * @param null|Closure(
-	 *     class-string<MapperInterface>,
-	 *     ConversionGateway
-	 * ): MapperInterface $constructor
+	 * @return list<class-string<WriterInterface>>
+	 */
+	public function getRegisteredWriters(): array
+	{
+		return $this->writers;
+	}
+
+	/**
+	 * @return list<class-string<FieldResolverInterface>>
+	 */
+	public function getRegisteredResolvers(): array
+	{
+		return $this->resolvers;
+	}
+
+	/**
+	 * @param null|Closure(string, ConversionGateway): object $constructor
 	 */
 	public function setConstructor(?Closure $constructor): self
 	{
-		if ($this->instances !== []) {
-			throw new MapperConfigurationException(
-				'Cannot change the mapper constructor after mapper instances have been created.'
+		if ($this->walkerInstances !== [] || $this->writerInstances !== []) {
+			throw new MapperComponentConfigurationException(
+				'Cannot change the mapper component constructor after reusable component instances have been created.',
 			);
 		}
 
@@ -115,101 +147,172 @@ final class MapperManager
 			return $this->mapCollection($source, $target, $context);
 		}
 
-		$mapperClass = $context->getMapperClass();
-		if ($mapperClass !== null) {
-			if (! $this->has($mapperClass)) {
-				throw new MapperNotFoundException(
-					sprintf("Mapper '%s' is not registered.", $mapperClass)
+		$walker = $this->resolveWalker($source, $context);
+		$writer = $this->resolveWriter($target, $context);
+		$result = $writer->prepare($target, $context);
+		$runtimeContext = $context->withTarget($result);
+		$coordinator = new FieldConversionCoordinator(
+			$context->getGateway(),
+			$this->createResolverChain($runtimeContext),
+		);
+
+		$walker->walk(
+			$source,
+			$runtimeContext,
+			function (string|int $name, mixed $value, mixed $walkerArguments = null) use (
+				$writer,
+				$coordinator,
+				&$result,
+				$runtimeContext,
+			): void {
+				$fieldContext = $runtimeContext->withPathSegment((string) $name);
+				$field = $coordinator->resolveField(
+					$runtimeContext,
+					$fieldContext->getPath(),
+					$name,
+					$value,
+					$walkerArguments,
 				);
-			}
+				$converted = $coordinator->convertScalar($value, $field, $fieldContext);
 
-			$context = $this->applyDefaultRepresentations($mapperClass, $context);
-
-			if (! $mapperClass::canMap($source, $target, $context)) {
-				throw new IncompatibleMapperException(
-					sprintf("Mapper '%s' cannot map the given source and target.", $mapperClass)
+				$result = $writer->write(
+					$result,
+					$name,
+					$converted,
+					$fieldContext,
+					$walkerArguments,
 				);
-			}
+			},
+		);
 
-			return $this->getMapper($mapperClass)->map($source, $target, $context);
-		}
-
-		foreach ($this->mappers as $mapperClass) {
-			$candidateContext = $this->applyDefaultRepresentations($mapperClass, $context);
-			if (! $mapperClass::canMap($source, $target, $candidateContext)) {
-				continue;
-			}
-
-			return $this->getMapper($mapperClass)->map($source, $target, $candidateContext);
-		}
-
-		throw new NoMapperFoundException('No registered mapper can handle the requested mapping.');
-	}
-
-	/**
-	 * @param class-string<MapperInterface> $mapper
-	 */
-	public function getMapper(string $mapper): MapperInterface
-	{
-		if (! $this->has($mapper)) {
-			throw new MapperNotFoundException(
-				sprintf("Mapper '%s' is not registered.", $mapper)
-			);
-		}
-
-		if (isset($this->instances[$mapper])) {
-			return $this->instances[$mapper];
-		}
-
-		$instance = $this->constructor !== null
-			? ($this->constructor)($mapper, $this->gateway)
-			: new $mapper($this->gateway);
-
-		if (! $instance instanceof MapperInterface || ! $instance instanceof $mapper) {
-			throw new MapperConfigurationException(
-				sprintf("Constructor did not return a valid '%s' instance.", $mapper)
-			);
-		}
-
-		return $this->instances[$mapper] = $instance;
-	}
-
-	public function warmUp(): void
-	{
-		foreach ($this->mappers as $mapper) {
-			$this->getMapper($mapper);
-		}
+		return $writer->finish($result, $runtimeContext->withTarget($result));
 	}
 
 	public function clear(): void
 	{
-		$this->instances = [];
+		$this->walkerInstances = [];
+		$this->writerInstances = [];
 	}
 
-	private function assertValidMapperClass(string $mapper): void
+	public function warmUp(): void
 	{
-		if (! class_exists($mapper) || ! is_a($mapper, MapperInterface::class, true)) {
-			throw new InvalidMapperClassException(
-				sprintf("Mapper '%s' must be a valid class implementing %s.", $mapper, MapperInterface::class)
-			);
+		foreach ($this->walkers as $walker) {
+			$this->getWalker($walker);
+		}
+
+		foreach ($this->writers as $writer) {
+			$this->getWriter($writer);
 		}
 	}
 
-	private function applyDefaultRepresentations(
-		string $mapperClass,
+	/**
+	 * @param class-string<WalkerInterface> $walker
+	 */
+	public function getWalker(string $walker): WalkerInterface
+	{
+		if (! isset($this->walkerInstances[$walker])) {
+			$instance = $this->construct($walker);
+			if (! $instance instanceof WalkerInterface) {
+				throw new MapperComponentConfigurationException(
+					sprintf("Constructor did not return a valid walker '%s'.", $walker),
+				);
+			}
+
+			$this->walkerInstances[$walker] = $instance;
+		}
+
+		return $this->walkerInstances[$walker];
+	}
+
+	/**
+	 * @param class-string<WriterInterface> $writer
+	 */
+	public function getWriter(string $writer): WriterInterface
+	{
+		if (! isset($this->writerInstances[$writer])) {
+			$instance = $this->construct($writer);
+			if (! $instance instanceof WriterInterface) {
+				throw new MapperComponentConfigurationException(
+					sprintf("Constructor did not return a valid writer '%s'.", $writer),
+				);
+			}
+
+			$this->writerInstances[$writer] = $instance;
+		}
+
+		return $this->writerInstances[$writer];
+	}
+
+	/**
+	 * @return list<FieldResolverInterface>
+	 */
+	public function createResolverChain(MappingContext $context): array
+	{
+		$chain = [];
+
+		foreach ($context->getResolverClasses() as $resolverClass) {
+			$chain[] = $this->constructResolver($resolverClass);
+		}
+
+		foreach ($this->resolvers as $resolverClass) {
+			$chain[] = $this->constructResolver($resolverClass);
+		}
+
+		return $chain;
+	}
+
+	public function resolveWalker(
+		mixed $source,
 		MappingContext $context,
-	): MappingContext {
-		$defaults = $mapperClass::defaultRepresentations();
+	): WalkerInterface {
+		$walkerClass = $context->getWalkerClass();
+		if ($walkerClass !== null) {
+			$this->assertRoleOrThrow($walkerClass, WalkerInterface::class);
+			if (! $walkerClass::canWalk($source, $context)) {
+				throw new IncompatibleWalkerException(
+					sprintf("Walker '%s' cannot walk the given source.", $walkerClass),
+				);
+			}
 
-		if ($context->getSourceRepresentation() === null && isset($defaults['from'])) {
-			$context = $context->withSourceRepresentation($defaults['from']);
+			return $this->has($walkerClass)
+				? $this->getWalker($walkerClass)
+				: $this->constructWalker($walkerClass);
 		}
 
-		if ($context->getOutputRepresentation() === null && isset($defaults['as'])) {
-			$context = $context->withOutputRepresentation($defaults['as']);
+		foreach ($this->walkers as $candidate) {
+			if ($candidate::canWalk($source, $context)) {
+				return $this->getWalker($candidate);
+			}
 		}
 
-		return $context;
+		throw new NoWalkerFoundException('No registered walker can handle the requested source.');
+	}
+
+	public function resolveWriter(
+		mixed $target,
+		MappingContext $context,
+	): WriterInterface {
+		$writerClass = $context->getWriterClass();
+		if ($writerClass !== null) {
+			$this->assertRoleOrThrow($writerClass, WriterInterface::class);
+			if (! $writerClass::canWrite($target, $context)) {
+				throw new IncompatibleWriterException(
+					sprintf("Writer '%s' cannot write the given target.", $writerClass),
+				);
+			}
+
+			return $this->has($writerClass)
+				? $this->getWriter($writerClass)
+				: $this->constructWriter($writerClass);
+		}
+
+		foreach ($this->writers as $candidate) {
+			if ($candidate::canWrite($target, $context)) {
+				return $this->getWriter($candidate);
+			}
+		}
+
+		throw new NoWriterFoundException('No registered writer can handle the requested target.');
 	}
 
 	private function mapCollection(
@@ -222,16 +325,130 @@ final class MapperManager
 		}
 
 		$results = [];
-		$childContext = $context->withCollection(false);
+		$itemContext = $context->withCollection(false);
 
 		foreach ($source as $key => $item) {
 			$results[] = $this->map(
 				$item,
 				$target,
-				$childContext->withPathSegment((string) $key),
+				$itemContext->withPathSegment((string) $key),
 			);
 		}
 
 		return $results;
+	}
+
+	private function construct(string $component): object
+	{
+		return $this->constructor !== null
+			? ($this->constructor)($component, $this->gateway)
+			: new $component();
+	}
+
+	/**
+	 * @param class-string<WalkerInterface> $walkerClass
+	 */
+	private function constructWalker(string $walkerClass): WalkerInterface
+	{
+		$instance = $this->construct($walkerClass);
+		if (! $instance instanceof WalkerInterface) {
+			throw new MapperComponentConfigurationException(
+				sprintf("Constructor did not return a valid walker '%s'.", $walkerClass),
+			);
+		}
+
+		return $instance;
+	}
+
+	/**
+	 * @param class-string<WriterInterface> $writerClass
+	 */
+	private function constructWriter(string $writerClass): WriterInterface
+	{
+		$instance = $this->construct($writerClass);
+		if (! $instance instanceof WriterInterface) {
+			throw new MapperComponentConfigurationException(
+				sprintf("Constructor did not return a valid writer '%s'.", $writerClass),
+			);
+		}
+
+		return $instance;
+	}
+
+	/**
+	 * @param class-string<FieldResolverInterface> $resolverClass
+	 */
+	private function constructResolver(string $resolverClass): FieldResolverInterface
+	{
+		$this->assertRoleOrThrow($resolverClass, FieldResolverInterface::class);
+		$instance = $this->construct($resolverClass);
+		if (! $instance instanceof FieldResolverInterface) {
+			throw new MapperComponentConfigurationException(
+				sprintf("Constructor did not return a valid resolver '%s'.", $resolverClass),
+			);
+		}
+
+		return $instance;
+	}
+
+	private function detectRole(string $component): string
+	{
+		if (! class_exists($component)) {
+			throw new InvalidMapperComponentException(
+				sprintf("Mapper component '%s' must be an existing class.", $component),
+			);
+		}
+
+		$roles = [];
+		if (is_a($component, WalkerInterface::class, true)) {
+			$roles[] = 'walker';
+		}
+
+		if (is_a($component, WriterInterface::class, true)) {
+			$roles[] = 'writer';
+		}
+
+		if (is_a($component, FieldResolverInterface::class, true)) {
+			$roles[] = 'resolver';
+		}
+
+		if (count($roles) !== 1) {
+			throw new InvalidMapperComponentException(
+				sprintf(
+					"Mapper component '%s' must implement exactly one of %s, %s, or %s.",
+					$component,
+					WalkerInterface::class,
+					WriterInterface::class,
+					FieldResolverInterface::class,
+				),
+			);
+		}
+
+		return $roles[0];
+	}
+
+	/**
+	 * @return array<int, string>
+	 */
+	private function &bucketFor(string $role): array
+	{
+		if ($role === 'walker') {
+			return $this->walkers;
+		}
+
+		if ($role === 'writer') {
+			return $this->writers;
+		}
+
+		return $this->resolvers;
+	}
+
+	private function assertRoleOrThrow(string $component, string $requiredInterface): void
+	{
+		if (! class_exists($component) || ! is_a($component, $requiredInterface, true)) {
+			throw new InvalidMapperComponentException(
+				sprintf("Mapper component '%s' must implement %s.", $component, $requiredInterface),
+			);
+		}
 	}
 }

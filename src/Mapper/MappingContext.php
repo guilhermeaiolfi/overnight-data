@@ -5,23 +5,31 @@ declare(strict_types=1);
 namespace ON\Data\Mapper;
 
 use ON\Data\Mapper\Representation\RepresentationInterface;
+use ON\Data\Mapper\Resolver\FieldResolverInterface;
+use ON\Data\Mapper\Walker\WalkerInterface;
+use ON\Data\Mapper\Writer\WriterInterface;
 
 final class MappingContext
 {
 	/**
 	 * @param class-string<RepresentationInterface>|null $sourceRepresentation
 	 * @param class-string<RepresentationInterface>|null $outputRepresentation
-	 * @param class-string<MapperInterface>|null $mapperClass
+	 * @param class-string<WalkerInterface>|null $walkerClass
+	 * @param class-string<WriterInterface>|null $writerClass
+	 * @param list<class-string<FieldResolverInterface>> $resolverClasses
 	 * @param list<mixed> $arguments
 	 */
 	public function __construct(
 		private readonly ConversionGateway $gateway,
 		private ?string $sourceRepresentation = null,
 		private ?string $outputRepresentation = null,
-		private ?string $mapperClass = null,
+		private ?string $walkerClass = null,
+		private ?string $writerClass = null,
+		private array $resolverClasses = [],
 		private array $arguments = [],
 		private bool $collection = false,
 		private string $path = '',
+		private mixed $target = null,
 	) {
 	}
 
@@ -47,11 +55,27 @@ final class MappingContext
 	}
 
 	/**
-	 * @return class-string<MapperInterface>|null
+	 * @return class-string<WalkerInterface>|null
 	 */
-	public function getMapperClass(): ?string
+	public function getWalkerClass(): ?string
 	{
-		return $this->mapperClass;
+		return $this->walkerClass;
+	}
+
+	/**
+	 * @return class-string<WriterInterface>|null
+	 */
+	public function getWriterClass(): ?string
+	{
+		return $this->writerClass;
+	}
+
+	/**
+	 * @return list<class-string<FieldResolverInterface>>
+	 */
+	public function getResolverClasses(): array
+	{
+		return $this->resolverClasses;
 	}
 
 	/**
@@ -70,6 +94,11 @@ final class MappingContext
 	public function getPath(): string
 	{
 		return $this->path;
+	}
+
+	public function getTarget(): mixed
+	{
+		return $this->target;
 	}
 
 	/**
@@ -95,14 +124,45 @@ final class MappingContext
 	}
 
 	/**
-	 * @param class-string<MapperInterface>|null $mapper
-	 * @param list<mixed> $arguments
+	 * @param class-string<WalkerInterface>|null $walker
 	 */
-	public function withMapperClass(?string $mapper, array $arguments = []): self
+	public function withWalkerClass(?string $walker): self
 	{
 		$clone = clone $this;
-		$clone->mapperClass = $mapper;
-		$clone->arguments = $arguments;
+		$clone->walkerClass = $walker;
+
+		return $clone;
+	}
+
+	/**
+	 * @param class-string<WriterInterface>|null $writer
+	 */
+	public function withWriterClass(?string $writer): self
+	{
+		$clone = clone $this;
+		$clone->writerClass = $writer;
+
+		return $clone;
+	}
+
+	/**
+	 * @param list<class-string<FieldResolverInterface>> $resolverClasses
+	 */
+	public function withResolverClasses(array $resolverClasses): self
+	{
+		$clone = clone $this;
+		$clone->resolverClasses = $resolverClasses;
+
+		return $clone;
+	}
+
+	/**
+	 * @param class-string<FieldResolverInterface> $resolverClass
+	 */
+	public function withAddedResolverClass(string $resolverClass): self
+	{
+		$clone = clone $this;
+		$clone->resolverClasses[] = $resolverClass;
 
 		return $clone;
 	}
@@ -135,6 +195,14 @@ final class MappingContext
 	{
 		$clone = clone $this;
 		$clone->path = $this->path === '' ? $segment : $this->path . '.' . $segment;
+
+		return $clone;
+	}
+
+	public function withTarget(mixed $target): self
+	{
+		$clone = clone $this;
+		$clone->target = $target;
 
 		return $clone;
 	}

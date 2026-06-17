@@ -2,36 +2,44 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\Mapper;
+namespace ON\Data\Mapper\Walker;
 
 use BackedEnum;
+use Closure;
 use DateTimeInterface;
 use ON\Data\Mapper\Attribute\Hidden;
 use ON\Data\Mapper\Attribute\MapTo;
+use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\Representation\RepresentationInterface;
 use ReflectionObject;
 use ReflectionProperty;
 use stdClass;
 
-final class ObjectToArrayMapper extends Mapper
+final class ObjectWalker implements WalkerInterface
 {
-	public static function canMap(
+	public static function canWalk(
 		mixed $source,
-		mixed $target,
 		MappingContext $context,
 	): bool {
 		return is_object($source)
-			&& ! $source instanceof stdClass
 			&& ! $source instanceof DateTimeInterface
 			&& ! $source instanceof BackedEnum
-			&& is_array($target);
+			&& ! $source instanceof RepresentationInterface;
 	}
 
-	public function map(
+	public function walk(
 		mixed $source,
-		mixed $target,
 		MappingContext $context,
-	): array {
-		$result = [];
+		Closure $visit,
+	): void {
+		if ($source instanceof stdClass) {
+			foreach (get_object_vars($source) as $name => $value) {
+				$visit($name, $value, null);
+			}
+
+			return;
+		}
+
 		$reflection = new ReflectionObject($source);
 
 		foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
@@ -39,13 +47,9 @@ final class ObjectToArrayMapper extends Mapper
 				continue;
 			}
 
-			$key = $this->resolveTargetKey($property);
-			$value = $this->convertOutbound($property->getValue($source), $property, $context->withPathSegment($property->getName()));
-
-			$result[$key] = $value;
+			$name = $this->resolveName($property);
+			$visit($name, $property->getValue($source), $property);
 		}
-
-		return $result;
 	}
 
 	private function isHidden(ReflectionProperty $property): bool
@@ -53,7 +57,7 @@ final class ObjectToArrayMapper extends Mapper
 		return $property->getAttributes(Hidden::class) !== [];
 	}
 
-	private function resolveTargetKey(ReflectionProperty $property): string
+	private function resolveName(ReflectionProperty $property): string
 	{
 		$attributes = $property->getAttributes(MapTo::class);
 		if ($attributes === []) {

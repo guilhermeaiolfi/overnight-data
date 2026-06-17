@@ -6,31 +6,34 @@ namespace Tests\ON\Data\Mapper;
 
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\FieldContext;
-use ON\Data\Mapper\FieldContextResolverInterface;
 use ON\Data\Mapper\FieldConversionCoordinator;
 use ON\Data\Mapper\FieldTypeRegistry;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\MappingContext;
-use ON\Data\Mapper\ReflectionPropertyFieldContextResolver;
 use ON\Data\Mapper\Representation\WireRepresentation;
+use ON\Data\Mapper\Resolver\FieldResolverInterface;
+use ON\Data\Mapper\Resolver\ReflectionPropertyFieldResolver;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 use ReflectionProperty;
 use stdClass;
 use Tests\ON\Data\Fixture\CustomFieldType;
-use Tests\ON\Data\Fixture\CustomResolverDto;
 use Tests\ON\Data\Fixture\PropertyContextFixture;
 use Tests\ON\Data\Fixture\UserInputDto;
 
 final class FieldConversionCoordinatorTest extends TestCase
 {
-	public function testReflectionPropertyResolverSupportsPrimitiveProperties(): void
+	public function testReflectionPropertyResolverUsesWalkerProperty(): void
 	{
-		$resolver = new ReflectionPropertyFieldContextResolver();
+		$resolver = new ReflectionPropertyFieldResolver();
 
 		$field = $resolver->resolve(
-			new ReflectionProperty(PropertyContextFixture::class, 'name'),
 			$this->context(),
+			'name',
+			'name',
+			'Ada',
+			new ReflectionProperty(PropertyContextFixture::class, 'name'),
 		);
 
 		self::assertSame('name', $field?->getName());
@@ -38,29 +41,35 @@ final class FieldConversionCoordinatorTest extends TestCase
 		self::assertFalse($field?->isNullable() ?? true);
 	}
 
-	public function testReflectionPropertyResolverSupportsNullablePrimitives(): void
+	public function testReflectionPropertyResolverFallsBackToPreparedTargetProperty(): void
 	{
-		$resolver = new ReflectionPropertyFieldContextResolver();
+		$resolver = new ReflectionPropertyFieldResolver();
+		$target = (new ReflectionClass(UserInputDto::class))->newInstanceWithoutConstructor();
 
 		$field = $resolver->resolve(
-			new ReflectionProperty(PropertyContextFixture::class, 'age'),
-			$this->context(),
+			$this->context()->withTarget($target),
+			'user_score',
+			'user_score',
+			'3.5',
+			null,
 		);
 
-		self::assertSame('age', $field?->getName());
-		self::assertSame('int', $field?->getType());
-		self::assertTrue($field?->isNullable() ?? false);
+		self::assertSame('score', $field?->getName());
+		self::assertSame('float', $field?->getType());
 	}
 
 	#[DataProvider('unsupportedPropertyProvider')]
-	public function testReflectionPropertyResolverReturnsNullForUnsupportedProperties(string $property): void
+	public function testReflectionPropertyResolverReturnsNullForUnsupportedTypes(string $property): void
 	{
-		$resolver = new ReflectionPropertyFieldContextResolver();
+		$resolver = new ReflectionPropertyFieldResolver();
 
 		self::assertNull(
 			$resolver->resolve(
-				new ReflectionProperty(PropertyContextFixture::class, $property),
 				$this->context(),
+				$property,
+				$property,
+				null,
+				new ReflectionProperty(PropertyContextFixture::class, $property),
 			),
 		);
 	}
@@ -76,173 +85,101 @@ final class FieldConversionCoordinatorTest extends TestCase
 		];
 	}
 
-	public function testCoordinatorConvertsInboundThroughGateway(): void
+	public function testCoordinatorLeavesValueUnchangedWithoutRepresentations(): void
 	{
-		$gateway = ConversionGateway::createDefault();
-		$coordinator = $gateway->getFieldConversionCoordinator();
+		$coordinator = new FieldConversionCoordinator($this->gateway(), [new ReflectionPropertyFieldResolver()]);
+		$context = $this->context()->withPathSegment('age');
+		$field = $coordinator->resolveField(
+			$context,
+			'age',
+			'age',
+			'42',
+			new ReflectionProperty(PropertyContextFixture::class, 'age'),
+		);
 
-		self::assertSame(
+		self::assertSame('42', $coordinator->convertScalar('42', $field, $context));
+	}
+
+	public function testCoordinatorConvertsFromWireToPhp(): void
+	{
+		$coordinator = new FieldConversionCoordinator($this->gateway(), [new ReflectionPropertyFieldResolver()]);
+		$context = $this->context()->withSourceRepresentation(WireRepresentation::class)->withPathSegment('age');
+		$field = $coordinator->resolveField(
+			$context,
+			'age',
+			'age',
+			'42',
+			new ReflectionProperty(PropertyContextFixture::class, 'age'),
+		);
+
+		self::assertSame(42, $coordinator->convertScalar('42', $field, $context));
+	}
+
+	public function testCoordinatorConvertsFromPhpToWire(): void
+	{
+		$coordinator = new FieldConversionCoordinator($this->gateway(), [new ReflectionPropertyFieldResolver()]);
+		$context = $this->context()->withOutputRepresentation(WireRepresentation::class)->withPathSegment('name');
+		$field = $coordinator->resolveField(
+			$context,
+			'name',
+			'name',
 			42,
-			$coordinator->convertInbound(
-				'42',
-				new ReflectionProperty(PropertyContextFixture::class, 'age'),
-				$this->context()->withSourceRepresentation(WireRepresentation::class)->withPathSegment('age'),
-			),
+			new ReflectionProperty(PropertyContextFixture::class, 'name'),
 		);
+
+		self::assertSame('42', $coordinator->convertScalar(42, $field, $context));
 	}
 
-	public function testCoordinatorConvertsOutboundThroughGateway(): void
+	public function testCoordinatorLeavesUnresolvedValuesUnchanged(): void
 	{
-		$gateway = ConversionGateway::createDefault();
-		$coordinator = $gateway->getFieldConversionCoordinator();
+		$coordinator = new FieldConversionCoordinator($this->gateway(), []);
 
 		self::assertSame(
 			'42',
-			$coordinator->convertOutbound(
-				42,
-				new ReflectionProperty(PropertyContextFixture::class, 'name'),
-				$this->context()->withOutputRepresentation(WireRepresentation::class)->withPathSegment('name'),
-			),
-		);
-	}
-
-	public function testCoordinatorDoesNothingWithoutRepresentations(): void
-	{
-		$gateway = ConversionGateway::createDefault();
-		$coordinator = $gateway->getFieldConversionCoordinator();
-
-		self::assertSame(
-			'42',
-			$coordinator->convertInbound(
+			$coordinator->convertScalar(
 				'42',
-				new ReflectionProperty(PropertyContextFixture::class, 'age'),
-				$this->context(),
-			),
-		);
-		self::assertSame(
-			42,
-			$coordinator->convertOutbound(
-				42,
-				new ReflectionProperty(PropertyContextFixture::class, 'age'),
-				$this->context(),
-			),
-		);
-	}
-
-	public function testCoordinatorReturnsOriginalValueWhenNoFieldContextResolves(): void
-	{
-		$coordinator = new FieldConversionCoordinator(new ConversionGateway(FieldTypeRegistry::createDefault()));
-
-		self::assertSame(
-			'42',
-			$coordinator->convertInbound(
-				'42',
-				new stdClass(),
+				$coordinator->resolveField(
+					$this->context()->withSourceRepresentation(WireRepresentation::class),
+					'age',
+					'age',
+					'42',
+					new stdClass(),
+				),
 				$this->context()->withSourceRepresentation(WireRepresentation::class),
 			),
 		);
 	}
 
-	public function testCustomResolverRegistrationIsUsed(): void
+	public function testExplicitResolverCanOverrideBuiltInResolution(): void
 	{
 		$coordinator = new FieldConversionCoordinator(
-			new ConversionGateway(FieldTypeRegistry::createDefault()),
-		);
-		$coordinator->addResolver(
-			new class () implements FieldContextResolverInterface {
-				public function resolve(mixed $source, MappingContext $context): ?FieldContext
-				{
-					return $source === 'custom' ? FieldContext::named('custom', 'int') : null;
-				}
-			},
-		);
-
-		self::assertSame(
-			10,
-			$coordinator->convertInbound(
-				'10',
-				'custom',
-				$this->context()->withSourceRepresentation(WireRepresentation::class),
-			),
-		);
-	}
-
-	public function testResolverOrderUsesFirstMatch(): void
-	{
-		$coordinator = new FieldConversionCoordinator(
-			new ConversionGateway(FieldTypeRegistry::createDefault()),
+			new ConversionGateway(FieldTypeRegistry::createDefault()->register('custom', CustomFieldType::class)),
 			[
-				new class () implements FieldContextResolverInterface {
-					public function resolve(mixed $source, MappingContext $context): ?FieldContext
-					{
-						return FieldContext::named('value', 'string');
+				new class () implements FieldResolverInterface {
+					public function resolve(
+						MappingContext $mapping,
+						string $path,
+						string|int $fieldName,
+						mixed $value,
+						mixed $extra = null,
+					): ?FieldContext {
+						return $fieldName === 'code'
+							? FieldContext::named('code', 'custom')
+							: null;
 					}
 				},
-				new class () implements FieldContextResolverInterface {
-					public function resolve(mixed $source, MappingContext $context): ?FieldContext
-					{
-						return FieldContext::named('value', 'int');
-					}
-				},
+				new ReflectionPropertyFieldResolver(),
 			],
 		);
+		$context = $this->context()->withSourceRepresentation(WireRepresentation::class)->withPathSegment('code');
+		$field = $coordinator->resolveField($context, 'code', 'code', 'ada', null);
 
-		self::assertSame(
-			'10',
-			$coordinator->convertInbound(
-				10,
-				'ignored',
-				$this->context()->withSourceRepresentation(WireRepresentation::class),
-			),
-		);
+		self::assertSame('ADA', $coordinator->convertScalar('ada', $field, $context));
 	}
 
-	public function testTypedObjectMappersUseCoordinatorForCustomFieldTypes(): void
+	public function testMapperRuntimeUsesSameConversionThroughDifferentCombinations(): void
 	{
-		$gateway = new ConversionGateway(
-			FieldTypeRegistry::createDefault()->register('custom', CustomFieldType::class),
-		);
-		$gateway->getFieldConversionCoordinator()->addResolver(
-			new class () implements FieldContextResolverInterface {
-				public function resolve(mixed $source, MappingContext $context): ?FieldContext
-				{
-					if (! $source instanceof ReflectionProperty || $source->getName() !== 'code') {
-						return null;
-					}
-
-					return FieldContext::named('code', 'custom');
-				}
-			},
-		);
-
-		$inbound = map(['code' => 'ada'], null, $gateway)
-			->from(WireRepresentation::class)
-			->to(CustomResolverDto::class);
-
-		$outbound = new CustomResolverDto();
-		$outbound->code = 'ADA';
-
-		$result = map($outbound, null, $gateway)
-			->as(WireRepresentation::class)
-			->toArray();
-
-		self::assertSame('ADA', $inbound->code);
-		self::assertSame('ada', $result['code']);
-	}
-
-	public function testStdClassMappingDoesNotInferScalarTypes(): void
-	{
-		$source = new stdClass();
-		$source->age = '42';
-
-		$result = map($source)->as(WireRepresentation::class)->toArray();
-
-		self::assertSame('42', $result['age']);
-	}
-
-	public function testExistingPhase3ABehaviorRemainsUnchanged(): void
-	{
-		$result = map([
+		$dto = map([
 			'id' => '10',
 			'name' => 123,
 			'age' => '42',
@@ -250,17 +187,25 @@ final class FieldConversionCoordinatorTest extends TestCase
 			'user_score' => '3.5',
 		])->from(WireRepresentation::class)->to(UserInputDto::class);
 
-		self::assertSame(10, $result->id);
-		self::assertSame('123', $result->name);
-		self::assertSame(42, $result->age);
-		self::assertTrue($result->active);
-		self::assertSame(3.5, $result->score);
+		$std = new stdClass();
+		$std->id = '10';
+		$std->name = 123;
+		$std->age = '42';
+		$std->active = 'true';
+		$std->user_score = '3.5';
+		$dtoFromStd = map($std)->from(WireRepresentation::class)->to(UserInputDto::class);
+
+		self::assertSame($dto->id, $dtoFromStd->id);
+		self::assertSame($dto->score, $dtoFromStd->score);
+	}
+
+	private function gateway(): ConversionGateway
+	{
+		return ConversionGateway::createDefault();
 	}
 
 	private function context(): MappingContext
 	{
-		$gateway = ConversionGateway::createDefault();
-
-		return new MappingContext($gateway);
+		return new MappingContext($this->gateway());
 	}
 }

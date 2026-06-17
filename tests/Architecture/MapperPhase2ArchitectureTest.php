@@ -70,16 +70,44 @@ final class MapperPhase2ArchitectureTest extends TestCase
 	{
 		$root = dirname(__DIR__, 2) . '/src/Mapper';
 		$requiredFiles = [
-			'/MapperInterface.php',
-			'/Mapper.php',
 			'/MapperManager.php',
 			'/MapBuilder.php',
 			'/MappingContext.php',
 			'/functions.php',
+			'/FieldConversionCoordinator.php',
+			'/Walker/WalkerInterface.php',
+			'/Walker/ArrayWalker.php',
+			'/Walker/ObjectWalker.php',
+			'/Writer/WriterInterface.php',
+			'/Writer/ArrayWriter.php',
+			'/Writer/ObjectWriter.php',
+			'/Resolver/FieldResolverInterface.php',
+			'/Resolver/ReflectionPropertyFieldResolver.php',
+			'/Support/ObjectPropertyMatcher.php',
 		];
 
 		foreach ($requiredFiles as $suffix) {
 			self::assertFileExists($root . $suffix);
+		}
+	}
+
+	public function testPairSpecificMapperFilesWereRemoved(): void
+	{
+		$root = dirname(__DIR__, 2) . '/src/Mapper';
+
+		foreach (
+			[
+				'/MapperInterface.php',
+				'/Mapper.php',
+				'/ArrayToStdClassMapper.php',
+				'/StdClassToArrayMapper.php',
+				'/ArrayToObjectMapper.php',
+				'/ObjectToArrayMapper.php',
+				'/FieldContextResolverInterface.php',
+				'/ReflectionPropertyFieldContextResolver.php',
+			] as $suffix
+		) {
+			self::assertFileDoesNotExist($root . $suffix);
 		}
 	}
 }

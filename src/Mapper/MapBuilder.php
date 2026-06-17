@@ -8,13 +8,18 @@ use JsonException;
 use ON\Data\Mapper\Exception\InvalidMapTargetException;
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\Representation\RepresentationInterface;
+use ON\Data\Mapper\Resolver\FieldResolverInterface;
+use ON\Data\Mapper\Walker\WalkerInterface;
+use ON\Data\Mapper\Writer\WriterInterface;
 
 final class MapBuilder
 {
 	/**
 	 * @param class-string<RepresentationInterface>|null $sourceRepresentation
 	 * @param class-string<RepresentationInterface>|null $outputRepresentation
-	 * @param class-string<MapperInterface>|null $mapperClass
+	 * @param class-string<WalkerInterface>|null $walkerClass
+	 * @param class-string<WriterInterface>|null $writerClass
+	 * @param list<class-string<FieldResolverInterface>> $resolverClasses
 	 * @param list<mixed> $arguments
 	 */
 	public function __construct(
@@ -22,7 +27,9 @@ final class MapBuilder
 		private ConversionGateway $gateway,
 		private ?string $sourceRepresentation = null,
 		private ?string $outputRepresentation = null,
-		private ?string $mapperClass = null,
+		private ?string $walkerClass = null,
+		private ?string $writerClass = null,
+		private array $resolverClasses = [],
 		private array $arguments = [],
 		private bool $collection = false,
 	) {
@@ -51,13 +58,34 @@ final class MapBuilder
 	}
 
 	/**
-	 * @param class-string<MapperInterface> $mapper
+	 * @param class-string<WalkerInterface> $walker
 	 */
-	public function using(string $mapper, mixed ...$arguments): self
+	public function walker(string $walker): self
 	{
 		$clone = clone $this;
-		$clone->mapperClass = $mapper;
-		$clone->arguments = $arguments;
+		$clone->walkerClass = $walker;
+
+		return $clone;
+	}
+
+	/**
+	 * @param class-string<WriterInterface> $writer
+	 */
+	public function writer(string $writer): self
+	{
+		$clone = clone $this;
+		$clone->writerClass = $writer;
+
+		return $clone;
+	}
+
+	/**
+	 * @param class-string<FieldResolverInterface> $resolver
+	 */
+	public function resolver(string $resolver): self
+	{
+		$clone = clone $this;
+		$clone->resolverClasses[] = $resolver;
 
 		return $clone;
 	}
@@ -94,25 +122,12 @@ final class MapBuilder
 			->map($this->source, $target, $this->createContext());
 	}
 
-	public function toArray(): array
-	{
-		if ($this->canReturnSourceArrayDirectly()) {
-			return $this->source;
-		}
-
-		$result = $this->to([]);
-		if (! is_array($result)) {
-			throw new MappingException('Mapped result is not an array.');
-		}
-
-		return $result;
-	}
-
 	public function toJson(): string
 	{
-		$value = $this->canReturnSourceArrayDirectly()
-			? $this->source
-			: $this->toArray();
+		$value = $this->to([]);
+		if (! is_array($value)) {
+			throw new MappingException('Mapped result is not an array.');
+		}
 
 		try {
 			return json_encode($value, JSON_THROW_ON_ERROR);
@@ -127,28 +142,16 @@ final class MapBuilder
 			$this->gateway,
 			$this->sourceRepresentation,
 			$this->outputRepresentation,
+			$this->walkerClass,
+			$this->writerClass,
+			$this->resolverClasses,
+			$this->arguments,
 		);
-
-		if ($this->mapperClass !== null) {
-			$context = $context->withMapperClass($this->mapperClass, $this->arguments);
-		} elseif ($this->arguments !== []) {
-			$context = $context->withArguments($this->arguments);
-		}
 
 		if ($this->collection) {
 			$context = $context->asCollection();
 		}
 
 		return $context;
-	}
-
-	private function canReturnSourceArrayDirectly(): bool
-	{
-		return is_array($this->source)
-			&& $this->mapperClass === null
-			&& $this->sourceRepresentation === null
-			&& $this->outputRepresentation === null
-			&& $this->arguments === []
-			&& ! $this->collection;
 	}
 }

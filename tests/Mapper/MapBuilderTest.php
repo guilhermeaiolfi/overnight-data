@@ -11,75 +11,63 @@ use ON\Data\Mapper\Representation\WireRepresentation;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use stdClass;
-use Tests\ON\Data\Fixture\GatewayIdentityMapper;
-use Tests\ON\Data\Fixture\MapperTestState;
+use Tests\ON\Data\Fixture\SpyArrayWalker;
+use Tests\ON\Data\Fixture\SpyArrayWriter;
+use Tests\ON\Data\Fixture\SpyResolver;
 
 final class MapBuilderTest extends TestCase
 {
-	protected function setUp(): void
-	{
-		MapperTestState::reset();
-	}
-
-	public function testImmutableBuilderMethods(): void
+	public function testBuilderMethodsAreImmutable(): void
 	{
 		$builder = map(['id' => 1]);
 		$from = $builder->from(WireRepresentation::class);
 		$as = $builder->as(WireRepresentation::class);
-		$using = $builder->using(GatewayIdentityMapper::class, 'a');
+		$walker = $builder->walker(SpyArrayWalker::class);
+		$writer = $builder->writer(SpyArrayWriter::class);
+		$resolver = $builder->resolver(SpyResolver::class);
 		$args = $builder->args('b');
 		$collection = $builder->collection();
 
 		self::assertNotSame($builder, $from);
 		self::assertNotSame($builder, $as);
-		self::assertNotSame($builder, $using);
+		self::assertNotSame($builder, $walker);
+		self::assertNotSame($builder, $writer);
+		self::assertNotSame($builder, $resolver);
 		self::assertNotSame($builder, $args);
 		self::assertNotSame($builder, $collection);
 		self::assertNull($this->property($builder, 'sourceRepresentation'));
 		self::assertNull($this->property($builder, 'outputRepresentation'));
-		self::assertNull($this->property($builder, 'mapperClass'));
+		self::assertNull($this->property($builder, 'walkerClass'));
+		self::assertNull($this->property($builder, 'writerClass'));
+		self::assertSame([], $this->property($builder, 'resolverClasses'));
 		self::assertSame([], $this->property($builder, 'arguments'));
 		self::assertFalse($this->property($builder, 'collection'));
 	}
 
-	public function testArrayToStdClass(): void
+	public function testToArrayCanonicalPathIsToEmptyArray(): void
 	{
-		$result = map(['id' => 10, 'name' => 'Ada'])->to(stdClass::class);
-
-		self::assertInstanceOf(stdClass::class, $result);
-		self::assertSame(10, $result->id);
-		self::assertSame('Ada', $result->name);
+		self::assertSame(['id' => 10, 'name' => 'Ada'], map(['id' => 10, 'name' => 'Ada'])->to([]));
 	}
 
-	public function testStdClassToArray(): void
+	public function testStdClassToArrayUsesToEmptyArray(): void
 	{
 		$source = new stdClass();
 		$source->id = 10;
 		$source->name = 'Ada';
 
-		self::assertSame(['id' => 10, 'name' => 'Ada'], map($source)->toArray());
+		self::assertSame(['id' => 10, 'name' => 'Ada'], map($source)->to([]));
 	}
 
 	public function testCollectionMapping(): void
 	{
-		$result = map(
-			[
-				['id' => 1],
-				['id' => 2],
-			],
-		)->collection()->to(stdClass::class);
+		$result = map([['id' => 1], ['id' => 2]])->collection()->to(stdClass::class);
 
 		self::assertCount(2, $result);
 		self::assertSame(1, $result[0]->id);
 		self::assertSame(2, $result[1]->id);
 	}
 
-	public function testEmptyCollectionMapping(): void
-	{
-		self::assertSame([], map([])->collection()->to(stdClass::class));
-	}
-
-	public function testToJson(): void
+	public function testToJsonMapsThroughArrayWriter(): void
 	{
 		$source = new stdClass();
 		$source->id = 10;

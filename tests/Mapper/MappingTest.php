@@ -10,7 +10,7 @@ use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Mapping;
 use PHPUnit\Framework\TestCase;
 use stdClass;
-use Tests\ON\Data\Fixture\GatewayIdentityMapper;
+use Tests\ON\Data\Fixture\GatewayAwareWriter;
 
 final class MappingTest extends TestCase
 {
@@ -47,26 +47,38 @@ final class MappingTest extends TestCase
 		self::assertSame(Mapping::getDefaultGateway(), Mapping::getDefaultGateway());
 	}
 
-	public function testMapUsesTheConfiguredDefaultGateway(): void
+	public function testMapUsesConfiguredDefaultGateway(): void
 	{
 		$gateway = new ConversionGateway(FieldTypeRegistry::createDefault());
-		$gateway->getMappers()->register(GatewayIdentityMapper::class);
+		$gateway->getMappers()->setConstructor(
+			static fn (string $component, ConversionGateway $runtime): object => $component === GatewayAwareWriter::class
+				? new GatewayAwareWriter($runtime)
+				: new $component(),
+		);
 		Mapping::setDefaultGateway($gateway);
 
-		$result = map('source')->using(GatewayIdentityMapper::class)->to(stdClass::class);
+		$result = map(['id' => 10])->writer(GatewayAwareWriter::class)->to(stdClass::class);
 
 		self::assertSame(spl_object_id($gateway), $result->gatewayId);
 	}
 
-	public function testExplicitGatewayOverridesTheDefault(): void
+	public function testExplicitGatewayOverridesDefault(): void
 	{
 		$defaultGateway = new ConversionGateway(FieldTypeRegistry::createDefault());
-		$defaultGateway->getMappers()->register(GatewayIdentityMapper::class);
+		$defaultGateway->getMappers()->setConstructor(
+			static fn (string $component, ConversionGateway $runtime): object => $component === GatewayAwareWriter::class
+				? new GatewayAwareWriter($runtime)
+				: new $component(),
+		);
 		$explicitGateway = new ConversionGateway(FieldTypeRegistry::createDefault());
-		$explicitGateway->getMappers()->register(GatewayIdentityMapper::class);
+		$explicitGateway->getMappers()->setConstructor(
+			static fn (string $component, ConversionGateway $runtime): object => $component === GatewayAwareWriter::class
+				? new GatewayAwareWriter($runtime)
+				: new $component(),
+		);
 		Mapping::setDefaultGateway($defaultGateway);
 
-		$result = map('source', null, $explicitGateway)->using(GatewayIdentityMapper::class)->to(stdClass::class);
+		$result = map(['id' => 10], null, $explicitGateway)->writer(GatewayAwareWriter::class)->to(stdClass::class);
 
 		self::assertSame(spl_object_id($explicitGateway), $result->gatewayId);
 		self::assertNotSame(spl_object_id($defaultGateway), $result->gatewayId);

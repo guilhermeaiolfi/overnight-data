@@ -2,7 +2,7 @@
 
 The definition foundation of a metadata-driven PHP data layer.
 
-`ON\Data` currently ships the standalone definition subsystem extracted from Overnight plus the support layers needed to store, restore, convert, and shallow-map data as plain PHP arrays, `stdClass` objects, and public-property DTOs.
+`ON\Data` currently ships the standalone definition subsystem extracted from Overnight plus the support layers needed to store, restore, convert, and shallow-map data as plain PHP arrays, `stdClass` objects, and public-property DTOs through a composable walker/resolver/writer mapper runtime.
 
 ## Status
 
@@ -17,10 +17,9 @@ This repository currently includes:
 - registry-managed `ViewDefinition` and `ViewField` wrappers backed by the same master-array storage;
 - the `ON\Data\Key` value object for simple and composite identities;
 - the standalone FieldType, representation, and conversion gateway foundation under `ON\Data\Mapper`;
-- `MapperManager`, `MappingContext`, and the fluent `map()` / `MapBuilder` entry point;
-- generic collection mapping;
-- shallow array-to-`stdClass` / `stdClass`-to-array structural mapping;
-- shallow array-to-object / object-to-array DTO mapping through public instance properties;
+- `MapperManager`, `MappingContext`, walkers, writers, resolvers, and the fluent `map()` / `MapBuilder` entry point;
+- generic collection mapping through the same composable runtime;
+- shallow array, `stdClass`, and public-property object combinations selected independently by source walker and target writer;
 - mapper attributes `MapFrom`, `MapTo`, and `Hidden` for shallow DTO mapping;
 - tests and quality tooling.
 

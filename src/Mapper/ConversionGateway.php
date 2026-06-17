@@ -20,8 +20,6 @@ final class ConversionGateway
 	 */
 	private array $representations = [];
 
-	private FieldConversionCoordinator $fieldConversionCoordinator;
-
 	private MapperManager $mappers;
 
 	public function __construct(
@@ -40,12 +38,6 @@ final class ConversionGateway
 			$this->registerRepresentation($representation);
 		}
 
-		$this->fieldConversionCoordinator = new FieldConversionCoordinator(
-			$this,
-			[
-				new ReflectionPropertyFieldContextResolver(),
-			],
-		);
 		$this->mappers = MapperManager::createDefault($this);
 	}
 
@@ -69,11 +61,6 @@ final class ConversionGateway
 	public function getMappers(): MapperManager
 	{
 		return $this->mappers;
-	}
-
-	public function getFieldConversionCoordinator(): FieldConversionCoordinator
-	{
-		return $this->fieldConversionCoordinator;
 	}
 
 	/**

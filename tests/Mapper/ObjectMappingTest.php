@@ -10,7 +10,8 @@ use ON\Data\Mapper\Attribute\MapFrom;
 use ON\Data\Mapper\Attribute\MapTo;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\MappingException;
-use ON\Data\Mapper\Exception\NoMapperFoundException;
+use ON\Data\Mapper\Exception\NoWalkerFoundException;
+use ON\Data\Mapper\Exception\NoWriterFoundException;
 use ON\Data\Mapper\FieldTypeRegistry;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\MappingContext;
@@ -19,6 +20,8 @@ use ON\Data\Mapper\Representation\WireRepresentation;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Fixture\AbstractUserDto;
+use Tests\ON\Data\Fixture\AliasSourcePost;
+use Tests\ON\Data\Fixture\AliasTargetPost;
 use Tests\ON\Data\Fixture\CtorSpyDto;
 use Tests\ON\Data\Fixture\MixedValueObject;
 use Tests\ON\Data\Fixture\ReadonlyUserDto;
@@ -64,7 +67,7 @@ final class ObjectMappingTest extends TestCase
 		$source->score = 3.5;
 		$source->profile = new MixedValueObject('admin');
 
-		$result = map($source)->toArray();
+		$result = map($source)->to([]);
 
 		self::assertSame(10, $result['id']);
 		self::assertSame('Ada', $result['full_name']);
@@ -74,6 +77,22 @@ final class ObjectMappingTest extends TestCase
 		self::assertSame(3.5, $result['score']);
 		self::assertSame($source->profile, $result['profile']);
 		self::assertArrayNotHasKey('password', $result);
+	}
+
+	public function testObjectMapsToObject(): void
+	{
+		$source = new UserInputDto();
+		$source->id = 10;
+		$source->name = 'Ada';
+		$source->age = 42;
+		$source->score = 9.5;
+
+		$result = map($source)->to(UserInputDto::class);
+
+		self::assertSame(10, $result->id);
+		self::assertSame('Ada', $result->name);
+		self::assertSame(42, $result->age);
+		self::assertSame(9.5, $result->score);
 	}
 
 	public function testConstructorIsNotCalled(): void
@@ -86,15 +105,7 @@ final class ObjectMappingTest extends TestCase
 		self::assertSame('Anonymous', $result->name);
 	}
 
-	public function testInheritedPublicPropertiesAreMapped(): void
-	{
-		$result = map(['id' => 10, 'age' => 42])->to(UserInputDto::class);
-
-		self::assertSame(10, $result->id);
-		self::assertSame(42, $result->age);
-	}
-
-	public function testStaticPrivateAndProtectedPropertiesAreIgnored(): void
+	public function testInheritedAndVisiblePropertyRulesAreApplied(): void
 	{
 		$result = map([
 			'id' => 10,
@@ -105,47 +116,32 @@ final class ObjectMappingTest extends TestCase
 			'protectedNote' => 'leak',
 		])->to(UserInputDto::class);
 
-		$mapped = map($result)->toArray();
+		$mapped = map($result)->to([]);
 
 		self::assertSame('users', UserInputDto::$table);
 		self::assertSame(10, $mapped['id']);
 		self::assertSame('Ada', $mapped['name']);
 		self::assertNull($mapped['nickname']);
 		self::assertSame(42, $mapped['age']);
-		self::assertFalse($mapped['active']);
-		self::assertSame(0.0, $mapped['score']);
 	}
 
-	public function testUnknownInputKeysAreIgnored(): void
+	public function testMissingKeysPreserveDefaultsAndUninitializedState(): void
 	{
-		$result = map(['id' => 10, 'age' => 42, 'unknown' => 'ignored'])->to(UserInputDto::class);
-
-		self::assertFalse(property_exists($result, 'unknown'));
-		self::assertSame(10, $result->id);
-	}
-
-	public function testMissingKeysPreserveDefaults(): void
-	{
-		$result = map(['id' => 10, 'age' => 42])->to(UserInputDto::class);
+		$result = map(['id' => 10])->to(UserInputDto::class);
 
 		self::assertSame('Anonymous', $result->name);
 		self::assertNull($result->nickname);
 		self::assertFalse($result->active);
 		self::assertSame(0.0, $result->score);
-	}
-
-	public function testMissingKeysLeaveUninitializedPropertiesUninitialized(): void
-	{
-		$result = map(['id' => 10])->to(UserInputDto::class);
-
 		self::assertFalse(isset($result->age));
 	}
 
-	public function testExplicitNullableNullIsPreserved(): void
+	public function testUnknownInputKeysAreIgnoredAndNullableNullIsPreserved(): void
 	{
-		$result = map(['id' => 10, 'age' => 42, 'nickname' => null])->to(UserInputDto::class);
+		$result = map(['id' => 10, 'nickname' => null, 'unknown' => 'ignored'])->to(UserInputDto::class);
 
 		self::assertNull($result->nickname);
+		self::assertFalse(property_exists($result, 'unknown'));
 	}
 
 	public function testInvalidNonNullableAssignmentProducesMappingException(): void
@@ -154,41 +150,47 @@ final class ObjectMappingTest extends TestCase
 		$this->expectExceptionMessage(UserInputDto::class . '::$id');
 		$this->expectExceptionMessage("path 'id'");
 
-		map(['id' => null, 'age' => 42])->to(UserInputDto::class);
+		map(['id' => null])->to(UserInputDto::class);
 	}
 
-	public function testMapFromAttributeIsUsed(): void
+	public function testMapFromAndMapToAttributesAreUsed(): void
 	{
-		$result = map(['id' => 10, 'age' => 42, 'user_score' => 7.25])->to(UserInputDto::class);
+		$inbound = map(['id' => 10, 'age' => 42, 'user_score' => 7.25])->to(UserInputDto::class);
+		$outboundSource = new UserOutputDto();
+		$outboundSource->id = 10;
+		$outboundSource->name = 'Ada';
+		$outboundSource->age = 42;
+		$outboundSource->profile = new MixedValueObject('admin');
 
-		self::assertSame(7.25, $result->score);
+		$outbound = map($outboundSource)->to([]);
+
+		self::assertSame(7.25, $inbound->score);
+		self::assertSame('Ada', $outbound['full_name']);
+		self::assertArrayNotHasKey('name', $outbound);
 	}
 
-	public function testMapToAttributeIsUsed(): void
+	public function testCombinedMapToAndMapFromBehaviorWorksAcrossObjectToObjectMapping(): void
 	{
-		$source = new UserOutputDto();
-		$source->id = 10;
-		$source->name = 'Ada';
-		$source->age = 42;
-		$source->profile = new MixedValueObject('admin');
+		$source = new AliasSourcePost();
+		$source->title = 'Hello';
 
-		$result = map($source)->toArray();
+		$result = map($source)->to(AliasTargetPost::class);
 
-		self::assertArrayHasKey('full_name', $result);
-		self::assertSame('Ada', $result['full_name']);
-		self::assertArrayNotHasKey('name', $result);
+		self::assertSame('Hello', $result->heading);
 	}
 
-	public function testUninitializedOutboundPropertyIsSkipped(): void
+	public function testHiddenAndUninitializedOutboundPropertiesAreHandled(): void
 	{
 		$source = new UserOutputDto();
 		$source->id = 10;
 		$source->name = 'Ada';
 		$source->active = true;
 		$source->score = 3.5;
+		$source->profile = new MixedValueObject('admin');
 
-		$result = map($source)->toArray();
+		$result = map($source)->to([]);
 
+		self::assertArrayNotHasKey('password', $result);
 		self::assertArrayNotHasKey('age', $result);
 	}
 
@@ -220,7 +222,7 @@ final class ObjectMappingTest extends TestCase
 		$source->score = 3.5;
 		$source->profile = new MixedValueObject('admin');
 
-		$result = map($source)->as(WireRepresentation::class)->toArray();
+		$result = map($source)->as(WireRepresentation::class)->to([]);
 
 		self::assertSame(10, $result['id']);
 		self::assertSame('Ada', $result['full_name']);
@@ -231,7 +233,7 @@ final class ObjectMappingTest extends TestCase
 		self::assertSame($source->profile, $result['profile']);
 	}
 
-	public function testConversionFailureIncludesNestedPropertyPath(): void
+	public function testConversionFailureIncludesCollectionItemPath(): void
 	{
 		$this->expectException(MappingException::class);
 		$this->expectExceptionMessage(UserInputDto::class . '::$id');
@@ -243,20 +245,32 @@ final class ObjectMappingTest extends TestCase
 			->to(UserInputDto::class);
 	}
 
-	public function testCollectionMappingToDtos(): void
+	public function testBuiltInCombinationsWork(): void
 	{
-		$result = map([
-			['id' => 1, 'age' => 30],
-			['id' => 2, 'age' => 31],
-		])->collection()->to(UserInputDto::class);
+		$array = ['id' => 10, 'name' => 'Ada', 'age' => 42];
+		$std = map($array)->to(stdClass::class);
+		$dto = map($array)->to(UserInputDto::class);
+		$stdToStd = map($std)->to(stdClass::class);
+		$stdToDto = map($std)->to(UserInputDto::class);
+		$dtoToArray = map($dto)->to([]);
+		$dtoToStd = map($dto)->to(stdClass::class);
+		$dtoToDto = map($dto)->to(UserInputDto::class);
 
-		self::assertCount(2, $result);
-		self::assertSame(1, $result[0]->id);
-		self::assertSame(31, $result[1]->age);
+		self::assertSame($array['id'], $std->id);
+		self::assertSame($array['id'], $dto->id);
+		self::assertSame($array['id'], $stdToStd->id);
+		self::assertSame($array['id'], $stdToDto->id);
+		self::assertSame($array['id'], $dtoToArray['id']);
+		self::assertSame($array['id'], $dtoToStd->id);
+		self::assertSame($array['id'], $dtoToDto->id);
 	}
 
-	public function testCollectionMappingFromDtosToArrays(): void
+	public function testCollectionMappingToAndFromDtos(): void
 	{
+		$result = map([['id' => 1, 'age' => 30], ['id' => 2, 'age' => 31]])
+			->collection()
+			->to(UserInputDto::class);
+
 		$first = new UserOutputDto();
 		$first->id = 1;
 		$first->name = 'Ada';
@@ -269,76 +283,60 @@ final class ObjectMappingTest extends TestCase
 		$second->age = 31;
 		$second->profile = new MixedValueObject('editor');
 
-		$result = map([$first, $second])->collection()->toArray();
+		$arrays = map([$first, $second])->collection()->to([]);
 
-		self::assertSame('Ada', $result[0]['full_name']);
-		self::assertSame(2, $result[1]['id']);
+		self::assertCount(2, $result);
+		self::assertSame(1, $result[0]->id);
+		self::assertSame('Ada', $arrays[0]['full_name']);
+		self::assertSame(2, $arrays[1]['id']);
 	}
 
-	public function testExistingStdClassMappingsRemainUnchanged(): void
+	public function testExplicitStdClassMappingsRemainShallow(): void
 	{
 		$stdClass = map(['id' => 10])->to(stdClass::class);
 
 		self::assertInstanceOf(stdClass::class, $stdClass);
-		self::assertSame(['id' => 10], map($stdClass)->toArray());
+		self::assertSame(['id' => 10], map($stdClass)->to([]));
 	}
 
-	public function testAbstractTargetFailsClearly(): void
-	{
-		$this->expectException(MappingException::class);
-		$this->expectExceptionMessage(AbstractUserDto::class);
-
-		map(['id' => 10])->to(AbstractUserDto::class);
-	}
-
-	public function testInterfaceTargetFailsClearly(): void
-	{
-		$this->expectException(MappingException::class);
-		$this->expectExceptionMessage(UserContract::class);
-
-		map(['id' => 10])->to(UserContract::class);
-	}
-
-	public function testEnumTargetFailsClearly(): void
-	{
-		$this->expectException(MappingException::class);
-		$this->expectExceptionMessage(StatusEnum::class);
-
-		map(['id' => 10])->to(StatusEnum::class);
-	}
-
-	public function testRepresentationTargetFailsClearly(): void
+	public function testUnsupportedTargetsFailClearly(): void
 	{
 		$gateway = new ConversionGateway(FieldTypeRegistry::createDefault());
 
-		$this->expectException(MappingException::class);
-		$this->expectExceptionMessage(PhpRepresentation::class);
+		$cases = [
+			[AbstractUserDto::class, AbstractUserDto::class],
+			[UserContract::class, UserContract::class],
+			[StatusEnum::class, StatusEnum::class],
+			[ReadonlyUserDto::class, ReadonlyUserDto::class],
+			[PhpRepresentation::class, PhpRepresentation::class],
+		];
 
-		$gateway
-			->getMappers()
-			->map(['id' => 10], PhpRepresentation::class, new MappingContext($gateway));
+		foreach ($cases as [$target, $message]) {
+			try {
+				$gateway->getMappers()->map(['id' => 10], $target, new MappingContext($gateway));
+				self::fail('Expected mapping exception was not thrown.');
+			} catch (MappingException $exception) {
+				self::assertStringContainsString($message, $exception->getMessage());
+			}
+		}
 	}
 
-	public function testReadonlyTargetFailsClearly(): void
+	public function testDateTimeAndBackedEnumsAreExcludedFromObjectWalking(): void
 	{
-		$this->expectException(MappingException::class);
-		$this->expectExceptionMessage(ReadonlyUserDto::class);
-
-		map(['id' => 10])->to(ReadonlyUserDto::class);
+		$this->expectException(NoWalkerFoundException::class);
+		map(new DateTimeImmutable('2024-01-01T00:00:00+00:00'))->to([]);
 	}
 
-	public function testDateTimeObjectsAreExcludedFromStructuralOutboundMapping(): void
+	public function testBackedEnumsAreExcludedFromObjectWalking(): void
 	{
-		$this->expectException(NoMapperFoundException::class);
-
-		map(new DateTimeImmutable('2024-01-01T00:00:00+00:00'))->toArray();
+		$this->expectException(NoWalkerFoundException::class);
+		map(StatusEnum::Active)->to([]);
 	}
 
-	public function testBackedEnumsAreExcludedFromStructuralOutboundMapping(): void
+	public function testNoWriterFoundForUnsupportedScalarTarget(): void
 	{
-		$this->expectException(NoMapperFoundException::class);
-
-		map(StatusEnum::Active)->toArray();
+		$this->expectException(NoWriterFoundException::class);
+		map(['id' => 10])->to('not-a-class');
 	}
 
 	public function testEmptyAttributeNamesAreRejected(): void

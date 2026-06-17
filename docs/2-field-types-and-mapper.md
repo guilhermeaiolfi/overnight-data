@@ -1,8 +1,8 @@
 # Field Types and Mapper Runtime
 
-`ON\Data` now includes the Phase 1 scalar conversion foundation plus the Phase 2 and Phase 3A structural mapper runtime under `ON\Data\Mapper`.
+`ON\Data` includes the scalar conversion foundation plus a shallow composable mapper runtime under `ON\Data\Mapper`.
 
-The current mapper layer is intentionally shallow. It supports mapper registration and selection, collection mapping, array/`stdClass` structural mapping, and public-property DTO mapping, but it does not yet implement nested object graphs or definition-aware row mapping.
+The mapper layer is intentionally shallow. It supports input-driven traversal of arrays, `stdClass`, and public-property DTOs, but it does not implement nested object graphs, typed nested lists, definition-aware row mapping, ORM integration, or framework-specific runtime behavior.
 
 ## Canonical representations
 
@@ -45,11 +45,11 @@ $field = FieldContext::fromField($collection->getField('id'));
 
 The context carries the field name, type, nullability flag, and the original field when available.
 
-Phase 1 does not depend on copied field-definition metadata, so `FieldContext::fromField()` keeps an empty metadata array and preserves the live optional field reference through `getField()` and `hasField()`.
+`FieldContext::fromField()` keeps an empty metadata array in the current implementation and preserves the live optional field reference through `getField()` and `hasField()`.
 
 ## Built-in FieldTypes
 
-Phase 1 includes these built-ins:
+Built-in handlers:
 
 - `StringFieldType`
 - `PassthroughFieldType`
@@ -57,7 +57,7 @@ Phase 1 includes these built-ins:
 - `IntFieldType`
 - `FloatFieldType`
 
-The default registry provides these aliases:
+Default aliases:
 
 ```text
 string       -> StringFieldType
@@ -80,8 +80,6 @@ Deliberately deferred:
 - enums
 - JSON and value objects
 
-Those need explicit policy decisions before they can be added safely.
-
 ## Boolean input policy
 
 `BoolFieldType` accepts only these forms:
@@ -95,13 +93,6 @@ Those need explicit policy decisions before they can be added safely.
 - case-insensitive strings `"on"` and `"off"`
 
 String inputs are trimmed before matching, so surrounding whitespace is ignored.
-
-Examples:
-
-```text
-" TRUE "  -> true
-" off "   -> false
-```
 
 Ambiguous values such as `""`, `"2"`, `"-1"`, `"enabled"`, `"disabled"`, and `"maybe"` are rejected.
 
@@ -159,70 +150,95 @@ Mapping::resetDefaultGateway();
 
 If no gateway is installed, `Mapping::getDefaultGateway()` lazily creates and reuses a built-in default instance.
 
-## MapperManager
+## Composable mapper runtime
 
 Each `ConversionGateway` owns one `MapperManager`:
 
 ```php
-$mappers = $gateway->getMappers();
+$runtime = $gateway->getMappers();
 ```
 
-The manager keeps mapper registration, selection, construction, and instance reuse in one place.
+The runtime is composed from independent component roles:
+
+```text
+Input
+  -> Walker
+  -> Resolver chain
+  -> Representation conversion
+  -> Writer
+  -> Output
+```
+
+Responsibilities:
+
+- walker: enumerate available source fields and expose walker-specific context
+- resolver: inspect the current field evidence and return a `FieldContext` when capable
+- conversion: move scalar values between representations only when a boundary was declared
+- writer: prepare the target and perform the final per-field assignment
+
+Traversal is input-driven. The walker determines what fields exist. The writer does not traverse the source, and the target does not cause extra source traversal.
+
+## Built-in components
+
+Default registered order:
+
+- walkers: `ArrayWalker`, `ObjectWalker`
+- writers: `ArrayWriter`, `ObjectWriter`
+- resolvers: `ReflectionPropertyFieldResolver`
+
+This supports the built-in shallow matrix:
+
+```php
+map($array)->to([]);
+map($array)->to(stdClass::class);
+map($array)->to(UserDto::class);
+
+map($stdClass)->to([]);
+map($stdClass)->to(stdClass::class);
+map($stdClass)->to(UserDto::class);
+
+map($dto)->to([]);
+map($dto)->to(stdClass::class);
+map($dto)->to(AnotherDto::class);
+```
+
+## Construction and registration
 
 Registration is lazy:
 
-- registering a mapper stores only the class string;
-- registration order is preserved;
-- duplicate registrations are rejected;
-- a mapper is instantiated only when it is selected for a mapping operation;
-- one instance is cached per mapper class;
-- `clear()` drops mapper instances but keeps registrations;
-- `warmUp()` eagerly constructs all registered mappers.
+- registering a component stores only its class string
+- registration order is preserved within each role bucket
+- duplicate registrations are rejected
+- walkers and writers are instantiated only when selected
+- one instance is cached per selected walker class and per selected writer class
+- resolvers are instantiated fresh for each mapping
+- `clear()` drops reusable walker and writer instances but preserves registrations
+- `warmUp()` eagerly constructs registered walkers and writers
 
-The default mapper set is intentionally small:
-
-- `ON\Data\Mapper\ArrayToStdClassMapper`
-- `ON\Data\Mapper\StdClassToArrayMapper`
-- `ON\Data\Mapper\ArrayToObjectMapper`
-- `ON\Data\Mapper\ObjectToArrayMapper`
-
-Automatic selection uses each mapper's static `canMap()` method in registration order. Explicit `using()` selection skips unrelated mapper scans and validates that the chosen mapper can handle the requested operation.
-
-## Mapper construction
-
-Default construction for built-in and custom structural mappers is:
+Applications may install a custom constructor callback before reusable instances exist:
 
 ```php
-new $mapper($gateway)
-```
-
-Custom construction can be installed before the first mapper instance is created:
-
-```php
-use ON\Data\Mapper\ConversionGateway;
-use ON\Data\Mapper\MapperInterface;
-
 $gateway->getMappers()->setConstructor(
-    static function (string $mapper, ConversionGateway $runtime): MapperInterface {
-        return new $mapper($runtime);
+    static function (string $component, ConversionGateway $runtime): object {
+        return new $component();
     },
 );
 ```
 
-The constructor callback receives the mapper class name and the active gateway. Once any mapper instance has been created, changing the constructor is rejected so the runtime stays consistent.
-
 ## MappingContext
 
-`ON\Data\Mapper\MappingContext` carries immutable per-operation mapper state:
+`ON\Data\Mapper\MappingContext` carries immutable per-operation state:
 
-- the active `ConversionGateway`;
-- source and output representation class names;
-- an explicitly selected mapper class;
-- mapper arguments;
-- collection mode;
-- the nested path currently being mapped.
-
-Collection mapping and nested mapper calls retain the active gateway through the context.
+- the active `ConversionGateway`
+- source representation
+- output representation
+- an explicit walker class
+- an explicit writer class
+- explicit resolver classes
+- mapping arguments
+- collection mode
+- current path
+- prepared runtime target
 
 ## Fluent map()
 
@@ -232,10 +248,16 @@ Import the helper once:
 use function ON\Data\Mapper\map;
 ```
 
-Map to a structural target:
+Map to the canonical array target:
 
 ```php
-$user = map(['id' => 10, 'name' => 'Ada'])->to(stdClass::class);
+$data = map($dto)->to([]);
+```
+
+Map to `stdClass`:
+
+```php
+$object = map(['id' => 10, 'name' => 'Ada'])->to(stdClass::class);
 ```
 
 Map to a shallow DTO:
@@ -249,178 +271,141 @@ Configure the source representation explicitly:
 ```php
 use ON\Data\Mapper\Representation\WireRepresentation;
 
-$builder = map($payload)
-    ->from(WireRepresentation::class);
+$user = map($payload)
+    ->from(WireRepresentation::class)
+    ->to(UserDto::class);
 ```
 
-Set the output representation for downstream mappers:
+Configure the output representation:
 
 ```php
-$builder = map($payload)
-    ->as(WireRepresentation::class);
+$wire = map($dto)
+    ->as(WireRepresentation::class)
+    ->to([]);
 ```
 
-Select a mapper directly and pass mapper-specific arguments:
+Override components for one mapping:
 
 ```php
-$result = map($payload)
-    ->using(CustomMapper::class, 'extra-option')
-    ->to($target);
+$result = map($source)
+    ->walker(CustomWalker::class)
+    ->resolver(CustomFieldResolver::class)
+    ->writer(CustomWriter::class)
+    ->args($customEvidence)
+    ->to([]);
 ```
 
 The fluent configuration methods return clones:
 
 - `from()`
 - `as()`
-- `using()`
+- `walker()`
+- `writer()`
+- `resolver()`
 - `args()`
 - `collection()`
 
 Passing a representation class to `to()` is rejected. Use `as()` for representation selection and `to()` for structural targets.
 
+Removed convenience APIs:
+
+- `using()`
+- `toArray()`
+
+`to([])` is the canonical array destination.
+
 ## Collection mapping
 
-Collection mode applies mapper selection item-by-item and returns a list:
+Collection mode applies the same runtime item by item and returns a list:
 
 ```php
-$rows = map(
-    [
-        ['id' => 1],
-        ['id' => 2],
-    ],
-)->collection()->to(stdClass::class);
+$rows = map([
+    ['id' => 1],
+    ['id' => 2],
+])->collection()->to(UserDto::class);
 ```
 
 Empty iterables map to an empty list. Non-iterable sources are rejected when collection mode is enabled.
 
-## toArray() and toJson()
-
-The fluent builder includes convenience helpers:
-
-```php
-$array = map($stdClass)->toArray();
-$json = map($stdClass)->toJson();
-```
-
-`toArray()` maps through the registered structural mappers when needed. `toJson()` encodes the resulting array as JSON and is useful for shallow export scenarios.
-
 ## Public-property DTO mapping
 
-Phase 3A adds shallow mapping for concrete classes with public instance properties:
-
-```php
-use function ON\Data\Mapper\map;
-
-$dto = map([
-    'id' => 10,
-    'name' => 'Ada',
-])->to(UserDto::class);
-
-$payload = map($dto)->toArray();
-```
+Inbound and outbound object support is shallow and public-property-based.
 
 Inbound rules:
 
-- the target must be a concrete non-enum, non-interface, non-abstract class;
-- the target constructor is bypassed with reflection and is not invoked;
-- only public instance properties are considered;
-- static, private, and protected properties are ignored;
-- unknown source keys are ignored;
-- missing keys leave defaults and uninitialized typed properties untouched;
-- `stdClass` still routes through the dedicated `stdClass` mapper.
+- concrete class-string targets are instantiated without invoking their constructors
+- only public instance properties are considered
+- static, private, and protected properties are ignored
+- unknown input names are ignored for typed targets
+- missing fields preserve defaults and uninitialized properties
+- `MapFrom` is applied on the target side
+- readonly targets are rejected in this phase
 
 Outbound rules:
 
-- only public instance properties are exported;
-- uninitialized typed properties are skipped;
-- explicit `null` values are preserved;
-- the result is always a plain array.
+- only public instance properties are exported
+- static properties are ignored
+- uninitialized typed properties are skipped
+- explicit `null` values are preserved
+- `MapTo` is applied on the source side
+- `Hidden` omits a property from outbound object walking
 
-## Mapping attributes
-
-Phase 3A includes three property-only attributes:
-
-- `ON\Data\Mapper\Attribute\MapFrom` remaps one inbound source key to a public property name.
-- `ON\Data\Mapper\Attribute\MapTo` remaps one outbound property name to a different array key.
-- `ON\Data\Mapper\Attribute\Hidden` omits a public property from outbound object-to-array mapping.
-
-Example:
+Combined aliasing works across object-to-object mapping:
 
 ```php
-use ON\Data\Mapper\Attribute\Hidden;
-use ON\Data\Mapper\Attribute\MapFrom;
-use ON\Data\Mapper\Attribute\MapTo;
-
-final class UserDto
+final class SourcePost
 {
-    public int $id;
-
-    #[MapFrom('full_name')]
-    #[MapTo('full_name')]
-    public string $name;
-
-    #[Hidden]
-    public string $password;
+    #[MapTo('post_title')]
+    public string $title;
 }
-```
 
-Empty `MapFrom` and `MapTo` names are rejected.
+final class TargetPost
+{
+    #[MapFrom('post_title')]
+    public string $heading;
+}
+
+$result = map($source)->to(TargetPost::class);
+```
 
 ## Representation-aware primitive conversion
 
-Structural DTO mapping stays representation-neutral by default:
+Structural mapping is representation-neutral by default:
 
 ```php
 map(['id' => '10'])->to(UserDto::class);
 ```
 
-The example above does not reinterpret scalar values automatically.
+Primitive conversion happens only when `from()` or `as()` creates a representation boundary.
 
-Primitive conversion only happens when a representation boundary is declared explicitly:
-
-```php
-use ON\Data\Mapper\Representation\WireRepresentation;
-
-$dto = map($payload)
-    ->from(WireRepresentation::class)
-    ->to(UserInputDto::class);
-
-$array = map($dto)
-    ->as(WireRepresentation::class)
-    ->toArray();
-```
-
-Phase 3A converts only public properties declared as:
+Supported reflection-derived primitive types in this phase:
 
 - `string`
 - `int`
 - `bool`
 - `float`
 
-Nullable primitives preserve `null`. Untyped, `mixed`, union, intersection, and class-typed properties are left unchanged in this phase.
+Untyped, `mixed`, union, intersection, and class-typed structural properties are left unchanged.
 
-## Current shallow-mapper limitations
+## Current shallow limitations
 
-The built-in structural mappers are intentionally narrow:
+The built-in runtime is intentionally narrow:
 
-- `ArrayToStdClassMapper` maps one array to one `stdClass`;
-- `StdClassToArrayMapper` maps one `stdClass` to one array;
-- `ArrayToObjectMapper` maps one array to one concrete object with public instance properties;
-- `ObjectToArrayMapper` maps one non-`stdClass` object to one array through public instance properties;
-- both mappers are shallow only;
-- nested DTO/object mapping is not implemented;
-- lists of typed nested objects are not implemented;
-- PHPDoc parsing is not implemented;
-- dot-path expansion is not implemented;
-- constructor-argument hydration and setters are not implemented;
-- private-property mutation is not implemented;
-- readonly-target hydration is not implemented;
-- arbitrary value-object FieldTypes are not implemented;
-- definition-aware row mapping is not implemented.
+- no nested DTO graphs
+- no recursive object mapping into class-typed properties
+- no typed nested collections
+- no PHPDoc parsing
+- no constructor-argument hydration
+- no setter hydration
+- no private-property mutation
+- no readonly hydration
+- no dot-path expansion
+- no definition-aware row mapping
+- no ORM, REST, or framework integration
 
 ## Boundaries
 
-The Phase 1 implementation does not depend on:
+The implementation does not depend on:
 
 - Overnight framework bootstrap
 - application singletons
@@ -432,12 +417,3 @@ The Phase 1 implementation does not depend on:
 - ORM session or entity tracking
 
 Definition arrays remain plain data. Conversion runtime objects are not stored in registries, collections, views, fields, relations, or exported definition arrays.
-
-## Deferred mapper phases
-
-The following are intentionally not implemented yet:
-
-- nested object mapping
-- list and graph mapping for typed objects
-- definition-row mapping
-- constructor and readonly hydration beyond public-property assignment
