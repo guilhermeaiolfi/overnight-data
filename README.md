@@ -18,6 +18,7 @@ This repository currently includes:
 - the `ON\Data\Key` value object for simple and composite identities;
 - the standalone FieldType, representation, and conversion gateway foundation under `ON\Data\Mapper`;
 - `MapperManager`, `MappingContext`, walkers, writers, resolvers, and the fluent `map()` / `MapBuilder` entry point;
+- default definition-aware field resolution through `->args($definition)` for shallow scalar conversion;
 - generic collection mapping through the same composable runtime;
 - shallow array, `stdClass`, and public-property object combinations selected independently by source walker and target writer;
 - mapper attributes `MapFrom`, `MapTo`, and `Hidden` for shallow DTO mapping;
@@ -63,4 +64,5 @@ composer check
 - `docs/definitions.md` covers the current public definition API.
 - `docs/extending-definitions.md` covers supported subclass-based extension points.
 - `docs/2-field-types-and-mapper.md` covers the implemented scalar FieldType, mapper runtime, and current shallow structural mapping support.
+- `docs/2-mappers/phase-5-definition-field-resolver.md` summarizes the definition-aware field resolver phase.
 - `docs/release-0.1-checklist.md` summarizes the pre-release checklist for the definitions-only package.

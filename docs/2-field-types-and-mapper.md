@@ -2,7 +2,7 @@
 
 `ON\Data` includes the scalar conversion foundation plus a shallow composable mapper runtime under `ON\Data\Mapper`.
 
-The mapper layer is intentionally shallow. It supports input-driven traversal of arrays, `stdClass`, and public-property DTOs, but it does not implement nested object graphs, typed nested lists, definition-aware row mapping, ORM integration, or framework-specific runtime behavior.
+The mapper layer is intentionally shallow. It supports input-driven traversal of arrays, `stdClass`, and public-property DTOs, plus definition-aware scalar conversion through `->args($definition)`, but it does not implement nested object graphs, typed nested lists, ORM integration, or framework-specific runtime behavior.
 
 ## Canonical representations
 
@@ -184,7 +184,7 @@ Default registered order:
 
 - walkers: `ArrayWalker`, `ObjectWalker`
 - writers: `ArrayWriter`, `ObjectWriter`
-- resolvers: `ReflectionPropertyFieldResolver`
+- resolvers: `DefinitionFieldResolver`, `ReflectionPropertyFieldResolver`
 
 This supports the built-in shallow matrix:
 
@@ -227,6 +227,8 @@ $gateway->getMappers()->setConstructor(
 ```
 
 Prepended components win first-match automatic selection only within their own role bucket. Prepending a walker does not reorder writers or resolvers, and vice versa.
+
+Explicit per-call fluent resolvers still run before every registered default resolver.
 
 ## MappingContext
 
@@ -310,6 +312,66 @@ The fluent configuration methods return clones:
 
 Passing a representation class to `to()` is rejected. Use `as()` for representation selection and `to()` for structural targets.
 
+## Definition-aware scalar conversion
+
+When one direct `DefinitionInterface` is supplied through `args()`, the default `DefinitionFieldResolver` can resolve field metadata for structurally untyped sources such as arrays and request-style payloads:
+
+```php
+use ON\Data\Definition\Registry;
+use ON\Data\Mapper\Representation\StorageRepresentation;
+use function ON\Data\Mapper\map;
+
+$registry = new Registry();
+$users = $registry->collection('users');
+$users->field('id', 'int');
+$users->field('active', 'bool');
+$users->field('rating', 'float');
+
+$result = map([
+    'id' => '42',
+    'active' => '0',
+    'rating' => '19.5',
+])
+    ->from(StorageRepresentation::class)
+    ->args($users)
+    ->to([]);
+```
+
+Result:
+
+```php
+[
+    'id' => 42,
+    'active' => false,
+    'rating' => 19.5,
+]
+```
+
+Collection mode reuses the same mapping arguments for each top-level item:
+
+```php
+$rows = map([
+    ['id' => '1', 'active' => '1'],
+    ['id' => '2', 'active' => '0'],
+])
+    ->from(StorageRepresentation::class)
+    ->args($users)
+    ->collection()
+    ->to([]);
+```
+
+`DefinitionFieldResolver` only uses exact effective field names emitted by the active walker. In this phase it does not resolve aliases, columns, relation names, or registry-wide lookups.
+
+The root `Registry` is not searched automatically. Pass the active definition itself:
+
+```php
+->args($registry->getDefinition('users'))
+```
+
+If mapping arguments contain more than one direct `DefinitionInterface`, resolution is ambiguous and the mapper throws a `MappingException` instead of choosing one arbitrarily.
+
+Definition metadata wins over reflection because `DefinitionFieldResolver` runs before `ReflectionPropertyFieldResolver`. If the supplied definition does not contain the current field, it returns `null` and reflection remains a fallback for typed DTO properties.
+
 Removed convenience APIs:
 
 - `using()`
@@ -381,6 +443,16 @@ map(['id' => '10'])->to(UserDto::class);
 
 Primitive conversion happens only when `from()` or `as()` creates a representation boundary.
 
+Supplying a definition alone does not trigger conversion:
+
+```php
+map(['id' => '10'])
+    ->args($users)
+    ->to([]);
+```
+
+That call preserves the raw string value because no representation boundary was declared.
+
 Supported reflection-derived primitive types in this phase:
 
 - `string`
@@ -403,7 +475,8 @@ The built-in runtime is intentionally narrow:
 - no private-property mutation
 - no readonly hydration
 - no dot-path expansion
-- no definition-aware row mapping
+- no alias-name remapping
+- no column-name remapping
 - no ORM, REST, or framework integration
 
 ## Boundaries

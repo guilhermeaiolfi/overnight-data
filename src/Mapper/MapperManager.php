@@ -13,6 +13,7 @@ use ON\Data\Mapper\Exception\MapperComponentConfigurationException;
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\Exception\NoWalkerFoundException;
 use ON\Data\Mapper\Exception\NoWriterFoundException;
+use ON\Data\Mapper\Resolver\DefinitionFieldResolver;
 use ON\Data\Mapper\Resolver\FieldResolverInterface;
 use ON\Data\Mapper\Resolver\ReflectionPropertyFieldResolver;
 use ON\Data\Mapper\Walker\ArrayWalker;
@@ -70,6 +71,7 @@ final class MapperManager
 		$manager->register(ObjectWalker::class);
 		$manager->register(ArrayWriter::class);
 		$manager->register(ObjectWriter::class);
+		$manager->register(DefinitionFieldResolver::class);
 		$manager->register(ReflectionPropertyFieldResolver::class);
 
 		return $manager;

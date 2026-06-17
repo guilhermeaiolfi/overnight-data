@@ -16,6 +16,7 @@ use ON\Data\Mapper\FieldTypeRegistry;
 use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\Representation\WireRepresentation;
+use ON\Data\Mapper\Resolver\DefinitionFieldResolver;
 use ON\Data\Mapper\Resolver\ReflectionPropertyFieldResolver;
 use ON\Data\Mapper\Walker\ArrayWalker;
 use ON\Data\Mapper\Walker\ObjectWalker;
@@ -331,7 +332,25 @@ final class MapperManagerTest extends TestCase
 
 		self::assertSame([ArrayWalker::class, ObjectWalker::class], $manager->getRegisteredWalkers());
 		self::assertSame([ArrayWriter::class, ObjectWriter::class], $manager->getRegisteredWriters());
-		self::assertSame([ReflectionPropertyFieldResolver::class], $manager->getRegisteredResolvers());
+		self::assertSame(
+			[DefinitionFieldResolver::class, ReflectionPropertyFieldResolver::class],
+			$manager->getRegisteredResolvers(),
+		);
+	}
+
+	public function testExplicitResolverClassesStillPrecedeDefaultResolvers(): void
+	{
+		$manager = MapperManager::createDefault($this->gateway());
+
+		self::assertSame(
+			[SpyResolver::class, DefinitionFieldResolver::class, ReflectionPropertyFieldResolver::class],
+			array_map(
+				static fn (object $resolver): string => $resolver::class,
+				$manager->createResolverChain(
+					(new MappingContext($this->gateway()))->withAddedResolverClass(SpyResolver::class),
+				),
+			),
+		);
 	}
 
 	public function testPrependedSpecializedWalkerWinsOverObjectWalker(): void
@@ -394,7 +413,7 @@ final class MapperManagerTest extends TestCase
 			$manager->getRegisteredWriters(),
 		);
 		self::assertSame(
-			[PrependingResolver::class, ReflectionPropertyFieldResolver::class],
+			[PrependingResolver::class, DefinitionFieldResolver::class, ReflectionPropertyFieldResolver::class],
 			$manager->getRegisteredResolvers(),
 		);
 	}
