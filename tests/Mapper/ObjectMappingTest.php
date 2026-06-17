@@ -17,6 +17,7 @@ use function ON\Data\Mapper\map;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Representation\WireRepresentation;
+use ON\Data\Mapper\Writer\ObjectWriter;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Fixture\AbstractUserDto;
@@ -24,6 +25,7 @@ use Tests\ON\Data\Fixture\AliasSourcePost;
 use Tests\ON\Data\Fixture\AliasTargetPost;
 use Tests\ON\Data\Fixture\CtorSpyDto;
 use Tests\ON\Data\Fixture\MixedValueObject;
+use Tests\ON\Data\Fixture\PrependingContractWriter;
 use Tests\ON\Data\Fixture\ReadonlyUserDto;
 use Tests\ON\Data\Fixture\StatusEnum;
 use Tests\ON\Data\Fixture\UserContract;
@@ -303,22 +305,50 @@ final class ObjectMappingTest extends TestCase
 	{
 		$gateway = new ConversionGateway(FieldTypeRegistry::createDefault());
 
-		$cases = [
-			[AbstractUserDto::class, AbstractUserDto::class],
-			[UserContract::class, UserContract::class],
-			[StatusEnum::class, StatusEnum::class],
-			[ReadonlyUserDto::class, ReadonlyUserDto::class],
-			[PhpRepresentation::class, PhpRepresentation::class],
-		];
-
-		foreach ($cases as [$target, $message]) {
+		foreach (
+			[
+				AbstractUserDto::class,
+				UserContract::class,
+				StatusEnum::class,
+				ReadonlyUserDto::class,
+				PhpRepresentation::class,
+			] as $target
+		) {
 			try {
-				$gateway->getMappers()->map(['id' => 10], $target, new MappingContext($gateway));
-				self::fail('Expected mapping exception was not thrown.');
-			} catch (MappingException $exception) {
-				self::assertStringContainsString($message, $exception->getMessage());
+				$gateway->getMappers()->map(
+					['id' => 10],
+					$target,
+					new MappingContext($gateway),
+				);
+				self::fail('Expected no-writer exception was not thrown.');
+			} catch (NoWriterFoundException $exception) {
+				self::assertStringContainsString($target, $exception->getMessage());
 			}
 		}
+	}
+
+	public function testObjectWriterCapabilityChecksDoNotClaimUnsupportedTargets(): void
+	{
+		$context = new MappingContext(new ConversionGateway(FieldTypeRegistry::createDefault()));
+
+		self::assertFalse(ObjectWriter::canWrite(UserContract::class, $context));
+		self::assertFalse(ObjectWriter::canWrite(AbstractUserDto::class, $context));
+		self::assertFalse(ObjectWriter::canWrite(StatusEnum::class, $context));
+		self::assertFalse(ObjectWriter::canWrite(ReadonlyUserDto::class, $context));
+		self::assertFalse(ObjectWriter::canWrite(PhpRepresentation::class, $context));
+		self::assertFalse(ObjectWriter::canWrite('Missing\\ClassName', $context));
+		self::assertTrue(ObjectWriter::canWrite(stdClass::class, $context));
+		self::assertTrue(ObjectWriter::canWrite(UserInputDto::class, $context));
+	}
+
+	public function testPrependedSpecializedWriterCanHandleTargetRejectedByObjectWriter(): void
+	{
+		$gateway = new ConversionGateway(FieldTypeRegistry::createDefault());
+		$gateway->getMappers()->prepend(PrependingContractWriter::class);
+
+		$result = $gateway->getMappers()->map(['specialized' => 'writer'], UserContract::class, new MappingContext($gateway));
+
+		self::assertSame('writer', $result->specialized);
 	}
 
 	public function testDateTimeAndBackedEnumsAreExcludedFromObjectWalking(): void
@@ -335,8 +365,12 @@ final class ObjectMappingTest extends TestCase
 
 	public function testNoWriterFoundForUnsupportedScalarTarget(): void
 	{
-		$this->expectException(NoWriterFoundException::class);
-		map(['id' => 10])->to('not-a-class');
+		try {
+			map(['id' => 10])->to('not-a-class');
+			self::fail('Expected no-writer exception was not thrown.');
+		} catch (NoWriterFoundException $exception) {
+			self::assertStringContainsString('not-a-class', $exception->getMessage());
+		}
 	}
 
 	public function testEmptyAttributeNamesAreRejected(): void

@@ -27,7 +27,17 @@ final class ObjectWriter implements WriterInterface
 			return false;
 		}
 
-		return class_exists($target) || interface_exists($target) || enum_exists($target);
+		if ($target === stdClass::class) {
+			return true;
+		}
+
+		if (! class_exists($target)) {
+			return false;
+		}
+
+		$reflection = new ReflectionClass($target);
+
+		return self::supportsReflectionTarget($reflection);
 	}
 
 	public function prepare(
@@ -100,6 +110,10 @@ final class ObjectWriter implements WriterInterface
 	{
 		$class = $reflection->getName();
 
+		if (self::supportsReflectionTarget($reflection)) {
+			return;
+		}
+
 		if ($reflection->isInterface()) {
 			throw new MappingException(sprintf("Cannot map to interface target '%s'.", $class));
 		}
@@ -127,6 +141,31 @@ final class ObjectWriter implements WriterInterface
 				);
 			}
 		}
+	}
+
+	private static function supportsReflectionTarget(ReflectionClass $reflection): bool
+	{
+		$class = $reflection->getName();
+
+		if ($reflection->isInterface() || $reflection->isAbstract() || $reflection->isEnum()) {
+			return false;
+		}
+
+		if (is_a($class, RepresentationInterface::class, true)) {
+			return false;
+		}
+
+		if (method_exists($reflection, 'isReadOnly') && $reflection->isReadOnly()) {
+			return false;
+		}
+
+		foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+			if (! $property->isStatic() && $property->isReadOnly()) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	private function wrapPropertyFailure(

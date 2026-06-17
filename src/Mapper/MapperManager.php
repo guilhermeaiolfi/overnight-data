@@ -77,16 +77,14 @@ final class MapperManager
 
 	public function register(string $component): self
 	{
-		$role = $this->detectRole($component);
-		$bucket = &$this->bucketFor($role);
+		$this->addComponent($component, append: true);
 
-		if (in_array($component, $bucket, true)) {
-			throw new DuplicateMapperComponentRegistrationException(
-				sprintf("Mapper component '%s' is already registered.", $component),
-			);
-		}
+		return $this;
+	}
 
-		$bucket[] = $component;
+	public function prepend(string $component): self
+	{
+		$this->addComponent($component, append: false);
 
 		return $this;
 	}
@@ -211,12 +209,7 @@ final class MapperManager
 	public function getWalker(string $walker): WalkerInterface
 	{
 		if (! isset($this->walkerInstances[$walker])) {
-			$instance = $this->construct($walker);
-			if (! $instance instanceof WalkerInterface) {
-				throw new MapperComponentConfigurationException(
-					sprintf("Constructor did not return a valid walker '%s'.", $walker),
-				);
-			}
+			$instance = $this->constructTypedComponent($walker, WalkerInterface::class, 'walker');
 
 			$this->walkerInstances[$walker] = $instance;
 		}
@@ -230,12 +223,7 @@ final class MapperManager
 	public function getWriter(string $writer): WriterInterface
 	{
 		if (! isset($this->writerInstances[$writer])) {
-			$instance = $this->construct($writer);
-			if (! $instance instanceof WriterInterface) {
-				throw new MapperComponentConfigurationException(
-					sprintf("Constructor did not return a valid writer '%s'.", $writer),
-				);
-			}
+			$instance = $this->constructTypedComponent($writer, WriterInterface::class, 'writer');
 
 			$this->writerInstances[$writer] = $instance;
 		}
@@ -312,7 +300,12 @@ final class MapperManager
 			}
 		}
 
-		throw new NoWriterFoundException('No registered writer can handle the requested target.');
+		throw new NoWriterFoundException(
+			sprintf(
+				'No registered writer can handle the requested target %s.',
+				$this->describeTarget($target),
+			),
+		);
 	}
 
 	private function mapCollection(
@@ -350,14 +343,7 @@ final class MapperManager
 	 */
 	private function constructWalker(string $walkerClass): WalkerInterface
 	{
-		$instance = $this->construct($walkerClass);
-		if (! $instance instanceof WalkerInterface) {
-			throw new MapperComponentConfigurationException(
-				sprintf("Constructor did not return a valid walker '%s'.", $walkerClass),
-			);
-		}
-
-		return $instance;
+		return $this->constructTypedComponent($walkerClass, WalkerInterface::class, 'walker');
 	}
 
 	/**
@@ -365,14 +351,7 @@ final class MapperManager
 	 */
 	private function constructWriter(string $writerClass): WriterInterface
 	{
-		$instance = $this->construct($writerClass);
-		if (! $instance instanceof WriterInterface) {
-			throw new MapperComponentConfigurationException(
-				sprintf("Constructor did not return a valid writer '%s'.", $writerClass),
-			);
-		}
-
-		return $instance;
+		return $this->constructTypedComponent($writerClass, WriterInterface::class, 'writer');
 	}
 
 	/**
@@ -381,10 +360,54 @@ final class MapperManager
 	private function constructResolver(string $resolverClass): FieldResolverInterface
 	{
 		$this->assertRoleOrThrow($resolverClass, FieldResolverInterface::class);
-		$instance = $this->construct($resolverClass);
-		if (! $instance instanceof FieldResolverInterface) {
+
+		return $this->constructTypedComponent($resolverClass, FieldResolverInterface::class, 'resolver');
+	}
+
+	private function addComponent(string $component, bool $append): void
+	{
+		$role = $this->detectRole($component);
+		$bucket = &$this->bucketFor($role);
+
+		if (in_array($component, $bucket, true)) {
+			throw new DuplicateMapperComponentRegistrationException(
+				sprintf("Mapper component '%s' is already registered.", $component),
+			);
+		}
+
+		if ($append) {
+			$bucket[] = $component;
+
+			return;
+		}
+
+		array_unshift($bucket, $component);
+	}
+
+	/**
+	 * @template T of object
+	 *
+	 * @param class-string<T> $requestedClass
+	 * @param class-string $expectedInterface
+	 *
+	 * @return T
+	 */
+	private function constructTypedComponent(
+		string $requestedClass,
+		string $expectedInterface,
+		string $role,
+	): object {
+		$instance = $this->construct($requestedClass);
+
+		if (! $instance instanceof $expectedInterface || ! $instance instanceof $requestedClass) {
 			throw new MapperComponentConfigurationException(
-				sprintf("Constructor did not return a valid resolver '%s'.", $resolverClass),
+				sprintf(
+					"Constructor returned %s while building %s '%s'; expected an instance of %s.",
+					$instance::class,
+					$role,
+					$requestedClass,
+					$requestedClass,
+				),
 			);
 		}
 
@@ -450,5 +473,18 @@ final class MapperManager
 				sprintf("Mapper component '%s' must implement %s.", $component, $requiredInterface),
 			);
 		}
+	}
+
+	private function describeTarget(mixed $target): string
+	{
+		if (is_object($target)) {
+			return sprintf("object of type '%s'", $target::class);
+		}
+
+		if (is_string($target)) {
+			return sprintf("class-string '%s'", $target);
+		}
+
+		return sprintf("value of type '%s'", gettype($target));
 	}
 }

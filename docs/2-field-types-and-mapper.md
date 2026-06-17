@@ -207,6 +207,7 @@ map($dto)->to(AnotherDto::class);
 Registration is lazy:
 
 - registering a component stores only its class string
+- `prepend()` inserts a component at the front of its own role bucket
 - registration order is preserved within each role bucket
 - duplicate registrations are rejected
 - walkers and writers are instantiated only when selected
@@ -224,6 +225,8 @@ $gateway->getMappers()->setConstructor(
     },
 );
 ```
+
+Prepended components win first-match automatic selection only within their own role bucket. Prepending a walker does not reorder writers or resolvers, and vice versa.
 
 ## MappingContext
 
