@@ -20,7 +20,7 @@ This repository currently includes:
 - `MapperManager`, `MappingContext`, `MappingNode`, walkers, writers, field resolvers, and the fluent `map()` / `MapBuilder` entry point;
 - default definition-aware field resolution through `->args($definition)` for scalar conversion;
 - generic collection mapping through the same composable runtime;
-- recursive array, `stdClass`, and public-property object combinations selected independently by source walker and target writer;
+- recursive array, `stdClass`, and public-property object combinations selected independently by source walker and target writer, with cycle checks applied at recursive mapper dispatch;
 - typed nested DTO properties and PHPDoc-described DTO lists;
 - default dotted-key expansion for flat joined rows and request payloads;
 - mapper attributes `MapFrom`, `MapTo`, and `Hidden` across nested DTO mapping;

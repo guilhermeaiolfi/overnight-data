@@ -142,19 +142,13 @@ final class MapperManager
 		mixed $target,
 		MappingContext $context,
 	): mixed {
-		return $this->mapNode(
-			MappingNode::root(
-				$source,
-				$target,
-				$context,
-				$context->getArguments(),
-				$context->isCollection(),
-			),
-		);
+		return $this->mapNode(MappingNode::root($source, $target, $context));
 	}
 
 	public function mapNode(MappingNode $node): mixed
 	{
+		$node->assertNoObjectCycle();
+
 		$walker = $this->resolveWalker($node->getValue(), $node->getContext());
 
 		return $walker->walk($node, $this);

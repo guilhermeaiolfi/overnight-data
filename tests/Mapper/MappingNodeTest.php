@@ -19,28 +19,38 @@ final class MappingNodeTest extends TestCase
 {
 	public function testRootNodeCarriesMappingFrameConfiguration(): void
 	{
-		$context = new MappingContext(ConversionGateway::createDefault());
+		$context = (new MappingContext(ConversionGateway::createDefault()))
+			->withArguments(['definition'])
+			->withCollection(true);
 		$source = ['author' => ['id' => 2]];
-		$node = MappingNode::root($source, [], $context, ['definition'], true);
+		$node = MappingNode::root($source, [], $context);
 
 		self::assertNull($node->getName());
 		self::assertSame($source, $node->getValue());
 		self::assertSame([], $node->getTarget());
 		self::assertSame($context, $node->getContext());
 		self::assertSame(['definition'], $node->getArguments());
+		self::assertSame($context->getArguments(), $node->getArguments());
 		self::assertTrue($node->isCollection());
+		self::assertSame($context->isCollection(), $node->isCollection());
 		self::assertNull($node->getParent());
 		self::assertSame('', $node->getPath());
 	}
 
 	public function testChildNodeDerivesParentAndDottedPaths(): void
 	{
-		$root = MappingNode::root(['author' => ['name' => 'Ada']], [], new MappingContext(ConversionGateway::createDefault()));
+		$context = (new MappingContext(ConversionGateway::createDefault()))
+			->withArguments(['users'])
+			->withCollection(true);
+		$root = MappingNode::root(['author' => ['name' => 'Ada']], [], $context);
 		$frame = $root->withTarget([]);
 		$author = $frame->child('author', ['name' => 'Ada']);
 		$name = $author->withTarget([])->child('name', 'Ada');
 
 		self::assertSame($frame, $author->getParent());
+		self::assertSame($context, $author->getContext());
+		self::assertSame($context->getArguments(), $author->getArguments());
+		self::assertSame($context->isCollection(), $author->isCollection());
 		self::assertSame('author', $author->getPath());
 		self::assertSame('author.name', $name->getPath());
 		self::assertSame($root->getValue(), $author->getParentSource());
@@ -58,14 +68,14 @@ final class MappingNodeTest extends TestCase
 		self::assertSame('0.id', $field->getPath());
 	}
 
-	public function testForMappingOverridesTargetArgumentsAndCollectionMode(): void
+	public function testForMappingDerivesNestedContextAndOverrideBehavior(): void
 	{
 		$context = (new MappingContext(ConversionGateway::createDefault()))
 			->withWalkerClass(SpyArrayWalker::class)
 			->withWriterClass(SpyArrayWriter::class);
 		$rootValue = ['author' => ['id' => 2]];
 		$childValue = ['id' => 2];
-		$child = MappingNode::root($rootValue, [], $context, ['old'])
+		$child = MappingNode::root($rootValue, [], $context->withArguments(['old']))
 			->child('author', $childValue);
 		$nestedArguments = ['new'];
 		$preservedArguments = ['same'];
@@ -75,11 +85,22 @@ final class MappingNodeTest extends TestCase
 
 		self::assertSame(stdClass::class, $nested->getTarget());
 		self::assertSame($nestedArguments, $nested->getArguments());
+		self::assertSame($nestedArguments, $nested->getContext()->getArguments());
 		self::assertTrue($nested->isCollection());
+		self::assertTrue($nested->getContext()->isCollection());
 		self::assertNull($nested->getContext()->getWalkerClass());
 		self::assertNull($nested->getContext()->getWriterClass());
+		self::assertSame($preservedArguments, $preserved->getArguments());
+		self::assertSame($preservedArguments, $preserved->getContext()->getArguments());
+		self::assertFalse($preserved->isCollection());
+		self::assertFalse($preserved->getContext()->isCollection());
 		self::assertSame(SpyArrayWalker::class, $preserved->getContext()->getWalkerClass());
 		self::assertSame(SpyArrayWriter::class, $preserved->getContext()->getWriterClass());
+	}
+
+	public function testWithContextMethodWasRemoved(): void
+	{
+		self::assertFalse(method_exists(MappingNode::class, 'withContext'));
 	}
 
 	public function testSourcePropertyEvidenceIsNodeLocal(): void

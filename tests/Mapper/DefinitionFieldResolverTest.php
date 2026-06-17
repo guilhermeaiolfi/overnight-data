@@ -123,7 +123,11 @@ final class DefinitionFieldResolverTest extends TestCase
 
 	private function node(string|int $name, mixed $value, array $arguments = []): MappingNode
 	{
-		return MappingNode::root([], [], $this->context(), $arguments)->child($name, $value);
+		return MappingNode::root(
+			[],
+			[],
+			$this->context()->withArguments($arguments),
+		)->child($name, $value);
 	}
 
 	private function context(): MappingContext

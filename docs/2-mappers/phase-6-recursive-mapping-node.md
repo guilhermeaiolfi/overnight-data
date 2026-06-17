@@ -5,10 +5,12 @@ This phase replaces the visitor-callback mapper flow with a recursive `MappingNo
 ## What changed
 
 - `MappingNode` is now the unit of current-node work.
+- `MappingContext` now holds effective configuration for the active mapping frame only.
 - walkers own traversal, collection iteration, and recursive dispatch
 - `MapperManager` now selects walkers and writers and constructs mapping-local resolver chains
 - writers only prepare, write one completed value, and finish
 - field resolvers now resolve leaf `FieldContext` objects from `MappingNode`
+- nested recursion is derived directly into another `MappingNode` rather than a temporary nested-mapping carrier
 
 Recursive traversal decisions are owned by walkers rather than a separate per-node resolver chain.
 
@@ -21,7 +23,7 @@ Recursive traversal decisions are owned by walkers rather than a separate per-no
 - nested definition relation scope replacement
 - nested representation conversion
 - top-level collection items containing nested structures
-- object cycle detection within the current ancestor chain
+- object cycle detection within the current ancestor chain, including collection-item recursion
 - destination reflection metadata wins for typed object targets
 - source reflection remains available for untyped outbound targets
 - scalar relation identifiers do not trigger recursion
@@ -63,3 +65,22 @@ Relation metadata only triggers recursion for structural values. Scalar relation
 ## Extension point
 
 Custom traversal behavior belongs in a custom walker. `MappingNode` remains the emitted runtime node, while field resolvers stay focused on leaf conversion metadata.
+
+Final ownership model:
+
+```text
+MappingContext = effective configuration for the active mapping frame
+MappingNode    = current traversal value, target, ancestry, and reflection evidence
+FieldContext   = minimal scalar-conversion facts
+Walker         = recursive structural decisions
+Writer         = target assignment
+```
+
+`MappingNode` derives path, parent source, parent target, and ancestor-chain cycle inspection from its own tree. Arguments and collection mode are read through the node API, but stored only in `MappingContext`.
+
+Cycle validation now occurs at `MapperManager::mapNode()` before walker selection, so every recursive dispatch uses the same ancestor-chain guard.
+
+Parent target semantics remain intentionally asymmetric:
+
+- object parents are observed as the same live mutated object instance
+- array parents are prepared-target snapshots

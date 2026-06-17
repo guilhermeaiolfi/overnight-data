@@ -63,7 +63,6 @@ abstract class Walker implements WalkerInterface
 			$nestedNode = $this->getNestedNode($child);
 
 			if ($nestedNode !== null && $child->getValue() !== null) {
-				$nestedNode->assertNoObjectCycle();
 				$value = $mappers->mapNode($nestedNode);
 			} else {
 				$field = $fieldCoordinator->resolveField($child);
@@ -71,7 +70,6 @@ abstract class Walker implements WalkerInterface
 			}
 
 			$result = $writer->write($result, $child, $value);
-			$frame = $frame->withTarget($result);
 		}
 
 		return $writer->finish($result, $frame->getContext());

@@ -9,32 +9,22 @@ use ReflectionProperty;
 
 final readonly class MappingNode
 {
-	/**
-	 * @param list<mixed> $arguments
-	 */
 	private function __construct(
 		private string|int|null $name,
 		private mixed $value,
 		private mixed $target,
 		private MappingContext $context,
 		private ?self $parent,
-		private array $arguments,
-		private bool $collection,
 		private ?ReflectionProperty $sourceProperty = null,
 	) {
 	}
 
-	/**
-	 * @param list<mixed> $arguments
-	 */
 	public static function root(
 		mixed $source,
 		mixed $target,
 		MappingContext $context,
-		array $arguments = [],
-		bool $collection = false,
 	): self {
-		return new self(null, $source, $target, $context, null, $arguments, $collection);
+		return new self(null, $source, $target, $context, null);
 	}
 
 	public function getName(): string|int|null
@@ -62,12 +52,12 @@ final readonly class MappingNode
 	 */
 	public function getArguments(): array
 	{
-		return $this->arguments;
+		return $this->context->getArguments();
 	}
 
 	public function isCollection(): bool
 	{
-		return $this->collection;
+		return $this->context->isCollection();
 	}
 
 	public function getParent(): ?self
@@ -102,20 +92,6 @@ final readonly class MappingNode
 		return $this->sourceProperty;
 	}
 
-	public function withContext(MappingContext $context): self
-	{
-		return new self(
-			$this->name,
-			$this->value,
-			$this->target,
-			$context,
-			$this->parent,
-			$this->arguments,
-			$this->collection,
-			$this->sourceProperty,
-		);
-	}
-
 	public function withTarget(mixed $target): self
 	{
 		return new self(
@@ -124,8 +100,6 @@ final readonly class MappingNode
 			$target,
 			$this->context,
 			$this->parent,
-			$this->arguments,
-			$this->collection,
 			$this->sourceProperty,
 		);
 	}
@@ -141,8 +115,6 @@ final readonly class MappingNode
 			null,
 			$this->context,
 			$this,
-			$this->arguments,
-			false,
 			$sourceProperty,
 		);
 	}
@@ -156,7 +128,10 @@ final readonly class MappingNode
 		bool $collection = false,
 		bool $preserveComponentOverrides = false,
 	): self {
-		$context = $this->context;
+		$context = $this->context
+			->withArguments($arguments)
+			->withCollection($collection);
+
 		if (! $preserveComponentOverrides) {
 			$context = $context
 				->withWalkerClass(null)
@@ -169,8 +144,6 @@ final readonly class MappingNode
 			$target,
 			$context,
 			$this->parent,
-			$arguments,
-			$collection,
 			$this->sourceProperty,
 		);
 	}

@@ -244,7 +244,7 @@ Explicit per-call fluent resolvers still run before every registered default res
 
 ## MappingContext
 
-`ON\Data\Mapper\MappingContext` carries immutable per-operation state:
+`ON\Data\Mapper\MappingContext` carries immutable per-mapping-frame configuration:
 
 - the active `ConversionGateway`
 - source representation
@@ -255,7 +255,7 @@ Explicit per-call fluent resolvers still run before every registered default res
 - mapping arguments
 - collection mode
 
-`MappingContext` is mapping-wide configuration only. It no longer stores traversal path, current source, prepared target, parent scope, or cycle state.
+`MappingContext` is configuration only. It does not store traversal path, current source, prepared target, parent scope, or cycle state.
 
 ## MappingNode
 
@@ -268,11 +268,11 @@ It carries:
 - the requested or prepared structural target for that node
 - the active `MappingContext`
 - the parent node when one exists
-- the effective mapping arguments
-- the current collection mode
 - walker-provided source `ReflectionProperty` evidence when available
 
-Derived data such as path, parent source, parent target, and ancestor-chain cycle inspection now comes from the node tree rather than `MappingContext`.
+Arguments and collection mode are exposed through `MappingNode`, but stored only in the active `MappingContext`.
+
+Derived data such as path, parent source, parent target, and ancestor-chain cycle inspection comes from the node tree rather than `MappingContext`.
 
 ## Fluent map()
 
@@ -402,7 +402,7 @@ If mapping arguments contain more than one direct `DefinitionInterface`, resolut
 
 Definition metadata wins over reflection because `DefinitionFieldResolver` runs before `ReflectionPropertyFieldResolver`. If the supplied definition does not contain the current field, it returns `null` and reflection remains a fallback for typed DTO properties.
 
-Definition relations participate in recursive mapping. When the active definition has a matching relation name, child mapping uses the relation target definition for that nested scope and removes the parent definition from the child argument list.
+Definition relations participate in recursive mapping. When the active definition has a matching relation name, child mapping derives a nested `MappingContext` whose arguments use the relation target definition for that scope and remove the parent definition from the child argument list.
 Relation metadata only triggers recursion for structural values. Scalar identifiers such as `2`, `'2'`, and `null` stay on the normal field-conversion and write path.
 
 Removed convenience APIs:
@@ -527,6 +527,7 @@ $result = map($source)->to(TargetPost::class);
 Writers and resolver helpers can inspect both the current and parent scope through the node tree. Parent object targets are the same live object instance; parent array targets are value snapshots only.
 
 Recursive mapping also includes mapping-local object cycle protection. Re-encountering the same source object in the current ancestor chain throws `MappingException` with the current path. Sibling branches may reuse the same object without being treated as a cycle.
+Cycle validation happens at recursive mapper dispatch, so nested collection items are checked by the same rule.
 
 ## Representation-aware primitive conversion
 

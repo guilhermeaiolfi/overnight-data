@@ -16,6 +16,9 @@ use stdClass;
 use Tests\ON\Data\Fixture\AuthorDto;
 use Tests\ON\Data\Fixture\ParentAwareWriter;
 use Tests\ON\Data\Fixture\PostDto;
+use Tests\ON\Data\Fixture\RecordingArrayWalker;
+use Tests\ON\Data\Fixture\RecursiveNode;
+use Tests\ON\Data\Fixture\RuntimeInvariantWriter;
 use Tests\ON\Data\Fixture\ScalarRelationPostDto;
 use Tests\ON\Data\Fixture\SourceAuthorDto;
 use Tests\ON\Data\Fixture\SourcePostNestedDto;
@@ -28,6 +31,8 @@ final class RecursiveMappingTest extends TestCase
 	protected function setUp(): void
 	{
 		ParentAwareWriter::reset();
+		RecordingArrayWalker::reset();
+		RuntimeInvariantWriter::reset();
 	}
 
 	public function testNestedArrayMapsToNestedDtoAndTypedList(): void
@@ -121,6 +126,17 @@ final class RecursiveMappingTest extends TestCase
 		map($source)->to([]);
 	}
 
+	public function testCycleProtectionCoversCollectionItems(): void
+	{
+		$source = new RecursiveNode();
+		$source->children[] = $source;
+
+		$this->expectException(MappingException::class);
+		$this->expectExceptionMessage("path 'children.0'");
+
+		map($source)->to([]);
+	}
+
 	public function testWriterReceivesCompletedNestedValuesAndParentContexts(): void
 	{
 		$gateway = ConversionGateway::createDefault();
@@ -153,6 +169,109 @@ final class RecursiveMappingTest extends TestCase
 				'valueType' => 'array',
 			],
 		], ParentAwareWriter::$writes);
+	}
+
+	public function testNestedCollectionFrameKeepsContextArgumentsAndCollectionModeInSync(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+		$gateway->getMappers()->prepend(RecordingArrayWalker::class);
+		$definition = $this->postsDefinition();
+
+		$result = map(
+			[
+				'authors' => [
+					['id' => 2, 'name' => 'Ada'],
+				],
+			],
+			null,
+			$gateway,
+		)
+			->args($definition)
+			->to(PostDto::class);
+
+		self::assertSame('Ada', $result->authors[0]->name);
+		self::assertSame([
+			[
+				'path' => '',
+				'nodeArguments' => [$definition],
+				'contextArguments' => [$definition],
+				'nodeCollection' => false,
+				'contextCollection' => false,
+			],
+			[
+				'path' => 'authors.0',
+				'nodeArguments' => [],
+				'contextArguments' => [],
+				'nodeCollection' => false,
+				'contextCollection' => false,
+			],
+		], RecordingArrayWalker::$frames);
+		self::assertContains([
+			'arguments' => [],
+			'collection' => true,
+		], RecordingArrayWalker::$selections);
+	}
+
+	public function testWriterTargetSemanticsKeepEvolvingResultAndArrayParentSnapshots(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+		$gateway->getMappers()->prepend(RuntimeInvariantWriter::class);
+
+		$result = map(
+			['author' => ['id' => 2, 'name' => 'Ada']],
+			null,
+			$gateway,
+		)->to([]);
+
+		self::assertSame(['author' => ['id' => 2, 'name' => 'Ada']], $result);
+		self::assertSame([
+			[
+				'path' => 'author.id',
+				'target' => [],
+				'parentTarget' => [],
+			],
+			[
+				'path' => 'author.name',
+				'target' => ['id' => 2],
+				'parentTarget' => [],
+			],
+			[
+				'path' => 'author',
+				'target' => [],
+				'parentTarget' => [],
+			],
+		], RuntimeInvariantWriter::$writes);
+	}
+
+	public function testWriterTargetSemanticsKeepLiveObjectParentReferences(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+		$gateway->getMappers()->prepend(RuntimeInvariantWriter::class);
+
+		$result = map(
+			['author' => ['id' => 2, 'name' => 'Ada']],
+			null,
+			$gateway,
+		)->to(stdClass::class);
+
+		self::assertSame('Ada', $result->author->name);
+		self::assertSame([
+			[
+				'path' => 'author.id',
+				'target' => [],
+				'parentTarget' => [],
+			],
+			[
+				'path' => 'author.name',
+				'target' => ['id' => 2],
+				'parentTarget' => ['id' => 2],
+			],
+			[
+				'path' => 'author',
+				'target' => [],
+				'parentTarget' => [],
+			],
+		], RuntimeInvariantWriter::$writes);
 	}
 
 	public function testObjectToObjectNestedMappingUsesTargetChildClass(): void
