@@ -14,14 +14,13 @@ use stdClass;
 
 final class MappingNodeTargetResolver
 {
+	public function findSourceProperty(MappingNode $node): ?ReflectionProperty
+	{
+		return $this->extractReflectionProperty($node->getArguments());
+	}
+
 	public function findTargetProperty(MappingNode $node): ?ReflectionProperty
 	{
-		$argument = $node->getArguments();
-		$property = $this->extractReflectionProperty($argument);
-		if ($property instanceof ReflectionProperty) {
-			return $property;
-		}
-
 		$target = $node->getContext()->getTarget();
 		if (! is_object($target) || $target instanceof stdClass) {
 			return null;

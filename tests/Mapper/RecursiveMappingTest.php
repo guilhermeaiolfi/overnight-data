@@ -9,6 +9,7 @@ use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\MappingException;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Representation\StorageRepresentation;
+use ON\Data\Mapper\Representation\WireRepresentation;
 use ON\Data\Mapper\Walker\ArrayWalkerOptions;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -17,7 +18,12 @@ use Tests\ON\Data\Fixture\AuthorDto;
 use Tests\ON\Data\Fixture\CustomNodeResolverArgument;
 use Tests\ON\Data\Fixture\ParentAwareWriter;
 use Tests\ON\Data\Fixture\PostDto;
+use Tests\ON\Data\Fixture\ScalarRelationPostDto;
+use Tests\ON\Data\Fixture\SourceAuthorDto;
+use Tests\ON\Data\Fixture\SourcePostNestedDto;
 use Tests\ON\Data\Fixture\SpyArrayWalker;
+use Tests\ON\Data\Fixture\TargetAuthorDto;
+use Tests\ON\Data\Fixture\TargetPostNestedDto;
 
 final class RecursiveMappingTest extends TestCase
 {
@@ -161,6 +167,136 @@ final class RecursiveMappingTest extends TestCase
 				'valueType' => 'array',
 			],
 		], ParentAwareWriter::$writes);
+	}
+
+	public function testObjectToObjectNestedMappingUsesTargetChildClass(): void
+	{
+		$source = new SourcePostNestedDto();
+		$source->author = new SourceAuthorDto();
+		$source->author->name = 'Ada';
+
+		$result = map($source)->to(TargetPostNestedDto::class);
+
+		self::assertInstanceOf(TargetPostNestedDto::class, $result);
+		self::assertInstanceOf(TargetAuthorDto::class, $result->author);
+		self::assertSame('Ada', $result->author->displayName);
+	}
+
+	public function testObjectToObjectTypedListUsesTargetElementClass(): void
+	{
+		$source = new SourcePostNestedDto();
+		$first = new SourceAuthorDto();
+		$first->name = 'Ada';
+		$second = new SourceAuthorDto();
+		$second->name = 'Linus';
+		$source->authors = [$first, $second];
+
+		$result = map($source)->to(TargetPostNestedDto::class);
+
+		self::assertCount(2, $result->authors);
+		self::assertContainsOnlyInstancesOf(TargetAuthorDto::class, $result->authors);
+		self::assertSame('Linus', $result->authors[1]->displayName);
+	}
+
+	public function testTargetPrimitiveReflectionDrivesInboundConversion(): void
+	{
+		$source = new SourcePostNestedDto();
+		$source->active = 'false';
+
+		$result = map($source)
+			->from(WireRepresentation::class)
+			->to(TargetPostNestedDto::class);
+
+		self::assertFalse($result->active);
+	}
+
+	public function testSourceReflectionRemainsAvailableForOutboundArrayMapping(): void
+	{
+		$source = new SourcePostNestedDto();
+		$source->author = new SourceAuthorDto();
+		$source->author->name = 'Ada';
+
+		$result = map($source)->to([]);
+
+		self::assertSame(['full_name' => 'Ada'], $result['author']);
+	}
+
+	public function testScalarRelationValueDoesNotRecurseForArrayTarget(): void
+	{
+		$result = map(['author' => '2'])
+			->from(StorageRepresentation::class)
+			->args($this->postsDefinition())
+			->to([]);
+
+		self::assertSame(['author' => '2'], $result);
+	}
+
+	public function testScalarRelationValueDoesNotRecurseForStdClassTarget(): void
+	{
+		$result = map(['author' => 2])
+			->args($this->postsDefinition())
+			->to(stdClass::class);
+
+		self::assertSame(2, $result->author);
+	}
+
+	public function testScalarRelationValueDoesNotRecurseForTypedDtoWhenAssignmentIsValid(): void
+	{
+		$result = map(['author' => '2'])
+			->from(StorageRepresentation::class)
+			->to(ScalarRelationPostDto::class);
+
+		self::assertSame(2, $result->author);
+	}
+
+	public function testNullRelationValueDoesNotRecurse(): void
+	{
+		$result = map(['author' => null])
+			->args($this->postsDefinition())
+			->to([]);
+
+		self::assertSame(['author' => null], $result);
+	}
+
+	public function testExpandedRelationArrayStillRecursesAndSwitchesDefinition(): void
+	{
+		$result = map(['author' => ['id' => '2', 'active' => '0']])
+			->from(StorageRepresentation::class)
+			->args($this->postsDefinition())
+			->to([]);
+
+		self::assertSame(['author' => ['id' => 2, 'active' => false]], $result);
+	}
+
+	public function testCompatibleTypedCollectionItemPreservesIdentity(): void
+	{
+		$author = new AuthorDto();
+		$author->id = 2;
+		$author->name = 'Ada';
+
+		$result = map([
+			'authors' => [$author],
+		])->to(PostDto::class);
+
+		self::assertSame($author, $result->authors[0]);
+	}
+
+	public function testMixedTypedCollectionPreservesCompatibleInstancesAndHydratesArrays(): void
+	{
+		$existing = new AuthorDto();
+		$existing->id = 2;
+		$existing->name = 'Ada';
+
+		$result = map([
+			'authors' => [
+				$existing,
+				['id' => 3, 'name' => 'Linus'],
+			],
+		])->to(PostDto::class);
+
+		self::assertSame($existing, $result->authors[0]);
+		self::assertInstanceOf(AuthorDto::class, $result->authors[1]);
+		self::assertSame('Linus', $result->authors[1]->name);
 	}
 
 	private function postsDefinition(): object

@@ -6,17 +6,21 @@ namespace ON\Data\Mapper\Resolver;
 
 use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\MappingNode;
-use ON\Data\Mapper\Support\ObjectPropertyMatcher;
-use ReflectionClass;
+use ON\Data\Mapper\Support\MappingNodeTargetResolver;
 use ReflectionNamedType;
 use ReflectionProperty;
-use stdClass;
 
 final class ReflectionPropertyFieldResolver implements FieldResolverInterface
 {
+	public function __construct(
+		private readonly ?MappingNodeTargetResolver $targetResolver = null,
+	) {
+	}
+
 	public function resolve(MappingNode $node): ?FieldContext
 	{
-		$property = $this->findProperty($node->getName(), $node->getContext()->getTarget(), $node->getArguments());
+		$resolver = $this->targetResolver ?? new MappingNodeTargetResolver();
+		$property = $resolver->findTargetProperty($node) ?? $resolver->findSourceProperty($node);
 		if (! $property instanceof ReflectionProperty) {
 			return null;
 		}
@@ -35,44 +39,5 @@ final class ReflectionPropertyFieldResolver implements FieldResolverInterface
 			$type->getName(),
 			$type->allowsNull(),
 		);
-	}
-
-	private function findProperty(
-		string|int $fieldName,
-		mixed $target,
-		mixed $extra,
-	): ?ReflectionProperty {
-		$property = $this->extractReflectionProperty($extra);
-		if ($property instanceof ReflectionProperty) {
-			return $property;
-		}
-
-		if (! is_object($target) || $target instanceof stdClass) {
-			return null;
-		}
-
-		$matcher = new ObjectPropertyMatcher(new ReflectionClass($target));
-
-		return $matcher->match($fieldName);
-	}
-
-	private function extractReflectionProperty(mixed $extra): ?ReflectionProperty
-	{
-		if ($extra instanceof ReflectionProperty) {
-			return $extra;
-		}
-
-		if (! is_array($extra)) {
-			return null;
-		}
-
-		foreach ($extra as $value) {
-			$property = $this->extractReflectionProperty($value);
-			if ($property instanceof ReflectionProperty) {
-				return $property;
-			}
-		}
-
-		return null;
 	}
 }

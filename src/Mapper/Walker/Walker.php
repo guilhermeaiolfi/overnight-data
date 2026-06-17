@@ -9,6 +9,7 @@ use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Resolver\MappingNodeResolverInterface;
+use stdClass;
 
 abstract class Walker implements WalkerInterface
 {
@@ -25,6 +26,17 @@ abstract class Walker implements WalkerInterface
 
 			$results = [];
 			foreach ($source as $key => $item) {
+				if (
+					is_string($target)
+					&& $target !== stdClass::class
+					&& is_object($item)
+					&& $item instanceof $target
+				) {
+					$results[] = $item;
+
+					continue;
+				}
+
 				$results[] = $mappers->map(
 					$item,
 					$target,

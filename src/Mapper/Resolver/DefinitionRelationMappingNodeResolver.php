@@ -35,6 +35,10 @@ final class DefinitionRelationMappingNodeResolver implements MappingNodeResolver
 		}
 
 		$targetResolver = $this->targetResolver ?? new MappingNodeTargetResolver();
+		if (! $targetResolver->isStructuralValue($node->getValue())) {
+			return null;
+		}
+
 		$target = $targetResolver->resolveGenericChildTarget($node);
 		$reflectionNode = (new ReflectionMappingNodeResolver($targetResolver))->resolve($node);
 		if ($reflectionNode !== null) {

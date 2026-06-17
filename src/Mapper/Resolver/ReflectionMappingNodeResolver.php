@@ -21,13 +21,30 @@ final class ReflectionMappingNodeResolver implements MappingNodeResolverInterfac
 	public function resolve(MappingNode $node): ?MappingNode
 	{
 		$resolver = $this->targetResolver ?? new MappingNodeTargetResolver();
-		$property = $resolver->findTargetProperty($node);
-		if (! $property instanceof ReflectionProperty) {
+		$targetProperty = $resolver->findTargetProperty($node);
+		if ($targetProperty instanceof ReflectionProperty) {
+			return $this->resolveForTargetProperty($node, $targetProperty, $resolver);
+		}
+
+		$sourceProperty = $resolver->findSourceProperty($node);
+		if ($sourceProperty instanceof ReflectionProperty) {
+			return $this->resolveForSourceProperty($node, $sourceProperty, $resolver);
+		}
+
+		return null;
+	}
+
+	private function resolveForTargetProperty(
+		MappingNode $node,
+		ReflectionProperty $property,
+		MappingNodeTargetResolver $resolver,
+	): ?MappingNode {
+		$type = $property->getType();
+		if (! $type instanceof ReflectionNamedType) {
 			return null;
 		}
 
-		$type = $property->getType();
-		if ($type instanceof ReflectionNamedType && ! $type->isBuiltin()) {
+		if (! $type->isBuiltin()) {
 			$class = $type->getName();
 
 			if ($node->getValue() instanceof $class) {
@@ -41,33 +58,70 @@ final class ReflectionMappingNodeResolver implements MappingNodeResolverInterfac
 			);
 		}
 
-		if ($type instanceof ReflectionNamedType && $type->isBuiltin()) {
-			if ($type->getName() === 'array') {
-				$listTarget = $this->resolvePhpDocListTarget($property);
-				if ($listTarget !== null) {
-					return $node->forChild(
-						target: $listTarget,
-						collection: true,
-						arguments: $this->withoutDirectDefinitions($node->getContext()->getArguments()),
-					);
-				}
-
-				if ($resolver->isStructuralValue($node->getValue())) {
-					return $node->forChild(
-						target: [],
-						collection: false,
-						arguments: $this->withoutDirectDefinitions($node->getContext()->getArguments()),
-					);
-				}
+		if ($type->getName() === 'array') {
+			$listTarget = $this->resolvePhpDocListTarget($property);
+			if ($listTarget !== null) {
+				return $node->forChild(
+					target: $listTarget,
+					collection: true,
+					arguments: $this->withoutDirectDefinitions($node->getContext()->getArguments()),
+				);
 			}
 
-			if ($type->getName() === 'object' && $resolver->isStructuralValue($node->getValue())) {
+			if ($resolver->isStructuralValue($node->getValue())) {
 				return $node->forChild(
-					target: stdClass::class,
+					target: [],
 					collection: false,
 					arguments: $this->withoutDirectDefinitions($node->getContext()->getArguments()),
 				);
 			}
+		}
+
+		if ($type->getName() === 'object' && $resolver->isStructuralValue($node->getValue())) {
+			return $node->forChild(
+				target: stdClass::class,
+				collection: false,
+				arguments: $this->withoutDirectDefinitions($node->getContext()->getArguments()),
+			);
+		}
+
+		return null;
+	}
+
+	private function resolveForSourceProperty(
+		MappingNode $node,
+		ReflectionProperty $property,
+		MappingNodeTargetResolver $resolver,
+	): ?MappingNode {
+		if (! $resolver->isStructuralValue($node->getValue())) {
+			return null;
+		}
+
+		$genericTarget = $resolver->resolveGenericChildTarget($node);
+		if ($genericTarget === null) {
+			return null;
+		}
+
+		$type = $property->getType();
+		if (! $type instanceof ReflectionNamedType) {
+			return $node->forChild($genericTarget);
+		}
+
+		if (! $type->isBuiltin()) {
+			return $node->forChild($genericTarget);
+		}
+
+		if ($type->getName() === 'array') {
+			$listTarget = $this->resolvePhpDocListTarget($property);
+			if ($listTarget !== null) {
+				return $node->forChild($genericTarget, true);
+			}
+
+			return $node->forChild($genericTarget);
+		}
+
+		if ($type->getName() === 'object') {
+			return $node->forChild($genericTarget);
 		}
 
 		return null;

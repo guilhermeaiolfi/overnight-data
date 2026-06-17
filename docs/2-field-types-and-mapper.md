@@ -391,6 +391,7 @@ If mapping arguments contain more than one direct `DefinitionInterface`, resolut
 Definition metadata wins over reflection because `DefinitionFieldResolver` runs before `ReflectionPropertyFieldResolver`. If the supplied definition does not contain the current field, it returns `null` and reflection remains a fallback for typed DTO properties.
 
 Definition relations participate in recursive mapping. When the active definition has a matching relation name, child mapping uses the relation target definition for that nested scope and removes the parent definition from the child argument list.
+Relation metadata only triggers recursion for structural values. Scalar identifiers such as `2`, `'2'`, and `null` stay on the normal field-conversion and write path.
 
 Removed convenience APIs:
 
@@ -466,6 +467,7 @@ Inbound rules:
 - `MapFrom` is applied on the target side
 - class-typed target properties recurse into nested DTO mapping
 - PHPDoc list forms `Type[]`, `list<Type>`, and `array<Type>` enable typed nested DTO lists
+- destination reflection metadata is authoritative for typed object targets
 - readonly targets are rejected in this phase
 
 Outbound rules:
@@ -477,6 +479,9 @@ Outbound rules:
 - `MapTo` is applied on the source side
 - `Hidden` omits a property from outbound object walking
 - nested objects recurse into nested arrays, `stdClass`, or typed DTOs when structural evidence exists
+- source reflection remains available when the destination is untyped, such as `[]` or `stdClass`
+
+For typed collections, items that are already instances of the declared destination element class are preserved as-is. Mixed lists still hydrate structural items such as arrays into new destination DTO instances.
 
 Combined aliasing works across object-to-object mapping:
 
