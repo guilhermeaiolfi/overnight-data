@@ -8,8 +8,6 @@ use BackedEnum;
 use DateTimeInterface;
 use ON\Data\Mapper\Attribute\Hidden;
 use ON\Data\Mapper\Attribute\MapTo;
-use ON\Data\Mapper\Representation\PhpRepresentation;
-use ReflectionNamedType;
 use ReflectionObject;
 use ReflectionProperty;
 use stdClass;
@@ -42,17 +40,7 @@ final class ObjectToArrayMapper extends Mapper
 			}
 
 			$key = $this->resolveTargetKey($property);
-			$value = $property->getValue($source);
-			$field = $this->resolvePrimitiveField($property);
-
-			if ($context->getOutputRepresentation() !== null && $field !== null) {
-				$value = $this->gateway->to(
-					PhpRepresentation::class,
-					$value,
-					$context->getOutputRepresentation(),
-					$field,
-				);
-			}
+			$value = $this->convertOutbound($property->getValue($source), $property, $context->withPathSegment($property->getName()));
 
 			$result[$key] = $value;
 		}
@@ -73,23 +61,5 @@ final class ObjectToArrayMapper extends Mapper
 		}
 
 		return $attributes[0]->newInstance()->getName();
-	}
-
-	private function resolvePrimitiveField(ReflectionProperty $property): ?FieldContext
-	{
-		$type = $property->getType();
-		if (! $type instanceof ReflectionNamedType) {
-			return null;
-		}
-
-		if (! $type->isBuiltin() || ! in_array($type->getName(), ['string', 'int', 'bool', 'float'], true)) {
-			return null;
-		}
-
-		return FieldContext::named(
-			$property->getName(),
-			$type->getName(),
-			$type->allowsNull(),
-		);
 	}
 }

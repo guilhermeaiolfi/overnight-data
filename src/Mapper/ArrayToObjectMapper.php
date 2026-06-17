@@ -6,10 +6,8 @@ namespace ON\Data\Mapper;
 
 use ON\Data\Mapper\Attribute\MapFrom;
 use ON\Data\Mapper\Exception\MappingException;
-use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ReflectionClass;
-use ReflectionNamedType;
 use ReflectionProperty;
 use stdClass;
 use Throwable;
@@ -61,7 +59,7 @@ final class ArrayToObjectMapper extends Mapper
 			$propertyContext = $context->withPathSegment($property->getName());
 
 			try {
-				$value = $this->normalizeInboundValue($source[$sourceKey], $property, $context);
+				$value = $this->convertInbound($source[$sourceKey], $property, $propertyContext);
 				$property->setValue($result, $value);
 			} catch (MappingException $exception) {
 				throw $this->wrapPropertyFailure($reflection, $property, $propertyContext, $exception);
@@ -124,47 +122,6 @@ final class ArrayToObjectMapper extends Mapper
 		}
 
 		return $attributes[0]->newInstance()->getName();
-	}
-
-	private function normalizeInboundValue(
-		mixed $value,
-		ReflectionProperty $property,
-		MappingContext $context,
-	): mixed {
-		$representation = $context->getSourceRepresentation();
-		if ($representation === null) {
-			return $value;
-		}
-
-		$field = $this->resolvePrimitiveField($property);
-		if ($field === null) {
-			return $value;
-		}
-
-		return $this->gateway->to(
-			$representation,
-			$value,
-			PhpRepresentation::class,
-			$field,
-		);
-	}
-
-	private function resolvePrimitiveField(ReflectionProperty $property): ?FieldContext
-	{
-		$type = $property->getType();
-		if (! $type instanceof ReflectionNamedType) {
-			return null;
-		}
-
-		if (! $type->isBuiltin() || ! in_array($type->getName(), ['string', 'int', 'bool', 'float'], true)) {
-			return null;
-		}
-
-		return FieldContext::named(
-			$property->getName(),
-			$type->getName(),
-			$type->allowsNull(),
-		);
 	}
 
 	private function wrapPropertyFailure(

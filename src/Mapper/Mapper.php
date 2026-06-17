@@ -11,6 +11,26 @@ abstract class Mapper implements MapperInterface
 	) {
 	}
 
+	protected function convertInbound(
+		mixed $value,
+		mixed $fieldSource,
+		MappingContext $context,
+	): mixed {
+		return $this->gateway
+			->getFieldConversionCoordinator()
+			->convertInbound($value, $fieldSource, $context);
+	}
+
+	protected function convertOutbound(
+		mixed $value,
+		mixed $fieldSource,
+		MappingContext $context,
+	): mixed {
+		return $this->gateway
+			->getFieldConversionCoordinator()
+			->convertOutbound($value, $fieldSource, $context);
+	}
+
 	public static function defaultRepresentations(): array
 	{
 		return [];
