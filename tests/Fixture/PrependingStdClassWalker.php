@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Fixture;
 
-use Closure;
 use ON\Data\Mapper\MappingContext;
-use ON\Data\Mapper\Walker\WalkerInterface;
+use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\Walker\Walker;
 use stdClass;
 
-final class PrependingStdClassWalker implements WalkerInterface
+final class PrependingStdClassWalker extends Walker
 {
 	public function __construct()
 	{
@@ -25,12 +25,12 @@ final class PrependingStdClassWalker implements WalkerInterface
 		return $source instanceof stdClass;
 	}
 
-	public function walk(
+	protected function getNodes(
 		mixed $source,
 		MappingContext $context,
-		Closure $visit,
-	): void {
+	): iterable {
 		ComponentTestState::recordRuntime(self::class, $context->getPath());
-		$visit('specialized', 'walker', null);
+
+		yield new MappingNode('specialized', 'walker', $context);
 	}
 }

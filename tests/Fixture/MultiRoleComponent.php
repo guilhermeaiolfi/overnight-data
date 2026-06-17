@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Fixture;
 
-use Closure;
+use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Walker\WalkerInterface;
 use ON\Data\Mapper\Writer\WriterInterface;
 
@@ -20,9 +21,11 @@ final class MultiRoleComponent implements WalkerInterface, WriterInterface
 
 	public function walk(
 		mixed $source,
+		mixed $target,
 		MappingContext $context,
-		Closure $visit,
-	): void {
+		MapperManager $mappers,
+	): mixed {
+		return null;
 	}
 
 	public static function canWrite(
@@ -41,10 +44,8 @@ final class MultiRoleComponent implements WalkerInterface, WriterInterface
 
 	public function write(
 		mixed $target,
-		string|int $name,
+		MappingNode $node,
 		mixed $value,
-		MappingContext $context,
-		mixed $walkerArguments = null,
 	): mixed {
 		return $target;
 	}

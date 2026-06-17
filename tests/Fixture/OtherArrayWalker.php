@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Fixture;
 
-use Closure;
 use ON\Data\Mapper\MappingContext;
-use ON\Data\Mapper\Walker\WalkerInterface;
+use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\Walker\Walker;
 
-final class OtherArrayWalker implements WalkerInterface
+final class OtherArrayWalker extends Walker
 {
 	public static function canWalk(
 		mixed $source,
@@ -17,13 +17,12 @@ final class OtherArrayWalker implements WalkerInterface
 		return is_array($source);
 	}
 
-	public function walk(
+	protected function getNodes(
 		mixed $source,
 		MappingContext $context,
-		Closure $visit,
-	): void {
+	): iterable {
 		foreach ($source as $name => $value) {
-			$visit($name, $value, null);
+			yield new MappingNode($name, $value, $context);
 		}
 	}
 }

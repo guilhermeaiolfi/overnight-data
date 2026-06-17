@@ -77,7 +77,7 @@ final class ObjectMappingTest extends TestCase
 		self::assertSame(42, $result['age']);
 		self::assertTrue($result['active']);
 		self::assertSame(3.5, $result['score']);
-		self::assertSame($source->profile, $result['profile']);
+		self::assertSame(['label' => 'admin'], $result['profile']);
 		self::assertArrayNotHasKey('password', $result);
 	}
 
@@ -232,7 +232,7 @@ final class ObjectMappingTest extends TestCase
 		self::assertSame(42, $result['age']);
 		self::assertTrue($result['active']);
 		self::assertSame(3.5, $result['score']);
-		self::assertSame($source->profile, $result['profile']);
+		self::assertSame(['label' => 'admin'], $result['profile']);
 	}
 
 	public function testConversionFailureIncludesCollectionItemPath(): void

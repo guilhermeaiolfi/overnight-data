@@ -20,14 +20,10 @@ final class FieldConversionCoordinator
 	}
 
 	public function resolveField(
-		MappingContext $mapping,
-		string $path,
-		string|int $fieldName,
-		mixed $value,
-		mixed $extra = null,
+		MappingNode $node,
 	): ?FieldContext {
 		foreach ($this->resolvers as $resolver) {
-			$field = $resolver->resolve($mapping, $path, $fieldName, $value, $extra);
+			$field = $resolver->resolve($node);
 			if ($field !== null) {
 				return $field;
 			}
@@ -39,14 +35,14 @@ final class FieldConversionCoordinator
 	public function convertScalar(
 		mixed $value,
 		?FieldContext $field,
-		MappingContext $mapping,
+		MappingContext $context,
 	): mixed {
 		if ($field === null) {
 			return $value;
 		}
 
-		$from = $mapping->getSourceRepresentation();
-		$to = $mapping->getOutputRepresentation();
+		$from = $context->getSourceRepresentation();
+		$to = $context->getOutputRepresentation();
 
 		if ($from === null && $to === null) {
 			return $value;
@@ -60,12 +56,12 @@ final class FieldConversionCoordinator
 				$field,
 			);
 		} catch (MappingException $exception) {
-			if ($mapping->getPath() === '') {
+			if ($context->getPath() === '') {
 				throw $exception;
 			}
 
 			throw new MappingException(
-				sprintf("Failed converting value at path '%s'.", $mapping->getPath()),
+				sprintf("Failed converting value at path '%s'.", $context->getPath()),
 				0,
 				$exception,
 			);

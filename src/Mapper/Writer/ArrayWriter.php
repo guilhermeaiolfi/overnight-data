@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Mapper\Writer;
 
 use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingNode;
 
 final class ArrayWriter implements WriterInterface
 {
@@ -24,12 +25,10 @@ final class ArrayWriter implements WriterInterface
 
 	public function write(
 		mixed $target,
-		string|int $name,
+		MappingNode $node,
 		mixed $value,
-		MappingContext $context,
-		mixed $walkerArguments = null,
 	): array {
-		$target[$name] = $value;
+		$target[$node->getName()] = $value;
 
 		return $target;
 	}

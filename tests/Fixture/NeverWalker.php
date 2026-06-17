@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Fixture;
 
-use Closure;
 use ON\Data\Mapper\MappingContext;
-use ON\Data\Mapper\Walker\WalkerInterface;
+use ON\Data\Mapper\Walker\Walker;
 
-final class NeverWalker implements WalkerInterface
+final class NeverWalker extends Walker
 {
 	public function __construct()
 	{
@@ -24,11 +23,12 @@ final class NeverWalker implements WalkerInterface
 		return false;
 	}
 
-	public function walk(
+	protected function getNodes(
 		mixed $source,
 		MappingContext $context,
-		Closure $visit,
-	): void {
+	): iterable {
 		ComponentTestState::recordRuntime(self::class, $context->getPath());
+
+		return [];
 	}
 }

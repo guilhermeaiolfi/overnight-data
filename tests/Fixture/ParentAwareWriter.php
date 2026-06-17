@@ -8,19 +8,22 @@ use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Writer\WriterInterface;
 
-final class SpyArrayWriter implements WriterInterface
+final class ParentAwareWriter implements WriterInterface
 {
-	public function __construct()
+	/**
+	 * @var list<array{path: string, hasParentSource: bool, hasParentTarget: bool, valueType: string}>
+	 */
+	public static array $writes = [];
+
+	public static function reset(): void
 	{
-		ComponentTestState::recordConstruction(self::class);
+		self::$writes = [];
 	}
 
 	public static function canWrite(
 		mixed $target,
 		MappingContext $context,
 	): bool {
-		ComponentTestState::recordSelection(self::class);
-
 		return is_array($target);
 	}
 
@@ -28,8 +31,6 @@ final class SpyArrayWriter implements WriterInterface
 		mixed $target,
 		MappingContext $context,
 	): array {
-		ComponentTestState::recordRuntime(self::class, $context->getPath());
-
 		return is_array($target) ? $target : [];
 	}
 
@@ -38,6 +39,13 @@ final class SpyArrayWriter implements WriterInterface
 		MappingNode $node,
 		mixed $value,
 	): array {
+		self::$writes[] = [
+			'path' => $node->getContext()->getPath(),
+			'hasParentSource' => $node->getContext()->getParentSource() !== null,
+			'hasParentTarget' => $node->getContext()->getParentTarget() !== null,
+			'valueType' => is_object($value) ? $value::class : get_debug_type($value),
+		];
+
 		$target[$node->getName()] = $value;
 
 		return $target;

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper\Walker;
 
-use Closure;
+use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingContext;
 
 interface WalkerInterface
@@ -14,12 +14,10 @@ interface WalkerInterface
 		MappingContext $context,
 	): bool;
 
-	/**
-	 * @param Closure(string|int, mixed, mixed): void $visit
-	 */
 	public function walk(
 		mixed $source,
+		mixed $target,
 		MappingContext $context,
-		Closure $visit,
-	): void;
+		MapperManager $mappers,
+	): mixed;
 }

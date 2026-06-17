@@ -6,6 +6,7 @@ namespace ON\Data\Mapper\Writer;
 
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Support\ObjectPropertyMatcher;
 use ReflectionClass;
@@ -68,19 +69,17 @@ final class ObjectWriter implements WriterInterface
 
 	public function write(
 		mixed $target,
-		string|int $name,
+		MappingNode $node,
 		mixed $value,
-		MappingContext $context,
-		mixed $walkerArguments = null,
 	): object {
 		if ($target instanceof stdClass) {
-			$target->{(string) $name} = $value;
+			$target->{(string) $node->getName()} = $value;
 
 			return $target;
 		}
 
 		$matcher = new ObjectPropertyMatcher(new ReflectionClass($target));
-		$property = $matcher->match($name);
+		$property = $matcher->match($node->getName());
 		if ($property === null) {
 			return $target;
 		}
@@ -91,7 +90,7 @@ final class ObjectWriter implements WriterInterface
 			throw $this->wrapPropertyFailure(
 				new ReflectionClass($target),
 				$property,
-				$context,
+				$node->getContext(),
 				$exception,
 			);
 		}

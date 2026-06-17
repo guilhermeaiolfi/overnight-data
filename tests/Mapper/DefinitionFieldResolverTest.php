@@ -11,6 +11,7 @@ use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Resolver\DefinitionFieldResolver;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -21,15 +22,15 @@ final class DefinitionFieldResolverTest extends TestCase
 	{
 		$resolver = new DefinitionFieldResolver();
 
-		self::assertNull($resolver->resolve($this->context(), 'id', 'id', '42'));
+		self::assertNull($resolver->resolve($this->node('id', '42')));
 	}
 
 	public function testReturnsNullWhenArgumentsDoNotContainDefinition(): void
 	{
 		$resolver = new DefinitionFieldResolver();
-		$context = $this->context()->withArguments([new stdClass(), ['id' => '42'], 'users']);
+		$node = $this->node('id', '42', [new stdClass(), ['id' => '42'], 'users']);
 
-		self::assertNull($resolver->resolve($context, 'id', 'id', '42'));
+		self::assertNull($resolver->resolve($node));
 	}
 
 	public function testDiscoversOneDirectDefinitionArgumentInAnyPosition(): void
@@ -39,8 +40,7 @@ final class DefinitionFieldResolverTest extends TestCase
 		$field = $definition->field('id', 'int')->nullable(true);
 		$resolver = new DefinitionFieldResolver();
 
-		$context = $this->context()->withArguments([new stdClass(), $definition]);
-		$resolved = $resolver->resolve($context, 'id', 'id', '42');
+		$resolved = $resolver->resolve($this->node('id', '42', [new stdClass(), $definition]));
 
 		self::assertInstanceOf(FieldContext::class, $resolved);
 		self::assertSame('id', $resolved->getName());
@@ -56,12 +56,7 @@ final class DefinitionFieldResolverTest extends TestCase
 		$field = $view->field('title', 'string');
 		$resolver = new DefinitionFieldResolver();
 
-		$resolved = $resolver->resolve(
-			$this->context()->withArguments([$view]),
-			'title',
-			'title',
-			123,
-		);
+		$resolved = $resolver->resolve($this->node('title', 123, [$view]));
 
 		self::assertSame('title', $resolved?->getName());
 		self::assertSame('string', $resolved?->getType());
@@ -73,14 +68,7 @@ final class DefinitionFieldResolverTest extends TestCase
 		$definition = $this->collectionDefinition();
 		$resolver = new DefinitionFieldResolver();
 
-		self::assertNull(
-			$resolver->resolve(
-				$this->context()->withArguments([$definition]),
-				'missing',
-				'missing',
-				'42',
-			),
-		);
+		self::assertNull($resolver->resolve($this->node('missing', '42', [$definition])));
 	}
 
 	public function testIntegerFieldNamesDoNotResolveAgainstDefinitions(): void
@@ -88,14 +76,7 @@ final class DefinitionFieldResolverTest extends TestCase
 		$definition = $this->collectionDefinition();
 		$resolver = new DefinitionFieldResolver();
 
-		self::assertNull(
-			$resolver->resolve(
-				$this->context()->withArguments([$definition]),
-				'0',
-				0,
-				'42',
-			),
-		);
+		self::assertNull($resolver->resolve($this->node(0, '42', [$definition])));
 	}
 
 	public function testExtraWalkerContextIsNotRequiredAndValueTypeDoesNotMatter(): void
@@ -103,12 +84,7 @@ final class DefinitionFieldResolverTest extends TestCase
 		$definition = $this->collectionDefinition();
 		$resolver = new DefinitionFieldResolver();
 
-		$field = $resolver->resolve(
-			$this->context()->withArguments([$definition]),
-			'active',
-			'active',
-			['unexpected' => 'shape'],
-		);
+		$field = $resolver->resolve($this->node('active', ['unexpected' => 'shape'], [$definition]));
 
 		self::assertSame('bool', $field?->getType());
 	}
@@ -125,12 +101,7 @@ final class DefinitionFieldResolverTest extends TestCase
 		$this->expectExceptionMessage('"users"');
 		$this->expectExceptionMessage('"posts"');
 
-		$resolver->resolve(
-			$this->context()->withArguments([$users, new stdClass(), $posts]),
-			'id',
-			'id',
-			'42',
-		);
+		$resolver->resolve($this->node('id', '42', [$users, new stdClass(), $posts]));
 	}
 
 	public function testAmbiguityDiscoveryIsCachedPerResolverInstance(): void
@@ -140,15 +111,24 @@ final class DefinitionFieldResolverTest extends TestCase
 		$second = $this->createMock(DefinitionInterface::class);
 		$second->expects(self::once())->method('getName')->willReturn('posts');
 		$resolver = new DefinitionFieldResolver();
-		$context = $this->context()->withArguments([$first, $second]);
+		$node = $this->node('id', '42', [$first, $second]);
 
 		foreach ([1, 2] as $attempt) {
 			try {
-				$resolver->resolve($context, 'id', 'id', '42');
+				$resolver->resolve($node);
 			} catch (MappingException $exception) {
 				self::assertStringContainsString('ambiguous', $exception->getMessage());
 			}
 		}
+	}
+
+	private function node(string|int $name, mixed $value, array $arguments = []): MappingNode
+	{
+		return new MappingNode(
+			$name,
+			$value,
+			$this->context()->withArguments($arguments)->withPathSegment((string) $name),
+		);
 	}
 
 	private function context(): MappingContext

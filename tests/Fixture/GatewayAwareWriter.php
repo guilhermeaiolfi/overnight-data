@@ -6,6 +6,7 @@ namespace Tests\ON\Data\Fixture;
 
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Writer\WriterInterface;
 use stdClass;
 
@@ -32,13 +33,11 @@ final class GatewayAwareWriter implements WriterInterface
 
 	public function write(
 		mixed $target,
-		string|int $name,
+		MappingNode $node,
 		mixed $value,
-		MappingContext $context,
-		mixed $walkerArguments = null,
 	): stdClass {
 		$target->gatewayId = spl_object_id($this->gateway);
-		$target->lastField = (string) $name;
+		$target->lastField = (string) $node->getName();
 
 		return $target;
 	}

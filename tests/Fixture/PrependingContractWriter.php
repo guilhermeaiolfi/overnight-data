@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Fixture;
 
 use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Writer\WriterInterface;
 
 final class PrependingContractWriter implements WriterInterface
@@ -34,12 +35,10 @@ final class PrependingContractWriter implements WriterInterface
 
 	public function write(
 		mixed $target,
-		string|int $name,
+		MappingNode $node,
 		mixed $value,
-		MappingContext $context,
-		mixed $walkerArguments = null,
 	): ContractDto {
-		$target->{$name} = $value;
+		$target->{$node->getName()} = $value;
 
 		return $target;
 	}

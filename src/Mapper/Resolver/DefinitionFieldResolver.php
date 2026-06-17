@@ -7,7 +7,7 @@ namespace ON\Data\Mapper\Resolver;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\FieldContext;
-use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingNode;
 
 final class DefinitionFieldResolver implements FieldResolverInterface
 {
@@ -17,19 +17,14 @@ final class DefinitionFieldResolver implements FieldResolverInterface
 
 	private ?MappingException $ambiguity = null;
 
-	public function resolve(
-		MappingContext $mapping,
-		string $path,
-		string|int $fieldName,
-		mixed $value,
-		mixed $extra = null,
-	): ?FieldContext {
-		$definition = $this->getDefinition($mapping);
-		if ($definition === null || ! is_string($fieldName)) {
+	public function resolve(MappingNode $node): ?FieldContext
+	{
+		$definition = $this->getDefinition($node);
+		if ($definition === null || ! is_string($node->getName())) {
 			return null;
 		}
 
-		$field = $definition->getField($fieldName);
+		$field = $definition->getField($node->getName());
 		if ($field === null) {
 			return null;
 		}
@@ -37,10 +32,10 @@ final class DefinitionFieldResolver implements FieldResolverInterface
 		return FieldContext::fromField($field);
 	}
 
-	private function getDefinition(MappingContext $mapping): ?DefinitionInterface
+	private function getDefinition(MappingNode $node): ?DefinitionInterface
 	{
 		if (! $this->discoveryComplete) {
-			$this->discoverDefinition($mapping);
+			$this->discoverDefinition($node);
 		}
 
 		if ($this->ambiguity !== null) {
@@ -50,12 +45,12 @@ final class DefinitionFieldResolver implements FieldResolverInterface
 		return $this->definition;
 	}
 
-	private function discoverDefinition(MappingContext $mapping): void
+	private function discoverDefinition(MappingNode $node): void
 	{
 		$this->discoveryComplete = true;
 
 		$definitions = [];
-		foreach ($mapping->getArguments() as $argument) {
+		foreach ($node->getContext()->getArguments() as $argument) {
 			if ($argument instanceof DefinitionInterface) {
 				$definitions[] = $argument;
 			}

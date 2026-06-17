@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Fixture;
 
-use Closure;
 use ON\Data\Mapper\MappingContext;
-use ON\Data\Mapper\Walker\WalkerInterface;
+use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\Walker\Walker;
 
-final class SpyArrayWalker implements WalkerInterface
+final class SpyArrayWalker extends Walker
 {
 	public function __construct()
 	{
@@ -24,15 +24,14 @@ final class SpyArrayWalker implements WalkerInterface
 		return is_array($source);
 	}
 
-	public function walk(
+	protected function getNodes(
 		mixed $source,
 		MappingContext $context,
-		Closure $visit,
-	): void {
+	): iterable {
 		ComponentTestState::recordRuntime(self::class, $context->getPath());
 
 		foreach ($source as $name => $value) {
-			$visit($name, $value, null);
+			yield new MappingNode($name, $value, $context);
 		}
 	}
 }

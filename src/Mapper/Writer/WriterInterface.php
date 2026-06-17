@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Mapper\Writer;
 
 use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingNode;
 
 interface WriterInterface
 {
@@ -20,10 +21,8 @@ interface WriterInterface
 
 	public function write(
 		mixed $target,
-		string|int $name,
+		MappingNode $node,
 		mixed $value,
-		MappingContext $context,
-		mixed $walkerArguments = null,
 	): mixed;
 
 	public function finish(

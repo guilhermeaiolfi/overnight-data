@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Mapper\Resolver;
 
 use ON\Data\Mapper\FieldContext;
-use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Support\ObjectPropertyMatcher;
 use ReflectionClass;
 use ReflectionNamedType;
@@ -14,14 +14,9 @@ use stdClass;
 
 final class ReflectionPropertyFieldResolver implements FieldResolverInterface
 {
-	public function resolve(
-		MappingContext $mapping,
-		string $path,
-		string|int $fieldName,
-		mixed $value,
-		mixed $extra = null,
-	): ?FieldContext {
-		$property = $this->findProperty($fieldName, $mapping->getTarget(), $extra);
+	public function resolve(MappingNode $node): ?FieldContext
+	{
+		$property = $this->findProperty($node->getName(), $node->getContext()->getTarget(), $node->getArguments());
 		if (! $property instanceof ReflectionProperty) {
 			return null;
 		}

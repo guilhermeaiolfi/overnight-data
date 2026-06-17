@@ -11,6 +11,7 @@ use ON\Data\Mapper\Representation\WireRepresentation;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use stdClass;
+use Tests\ON\Data\Fixture\ArgumentDrivenNodeResolver;
 use Tests\ON\Data\Fixture\SpyArrayWalker;
 use Tests\ON\Data\Fixture\SpyArrayWriter;
 use Tests\ON\Data\Fixture\SpyResolver;
@@ -25,6 +26,7 @@ final class MapBuilderTest extends TestCase
 		$walker = $builder->walker(SpyArrayWalker::class);
 		$writer = $builder->writer(SpyArrayWriter::class);
 		$resolver = $builder->resolver(SpyResolver::class);
+		$nodeResolver = $builder->nodeResolver(ArgumentDrivenNodeResolver::class);
 		$args = $builder->args('b');
 		$collection = $builder->collection();
 
@@ -33,6 +35,7 @@ final class MapBuilderTest extends TestCase
 		self::assertNotSame($builder, $walker);
 		self::assertNotSame($builder, $writer);
 		self::assertNotSame($builder, $resolver);
+		self::assertNotSame($builder, $nodeResolver);
 		self::assertNotSame($builder, $args);
 		self::assertNotSame($builder, $collection);
 		self::assertNull($this->property($builder, 'sourceRepresentation'));
@@ -40,6 +43,7 @@ final class MapBuilderTest extends TestCase
 		self::assertNull($this->property($builder, 'walkerClass'));
 		self::assertNull($this->property($builder, 'writerClass'));
 		self::assertSame([], $this->property($builder, 'resolverClasses'));
+		self::assertSame([], $this->property($builder, 'nodeResolverClasses'));
 		self::assertSame([], $this->property($builder, 'arguments'));
 		self::assertFalse($this->property($builder, 'collection'));
 	}

@@ -1,8 +1,8 @@
 # Field Types and Mapper Runtime
 
-`ON\Data` includes the scalar conversion foundation plus a shallow composable mapper runtime under `ON\Data\Mapper`.
+`ON\Data` includes the scalar conversion foundation plus a recursive composable mapper runtime under `ON\Data\Mapper`.
 
-The mapper layer is intentionally shallow. It supports input-driven traversal of arrays, `stdClass`, and public-property DTOs, plus definition-aware scalar conversion through `->args($definition)`, but it does not implement nested object graphs, typed nested lists, ORM integration, or framework-specific runtime behavior.
+The mapper layer supports input-driven traversal of arrays, `stdClass`, and public-property DTOs, plus recursive structural mapping, definition-aware scalar conversion through `->args($definition)`, and default dotted-key expansion for flat rows. It still does not implement constructor hydration, readonly hydration, ORM integration, or framework-specific runtime behavior.
 
 ## Canonical representations
 
@@ -163,6 +163,7 @@ The runtime is composed from independent component roles:
 ```text
 Input
   -> Walker
+  -> MappingNode resolver chain
   -> Resolver chain
   -> Representation conversion
   -> Writer
@@ -171,12 +172,13 @@ Input
 
 Responsibilities:
 
-- walker: enumerate available source fields and expose walker-specific context
-- resolver: inspect the current field evidence and return a `FieldContext` when capable
+- walker: enumerate source nodes, own collection traversal, and initiate recursive mapping
+- mapping-node resolver: decide whether a node should recurse and what child target it should use
+- resolver: inspect the current leaf node and return a `FieldContext` when capable
 - conversion: move scalar values between representations only when a boundary was declared
-- writer: prepare the target and perform the final per-field assignment
+- writer: prepare the target and perform only the final per-node assignment
 
-Traversal is input-driven. The walker determines what fields exist. The writer does not traverse the source, and the target does not cause extra source traversal.
+Traversal is input-driven. The walker determines what nodes exist, owns collection iteration, and can recurse into nested structures. The writer never traverses the source, and the target does not cause extra source traversal.
 
 ## Built-in components
 
@@ -185,8 +187,9 @@ Default registered order:
 - walkers: `ArrayWalker`, `ObjectWalker`
 - writers: `ArrayWriter`, `ObjectWriter`
 - resolvers: `DefinitionFieldResolver`, `ReflectionPropertyFieldResolver`
+- mapping-node resolvers: `DefinitionRelationMappingNodeResolver`, `ReflectionMappingNodeResolver`, `StructuralValueMappingNodeResolver`
 
-This supports the built-in shallow matrix:
+This supports the built-in recursive matrix:
 
 ```php
 map($array)->to([]);
@@ -200,6 +203,18 @@ map($stdClass)->to(UserDto::class);
 map($dto)->to([]);
 map($dto)->to(stdClass::class);
 map($dto)->to(AnotherDto::class);
+```
+
+Nested typed properties and PHPDoc lists also work:
+
+```php
+final class PostDto
+{
+    public AuthorDto $author;
+
+    /** @var list<AuthorDto> */
+    public array $authors = [];
+}
 ```
 
 ## Construction and registration
@@ -240,10 +255,12 @@ Explicit per-call fluent resolvers still run before every registered default res
 - an explicit walker class
 - an explicit writer class
 - explicit resolver classes
+- explicit mapping-node resolver classes
 - mapping arguments
 - collection mode
 - current path
-- prepared runtime target
+- current source and prepared runtime target
+- parent source and parent target
 
 ## Fluent map()
 
@@ -294,6 +311,7 @@ Override components for one mapping:
 ```php
 $result = map($source)
     ->walker(CustomWalker::class)
+    ->nodeResolver(CustomNodeResolver::class)
     ->resolver(CustomFieldResolver::class)
     ->writer(CustomWriter::class)
     ->args($customEvidence)
@@ -347,7 +365,7 @@ Result:
 ]
 ```
 
-Collection mode reuses the same mapping arguments for each top-level item:
+Collection mode reuses the same mapping arguments for each top-level item, and nested relation scopes replace only the active definition while preserving unrelated arguments such as `ArrayWalkerOptions`:
 
 ```php
 $rows = map([
@@ -360,7 +378,7 @@ $rows = map([
     ->to([]);
 ```
 
-`DefinitionFieldResolver` only uses exact effective field names emitted by the active walker. In this phase it does not resolve aliases, columns, relation names, or registry-wide lookups.
+`DefinitionFieldResolver` only uses exact effective field names emitted by the active walker. It does not resolve aliases, columns, or registry-wide lookups by itself.
 
 The root `Registry` is not searched automatically. Pass the active definition itself:
 
@@ -372,12 +390,54 @@ If mapping arguments contain more than one direct `DefinitionInterface`, resolut
 
 Definition metadata wins over reflection because `DefinitionFieldResolver` runs before `ReflectionPropertyFieldResolver`. If the supplied definition does not contain the current field, it returns `null` and reflection remains a fallback for typed DTO properties.
 
+Definition relations participate in recursive mapping. When the active definition has a matching relation name, child mapping uses the relation target definition for that nested scope and removes the parent definition from the child argument list.
+
 Removed convenience APIs:
 
 - `using()`
 - `toArray()`
 
 `to([])` is the canonical array destination.
+
+## Dotted-key expansion
+
+`ArrayWalker` expands dotted source keys before node creation by default, regardless of the destination type:
+
+```php
+$result = map([
+    'id' => 1,
+    'author.name' => 'Guilherme',
+    'author.id' => 2,
+])->to([]);
+```
+
+Result:
+
+```php
+[
+    'id' => 1,
+    'author' => [
+        'name' => 'Guilherme',
+        'id' => 2,
+    ],
+]
+```
+
+This makes flat joined rows and request payloads map cleanly into nested arrays, `stdClass`, and DTOs.
+
+Disable expansion explicitly when literal dotted keys are required:
+
+```php
+use ON\Data\Mapper\Walker\ArrayWalkerOptions;
+
+$result = map([
+    'metadata.version' => '1.0',
+])
+    ->args(new ArrayWalkerOptions(false))
+    ->to([]);
+```
+
+Malformed paths, scalar/branch collisions, and duplicate leaf collisions throw `MappingException`.
 
 ## Collection mapping
 
@@ -394,7 +454,7 @@ Empty iterables map to an empty list. Non-iterable sources are rejected when col
 
 ## Public-property DTO mapping
 
-Inbound and outbound object support is shallow and public-property-based.
+Inbound and outbound object support is recursive and public-property-based.
 
 Inbound rules:
 
@@ -404,6 +464,8 @@ Inbound rules:
 - unknown input names are ignored for typed targets
 - missing fields preserve defaults and uninitialized properties
 - `MapFrom` is applied on the target side
+- class-typed target properties recurse into nested DTO mapping
+- PHPDoc list forms `Type[]`, `list<Type>`, and `array<Type>` enable typed nested DTO lists
 - readonly targets are rejected in this phase
 
 Outbound rules:
@@ -414,6 +476,7 @@ Outbound rules:
 - explicit `null` values are preserved
 - `MapTo` is applied on the source side
 - `Hidden` omits a property from outbound object walking
+- nested objects recurse into nested arrays, `stdClass`, or typed DTOs when structural evidence exists
 
 Combined aliasing works across object-to-object mapping:
 
@@ -432,6 +495,19 @@ final class TargetPost
 
 $result = map($source)->to(TargetPost::class);
 ```
+
+## Parent and cycle context
+
+`MappingContext` now exposes:
+
+- `getSource()`
+- `getTarget()`
+- `getParentSource()`
+- `getParentTarget()`
+
+Writers and custom node resolvers can inspect both the current and parent scope. Parent object targets are the same live object instance; parent array targets are value snapshots only.
+
+Recursive mapping also includes mapping-local object cycle protection. Re-encountering the same source object in the current ancestor chain throws `MappingException` with the current path.
 
 ## Representation-aware primitive conversion
 
@@ -462,19 +538,15 @@ Supported reflection-derived primitive types in this phase:
 
 Untyped, `mixed`, union, intersection, and class-typed structural properties are left unchanged.
 
-## Current shallow limitations
+## Current limitations
 
 The built-in runtime is intentionally narrow:
 
-- no nested DTO graphs
-- no recursive object mapping into class-typed properties
-- no typed nested collections
-- no PHPDoc parsing
+- no complete PHPDoc parsing beyond `Type[]`, `list<Type>`, and `array<Type>`
 - no constructor-argument hydration
 - no setter hydration
 - no private-property mutation
 - no readonly hydration
-- no dot-path expansion
 - no alias-name remapping
 - no column-name remapping
 - no ORM, REST, or framework integration
