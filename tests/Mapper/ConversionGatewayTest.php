@@ -17,10 +17,19 @@ use ON\Data\Mapper\Representation\WireRepresentation;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\Fixture\CacheRepresentation;
 use Tests\ON\Data\Fixture\CustomFieldType;
+use Tests\ON\Data\Fixture\TrackingCustomFieldType;
 
 final class ConversionGatewayTest extends TestCase
 {
+	protected function setUp(): void
+	{
+		parent::setUp();
+
+		TrackingCustomFieldType::reset();
+	}
+
 	public function testStorageIntegerStringConvertsToPhpInteger(): void
 	{
 		$gateway = ConversionGateway::createDefault();
@@ -205,6 +214,14 @@ final class ConversionGatewayTest extends TestCase
 		self::assertSame($value, $gateway->to(PhpRepresentation::class, $value, PhpRepresentation::class, FieldContext::named('payload', 'text')));
 	}
 
+	public function testSameValidRepresentationDoesNotRequireFieldTypeResolution(): void
+	{
+		$gateway = new ConversionGateway(new FieldTypeRegistry());
+		$value = new stdClass();
+
+		self::assertSame($value, $gateway->to(PhpRepresentation::class, $value, PhpRepresentation::class, FieldContext::named('payload', 'missing')));
+	}
+
 	public function testNullPassesThroughUnchanged(): void
 	{
 		$gateway = ConversionGateway::createDefault();
@@ -218,6 +235,94 @@ final class ConversionGatewayTest extends TestCase
 
 		$this->expectException(UnsupportedConversionException::class);
 		$gateway->to(stdClass::class, '10', PhpRepresentation::class, FieldContext::named('id', 'int'));
+	}
+
+	public function testEqualInvalidRepresentationStillFailsValidation(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		$this->expectException(UnsupportedConversionException::class);
+		$gateway->to(stdClass::class, '10', stdClass::class, FieldContext::named('id', 'int'));
+	}
+
+	public function testCustomRepresentationIsAcceptedWithoutRegistration(): void
+	{
+		$gateway = $this->trackingGateway();
+
+		self::assertSame(
+			'php<payload>',
+			$gateway->to(CacheRepresentation::class, 'payload', PhpRepresentation::class, FieldContext::named('payload', 'tracked')),
+		);
+	}
+
+	public function testBuiltInFieldTypeRejectsValidCustomRepresentation(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		$this->expectException(UnsupportedConversionException::class);
+		$gateway->to(CacheRepresentation::class, '10', PhpRepresentation::class, FieldContext::named('id', 'int'));
+	}
+
+	public function testCustomRepresentationToPhpCallsOnlyToPhp(): void
+	{
+		$gateway = $this->trackingGateway();
+
+		self::assertSame(
+			'php<payload>',
+			$gateway->to(CacheRepresentation::class, 'payload', PhpRepresentation::class, FieldContext::named('payload', 'tracked')),
+		);
+		self::assertSame(
+			['toPhp:' . CacheRepresentation::class],
+			TrackingCustomFieldType::calls(),
+		);
+	}
+
+	public function testPhpToCustomRepresentationCallsOnlyFromPhp(): void
+	{
+		$gateway = $this->trackingGateway();
+
+		self::assertSame(
+			'cache<payload>',
+			$gateway->to(PhpRepresentation::class, 'payload', CacheRepresentation::class, FieldContext::named('payload', 'tracked')),
+		);
+		self::assertSame(
+			['fromPhp:' . CacheRepresentation::class],
+			TrackingCustomFieldType::calls(),
+		);
+	}
+
+	public function testCustomRepresentationToWireRoutesThroughPhp(): void
+	{
+		$gateway = $this->trackingGateway();
+
+		self::assertSame(
+			'wire<php<payload>>',
+			$gateway->to(CacheRepresentation::class, 'payload', WireRepresentation::class, FieldContext::named('payload', 'tracked')),
+		);
+		self::assertSame(
+			[
+				'toPhp:' . CacheRepresentation::class,
+				'fromPhp:' . WireRepresentation::class,
+			],
+			TrackingCustomFieldType::calls(),
+		);
+	}
+
+	public function testWireToCustomRepresentationRoutesThroughPhp(): void
+	{
+		$gateway = $this->trackingGateway();
+
+		self::assertSame(
+			'cache<php-wire<payload>>',
+			$gateway->to(WireRepresentation::class, 'payload', CacheRepresentation::class, FieldContext::named('payload', 'tracked')),
+		);
+		self::assertSame(
+			[
+				'toPhp:' . WireRepresentation::class,
+				'fromPhp:' . CacheRepresentation::class,
+			],
+			TrackingCustomFieldType::calls(),
+		);
 	}
 
 	public function testConversionErrorsRetainPreviousExceptions(): void
@@ -286,6 +391,13 @@ final class ConversionGatewayTest extends TestCase
 		self::assertSame(
 			$gateway->to(StorageRepresentation::class, '15', PhpRepresentation::class, FieldContext::fromField($originalField)),
 			$gateway->to(StorageRepresentation::class, '15', PhpRepresentation::class, FieldContext::fromField($restoredField)),
+		);
+	}
+
+	private function trackingGateway(): ConversionGateway
+	{
+		return new ConversionGateway(
+			FieldTypeRegistry::createDefault()->register('tracked', TrackingCustomFieldType::class),
 		);
 	}
 }

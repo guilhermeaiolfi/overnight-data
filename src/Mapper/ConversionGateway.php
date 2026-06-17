@@ -9,48 +9,21 @@ use ON\Data\Mapper\Exception\FieldTypeNotFoundException;
 use ON\Data\Mapper\Exception\UnsupportedConversionException;
 use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Representation\RepresentationInterface;
-use ON\Data\Mapper\Representation\StorageRepresentation;
-use ON\Data\Mapper\Representation\WireRepresentation;
 use Throwable;
 
 final class ConversionGateway
 {
-	/**
-	 * @var array<class-string<RepresentationInterface>, RepresentationInterface>
-	 */
-	private array $representations = [];
-
 	private MapperManager $mappers;
 
 	public function __construct(
 		private readonly FieldTypeRegistry $fieldTypes,
-		RepresentationInterface ...$representations,
 	) {
-		$representations = $representations !== []
-			? $representations
-			: [
-				new PhpRepresentation(),
-				new StorageRepresentation(),
-				new WireRepresentation(),
-			];
-
-		foreach ($representations as $representation) {
-			$this->registerRepresentation($representation);
-		}
-
 		$this->mappers = MapperManager::createDefault($this);
 	}
 
 	public static function createDefault(): self
 	{
 		return new self(FieldTypeRegistry::createDefault());
-	}
-
-	public function registerRepresentation(RepresentationInterface $representation): self
-	{
-		$this->representations[$representation::class] = $representation;
-
-		return $this;
 	}
 
 	public function getFieldTypes(): FieldTypeRegistry
@@ -93,11 +66,11 @@ final class ConversionGateway
 
 		try {
 			$phpValue = $from === PhpRepresentation::class
-				? $this->representations[$from]->toPhp($value, $field)
+				? $value
 				: $handler::toPhp($from, $value, $field);
 
 			return $to === PhpRepresentation::class
-				? $this->representations[$to]->fromPhp($phpValue, $field)
+				? $phpValue
 				: $handler::fromPhp($to, $phpValue, $field);
 		} catch (FieldTypeNotFoundException|UnsupportedConversionException $exception) {
 			throw $exception;
@@ -111,7 +84,7 @@ final class ConversionGateway
 	 */
 	private function requireRepresentation(string $representation): void
 	{
-		if (! isset($this->representations[$representation])) {
+		if (! is_a($representation, RepresentationInterface::class, true)) {
 			throw new UnsupportedConversionException(
 				sprintf("Unknown representation '%s'.", $representation)
 			);

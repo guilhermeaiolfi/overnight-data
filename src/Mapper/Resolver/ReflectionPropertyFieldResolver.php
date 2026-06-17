@@ -6,21 +6,17 @@ namespace ON\Data\Mapper\Resolver;
 
 use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\MappingNode;
-use ON\Data\Mapper\Support\MappingNodePropertyFinder;
+use ON\Data\Mapper\Support\ObjectPropertyMatcher;
+use ReflectionClass;
 use ReflectionNamedType;
 use ReflectionProperty;
+use stdClass;
 
 final class ReflectionPropertyFieldResolver implements FieldResolverInterface
 {
-	public function __construct(
-		private readonly ?MappingNodePropertyFinder $propertyFinder = null,
-	) {
-	}
-
 	public function resolve(MappingNode $node): ?FieldContext
 	{
-		$finder = $this->propertyFinder ?? new MappingNodePropertyFinder();
-		$property = $finder->findTargetProperty($node) ?? $finder->findSourceProperty($node);
+		$property = $this->findProperty($node);
 		if (! $property instanceof ReflectionProperty) {
 			return null;
 		}
@@ -39,5 +35,22 @@ final class ReflectionPropertyFieldResolver implements FieldResolverInterface
 			$type->getName(),
 			$type->allowsNull(),
 		);
+	}
+
+	private function findProperty(MappingNode $node): ?ReflectionProperty
+	{
+		return $this->findTargetProperty($node) ?? $node->getSourceProperty();
+	}
+
+	private function findTargetProperty(MappingNode $node): ?ReflectionProperty
+	{
+		$target = $node->getParentTarget();
+		if (! is_object($target) || $target instanceof stdClass) {
+			return null;
+		}
+
+		$matcher = new ObjectPropertyMatcher(new ReflectionClass($target));
+
+		return $matcher->match($node->getName());
 	}
 }

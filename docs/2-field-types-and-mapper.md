@@ -4,19 +4,37 @@
 
 The mapper layer supports input-driven traversal of arrays, `stdClass`, and public-property DTOs, plus recursive structural mapping, definition-aware scalar conversion through `->args($definition)`, and default dotted-key expansion for flat rows. It still does not implement constructor hydration, readonly hydration, ORM integration, or framework-specific runtime behavior.
 
-## Canonical representations
+## Representation identity
 
-Conversions route through canonical PHP values.
+Representations are class-based identities implementing the marker interface `ON\Data\Mapper\Representation\RepresentationInterface`.
+
+They identify the domain in which a value is expressed and do not perform conversion themselves.
 
 - `ON\Data\Mapper\Representation\PhpRepresentation` is the canonical application representation.
 - `ON\Data\Mapper\Representation\StorageRepresentation` is the storage-facing representation for database-driver-compatible scalar values.
 - `ON\Data\Mapper\Representation\WireRepresentation` is the external-input and JSON-compatible representation.
+
+## Conversion authority
+
+Field types own semantic conversion:
+
+```text
+FieldType      = what the value is
+Representation = where the value is expressed
+```
+
+`FieldTypeInterface::toPhp()` converts from a named representation into canonical PHP. `FieldTypeInterface::fromPhp()` converts canonical PHP into a named representation.
+
+## Canonical PHP routing
+
+Conversions route through canonical PHP values.
 
 Non-identical conversions route through PHP:
 
 ```text
 Storage -> PHP -> Wire
 Wire -> PHP -> Storage
+Custom -> PHP -> Custom
 ```
 
 If the source and target representations are the same, the original value is returned unchanged.
@@ -129,6 +147,18 @@ $phpValue = $gateway->to(
     FieldContext::named('id', 'int'),
 );
 ```
+
+Custom representations are open-ended marker classes. They do not need gateway registration:
+
+```php
+use ON\Data\Mapper\Representation\RepresentationInterface;
+
+final class CacheRepresentation implements RepresentationInterface
+{
+}
+```
+
+That class is immediately usable as a representation class string, but the selected field type must explicitly understand it. Built-in field types may reject custom representations they do not support.
 
 ## Default runtime
 

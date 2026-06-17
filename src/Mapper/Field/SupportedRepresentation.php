@@ -6,6 +6,7 @@ namespace ON\Data\Mapper\Field;
 
 use ON\Data\Mapper\Exception\UnsupportedConversionException;
 use ON\Data\Mapper\Representation\PhpRepresentation;
+use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Representation\StorageRepresentation;
 use ON\Data\Mapper\Representation\WireRepresentation;
 
@@ -16,7 +17,7 @@ final class SupportedRepresentation
 	}
 
 	/**
-	 * @param class-string $representation
+	 * @param class-string<RepresentationInterface> $representation
 	 */
 	public static function assert(string $representation, string $fieldType): void
 	{
