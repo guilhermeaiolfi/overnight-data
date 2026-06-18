@@ -20,6 +20,13 @@ use stdClass;
 
 abstract class Walker implements WalkerInterface
 {
+	private readonly MappingNodePropertyFinder $propertyFinder;
+
+	public function __construct()
+	{
+		$this->propertyFinder = new MappingNodePropertyFinder();
+	}
+
 	final public function walk(
 		MappingNode $node,
 		MapperManager $mappers,
@@ -86,9 +93,8 @@ abstract class Walker implements WalkerInterface
 			return null;
 		}
 
-		$propertyFinder = new MappingNodePropertyFinder();
-		$targetProperty = $propertyFinder->findTargetProperty($node);
-		$sourceProperty = $propertyFinder->findSourceProperty($node);
+		$targetProperty = $this->propertyFinder->findTargetProperty($node);
+		$sourceProperty = $this->propertyFinder->findSourceProperty($node);
 		$activeDefinition = $this->getActiveDefinition($node->getArguments());
 		$relation = $this->getRelation($activeDefinition, $node);
 		$reflectionTarget = $this->getReflectionNestedTarget($node, $targetProperty, $sourceProperty);

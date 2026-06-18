@@ -52,6 +52,33 @@ final class FieldConversionCoordinatorTest extends TestCase
 		self::assertSame('float', $field?->getType());
 	}
 
+	public function testReflectionPropertyResolverPrefersTargetPropertyOverSourceProperty(): void
+	{
+		$resolver = new ReflectionPropertyFieldResolver();
+		$target = (new ReflectionClass(UserInputDto::class))->newInstanceWithoutConstructor();
+		$node = MappingNode::root([], $target, $this->context())
+			->withTarget($target)
+			->child('user_score', '3.5', new ReflectionProperty(PropertyContextFixture::class, 'name'));
+
+		$field = $resolver->resolve($node);
+
+		self::assertSame('score', $field?->getName());
+		self::assertSame('float', $field?->getType());
+	}
+
+	public function testReflectionPropertyResolverUsesSourcePropertyAsFallback(): void
+	{
+		$resolver = new ReflectionPropertyFieldResolver();
+		$node = MappingNode::root([], [], $this->context())
+			->withTarget([])
+			->child('name', 'Ada', new ReflectionProperty(PropertyContextFixture::class, 'name'));
+
+		$field = $resolver->resolve($node);
+
+		self::assertSame('name', $field?->getName());
+		self::assertSame('string', $field?->getType());
+	}
+
 	#[DataProvider('unsupportedPropertyProvider')]
 	public function testReflectionPropertyResolverReturnsNullForUnsupportedTypes(string $property): void
 	{

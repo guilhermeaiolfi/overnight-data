@@ -12,6 +12,7 @@ final class SpyArrayWalker extends Walker
 {
 	public function __construct()
 	{
+		parent::__construct();
 		ComponentTestState::recordConstruction(self::class);
 	}
 

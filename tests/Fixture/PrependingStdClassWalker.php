@@ -13,6 +13,7 @@ final class PrependingStdClassWalker extends Walker
 {
 	public function __construct()
 	{
+		parent::__construct();
 		ComponentTestState::recordConstruction(self::class);
 	}
 

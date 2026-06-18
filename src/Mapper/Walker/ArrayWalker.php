@@ -14,6 +14,7 @@ final class ArrayWalker extends Walker
 	public function __construct(
 		private readonly ?ArrayPathExpander $pathExpander = null,
 	) {
+		parent::__construct();
 	}
 
 	public static function canWalk(
