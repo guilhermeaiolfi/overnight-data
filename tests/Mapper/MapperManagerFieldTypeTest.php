@@ -21,7 +21,7 @@ use Tests\ON\Data\Fixture\CustomFieldType;
 use Tests\ON\Data\Fixture\EmptyNamesFieldType;
 use Tests\ON\Data\Fixture\InvalidNamesFieldType;
 
-final class FieldTypeRegistryTest extends TestCase
+final class MapperManagerFieldTypeTest extends TestCase
 {
 	public function testDefaultManagerResolvesPrimitiveAliases(): void
 	{
