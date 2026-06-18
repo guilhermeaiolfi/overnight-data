@@ -4,26 +4,21 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper;
 
-use ON\Data\Mapper\Representation\RepresentationInterface;
-
 interface FieldTypeInterface
 {
-	public static function storageType(): string;
-
 	/**
-	 * @param class-string<RepresentationInterface> $from
+	 * @return non-empty-list<non-empty-string>
 	 */
+	public static function getNames(): array;
+
+	public static function getStorageType(): string;
+
 	public static function toPhp(
-		string $from,
 		mixed $value,
 		FieldContext $field,
 	): mixed;
 
-	/**
-	 * @param class-string<RepresentationInterface> $to
-	 */
 	public static function fromPhp(
-		string $to,
 		mixed $value,
 		FieldContext $field,
 	): mixed;

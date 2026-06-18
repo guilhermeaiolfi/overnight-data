@@ -118,7 +118,7 @@ final class MapBuilder
 		}
 
 		return $this->gateway
-			->getMappers()
+			->getMapperManager()
 			->map($this->source, $target, $this->createContext());
 	}
 

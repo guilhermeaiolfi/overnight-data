@@ -12,7 +12,6 @@ use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\Exception\NoWalkerFoundException;
 use ON\Data\Mapper\Exception\NoWriterFoundException;
-use ON\Data\Mapper\FieldTypeRegistry;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\Representation\PhpRepresentation;
@@ -303,7 +302,7 @@ final class ObjectMappingTest extends TestCase
 
 	public function testUnsupportedTargetsFailClearly(): void
 	{
-		$gateway = new ConversionGateway(FieldTypeRegistry::createDefault());
+		$gateway = ConversionGateway::createDefault();
 
 		foreach (
 			[
@@ -315,7 +314,7 @@ final class ObjectMappingTest extends TestCase
 			] as $target
 		) {
 			try {
-				$gateway->getMappers()->map(
+				$gateway->getMapperManager()->map(
 					['id' => 10],
 					$target,
 					new MappingContext($gateway),
@@ -329,7 +328,7 @@ final class ObjectMappingTest extends TestCase
 
 	public function testObjectWriterCapabilityChecksDoNotClaimUnsupportedTargets(): void
 	{
-		$context = new MappingContext(new ConversionGateway(FieldTypeRegistry::createDefault()));
+		$context = new MappingContext(ConversionGateway::createDefault());
 
 		self::assertFalse(ObjectWriter::canWrite(UserContract::class, $context));
 		self::assertFalse(ObjectWriter::canWrite(AbstractUserDto::class, $context));
@@ -343,10 +342,10 @@ final class ObjectMappingTest extends TestCase
 
 	public function testPrependedSpecializedWriterCanHandleTargetRejectedByObjectWriter(): void
 	{
-		$gateway = new ConversionGateway(FieldTypeRegistry::createDefault());
-		$gateway->getMappers()->prepend(PrependingContractWriter::class);
+		$gateway = ConversionGateway::createDefault();
+		$gateway->getMapperManager()->prepend(PrependingContractWriter::class);
 
-		$result = $gateway->getMappers()->map(['specialized' => 'writer'], UserContract::class, new MappingContext($gateway));
+		$result = $gateway->getMapperManager()->map(['specialized' => 'writer'], UserContract::class, new MappingContext($gateway));
 
 		self::assertSame('writer', $result->specialized);
 	}

@@ -10,26 +10,27 @@ use ON\Data\Mapper\FieldTypeInterface;
 
 final class StringFieldType implements FieldTypeInterface
 {
-	public static function storageType(): string
+	public static function getNames(): array
+	{
+		return ['string'];
+	}
+
+	public static function getStorageType(): string
 	{
 		return 'string';
 	}
 
-	public static function toPhp(string $from, mixed $value, FieldContext $field): mixed
+	public static function toPhp(mixed $value, FieldContext $field): mixed
 	{
-		SupportedRepresentation::assert($from, static::class);
-
-		return self::normalize($value, $field);
+		return self::convertToString($value, $field);
 	}
 
-	public static function fromPhp(string $to, mixed $value, FieldContext $field): mixed
+	public static function fromPhp(mixed $value, FieldContext $field): mixed
 	{
-		SupportedRepresentation::assert($to, static::class);
-
-		return self::normalize($value, $field);
+		return self::convertToString($value, $field);
 	}
 
-	private static function normalize(mixed $value, FieldContext $field): string
+	private static function convertToString(mixed $value, FieldContext $field): string
 	{
 		if (is_string($value)) {
 			return $value;

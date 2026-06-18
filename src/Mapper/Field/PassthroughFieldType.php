@@ -9,26 +9,22 @@ use ON\Data\Mapper\FieldTypeInterface;
 
 final class PassthroughFieldType implements FieldTypeInterface
 {
-	public static function storageType(): string
+	public static function getNames(): array
+	{
+		return ['text'];
+	}
+
+	public static function getStorageType(): string
 	{
 		return 'text';
 	}
 
-	public static function toPhp(string $from, mixed $value, FieldContext $field): mixed
+	public static function toPhp(mixed $value, FieldContext $field): mixed
 	{
-		SupportedRepresentation::assert($from, static::class);
-
-		return self::normalize($value);
+		return $value;
 	}
 
-	public static function fromPhp(string $to, mixed $value, FieldContext $field): mixed
-	{
-		SupportedRepresentation::assert($to, static::class);
-
-		return self::normalize($value);
-	}
-
-	private static function normalize(mixed $value): mixed
+	public static function fromPhp(mixed $value, FieldContext $field): mixed
 	{
 		return $value;
 	}

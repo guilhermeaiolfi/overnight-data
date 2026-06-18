@@ -140,7 +140,7 @@ final class RecursiveMappingTest extends TestCase
 	public function testWriterReceivesCompletedNestedValuesAndParentContexts(): void
 	{
 		$gateway = ConversionGateway::createDefault();
-		$gateway->getMappers()->prepend(ParentAwareWriter::class);
+		$gateway->getMapperManager()->prepend(ParentAwareWriter::class);
 
 		$result = map(
 			['author' => ['id' => 2, 'name' => 'Ada']],
@@ -174,7 +174,7 @@ final class RecursiveMappingTest extends TestCase
 	public function testNestedCollectionFrameKeepsContextArgumentsAndCollectionModeInSync(): void
 	{
 		$gateway = ConversionGateway::createDefault();
-		$gateway->getMappers()->prepend(RecordingArrayWalker::class);
+		$gateway->getMapperManager()->prepend(RecordingArrayWalker::class);
 		$definition = $this->postsDefinition();
 
 		$result = map(
@@ -215,7 +215,7 @@ final class RecursiveMappingTest extends TestCase
 	public function testWriterTargetSemanticsKeepEvolvingResultAndArrayParentSnapshots(): void
 	{
 		$gateway = ConversionGateway::createDefault();
-		$gateway->getMappers()->prepend(RuntimeInvariantWriter::class);
+		$gateway->getMapperManager()->prepend(RuntimeInvariantWriter::class);
 
 		$result = map(
 			['author' => ['id' => 2, 'name' => 'Ada']],
@@ -246,7 +246,7 @@ final class RecursiveMappingTest extends TestCase
 	public function testWriterTargetSemanticsKeepLiveObjectParentReferences(): void
 	{
 		$gateway = ConversionGateway::createDefault();
-		$gateway->getMappers()->prepend(RuntimeInvariantWriter::class);
+		$gateway->getMapperManager()->prepend(RuntimeInvariantWriter::class);
 
 		$result = map(
 			['author' => ['id' => 2, 'name' => 'Ada']],

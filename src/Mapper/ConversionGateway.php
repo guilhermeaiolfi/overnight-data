@@ -13,27 +13,24 @@ use Throwable;
 
 final class ConversionGateway
 {
-	private MapperManager $mappers;
+	private MapperManager $mapperManager;
 
-	public function __construct(
-		private readonly FieldTypeRegistry $fieldTypes,
-	) {
-		$this->mappers = MapperManager::createDefault($this);
+	public function __construct()
+	{
+		$this->mapperManager = new MapperManager($this);
 	}
 
 	public static function createDefault(): self
 	{
-		return new self(FieldTypeRegistry::createDefault());
+		$gateway = new self();
+		$gateway->mapperManager = MapperManager::createDefault($gateway);
+
+		return $gateway;
 	}
 
-	public function getFieldTypes(): FieldTypeRegistry
+	public function getMapperManager(): MapperManager
 	{
-		return $this->fieldTypes;
-	}
-
-	public function getMappers(): MapperManager
-	{
-		return $this->mappers;
+		return $this->mapperManager;
 	}
 
 	/**
@@ -57,8 +54,8 @@ final class ConversionGateway
 			return $value;
 		}
 
-		$handler = $this->fieldTypes->resolve($field);
-		if ($handler === null) {
+		$fieldType = $this->mapperManager->resolveFieldType($field);
+		if ($fieldType === null) {
 			throw new FieldTypeNotFoundException(
 				sprintf("Field '%s' uses unknown FieldType '%s'.", $field->getName(), $field->getType())
 			);
@@ -67,16 +64,27 @@ final class ConversionGateway
 		try {
 			$phpValue = $from === PhpRepresentation::class
 				? $value
-				: $handler::toPhp($from, $value, $field);
+				: $this->resolveConverter($fieldType, $from)::toPhp($value, $field);
 
 			return $to === PhpRepresentation::class
 				? $phpValue
-				: $handler::fromPhp($to, $phpValue, $field);
+				: $this->resolveConverter($fieldType, $to)::fromPhp($phpValue, $field);
 		} catch (FieldTypeNotFoundException|UnsupportedConversionException $exception) {
 			throw $exception;
 		} catch (Throwable $exception) {
 			throw ConversionException::forField($field, $from, $to, $exception);
 		}
+	}
+
+	/**
+	 * @param class-string<FieldTypeInterface> $fieldType
+	 * @param class-string<RepresentationInterface> $representation
+	 *
+	 * @return class-string<FieldTypeInterface>|class-string<FieldTypeCodecInterface>
+	 */
+	private function resolveConverter(string $fieldType, string $representation): string
+	{
+		return $this->mapperManager->resolveFieldTypeCodec($fieldType, $representation) ?? $fieldType;
 	}
 
 	/**

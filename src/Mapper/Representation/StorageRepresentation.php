@@ -4,6 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper\Representation;
 
-final class StorageRepresentation implements RepresentationInterface
+class StorageRepresentation implements RepresentationInterface
 {
 }

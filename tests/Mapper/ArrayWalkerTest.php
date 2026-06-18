@@ -9,6 +9,7 @@ use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Walker\ArrayWalker;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 final class ArrayWalkerTest extends TestCase
 {
@@ -43,7 +44,7 @@ final class ArrayWalkerTest extends TestCase
 	{
 		$walker = new ArrayWalker();
 		$root = MappingNode::root($source, [], new MappingContext(ConversionGateway::createDefault()));
-		$method = new \ReflectionMethod(ArrayWalker::class, 'getNodes');
+		$method = new ReflectionMethod(ArrayWalker::class, 'getNodes');
 		$method->setAccessible(true);
 
 		return array_values(iterator_to_array($method->invoke($walker, $root), false));

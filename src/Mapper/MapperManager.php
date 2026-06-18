@@ -6,12 +6,19 @@ namespace ON\Data\Mapper;
 
 use Closure;
 use ON\Data\Mapper\Exception\DuplicateMapperComponentRegistrationException;
+use ON\Data\Mapper\Exception\FieldTypeNotFoundException;
 use ON\Data\Mapper\Exception\IncompatibleWalkerException;
 use ON\Data\Mapper\Exception\IncompatibleWriterException;
 use ON\Data\Mapper\Exception\InvalidMapperComponentException;
 use ON\Data\Mapper\Exception\MapperComponentConfigurationException;
 use ON\Data\Mapper\Exception\NoWalkerFoundException;
 use ON\Data\Mapper\Exception\NoWriterFoundException;
+use ON\Data\Mapper\Field\BoolFieldType;
+use ON\Data\Mapper\Field\FloatFieldType;
+use ON\Data\Mapper\Field\IntFieldType;
+use ON\Data\Mapper\Field\PassthroughFieldType;
+use ON\Data\Mapper\Field\StringFieldType;
+use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Resolver\DefinitionFieldResolver;
 use ON\Data\Mapper\Resolver\FieldResolverInterface;
 use ON\Data\Mapper\Resolver\ReflectionPropertyFieldResolver;
@@ -38,6 +45,30 @@ final class MapperManager
 	 * @var list<class-string<FieldResolverInterface>>
 	 */
 	private array $resolvers = [];
+
+	/**
+	 * @var array<string, class-string<FieldTypeInterface>>
+	 */
+	private array $fieldTypes = [];
+
+	/**
+	 * @var array<
+	 *     class-string<RepresentationInterface>,
+	 *     array<
+	 *         class-string<FieldTypeInterface>,
+	 *         class-string<FieldTypeCodecInterface>
+	 *     >
+	 * >
+	 */
+	private array $fieldTypeCodecs = [];
+
+	/**
+	 * @var array<
+	 *     class-string<FieldTypeInterface>,
+	 *     array<class-string<RepresentationInterface>, class-string<FieldTypeCodecInterface>|null>
+	 * >
+	 */
+	private array $resolvedFieldTypeCodecs = [];
 
 	/**
 	 * @var array<class-string<WalkerInterface>, WalkerInterface>
@@ -72,6 +103,11 @@ final class MapperManager
 		$manager->register(ObjectWriter::class);
 		$manager->register(DefinitionFieldResolver::class);
 		$manager->register(ReflectionPropertyFieldResolver::class);
+		$manager->register(StringFieldType::class);
+		$manager->register(PassthroughFieldType::class);
+		$manager->register(BoolFieldType::class);
+		$manager->register(IntFieldType::class);
+		$manager->register(FloatFieldType::class);
 
 		return $manager;
 	}
@@ -94,7 +130,9 @@ final class MapperManager
 	{
 		return in_array($component, $this->walkers, true)
 			|| in_array($component, $this->writers, true)
-			|| in_array($component, $this->resolvers, true);
+			|| in_array($component, $this->resolvers, true)
+			|| in_array($component, $this->fieldTypes, true)
+			|| $this->hasCodecClass($component);
 	}
 
 	/**
@@ -119,6 +157,28 @@ final class MapperManager
 	public function getRegisteredResolvers(): array
 	{
 		return $this->resolvers;
+	}
+
+	/**
+	 * @return array<string, class-string<FieldTypeInterface>>
+	 */
+	public function getRegisteredFieldTypes(): array
+	{
+		return $this->fieldTypes;
+	}
+
+	/**
+	 * @return array<
+	 *     class-string<RepresentationInterface>,
+	 *     array<
+	 *         class-string<FieldTypeInterface>,
+	 *         class-string<FieldTypeCodecInterface>
+	 *     >
+	 * >
+	 */
+	public function getRegisteredFieldTypeCodecs(): array
+	{
+		return $this->fieldTypeCodecs;
 	}
 
 	/**
@@ -158,6 +218,7 @@ final class MapperManager
 	{
 		$this->walkerInstances = [];
 		$this->writerInstances = [];
+		$this->resolvedFieldTypeCodecs = [];
 	}
 
 	public function warmUp(): void
@@ -219,6 +280,74 @@ final class MapperManager
 			$context->getGateway(),
 			$this->createResolverChain($context),
 		);
+	}
+
+	/**
+	 * @return class-string<FieldTypeInterface>|null
+	 */
+	public function resolveFieldType(FieldContext $field): ?string
+	{
+		$type = $field->getType();
+
+		if (is_a($type, FieldTypeInterface::class, true)) {
+			/** @var class-string<FieldTypeInterface> $type */
+			return $type;
+		}
+
+		if (isset($this->fieldTypes[$type])) {
+			return $this->fieldTypes[$type];
+		}
+
+		return $this->fieldTypes[strtolower($type)] ?? null;
+	}
+
+	/**
+	 * @return class-string<FieldTypeInterface>
+	 */
+	public function getFieldType(string $name): string
+	{
+		$resolved = $this->resolveFieldType(FieldContext::named($name, $name));
+		if ($resolved === null) {
+			throw new FieldTypeNotFoundException(sprintf("FieldType '%s' is not registered.", $name));
+		}
+
+		return $resolved;
+	}
+
+	/**
+	 * @param class-string<FieldTypeInterface> $fieldType
+	 * @param class-string<RepresentationInterface> $representation
+	 *
+	 * @return class-string<FieldTypeCodecInterface>|null
+	 */
+	public function resolveFieldTypeCodec(string $fieldType, string $representation): ?string
+	{
+		if (isset($this->resolvedFieldTypeCodecs[$fieldType]) && array_key_exists($representation, $this->resolvedFieldTypeCodecs[$fieldType])) {
+			return $this->resolvedFieldTypeCodecs[$fieldType][$representation];
+		}
+
+		$resolved = null;
+		$current = $representation;
+
+		do {
+			$codec = $this->fieldTypeCodecs[$current][$fieldType] ?? null;
+			if ($codec !== null) {
+				$resolved = $codec;
+
+				break;
+			}
+
+			$parent = get_parent_class($current);
+			if (! is_string($parent) || ! is_a($parent, RepresentationInterface::class, true)) {
+				break;
+			}
+
+			$current = $parent;
+		} while (true);
+
+		$this->resolvedFieldTypeCodecs[$fieldType][$representation] = $resolved;
+
+		return $resolved;
 	}
 
 	public function resolveWalker(
@@ -316,8 +445,44 @@ final class MapperManager
 	private function addComponent(string $component, bool $append): void
 	{
 		$role = $this->detectRole($component);
-		$bucket = &$this->bucketFor($role);
 
+		if ($role === 'fieldType') {
+			if (! $append) {
+				throw new InvalidMapperComponentException(
+					sprintf("Mapper component '%s' cannot be prepended because field type registrations are keyed, not ordered.", $component),
+				);
+			}
+
+			if ($this->has($component)) {
+				throw new DuplicateMapperComponentRegistrationException(
+					sprintf("Mapper component '%s' is already registered.", $component),
+				);
+			}
+
+			$this->registerFieldType($component);
+
+			return;
+		}
+
+		if ($role === 'codec') {
+			if (! $append) {
+				throw new InvalidMapperComponentException(
+					sprintf("Mapper component '%s' cannot be prepended because codec registrations are keyed, not ordered.", $component),
+				);
+			}
+
+			if ($this->has($component)) {
+				throw new DuplicateMapperComponentRegistrationException(
+					sprintf("Mapper component '%s' is already registered.", $component),
+				);
+			}
+
+			$this->registerFieldTypeCodec($component);
+
+			return;
+		}
+
+		$bucket = &$this->bucketFor($role);
 		if (in_array($component, $bucket, true)) {
 			throw new DuplicateMapperComponentRegistrationException(
 				sprintf("Mapper component '%s' is already registered.", $component),
@@ -384,14 +549,24 @@ final class MapperManager
 			$roles[] = 'resolver';
 		}
 
+		if (is_a($component, FieldTypeInterface::class, true)) {
+			$roles[] = 'fieldType';
+		}
+
+		if (is_a($component, FieldTypeCodecInterface::class, true)) {
+			$roles[] = 'codec';
+		}
+
 		if (count($roles) !== 1) {
 			throw new InvalidMapperComponentException(
 				sprintf(
-					"Mapper component '%s' must implement exactly one of %s, %s, or %s.",
+					"Mapper component '%s' must implement exactly one of %s, %s, %s, %s, or %s.",
 					$component,
 					WalkerInterface::class,
 					WriterInterface::class,
 					FieldResolverInterface::class,
+					FieldTypeInterface::class,
+					FieldTypeCodecInterface::class,
 				),
 			);
 		}
@@ -422,6 +597,66 @@ final class MapperManager
 				sprintf("Mapper component '%s' must implement %s.", $component, $requiredInterface),
 			);
 		}
+	}
+
+	/**
+	 * @param class-string<FieldTypeInterface> $fieldType
+	 */
+	private function registerFieldType(string $fieldType): void
+	{
+		$names = $fieldType::getNames();
+		if ($names === []) {
+			throw new InvalidMapperComponentException(
+				sprintf("FieldType '%s' must declare at least one registration name.", $fieldType),
+			);
+		}
+
+		foreach ($names as $name) {
+			if (! is_string($name) || $name === '') {
+				throw new InvalidMapperComponentException(
+					sprintf("FieldType '%s' must declare only non-empty string names.", $fieldType),
+				);
+			}
+
+			$this->fieldTypes[$name] = $fieldType;
+			$this->fieldTypes[strtolower($name)] = $fieldType;
+		}
+	}
+
+	/**
+	 * @param class-string<FieldTypeCodecInterface> $codec
+	 */
+	private function registerFieldTypeCodec(string $codec): void
+	{
+		$fieldType = $codec::getFieldType();
+		if (! class_exists($fieldType) || ! is_a($fieldType, FieldTypeInterface::class, true)) {
+			throw new InvalidMapperComponentException(
+				sprintf("FieldType codec '%s' must reference a valid %s class.", $codec, FieldTypeInterface::class),
+			);
+		}
+
+		$representation = $codec::getRepresentation();
+		if (! class_exists($representation) || ! is_a($representation, RepresentationInterface::class, true)) {
+			throw new InvalidMapperComponentException(
+				sprintf("FieldType codec '%s' must reference a valid %s class.", $codec, RepresentationInterface::class),
+			);
+		}
+
+		/** @var class-string<FieldTypeInterface> $fieldType */
+		/** @var class-string<RepresentationInterface> $representation */
+		$this->fieldTypeCodecs[$representation][$fieldType] = $codec;
+		$this->resolvedFieldTypeCodecs = [];
+	}
+
+	private function hasCodecClass(string $component): bool
+	{
+		foreach ($this->fieldTypeCodecs as $codecsByFieldType) {
+			if (in_array($component, $codecsByFieldType, true)) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private function describeTarget(mixed $target): string

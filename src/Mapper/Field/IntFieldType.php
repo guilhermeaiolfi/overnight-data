@@ -12,26 +12,27 @@ final class IntFieldType implements FieldTypeInterface
 {
 	private const FLOAT_SAFE_INTEGER_MAX = 9007199254740991;
 
-	public static function storageType(): string
+	public static function getNames(): array
+	{
+		return ['int', 'integer', 'primary', 'smallprimary'];
+	}
+
+	public static function getStorageType(): string
 	{
 		return 'int';
 	}
 
-	public static function toPhp(string $from, mixed $value, FieldContext $field): mixed
+	public static function toPhp(mixed $value, FieldContext $field): mixed
 	{
-		SupportedRepresentation::assert($from, static::class);
-
-		return self::normalize($value, $field);
+		return self::convertToInt($value, $field);
 	}
 
-	public static function fromPhp(string $to, mixed $value, FieldContext $field): mixed
+	public static function fromPhp(mixed $value, FieldContext $field): mixed
 	{
-		SupportedRepresentation::assert($to, static::class);
-
-		return self::normalize($value, $field);
+		return self::convertToInt($value, $field);
 	}
 
-	private static function normalize(mixed $value, FieldContext $field): int
+	private static function convertToInt(mixed $value, FieldContext $field): int
 	{
 		if (is_int($value)) {
 			return $value;

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Mapper;
 
 use ON\Data\Mapper\ConversionGateway;
-use ON\Data\Mapper\FieldTypeRegistry;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Mapping;
 use PHPUnit\Framework\TestCase;
@@ -29,7 +28,7 @@ final class MappingTest extends TestCase
 
 	public function testSetDefaultGatewayReplacesRuntimeUsedByDefaultHolder(): void
 	{
-		$gateway = new ConversionGateway(FieldTypeRegistry::createDefault());
+		$gateway = ConversionGateway::createDefault();
 
 		Mapping::setDefaultGateway($gateway);
 
@@ -38,7 +37,7 @@ final class MappingTest extends TestCase
 
 	public function testResetDefaultGatewayRestoresLazyBuiltInBehavior(): void
 	{
-		$gateway = new ConversionGateway(FieldTypeRegistry::createDefault());
+		$gateway = ConversionGateway::createDefault();
 
 		Mapping::setDefaultGateway($gateway);
 		Mapping::resetDefaultGateway();
@@ -49,8 +48,8 @@ final class MappingTest extends TestCase
 
 	public function testMapUsesConfiguredDefaultGateway(): void
 	{
-		$gateway = new ConversionGateway(FieldTypeRegistry::createDefault());
-		$gateway->getMappers()->setConstructor(
+		$gateway = ConversionGateway::createDefault();
+		$gateway->getMapperManager()->setConstructor(
 			static fn (string $component, ConversionGateway $runtime): object => $component === GatewayAwareWriter::class
 				? new GatewayAwareWriter($runtime)
 				: new $component(),
@@ -64,14 +63,14 @@ final class MappingTest extends TestCase
 
 	public function testExplicitGatewayOverridesDefault(): void
 	{
-		$defaultGateway = new ConversionGateway(FieldTypeRegistry::createDefault());
-		$defaultGateway->getMappers()->setConstructor(
+		$defaultGateway = ConversionGateway::createDefault();
+		$defaultGateway->getMapperManager()->setConstructor(
 			static fn (string $component, ConversionGateway $runtime): object => $component === GatewayAwareWriter::class
 				? new GatewayAwareWriter($runtime)
 				: new $component(),
 		);
-		$explicitGateway = new ConversionGateway(FieldTypeRegistry::createDefault());
-		$explicitGateway->getMappers()->setConstructor(
+		$explicitGateway = ConversionGateway::createDefault();
+		$explicitGateway->getMapperManager()->setConstructor(
 			static fn (string $component, ConversionGateway $runtime): object => $component === GatewayAwareWriter::class
 				? new GatewayAwareWriter($runtime)
 				: new $component(),

@@ -10,26 +10,27 @@ use ON\Data\Mapper\FieldTypeInterface;
 
 final class FloatFieldType implements FieldTypeInterface
 {
-	public static function storageType(): string
+	public static function getNames(): array
+	{
+		return ['float', 'double'];
+	}
+
+	public static function getStorageType(): string
 	{
 		return 'float';
 	}
 
-	public static function toPhp(string $from, mixed $value, FieldContext $field): mixed
+	public static function toPhp(mixed $value, FieldContext $field): mixed
 	{
-		SupportedRepresentation::assert($from, static::class);
-
-		return self::normalize($value, $field);
+		return self::convertToFloat($value, $field);
 	}
 
-	public static function fromPhp(string $to, mixed $value, FieldContext $field): mixed
+	public static function fromPhp(mixed $value, FieldContext $field): mixed
 	{
-		SupportedRepresentation::assert($to, static::class);
-
-		return self::normalize($value, $field);
+		return self::convertToFloat($value, $field);
 	}
 
-	private static function normalize(mixed $value, FieldContext $field): float
+	private static function convertToFloat(mixed $value, FieldContext $field): float
 	{
 		if (is_float($value)) {
 			if (! is_finite($value)) {

@@ -4,12 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Fixture;
 
-use ON\Data\Mapper\Exception\UnsupportedConversionException;
 use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldTypeInterface;
-use ON\Data\Mapper\Representation\PhpRepresentation;
-use ON\Data\Mapper\Representation\StorageRepresentation;
-use ON\Data\Mapper\Representation\WireRepresentation;
 
 final class TrackingCustomFieldType implements FieldTypeInterface
 {
@@ -31,37 +27,32 @@ final class TrackingCustomFieldType implements FieldTypeInterface
 		return self::$calls;
 	}
 
-	public static function storageType(): string
+	public static function record(string $call): void
+	{
+		self::$calls[] = $call;
+	}
+
+	public static function getNames(): array
+	{
+		return ['tracked'];
+	}
+
+	public static function getStorageType(): string
 	{
 		return 'tracked';
 	}
 
-	public static function toPhp(string $from, mixed $value, FieldContext $field): mixed
+	public static function toPhp(mixed $value, FieldContext $field): mixed
 	{
-		self::$calls[] = 'toPhp:' . $from;
+		self::$calls[] = 'fieldType:toPhp';
 
-		return match ($from) {
-			CacheRepresentation::class => 'php<' . (string) $value . '>',
-			StorageRepresentation::class => 'php-storage<' . (string) $value . '>',
-			WireRepresentation::class => 'php-wire<' . (string) $value . '>',
-			default => throw new UnsupportedConversionException(
-				sprintf("Representation '%s' is not supported by %s.", $from, static::class)
-			),
-		};
+		return 'field-php<' . (string) $value . '>';
 	}
 
-	public static function fromPhp(string $to, mixed $value, FieldContext $field): mixed
+	public static function fromPhp(mixed $value, FieldContext $field): mixed
 	{
-		self::$calls[] = 'fromPhp:' . $to;
+		self::$calls[] = 'fieldType:fromPhp';
 
-		return match ($to) {
-			CacheRepresentation::class => 'cache<' . (string) $value . '>',
-			StorageRepresentation::class => 'storage<' . (string) $value . '>',
-			WireRepresentation::class => 'wire<' . (string) $value . '>',
-			PhpRepresentation::class => 'php-out<' . (string) $value . '>',
-			default => throw new UnsupportedConversionException(
-				sprintf("Representation '%s' is not supported by %s.", $to, static::class)
-			),
-		};
+		return 'field-out<' . (string) $value . '>';
 	}
 }

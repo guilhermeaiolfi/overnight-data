@@ -7,7 +7,6 @@ namespace Tests\ON\Data\Mapper;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldConversionCoordinator;
-use ON\Data\Mapper\FieldTypeRegistry;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
@@ -148,8 +147,11 @@ final class FieldConversionCoordinatorTest extends TestCase
 
 	public function testExplicitResolverCanOverrideBuiltInResolution(): void
 	{
+		$gateway = new ConversionGateway();
+		$gateway->getMapperManager()->register(CustomFieldType::class);
+
 		$coordinator = new FieldConversionCoordinator(
-			new ConversionGateway(FieldTypeRegistry::createDefault()->register('custom', CustomFieldType::class)),
+			$gateway,
 			[
 				new class () implements FieldResolverInterface {
 					public function resolve(MappingNode $node): ?FieldContext

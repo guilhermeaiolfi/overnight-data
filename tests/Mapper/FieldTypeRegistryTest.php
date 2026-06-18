@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Mapper;
 
+use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\FieldTypeNotFoundException;
-use ON\Data\Mapper\Exception\InvalidFieldTypeException;
+use ON\Data\Mapper\Exception\InvalidMapperComponentException;
 use ON\Data\Mapper\Field\BoolFieldType;
 use ON\Data\Mapper\Field\FloatFieldType;
 use ON\Data\Mapper\Field\IntFieldType;
@@ -13,56 +14,87 @@ use ON\Data\Mapper\Field\PassthroughFieldType;
 use ON\Data\Mapper\Field\StringFieldType;
 use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldTypeInterface;
-use ON\Data\Mapper\FieldTypeRegistry;
+use ON\Data\Mapper\MapperManager;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
-use stdClass;
 use Tests\ON\Data\Fixture\CustomFieldType;
+use Tests\ON\Data\Fixture\EmptyNamesFieldType;
+use Tests\ON\Data\Fixture\InvalidNamesFieldType;
 
 final class FieldTypeRegistryTest extends TestCase
 {
-	public function testDefaultRegistryResolvesPrimitiveAliases(): void
+	public function testDefaultManagerResolvesPrimitiveAliases(): void
 	{
-		$registry = FieldTypeRegistry::createDefault();
+		$manager = MapperManager::createDefault($this->gateway());
 
-		self::assertSame(StringFieldType::class, $registry->get('string'));
-		self::assertSame(IntFieldType::class, $registry->get('integer'));
-		self::assertSame(IntFieldType::class, $registry->get('primary'));
-		self::assertSame(IntFieldType::class, $registry->get('smallprimary'));
+		self::assertSame(StringFieldType::class, $manager->getFieldType('string'));
+		self::assertSame(PassthroughFieldType::class, $manager->getFieldType('text'));
+		self::assertSame(BoolFieldType::class, $manager->getFieldType('boolean'));
+		self::assertSame(IntFieldType::class, $manager->getFieldType('integer'));
+		self::assertSame(IntFieldType::class, $manager->getFieldType('primary'));
+		self::assertSame(IntFieldType::class, $manager->getFieldType('smallprimary'));
+		self::assertSame(FloatFieldType::class, $manager->getFieldType('double'));
+	}
+
+	public function testAliasLookupRemainsCaseInsensitive(): void
+	{
+		$manager = MapperManager::createDefault($this->gateway());
+
+		self::assertSame(IntFieldType::class, $manager->getFieldType('INTEGER'));
+		self::assertSame(BoolFieldType::class, $manager->getFieldType('BoOlEaN'));
 	}
 
 	public function testDirectFieldTypeClassReferencesResolve(): void
 	{
-		$registry = FieldTypeRegistry::createDefault();
+		$manager = MapperManager::createDefault($this->gateway());
 
 		self::assertSame(
 			StringFieldType::class,
-			$registry->resolve(FieldContext::named('name', StringFieldType::class)),
+			$manager->resolveFieldType(FieldContext::named('name', StringFieldType::class)),
 		);
 	}
 
 	public function testCustomFieldTypeRegistrationWorks(): void
 	{
-		$registry = (new FieldTypeRegistry())->register('custom', CustomFieldType::class);
+		$manager = new MapperManager($this->gateway());
+		$manager->register(CustomFieldType::class);
 
-		self::assertSame(CustomFieldType::class, $registry->get('custom'));
-		self::assertSame('HELLO', CustomFieldType::toPhp('any', 'hello', FieldContext::named('value', 'custom')));
+		self::assertSame(CustomFieldType::class, $manager->getFieldType('custom'));
+		self::assertSame('HELLO', CustomFieldType::toPhp('hello', FieldContext::named('value', 'custom')));
 	}
 
-	public function testInvalidFieldTypeRegistrationFails(): void
+	public function testLaterFieldTypeRegistrationReplacesExistingAlias(): void
 	{
-		$this->expectException(InvalidFieldTypeException::class);
-		(new FieldTypeRegistry())->register('broken', stdClass::class);
+		$manager = MapperManager::createDefault($this->gateway());
+		$manager->register(CustomFieldType::class);
+
+		self::assertSame(CustomFieldType::class, $manager->getFieldType('custom'));
+	}
+
+	public function testEmptyAndInvalidNamesAreRejected(): void
+	{
+		$manager = new MapperManager($this->gateway());
+
+		$this->expectException(InvalidMapperComponentException::class);
+		$manager->register(EmptyNamesFieldType::class);
+	}
+
+	public function testBlankNamesAreRejected(): void
+	{
+		$manager = new MapperManager($this->gateway());
+
+		$this->expectException(InvalidMapperComponentException::class);
+		$manager->register(InvalidNamesFieldType::class);
 	}
 
 	public function testUnknownFieldTypeResolutionIsExplicit(): void
 	{
-		$registry = new FieldTypeRegistry();
+		$manager = new MapperManager($this->gateway());
 
-		self::assertNull($registry->resolve(FieldContext::named('name', 'unknown')));
+		self::assertNull($manager->resolveFieldType(FieldContext::named('name', 'unknown')));
 
 		$this->expectException(FieldTypeNotFoundException::class);
-		$registry->get('unknown');
+		$manager->getFieldType('unknown');
 	}
 
 	public function testPrimitiveFieldTypesExposeSameDirectStaticContractAsCustomFieldTypes(): void
@@ -79,10 +111,15 @@ final class FieldTypeRegistryTest extends TestCase
 		foreach ($fieldTypes as $fieldType) {
 			self::assertTrue(is_a($fieldType, FieldTypeInterface::class, true));
 
-			$storageType = new ReflectionMethod($fieldType, 'storageType');
-			self::assertTrue($storageType->isPublic());
-			self::assertTrue($storageType->isStatic());
-			self::assertSame($fieldType, $storageType->getDeclaringClass()->getName());
+			$getNames = new ReflectionMethod($fieldType, 'getNames');
+			self::assertTrue($getNames->isPublic());
+			self::assertTrue($getNames->isStatic());
+			self::assertSame($fieldType, $getNames->getDeclaringClass()->getName());
+
+			$getStorageType = new ReflectionMethod($fieldType, 'getStorageType');
+			self::assertTrue($getStorageType->isPublic());
+			self::assertTrue($getStorageType->isStatic());
+			self::assertSame($fieldType, $getStorageType->getDeclaringClass()->getName());
 
 			$toPhp = new ReflectionMethod($fieldType, 'toPhp');
 			self::assertTrue($toPhp->isPublic());
@@ -94,5 +131,10 @@ final class FieldTypeRegistryTest extends TestCase
 			self::assertTrue($fromPhp->isStatic());
 			self::assertSame($fieldType, $fromPhp->getDeclaringClass()->getName());
 		}
+	}
+
+	private function gateway(): ConversionGateway
+	{
+		return new ConversionGateway();
 	}
 }

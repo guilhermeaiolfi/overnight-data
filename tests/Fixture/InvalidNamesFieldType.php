@@ -7,25 +7,25 @@ namespace Tests\ON\Data\Fixture;
 use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldTypeInterface;
 
-final class CustomFieldType implements FieldTypeInterface
+final class InvalidNamesFieldType implements FieldTypeInterface
 {
 	public static function getNames(): array
 	{
-		return ['custom'];
+		return [''];
 	}
 
 	public static function getStorageType(): string
 	{
-		return 'custom';
+		return 'invalid';
 	}
 
 	public static function toPhp(mixed $value, FieldContext $field): mixed
 	{
-		return strtoupper((string) $value);
+		return $value;
 	}
 
 	public static function fromPhp(mixed $value, FieldContext $field): mixed
 	{
-		return strtolower((string) $value);
+		return $value;
 	}
 }
