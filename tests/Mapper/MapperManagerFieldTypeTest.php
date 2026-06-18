@@ -20,6 +20,9 @@ use ReflectionMethod;
 use Tests\ON\Data\Fixture\CustomFieldType;
 use Tests\ON\Data\Fixture\EmptyNamesFieldType;
 use Tests\ON\Data\Fixture\InvalidNamesFieldType;
+use Tests\ON\Data\Fixture\LowerMoneyFieldType;
+use Tests\ON\Data\Fixture\PartiallyInvalidNamesFieldType;
+use Tests\ON\Data\Fixture\UpperMoneyFieldType;
 
 final class MapperManagerFieldTypeTest extends TestCase
 {
@@ -65,10 +68,13 @@ final class MapperManagerFieldTypeTest extends TestCase
 
 	public function testLaterFieldTypeRegistrationReplacesExistingAlias(): void
 	{
-		$manager = MapperManager::createDefault($this->gateway());
-		$manager->register(CustomFieldType::class);
+		$manager = new MapperManager($this->gateway());
+		$manager->register(UpperMoneyFieldType::class);
+		$manager->register(LowerMoneyFieldType::class);
 
-		self::assertSame(CustomFieldType::class, $manager->getFieldType('custom'));
+		self::assertSame(LowerMoneyFieldType::class, $manager->getFieldType('money'));
+		self::assertSame(LowerMoneyFieldType::class, $manager->getFieldType('Money'));
+		self::assertSame(LowerMoneyFieldType::class, $manager->getFieldType('MONEY'));
 	}
 
 	public function testEmptyAndInvalidNamesAreRejected(): void
@@ -85,6 +91,20 @@ final class MapperManagerFieldTypeTest extends TestCase
 
 		$this->expectException(InvalidMapperComponentException::class);
 		$manager->register(InvalidNamesFieldType::class);
+	}
+
+	public function testFailedFieldTypeRegistrationDoesNotPartiallyMutateAliases(): void
+	{
+		$manager = new MapperManager($this->gateway());
+
+		try {
+			$manager->register(PartiallyInvalidNamesFieldType::class);
+			self::fail('Expected invalid field type registration exception was not thrown.');
+		} catch (InvalidMapperComponentException) {
+		}
+
+		self::assertSame([], $manager->getRegisteredFieldTypes());
+		self::assertFalse($manager->has(PartiallyInvalidNamesFieldType::class));
 	}
 
 	public function testUnknownFieldTypeResolutionIsExplicit(): void

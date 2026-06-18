@@ -81,6 +81,11 @@ final class MapperManager
 	private array $writerInstances = [];
 
 	/**
+	 * @var array<class-string, true>
+	 */
+	private array $registeredComponents = [];
+
+	/**
 	 * @param null|Closure(string, ConversionGateway): object $constructor
 	 */
 	public function __construct(
@@ -128,11 +133,7 @@ final class MapperManager
 
 	public function has(string $component): bool
 	{
-		return in_array($component, $this->walkers, true)
-			|| in_array($component, $this->writers, true)
-			|| in_array($component, $this->resolvers, true)
-			|| in_array($component, $this->fieldTypes, true)
-			|| $this->hasCodecClass($component);
+		return isset($this->registeredComponents[$component]);
 	}
 
 	/**
@@ -294,10 +295,6 @@ final class MapperManager
 			return $type;
 		}
 
-		if (isset($this->fieldTypes[$type])) {
-			return $this->fieldTypes[$type];
-		}
-
 		return $this->fieldTypes[strtolower($type)] ?? null;
 	}
 
@@ -453,13 +450,9 @@ final class MapperManager
 				);
 			}
 
-			if ($this->has($component)) {
-				throw new DuplicateMapperComponentRegistrationException(
-					sprintf("Mapper component '%s' is already registered.", $component),
-				);
-			}
-
+			$this->assertNotRegistered($component);
 			$this->registerFieldType($component);
+			$this->registeredComponents[$component] = true;
 
 			return;
 		}
@@ -471,31 +464,23 @@ final class MapperManager
 				);
 			}
 
-			if ($this->has($component)) {
-				throw new DuplicateMapperComponentRegistrationException(
-					sprintf("Mapper component '%s' is already registered.", $component),
-				);
-			}
-
+			$this->assertNotRegistered($component);
 			$this->registerFieldTypeCodec($component);
+			$this->registeredComponents[$component] = true;
 
 			return;
 		}
 
 		$bucket = &$this->bucketFor($role);
-		if (in_array($component, $bucket, true)) {
-			throw new DuplicateMapperComponentRegistrationException(
-				sprintf("Mapper component '%s' is already registered.", $component),
-			);
-		}
+		$this->assertNotRegistered($component);
 
 		if ($append) {
 			$bucket[] = $component;
-
-			return;
+		} else {
+			array_unshift($bucket, $component);
 		}
 
-		array_unshift($bucket, $component);
+		$this->registeredComponents[$component] = true;
 	}
 
 	/**
@@ -617,8 +602,9 @@ final class MapperManager
 					sprintf("FieldType '%s' must declare only non-empty string names.", $fieldType),
 				);
 			}
+		}
 
-			$this->fieldTypes[$name] = $fieldType;
+		foreach ($names as $name) {
 			$this->fieldTypes[strtolower($name)] = $fieldType;
 		}
 	}
@@ -648,15 +634,13 @@ final class MapperManager
 		$this->resolvedFieldTypeCodecs = [];
 	}
 
-	private function hasCodecClass(string $component): bool
+	private function assertNotRegistered(string $component): void
 	{
-		foreach ($this->fieldTypeCodecs as $codecsByFieldType) {
-			if (in_array($component, $codecsByFieldType, true)) {
-				return true;
-			}
+		if (isset($this->registeredComponents[$component])) {
+			throw new DuplicateMapperComponentRegistrationException(
+				sprintf("Mapper component '%s' is already registered.", $component),
+			);
 		}
-
-		return false;
 	}
 
 	private function describeTarget(mixed $target): string

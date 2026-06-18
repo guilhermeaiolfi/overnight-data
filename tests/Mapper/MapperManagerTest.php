@@ -114,6 +114,16 @@ final class MapperManagerTest extends TestCase
 		$manager->register(TrackingWireCodec::class);
 	}
 
+	public function testSupersededCodecClassStillCountsAsDuplicateRegistration(): void
+	{
+		$manager = new MapperManager($this->gateway());
+		$manager->register(TrackingWireCodec::class);
+		$manager->register(ReplacementTrackingWireCodec::class);
+
+		$this->expectException(DuplicateMapperComponentRegistrationException::class);
+		$manager->register(TrackingWireCodec::class);
+	}
+
 	public function testInvalidComponentsFail(): void
 	{
 		$manager = new MapperManager($this->gateway());
