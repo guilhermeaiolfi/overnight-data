@@ -19,9 +19,12 @@ This repository currently includes:
 - the standalone FieldType, representation, field-type codec, and conversion gateway foundation under `ON\Data\Mapper`;
 - `MapperManager`, `MappingContext`, `MappingNode`, walkers, writers, field resolvers, and the fluent `map()` / `MapBuilder` entry point;
 - default definition-aware field resolution through `->args($definition)` for scalar conversion;
+- ad-hoc path-based scalar metadata through `FieldMap::fromArray()` and `MapBuilder::fieldMap()`;
 - generic collection mapping through the same composable runtime;
 - recursive array, `stdClass`, and public-property object combinations selected independently by source walker and target writer, with cycle checks applied at recursive mapper dispatch;
 - typed nested DTO properties and PHPDoc-described DTO lists;
+- automatic backed-enum and immutable-datetime reflection for public DTO properties;
+- exact numeric `decimal` and `bigint` field types using canonical strings;
 - default dotted-key expansion for flat joined rows and request payloads;
 - mapper attributes `MapFrom`, `MapTo`, and `Hidden` across nested DTO mapping;
 - tests and quality tooling.
@@ -33,8 +36,7 @@ Not implemented yet:
 - semantic view fields and expressions;
 - query execution;
 - persistence and ORM adapters;
-- constructor hydration and readonly-target hydration;
-- big-integer, decimal, enum, and datetime-oriented FieldTypes.
+- constructor hydration and readonly-target hydration.
 
 ## Namespace
 
@@ -66,6 +68,7 @@ composer check
 - `docs/definitions.md` covers the current public definition API.
 - `docs/extending-definitions.md` covers supported subclass-based extension points.
 - `docs/2-field-types-and-mapper.md` covers the implemented scalar FieldType, mapper runtime, and current recursive structural mapping support.
+- `docs/2-mappers/phase-8-exact-numerics-and-field-map.md` summarizes reflected enums/datetimes, exact numerics, and ad-hoc mapper field maps.
 - `docs/2-mappers/phase-7-field-type-codecs.md` summarizes the field-type codec and centralized mapper registration phase.
 - `docs/2-mappers/phase-5-definition-field-resolver.md` summarizes the definition-aware field resolver phase.
 - `docs/2-mappers/phase-6-recursive-mapping-node.md` summarizes the recursive `MappingNode` phase.

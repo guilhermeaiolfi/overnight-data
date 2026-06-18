@@ -8,9 +8,11 @@ use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\FieldTypeNotFoundException;
 use ON\Data\Mapper\Exception\InvalidMapperComponentException;
 use ON\Data\Mapper\Field\BackedEnumFieldType;
+use ON\Data\Mapper\Field\BigIntFieldType;
 use ON\Data\Mapper\Field\BoolFieldType;
 use ON\Data\Mapper\Field\DateFieldType;
 use ON\Data\Mapper\Field\DateTimeFieldType;
+use ON\Data\Mapper\Field\DecimalFieldType;
 use ON\Data\Mapper\Field\FloatFieldType;
 use ON\Data\Mapper\Field\IntFieldType;
 use ON\Data\Mapper\Field\JsonFieldType;
@@ -43,6 +45,10 @@ final class MapperManagerFieldTypeTest extends TestCase
 		self::assertSame(IntFieldType::class, $manager->getFieldType('integer'));
 		self::assertSame(IntFieldType::class, $manager->getFieldType('primary'));
 		self::assertSame(IntFieldType::class, $manager->getFieldType('smallprimary'));
+		self::assertSame(BigIntFieldType::class, $manager->getFieldType('bigint'));
+		self::assertSame(BigIntFieldType::class, $manager->getFieldType('biginteger'));
+		self::assertSame(BigIntFieldType::class, $manager->getFieldType('bigprimary'));
+		self::assertSame(DecimalFieldType::class, $manager->getFieldType('decimal'));
 		self::assertSame(FloatFieldType::class, $manager->getFieldType('double'));
 		self::assertSame(JsonFieldType::class, $manager->getFieldType('json'));
 		self::assertSame(UrlFieldType::class, $manager->getFieldType('url'));
@@ -57,6 +63,7 @@ final class MapperManagerFieldTypeTest extends TestCase
 
 		self::assertSame(IntFieldType::class, $manager->getFieldType('INTEGER'));
 		self::assertSame(BoolFieldType::class, $manager->getFieldType('BoOlEaN'));
+		self::assertSame(BigIntFieldType::class, $manager->getFieldType('BIGPRIMARY'));
 	}
 
 	public function testDirectFieldTypeClassReferencesResolve(): void
@@ -147,6 +154,8 @@ final class MapperManagerFieldTypeTest extends TestCase
 			BoolFieldType::class,
 			BackedEnumFieldType::class,
 			IntFieldType::class,
+			BigIntFieldType::class,
+			DecimalFieldType::class,
 			FloatFieldType::class,
 			JsonFieldType::class,
 			UrlFieldType::class,

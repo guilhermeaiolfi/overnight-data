@@ -31,6 +31,7 @@ final class MapBuilder
 		private ?string $writerClass = null,
 		private array $resolverClasses = [],
 		private array $arguments = [],
+		private ?FieldMap $fieldMap = null,
 		private bool $collection = false,
 	) {
 	}
@@ -101,6 +102,14 @@ final class MapBuilder
 		return $clone;
 	}
 
+	public function fieldMap(FieldMap $fieldMap): self
+	{
+		$clone = clone $this;
+		$clone->fieldMap = $fieldMap;
+
+		return $clone;
+	}
+
 	public function collection(): self
 	{
 		$clone = clone $this;
@@ -146,6 +155,7 @@ final class MapBuilder
 			$this->writerClass,
 			$this->resolverClasses,
 			$this->arguments,
+			$this->fieldMap,
 		);
 
 		if ($this->collection) {

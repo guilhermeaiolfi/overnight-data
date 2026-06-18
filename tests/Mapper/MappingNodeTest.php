@@ -6,6 +6,7 @@ namespace Tests\ON\Data\Mapper;
 
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\MappingException;
+use ON\Data\Mapper\FieldMap;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
 use PHPUnit\Framework\TestCase;
@@ -21,6 +22,7 @@ final class MappingNodeTest extends TestCase
 	{
 		$context = (new MappingContext(ConversionGateway::createDefault()))
 			->withArguments(['definition'])
+			->withFieldMap(FieldMap::fromArray(['id' => 'bigint']))
 			->withCollection(true);
 		$source = ['author' => ['id' => 2]];
 		$node = MappingNode::root($source, [], $context);
@@ -31,6 +33,7 @@ final class MappingNodeTest extends TestCase
 		self::assertSame($context, $node->getContext());
 		self::assertSame(['definition'], $node->getArguments());
 		self::assertSame($context->getArguments(), $node->getArguments());
+		self::assertSame($context->getFieldMap(), $node->getContext()->getFieldMap());
 		self::assertTrue($node->isCollection());
 		self::assertSame($context->isCollection(), $node->isCollection());
 		self::assertNull($node->getParent());
@@ -72,7 +75,8 @@ final class MappingNodeTest extends TestCase
 	{
 		$context = (new MappingContext(ConversionGateway::createDefault()))
 			->withWalkerClass(SpyArrayWalker::class)
-			->withWriterClass(SpyArrayWriter::class);
+			->withWriterClass(SpyArrayWriter::class)
+			->withFieldMap(FieldMap::fromArray(['author.id' => 'bigint']));
 		$rootValue = ['author' => ['id' => 2]];
 		$childValue = ['id' => 2];
 		$child = MappingNode::root($rootValue, [], $context->withArguments(['old']))
@@ -88,12 +92,14 @@ final class MappingNodeTest extends TestCase
 		self::assertSame($nestedArguments, $nested->getContext()->getArguments());
 		self::assertTrue($nested->isCollection());
 		self::assertTrue($nested->getContext()->isCollection());
+		self::assertSame($context->getFieldMap(), $nested->getContext()->getFieldMap());
 		self::assertNull($nested->getContext()->getWalkerClass());
 		self::assertNull($nested->getContext()->getWriterClass());
 		self::assertSame($preservedArguments, $preserved->getArguments());
 		self::assertSame($preservedArguments, $preserved->getContext()->getArguments());
 		self::assertFalse($preserved->isCollection());
 		self::assertFalse($preserved->getContext()->isCollection());
+		self::assertSame($context->getFieldMap(), $preserved->getContext()->getFieldMap());
 		self::assertSame(SpyArrayWalker::class, $preserved->getContext()->getWalkerClass());
 		self::assertSame(SpyArrayWriter::class, $preserved->getContext()->getWriterClass());
 	}

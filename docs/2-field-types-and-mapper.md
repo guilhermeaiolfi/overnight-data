@@ -2,7 +2,7 @@
 
 `ON\Data` includes scalar conversion and recursive structural mapping under `ON\Data\Mapper`.
 
-The mapper layer supports arrays, `stdClass`, and public-property DTOs, definition-aware scalar conversion through `->args($definition)`, dotted-key expansion, and representation-aware conversion routed through canonical PHP values.
+The mapper layer supports arrays, `stdClass`, and public-property DTOs, definition-aware scalar conversion through `->args($definition)`, ad-hoc scalar metadata through `->fieldMap(...)`, dotted-key expansion, and representation-aware conversion routed through canonical PHP values.
 
 ## Core roles
 
@@ -51,8 +51,12 @@ Built-in handlers:
 - `PassthroughFieldType`
 - `BoolFieldType`
 - `IntFieldType`
+- `BigIntFieldType`
+- `DecimalFieldType`
 - `FloatFieldType`
 - `DateFieldType`
+- `BackedEnumFieldType`
+- `DateTimeFieldType`
 
 Default aliases:
 
@@ -65,9 +69,16 @@ int          -> IntFieldType
 integer      -> IntFieldType
 primary      -> IntFieldType
 smallprimary -> IntFieldType
+bigint       -> BigIntFieldType
+biginteger   -> BigIntFieldType
+bigprimary   -> BigIntFieldType
+decimal      -> DecimalFieldType
 float        -> FloatFieldType
 double       -> FloatFieldType
 date         -> DateFieldType
+datetime     -> DateTimeFieldType
+timestamp    -> DateTimeFieldType
+backed-enum  -> BackedEnumFieldType
 ```
 
 Alias lookup is case-insensitive.
@@ -210,7 +221,7 @@ Default registered runtime components:
 
 - walkers: `ArrayWalker`, `ObjectWalker`
 - writers: `ArrayWriter`, `ObjectWriter`
-- resolvers: `DefinitionFieldResolver`, `ReflectionPropertyFieldResolver`
+- resolvers: `FieldMapFieldResolver`, `DefinitionFieldResolver`, `ReflectionPropertyFieldResolver`
 - field types: the built-in scalar handlers above
 
 Walkers and writers are cached reusable instances. Resolvers are constructed per mapping. Field types and codecs are static classes and are never instantiated.
@@ -252,7 +263,59 @@ map($source)
 
 When one direct `DefinitionInterface` is supplied through `->args($definition)`, the default `DefinitionFieldResolver` can derive `FieldContext` values for untyped structural sources such as arrays and request payloads.
 
-Definition metadata wins over reflection because `DefinitionFieldResolver` runs before `ReflectionPropertyFieldResolver`.
+## FieldMap
+
+`FieldMap` adds small mapping-local scalar metadata without recreating the old blueprint subsystem:
+
+```php
+use ON\Data\Mapper\FieldMap;
+
+map($payload)
+    ->from(StorageRepresentation::class)
+    ->fieldMap(FieldMap::fromArray([
+        'id' => 'bigint',
+        'amount' => 'decimal',
+        'items.price' => 'decimal',
+    ]))
+    ->to([]);
+```
+
+`FieldMap::fromArray()` accepts either:
+
+- `'path' => 'type'`
+- `'path' => ['type' => 'type', 'nullable' => true]`
+
+Configured paths are case-sensitive dotted paths. Numeric configured segments are rejected, but runtime numeric segments are ignored during lookup so `items.price` applies to `items.0.price`, `items.1.price`, and so on.
+
+## Reflection fallback
+
+`ReflectionPropertyFieldResolver` still infers primitive scalar properties and now also infers:
+
+- backed-enum property classes
+- immutable-compatible datetime properties such as `DateTimeImmutable` and `DateTimeInterface`
+
+Mutable concrete datetime properties such as `DateTime` are intentionally not inferred because the mapper's canonical datetime value is `DateTimeImmutable`.
+
+## Resolver precedence
+
+Default precedence is:
+
+```text
+custom resolver configured through ->resolver()
+FieldMapFieldResolver
+DefinitionFieldResolver
+ReflectionPropertyFieldResolver
+```
+
+Definition metadata therefore still wins over reflection, while `FieldMap` wins over both for the paths it explicitly defines.
+
+## Exact numeric field types
+
+`decimal` and `bigint` use normalized strings as their canonical PHP values.
+
+- `decimal` accepts decimal strings and PHP integers, and rejects floats to avoid precision loss
+- `bigint` accepts integer strings and PHP integers without coercing through platform-sized integers
+- `bigprimary` is only a field-type alias for mapper conversion and does not affect collection primary-key metadata
 
 ## Current limitations
 
@@ -260,4 +323,4 @@ Definition metadata wins over reflection because `DefinitionFieldResolver` runs 
 - no readonly-target hydration
 - no ORM or framework integration
 - no complete PHPDoc parsing beyond the currently supported DTO list forms
-- no built-in decimal, money, enum, or datetime field types yet
+- no decimal arithmetic, scale/precision policy, or bigint arithmetic helpers

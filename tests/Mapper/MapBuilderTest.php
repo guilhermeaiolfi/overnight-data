@@ -6,6 +6,7 @@ namespace Tests\ON\Data\Mapper;
 
 use ON\Data\Definition\Registry;
 use ON\Data\Mapper\Exception\InvalidMapTargetException;
+use ON\Data\Mapper\FieldMap;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Representation\WireRepresentation;
 use PHPUnit\Framework\TestCase;
@@ -26,6 +27,7 @@ final class MapBuilderTest extends TestCase
 		$writer = $builder->writer(SpyArrayWriter::class);
 		$resolver = $builder->resolver(SpyResolver::class);
 		$args = $builder->args('b');
+		$fieldMap = $builder->fieldMap(FieldMap::fromArray(['id' => 'bigint']));
 		$collection = $builder->collection();
 
 		self::assertNotSame($builder, $from);
@@ -34,6 +36,7 @@ final class MapBuilderTest extends TestCase
 		self::assertNotSame($builder, $writer);
 		self::assertNotSame($builder, $resolver);
 		self::assertNotSame($builder, $args);
+		self::assertNotSame($builder, $fieldMap);
 		self::assertNotSame($builder, $collection);
 		self::assertNull($this->property($builder, 'sourceRepresentation'));
 		self::assertNull($this->property($builder, 'outputRepresentation'));
@@ -41,6 +44,7 @@ final class MapBuilderTest extends TestCase
 		self::assertNull($this->property($builder, 'writerClass'));
 		self::assertSame([], $this->property($builder, 'resolverClasses'));
 		self::assertSame([], $this->property($builder, 'arguments'));
+		self::assertNull($this->property($builder, 'fieldMap'));
 		self::assertFalse($this->property($builder, 'collection'));
 	}
 

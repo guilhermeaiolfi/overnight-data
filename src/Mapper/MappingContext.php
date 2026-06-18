@@ -27,6 +27,7 @@ final class MappingContext
 		private ?string $writerClass = null,
 		private array $resolverClasses = [],
 		private array $arguments = [],
+		private ?FieldMap $fieldMap = null,
 		private bool $collection = false,
 	) {
 	}
@@ -82,6 +83,11 @@ final class MappingContext
 	public function getArguments(): array
 	{
 		return $this->arguments;
+	}
+
+	public function getFieldMap(): ?FieldMap
+	{
+		return $this->fieldMap;
 	}
 
 	public function isCollection(): bool
@@ -162,6 +168,14 @@ final class MappingContext
 	{
 		$clone = clone $this;
 		$clone->arguments = $arguments;
+
+		return $clone;
+	}
+
+	public function withFieldMap(?FieldMap $fieldMap): self
+	{
+		$clone = clone $this;
+		$clone->fieldMap = $fieldMap;
 
 		return $clone;
 	}

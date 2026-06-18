@@ -13,10 +13,12 @@ use ON\Data\Mapper\Exception\MapperComponentConfigurationException;
 use ON\Data\Mapper\Exception\NoWalkerFoundException;
 use ON\Data\Mapper\Exception\NoWriterFoundException;
 use ON\Data\Mapper\Field\BackedEnumFieldType;
+use ON\Data\Mapper\Field\BigIntFieldType;
 use ON\Data\Mapper\Field\BoolFieldType;
 use ON\Data\Mapper\Field\DateFieldType;
 use ON\Data\Mapper\Field\DateTimeFieldType;
 use ON\Data\Mapper\Field\DateTimeWireCodec;
+use ON\Data\Mapper\Field\DecimalFieldType;
 use ON\Data\Mapper\Field\FloatFieldType;
 use ON\Data\Mapper\Field\IntFieldType;
 use ON\Data\Mapper\Field\JsonFieldType;
@@ -27,6 +29,7 @@ use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\Representation\WireRepresentation;
 use ON\Data\Mapper\Resolver\DefinitionFieldResolver;
+use ON\Data\Mapper\Resolver\FieldMapFieldResolver;
 use ON\Data\Mapper\Resolver\ReflectionPropertyFieldResolver;
 use ON\Data\Mapper\Walker\ArrayWalker;
 use ON\Data\Mapper\Walker\ObjectWalker;
@@ -343,7 +346,7 @@ final class MapperManagerTest extends TestCase
 		self::assertSame([ArrayWalker::class, ObjectWalker::class], $manager->getRegisteredWalkers());
 		self::assertSame([ArrayWriter::class, ObjectWriter::class], $manager->getRegisteredWriters());
 		self::assertSame(
-			[DefinitionFieldResolver::class, ReflectionPropertyFieldResolver::class],
+			[FieldMapFieldResolver::class, DefinitionFieldResolver::class, ReflectionPropertyFieldResolver::class],
 			$manager->getRegisteredResolvers(),
 		);
 		self::assertSame(
@@ -357,6 +360,10 @@ final class MapperManagerTest extends TestCase
 				'integer' => IntFieldType::class,
 				'primary' => IntFieldType::class,
 				'smallprimary' => IntFieldType::class,
+				'bigint' => BigIntFieldType::class,
+				'biginteger' => BigIntFieldType::class,
+				'bigprimary' => BigIntFieldType::class,
+				'decimal' => DecimalFieldType::class,
 				'float' => FloatFieldType::class,
 				'double' => FloatFieldType::class,
 				'json' => JsonFieldType::class,
@@ -375,7 +382,7 @@ final class MapperManagerTest extends TestCase
 		$manager = MapperManager::createDefault($this->gateway());
 
 		self::assertSame(
-			[SpyResolver::class, DefinitionFieldResolver::class, ReflectionPropertyFieldResolver::class],
+			[SpyResolver::class, FieldMapFieldResolver::class, DefinitionFieldResolver::class, ReflectionPropertyFieldResolver::class],
 			array_map(
 				static fn (object $resolver): string => $resolver::class,
 				$manager->createResolverChain(
