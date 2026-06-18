@@ -7,11 +7,16 @@ namespace Tests\ON\Data\Mapper;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\FieldTypeNotFoundException;
 use ON\Data\Mapper\Exception\InvalidMapperComponentException;
+use ON\Data\Mapper\Field\BackedEnumFieldType;
 use ON\Data\Mapper\Field\BoolFieldType;
+use ON\Data\Mapper\Field\DateFieldType;
+use ON\Data\Mapper\Field\DateTimeFieldType;
 use ON\Data\Mapper\Field\FloatFieldType;
 use ON\Data\Mapper\Field\IntFieldType;
+use ON\Data\Mapper\Field\JsonFieldType;
 use ON\Data\Mapper\Field\PassthroughFieldType;
 use ON\Data\Mapper\Field\StringFieldType;
+use ON\Data\Mapper\Field\UrlFieldType;
 use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldTypeInterface;
 use ON\Data\Mapper\MapperManager;
@@ -22,6 +27,7 @@ use Tests\ON\Data\Fixture\EmptyNamesFieldType;
 use Tests\ON\Data\Fixture\InvalidNamesFieldType;
 use Tests\ON\Data\Fixture\LowerMoneyFieldType;
 use Tests\ON\Data\Fixture\PartiallyInvalidNamesFieldType;
+use Tests\ON\Data\Fixture\StatusEnum;
 use Tests\ON\Data\Fixture\UpperMoneyFieldType;
 
 final class MapperManagerFieldTypeTest extends TestCase
@@ -33,10 +39,16 @@ final class MapperManagerFieldTypeTest extends TestCase
 		self::assertSame(StringFieldType::class, $manager->getFieldType('string'));
 		self::assertSame(PassthroughFieldType::class, $manager->getFieldType('text'));
 		self::assertSame(BoolFieldType::class, $manager->getFieldType('boolean'));
+		self::assertSame(BackedEnumFieldType::class, $manager->getFieldType('backed-enum'));
 		self::assertSame(IntFieldType::class, $manager->getFieldType('integer'));
 		self::assertSame(IntFieldType::class, $manager->getFieldType('primary'));
 		self::assertSame(IntFieldType::class, $manager->getFieldType('smallprimary'));
 		self::assertSame(FloatFieldType::class, $manager->getFieldType('double'));
+		self::assertSame(JsonFieldType::class, $manager->getFieldType('json'));
+		self::assertSame(UrlFieldType::class, $manager->getFieldType('url'));
+		self::assertSame(DateFieldType::class, $manager->getFieldType('date'));
+		self::assertSame(DateTimeFieldType::class, $manager->getFieldType('datetime'));
+		self::assertSame(DateTimeFieldType::class, $manager->getFieldType('timestamp'));
 	}
 
 	public function testAliasLookupRemainsCaseInsensitive(): void
@@ -54,6 +66,16 @@ final class MapperManagerFieldTypeTest extends TestCase
 		self::assertSame(
 			StringFieldType::class,
 			$manager->resolveFieldType(FieldContext::named('name', StringFieldType::class)),
+		);
+	}
+
+	public function testBackedEnumClassReferencesResolveDynamically(): void
+	{
+		$manager = MapperManager::createDefault($this->gateway());
+
+		self::assertSame(
+			BackedEnumFieldType::class,
+			$manager->resolveFieldType(FieldContext::named('status', StatusEnum::class)),
 		);
 	}
 
@@ -123,8 +145,13 @@ final class MapperManagerFieldTypeTest extends TestCase
 			StringFieldType::class,
 			PassthroughFieldType::class,
 			BoolFieldType::class,
+			BackedEnumFieldType::class,
 			IntFieldType::class,
 			FloatFieldType::class,
+			JsonFieldType::class,
+			UrlFieldType::class,
+			DateFieldType::class,
+			DateTimeFieldType::class,
 			CustomFieldType::class,
 		];
 

@@ -12,11 +12,17 @@ use ON\Data\Mapper\Exception\InvalidMapperComponentException;
 use ON\Data\Mapper\Exception\MapperComponentConfigurationException;
 use ON\Data\Mapper\Exception\NoWalkerFoundException;
 use ON\Data\Mapper\Exception\NoWriterFoundException;
+use ON\Data\Mapper\Field\BackedEnumFieldType;
 use ON\Data\Mapper\Field\BoolFieldType;
+use ON\Data\Mapper\Field\DateFieldType;
+use ON\Data\Mapper\Field\DateTimeFieldType;
+use ON\Data\Mapper\Field\DateTimeWireCodec;
 use ON\Data\Mapper\Field\FloatFieldType;
 use ON\Data\Mapper\Field\IntFieldType;
+use ON\Data\Mapper\Field\JsonFieldType;
 use ON\Data\Mapper\Field\PassthroughFieldType;
 use ON\Data\Mapper\Field\StringFieldType;
+use ON\Data\Mapper\Field\UrlFieldType;
 use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\Representation\WireRepresentation;
@@ -346,15 +352,22 @@ final class MapperManagerTest extends TestCase
 				'text' => PassthroughFieldType::class,
 				'bool' => BoolFieldType::class,
 				'boolean' => BoolFieldType::class,
+				'backed-enum' => BackedEnumFieldType::class,
 				'int' => IntFieldType::class,
 				'integer' => IntFieldType::class,
 				'primary' => IntFieldType::class,
 				'smallprimary' => IntFieldType::class,
 				'float' => FloatFieldType::class,
 				'double' => FloatFieldType::class,
+				'json' => JsonFieldType::class,
+				'url' => UrlFieldType::class,
+				'date' => DateFieldType::class,
+				'datetime' => DateTimeFieldType::class,
+				'timestamp' => DateTimeFieldType::class,
 			],
 			$manager->getRegisteredFieldTypes(),
 		);
+		self::assertSame(DateTimeWireCodec::class, $manager->resolveFieldTypeCodec(DateTimeFieldType::class, WireRepresentation::class));
 	}
 
 	public function testExplicitResolverClassesStillPrecedeDefaultResolvers(): void

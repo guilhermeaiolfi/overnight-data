@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Mapper;
 
+use DateTimeImmutable;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Mapper\Exception\MappingException;
@@ -13,6 +14,7 @@ use ON\Data\Mapper\Representation\WireRepresentation;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Fixture\MixedValueObject;
+use Tests\ON\Data\Fixture\StatusEnum;
 use Tests\ON\Data\Fixture\UserInputDto;
 use Tests\ON\Data\Fixture\UserOutputDto;
 
@@ -24,6 +26,8 @@ final class DefinitionAwareMappingTest extends TestCase
 			'id' => '42',
 			'active' => '0',
 			'rating' => '19.5',
+			'profile' => '{"role":"admin"}',
+			'url' => ' files/docs/report.pdf ',
 		])
 			->from(StorageRepresentation::class)
 			->args($this->usersDefinition())
@@ -34,6 +38,8 @@ final class DefinitionAwareMappingTest extends TestCase
 				'id' => 42,
 				'active' => false,
 				'rating' => 19.5,
+				'profile' => ['role' => 'admin'],
+				'url' => '/files/docs/report.pdf',
 			],
 			$result,
 		);
@@ -46,6 +52,8 @@ final class DefinitionAwareMappingTest extends TestCase
 			'active' => 'true',
 			'rating' => '19.5',
 			'name' => 123,
+			'profile' => '{"role":"admin"}',
+			'url' => 'https://example.com/report.pdf',
 		])
 			->from(WireRepresentation::class)
 			->args($this->usersDefinition())
@@ -55,6 +63,30 @@ final class DefinitionAwareMappingTest extends TestCase
 		self::assertTrue($result['active']);
 		self::assertSame(19.5, $result['rating']);
 		self::assertSame('123', $result['name']);
+		self::assertSame(['role' => 'admin'], $result['profile']);
+		self::assertSame('https://example.com/report.pdf', $result['url']);
+	}
+
+	public function testWireRepresentationUsesDateTimeCodecWhileOtherFieldsKeepDefaultFallback(): void
+	{
+		$result = map([
+			'id' => '42',
+			'active' => 'true',
+			'status' => 'active',
+			'birthday' => '2026-06-18',
+			'published_at' => '2026-06-18T13:45:12+00:00',
+		])
+			->from(WireRepresentation::class)
+			->args($this->usersDefinition())
+			->to([]);
+
+		self::assertSame(42, $result['id']);
+		self::assertTrue($result['active']);
+		self::assertSame(StatusEnum::Active, $result['status']);
+		self::assertInstanceOf(DateTimeImmutable::class, $result['birthday']);
+		self::assertSame('2026-06-18', $result['birthday']->format('Y-m-d'));
+		self::assertInstanceOf(DateTimeImmutable::class, $result['published_at']);
+		self::assertSame('2026-06-18 13:45:12', $result['published_at']->format('Y-m-d H:i:s'));
 	}
 
 	public function testPhpValuesConvertToStorageUsingDefinition(): void
@@ -63,6 +95,11 @@ final class DefinitionAwareMappingTest extends TestCase
 			'id' => 42,
 			'active' => false,
 			'rating' => 19.5,
+			'profile' => ['role' => 'admin'],
+			'url' => '/files/docs/report.pdf',
+			'status' => StatusEnum::Active,
+			'birthday' => new DateTimeImmutable('2026-06-18'),
+			'published_at' => new DateTimeImmutable('2026-06-18T13:45:12+00:00'),
 		])
 			->as(StorageRepresentation::class)
 			->args($this->usersDefinition())
@@ -73,6 +110,40 @@ final class DefinitionAwareMappingTest extends TestCase
 				'id' => 42,
 				'active' => false,
 				'rating' => 19.5,
+				'profile' => ['role' => 'admin'],
+				'url' => '/files/docs/report.pdf',
+				'status' => 'active',
+				'birthday' => '2026-06-18',
+				'published_at' => '2026-06-18 13:45:12',
+			],
+			$result,
+		);
+	}
+
+	public function testPhpValuesConvertToWireUsingDateTimeCodecAndOtherFieldFallbacks(): void
+	{
+		$result = map([
+			'id' => 42,
+			'active' => false,
+			'profile' => ['role' => 'admin'],
+			'url' => '/files/docs/report.pdf',
+			'status' => StatusEnum::Active,
+			'birthday' => new DateTimeImmutable('2026-06-18'),
+			'published_at' => new DateTimeImmutable('2026-06-18T13:45:12+00:00'),
+		])
+			->as(WireRepresentation::class)
+			->args($this->usersDefinition())
+			->to([]);
+
+		self::assertSame(
+			[
+				'id' => 42,
+				'active' => false,
+				'profile' => ['role' => 'admin'],
+				'url' => '/files/docs/report.pdf',
+				'status' => 'active',
+				'birthday' => '2026-06-18',
+				'published_at' => '2026-06-18T13:45:12+00:00',
 			],
 			$result,
 		);
@@ -255,6 +326,11 @@ final class DefinitionAwareMappingTest extends TestCase
 		$definition->field('active', 'bool');
 		$definition->field('rating', 'float');
 		$definition->field('name', 'string');
+		$definition->field('profile', 'json');
+		$definition->field('url', 'url')->nullable(true);
+		$definition->field('status', StatusEnum::class);
+		$definition->field('birthday', 'date');
+		$definition->field('published_at', 'datetime');
 
 		return $definition;
 	}

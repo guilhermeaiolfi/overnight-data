@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Mapper;
 
+use DateTimeImmutable;
 use ON\Data\Definition\Registry;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\ConversionException;
@@ -21,6 +22,7 @@ use Tests\ON\Data\Fixture\CacheRepresentation;
 use Tests\ON\Data\Fixture\CustomFieldType;
 use Tests\ON\Data\Fixture\JsonApiRepresentation;
 use Tests\ON\Data\Fixture\ReplacementTrackingWireCodec;
+use Tests\ON\Data\Fixture\StatusEnum;
 use Tests\ON\Data\Fixture\TrackingApiCodec;
 use Tests\ON\Data\Fixture\TrackingCacheCodec;
 use Tests\ON\Data\Fixture\TrackingCustomFieldType;
@@ -45,6 +47,21 @@ final class ConversionGatewayTest extends TestCase
 		);
 	}
 
+	public function testStorageDateStringConvertsToPhpDate(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		$result = $gateway->to(
+			StorageRepresentation::class,
+			'2026-06-18',
+			PhpRepresentation::class,
+			FieldContext::named('birthday', 'date'),
+		);
+
+		self::assertInstanceOf(DateTimeImmutable::class, $result);
+		self::assertSame('2026-06-18', $result->format('Y-m-d'));
+	}
+
 	public function testWireIntegerStringConvertsToPhpInteger(): void
 	{
 		$gateway = ConversionGateway::createDefault();
@@ -52,6 +69,164 @@ final class ConversionGatewayTest extends TestCase
 		self::assertSame(
 			42,
 			$gateway->to(WireRepresentation::class, '42', PhpRepresentation::class, FieldContext::named('id', 'integer')),
+		);
+	}
+
+	public function testWireDateStringUsesFieldTypeFallback(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		$result = $gateway->to(
+			WireRepresentation::class,
+			'2026-06-18',
+			PhpRepresentation::class,
+			FieldContext::named('birthday', 'date'),
+		);
+
+		self::assertInstanceOf(DateTimeImmutable::class, $result);
+		self::assertSame('2026-06-18', $result->format('Y-m-d'));
+	}
+
+	public function testBackedEnumConvertsFromWireToPhp(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		self::assertSame(
+			StatusEnum::Active,
+			$gateway->to(
+				WireRepresentation::class,
+				'active',
+				PhpRepresentation::class,
+				FieldContext::named('status', StatusEnum::class),
+			),
+		);
+	}
+
+	public function testBackedEnumConvertsFromPhpToStorage(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		self::assertSame(
+			'active',
+			$gateway->to(
+				PhpRepresentation::class,
+				StatusEnum::Active,
+				StorageRepresentation::class,
+				FieldContext::named('status', StatusEnum::class),
+			),
+		);
+	}
+
+	public function testInvalidBackedEnumValueFailsConversion(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		$this->expectException(ConversionException::class);
+		$gateway->to(
+			WireRepresentation::class,
+			'missing',
+			PhpRepresentation::class,
+			FieldContext::named('status', StatusEnum::class),
+		);
+	}
+
+	public function testStorageJsonStringConvertsToPhpArray(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		self::assertSame(
+			['role' => 'admin', 'flags' => ['active' => true]],
+			$gateway->to(
+				StorageRepresentation::class,
+				'{"role":"admin","flags":{"active":true}}',
+				PhpRepresentation::class,
+				FieldContext::named('profile', 'json'),
+			),
+		);
+	}
+
+	public function testWireJsonStringConvertsToPhpArray(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		self::assertSame(
+			['role' => 'admin'],
+			$gateway->to(
+				WireRepresentation::class,
+				'{"role":"admin"}',
+				PhpRepresentation::class,
+				FieldContext::named('profile', 'json'),
+			),
+		);
+	}
+
+	public function testAbsoluteHttpsUrlRemainsUnchanged(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		self::assertSame(
+			'https://example.com/report.pdf',
+			$gateway->to(
+				PhpRepresentation::class,
+				'https://example.com/report.pdf',
+				StorageRepresentation::class,
+				FieldContext::named('url', 'url'),
+			),
+		);
+	}
+
+	public function testRelativeFilePathBecomesSiteAbsolutePath(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		self::assertSame(
+			'/files/docs/report.pdf',
+			$gateway->to(
+				PhpRepresentation::class,
+				' files/docs/report.pdf ',
+				StorageRepresentation::class,
+				FieldContext::named('url', 'url', true),
+			),
+		);
+	}
+
+	public function testUnsafeUrlSchemeIsRejected(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		$this->expectException(ConversionException::class);
+		$gateway->to(
+			PhpRepresentation::class,
+			'javascript:alert(1)',
+			StorageRepresentation::class,
+			FieldContext::named('url', 'url'),
+		);
+	}
+
+	public function testProtocolRelativeUrlIsRejected(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		$this->expectException(ConversionException::class);
+		$gateway->to(
+			PhpRepresentation::class,
+			'//example.com/file.pdf',
+			StorageRepresentation::class,
+			FieldContext::named('url', 'url'),
+		);
+	}
+
+	public function testEmptyNullableUrlBecomesNull(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		self::assertNull(
+			$gateway->to(
+				PhpRepresentation::class,
+				' ',
+				StorageRepresentation::class,
+				FieldContext::named('url', 'url', true),
+			),
 		);
 	}
 
@@ -169,6 +344,182 @@ final class ConversionGatewayTest extends TestCase
 		self::assertSame(
 			'HELLO',
 			$gateway->to(StorageRepresentation::class, 'hello', PhpRepresentation::class, FieldContext::named('code', 'custom')),
+		);
+	}
+
+	public function testPhpDateValueConvertsToStorageUsingFieldTypeFallback(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		self::assertSame(
+			'2026-06-18',
+			$gateway->to(
+				PhpRepresentation::class,
+				new DateTimeImmutable('2026-06-18'),
+				StorageRepresentation::class,
+				FieldContext::named('birthday', 'date'),
+			),
+		);
+	}
+
+	public function testPhpDateValueConvertsToWireUsingFieldTypeFallback(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		self::assertSame(
+			'2026-06-18',
+			$gateway->to(
+				PhpRepresentation::class,
+				new DateTimeImmutable('2026-06-18'),
+				WireRepresentation::class,
+				FieldContext::named('birthday', 'date'),
+			),
+		);
+	}
+
+	public function testPhpArrayConvertsToStorageJsonString(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		self::assertSame(
+			'{"role":"admin","flags":{"active":true}}',
+			$gateway->to(
+				PhpRepresentation::class,
+				['role' => 'admin', 'flags' => ['active' => true]],
+				StorageRepresentation::class,
+				FieldContext::named('profile', 'json'),
+			),
+		);
+	}
+
+	public function testPhpStringPassesThroughWhenConvertingToJsonRepresentations(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		self::assertSame(
+			'{"role":"admin"}',
+			$gateway->to(
+				PhpRepresentation::class,
+				'{"role":"admin"}',
+				WireRepresentation::class,
+				FieldContext::named('profile', 'json'),
+			),
+		);
+	}
+
+	public function testChildWireRepresentationInheritsDateFieldTypeFallbackWhenNoCodecExists(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		self::assertSame(
+			'2026-06-18',
+			$gateway->to(
+				PhpRepresentation::class,
+				new DateTimeImmutable('2026-06-18'),
+				ApiRepresentation::class,
+				FieldContext::named('birthday', 'date'),
+			),
+		);
+	}
+
+	public function testStorageDateTimeStringConvertsToPhpDateTime(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		$result = $gateway->to(
+			StorageRepresentation::class,
+			'2026-06-18 13:45:12',
+			PhpRepresentation::class,
+			FieldContext::named('published_at', 'datetime'),
+		);
+
+		self::assertInstanceOf(DateTimeImmutable::class, $result);
+		self::assertSame('2026-06-18 13:45:12', $result->format('Y-m-d H:i:s'));
+	}
+
+	public function testWireDateTimeStringUsesExactWireCodec(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		$result = $gateway->to(
+			WireRepresentation::class,
+			'2026-06-18T13:45:12+00:00',
+			PhpRepresentation::class,
+			FieldContext::named('published_at', 'datetime'),
+		);
+
+		self::assertInstanceOf(DateTimeImmutable::class, $result);
+		self::assertSame('2026-06-18T13:45:12+00:00', $result->format(DateTimeImmutable::ATOM));
+	}
+
+	public function testTimestampUsesDateTimeFieldTypeBehavior(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		$phpValue = $gateway->to(
+			WireRepresentation::class,
+			'2026-06-18T13:45:12+00:00',
+			PhpRepresentation::class,
+			FieldContext::named('created_at', 'timestamp'),
+		);
+
+		self::assertInstanceOf(DateTimeImmutable::class, $phpValue);
+		self::assertSame(
+			'2026-06-18 13:45:12',
+			$gateway->to(
+				PhpRepresentation::class,
+				$phpValue,
+				StorageRepresentation::class,
+				FieldContext::named('created_at', 'timestamp'),
+			),
+		);
+	}
+
+	public function testPhpDateTimeValueConvertsToStorageUsingFieldTypeFallback(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+		$value = new DateTimeImmutable('2026-06-18T13:45:12+00:00');
+
+		self::assertSame(
+			'2026-06-18 13:45:12',
+			$gateway->to(
+				PhpRepresentation::class,
+				$value,
+				StorageRepresentation::class,
+				FieldContext::named('published_at', 'datetime'),
+			),
+		);
+	}
+
+	public function testPhpDateTimeValueConvertsToWireUsingExactWireCodec(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+		$value = new DateTimeImmutable('2026-06-18T13:45:12+00:00');
+
+		self::assertSame(
+			'2026-06-18T13:45:12+00:00',
+			$gateway->to(
+				PhpRepresentation::class,
+				$value,
+				WireRepresentation::class,
+				FieldContext::named('published_at', 'datetime'),
+			),
+		);
+	}
+
+	public function testChildWireRepresentationInheritsDateTimeWireCodec(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+		$value = new DateTimeImmutable('2026-06-18T13:45:12+00:00');
+
+		self::assertSame(
+			'2026-06-18T13:45:12+00:00',
+			$gateway->to(
+				PhpRepresentation::class,
+				$value,
+				ApiRepresentation::class,
+				FieldContext::named('published_at', 'datetime'),
+			),
 		);
 	}
 

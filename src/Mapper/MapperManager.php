@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper;
 
+use BackedEnum;
 use Closure;
 use ON\Data\Mapper\Exception\DuplicateMapperComponentRegistrationException;
 use ON\Data\Mapper\Exception\FieldTypeNotFoundException;
@@ -13,11 +14,17 @@ use ON\Data\Mapper\Exception\InvalidMapperComponentException;
 use ON\Data\Mapper\Exception\MapperComponentConfigurationException;
 use ON\Data\Mapper\Exception\NoWalkerFoundException;
 use ON\Data\Mapper\Exception\NoWriterFoundException;
+use ON\Data\Mapper\Field\BackedEnumFieldType;
 use ON\Data\Mapper\Field\BoolFieldType;
+use ON\Data\Mapper\Field\DateFieldType;
+use ON\Data\Mapper\Field\DateTimeFieldType;
+use ON\Data\Mapper\Field\DateTimeWireCodec;
 use ON\Data\Mapper\Field\FloatFieldType;
 use ON\Data\Mapper\Field\IntFieldType;
+use ON\Data\Mapper\Field\JsonFieldType;
 use ON\Data\Mapper\Field\PassthroughFieldType;
 use ON\Data\Mapper\Field\StringFieldType;
+use ON\Data\Mapper\Field\UrlFieldType;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Resolver\DefinitionFieldResolver;
 use ON\Data\Mapper\Resolver\FieldResolverInterface;
@@ -111,8 +118,14 @@ final class MapperManager
 		$manager->register(StringFieldType::class);
 		$manager->register(PassthroughFieldType::class);
 		$manager->register(BoolFieldType::class);
+		$manager->register(BackedEnumFieldType::class);
 		$manager->register(IntFieldType::class);
 		$manager->register(FloatFieldType::class);
+		$manager->register(JsonFieldType::class);
+		$manager->register(UrlFieldType::class);
+		$manager->register(DateFieldType::class);
+		$manager->register(DateTimeFieldType::class);
+		$manager->register(DateTimeWireCodec::class);
 
 		return $manager;
 	}
@@ -293,6 +306,10 @@ final class MapperManager
 		if (is_a($type, FieldTypeInterface::class, true)) {
 			/** @var class-string<FieldTypeInterface> $type */
 			return $type;
+		}
+
+		if (enum_exists($type) && is_a($type, BackedEnum::class, true)) {
+			return BackedEnumFieldType::class;
 		}
 
 		return $this->fieldTypes[strtolower($type)] ?? null;

@@ -10,7 +10,7 @@ Representations are class-based markers implementing `ON\Data\Mapper\Representat
 
 - `PhpRepresentation` is the canonical hub.
 - `StorageRepresentation` is the storage-facing marker.
-- `WireRepresentation` is the external-input and JSON-facing marker.
+- `WireRepresentation` is the external-input and JSON-facing marker and now extends `StorageRepresentation`.
 
 Field types own:
 
@@ -52,6 +52,7 @@ Built-in handlers:
 - `BoolFieldType`
 - `IntFieldType`
 - `FloatFieldType`
+- `DateFieldType`
 
 Default aliases:
 
@@ -66,6 +67,7 @@ primary      -> IntFieldType
 smallprimary -> IntFieldType
 float        -> FloatFieldType
 double       -> FloatFieldType
+date         -> DateFieldType
 ```
 
 Alias lookup is case-insensitive.
@@ -165,7 +167,7 @@ final class MoneyWireCodec implements FieldTypeCodecInterface
 }
 ```
 
-A codec registered for `WireRepresentation` automatically applies to child representations unless a more specific codec exists.
+A codec registered for `WireRepresentation` automatically applies to child representations unless a more specific codec exists. Because `WireRepresentation` extends `StorageRepresentation`, a storage-oriented default can stay on the field type while a wire-only codec overrides just the wire-facing behavior.
 
 ## ConversionGateway
 
@@ -258,4 +260,4 @@ Definition metadata wins over reflection because `DefinitionFieldResolver` runs 
 - no readonly-target hydration
 - no ORM or framework integration
 - no complete PHPDoc parsing beyond the currently supported DTO list forms
-- no built-in decimal, money, enum, or date field types yet
+- no built-in decimal, money, enum, or datetime field types yet

@@ -34,7 +34,7 @@ Not implemented yet:
 - query execution;
 - persistence and ORM adapters;
 - constructor hydration and readonly-target hydration;
-- big-integer, decimal, enum, and date-oriented FieldTypes.
+- big-integer, decimal, enum, and datetime-oriented FieldTypes.
 
 ## Namespace
 
