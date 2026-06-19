@@ -8,6 +8,7 @@ use ON\Data\Definition\Registry;
 use ON\Data\Mapper\FieldMap;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Mapper\Mapper;
+use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Representation\WireRepresentation;
@@ -104,13 +105,29 @@ final class RecordingRootArrayMapper extends Mapper
 		self::$paths = [];
 	}
 
-	protected function getNodes(MappingNode $node): iterable
-	{
+	public function map(
+		MappingNode $node,
+		MapperManager $mapperManager,
+	): mixed {
 		self::$paths[] = $node->getPath();
 
-		foreach ($node->getValue() as $name => $value) {
-			yield $node->child($name, $value);
+		if ($node->isCollection()) {
+			return $this->mapCollection($node, $mapperManager);
 		}
+
+		$writer = $mapperManager->resolveWriter($node->getTarget(), $node->getContext());
+		$result = $writer->prepare($node->getTarget(), $node->getContext());
+		$frame = $node->withTarget($result);
+		$resolvers = $mapperManager->createResolverChain($frame->getContext());
+		$converter = $mapperManager->createFieldConversionCoordinator();
+
+		foreach ($node->getValue() as $name => $value) {
+			$child = $frame->child($name, $value);
+			$mappedValue = $this->mapChild($child, $resolvers, $converter, $mapperManager);
+			$result = $writer->write($result, $child, $mappedValue);
+		}
+
+		return $writer->finish($result, $frame->getContext());
 	}
 
 	public static function canMap(

@@ -8,6 +8,8 @@ use BackedEnum;
 use DateTimeInterface;
 use ON\Data\Mapper\Attribute\Hidden;
 use ON\Data\Mapper\Attribute\MapTo;
+use ON\Data\Mapper\Exception\MappingException;
+use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Representation\RepresentationInterface;
@@ -27,16 +29,33 @@ final class ObjectMapper extends Mapper
 			&& ! $source instanceof RepresentationInterface;
 	}
 
-	protected function getNodes(
+	public function map(
 		MappingNode $node,
-	): iterable {
+		MapperManager $mapperManager,
+	): mixed {
+		if ($node->isCollection()) {
+			return $this->mapCollection($node, $mapperManager);
+		}
+
 		$source = $node->getValue();
+		if (! is_object($source)) {
+			throw new MappingException('ObjectMapper can only map object sources.');
+		}
+
+		$writer = $mapperManager->resolveWriter($node->getTarget(), $node->getContext());
+		$result = $writer->prepare($node->getTarget(), $node->getContext());
+		$frame = $node->withTarget($result);
+		$resolvers = $mapperManager->createResolverChain($frame->getContext());
+		$converter = $mapperManager->createFieldConversionCoordinator();
+
 		if ($source instanceof stdClass) {
 			foreach (get_object_vars($source) as $name => $value) {
-				yield $node->child($name, $value);
+				$child = $frame->child($name, $value);
+				$mappedValue = $this->mapChild($child, $resolvers, $converter, $mapperManager);
+				$result = $writer->write($result, $child, $mappedValue);
 			}
 
-			return;
+			return $writer->finish($result, $frame->getContext());
 		}
 
 		$reflection = new ReflectionObject($source);
@@ -47,8 +66,12 @@ final class ObjectMapper extends Mapper
 			}
 
 			$name = $this->resolveName($property);
-			yield $node->child($name, $property->getValue($source), $property);
+			$child = $frame->child($name, $property->getValue($source), $property);
+			$mappedValue = $this->mapChild($child, $resolvers, $converter, $mapperManager);
+			$result = $writer->write($result, $child, $mappedValue);
 		}
+
+		return $writer->finish($result, $frame->getContext());
 	}
 
 	private function isHidden(ReflectionProperty $property): bool

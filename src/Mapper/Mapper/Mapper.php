@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Mapper\Mapper;
 
 use ON\Data\Mapper\Exception\MappingException;
+use ON\Data\Mapper\FieldConversionCoordinator;
 use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Resolution\BranchNodeResolutionInterface;
@@ -15,49 +16,7 @@ use stdClass;
 
 abstract class Mapper implements MapperInterface
 {
-	final public function map(
-		MappingNode $node,
-		MapperManager $mapperManager,
-	): mixed {
-		if ($node->isCollection()) {
-			return $this->mapCollection($node, $mapperManager);
-		}
-
-		$writer = $mapperManager->resolveWriter($node->getTarget(), $node->getContext());
-		$result = $writer->prepare($node->getTarget(), $node->getContext());
-		$frame = $node->withTarget($result);
-		$resolvers = $mapperManager->createResolverChain($frame->getContext());
-		$converter = $mapperManager->createFieldConversionCoordinator();
-
-		foreach ($this->getNodes($frame) as $child) {
-			$resolution = $this->resolveNode($child, $resolvers);
-
-			if ($resolution instanceof BranchNodeResolutionInterface) {
-				$value = $child->getValue() === null
-					? null
-					: $mapperManager->mapNode(
-						$child->forMapping(
-							$resolution->getTarget(),
-							$resolution->getArguments(),
-							$resolution->isCollection(),
-						),
-					);
-			} else {
-				$value = $converter->convert($child->getValue(), $resolution, $child);
-			}
-
-			$result = $writer->write($result, $child, $value);
-		}
-
-		return $writer->finish($result, $frame->getContext());
-	}
-
-	/**
-	 * @return iterable<MappingNode>
-	 */
-	abstract protected function getNodes(MappingNode $node): iterable;
-
-	private function mapCollection(MappingNode $node, MapperManager $mapperManager): array
+	final protected function mapCollection(MappingNode $node, MapperManager $mapperManager): array
 	{
 		if (! is_iterable($node->getValue())) {
 			throw new MappingException('Collection mapping requires an iterable source.');
@@ -91,7 +50,35 @@ abstract class Mapper implements MapperInterface
 	/**
 	 * @param list<NodeResolverInterface> $resolvers
 	 */
-	private function resolveNode(MappingNode $node, array $resolvers): LeafNodeResolutionInterface|BranchNodeResolutionInterface
+	final protected function mapChild(
+		MappingNode $child,
+		array $resolvers,
+		FieldConversionCoordinator $converter,
+		MapperManager $mapperManager,
+	): mixed {
+		$resolution = $this->resolveNode($child, $resolvers);
+
+		if ($resolution instanceof BranchNodeResolutionInterface) {
+			if ($child->getValue() === null) {
+				return null;
+			}
+
+			return $mapperManager->mapNode(
+				$child->forMapping(
+					$resolution->getTarget(),
+					$resolution->getArguments(),
+					$resolution->isCollection(),
+				),
+			);
+		}
+
+		return $converter->convert($child->getValue(), $resolution, $child);
+	}
+
+	/**
+	 * @param list<NodeResolverInterface> $resolvers
+	 */
+	final protected function resolveNode(MappingNode $node, array $resolvers): LeafNodeResolutionInterface|BranchNodeResolutionInterface
 	{
 		foreach ($resolvers as $resolver) {
 			$resolution = $resolver->resolve($node);

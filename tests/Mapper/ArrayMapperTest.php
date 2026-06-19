@@ -5,48 +5,110 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Mapper;
 
 use ON\Data\Mapper\ConversionGateway;
-use ON\Data\Mapper\Mapper\ArrayMapper;
+use function ON\Data\Mapper\map;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\Writer\WriterInterface;
 use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
 
 final class ArrayMapperTest extends TestCase
 {
+	protected function setUp(): void
+	{
+		ArrayMapperNodeRecordingWriter::reset();
+	}
+
 	public function testArraySourcePropertiesAreAlwaysNull(): void
 	{
-		$nodes = $this->nodesFrom([
+		$this->mapWithRecorder([
 			'name' => 'Alice',
 		]);
 
-		self::assertCount(1, $nodes);
-		self::assertSame('name', $nodes[0]->getName());
-		self::assertNull($nodes[0]->getSourceProperty());
+		self::assertSame(
+			[
+				[
+					'name' => 'name',
+					'sourceProperty' => null,
+				],
+			],
+			ArrayMapperNodeRecordingWriter::$writes,
+		);
 	}
 
 	public function testNumericArrayKeyZeroRemainsNodeName(): void
 	{
-		$nodes = $this->nodesFrom([
+		$this->mapWithRecorder([
 			0 => 'Alice',
 		]);
 
-		self::assertCount(1, $nodes);
-		self::assertSame(0, $nodes[0]->getName());
-		self::assertNull($nodes[0]->getSourceProperty());
+		self::assertSame(
+			[
+				[
+					'name' => 0,
+					'sourceProperty' => null,
+				],
+			],
+			ArrayMapperNodeRecordingWriter::$writes,
+		);
 	}
 
 	/**
 	 * @param array<string|int, mixed> $source
-	 *
-	 * @return list<MappingNode>
 	 */
-	private function nodesFrom(array $source): array
+	private function mapWithRecorder(array $source): void
 	{
-		$Mapper = new ArrayMapper();
-		$root = MappingNode::root($source, [], new MappingContext(ConversionGateway::createDefault()));
-		$method = new ReflectionMethod(ArrayMapper::class, 'getNodes');
-		$method->setAccessible(true);
+		$gateway = ConversionGateway::createDefault();
+		$gateway->getMapperManager()->prepend(ArrayMapperNodeRecordingWriter::class);
 
-		return array_values(iterator_to_array($method->invoke($Mapper, $root), false));
+		map($source, null, $gateway)->to([]);
+	}
+}
+
+final class ArrayMapperNodeRecordingWriter implements WriterInterface
+{
+	/**
+	 * @var list<array{name: string|int|null, sourceProperty: string|null}>
+	 */
+	public static array $writes = [];
+
+	public static function reset(): void
+	{
+		self::$writes = [];
+	}
+
+	public static function canWrite(
+		mixed $target,
+		MappingContext $context,
+	): bool {
+		return is_array($target);
+	}
+
+	public function prepare(
+		mixed $target,
+		MappingContext $context,
+	): array {
+		return [];
+	}
+
+	public function write(
+		mixed $target,
+		MappingNode $node,
+		mixed $value,
+	): array {
+		self::$writes[] = [
+			'name' => $node->getName(),
+			'sourceProperty' => $node->getSourceProperty()?->getName(),
+		];
+
+		$target[$node->getName()] = $value;
+
+		return $target;
+	}
+
+	public function finish(
+		mixed $target,
+		MappingContext $context,
+	): array {
+		return $target;
 	}
 }

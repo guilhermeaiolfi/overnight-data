@@ -69,6 +69,7 @@ composer check
 - `docs/extending-definitions.md` covers supported subclass-based extension points.
 - `docs/2-field-types-and-mapper.md` covers the implemented scalar FieldType, mapper runtime, and current recursive structural mapping support.
 - `docs/2-mappers/phase-10-one-level-mappers-and-node-resolution.md` summarizes one-level mappers and unified leaf/branch node resolution.
+- `docs/2-mappers/phase-10-a-concrete-mapper-loops.md` summarizes concrete mapper loop ownership.
 - `docs/2-mappers/phase-8-exact-numerics-and-field-map.md` summarizes reflected enums/datetimes, exact numerics, and ad-hoc mapper field maps.
 - `docs/2-mappers/phase-7-field-type-codecs.md` summarizes the field-type codec and centralized mapper registration phase.
 - `docs/2-mappers/phase-5-definition-field-resolver.md` summarizes the definition-aware field resolver phase.

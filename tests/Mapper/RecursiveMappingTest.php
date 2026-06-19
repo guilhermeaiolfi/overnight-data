@@ -199,6 +199,13 @@ final class RecursiveMappingTest extends TestCase
 				'contextCollection' => false,
 			],
 			[
+				'path' => 'authors',
+				'nodeArguments' => [],
+				'contextArguments' => [],
+				'nodeCollection' => true,
+				'contextCollection' => true,
+			],
+			[
 				'path' => 'authors.0',
 				'nodeArguments' => [],
 				'contextArguments' => [],
