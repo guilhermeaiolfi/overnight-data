@@ -6,6 +6,6 @@ namespace ON\Data\Mapper\Exception;
 
 use RuntimeException;
 
-final class IncompatibleWalkerException extends RuntimeException
+final class IncompatibleMapperException extends RuntimeException
 {
 }

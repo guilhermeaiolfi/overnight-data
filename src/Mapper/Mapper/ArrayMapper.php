@@ -2,22 +2,21 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\Mapper\Walker;
+namespace ON\Data\Mapper\Mapper;
 
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Support\ArrayPathExpander;
 
-final class ArrayWalker extends Walker
+final class ArrayMapper extends Mapper
 {
 	public function __construct(
 		private readonly ?ArrayPathExpander $pathExpander = null,
 	) {
-		parent::__construct();
 	}
 
-	public static function canWalk(
+	public static function canMap(
 		mixed $source,
 		MappingContext $context,
 	): bool {
@@ -29,7 +28,7 @@ final class ArrayWalker extends Walker
 	): iterable {
 		$source = $node->getValue();
 		if (! is_array($source)) {
-			throw new MappingException('ArrayWalker can only enumerate array sources.');
+			throw new MappingException('ArrayMapper can only enumerate array sources.');
 		}
 
 		$normalized = $this->shouldExpandDottedKeys($node)
@@ -46,7 +45,7 @@ final class ArrayWalker extends Walker
 		$options = [];
 
 		foreach ($node->getArguments() as $argument) {
-			if ($argument instanceof ArrayWalkerOptions) {
+			if ($argument instanceof ArrayMapperOptions) {
 				$options[] = $argument;
 			}
 		}
@@ -56,7 +55,7 @@ final class ArrayWalker extends Walker
 		}
 
 		if (count($options) > 1) {
-			throw new MappingException('ArrayWalkerOptions is ambiguous: mapping arguments contain multiple direct options.');
+			throw new MappingException('ArrayMapperOptions is ambiguous: mapping arguments contain multiple direct options.');
 		}
 
 		return $options[0]->getExpandDottedKeys();

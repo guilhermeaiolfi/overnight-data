@@ -4,24 +4,24 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Fixture;
 
+use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
-use ON\Data\Mapper\Walker\WalkerInterface;
 use ON\Data\Mapper\Writer\WriterInterface;
 
-final class MultiRoleComponent implements WalkerInterface, WriterInterface
+final class MultiRoleComponent implements MapperInterface, WriterInterface
 {
-	public static function canWalk(
+	public static function canMap(
 		mixed $source,
 		MappingContext $context,
 	): bool {
 		return false;
 	}
 
-	public function walk(
+	public function map(
 		MappingNode $node,
-		MapperManager $mappers,
+		MapperManager $mapperManager,
 	): mixed {
 		return null;
 	}

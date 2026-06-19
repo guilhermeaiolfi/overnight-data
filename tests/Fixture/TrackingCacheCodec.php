@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Fixture;
 
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldTypeCodecInterface;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 
 final class TrackingCacheCodec implements FieldTypeCodecInterface
 {
@@ -19,14 +19,14 @@ final class TrackingCacheCodec implements FieldTypeCodecInterface
 		return CacheRepresentation::class;
 	}
 
-	public static function toPhp(mixed $value, FieldContext $field): mixed
+	public static function toPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		TrackingCustomFieldType::record('cacheCodec:toPhp');
 
 		return 'php<' . (string) $value . '>';
 	}
 
-	public static function fromPhp(mixed $value, FieldContext $field): mixed
+	public static function fromPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		TrackingCustomFieldType::record('cacheCodec:fromPhp');
 

@@ -7,8 +7,8 @@ namespace ON\Data\Mapper\Field;
 use DateTimeImmutable;
 use DateTimeInterface;
 use InvalidArgumentException;
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldTypeInterface;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 
 final class DateTimeFieldType implements FieldTypeInterface
 {
@@ -24,7 +24,7 @@ final class DateTimeFieldType implements FieldTypeInterface
 		return 'datetime';
 	}
 
-	public static function toPhp(mixed $value, FieldContext $field): mixed
+	public static function toPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		if ($value instanceof DateTimeInterface) {
 			return self::normalizeDateTimeObject($value);
@@ -39,12 +39,12 @@ final class DateTimeFieldType implements FieldTypeInterface
 		return self::parseDateTimeString($value, self::STORAGE_FORMAT, $field);
 	}
 
-	public static function fromPhp(mixed $value, FieldContext $field): mixed
+	public static function fromPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		return self::normalizeDateTimeObject($value)->format(self::STORAGE_FORMAT);
 	}
 
-	public static function parseDateTimeString(string $value, string $format, FieldContext $field): DateTimeImmutable
+	public static function parseDateTimeString(string $value, string $format, LeafNodeResolutionInterface $field): DateTimeImmutable
 	{
 		$normalized = trim($value);
 		$dateTime = DateTimeImmutable::createFromFormat('!' . $format, $normalized);

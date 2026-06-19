@@ -12,7 +12,7 @@ use ON\Data\Mapper\Representation\WireRepresentation;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use stdClass;
-use Tests\ON\Data\Fixture\SpyArrayWalker;
+use Tests\ON\Data\Fixture\SpyArrayMapper;
 use Tests\ON\Data\Fixture\SpyArrayWriter;
 use Tests\ON\Data\Fixture\SpyResolver;
 
@@ -23,7 +23,7 @@ final class MapBuilderTest extends TestCase
 		$builder = map(['id' => 1]);
 		$from = $builder->from(WireRepresentation::class);
 		$as = $builder->as(WireRepresentation::class);
-		$walker = $builder->walker(SpyArrayWalker::class);
+		$mapper = $builder->mapper(SpyArrayMapper::class);
 		$writer = $builder->writer(SpyArrayWriter::class);
 		$resolver = $builder->resolver(SpyResolver::class);
 		$args = $builder->args('b');
@@ -32,7 +32,7 @@ final class MapBuilderTest extends TestCase
 
 		self::assertNotSame($builder, $from);
 		self::assertNotSame($builder, $as);
-		self::assertNotSame($builder, $walker);
+		self::assertNotSame($builder, $mapper);
 		self::assertNotSame($builder, $writer);
 		self::assertNotSame($builder, $resolver);
 		self::assertNotSame($builder, $args);
@@ -40,7 +40,7 @@ final class MapBuilderTest extends TestCase
 		self::assertNotSame($builder, $collection);
 		self::assertNull($this->property($builder, 'sourceRepresentation'));
 		self::assertNull($this->property($builder, 'outputRepresentation'));
-		self::assertNull($this->property($builder, 'walkerClass'));
+		self::assertNull($this->property($builder, 'mapperClass'));
 		self::assertNull($this->property($builder, 'writerClass'));
 		self::assertSame([], $this->property($builder, 'resolverClasses'));
 		self::assertSame([], $this->property($builder, 'arguments'));

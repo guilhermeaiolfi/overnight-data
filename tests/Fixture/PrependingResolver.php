@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Fixture;
 
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\MappingNode;
-use ON\Data\Mapper\Resolver\FieldResolverInterface;
+use ON\Data\Mapper\Resolution\LeafNodeResolution;
+use ON\Data\Mapper\Resolver\NodeResolverInterface;
 
-final class PrependingResolver implements FieldResolverInterface
+final class PrependingResolver implements NodeResolverInterface
 {
 	public function __construct()
 	{
 		ComponentTestState::recordConstruction(self::class);
 	}
 
-	public function resolve(MappingNode $node): ?FieldContext
+	public function resolve(MappingNode $node): ?LeafNodeResolution
 	{
 		ComponentTestState::recordRuntime(self::class, $node->getPath());
 
@@ -23,6 +23,6 @@ final class PrependingResolver implements FieldResolverInterface
 			return null;
 		}
 
-		return FieldContext::named('id', 'string');
+		return LeafNodeResolution::named('id', 'string');
 	}
 }

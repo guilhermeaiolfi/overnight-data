@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace ON\Data\Mapper;
 
 use InvalidArgumentException;
+use ON\Data\Mapper\Resolution\LeafNodeResolution;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 
 final class FieldMap
 {
@@ -60,14 +62,14 @@ final class FieldMap
 		return $this->fields;
 	}
 
-	public function getField(string $path, string $name): ?FieldContext
+	public function getField(string $path, string $name): ?LeafNodeResolutionInterface
 	{
 		$entry = $this->fields[$this->canonicalizeRuntimePath($path)] ?? null;
 		if ($entry === null) {
 			return null;
 		}
 
-		return FieldContext::named($name, $entry['type'], $entry['nullable']);
+		return LeafNodeResolution::named($name, $entry['type'], $entry['nullable']);
 	}
 
 	/**

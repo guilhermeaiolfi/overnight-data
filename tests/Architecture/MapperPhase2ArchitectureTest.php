@@ -75,14 +75,14 @@ final class MapperPhase2ArchitectureTest extends TestCase
 			'/MappingContext.php',
 			'/functions.php',
 			'/FieldConversionCoordinator.php',
-			'/Walker/WalkerInterface.php',
-			'/Walker/ArrayWalker.php',
-			'/Walker/ObjectWalker.php',
+			'/Mapper/MapperInterface.php',
+			'/Mapper/ArrayMapper.php',
+			'/Mapper/ObjectMapper.php',
 			'/Writer/WriterInterface.php',
 			'/Writer/ArrayWriter.php',
 			'/Writer/ObjectWriter.php',
-			'/Resolver/FieldResolverInterface.php',
-			'/Resolver/ReflectionPropertyFieldResolver.php',
+			'/Resolver/NodeResolverInterface.php',
+			'/Resolver/ReflectionPropertyNodeResolver.php',
 			'/Support/ObjectPropertyMatcher.php',
 		];
 
@@ -103,8 +103,8 @@ final class MapperPhase2ArchitectureTest extends TestCase
 				'/StdClassToArrayMapper.php',
 				'/ArrayToObjectMapper.php',
 				'/ObjectToArrayMapper.php',
-				'/FieldContextResolverInterface.php',
-				'/ReflectionPropertyFieldContextResolver.php',
+				'/LeafNodeResolutionResolverInterface.php',
+				'/ReflectionPropertyLeafNodeResolutionResolver.php',
 			] as $suffix
 		) {
 			self::assertFileDoesNotExist($root . $suffix);

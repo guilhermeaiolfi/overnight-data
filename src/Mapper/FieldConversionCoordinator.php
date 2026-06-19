@@ -6,38 +6,21 @@ namespace ON\Data\Mapper;
 
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\Representation\PhpRepresentation;
-use ON\Data\Mapper\Resolver\FieldResolverInterface;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 
 final class FieldConversionCoordinator
 {
-	/**
-	 * @param list<FieldResolverInterface> $resolvers
-	 */
 	public function __construct(
 		private readonly ConversionGateway $gateway,
-		private readonly array $resolvers,
 	) {
 	}
 
-	public function resolveField(
-		MappingNode $node,
-	): ?FieldContext {
-		foreach ($this->resolvers as $resolver) {
-			$field = $resolver->resolve($node);
-			if ($field !== null) {
-				return $field;
-			}
-		}
-
-		return null;
-	}
-
-	public function convertScalar(
+	public function convert(
 		mixed $value,
-		?FieldContext $field,
+		LeafNodeResolutionInterface $leaf,
 		MappingNode $node,
 	): mixed {
-		if ($field === null) {
+		if ($leaf->getType() === null) {
 			return $value;
 		}
 
@@ -54,7 +37,7 @@ final class FieldConversionCoordinator
 				$from ?? PhpRepresentation::class,
 				$value,
 				$to ?? PhpRepresentation::class,
-				$field,
+				$leaf,
 			);
 		} catch (MappingException $exception) {
 			if ($node->getPath() === '') {

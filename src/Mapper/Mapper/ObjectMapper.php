@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\Mapper\Walker;
+namespace ON\Data\Mapper\Mapper;
 
 use BackedEnum;
 use DateTimeInterface;
@@ -15,9 +15,9 @@ use ReflectionObject;
 use ReflectionProperty;
 use stdClass;
 
-final class ObjectWalker extends Walker
+final class ObjectMapper extends Mapper
 {
-	public static function canWalk(
+	public static function canMap(
 		mixed $source,
 		MappingContext $context,
 	): bool {

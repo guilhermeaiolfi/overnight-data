@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper\Field;
 
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldTypeInterface;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 
 final class PassthroughFieldType implements FieldTypeInterface
 {
@@ -19,12 +19,12 @@ final class PassthroughFieldType implements FieldTypeInterface
 		return 'text';
 	}
 
-	public static function toPhp(mixed $value, FieldContext $field): mixed
+	public static function toPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		return $value;
 	}
 
-	public static function fromPhp(mixed $value, FieldContext $field): mixed
+	public static function fromPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		return $value;
 	}

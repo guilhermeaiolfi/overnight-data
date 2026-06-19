@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper\Exception;
 
-use ON\Data\Mapper\FieldContext;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 use Throwable;
 
 class ConversionException extends MappingException
@@ -14,7 +14,7 @@ class ConversionException extends MappingException
 	 * @param class-string $to
 	 */
 	public static function forField(
-		FieldContext $field,
+		LeafNodeResolutionInterface $field,
 		string $from,
 		string $to,
 		Throwable $previous,

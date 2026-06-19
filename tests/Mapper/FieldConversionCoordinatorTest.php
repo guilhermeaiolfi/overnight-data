@@ -6,7 +6,6 @@ namespace Tests\ON\Data\Mapper;
 
 use DateTimeImmutable;
 use ON\Data\Mapper\ConversionGateway;
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldConversionCoordinator;
 use ON\Data\Mapper\FieldMap;
 use function ON\Data\Mapper\map;
@@ -14,9 +13,10 @@ use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Representation\StorageRepresentation;
 use ON\Data\Mapper\Representation\WireRepresentation;
-use ON\Data\Mapper\Resolver\FieldMapFieldResolver;
-use ON\Data\Mapper\Resolver\FieldResolverInterface;
-use ON\Data\Mapper\Resolver\ReflectionPropertyFieldResolver;
+use ON\Data\Mapper\Resolution\LeafNodeResolution;
+use ON\Data\Mapper\Resolver\FieldMapNodeResolver;
+use ON\Data\Mapper\Resolver\NodeResolverInterface;
+use ON\Data\Mapper\Resolver\ReflectionPropertyNodeResolver;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -32,9 +32,9 @@ use Tests\ON\Data\Fixture\UserInputDto;
 
 final class FieldConversionCoordinatorTest extends TestCase
 {
-	public function testReflectionPropertyResolverUsesWalkerProperty(): void
+	public function testReflectionPropertyResolverUsesMapperProperty(): void
 	{
-		$resolver = new ReflectionPropertyFieldResolver();
+		$resolver = new ReflectionPropertyNodeResolver();
 		$node = MappingNode::root([], [], $this->context())
 			->child('name', 'Ada', new ReflectionProperty(PropertyContextFixture::class, 'name'));
 
@@ -47,7 +47,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 
 	public function testReflectionPropertyResolverFallsBackToPreparedTargetProperty(): void
 	{
-		$resolver = new ReflectionPropertyFieldResolver();
+		$resolver = new ReflectionPropertyNodeResolver();
 		$target = (new ReflectionClass(UserInputDto::class))->newInstanceWithoutConstructor();
 		$node = MappingNode::root([], $target, $this->context())
 			->withTarget($target)
@@ -61,7 +61,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 
 	public function testReflectionPropertyResolverPrefersTargetPropertyOverSourceProperty(): void
 	{
-		$resolver = new ReflectionPropertyFieldResolver();
+		$resolver = new ReflectionPropertyNodeResolver();
 		$target = (new ReflectionClass(UserInputDto::class))->newInstanceWithoutConstructor();
 		$node = MappingNode::root([], $target, $this->context())
 			->withTarget($target)
@@ -75,7 +75,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 
 	public function testReflectionPropertyResolverUsesSourcePropertyAsFallback(): void
 	{
-		$resolver = new ReflectionPropertyFieldResolver();
+		$resolver = new ReflectionPropertyNodeResolver();
 		$node = MappingNode::root([], [], $this->context())
 			->withTarget([])
 			->child('name', 'Ada', new ReflectionProperty(PropertyContextFixture::class, 'name'));
@@ -88,7 +88,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 
 	public function testReflectionPropertyResolverInfersBackedEnumTypes(): void
 	{
-		$resolver = new ReflectionPropertyFieldResolver();
+		$resolver = new ReflectionPropertyNodeResolver();
 
 		$stringEnum = $resolver->resolve(
 			MappingNode::root([], [], $this->context())
@@ -110,7 +110,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 
 	public function testReflectionPropertyResolverInfersImmutableDatetimeTypes(): void
 	{
-		$resolver = new ReflectionPropertyFieldResolver();
+		$resolver = new ReflectionPropertyNodeResolver();
 
 		$immutable = $resolver->resolve(
 			MappingNode::root([], [], $this->context())
@@ -133,7 +133,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 	#[DataProvider('unsupportedPropertyProvider')]
 	public function testReflectionPropertyResolverReturnsNullForUnsupportedTypes(string $property): void
 	{
-		$resolver = new ReflectionPropertyFieldResolver();
+		$resolver = new ReflectionPropertyNodeResolver();
 		$node = MappingNode::root([], [], $this->context())
 			->child($property, null, new ReflectionProperty(PropertyContextFixture::class, $property));
 
@@ -155,7 +155,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 
 	public function testFieldMapResolverUsesFullPathAndIgnoresRuntimeIndexes(): void
 	{
-		$resolver = new FieldMapFieldResolver();
+		$resolver = new FieldMapNodeResolver();
 		$fieldMap = FieldMap::fromArray([
 			'items.price' => 'decimal',
 		]);
@@ -170,7 +170,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 
 	public function testFieldMapResolverReturnsNullWithoutStringNodeNameOrMap(): void
 	{
-		$resolver = new FieldMapFieldResolver();
+		$resolver = new FieldMapNodeResolver();
 		$withoutMap = MappingNode::root([], [], $this->context())->child('price', '12.50');
 		$numericNode = MappingNode::root([], [], $this->context()->withFieldMap(FieldMap::fromArray(['id' => 'bigint'])))
 			->child(0, ['id' => '1']);
@@ -181,45 +181,45 @@ final class FieldConversionCoordinatorTest extends TestCase
 
 	public function testCoordinatorLeavesValueUnchangedWithoutRepresentations(): void
 	{
-		$coordinator = new FieldConversionCoordinator($this->gateway(), [new ReflectionPropertyFieldResolver()]);
+		$coordinator = new FieldConversionCoordinator($this->gateway());
 		$node = MappingNode::root([], [], $this->context())
 			->child('age', '42', new ReflectionProperty(PropertyContextFixture::class, 'age'));
-		$field = $coordinator->resolveField($node);
+		$field = (new ReflectionPropertyNodeResolver())->resolve($node);
 
-		self::assertSame('42', $coordinator->convertScalar('42', $field, $node));
+		self::assertSame('42', $coordinator->convert('42', $field, $node));
 	}
 
 	public function testCoordinatorConvertsFromWireToPhp(): void
 	{
-		$coordinator = new FieldConversionCoordinator($this->gateway(), [new ReflectionPropertyFieldResolver()]);
+		$coordinator = new FieldConversionCoordinator($this->gateway());
 		$node = MappingNode::root([], [], $this->context()->withSourceRepresentation(WireRepresentation::class))
 			->child('age', '42', new ReflectionProperty(PropertyContextFixture::class, 'age'));
-		$field = $coordinator->resolveField($node);
+		$field = (new ReflectionPropertyNodeResolver())->resolve($node);
 
-		self::assertSame(42, $coordinator->convertScalar('42', $field, $node));
+		self::assertSame(42, $coordinator->convert('42', $field, $node));
 	}
 
 	public function testCoordinatorConvertsFromPhpToWire(): void
 	{
-		$coordinator = new FieldConversionCoordinator($this->gateway(), [new ReflectionPropertyFieldResolver()]);
+		$coordinator = new FieldConversionCoordinator($this->gateway());
 		$node = MappingNode::root([], [], $this->context()->withOutputRepresentation(WireRepresentation::class))
 			->child('name', 42, new ReflectionProperty(PropertyContextFixture::class, 'name'));
-		$field = $coordinator->resolveField($node);
+		$field = (new ReflectionPropertyNodeResolver())->resolve($node);
 
-		self::assertSame('42', $coordinator->convertScalar(42, $field, $node));
+		self::assertSame('42', $coordinator->convert(42, $field, $node));
 	}
 
-	public function testCoordinatorLeavesUnresolvedValuesUnchanged(): void
+	public function testCoordinatorLeavesPassthroughValuesUnchanged(): void
 	{
-		$coordinator = new FieldConversionCoordinator($this->gateway(), []);
+		$coordinator = new FieldConversionCoordinator($this->gateway());
 		$node = MappingNode::root([], [], $this->context()->withSourceRepresentation(WireRepresentation::class))
 			->child('age', '42');
 
 		self::assertSame(
 			'42',
-			$coordinator->convertScalar(
+			$coordinator->convert(
 				'42',
-				$coordinator->resolveField($node),
+				LeafNodeResolution::passthrough('age'),
 				$node,
 			),
 		);
@@ -230,25 +230,20 @@ final class FieldConversionCoordinatorTest extends TestCase
 		$gateway = new ConversionGateway();
 		$gateway->getMapperManager()->register(CustomFieldType::class);
 
-		$coordinator = new FieldConversionCoordinator(
-			$gateway,
-			[
-				new class () implements FieldResolverInterface {
-					public function resolve(MappingNode $node): ?FieldContext
-					{
-						return $node->getName() === 'code'
-							? FieldContext::named('code', 'custom')
-							: null;
-					}
-				},
-				new ReflectionPropertyFieldResolver(),
-			],
-		);
+		$coordinator = new FieldConversionCoordinator($gateway);
+		$resolver = new class () implements NodeResolverInterface {
+			public function resolve(MappingNode $node): ?LeafNodeResolution
+			{
+				return $node->getName() === 'code'
+					? LeafNodeResolution::named('code', 'custom')
+					: null;
+			}
+		};
 		$node = MappingNode::root([], [], $this->context()->withSourceRepresentation(WireRepresentation::class))
 			->child('code', 'ada');
-		$field = $coordinator->resolveField($node);
+		$field = $resolver->resolve($node);
 
-		self::assertSame('ADA', $coordinator->convertScalar('ada', $field, $node));
+		self::assertSame('ADA', $coordinator->convert('ada', $field, $node));
 	}
 
 	public function testMapperRuntimeUsesSameConversionThroughDifferentCombinations(): void

@@ -19,9 +19,9 @@ use ON\Data\Mapper\Field\JsonFieldType;
 use ON\Data\Mapper\Field\PassthroughFieldType;
 use ON\Data\Mapper\Field\StringFieldType;
 use ON\Data\Mapper\Field\UrlFieldType;
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldTypeInterface;
 use ON\Data\Mapper\MapperManager;
+use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use Tests\ON\Data\Fixture\CustomFieldType;
@@ -72,7 +72,7 @@ final class MapperManagerFieldTypeTest extends TestCase
 
 		self::assertSame(
 			StringFieldType::class,
-			$manager->resolveFieldType(FieldContext::named('name', StringFieldType::class)),
+			$manager->resolveFieldType(LeafNodeResolution::named('name', StringFieldType::class)),
 		);
 	}
 
@@ -82,7 +82,7 @@ final class MapperManagerFieldTypeTest extends TestCase
 
 		self::assertSame(
 			BackedEnumFieldType::class,
-			$manager->resolveFieldType(FieldContext::named('status', StatusEnum::class)),
+			$manager->resolveFieldType(LeafNodeResolution::named('status', StatusEnum::class)),
 		);
 	}
 
@@ -92,7 +92,7 @@ final class MapperManagerFieldTypeTest extends TestCase
 		$manager->register(CustomFieldType::class);
 
 		self::assertSame(CustomFieldType::class, $manager->getFieldType('custom'));
-		self::assertSame('HELLO', CustomFieldType::toPhp('hello', FieldContext::named('value', 'custom')));
+		self::assertSame('HELLO', CustomFieldType::toPhp('hello', LeafNodeResolution::named('value', 'custom')));
 	}
 
 	public function testLaterFieldTypeRegistrationReplacesExistingAlias(): void
@@ -140,7 +140,7 @@ final class MapperManagerFieldTypeTest extends TestCase
 	{
 		$manager = new MapperManager($this->gateway());
 
-		self::assertNull($manager->resolveFieldType(FieldContext::named('name', 'unknown')));
+		self::assertNull($manager->resolveFieldType(LeafNodeResolution::named('name', 'unknown')));
 
 		$this->expectException(FieldTypeNotFoundException::class);
 		$manager->getFieldType('unknown');

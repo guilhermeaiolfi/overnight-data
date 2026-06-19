@@ -10,10 +10,10 @@ use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\ConversionException;
 use ON\Data\Mapper\Exception\FieldTypeNotFoundException;
 use ON\Data\Mapper\Exception\UnsupportedConversionException;
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Representation\StorageRepresentation;
 use ON\Data\Mapper\Representation\WireRepresentation;
+use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -43,7 +43,7 @@ final class ConversionGatewayTest extends TestCase
 
 		self::assertSame(
 			10,
-			$gateway->to(StorageRepresentation::class, '10', PhpRepresentation::class, FieldContext::named('id', 'int')),
+			$gateway->to(StorageRepresentation::class, '10', PhpRepresentation::class, LeafNodeResolution::named('id', 'int')),
 		);
 	}
 
@@ -55,7 +55,7 @@ final class ConversionGatewayTest extends TestCase
 			StorageRepresentation::class,
 			'2026-06-18',
 			PhpRepresentation::class,
-			FieldContext::named('birthday', 'date'),
+			LeafNodeResolution::named('birthday', 'date'),
 		);
 
 		self::assertInstanceOf(DateTimeImmutable::class, $result);
@@ -68,7 +68,7 @@ final class ConversionGatewayTest extends TestCase
 
 		self::assertSame(
 			42,
-			$gateway->to(WireRepresentation::class, '42', PhpRepresentation::class, FieldContext::named('id', 'integer')),
+			$gateway->to(WireRepresentation::class, '42', PhpRepresentation::class, LeafNodeResolution::named('id', 'integer')),
 		);
 	}
 
@@ -80,7 +80,7 @@ final class ConversionGatewayTest extends TestCase
 			WireRepresentation::class,
 			'2026-06-18',
 			PhpRepresentation::class,
-			FieldContext::named('birthday', 'date'),
+			LeafNodeResolution::named('birthday', 'date'),
 		);
 
 		self::assertInstanceOf(DateTimeImmutable::class, $result);
@@ -97,7 +97,7 @@ final class ConversionGatewayTest extends TestCase
 				WireRepresentation::class,
 				'active',
 				PhpRepresentation::class,
-				FieldContext::named('status', StatusEnum::class),
+				LeafNodeResolution::named('status', StatusEnum::class),
 			),
 		);
 	}
@@ -112,7 +112,7 @@ final class ConversionGatewayTest extends TestCase
 				PhpRepresentation::class,
 				StatusEnum::Active,
 				StorageRepresentation::class,
-				FieldContext::named('status', StatusEnum::class),
+				LeafNodeResolution::named('status', StatusEnum::class),
 			),
 		);
 	}
@@ -126,7 +126,7 @@ final class ConversionGatewayTest extends TestCase
 			WireRepresentation::class,
 			'missing',
 			PhpRepresentation::class,
-			FieldContext::named('status', StatusEnum::class),
+			LeafNodeResolution::named('status', StatusEnum::class),
 		);
 	}
 
@@ -140,7 +140,7 @@ final class ConversionGatewayTest extends TestCase
 				StorageRepresentation::class,
 				'{"role":"admin","flags":{"active":true}}',
 				PhpRepresentation::class,
-				FieldContext::named('profile', 'json'),
+				LeafNodeResolution::named('profile', 'json'),
 			),
 		);
 	}
@@ -155,7 +155,7 @@ final class ConversionGatewayTest extends TestCase
 				WireRepresentation::class,
 				'{"role":"admin"}',
 				PhpRepresentation::class,
-				FieldContext::named('profile', 'json'),
+				LeafNodeResolution::named('profile', 'json'),
 			),
 		);
 	}
@@ -170,7 +170,7 @@ final class ConversionGatewayTest extends TestCase
 				PhpRepresentation::class,
 				'https://example.com/report.pdf',
 				StorageRepresentation::class,
-				FieldContext::named('url', 'url'),
+				LeafNodeResolution::named('url', 'url'),
 			),
 		);
 	}
@@ -185,7 +185,7 @@ final class ConversionGatewayTest extends TestCase
 				PhpRepresentation::class,
 				' files/docs/report.pdf ',
 				StorageRepresentation::class,
-				FieldContext::named('url', 'url', true),
+				LeafNodeResolution::named('url', 'url', true),
 			),
 		);
 	}
@@ -199,7 +199,7 @@ final class ConversionGatewayTest extends TestCase
 			PhpRepresentation::class,
 			'javascript:alert(1)',
 			StorageRepresentation::class,
-			FieldContext::named('url', 'url'),
+			LeafNodeResolution::named('url', 'url'),
 		);
 	}
 
@@ -212,7 +212,7 @@ final class ConversionGatewayTest extends TestCase
 			PhpRepresentation::class,
 			'//example.com/file.pdf',
 			StorageRepresentation::class,
-			FieldContext::named('url', 'url'),
+			LeafNodeResolution::named('url', 'url'),
 		);
 	}
 
@@ -225,7 +225,7 @@ final class ConversionGatewayTest extends TestCase
 				PhpRepresentation::class,
 				' ',
 				StorageRepresentation::class,
-				FieldContext::named('url', 'url', true),
+				LeafNodeResolution::named('url', 'url', true),
 			),
 		);
 	}
@@ -237,7 +237,7 @@ final class ConversionGatewayTest extends TestCase
 
 		self::assertSame(
 			$expected,
-			$gateway->to(WireRepresentation::class, $input, PhpRepresentation::class, FieldContext::named('active', 'bool')),
+			$gateway->to(WireRepresentation::class, $input, PhpRepresentation::class, LeafNodeResolution::named('active', 'bool')),
 		);
 	}
 
@@ -271,7 +271,7 @@ final class ConversionGatewayTest extends TestCase
 		$gateway = ConversionGateway::createDefault();
 
 		$this->expectException(ConversionException::class);
-		$gateway->to(WireRepresentation::class, $input, PhpRepresentation::class, FieldContext::named('active', 'bool'));
+		$gateway->to(WireRepresentation::class, $input, PhpRepresentation::class, LeafNodeResolution::named('active', 'bool'));
 	}
 
 	public static function ambiguousBooleanValues(): array
@@ -292,14 +292,14 @@ final class ConversionGatewayTest extends TestCase
 		$gateway = new ConversionGateway();
 		$value = new stdClass();
 
-		self::assertSame($value, $gateway->to(PhpRepresentation::class, $value, PhpRepresentation::class, FieldContext::named('payload', 'missing')));
+		self::assertSame($value, $gateway->to(PhpRepresentation::class, $value, PhpRepresentation::class, LeafNodeResolution::named('payload', 'missing')));
 	}
 
 	public function testNullPassesThroughUnchanged(): void
 	{
 		$gateway = ConversionGateway::createDefault();
 
-		self::assertNull($gateway->to(StorageRepresentation::class, null, PhpRepresentation::class, FieldContext::named('id', 'int')));
+		self::assertNull($gateway->to(StorageRepresentation::class, null, PhpRepresentation::class, LeafNodeResolution::named('id', 'int')));
 	}
 
 	public function testUnknownRepresentationsFail(): void
@@ -307,7 +307,7 @@ final class ConversionGatewayTest extends TestCase
 		$gateway = ConversionGateway::createDefault();
 
 		$this->expectException(UnsupportedConversionException::class);
-		$gateway->to(stdClass::class, '10', PhpRepresentation::class, FieldContext::named('id', 'int'));
+		$gateway->to(stdClass::class, '10', PhpRepresentation::class, LeafNodeResolution::named('id', 'int'));
 	}
 
 	public function testEqualInvalidRepresentationStillFailsValidation(): void
@@ -315,7 +315,7 @@ final class ConversionGatewayTest extends TestCase
 		$gateway = ConversionGateway::createDefault();
 
 		$this->expectException(UnsupportedConversionException::class);
-		$gateway->to(stdClass::class, '10', stdClass::class, FieldContext::named('id', 'int'));
+		$gateway->to(stdClass::class, '10', stdClass::class, LeafNodeResolution::named('id', 'int'));
 	}
 
 	public function testValidCustomRepresentationWorksWithBuiltInFieldTypeWithoutCodec(): void
@@ -324,7 +324,7 @@ final class ConversionGatewayTest extends TestCase
 
 		self::assertSame(
 			42,
-			$gateway->to(CacheRepresentation::class, '42', PhpRepresentation::class, FieldContext::named('id', 'int')),
+			$gateway->to(CacheRepresentation::class, '42', PhpRepresentation::class, LeafNodeResolution::named('id', 'int')),
 		);
 	}
 
@@ -333,7 +333,7 @@ final class ConversionGatewayTest extends TestCase
 		$gateway = new ConversionGateway();
 
 		$this->expectException(FieldTypeNotFoundException::class);
-		$gateway->to(StorageRepresentation::class, '10', PhpRepresentation::class, FieldContext::named('id', 'int'));
+		$gateway->to(StorageRepresentation::class, '10', PhpRepresentation::class, LeafNodeResolution::named('id', 'int'));
 	}
 
 	public function testCustomFieldTypeCanBeRegisteredThroughMapperManager(): void
@@ -343,7 +343,7 @@ final class ConversionGatewayTest extends TestCase
 
 		self::assertSame(
 			'HELLO',
-			$gateway->to(StorageRepresentation::class, 'hello', PhpRepresentation::class, FieldContext::named('code', 'custom')),
+			$gateway->to(StorageRepresentation::class, 'hello', PhpRepresentation::class, LeafNodeResolution::named('code', 'custom')),
 		);
 	}
 
@@ -357,7 +357,7 @@ final class ConversionGatewayTest extends TestCase
 				PhpRepresentation::class,
 				new DateTimeImmutable('2026-06-18'),
 				StorageRepresentation::class,
-				FieldContext::named('birthday', 'date'),
+				LeafNodeResolution::named('birthday', 'date'),
 			),
 		);
 	}
@@ -372,7 +372,7 @@ final class ConversionGatewayTest extends TestCase
 				PhpRepresentation::class,
 				new DateTimeImmutable('2026-06-18'),
 				WireRepresentation::class,
-				FieldContext::named('birthday', 'date'),
+				LeafNodeResolution::named('birthday', 'date'),
 			),
 		);
 	}
@@ -387,7 +387,7 @@ final class ConversionGatewayTest extends TestCase
 				PhpRepresentation::class,
 				['role' => 'admin', 'flags' => ['active' => true]],
 				StorageRepresentation::class,
-				FieldContext::named('profile', 'json'),
+				LeafNodeResolution::named('profile', 'json'),
 			),
 		);
 	}
@@ -402,7 +402,7 @@ final class ConversionGatewayTest extends TestCase
 				PhpRepresentation::class,
 				'{"role":"admin"}',
 				WireRepresentation::class,
-				FieldContext::named('profile', 'json'),
+				LeafNodeResolution::named('profile', 'json'),
 			),
 		);
 	}
@@ -417,7 +417,7 @@ final class ConversionGatewayTest extends TestCase
 				PhpRepresentation::class,
 				new DateTimeImmutable('2026-06-18'),
 				ApiRepresentation::class,
-				FieldContext::named('birthday', 'date'),
+				LeafNodeResolution::named('birthday', 'date'),
 			),
 		);
 	}
@@ -430,7 +430,7 @@ final class ConversionGatewayTest extends TestCase
 			StorageRepresentation::class,
 			'2026-06-18 13:45:12',
 			PhpRepresentation::class,
-			FieldContext::named('published_at', 'datetime'),
+			LeafNodeResolution::named('published_at', 'datetime'),
 		);
 
 		self::assertInstanceOf(DateTimeImmutable::class, $result);
@@ -445,7 +445,7 @@ final class ConversionGatewayTest extends TestCase
 			WireRepresentation::class,
 			'2026-06-18T13:45:12+00:00',
 			PhpRepresentation::class,
-			FieldContext::named('published_at', 'datetime'),
+			LeafNodeResolution::named('published_at', 'datetime'),
 		);
 
 		self::assertInstanceOf(DateTimeImmutable::class, $result);
@@ -460,7 +460,7 @@ final class ConversionGatewayTest extends TestCase
 			WireRepresentation::class,
 			'2026-06-18T13:45:12+00:00',
 			PhpRepresentation::class,
-			FieldContext::named('created_at', 'timestamp'),
+			LeafNodeResolution::named('created_at', 'timestamp'),
 		);
 
 		self::assertInstanceOf(DateTimeImmutable::class, $phpValue);
@@ -470,7 +470,7 @@ final class ConversionGatewayTest extends TestCase
 				PhpRepresentation::class,
 				$phpValue,
 				StorageRepresentation::class,
-				FieldContext::named('created_at', 'timestamp'),
+				LeafNodeResolution::named('created_at', 'timestamp'),
 			),
 		);
 	}
@@ -486,7 +486,7 @@ final class ConversionGatewayTest extends TestCase
 				PhpRepresentation::class,
 				$value,
 				StorageRepresentation::class,
-				FieldContext::named('published_at', 'datetime'),
+				LeafNodeResolution::named('published_at', 'datetime'),
 			),
 		);
 	}
@@ -502,7 +502,7 @@ final class ConversionGatewayTest extends TestCase
 				PhpRepresentation::class,
 				$value,
 				WireRepresentation::class,
-				FieldContext::named('published_at', 'datetime'),
+				LeafNodeResolution::named('published_at', 'datetime'),
 			),
 		);
 	}
@@ -518,7 +518,7 @@ final class ConversionGatewayTest extends TestCase
 				PhpRepresentation::class,
 				$value,
 				ApiRepresentation::class,
-				FieldContext::named('published_at', 'datetime'),
+				LeafNodeResolution::named('published_at', 'datetime'),
 			),
 		);
 	}
@@ -529,7 +529,7 @@ final class ConversionGatewayTest extends TestCase
 
 		self::assertSame(
 			'php<payload>',
-			$gateway->to(CacheRepresentation::class, 'payload', PhpRepresentation::class, FieldContext::named('payload', 'tracked')),
+			$gateway->to(CacheRepresentation::class, 'payload', PhpRepresentation::class, LeafNodeResolution::named('payload', 'tracked')),
 		);
 		self::assertSame(['cacheCodec:toPhp'], TrackingCustomFieldType::calls());
 	}
@@ -540,7 +540,7 @@ final class ConversionGatewayTest extends TestCase
 
 		self::assertSame(
 			'cache<payload>',
-			$gateway->to(PhpRepresentation::class, 'payload', CacheRepresentation::class, FieldContext::named('payload', 'tracked')),
+			$gateway->to(PhpRepresentation::class, 'payload', CacheRepresentation::class, LeafNodeResolution::named('payload', 'tracked')),
 		);
 		self::assertSame(['cacheCodec:fromPhp'], TrackingCustomFieldType::calls());
 	}
@@ -551,7 +551,7 @@ final class ConversionGatewayTest extends TestCase
 
 		self::assertSame(
 			'wire<php<payload>>',
-			$gateway->to(CacheRepresentation::class, 'payload', WireRepresentation::class, FieldContext::named('payload', 'tracked')),
+			$gateway->to(CacheRepresentation::class, 'payload', WireRepresentation::class, LeafNodeResolution::named('payload', 'tracked')),
 		);
 		self::assertSame(
 			['cacheCodec:toPhp', 'wireCodec:fromPhp'],
@@ -565,7 +565,7 @@ final class ConversionGatewayTest extends TestCase
 
 		self::assertSame(
 			'api<payload>',
-			$gateway->to(PhpRepresentation::class, 'payload', JsonApiRepresentation::class, FieldContext::named('payload', 'tracked')),
+			$gateway->to(PhpRepresentation::class, 'payload', JsonApiRepresentation::class, LeafNodeResolution::named('payload', 'tracked')),
 		);
 		self::assertSame(['apiCodec:fromPhp'], TrackingCustomFieldType::calls());
 	}
@@ -577,7 +577,7 @@ final class ConversionGatewayTest extends TestCase
 
 		self::assertSame(
 			'api<payload>',
-			$gateway->to(PhpRepresentation::class, 'payload', ApiRepresentation::class, FieldContext::named('payload', 'tracked')),
+			$gateway->to(PhpRepresentation::class, 'payload', ApiRepresentation::class, LeafNodeResolution::named('payload', 'tracked')),
 		);
 		self::assertSame(['apiCodec:fromPhp'], TrackingCustomFieldType::calls());
 	}
@@ -589,7 +589,7 @@ final class ConversionGatewayTest extends TestCase
 
 		self::assertSame(
 			'field-php<payload>',
-			$gateway->to(ApiRepresentation::class, 'payload', PhpRepresentation::class, FieldContext::named('payload', 'tracked')),
+			$gateway->to(ApiRepresentation::class, 'payload', PhpRepresentation::class, LeafNodeResolution::named('payload', 'tracked')),
 		);
 		self::assertSame(['fieldType:toPhp'], TrackingCustomFieldType::calls());
 	}
@@ -610,7 +610,7 @@ final class ConversionGatewayTest extends TestCase
 		$gateway = ConversionGateway::createDefault();
 
 		try {
-			$gateway->to(WireRepresentation::class, 'maybe', PhpRepresentation::class, FieldContext::named('active', 'bool'));
+			$gateway->to(WireRepresentation::class, 'maybe', PhpRepresentation::class, LeafNodeResolution::named('active', 'bool'));
 			self::fail('Expected conversion exception was not thrown.');
 		} catch (ConversionException $exception) {
 			self::assertNotNull($exception->getPrevious());
@@ -627,19 +627,19 @@ final class ConversionGatewayTest extends TestCase
 		$before = $registry->all();
 
 		$gateway = ConversionGateway::createDefault();
-		$result = $gateway->to(StorageRepresentation::class, '10', PhpRepresentation::class, FieldContext::fromField($field));
+		$result = $gateway->to(StorageRepresentation::class, '10', PhpRepresentation::class, LeafNodeResolution::fromField($field));
 
 		self::assertSame(10, $result);
 		self::assertSame($before, $registry->all());
 	}
 
-	public function testFieldContextFromFieldRetainsOnlyNameTypeAndNullability(): void
+	public function testLeafNodeResolutionFromFieldRetainsOnlyNameTypeAndNullability(): void
 	{
 		$registry = new Registry();
 		$field = $registry->collection('users')->field('id', 'int')->nullable(true)->description('ignored in phase 1');
 		$before = $registry->all();
 
-		$context = FieldContext::fromField($field);
+		$context = LeafNodeResolution::fromField($field);
 
 		self::assertSame('id', $context->getName());
 		self::assertSame('int', $context->getType());
@@ -659,8 +659,8 @@ final class ConversionGatewayTest extends TestCase
 		$gateway->getMapperManager()->register(CustomFieldType::class);
 
 		self::assertSame(
-			$gateway->to(StorageRepresentation::class, 'hello', PhpRepresentation::class, FieldContext::fromField($originalField)),
-			$gateway->to(StorageRepresentation::class, 'hello', PhpRepresentation::class, FieldContext::fromField($restoredField)),
+			$gateway->to(StorageRepresentation::class, 'hello', PhpRepresentation::class, LeafNodeResolution::fromField($originalField)),
+			$gateway->to(StorageRepresentation::class, 'hello', PhpRepresentation::class, LeafNodeResolution::fromField($restoredField)),
 		);
 	}
 

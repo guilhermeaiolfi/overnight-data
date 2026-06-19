@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Fixture;
 
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldTypeCodecInterface;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 
 final class TrackingApiCodec implements FieldTypeCodecInterface
 {
@@ -19,14 +19,14 @@ final class TrackingApiCodec implements FieldTypeCodecInterface
 		return ApiRepresentation::class;
 	}
 
-	public static function toPhp(mixed $value, FieldContext $field): mixed
+	public static function toPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		TrackingCustomFieldType::record('apiCodec:toPhp');
 
 		return 'php-api<' . (string) $value . '>';
 	}
 
-	public static function fromPhp(mixed $value, FieldContext $field): mixed
+	public static function fromPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		TrackingCustomFieldType::record('apiCodec:fromPhp');
 

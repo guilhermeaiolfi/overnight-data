@@ -134,7 +134,7 @@ final readonly class MappingNode
 
 		if (! $preserveComponentOverrides) {
 			$context = $context
-				->withWalkerClass(null)
+				->withMapperClass(null)
 				->withWriterClass(null);
 		}
 

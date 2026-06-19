@@ -7,9 +7,9 @@ namespace ON\Data\Mapper;
 use JsonException;
 use ON\Data\Mapper\Exception\InvalidMapTargetException;
 use ON\Data\Mapper\Exception\MappingException;
+use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\Representation\RepresentationInterface;
-use ON\Data\Mapper\Resolver\FieldResolverInterface;
-use ON\Data\Mapper\Walker\WalkerInterface;
+use ON\Data\Mapper\Resolver\NodeResolverInterface;
 use ON\Data\Mapper\Writer\WriterInterface;
 
 final class MapBuilder
@@ -17,9 +17,9 @@ final class MapBuilder
 	/**
 	 * @param class-string<RepresentationInterface>|null $sourceRepresentation
 	 * @param class-string<RepresentationInterface>|null $outputRepresentation
-	 * @param class-string<WalkerInterface>|null $walkerClass
+	 * @param class-string<MapperInterface>|null $mapperClass
 	 * @param class-string<WriterInterface>|null $writerClass
-	 * @param list<class-string<FieldResolverInterface>> $resolverClasses
+	 * @param list<class-string<NodeResolverInterface>> $resolverClasses
 	 * @param list<mixed> $arguments
 	 */
 	public function __construct(
@@ -27,7 +27,7 @@ final class MapBuilder
 		private ConversionGateway $gateway,
 		private ?string $sourceRepresentation = null,
 		private ?string $outputRepresentation = null,
-		private ?string $walkerClass = null,
+		private ?string $mapperClass = null,
 		private ?string $writerClass = null,
 		private array $resolverClasses = [],
 		private array $arguments = [],
@@ -59,12 +59,12 @@ final class MapBuilder
 	}
 
 	/**
-	 * @param class-string<WalkerInterface> $walker
+	 * @param class-string<MapperInterface> $mapper
 	 */
-	public function walker(string $walker): self
+	public function mapper(string $mapper): self
 	{
 		$clone = clone $this;
-		$clone->walkerClass = $walker;
+		$clone->mapperClass = $mapper;
 
 		return $clone;
 	}
@@ -81,7 +81,7 @@ final class MapBuilder
 	}
 
 	/**
-	 * @param class-string<FieldResolverInterface> $resolver
+	 * @param class-string<NodeResolverInterface> $resolver
 	 */
 	public function resolver(string $resolver): self
 	{
@@ -151,7 +151,7 @@ final class MapBuilder
 			$this->gateway,
 			$this->sourceRepresentation,
 			$this->outputRepresentation,
-			$this->walkerClass,
+			$this->mapperClass,
 			$this->writerClass,
 			$this->resolverClasses,
 			$this->arguments,

@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Mapper;
 
 use ON\Data\Mapper\ConversionGateway;
+use ON\Data\Mapper\Mapper\ArrayMapper;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
-use ON\Data\Mapper\Walker\ArrayWalker;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
-final class ArrayWalkerTest extends TestCase
+final class ArrayMapperTest extends TestCase
 {
 	public function testArraySourcePropertiesAreAlwaysNull(): void
 	{
@@ -42,11 +42,11 @@ final class ArrayWalkerTest extends TestCase
 	 */
 	private function nodesFrom(array $source): array
 	{
-		$walker = new ArrayWalker();
+		$Mapper = new ArrayMapper();
 		$root = MappingNode::root($source, [], new MappingContext(ConversionGateway::createDefault()));
-		$method = new ReflectionMethod(ArrayWalker::class, 'getNodes');
+		$method = new ReflectionMethod(ArrayMapper::class, 'getNodes');
 		$method->setAccessible(true);
 
-		return array_values(iterator_to_array($method->invoke($walker, $root), false));
+		return array_values(iterator_to_array($method->invoke($Mapper, $root), false));
 	}
 }

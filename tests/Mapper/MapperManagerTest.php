@@ -6,11 +6,11 @@ namespace Tests\ON\Data\Mapper;
 
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\DuplicateMapperComponentRegistrationException;
-use ON\Data\Mapper\Exception\IncompatibleWalkerException;
+use ON\Data\Mapper\Exception\IncompatibleMapperException;
 use ON\Data\Mapper\Exception\IncompatibleWriterException;
 use ON\Data\Mapper\Exception\InvalidMapperComponentException;
 use ON\Data\Mapper\Exception\MapperComponentConfigurationException;
-use ON\Data\Mapper\Exception\NoWalkerFoundException;
+use ON\Data\Mapper\Exception\NoMapperFoundException;
 use ON\Data\Mapper\Exception\NoWriterFoundException;
 use ON\Data\Mapper\Field\BackedEnumFieldType;
 use ON\Data\Mapper\Field\BigIntFieldType;
@@ -25,14 +25,16 @@ use ON\Data\Mapper\Field\JsonFieldType;
 use ON\Data\Mapper\Field\PassthroughFieldType;
 use ON\Data\Mapper\Field\StringFieldType;
 use ON\Data\Mapper\Field\UrlFieldType;
+use ON\Data\Mapper\Mapper\ArrayMapper;
+use ON\Data\Mapper\Mapper\ObjectMapper;
 use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\Representation\WireRepresentation;
-use ON\Data\Mapper\Resolver\DefinitionFieldResolver;
-use ON\Data\Mapper\Resolver\FieldMapFieldResolver;
-use ON\Data\Mapper\Resolver\ReflectionPropertyFieldResolver;
-use ON\Data\Mapper\Walker\ArrayWalker;
-use ON\Data\Mapper\Walker\ObjectWalker;
+use ON\Data\Mapper\Resolver\DefinitionNodeResolver;
+use ON\Data\Mapper\Resolver\FieldMapNodeResolver;
+use ON\Data\Mapper\Resolver\GenericNodeResolver;
+use ON\Data\Mapper\Resolver\PassthroughNodeResolver;
+use ON\Data\Mapper\Resolver\ReflectionPropertyNodeResolver;
 use ON\Data\Mapper\Writer\ArrayWriter;
 use ON\Data\Mapper\Writer\ObjectWriter;
 use PHPUnit\Framework\TestCase;
@@ -46,16 +48,16 @@ use Tests\ON\Data\Fixture\CustomMapper;
 use Tests\ON\Data\Fixture\InvalidCodecFieldTypeTarget;
 use Tests\ON\Data\Fixture\InvalidCodecRepresentationTarget;
 use Tests\ON\Data\Fixture\MultiRoleComponent;
-use Tests\ON\Data\Fixture\NeverWalker;
+use Tests\ON\Data\Fixture\NeverMapper;
 use Tests\ON\Data\Fixture\NeverWriter;
-use Tests\ON\Data\Fixture\OtherArrayWalker;
+use Tests\ON\Data\Fixture\OtherArrayMapper;
 use Tests\ON\Data\Fixture\OtherArrayWriter;
 use Tests\ON\Data\Fixture\OtherResolver;
 use Tests\ON\Data\Fixture\PrependingContractWriter;
 use Tests\ON\Data\Fixture\PrependingResolver;
-use Tests\ON\Data\Fixture\PrependingStdClassWalker;
+use Tests\ON\Data\Fixture\PrependingStdClassMapper;
 use Tests\ON\Data\Fixture\ReplacementTrackingWireCodec;
-use Tests\ON\Data\Fixture\SpyArrayWalker;
+use Tests\ON\Data\Fixture\SpyArrayMapper;
 use Tests\ON\Data\Fixture\SpyArrayWriter;
 use Tests\ON\Data\Fixture\SpyResolver;
 use Tests\ON\Data\Fixture\TrackingApiCodec;
@@ -75,13 +77,13 @@ final class MapperManagerTest extends TestCase
 	{
 		$manager = new MapperManager($this->gateway());
 
-		$manager->register(SpyArrayWalker::class);
+		$manager->register(SpyArrayMapper::class);
 		$manager->register(SpyArrayWriter::class);
 		$manager->register(SpyResolver::class);
 		$manager->register(CustomFieldType::class);
 		$manager->register(TrackingWireCodec::class);
 
-		self::assertSame([SpyArrayWalker::class], $manager->getRegisteredWalkers());
+		self::assertSame([SpyArrayMapper::class], $manager->getRegisteredMappers());
 		self::assertSame([SpyArrayWriter::class], $manager->getRegisteredWriters());
 		self::assertSame([SpyResolver::class], $manager->getRegisteredResolvers());
 		self::assertSame(CustomFieldType::class, $manager->getFieldType('custom'));
@@ -92,13 +94,13 @@ final class MapperManagerTest extends TestCase
 	public function testHasRecognizesAllFiveComponentRoles(): void
 	{
 		$manager = new MapperManager($this->gateway());
-		$manager->register(SpyArrayWalker::class);
+		$manager->register(SpyArrayMapper::class);
 		$manager->register(SpyArrayWriter::class);
 		$manager->register(SpyResolver::class);
 		$manager->register(CustomFieldType::class);
 		$manager->register(TrackingWireCodec::class);
 
-		self::assertTrue($manager->has(SpyArrayWalker::class));
+		self::assertTrue($manager->has(SpyArrayMapper::class));
 		self::assertTrue($manager->has(SpyArrayWriter::class));
 		self::assertTrue($manager->has(SpyResolver::class));
 		self::assertTrue($manager->has(CustomFieldType::class));
@@ -108,10 +110,10 @@ final class MapperManagerTest extends TestCase
 	public function testDuplicateRegistrationFails(): void
 	{
 		$manager = new MapperManager($this->gateway());
-		$manager->register(SpyArrayWalker::class);
+		$manager->register(SpyArrayMapper::class);
 
 		$this->expectException(DuplicateMapperComponentRegistrationException::class);
-		$manager->register(SpyArrayWalker::class);
+		$manager->register(SpyArrayMapper::class);
 	}
 
 	public function testDuplicateCodecRegistrationFails(): void
@@ -190,8 +192,8 @@ final class MapperManagerTest extends TestCase
 	{
 		$gateway = $this->gateway();
 		$manager = new MapperManager($gateway);
-		$manager->register(NeverWalker::class);
-		$manager->register(SpyArrayWalker::class);
+		$manager->register(NeverMapper::class);
+		$manager->register(SpyArrayMapper::class);
 		$manager->register(NeverWriter::class);
 		$manager->register(SpyArrayWriter::class);
 
@@ -202,7 +204,7 @@ final class MapperManagerTest extends TestCase
 		self::assertSame(['id' => 11], $second);
 		self::assertSame(
 			[
-				SpyArrayWalker::class => 1,
+				SpyArrayMapper::class => 1,
 				SpyArrayWriter::class => 1,
 			],
 			ComponentTestState::$constructed,
@@ -213,7 +215,7 @@ final class MapperManagerTest extends TestCase
 	{
 		$gateway = $this->gateway();
 		$manager = new MapperManager($gateway);
-		$manager->register(SpyArrayWalker::class);
+		$manager->register(SpyArrayMapper::class);
 		$manager->register(SpyArrayWriter::class);
 		$manager->register(TrackingWireCodec::class);
 
@@ -227,17 +229,17 @@ final class MapperManagerTest extends TestCase
 
 		self::assertSame(
 			[
-				SpyArrayWalker::class => 2,
+				SpyArrayMapper::class => 2,
 				SpyArrayWriter::class => 2,
 			],
 			ComponentTestState::$constructed,
 		);
 	}
 
-	public function testWarmUpConstructsRegisteredWalkersAndWritersButNotResolvers(): void
+	public function testWarmUpConstructsRegisteredMappersAndWritersButNotResolvers(): void
 	{
 		$manager = new MapperManager($this->gateway());
-		$manager->register(SpyArrayWalker::class);
+		$manager->register(SpyArrayMapper::class);
 		$manager->register(SpyArrayWriter::class);
 		$manager->register(SpyResolver::class);
 
@@ -245,7 +247,7 @@ final class MapperManagerTest extends TestCase
 
 		self::assertSame(
 			[
-				SpyArrayWalker::class => 1,
+				SpyArrayMapper::class => 1,
 				SpyArrayWriter::class => 1,
 			],
 			ComponentTestState::$constructed,
@@ -264,7 +266,7 @@ final class MapperManagerTest extends TestCase
 				return new $component();
 			},
 		);
-		$manager->register(SpyArrayWalker::class);
+		$manager->register(SpyArrayMapper::class);
 		$manager->register(SpyArrayWriter::class);
 		$manager->register(SpyResolver::class);
 
@@ -272,7 +274,7 @@ final class MapperManagerTest extends TestCase
 
 		self::assertSame(
 			[
-				[SpyArrayWalker::class, spl_object_id($gateway)],
+				[SpyArrayMapper::class, spl_object_id($gateway)],
 				[SpyArrayWriter::class, spl_object_id($gateway)],
 				[SpyResolver::class, spl_object_id($gateway)],
 				[SpyResolver::class, spl_object_id($gateway)],
@@ -287,22 +289,22 @@ final class MapperManagerTest extends TestCase
 			$this->gateway(),
 			static fn (string $component, ConversionGateway $runtime): object => new stdClass(),
 		);
-		$manager->register(SpyArrayWalker::class);
+		$manager->register(SpyArrayMapper::class);
 
 		$this->expectException(MapperComponentConfigurationException::class);
-		$manager->getWalker(SpyArrayWalker::class);
+		$manager->getMapper(SpyArrayMapper::class);
 	}
 
-	public function testConstructorMustReturnRequestedWalkerClass(): void
+	public function testConstructorMustReturnRequestedMapperClass(): void
 	{
 		$manager = new MapperManager(
 			$this->gateway(),
-			static fn (string $component, ConversionGateway $runtime): object => new OtherArrayWalker(),
+			static fn (string $component, ConversionGateway $runtime): object => new OtherArrayMapper(),
 		);
-		$manager->register(SpyArrayWalker::class);
+		$manager->register(SpyArrayMapper::class);
 
 		$this->expectException(MapperComponentConfigurationException::class);
-		$manager->getWalker(SpyArrayWalker::class);
+		$manager->getMapper(SpyArrayMapper::class);
 	}
 
 	public function testConstructorMustReturnRequestedWriterClass(): void
@@ -332,8 +334,8 @@ final class MapperManagerTest extends TestCase
 	{
 		$gateway = $this->gateway();
 		$manager = new MapperManager($gateway);
-		$manager->register(SpyArrayWalker::class);
-		$manager->getWalker(SpyArrayWalker::class);
+		$manager->register(SpyArrayMapper::class);
+		$manager->getMapper(SpyArrayMapper::class);
 
 		$this->expectException(MapperComponentConfigurationException::class);
 		$manager->setConstructor(static fn (string $component, ConversionGateway $runtime): object => new $component());
@@ -343,10 +345,16 @@ final class MapperManagerTest extends TestCase
 	{
 		$manager = MapperManager::createDefault($this->gateway());
 
-		self::assertSame([ArrayWalker::class, ObjectWalker::class], $manager->getRegisteredWalkers());
+		self::assertSame([ArrayMapper::class, ObjectMapper::class], $manager->getRegisteredMappers());
 		self::assertSame([ArrayWriter::class, ObjectWriter::class], $manager->getRegisteredWriters());
 		self::assertSame(
-			[FieldMapFieldResolver::class, DefinitionFieldResolver::class, ReflectionPropertyFieldResolver::class],
+			[
+				FieldMapNodeResolver::class,
+				DefinitionNodeResolver::class,
+				ReflectionPropertyNodeResolver::class,
+				GenericNodeResolver::class,
+				PassthroughNodeResolver::class,
+			],
 			$manager->getRegisteredResolvers(),
 		);
 		self::assertSame(
@@ -382,7 +390,14 @@ final class MapperManagerTest extends TestCase
 		$manager = MapperManager::createDefault($this->gateway());
 
 		self::assertSame(
-			[SpyResolver::class, FieldMapFieldResolver::class, DefinitionFieldResolver::class, ReflectionPropertyFieldResolver::class],
+			[
+				SpyResolver::class,
+				FieldMapNodeResolver::class,
+				DefinitionNodeResolver::class,
+				ReflectionPropertyNodeResolver::class,
+				GenericNodeResolver::class,
+				PassthroughNodeResolver::class,
+			],
 			array_map(
 				static fn (object $resolver): string => $resolver::class,
 				$manager->createResolverChain(
@@ -392,17 +407,17 @@ final class MapperManagerTest extends TestCase
 		);
 	}
 
-	public function testPrependedSpecializedWalkerWinsOverObjectWalker(): void
+	public function testPrependedSpecializedMapperWinsOverObjectMapper(): void
 	{
 		$gateway = $this->gateway();
 		$manager = MapperManager::createDefault($gateway);
-		$manager->prepend(PrependingStdClassWalker::class);
+		$manager->prepend(PrependingStdClassMapper::class);
 		$source = new stdClass();
 		$source->id = 10;
 
 		$result = $manager->map($source, [], new MappingContext($gateway));
 
-		self::assertSame(['specialized' => 'walker'], $result);
+		self::assertSame(['specialized' => 'Mapper'], $result);
 	}
 
 	public function testPrependedSpecializedWriterWinsOverObjectWriter(): void
@@ -483,12 +498,12 @@ final class MapperManagerTest extends TestCase
 		self::assertSame(ReplacementTrackingWireCodec::class, $manager->resolveFieldTypeCodec(TrackingCustomFieldType::class, WireRepresentation::class));
 	}
 
-	public function testIncompatibleExplicitWalkerFails(): void
+	public function testIncompatibleExplicitMapperFails(): void
 	{
 		$manager = new MapperManager($this->gateway());
 
-		$this->expectException(IncompatibleWalkerException::class);
-		$manager->map(['id' => 10], [], (new MappingContext($this->gateway()))->withWalkerClass(NeverWalker::class));
+		$this->expectException(IncompatibleMapperException::class);
+		$manager->map(['id' => 10], [], (new MappingContext($this->gateway()))->withMapperClass(NeverMapper::class));
 	}
 
 	public function testIncompatibleExplicitWriterFails(): void
@@ -497,23 +512,23 @@ final class MapperManagerTest extends TestCase
 
 		$this->expectException(IncompatibleWriterException::class);
 		$manager->map(['id' => 10], [], (new MappingContext($this->gateway()))
-			->withWalkerClass(SpyArrayWalker::class)
+			->withMapperClass(SpyArrayMapper::class)
 			->withWriterClass(NeverWriter::class));
 	}
 
-	public function testNoWalkerFoundFails(): void
+	public function testNoMapperFoundFails(): void
 	{
 		$manager = new MapperManager($this->gateway());
 		$manager->register(SpyArrayWriter::class);
 
-		$this->expectException(NoWalkerFoundException::class);
+		$this->expectException(NoMapperFoundException::class);
 		$manager->map(new stdClass(), [], new MappingContext($this->gateway()));
 	}
 
 	public function testNoWriterFoundFails(): void
 	{
 		$manager = new MapperManager($this->gateway());
-		$manager->register(SpyArrayWalker::class);
+		$manager->register(SpyArrayMapper::class);
 
 		$this->expectException(NoWriterFoundException::class);
 		$manager->map(['id' => 10], stdClass::class, new MappingContext($this->gateway()));

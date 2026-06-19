@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace ON\Data\Mapper\Field;
 
 use InvalidArgumentException;
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldTypeInterface;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 
 final class FloatFieldType implements FieldTypeInterface
 {
@@ -20,17 +20,17 @@ final class FloatFieldType implements FieldTypeInterface
 		return 'float';
 	}
 
-	public static function toPhp(mixed $value, FieldContext $field): mixed
+	public static function toPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		return self::convertToFloat($value, $field);
 	}
 
-	public static function fromPhp(mixed $value, FieldContext $field): mixed
+	public static function fromPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		return self::convertToFloat($value, $field);
 	}
 
-	private static function convertToFloat(mixed $value, FieldContext $field): float
+	private static function convertToFloat(mixed $value, LeafNodeResolutionInterface $field): float
 	{
 		if (is_float($value)) {
 			if (! is_finite($value)) {

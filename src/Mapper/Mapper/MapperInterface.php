@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\Mapper\Walker;
+namespace ON\Data\Mapper\Mapper;
 
 use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
 
-interface WalkerInterface
+interface MapperInterface
 {
-	public static function canWalk(
+	public static function canMap(
 		mixed $source,
 		MappingContext $context,
 	): bool;
 
-	public function walk(MappingNode $node, MapperManager $mappers): mixed;
+	public function map(MappingNode $node, MapperManager $mapperManager): mixed;
 }

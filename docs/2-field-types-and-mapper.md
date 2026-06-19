@@ -87,9 +87,9 @@ Alias lookup is case-insensitive.
 
 `MapperManager` is the single public registration facade for:
 
-- walkers;
+- Mappers;
 - writers;
-- field resolvers;
+- node resolvers;
 - field types;
 - field-type codecs.
 
@@ -120,8 +120,8 @@ class ApiRepresentation extends WireRepresentation
 ## Field type example
 
 ```php
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldTypeInterface;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 
 final class MoneyFieldType implements FieldTypeInterface
 {
@@ -135,12 +135,12 @@ final class MoneyFieldType implements FieldTypeInterface
         return 'decimal';
     }
 
-    public static function toPhp(mixed $value, FieldContext $field): mixed
+    public static function toPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
     {
         return (string) $value;
     }
 
-    public static function fromPhp(mixed $value, FieldContext $field): mixed
+    public static function fromPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
     {
         return (string) $value;
     }
@@ -150,9 +150,9 @@ final class MoneyFieldType implements FieldTypeInterface
 ## Codec example
 
 ```php
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldTypeCodecInterface;
 use ON\Data\Mapper\Representation\WireRepresentation;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 
 final class MoneyWireCodec implements FieldTypeCodecInterface
 {
@@ -166,12 +166,12 @@ final class MoneyWireCodec implements FieldTypeCodecInterface
         return WireRepresentation::class;
     }
 
-    public static function toPhp(mixed $value, FieldContext $field): mixed
+    public static function toPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
     {
         return $value;
     }
 
-    public static function fromPhp(mixed $value, FieldContext $field): mixed
+    public static function fromPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
     {
         return $value;
     }
@@ -197,15 +197,15 @@ $gateway = ConversionGateway::createDefault();
 Convert values explicitly by naming the source and target representations:
 
 ```php
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\Representation\PhpRepresentation;
+use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use ON\Data\Mapper\Representation\StorageRepresentation;
 
 $phpValue = $gateway->to(
     StorageRepresentation::class,
     '10',
     PhpRepresentation::class,
-    FieldContext::named('id', 'int'),
+    LeafNodeResolution::named('id', 'int'),
 );
 ```
 
@@ -219,12 +219,12 @@ $runtime = $gateway->getMapperManager();
 
 Default registered runtime components:
 
-- walkers: `ArrayWalker`, `ObjectWalker`
+- Mappers: `ArrayMapper`, `ObjectMapper`
 - writers: `ArrayWriter`, `ObjectWriter`
-- resolvers: `FieldMapFieldResolver`, `DefinitionFieldResolver`, `ReflectionPropertyFieldResolver`
+- resolvers: `FieldMapNodeResolver`, `DefinitionNodeResolver`, `ReflectionPropertyNodeResolver`, `GenericNodeResolver`, `PassthroughNodeResolver`
 - field types: the built-in scalar handlers above
 
-Walkers and writers are cached reusable instances. Resolvers are constructed per mapping. Field types and codecs are static classes and are never instantiated.
+Mappers and writers are cached reusable instances. Resolvers are constructed per mapping. Field types and codecs are static classes and are never instantiated.
 
 ## Fluent mapping
 
@@ -252,16 +252,22 @@ Override runtime components for one mapping:
 
 ```php
 map($source)
-    ->walker(CustomWalker::class)
-    ->resolver(CustomFieldResolver::class)
+    ->mapper(CustomMapper::class)
+    ->resolver(CustomNodeResolver::class)
     ->writer(CustomWriter::class)
     ->args($definition)
     ->to([]);
 ```
 
-## Definition-aware scalar conversion
+## One-level mapper runtime
 
-When one direct `DefinitionInterface` is supplied through `->args($definition)`, the default `DefinitionFieldResolver` can derive `FieldContext` values for untyped structural sources such as arrays and request payloads.
+A mapper maps one source branch level. It owns writer preparation, immediate child enumeration, node resolution, conversion, recursive branch dispatch, writing, and writer finishing. Concrete mappers only decide whether they can map a source value and how to enumerate that source value's immediate children.
+
+When a child resolves as a branch, recursive dispatch returns through `MapperManager::mapNode()`. That means mapper selection happens from the branch's runtime source value, so hybrid trees such as array root -> object child -> array grandchild are handled naturally.
+
+## Definition-aware node resolution
+
+When one direct `DefinitionInterface` is supplied through `->args($definition)`, the default `DefinitionNodeResolver` can derive `LeafNodeResolution` values for fields and `BranchNodeResolution` values for relations. Definition collections describe metadata; runtime collection cardinality comes from relation cardinality, PHPDoc list metadata, or explicit root collection mapping.
 
 ## FieldMap
 
@@ -289,7 +295,7 @@ Configured paths are case-sensitive dotted paths. Numeric configured segments ar
 
 ## Reflection fallback
 
-`ReflectionPropertyFieldResolver` still infers primitive scalar properties and now also infers:
+`ReflectionPropertyNodeResolver` still infers primitive scalar properties and now also infers:
 
 - backed-enum property classes
 - immutable-compatible datetime properties such as `DateTimeImmutable` and `DateTimeInterface`
@@ -302,12 +308,14 @@ Default precedence is:
 
 ```text
 custom resolver configured through ->resolver()
-FieldMapFieldResolver
-DefinitionFieldResolver
-ReflectionPropertyFieldResolver
+FieldMapNodeResolver
+DefinitionNodeResolver
+ReflectionPropertyNodeResolver
+GenericNodeResolver
+PassthroughNodeResolver
 ```
 
-Definition metadata therefore still wins over reflection, while `FieldMap` wins over both for the paths it explicitly defines.
+Definition metadata therefore still wins over reflection, while `FieldMap` wins over both for the paths it explicitly defines. `PassthroughNodeResolver` is the final fallback and preserves unchanged values when no metadata applies.
 
 ## Exact numeric field types
 

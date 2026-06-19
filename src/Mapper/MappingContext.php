@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper;
 
+use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\Representation\RepresentationInterface;
-use ON\Data\Mapper\Resolver\FieldResolverInterface;
-use ON\Data\Mapper\Walker\WalkerInterface;
+use ON\Data\Mapper\Resolver\NodeResolverInterface;
 use ON\Data\Mapper\Writer\WriterInterface;
 
 final class MappingContext
@@ -14,16 +14,16 @@ final class MappingContext
 	/**
 	 * @param class-string<RepresentationInterface>|null $sourceRepresentation
 	 * @param class-string<RepresentationInterface>|null $outputRepresentation
-	 * @param class-string<WalkerInterface>|null $walkerClass
+	 * @param class-string<MapperInterface>|null $mapperClass
 	 * @param class-string<WriterInterface>|null $writerClass
-	 * @param list<class-string<FieldResolverInterface>> $resolverClasses
+	 * @param list<class-string<NodeResolverInterface>> $resolverClasses
 	 * @param list<mixed> $arguments
 	 */
 	public function __construct(
 		private readonly ConversionGateway $gateway,
 		private ?string $sourceRepresentation = null,
 		private ?string $outputRepresentation = null,
-		private ?string $walkerClass = null,
+		private ?string $mapperClass = null,
 		private ?string $writerClass = null,
 		private array $resolverClasses = [],
 		private array $arguments = [],
@@ -54,11 +54,11 @@ final class MappingContext
 	}
 
 	/**
-	 * @return class-string<WalkerInterface>|null
+	 * @return class-string<MapperInterface>|null
 	 */
-	public function getWalkerClass(): ?string
+	public function getMapperClass(): ?string
 	{
-		return $this->walkerClass;
+		return $this->mapperClass;
 	}
 
 	/**
@@ -70,7 +70,7 @@ final class MappingContext
 	}
 
 	/**
-	 * @return list<class-string<FieldResolverInterface>>
+	 * @return list<class-string<NodeResolverInterface>>
 	 */
 	public function getResolverClasses(): array
 	{
@@ -118,12 +118,12 @@ final class MappingContext
 	}
 
 	/**
-	 * @param class-string<WalkerInterface>|null $walker
+	 * @param class-string<MapperInterface>|null $mapper
 	 */
-	public function withWalkerClass(?string $walker): self
+	public function withMapperClass(?string $mapper): self
 	{
 		$clone = clone $this;
-		$clone->walkerClass = $walker;
+		$clone->mapperClass = $mapper;
 
 		return $clone;
 	}
@@ -140,7 +140,7 @@ final class MappingContext
 	}
 
 	/**
-	 * @param list<class-string<FieldResolverInterface>> $resolverClasses
+	 * @param list<class-string<NodeResolverInterface>> $resolverClasses
 	 */
 	public function withResolverClasses(array $resolverClasses): self
 	{
@@ -151,7 +151,7 @@ final class MappingContext
 	}
 
 	/**
-	 * @param class-string<FieldResolverInterface> $resolverClass
+	 * @param class-string<NodeResolverInterface> $resolverClass
 	 */
 	public function withAddedResolverClass(string $resolverClass): self
 	{

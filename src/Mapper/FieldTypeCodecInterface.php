@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Mapper;
 
 use ON\Data\Mapper\Representation\RepresentationInterface;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 
 interface FieldTypeCodecInterface
 {
@@ -20,11 +21,11 @@ interface FieldTypeCodecInterface
 
 	public static function toPhp(
 		mixed $value,
-		FieldContext $field,
+		LeafNodeResolutionInterface $field,
 	): mixed;
 
 	public static function fromPhp(
 		mixed $value,
-		FieldContext $field,
+		LeafNodeResolutionInterface $field,
 	): mixed;
 }

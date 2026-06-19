@@ -2,7 +2,7 @@
 
 The definition foundation of a metadata-driven PHP data layer.
 
-`ON\Data` currently ships the standalone definition subsystem extracted from Overnight plus the support layers needed to store, restore, convert, and recursively map data as plain PHP arrays, `stdClass` objects, and public-property DTOs through a composable walker/resolver/writer mapper runtime.
+`ON\Data` currently ships the standalone definition subsystem extracted from Overnight plus the support layers needed to store, restore, convert, and recursively map data as plain PHP arrays, `stdClass` objects, and public-property DTOs through a composable Mapper/resolver/writer mapper runtime.
 
 ## Status
 
@@ -17,11 +17,11 @@ This repository currently includes:
 - registry-managed `ViewDefinition` and `ViewField` wrappers backed by the same master-array storage;
 - the `ON\Data\Key` value object for simple and composite identities;
 - the standalone FieldType, representation, field-type codec, and conversion gateway foundation under `ON\Data\Mapper`;
-- `MapperManager`, `MappingContext`, `MappingNode`, walkers, writers, field resolvers, and the fluent `map()` / `MapBuilder` entry point;
-- default definition-aware field resolution through `->args($definition)` for scalar conversion;
+- `MapperManager`, `MappingContext`, `MappingNode`, one-level Mappers, writers, node resolvers, and the fluent `map()` / `MapBuilder` entry point;
+- default definition-aware node resolution through `->args($definition)` for scalar conversion and relation branches;
 - ad-hoc path-based scalar metadata through `FieldMap::fromArray()` and `MapBuilder::fieldMap()`;
 - generic collection mapping through the same composable runtime;
-- recursive array, `stdClass`, and public-property object combinations selected independently by source walker and target writer, with cycle checks applied at recursive mapper dispatch;
+- recursive array, `stdClass`, and public-property object combinations selected independently by source Mapper and target writer, with cycle checks applied at recursive mapper dispatch;
 - typed nested DTO properties and PHPDoc-described DTO lists;
 - automatic backed-enum and immutable-datetime reflection for public DTO properties;
 - exact numeric `decimal` and `bigint` field types using canonical strings;
@@ -68,6 +68,7 @@ composer check
 - `docs/definitions.md` covers the current public definition API.
 - `docs/extending-definitions.md` covers supported subclass-based extension points.
 - `docs/2-field-types-and-mapper.md` covers the implemented scalar FieldType, mapper runtime, and current recursive structural mapping support.
+- `docs/2-mappers/phase-10-one-level-mappers-and-node-resolution.md` summarizes one-level mappers and unified leaf/branch node resolution.
 - `docs/2-mappers/phase-8-exact-numerics-and-field-map.md` summarizes reflected enums/datetimes, exact numerics, and ad-hoc mapper field maps.
 - `docs/2-mappers/phase-7-field-type-codecs.md` summarizes the field-type codec and centralized mapper registration phase.
 - `docs/2-mappers/phase-5-definition-field-resolver.md` summarizes the definition-aware field resolver phase.

@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper\Resolver;
 
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 
-final class FieldMapFieldResolver implements FieldResolverInterface
+final class FieldMapNodeResolver implements NodeResolverInterface
 {
-	public function resolve(MappingNode $node): ?FieldContext
+	public function resolve(MappingNode $node): ?LeafNodeResolutionInterface
 	{
 		$fieldMap = $node->getContext()->getFieldMap();
 		if ($fieldMap === null) {

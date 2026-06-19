@@ -6,8 +6,8 @@ namespace ON\Data\Mapper\Field;
 
 use BackedEnum;
 use InvalidArgumentException;
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldTypeInterface;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 
 final class BackedEnumFieldType implements FieldTypeInterface
 {
@@ -21,7 +21,7 @@ final class BackedEnumFieldType implements FieldTypeInterface
 		return 'string';
 	}
 
-	public static function toPhp(mixed $value, FieldContext $field): mixed
+	public static function toPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		if ($value instanceof BackedEnum) {
 			return $value;
@@ -32,7 +32,7 @@ final class BackedEnumFieldType implements FieldTypeInterface
 		return $enum::from($value);
 	}
 
-	public static function fromPhp(mixed $value, FieldContext $field): mixed
+	public static function fromPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		if (! $value instanceof BackedEnum) {
 			throw new InvalidArgumentException(
@@ -46,7 +46,7 @@ final class BackedEnumFieldType implements FieldTypeInterface
 	/**
 	 * @return class-string<BackedEnum>
 	 */
-	private static function resolveEnumClass(FieldContext $field): string
+	private static function resolveEnumClass(LeafNodeResolutionInterface $field): string
 	{
 		$type = $field->getType();
 		if (! enum_exists($type) || ! is_a($type, BackedEnum::class, true)) {

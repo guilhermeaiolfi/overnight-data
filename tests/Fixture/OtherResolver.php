@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Fixture;
 
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\MappingNode;
-use ON\Data\Mapper\Resolver\FieldResolverInterface;
+use ON\Data\Mapper\Resolution\LeafNodeResolution;
+use ON\Data\Mapper\Resolver\NodeResolverInterface;
 
-final class OtherResolver implements FieldResolverInterface
+final class OtherResolver implements NodeResolverInterface
 {
-	public function resolve(MappingNode $node): ?FieldContext
+	public function resolve(MappingNode $node): ?LeafNodeResolution
 	{
-		return FieldContext::named((string) $node->getName(), 'string');
+		return LeafNodeResolution::named((string) $node->getName(), 'string');
 	}
 }

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\Mapper\Walker;
+namespace ON\Data\Mapper\Mapper;
 
-final readonly class ArrayWalkerOptions
+final readonly class ArrayMapperOptions
 {
 	public function __construct(
 		private bool $expandDottedKeys = true,

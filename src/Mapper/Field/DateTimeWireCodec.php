@@ -7,9 +7,9 @@ namespace ON\Data\Mapper\Field;
 use DateTimeImmutable;
 use DateTimeInterface;
 use InvalidArgumentException;
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldTypeCodecInterface;
 use ON\Data\Mapper\Representation\WireRepresentation;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 use Throwable;
 
 final class DateTimeWireCodec implements FieldTypeCodecInterface
@@ -24,7 +24,7 @@ final class DateTimeWireCodec implements FieldTypeCodecInterface
 		return WireRepresentation::class;
 	}
 
-	public static function toPhp(mixed $value, FieldContext $field): mixed
+	public static function toPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		if ($value instanceof DateTimeInterface) {
 			return DateTimeFieldType::normalizeDateTimeObject($value);
@@ -47,7 +47,7 @@ final class DateTimeWireCodec implements FieldTypeCodecInterface
 		}
 	}
 
-	public static function fromPhp(mixed $value, FieldContext $field): mixed
+	public static function fromPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		return DateTimeFieldType::normalizeDateTimeObject($value)->format(DateTimeInterface::ATOM);
 	}

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace ON\Data\Mapper\Field;
 
 use InvalidArgumentException;
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldTypeInterface;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 
 final class IntFieldType implements FieldTypeInterface
 {
@@ -22,17 +22,17 @@ final class IntFieldType implements FieldTypeInterface
 		return 'int';
 	}
 
-	public static function toPhp(mixed $value, FieldContext $field): mixed
+	public static function toPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		return self::convertToInt($value, $field);
 	}
 
-	public static function fromPhp(mixed $value, FieldContext $field): mixed
+	public static function fromPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		return self::convertToInt($value, $field);
 	}
 
-	private static function convertToInt(mixed $value, FieldContext $field): int
+	private static function convertToInt(mixed $value, LeafNodeResolutionInterface $field): int
 	{
 		if (is_int($value)) {
 			return $value;

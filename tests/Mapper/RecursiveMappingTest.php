@@ -8,21 +8,21 @@ use ON\Data\Definition\Registry;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\MappingException;
 use function ON\Data\Mapper\map;
+use ON\Data\Mapper\Mapper\ArrayMapperOptions;
 use ON\Data\Mapper\Representation\StorageRepresentation;
 use ON\Data\Mapper\Representation\WireRepresentation;
-use ON\Data\Mapper\Walker\ArrayWalkerOptions;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Fixture\AuthorDto;
 use Tests\ON\Data\Fixture\ParentAwareWriter;
 use Tests\ON\Data\Fixture\PostDto;
-use Tests\ON\Data\Fixture\RecordingArrayWalker;
+use Tests\ON\Data\Fixture\RecordingArrayMapper;
 use Tests\ON\Data\Fixture\RecursiveNode;
 use Tests\ON\Data\Fixture\RuntimeInvariantWriter;
 use Tests\ON\Data\Fixture\ScalarRelationPostDto;
 use Tests\ON\Data\Fixture\SourceAuthorDto;
 use Tests\ON\Data\Fixture\SourcePostNestedDto;
-use Tests\ON\Data\Fixture\SpyArrayWalker;
+use Tests\ON\Data\Fixture\SpyArrayMapper;
 use Tests\ON\Data\Fixture\TargetAuthorDto;
 use Tests\ON\Data\Fixture\TargetPostNestedDto;
 
@@ -31,7 +31,7 @@ final class RecursiveMappingTest extends TestCase
 	protected function setUp(): void
 	{
 		ParentAwareWriter::reset();
-		RecordingArrayWalker::reset();
+		RecordingArrayMapper::reset();
 		RuntimeInvariantWriter::reset();
 	}
 
@@ -86,11 +86,11 @@ final class RecursiveMappingTest extends TestCase
 		self::assertSame(2, $stdResult->author->id);
 	}
 
-	public function testArrayWalkerOptionsCanDisableExpansion(): void
+	public function testArrayMapperOptionsCanDisableExpansion(): void
 	{
 		$result = map([
 			'metadata.version' => '1.0',
-		])->args(new ArrayWalkerOptions(false))->to([]);
+		])->args(new ArrayMapperOptions(false))->to([]);
 
 		self::assertSame(['metadata.version' => '1.0'], $result);
 	}
@@ -106,10 +106,10 @@ final class RecursiveMappingTest extends TestCase
 		])->to([]);
 	}
 
-	public function testRootWalkerOverrideDoesNotLeakIntoNestedAutomaticSelection(): void
+	public function testRootMapperOverrideDoesNotLeakIntoNestedAutomaticSelection(): void
 	{
 		$result = map(['author' => (object) ['id' => 2]])
-			->walker(SpyArrayWalker::class)
+			->mapper(SpyArrayMapper::class)
 			->to([]);
 
 		self::assertSame(['author' => ['id' => 2]], $result);
@@ -174,7 +174,7 @@ final class RecursiveMappingTest extends TestCase
 	public function testNestedCollectionFrameKeepsContextArgumentsAndCollectionModeInSync(): void
 	{
 		$gateway = ConversionGateway::createDefault();
-		$gateway->getMapperManager()->prepend(RecordingArrayWalker::class);
+		$gateway->getMapperManager()->prepend(RecordingArrayMapper::class);
 		$definition = $this->postsDefinition();
 
 		$result = map(
@@ -205,11 +205,11 @@ final class RecursiveMappingTest extends TestCase
 				'nodeCollection' => false,
 				'contextCollection' => false,
 			],
-		], RecordingArrayWalker::$frames);
+		], RecordingArrayMapper::$frames);
 		self::assertContains([
 			'arguments' => [],
 			'collection' => true,
-		], RecordingArrayWalker::$selections);
+		], RecordingArrayMapper::$selections);
 	}
 
 	public function testWriterTargetSemanticsKeepEvolvingResultAndArrayParentSnapshots(): void

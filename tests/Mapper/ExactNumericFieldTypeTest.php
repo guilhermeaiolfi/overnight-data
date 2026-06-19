@@ -8,10 +8,10 @@ use InvalidArgumentException;
 use ON\Data\Definition\Registry;
 use ON\Data\Mapper\Field\BigIntFieldType;
 use ON\Data\Mapper\Field\DecimalFieldType;
-use ON\Data\Mapper\FieldContext;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Representation\StorageRepresentation;
 use ON\Data\Mapper\Representation\WireRepresentation;
+use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -20,8 +20,8 @@ final class ExactNumericFieldTypeTest extends TestCase
 	#[DataProvider('decimalNormalizationProvider')]
 	public function testDecimalFieldTypeNormalizesExactValues(mixed $input, string $expected): void
 	{
-		self::assertSame($expected, DecimalFieldType::toPhp($input, FieldContext::named('amount', 'decimal')));
-		self::assertSame($expected, DecimalFieldType::fromPhp($input, FieldContext::named('amount', 'decimal')));
+		self::assertSame($expected, DecimalFieldType::toPhp($input, LeafNodeResolution::named('amount', 'decimal')));
+		self::assertSame($expected, DecimalFieldType::fromPhp($input, LeafNodeResolution::named('amount', 'decimal')));
 	}
 
 	public static function decimalNormalizationProvider(): array
@@ -46,7 +46,7 @@ final class ExactNumericFieldTypeTest extends TestCase
 		$this->expectException(InvalidArgumentException::class);
 		$this->expectExceptionMessage($message);
 
-		DecimalFieldType::toPhp($input, FieldContext::named('amount', 'decimal'));
+		DecimalFieldType::toPhp($input, LeafNodeResolution::named('amount', 'decimal'));
 	}
 
 	public static function invalidDecimalProvider(): array
@@ -65,8 +65,8 @@ final class ExactNumericFieldTypeTest extends TestCase
 	#[DataProvider('bigIntNormalizationProvider')]
 	public function testBigIntFieldTypeNormalizesExactValues(mixed $input, string $expected): void
 	{
-		self::assertSame($expected, BigIntFieldType::toPhp($input, FieldContext::named('id', 'bigint')));
-		self::assertSame($expected, BigIntFieldType::fromPhp($input, FieldContext::named('id', 'bigint')));
+		self::assertSame($expected, BigIntFieldType::toPhp($input, LeafNodeResolution::named('id', 'bigint')));
+		self::assertSame($expected, BigIntFieldType::fromPhp($input, LeafNodeResolution::named('id', 'bigint')));
 	}
 
 	public static function bigIntNormalizationProvider(): array
@@ -88,7 +88,7 @@ final class ExactNumericFieldTypeTest extends TestCase
 	{
 		$this->expectException(InvalidArgumentException::class);
 
-		BigIntFieldType::toPhp($input, FieldContext::named('id', 'bigint'));
+		BigIntFieldType::toPhp($input, LeafNodeResolution::named('id', 'bigint'));
 	}
 
 	public static function invalidBigIntProvider(): array

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace ON\Data\Mapper\Field;
 
 use InvalidArgumentException;
-use ON\Data\Mapper\FieldContext;
 use ON\Data\Mapper\FieldTypeInterface;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 
 final class BoolFieldType implements FieldTypeInterface
 {
@@ -20,17 +20,17 @@ final class BoolFieldType implements FieldTypeInterface
 		return 'bool';
 	}
 
-	public static function toPhp(mixed $value, FieldContext $field): mixed
+	public static function toPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		return self::convertToBool($value, $field);
 	}
 
-	public static function fromPhp(mixed $value, FieldContext $field): mixed
+	public static function fromPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
 	{
 		return self::convertToBool($value, $field);
 	}
 
-	private static function convertToBool(mixed $value, FieldContext $field): bool
+	private static function convertToBool(mixed $value, LeafNodeResolutionInterface $field): bool
 	{
 		if (is_bool($value)) {
 			return $value;

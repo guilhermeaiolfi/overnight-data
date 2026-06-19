@@ -13,7 +13,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use stdClass;
 use Tests\ON\Data\Fixture\PropertyContextFixture;
-use Tests\ON\Data\Fixture\SpyArrayWalker;
+use Tests\ON\Data\Fixture\SpyArrayMapper;
 use Tests\ON\Data\Fixture\SpyArrayWriter;
 
 final class MappingNodeTest extends TestCase
@@ -74,7 +74,7 @@ final class MappingNodeTest extends TestCase
 	public function testForMappingDerivesNestedContextAndOverrideBehavior(): void
 	{
 		$context = (new MappingContext(ConversionGateway::createDefault()))
-			->withWalkerClass(SpyArrayWalker::class)
+			->withMapperClass(SpyArrayMapper::class)
 			->withWriterClass(SpyArrayWriter::class)
 			->withFieldMap(FieldMap::fromArray(['author.id' => 'bigint']));
 		$rootValue = ['author' => ['id' => 2]];
@@ -93,14 +93,14 @@ final class MappingNodeTest extends TestCase
 		self::assertTrue($nested->isCollection());
 		self::assertTrue($nested->getContext()->isCollection());
 		self::assertSame($context->getFieldMap(), $nested->getContext()->getFieldMap());
-		self::assertNull($nested->getContext()->getWalkerClass());
+		self::assertNull($nested->getContext()->getMapperClass());
 		self::assertNull($nested->getContext()->getWriterClass());
 		self::assertSame($preservedArguments, $preserved->getArguments());
 		self::assertSame($preservedArguments, $preserved->getContext()->getArguments());
 		self::assertFalse($preserved->isCollection());
 		self::assertFalse($preserved->getContext()->isCollection());
 		self::assertSame($context->getFieldMap(), $preserved->getContext()->getFieldMap());
-		self::assertSame(SpyArrayWalker::class, $preserved->getContext()->getWalkerClass());
+		self::assertSame(SpyArrayMapper::class, $preserved->getContext()->getMapperClass());
 		self::assertSame(SpyArrayWriter::class, $preserved->getContext()->getWriterClass());
 	}
 

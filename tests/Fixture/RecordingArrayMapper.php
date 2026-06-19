@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Fixture;
 
 use ON\Data\Mapper\Exception\MappingException;
+use ON\Data\Mapper\Mapper\Mapper;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
-use ON\Data\Mapper\Walker\Walker;
 
-final class RecordingArrayWalker extends Walker
+final class RecordingArrayMapper extends Mapper
 {
 	/**
 	 * @var list<array{
@@ -33,7 +33,7 @@ final class RecordingArrayWalker extends Walker
 		self::$selections = [];
 	}
 
-	public static function canWalk(
+	public static function canMap(
 		mixed $source,
 		MappingContext $context,
 	): bool {
@@ -58,7 +58,7 @@ final class RecordingArrayWalker extends Walker
 
 		$source = $node->getValue();
 		if (! is_array($source)) {
-			throw new MappingException('RecordingArrayWalker can only enumerate array sources.');
+			throw new MappingException('RecordingArrayMapper can only enumerate array sources.');
 		}
 
 		foreach ($source as $name => $value) {

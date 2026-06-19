@@ -10,7 +10,7 @@ use ON\Data\Mapper\Attribute\MapFrom;
 use ON\Data\Mapper\Attribute\MapTo;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\MappingException;
-use ON\Data\Mapper\Exception\NoWalkerFoundException;
+use ON\Data\Mapper\Exception\NoMapperFoundException;
 use ON\Data\Mapper\Exception\NoWriterFoundException;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\MappingContext;
@@ -352,13 +352,13 @@ final class ObjectMappingTest extends TestCase
 
 	public function testDateTimeAndBackedEnumsAreExcludedFromObjectWalking(): void
 	{
-		$this->expectException(NoWalkerFoundException::class);
+		$this->expectException(NoMapperFoundException::class);
 		map(new DateTimeImmutable('2024-01-01T00:00:00+00:00'))->to([]);
 	}
 
 	public function testBackedEnumsAreExcludedFromObjectWalking(): void
 	{
-		$this->expectException(NoWalkerFoundException::class);
+		$this->expectException(NoMapperFoundException::class);
 		map(StatusEnum::Active)->to([]);
 	}
 

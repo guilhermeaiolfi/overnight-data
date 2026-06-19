@@ -8,11 +8,11 @@ use BackedEnum;
 use Closure;
 use ON\Data\Mapper\Exception\DuplicateMapperComponentRegistrationException;
 use ON\Data\Mapper\Exception\FieldTypeNotFoundException;
-use ON\Data\Mapper\Exception\IncompatibleWalkerException;
+use ON\Data\Mapper\Exception\IncompatibleMapperException;
 use ON\Data\Mapper\Exception\IncompatibleWriterException;
 use ON\Data\Mapper\Exception\InvalidMapperComponentException;
 use ON\Data\Mapper\Exception\MapperComponentConfigurationException;
-use ON\Data\Mapper\Exception\NoWalkerFoundException;
+use ON\Data\Mapper\Exception\NoMapperFoundException;
 use ON\Data\Mapper\Exception\NoWriterFoundException;
 use ON\Data\Mapper\Field\BackedEnumFieldType;
 use ON\Data\Mapper\Field\BigIntFieldType;
@@ -27,14 +27,18 @@ use ON\Data\Mapper\Field\JsonFieldType;
 use ON\Data\Mapper\Field\PassthroughFieldType;
 use ON\Data\Mapper\Field\StringFieldType;
 use ON\Data\Mapper\Field\UrlFieldType;
+use ON\Data\Mapper\Mapper\ArrayMapper;
+use ON\Data\Mapper\Mapper\MapperInterface;
+use ON\Data\Mapper\Mapper\ObjectMapper;
 use ON\Data\Mapper\Representation\RepresentationInterface;
-use ON\Data\Mapper\Resolver\DefinitionFieldResolver;
-use ON\Data\Mapper\Resolver\FieldMapFieldResolver;
-use ON\Data\Mapper\Resolver\FieldResolverInterface;
-use ON\Data\Mapper\Resolver\ReflectionPropertyFieldResolver;
-use ON\Data\Mapper\Walker\ArrayWalker;
-use ON\Data\Mapper\Walker\ObjectWalker;
-use ON\Data\Mapper\Walker\WalkerInterface;
+use ON\Data\Mapper\Resolution\LeafNodeResolution;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
+use ON\Data\Mapper\Resolver\DefinitionNodeResolver;
+use ON\Data\Mapper\Resolver\FieldMapNodeResolver;
+use ON\Data\Mapper\Resolver\GenericNodeResolver;
+use ON\Data\Mapper\Resolver\NodeResolverInterface;
+use ON\Data\Mapper\Resolver\PassthroughNodeResolver;
+use ON\Data\Mapper\Resolver\ReflectionPropertyNodeResolver;
 use ON\Data\Mapper\Writer\ArrayWriter;
 use ON\Data\Mapper\Writer\ObjectWriter;
 use ON\Data\Mapper\Writer\WriterInterface;
@@ -42,9 +46,9 @@ use ON\Data\Mapper\Writer\WriterInterface;
 final class MapperManager
 {
 	/**
-	 * @var list<class-string<WalkerInterface>>
+	 * @var list<class-string<MapperInterface>>
 	 */
-	private array $walkers = [];
+	private array $mappers = [];
 
 	/**
 	 * @var list<class-string<WriterInterface>>
@@ -52,7 +56,7 @@ final class MapperManager
 	private array $writers = [];
 
 	/**
-	 * @var list<class-string<FieldResolverInterface>>
+	 * @var list<class-string<NodeResolverInterface>>
 	 */
 	private array $resolvers = [];
 
@@ -81,9 +85,9 @@ final class MapperManager
 	private array $resolvedFieldTypeCodecs = [];
 
 	/**
-	 * @var array<class-string<WalkerInterface>, WalkerInterface>
+	 * @var array<class-string<MapperInterface>, MapperInterface>
 	 */
-	private array $walkerInstances = [];
+	private array $mapperInstances = [];
 
 	/**
 	 * @var array<class-string<WriterInterface>, WriterInterface>
@@ -112,13 +116,15 @@ final class MapperManager
 		?Closure $constructor = null,
 	): self {
 		$manager = new self($gateway, $constructor);
-		$manager->register(ArrayWalker::class);
-		$manager->register(ObjectWalker::class);
+		$manager->register(ArrayMapper::class);
+		$manager->register(ObjectMapper::class);
 		$manager->register(ArrayWriter::class);
 		$manager->register(ObjectWriter::class);
-		$manager->register(FieldMapFieldResolver::class);
-		$manager->register(DefinitionFieldResolver::class);
-		$manager->register(ReflectionPropertyFieldResolver::class);
+		$manager->register(FieldMapNodeResolver::class);
+		$manager->register(DefinitionNodeResolver::class);
+		$manager->register(ReflectionPropertyNodeResolver::class);
+		$manager->register(GenericNodeResolver::class);
+		$manager->register(PassthroughNodeResolver::class);
 		$manager->register(StringFieldType::class);
 		$manager->register(PassthroughFieldType::class);
 		$manager->register(BoolFieldType::class);
@@ -156,11 +162,11 @@ final class MapperManager
 	}
 
 	/**
-	 * @return list<class-string<WalkerInterface>>
+	 * @return list<class-string<MapperInterface>>
 	 */
-	public function getRegisteredWalkers(): array
+	public function getRegisteredMappers(): array
 	{
-		return $this->walkers;
+		return $this->mappers;
 	}
 
 	/**
@@ -172,7 +178,7 @@ final class MapperManager
 	}
 
 	/**
-	 * @return list<class-string<FieldResolverInterface>>
+	 * @return list<class-string<NodeResolverInterface>>
 	 */
 	public function getRegisteredResolvers(): array
 	{
@@ -206,7 +212,7 @@ final class MapperManager
 	 */
 	public function setConstructor(?Closure $constructor): self
 	{
-		if ($this->walkerInstances !== [] || $this->writerInstances !== []) {
+		if ($this->mapperInstances !== [] || $this->writerInstances !== []) {
 			throw new MapperComponentConfigurationException(
 				'Cannot change the mapper component constructor after reusable component instances have been created.',
 			);
@@ -229,22 +235,22 @@ final class MapperManager
 	{
 		$node->assertNoObjectCycle();
 
-		$walker = $this->resolveWalker($node->getValue(), $node->getContext());
+		$mapper = $this->resolveMapper($node->getValue(), $node->getContext());
 
-		return $walker->walk($node, $this);
+		return $mapper->map($node, $this);
 	}
 
 	public function clear(): void
 	{
-		$this->walkerInstances = [];
+		$this->mapperInstances = [];
 		$this->writerInstances = [];
 		$this->resolvedFieldTypeCodecs = [];
 	}
 
 	public function warmUp(): void
 	{
-		foreach ($this->walkers as $walker) {
-			$this->getWalker($walker);
+		foreach ($this->mappers as $mapper) {
+			$this->getMapper($mapper);
 		}
 
 		foreach ($this->writers as $writer) {
@@ -253,15 +259,15 @@ final class MapperManager
 	}
 
 	/**
-	 * @param class-string<WalkerInterface> $walker
+	 * @param class-string<MapperInterface> $mapper
 	 */
-	public function getWalker(string $walker): WalkerInterface
+	public function getMapper(string $mapper): MapperInterface
 	{
-		if (! isset($this->walkerInstances[$walker])) {
-			$this->walkerInstances[$walker] = $this->constructTypedComponent($walker, WalkerInterface::class, 'walker');
+		if (! isset($this->mapperInstances[$mapper])) {
+			$this->mapperInstances[$mapper] = $this->constructTypedComponent($mapper, MapperInterface::class, 'mapper');
 		}
 
-		return $this->walkerInstances[$walker];
+		return $this->mapperInstances[$mapper];
 	}
 
 	/**
@@ -277,7 +283,7 @@ final class MapperManager
 	}
 
 	/**
-	 * @return list<FieldResolverInterface>
+	 * @return list<NodeResolverInterface>
 	 */
 	public function createResolverChain(MappingContext $context): array
 	{
@@ -294,20 +300,20 @@ final class MapperManager
 		return $chain;
 	}
 
-	public function createFieldConversionCoordinator(MappingContext $context): FieldConversionCoordinator
+	public function createFieldConversionCoordinator(): FieldConversionCoordinator
 	{
-		return new FieldConversionCoordinator(
-			$context->getGateway(),
-			$this->createResolverChain($context),
-		);
+		return new FieldConversionCoordinator($this->gateway);
 	}
 
 	/**
 	 * @return class-string<FieldTypeInterface>|null
 	 */
-	public function resolveFieldType(FieldContext $field): ?string
+	public function resolveFieldType(LeafNodeResolutionInterface $field): ?string
 	{
 		$type = $field->getType();
+		if ($type === null) {
+			return null;
+		}
 
 		if (is_a($type, FieldTypeInterface::class, true)) {
 			/** @var class-string<FieldTypeInterface> $type */
@@ -326,7 +332,7 @@ final class MapperManager
 	 */
 	public function getFieldType(string $name): string
 	{
-		$resolved = $this->resolveFieldType(FieldContext::named($name, $name));
+		$resolved = $this->resolveFieldType(LeafNodeResolution::named($name, $name));
 		if ($resolved === null) {
 			throw new FieldTypeNotFoundException(sprintf("FieldType '%s' is not registered.", $name));
 		}
@@ -370,31 +376,31 @@ final class MapperManager
 		return $resolved;
 	}
 
-	public function resolveWalker(
+	public function resolveMapper(
 		mixed $source,
 		MappingContext $context,
-	): WalkerInterface {
-		$walkerClass = $context->getWalkerClass();
-		if ($walkerClass !== null) {
-			$this->assertRoleOrThrow($walkerClass, WalkerInterface::class);
-			if (! $walkerClass::canWalk($source, $context)) {
-				throw new IncompatibleWalkerException(
-					sprintf("Walker '%s' cannot walk the given source.", $walkerClass),
+	): MapperInterface {
+		$mapperClass = $context->getMapperClass();
+		if ($mapperClass !== null) {
+			$this->assertRoleOrThrow($mapperClass, MapperInterface::class);
+			if (! $mapperClass::canMap($source, $context)) {
+				throw new IncompatibleMapperException(
+					sprintf("Mapper '%s' cannot map the given source.", $mapperClass),
 				);
 			}
 
-			return $this->has($walkerClass)
-				? $this->getWalker($walkerClass)
-				: $this->constructWalker($walkerClass);
+			return $this->has($mapperClass)
+				? $this->getMapper($mapperClass)
+				: $this->constructMapper($mapperClass);
 		}
 
-		foreach ($this->walkers as $candidate) {
-			if ($candidate::canWalk($source, $context)) {
-				return $this->getWalker($candidate);
+		foreach ($this->mappers as $candidate) {
+			if ($candidate::canMap($source, $context)) {
+				return $this->getMapper($candidate);
 			}
 		}
 
-		throw new NoWalkerFoundException('No registered walker can handle the requested source.');
+		throw new NoMapperFoundException('No registered mapper can handle the requested source.');
 	}
 
 	public function resolveWriter(
@@ -437,11 +443,11 @@ final class MapperManager
 	}
 
 	/**
-	 * @param class-string<WalkerInterface> $walkerClass
+	 * @param class-string<MapperInterface> $mapperClass
 	 */
-	private function constructWalker(string $walkerClass): WalkerInterface
+	private function constructMapper(string $mapperClass): MapperInterface
 	{
-		return $this->constructTypedComponent($walkerClass, WalkerInterface::class, 'walker');
+		return $this->constructTypedComponent($mapperClass, MapperInterface::class, 'mapper');
 	}
 
 	/**
@@ -453,13 +459,13 @@ final class MapperManager
 	}
 
 	/**
-	 * @param class-string<FieldResolverInterface> $resolverClass
+	 * @param class-string<NodeResolverInterface> $resolverClass
 	 */
-	private function constructResolver(string $resolverClass): FieldResolverInterface
+	private function constructResolver(string $resolverClass): NodeResolverInterface
 	{
-		$this->assertRoleOrThrow($resolverClass, FieldResolverInterface::class);
+		$this->assertRoleOrThrow($resolverClass, NodeResolverInterface::class);
 
-		return $this->constructTypedComponent($resolverClass, FieldResolverInterface::class, 'resolver');
+		return $this->constructTypedComponent($resolverClass, NodeResolverInterface::class, 'resolver');
 	}
 
 	private function addComponent(string $component, bool $append): void
@@ -545,15 +551,15 @@ final class MapperManager
 		}
 
 		$roles = [];
-		if (is_a($component, WalkerInterface::class, true)) {
-			$roles[] = 'walker';
+		if (is_a($component, MapperInterface::class, true)) {
+			$roles[] = 'mapper';
 		}
 
 		if (is_a($component, WriterInterface::class, true)) {
 			$roles[] = 'writer';
 		}
 
-		if (is_a($component, FieldResolverInterface::class, true)) {
+		if (is_a($component, NodeResolverInterface::class, true)) {
 			$roles[] = 'resolver';
 		}
 
@@ -570,9 +576,9 @@ final class MapperManager
 				sprintf(
 					"Mapper component '%s' must implement exactly one of %s, %s, %s, %s, or %s.",
 					$component,
-					WalkerInterface::class,
+					MapperInterface::class,
 					WriterInterface::class,
-					FieldResolverInterface::class,
+					NodeResolverInterface::class,
 					FieldTypeInterface::class,
 					FieldTypeCodecInterface::class,
 				),
@@ -587,8 +593,8 @@ final class MapperManager
 	 */
 	private function &bucketFor(string $role): array
 	{
-		if ($role === 'walker') {
-			return $this->walkers;
+		if ($role === 'mapper') {
+			return $this->mappers;
 		}
 
 		if ($role === 'writer') {

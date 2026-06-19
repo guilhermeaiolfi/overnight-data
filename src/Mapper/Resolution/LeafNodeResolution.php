@@ -2,19 +2,20 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\Mapper;
+namespace ON\Data\Mapper\Resolution;
 
 use ON\Data\Definition\Field\FieldInterface;
+use ON\Data\Mapper\FieldTypeInterface;
 
-final readonly class FieldContext
+final readonly class LeafNodeResolution implements LeafNodeResolutionInterface
 {
 	/**
-	 * @param class-string<FieldTypeInterface>|non-empty-string $type
+	 * @param class-string<FieldTypeInterface>|non-empty-string|null $type
 	 */
 	public function __construct(
-		private readonly string $name,
-		private readonly string $type,
-		private readonly bool $nullable = false,
+		private string $name,
+		private ?string $type,
+		private bool $nullable = false,
 	) {
 	}
 
@@ -38,12 +39,17 @@ final readonly class FieldContext
 		return new self($name, $type, $nullable);
 	}
 
+	public static function passthrough(string $name): self
+	{
+		return new self($name, null);
+	}
+
 	public function getName(): string
 	{
 		return $this->name;
 	}
 
-	public function getType(): string
+	public function getType(): ?string
 	{
 		return $this->type;
 	}
@@ -51,10 +57,5 @@ final readonly class FieldContext
 	public function isNullable(): bool
 	{
 		return $this->nullable;
-	}
-
-	public function isClassType(): bool
-	{
-		return class_exists($this->type);
 	}
 }

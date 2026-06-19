@@ -9,6 +9,7 @@ use ON\Data\Mapper\Exception\FieldTypeNotFoundException;
 use ON\Data\Mapper\Exception\UnsupportedConversionException;
 use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Representation\RepresentationInterface;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 use Throwable;
 
 final class ConversionGateway
@@ -41,7 +42,7 @@ final class ConversionGateway
 		string $from,
 		mixed $value,
 		string $to,
-		FieldContext $field,
+		LeafNodeResolutionInterface $field,
 	): mixed {
 		if ($value === null) {
 			return null;
