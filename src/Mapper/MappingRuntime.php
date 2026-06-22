@@ -10,10 +10,13 @@ use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
 use ON\Data\Mapper\Writer\MappingWriter;
+use ON\Data\Mapper\Writer\WriterInterface;
 
 final class MappingRuntime
 {
 	private ?MappingWriter $mappingWriter = null;
+
+	private ?WriterInterface $writer = null;
 
 	/**
 	 * @var list<NodeResolverInterface>|null
@@ -25,7 +28,7 @@ final class MappingRuntime
 	public function __construct(
 		private readonly MapperManager $mapperManager,
 		private readonly MappingNode $mappingNode,
-		private readonly ?MappingRuntimeCache $cache = null,
+		private readonly ?self $parentMappingRuntime = null,
 	) {
 	}
 
@@ -120,7 +123,6 @@ final class MappingRuntime
 		}
 
 		$results = [];
-		$cache = new MappingRuntimeCache();
 
 		foreach ($source as $key => $item) {
 			$itemNode = $this->mappingNode
@@ -138,7 +140,7 @@ final class MappingRuntime
 			$results[] = (new self(
 				mapperManager: $this->mapperManager,
 				mappingNode: $itemNode,
-				cache: $cache,
+				parentMappingRuntime: $this,
 			))->map();
 		}
 
@@ -149,14 +151,19 @@ final class MappingRuntime
 	{
 		return $this->mappingWriter ??= new MappingWriter(
 			mappingNode: $this->mappingNode,
-			writer: $this->cache?->getWriter(
-				mapperManager: $this->mapperManager,
-				target: $this->mappingNode->getTarget(),
-				context: $this->mappingNode->getContext(),
-			) ?? $this->mapperManager->resolveWriter(
-				target: $this->mappingNode->getTarget(),
-				context: $this->mappingNode->getContext(),
-			),
+			writer: $this->getWriter(),
+		);
+	}
+
+	private function getWriter(): WriterInterface
+	{
+		if ($this->parentMappingRuntime !== null) {
+			return $this->parentMappingRuntime->getWriter();
+		}
+
+		return $this->writer ??= $this->mapperManager->resolveWriter(
+			target: $this->mappingNode->getTarget(),
+			context: $this->mappingNode->getContext(),
 		);
 	}
 
@@ -177,17 +184,21 @@ final class MappingRuntime
 	 */
 	private function getResolvers(): array
 	{
-		return $this->resolvers ??= $this->cache?->getResolvers(
-			mapperManager: $this->mapperManager,
-			context: $this->mappingNode->getContext(),
-		) ?? $this->mapperManager->createResolverChain(
+		if ($this->parentMappingRuntime !== null) {
+			return $this->parentMappingRuntime->getResolvers();
+		}
+
+		return $this->resolvers ??= $this->mapperManager->createResolverChain(
 			context: $this->mappingNode->getContext(),
 		);
 	}
 
 	private function getConverter(): FieldConversionCoordinator
 	{
-		return $this->converter ??= $this->cache?->getConverter($this->mapperManager)
-			?? $this->mapperManager->createFieldConversionCoordinator();
+		if ($this->parentMappingRuntime !== null) {
+			return $this->parentMappingRuntime->getConverter();
+		}
+
+		return $this->converter ??= $this->mapperManager->createFieldConversionCoordinator();
 	}
 }

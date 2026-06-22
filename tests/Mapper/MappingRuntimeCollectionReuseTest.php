@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Mapper;
 
 use ON\Data\Mapper\ConversionGateway;
+use ON\Data\Mapper\FieldTypeInterface;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingRuntime;
+use ON\Data\Mapper\Representation\WireRepresentation;
 use ON\Data\Mapper\Resolution\BranchNodeResolution;
 use ON\Data\Mapper\Resolution\BranchNodeResolutionInterface;
 use ON\Data\Mapper\Resolution\LeafNodeResolution;
@@ -19,31 +21,32 @@ use ON\Data\Mapper\Writer\WriterInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
-final class MappingRuntimeCacheTest extends TestCase
+final class MappingRuntimeCollectionReuseTest extends TestCase
 {
 	protected function setUp(): void
 	{
-		RuntimeCacheSpyWriter::reset();
-		RuntimeCacheSpyResolver::reset();
-		RuntimeCachePrecedenceResolver::reset();
-		RuntimeCacheBranchResolver::reset();
-		RuntimeCacheCollectionBranchResolver::reset();
-		RuntimeCacheArrayMapper::reset();
-		RuntimeCacheObjectMapper::reset();
+		RuntimeReuseSpyWriter::reset();
+		RuntimeReuseSpyResolver::reset();
+		RuntimeReusePrecedenceResolver::reset();
+		RuntimeReuseBranchResolver::reset();
+		RuntimeReuseCollectionBranchResolver::reset();
+		RuntimeReuseArrayMapper::reset();
+		RuntimeReuseObjectMapper::reset();
+		RuntimeReuseCountingFieldType::reset();
 	}
 
 	public function testWriterSelectionOccursOnceForMultipleDirectCollectionItems(): void
 	{
 		$gateway = ConversionGateway::createDefault();
-		$gateway->getMapperManager()->prepend(RuntimeCacheSpyWriter::class);
+		$gateway->getMapperManager()->prepend(RuntimeReuseSpyWriter::class);
 
 		$result = map([['id' => 1], ['id' => 2]], null, $gateway)
 			->collection()
 			->to([]);
 
 		self::assertSame([['id' => 1], ['id' => 2]], $result);
-		self::assertSame(1, RuntimeCacheSpyWriter::$canWriteCalls);
-		self::assertSame(2, RuntimeCacheSpyWriter::$createTargetCalls);
+		self::assertSame(1, RuntimeReuseSpyWriter::$canWriteCalls);
+		self::assertSame(2, RuntimeReuseSpyWriter::$createTargetCalls);
 	}
 
 	public function testResolverComponentsAreConstructedOncePerCollectionFrame(): void
@@ -52,12 +55,27 @@ final class MappingRuntimeCacheTest extends TestCase
 
 		$result = map([['id' => 1], ['id' => 2]], null, $gateway)
 			->collection()
-			->resolver(RuntimeCacheSpyResolver::class)
+			->resolver(RuntimeReuseSpyResolver::class)
 			->to([]);
 
 		self::assertSame([['id' => 1], ['id' => 2]], $result);
-		self::assertSame(1, RuntimeCacheSpyResolver::$constructions);
-		self::assertSame(['0.id', '1.id'], RuntimeCacheSpyResolver::$resolvedPaths);
+		self::assertSame(1, RuntimeReuseSpyResolver::$constructions);
+		self::assertSame(['0.id', '1.id'], RuntimeReuseSpyResolver::$resolvedPaths);
+	}
+
+	public function testDirectCollectionItemsShareConversionCoordinatorPath(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+		$gateway->getMapperManager()->register(RuntimeReuseCountingFieldType::class);
+
+		$result = map([['id' => '1'], ['id' => '2']], null, $gateway)
+			->collection()
+			->from(WireRepresentation::class)
+			->resolver(RuntimeReuseTypedIdResolver::class)
+			->to([]);
+
+		self::assertSame([['id' => 'converted:1'], ['id' => 'converted:2']], $result);
+		self::assertSame(2, RuntimeReuseCountingFieldType::$toPhpCalls);
 	}
 
 	public function testResolverOrderAndExplicitResolverPrecedenceRemainUnchanged(): void
@@ -66,18 +84,32 @@ final class MappingRuntimeCacheTest extends TestCase
 
 		$result = map([['id' => 1], ['id' => 2]], null, $gateway)
 			->collection()
-			->resolver(RuntimeCachePrecedenceResolver::class)
+			->resolver(RuntimeReusePrecedenceResolver::class)
 			->to([]);
 
 		self::assertSame([['custom_id' => 1], ['custom_id' => 2]], $result);
-		self::assertSame(['0.id', '1.id'], RuntimeCachePrecedenceResolver::$resolvedPaths);
+		self::assertSame(['0.id', '1.id'], RuntimeReusePrecedenceResolver::$resolvedPaths);
+	}
+
+	public function testExplicitWriterOverrideRemainsAppliedToDirectCollectionItems(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		$result = map([['id' => 1], ['id' => 2]], null, $gateway)
+			->collection()
+			->writer(RuntimeReuseSpyWriter::class)
+			->to([]);
+
+		self::assertSame([['id' => 1], ['id' => 2]], $result);
+		self::assertSame(1, RuntimeReuseSpyWriter::$canWriteCalls);
+		self::assertSame(2, RuntimeReuseSpyWriter::$createTargetCalls);
 	}
 
 	public function testMixedObjectArrayCollectionsStillSelectMapperPerItem(): void
 	{
 		$gateway = ConversionGateway::createDefault();
-		$gateway->getMapperManager()->prepend(RuntimeCacheArrayMapper::class);
-		$gateway->getMapperManager()->prepend(RuntimeCacheObjectMapper::class);
+		$gateway->getMapperManager()->prepend(RuntimeReuseArrayMapper::class);
+		$gateway->getMapperManager()->prepend(RuntimeReuseObjectMapper::class);
 
 		$result = map([['id' => 1], (object) ['id' => 2], ['id' => 3]], null, $gateway)
 			->collection()
@@ -88,83 +120,83 @@ final class MappingRuntimeCacheTest extends TestCase
 			['kind' => 'object'],
 			['kind' => 'array'],
 		], $result);
-		self::assertSame(3, RuntimeCacheObjectMapper::$canMapCalls);
-		self::assertSame(2, RuntimeCacheArrayMapper::$canMapCalls);
-		self::assertSame(2, RuntimeCacheArrayMapper::$mapCalls);
-		self::assertSame(1, RuntimeCacheObjectMapper::$mapCalls);
+		self::assertSame(3, RuntimeReuseObjectMapper::$canMapCalls);
+		self::assertSame(2, RuntimeReuseArrayMapper::$canMapCalls);
+		self::assertSame(2, RuntimeReuseArrayMapper::$mapCalls);
+		self::assertSame(1, RuntimeReuseObjectMapper::$mapCalls);
 	}
 
-	public function testNestedCollectionGetsSeparateCacheFromParentCollection(): void
+	public function testNestedCollectionGetsSeparateReuseFrameFromParentCollection(): void
 	{
 		$gateway = ConversionGateway::createDefault();
-		$gateway->getMapperManager()->prepend(RuntimeCacheSpyWriter::class);
+		$gateway->getMapperManager()->prepend(RuntimeReuseSpyWriter::class);
 
 		$result = map([
 			['children' => [['id' => 1], ['id' => 2]]],
 			['children' => [['id' => 3]]],
 		], null, $gateway)
 			->collection()
-			->resolver(RuntimeCacheCollectionBranchResolver::class)
+			->resolver(RuntimeReuseCollectionBranchResolver::class)
 			->to([]);
 
 		self::assertSame([
 			['children' => [['id' => 1], ['id' => 2]]],
 			['children' => [['id' => 3]]],
 		], $result);
-		self::assertSame(3, RuntimeCacheSpyWriter::$canWriteCalls);
-		self::assertSame(3, RuntimeCacheCollectionBranchResolver::$constructions);
+		self::assertSame(3, RuntimeReuseSpyWriter::$canWriteCalls);
+		self::assertSame(3, RuntimeReuseCollectionBranchResolver::$constructions);
 	}
 
-	public function testBranchesWithDifferentTargetsDoNotInheritParentCollectionCache(): void
+	public function testBranchesWithDifferentTargetsDoNotInheritParentCollectionComponents(): void
 	{
 		$gateway = ConversionGateway::createDefault();
-		$gateway->getMapperManager()->prepend(RuntimeCacheSpyWriter::class);
+		$gateway->getMapperManager()->prepend(RuntimeReuseSpyWriter::class);
 
 		$result = map([
 			['child' => ['id' => 1]],
 			['child' => ['id' => 2]],
 		], null, $gateway)
 			->collection()
-			->resolver(RuntimeCacheBranchResolver::class)
+			->resolver(RuntimeReuseBranchResolver::class)
 			->to([]);
 
 		self::assertSame(1, $result[0]['child']->id);
 		self::assertSame(2, $result[1]['child']->id);
-		self::assertSame(3, RuntimeCacheSpyWriter::$canWriteCalls);
+		self::assertSame(3, RuntimeReuseSpyWriter::$canWriteCalls);
 	}
 
 	public function testEmptyCollectionsDoNotEagerlyResolveWriterOrConstructResolvers(): void
 	{
 		$gateway = ConversionGateway::createDefault();
-		$gateway->getMapperManager()->prepend(RuntimeCacheSpyWriter::class);
+		$gateway->getMapperManager()->prepend(RuntimeReuseSpyWriter::class);
 
 		$result = map([], null, $gateway)
 			->collection()
-			->resolver(RuntimeCacheSpyResolver::class)
+			->resolver(RuntimeReuseSpyResolver::class)
 			->to([]);
 
 		self::assertSame([], $result);
-		self::assertSame(0, RuntimeCacheSpyWriter::$canWriteCalls);
-		self::assertSame(0, RuntimeCacheSpyResolver::$constructions);
+		self::assertSame(0, RuntimeReuseSpyWriter::$canWriteCalls);
+		self::assertSame(0, RuntimeReuseSpyResolver::$constructions);
 	}
 
 	public function testNonCollectionMappingBehaviorRemainsUnchanged(): void
 	{
 		$gateway = ConversionGateway::createDefault();
-		$gateway->getMapperManager()->prepend(RuntimeCacheSpyWriter::class);
+		$gateway->getMapperManager()->prepend(RuntimeReuseSpyWriter::class);
 
 		$result = map(['id' => 1], null, $gateway)
-			->resolver(RuntimeCacheSpyResolver::class)
+			->resolver(RuntimeReuseSpyResolver::class)
 			->to([]);
 
 		self::assertSame(['id' => 1], $result);
-		self::assertSame(1, RuntimeCacheSpyWriter::$canWriteCalls);
-		self::assertSame(1, RuntimeCacheSpyWriter::$createTargetCalls);
-		self::assertSame(1, RuntimeCacheSpyResolver::$constructions);
+		self::assertSame(1, RuntimeReuseSpyWriter::$canWriteCalls);
+		self::assertSame(1, RuntimeReuseSpyWriter::$createTargetCalls);
+		self::assertSame(1, RuntimeReuseSpyResolver::$constructions);
 	}
 }
 
-final class RuntimeCacheSpyWriter implements WriterInterface
+final class RuntimeReuseSpyWriter implements WriterInterface
 {
 	public static int $canWriteCalls = 0;
 
@@ -204,7 +236,7 @@ final class RuntimeCacheSpyWriter implements WriterInterface
 	}
 }
 
-final class RuntimeCacheSpyResolver implements NodeResolverInterface
+final class RuntimeReuseSpyResolver implements NodeResolverInterface
 {
 	public static int $constructions = 0;
 
@@ -233,7 +265,7 @@ final class RuntimeCacheSpyResolver implements NodeResolverInterface
 	}
 }
 
-final class RuntimeCachePrecedenceResolver implements NodeResolverInterface
+final class RuntimeReusePrecedenceResolver implements NodeResolverInterface
 {
 	/**
 	 * @var list<string>
@@ -258,7 +290,20 @@ final class RuntimeCachePrecedenceResolver implements NodeResolverInterface
 	}
 }
 
-final class RuntimeCacheBranchResolver implements NodeResolverInterface
+final class RuntimeReuseTypedIdResolver implements NodeResolverInterface
+{
+	public function resolve(
+		MappingNode $node,
+	): LeafNodeResolutionInterface|BranchNodeResolutionInterface|null {
+		if ($node->getName() === 'id') {
+			return LeafNodeResolution::named('id', 'runtime-reuse-counting');
+		}
+
+		return null;
+	}
+}
+
+final class RuntimeReuseBranchResolver implements NodeResolverInterface
 {
 	public static int $constructions = 0;
 
@@ -287,7 +332,7 @@ final class RuntimeCacheBranchResolver implements NodeResolverInterface
 	}
 }
 
-final class RuntimeCacheCollectionBranchResolver implements NodeResolverInterface
+final class RuntimeReuseCollectionBranchResolver implements NodeResolverInterface
 {
 	public static int $constructions = 0;
 
@@ -317,7 +362,43 @@ final class RuntimeCacheCollectionBranchResolver implements NodeResolverInterfac
 	}
 }
 
-final class RuntimeCacheArrayMapper implements MapperInterface
+final class RuntimeReuseCountingFieldType implements FieldTypeInterface
+{
+	public static int $toPhpCalls = 0;
+
+	public static function reset(): void
+	{
+		self::$toPhpCalls = 0;
+	}
+
+	public static function getNames(): array
+	{
+		return ['runtime-reuse-counting'];
+	}
+
+	public static function getStorageType(): string
+	{
+		return 'string';
+	}
+
+	public static function toPhp(
+		mixed $value,
+		LeafNodeResolutionInterface $field,
+	): mixed {
+		self::$toPhpCalls++;
+
+		return 'converted:' . $value;
+	}
+
+	public static function fromPhp(
+		mixed $value,
+		LeafNodeResolutionInterface $field,
+	): mixed {
+		return $value;
+	}
+}
+
+final class RuntimeReuseArrayMapper implements MapperInterface
 {
 	public static int $canMapCalls = 0;
 
@@ -346,7 +427,7 @@ final class RuntimeCacheArrayMapper implements MapperInterface
 	}
 }
 
-final class RuntimeCacheObjectMapper implements MapperInterface
+final class RuntimeReuseObjectMapper implements MapperInterface
 {
 	public static int $canMapCalls = 0;
 
