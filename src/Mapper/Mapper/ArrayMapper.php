@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace ON\Data\Mapper\Mapper;
 
 use ON\Data\Mapper\Exception\MappingException;
-use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingRuntime;
 use ON\Data\Mapper\Support\ArrayPathExpander;
 
-final class ArrayMapper extends Mapper
+final class ArrayMapper implements MapperInterface
 {
 	public function __construct(
 		private readonly ?ArrayPathExpander $pathExpander = null,
@@ -24,35 +24,25 @@ final class ArrayMapper extends Mapper
 		return is_array($source);
 	}
 
-	public function map(
-		MappingNode $node,
-		MapperManager $mapperManager,
-	): mixed {
-		if ($node->isCollection()) {
-			return $this->mapCollection($node, $mapperManager);
-		}
-
-		$source = $node->getValue();
+	public function map(MappingRuntime $runtime): mixed
+	{
+		$source = $runtime->getSource();
 		if (! is_array($source)) {
 			throw new MappingException('ArrayMapper can only map array sources.');
 		}
 
-		$normalized = $this->shouldExpandDottedKeys($node)
+		$source = $this->shouldExpandDottedKeys($runtime->getMappingNode())
 			? ($this->pathExpander ?? new ArrayPathExpander())->expand($source)
 			: $source;
-		$writer = $mapperManager->resolveWriter($node->getTarget(), $node->getContext());
-		$result = $writer->prepare($node->getTarget(), $node->getContext());
-		$frame = $node->withTarget($result);
-		$resolvers = $mapperManager->createResolverChain($frame->getContext());
-		$converter = $mapperManager->createFieldConversionCoordinator();
 
-		foreach ($normalized as $name => $value) {
-			$child = $frame->child($name, $value);
-			$mappedValue = $this->mapChild($child, $resolvers, $converter, $mapperManager);
-			$result = $writer->write($result, $child, $mappedValue);
+		foreach ($source as $name => $value) {
+			$runtime->write(
+				name: $name,
+				value: $value,
+			);
 		}
 
-		return $writer->finish($result, $frame->getContext());
+		return $runtime->getResult();
 	}
 
 	private function shouldExpandDottedKeys(MappingNode $node): bool

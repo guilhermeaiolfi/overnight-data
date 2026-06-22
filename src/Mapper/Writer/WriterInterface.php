@@ -14,19 +14,14 @@ interface WriterInterface
 		MappingContext $context,
 	): bool;
 
-	public function prepare(
-		mixed $target,
-		MappingContext $context,
+	public function createTarget(
+		MappingNode $node,
 	): mixed;
 
 	public function write(
 		mixed $target,
-		MappingNode $node,
+		string|int $name,
 		mixed $value,
-	): mixed;
-
-	public function finish(
-		mixed $target,
-		MappingContext $context,
+		MappingNode $node,
 	): mixed;
 }

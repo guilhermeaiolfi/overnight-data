@@ -27,17 +27,18 @@ final class ParentAwareWriter implements WriterInterface
 		return is_array($target);
 	}
 
-	public function prepare(
-		mixed $target,
-		MappingContext $context,
-	): array {
+	public function createTarget(MappingNode $node): array
+	{
+		$target = $node->getTarget();
+
 		return is_array($target) ? $target : [];
 	}
 
 	public function write(
 		mixed $target,
-		MappingNode $node,
+		string|int $name,
 		mixed $value,
+		MappingNode $node,
 	): array {
 		self::$writes[] = [
 			'path' => $node->getPath(),
@@ -46,15 +47,8 @@ final class ParentAwareWriter implements WriterInterface
 			'valueType' => is_object($value) ? $value::class : get_debug_type($value),
 		];
 
-		$target[$node->getName()] = $value;
+		$target[$name] = $value;
 
-		return $target;
-	}
-
-	public function finish(
-		mixed $target,
-		MappingContext $context,
-	): array {
 		return $target;
 	}
 }

@@ -24,28 +24,20 @@ final class GatewayAwareWriter implements WriterInterface
 		return $target === stdClass::class || $target instanceof stdClass;
 	}
 
-	public function prepare(
-		mixed $target,
-		MappingContext $context,
-	): stdClass {
+	public function createTarget(MappingNode $node): stdClass
+	{
 		return new stdClass();
 	}
 
 	public function write(
 		mixed $target,
-		MappingNode $node,
+		string|int $name,
 		mixed $value,
+		MappingNode $node,
 	): stdClass {
 		$target->gatewayId = spl_object_id($this->gateway);
-		$target->lastField = (string) $node->getName();
+		$target->lastField = (string) $name;
 
-		return $target;
-	}
-
-	public function finish(
-		mixed $target,
-		MappingContext $context,
-	): stdClass {
 		return $target;
 	}
 }

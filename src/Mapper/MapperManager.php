@@ -228,16 +228,14 @@ final class MapperManager
 		mixed $target,
 		MappingContext $context,
 	): mixed {
-		return $this->mapNode(MappingNode::root($source, $target, $context));
-	}
-
-	public function mapNode(MappingNode $node): mixed
-	{
-		$node->assertNoObjectCycle();
-
-		$mapper = $this->resolveMapper($node->getValue(), $node->getContext());
-
-		return $mapper->map($node, $this);
+		return (new MappingRuntime(
+			mapperManager: $this,
+			mappingNode: MappingNode::root(
+				source: $source,
+				target: $target,
+				context: $context,
+			),
+		))->map();
 	}
 
 	public function clear(): void

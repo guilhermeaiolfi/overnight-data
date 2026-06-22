@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Fixture;
 
-use ON\Data\Mapper\Mapper\Mapper;
-use ON\Data\Mapper\MapperManager;
+use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\MappingContext;
-use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingRuntime;
 
-final class NeverMapper extends Mapper
+final class NeverMapper implements MapperInterface
 {
 	public function __construct()
 	{
@@ -25,11 +24,9 @@ final class NeverMapper extends Mapper
 		return false;
 	}
 
-	public function map(
-		MappingNode $node,
-		MapperManager $mapperManager,
-	): mixed {
-		ComponentTestState::recordRuntime(self::class, $node->getPath());
+	public function map(MappingRuntime $runtime): mixed
+	{
+		ComponentTestState::recordRuntime(self::class, $runtime->getMappingNode()->getPath());
 
 		return [];
 	}

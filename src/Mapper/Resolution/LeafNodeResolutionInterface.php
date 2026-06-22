@@ -6,10 +6,8 @@ namespace ON\Data\Mapper\Resolution;
 
 use ON\Data\Mapper\FieldTypeInterface;
 
-interface LeafNodeResolutionInterface
+interface LeafNodeResolutionInterface extends ResolutionNodeInterface
 {
-	public function getName(): string;
-
 	/**
 	 * @return class-string<FieldTypeInterface>|non-empty-string|null
 	 */

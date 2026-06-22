@@ -83,32 +83,24 @@ final class ArrayMapperNodeRecordingWriter implements WriterInterface
 		return is_array($target);
 	}
 
-	public function prepare(
-		mixed $target,
-		MappingContext $context,
-	): array {
+	public function createTarget(MappingNode $node): array
+	{
 		return [];
 	}
 
 	public function write(
 		mixed $target,
-		MappingNode $node,
+		string|int $name,
 		mixed $value,
+		MappingNode $node,
 	): array {
 		self::$writes[] = [
 			'name' => $node->getName(),
-			'sourceProperty' => $node->getSourceProperty()?->getName(),
+			'sourceProperty' => null,
 		];
 
-		$target[$node->getName()] = $value;
+		$target[$name] = $value;
 
-		return $target;
-	}
-
-	public function finish(
-		mixed $target,
-		MappingContext $context,
-	): array {
 		return $target;
 	}
 }

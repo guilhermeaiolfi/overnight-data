@@ -24,26 +24,18 @@ final class NeverWriter implements WriterInterface
 		return false;
 	}
 
-	public function prepare(
-		mixed $target,
-		MappingContext $context,
-	): mixed {
+	public function createTarget(MappingNode $node): mixed
+	{
 		ComponentTestState::recordRuntime(self::class);
 
-		return $target;
+		return $node->getTarget();
 	}
 
 	public function write(
 		mixed $target,
-		MappingNode $node,
+		string|int $name,
 		mixed $value,
-	): mixed {
-		return $target;
-	}
-
-	public function finish(
-		mixed $target,
-		MappingContext $context,
+		MappingNode $node,
 	): mixed {
 		return $target;
 	}

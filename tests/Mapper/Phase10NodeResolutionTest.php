@@ -7,10 +7,10 @@ namespace Tests\ON\Data\Mapper;
 use ON\Data\Definition\Registry;
 use ON\Data\Mapper\FieldMap;
 use function ON\Data\Mapper\map;
-use ON\Data\Mapper\Mapper\Mapper;
-use ON\Data\Mapper\MapperManager;
+use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingRuntime;
 use ON\Data\Mapper\Representation\WireRepresentation;
 use ON\Data\Mapper\Resolution\BranchNodeResolution;
 use ON\Data\Mapper\Resolution\BranchNodeResolutionInterface;
@@ -93,7 +93,7 @@ final class Phase10NodeResolutionTest extends TestCase
 	}
 }
 
-final class RecordingRootArrayMapper extends Mapper
+final class RecordingRootArrayMapper implements MapperInterface
 {
 	/**
 	 * @var list<string>
@@ -105,29 +105,16 @@ final class RecordingRootArrayMapper extends Mapper
 		self::$paths = [];
 	}
 
-	public function map(
-		MappingNode $node,
-		MapperManager $mapperManager,
-	): mixed {
+	public function map(MappingRuntime $runtime): mixed
+	{
+		$node = $runtime->getMappingNode();
 		self::$paths[] = $node->getPath();
 
-		if ($node->isCollection()) {
-			return $this->mapCollection($node, $mapperManager);
+		foreach ($runtime->getSource() as $name => $value) {
+			$runtime->write(name: $name, value: $value);
 		}
 
-		$writer = $mapperManager->resolveWriter($node->getTarget(), $node->getContext());
-		$result = $writer->prepare($node->getTarget(), $node->getContext());
-		$frame = $node->withTarget($result);
-		$resolvers = $mapperManager->createResolverChain($frame->getContext());
-		$converter = $mapperManager->createFieldConversionCoordinator();
-
-		foreach ($node->getValue() as $name => $value) {
-			$child = $frame->child($name, $value);
-			$mappedValue = $this->mapChild($child, $resolvers, $converter, $mapperManager);
-			$result = $writer->write($result, $child, $mappedValue);
-		}
-
-		return $writer->finish($result, $frame->getContext());
+		return $runtime->getResult();
 	}
 
 	public static function canMap(
@@ -148,7 +135,7 @@ final class Phase10CustomNodeResolver implements NodeResolverInterface
 		}
 
 		if ($node->getName() === 'child') {
-			return BranchNodeResolution::make(stdClass::class, []);
+			return BranchNodeResolution::named('child', stdClass::class, []);
 		}
 
 		return null;

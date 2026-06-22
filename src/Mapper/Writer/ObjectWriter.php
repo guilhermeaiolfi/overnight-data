@@ -41,10 +41,11 @@ final class ObjectWriter implements WriterInterface
 		return self::supportsReflectionTarget($reflection);
 	}
 
-	public function prepare(
-		mixed $target,
-		MappingContext $context,
+	public function createTarget(
+		MappingNode $node,
 	): object {
+		$target = $node->getTarget();
+
 		if ($target instanceof stdClass) {
 			return clone $target;
 		}
@@ -69,17 +70,18 @@ final class ObjectWriter implements WriterInterface
 
 	public function write(
 		mixed $target,
-		MappingNode $node,
+		string|int $name,
 		mixed $value,
+		MappingNode $node,
 	): object {
 		if ($target instanceof stdClass) {
-			$target->{(string) $node->getName()} = $value;
+			$target->{(string) $name} = $value;
 
 			return $target;
 		}
 
 		$matcher = new ObjectPropertyMatcher(new ReflectionClass($target));
-		$property = $matcher->match($node->getName());
+		$property = $matcher->match($name);
 		if ($property === null) {
 			return $target;
 		}
@@ -95,13 +97,6 @@ final class ObjectWriter implements WriterInterface
 			);
 		}
 
-		return $target;
-	}
-
-	public function finish(
-		mixed $target,
-		MappingContext $context,
-	): object {
 		return $target;
 	}
 

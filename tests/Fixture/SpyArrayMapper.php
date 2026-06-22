@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Fixture;
 
-use ON\Data\Mapper\Mapper\Mapper;
-use ON\Data\Mapper\MapperManager;
+use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\MappingContext;
-use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingRuntime;
 
-final class SpyArrayMapper extends Mapper
+final class SpyArrayMapper implements MapperInterface
 {
 	public function __construct()
 	{
@@ -25,28 +24,14 @@ final class SpyArrayMapper extends Mapper
 		return is_array($source);
 	}
 
-	public function map(
-		MappingNode $node,
-		MapperManager $mapperManager,
-	): mixed {
-		ComponentTestState::recordRuntime(self::class, $node->getPath());
+	public function map(MappingRuntime $runtime): mixed
+	{
+		ComponentTestState::recordRuntime(self::class, $runtime->getMappingNode()->getPath());
 
-		if ($node->isCollection()) {
-			return $this->mapCollection($node, $mapperManager);
+		foreach ($runtime->getSource() as $name => $value) {
+			$runtime->write(name: $name, value: $value);
 		}
 
-		$writer = $mapperManager->resolveWriter($node->getTarget(), $node->getContext());
-		$result = $writer->prepare($node->getTarget(), $node->getContext());
-		$frame = $node->withTarget($result);
-		$resolvers = $mapperManager->createResolverChain($frame->getContext());
-		$converter = $mapperManager->createFieldConversionCoordinator();
-
-		foreach ($node->getValue() as $name => $value) {
-			$child = $frame->child($name, $value);
-			$mappedValue = $this->mapChild($child, $resolvers, $converter, $mapperManager);
-			$result = $writer->write($result, $child, $mappedValue);
-		}
-
-		return $writer->finish($result, $frame->getContext());
+		return $runtime->getResult();
 	}
 }

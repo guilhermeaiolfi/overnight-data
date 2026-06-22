@@ -57,14 +57,15 @@ final class DefinitionNodeResolver implements NodeResolverInterface
 			return null;
 		}
 
-		return BranchNodeResolution::make(
-			$target,
-			$this->branchInferrer()->replaceDefinitionArguments(
+		return BranchNodeResolution::named(
+			name: $relation->getName(),
+			target: $target,
+			arguments: $this->branchInferrer()->replaceDefinitionArguments(
 				$node->getArguments(),
 				$definition,
 				$relation->getCollection(),
 			),
-			$relation->getCardinality() === 'many',
+			collection: $relation->getCardinality() === 'many',
 		);
 	}
 

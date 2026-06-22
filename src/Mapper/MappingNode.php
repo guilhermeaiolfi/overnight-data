@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\Mapper;
 
 use ON\Data\Mapper\Exception\MappingException;
-use ReflectionProperty;
 
 final readonly class MappingNode
 {
@@ -15,7 +14,6 @@ final readonly class MappingNode
 		private mixed $target,
 		private MappingContext $context,
 		private ?self $parent,
-		private ?ReflectionProperty $sourceProperty = null,
 	) {
 	}
 
@@ -87,11 +85,6 @@ final readonly class MappingNode
 		return $this->parent?->getTarget();
 	}
 
-	public function getSourceProperty(): ?ReflectionProperty
-	{
-		return $this->sourceProperty;
-	}
-
 	public function withTarget(mixed $target): self
 	{
 		return new self(
@@ -100,14 +93,12 @@ final readonly class MappingNode
 			$target,
 			$this->context,
 			$this->parent,
-			$this->sourceProperty,
 		);
 	}
 
-	public function child(
+	public function createChildNode(
 		string|int $name,
 		mixed $value,
-		?ReflectionProperty $sourceProperty = null,
 	): self {
 		return new self(
 			$name,
@@ -115,7 +106,6 @@ final readonly class MappingNode
 			null,
 			$this->context,
 			$this,
-			$sourceProperty,
 		);
 	}
 
@@ -144,7 +134,6 @@ final readonly class MappingNode
 			$target,
 			$context,
 			$this->parent,
-			$this->sourceProperty,
 		);
 	}
 

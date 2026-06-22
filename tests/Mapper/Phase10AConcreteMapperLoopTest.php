@@ -41,13 +41,11 @@ final class Phase10AConcreteMapperLoopTest extends TestCase
 		self::assertSame(['id' => 10, 'child' => ['name' => 'Ada']], $result);
 		self::assertSame(
 			[
-				['event' => 'prepare'],
+				['event' => 'createTarget'],
 				['event' => 'write', 'path' => 'id'],
-				['event' => 'prepare'],
+				['event' => 'createTarget'],
 				['event' => 'write', 'path' => 'child.name'],
-				['event' => 'finish'],
 				['event' => 'write', 'path' => 'child'],
-				['event' => 'finish'],
 			],
 			Phase10ARecordingWriter::$events,
 		);
@@ -74,13 +72,11 @@ final class Phase10AConcreteMapperLoopTest extends TestCase
 		);
 		self::assertSame(
 			[
-				['event' => 'prepare'],
-				['event' => 'write', 'path' => 'display_name'],
-				['event' => 'prepare'],
+				['event' => 'createTarget'],
+				['event' => 'write', 'path' => 'name'],
+				['event' => 'createTarget'],
 				['event' => 'write', 'path' => 'child.role'],
-				['event' => 'finish'],
 				['event' => 'write', 'path' => 'child'],
-				['event' => 'finish'],
 			],
 			Phase10ARecordingWriter::$events,
 		);
@@ -106,12 +102,10 @@ final class Phase10ARecordingWriter implements WriterInterface
 		return is_array($target);
 	}
 
-	public function prepare(
-		mixed $target,
-		MappingContext $context,
-	): array {
+	public function createTarget(MappingNode $node): array
+	{
 		self::$events[] = [
-			'event' => 'prepare',
+			'event' => 'createTarget',
 		];
 
 		return [];
@@ -119,26 +113,16 @@ final class Phase10ARecordingWriter implements WriterInterface
 
 	public function write(
 		mixed $target,
-		MappingNode $node,
+		string|int $name,
 		mixed $value,
+		MappingNode $node,
 	): array {
 		self::$events[] = [
 			'event' => 'write',
 			'path' => $node->getPath(),
 		];
 
-		$target[$node->getName()] = $value;
-
-		return $target;
-	}
-
-	public function finish(
-		mixed $target,
-		MappingContext $context,
-	): array {
-		self::$events[] = [
-			'event' => 'finish',
-		];
+		$target[$name] = $value;
 
 		return $target;
 	}

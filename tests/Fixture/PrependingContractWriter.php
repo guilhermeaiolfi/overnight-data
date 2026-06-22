@@ -24,10 +24,8 @@ final class PrependingContractWriter implements WriterInterface
 		ComponentTestState::recordConstruction(self::class);
 	}
 
-	public function prepare(
-		mixed $target,
-		MappingContext $context,
-	): ContractDto {
+	public function createTarget(MappingNode $node): ContractDto
+	{
 		ComponentTestState::recordRuntime(self::class);
 
 		return new ContractDto();
@@ -35,18 +33,12 @@ final class PrependingContractWriter implements WriterInterface
 
 	public function write(
 		mixed $target,
-		MappingNode $node,
+		string|int $name,
 		mixed $value,
+		MappingNode $node,
 	): ContractDto {
-		$target->{$node->getName()} = $value;
+		$target->{$name} = $value;
 
-		return $target;
-	}
-
-	public function finish(
-		mixed $target,
-		MappingContext $context,
-	): ContractDto {
 		return $target;
 	}
 }

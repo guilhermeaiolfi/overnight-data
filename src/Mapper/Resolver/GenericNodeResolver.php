@@ -28,6 +28,10 @@ final class GenericNodeResolver implements NodeResolverInterface
 			return null;
 		}
 
-		return BranchNodeResolution::make($target, $node->getArguments());
+		return BranchNodeResolution::named(
+			name: (string) $node->getName(),
+			target: $target,
+			arguments: $node->getArguments(),
+		);
 	}
 }

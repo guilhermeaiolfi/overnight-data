@@ -10,6 +10,7 @@ final readonly class BranchNodeResolution implements BranchNodeResolutionInterfa
 	 * @param list<mixed> $arguments
 	 */
 	public function __construct(
+		private string $name,
 		private mixed $target,
 		private array $arguments,
 		private bool $collection = false,
@@ -19,9 +20,18 @@ final readonly class BranchNodeResolution implements BranchNodeResolutionInterfa
 	/**
 	 * @param list<mixed> $arguments
 	 */
-	public static function make(mixed $target, array $arguments, bool $collection = false): self
+	public static function named(
+		string $name,
+		mixed $target,
+		array $arguments,
+		bool $collection = false,
+	): self {
+		return new self($name, $target, $arguments, $collection);
+	}
+
+	public function getName(): string
 	{
-		return new self($target, $arguments, $collection);
+		return $this->name;
 	}
 
 	public function getTarget(): mixed

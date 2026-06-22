@@ -10,9 +10,7 @@ use ON\Data\Mapper\FieldMap;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
 use PHPUnit\Framework\TestCase;
-use ReflectionProperty;
 use stdClass;
-use Tests\ON\Data\Fixture\PropertyContextFixture;
 use Tests\ON\Data\Fixture\SpyArrayMapper;
 use Tests\ON\Data\Fixture\SpyArrayWriter;
 
@@ -47,8 +45,8 @@ final class MappingNodeTest extends TestCase
 			->withCollection(true);
 		$root = MappingNode::root(['author' => ['name' => 'Ada']], [], $context);
 		$frame = $root->withTarget([]);
-		$author = $frame->child('author', ['name' => 'Ada']);
-		$name = $author->withTarget([])->child('name', 'Ada');
+		$author = $frame->createChildNode('author', ['name' => 'Ada']);
+		$name = $author->withTarget([])->createChildNode('name', 'Ada');
 
 		self::assertSame($frame, $author->getParent());
 		self::assertSame($context, $author->getContext());
@@ -64,8 +62,8 @@ final class MappingNodeTest extends TestCase
 	public function testCollectionIndexesAppearInDerivedPaths(): void
 	{
 		$root = MappingNode::root([['id' => 2]], [], new MappingContext(ConversionGateway::createDefault()));
-		$item = $root->child(0, ['id' => 2]);
-		$field = $item->withTarget([])->child('id', 2);
+		$item = $root->createChildNode(0, ['id' => 2]);
+		$field = $item->withTarget([])->createChildNode('id', 2);
 
 		self::assertSame('0', $item->getPath());
 		self::assertSame('0.id', $field->getPath());
@@ -80,12 +78,21 @@ final class MappingNodeTest extends TestCase
 		$rootValue = ['author' => ['id' => 2]];
 		$childValue = ['id' => 2];
 		$child = MappingNode::root($rootValue, [], $context->withArguments(['old']))
-			->child('author', $childValue);
+			->createChildNode('author', $childValue);
 		$nestedArguments = ['new'];
 		$preservedArguments = ['same'];
 		$preservedTarget = [];
-		$nested = $child->forMapping(stdClass::class, $nestedArguments, true);
-		$preserved = $child->forMapping($preservedTarget, $preservedArguments, false, true);
+		$nested = $child->forMapping(
+			target: stdClass::class,
+			arguments: $nestedArguments,
+			collection: true,
+		);
+		$preserved = $child->forMapping(
+			target: $preservedTarget,
+			arguments: $preservedArguments,
+			collection: false,
+			preserveComponentOverrides: true,
+		);
 
 		self::assertSame(stdClass::class, $nested->getTarget());
 		self::assertSame($nestedArguments, $nested->getArguments());
@@ -109,20 +116,19 @@ final class MappingNodeTest extends TestCase
 		self::assertFalse(method_exists(MappingNode::class, 'withContext'));
 	}
 
-	public function testSourcePropertyEvidenceIsNodeLocal(): void
+	public function testNodeDoesNotExposeSourcePropertyEvidence(): void
 	{
-		$property = new ReflectionProperty(PropertyContextFixture::class, 'name');
-		$child = MappingNode::root((object) ['name' => 'Ada'], [], new MappingContext(ConversionGateway::createDefault()))
-			->child('name', 'Ada', $property);
-
-		self::assertSame($property, $child->getSourceProperty());
+		self::assertFalse(method_exists(MappingNode::class, 'getSourceProperty'));
 	}
 
 	public function testCycleDetectionUsesOnlyAncestorChain(): void
 	{
 		$rootValue = new stdClass();
 		$root = MappingNode::root($rootValue, [], new MappingContext(ConversionGateway::createDefault()));
-		$self = $root->child('self', $rootValue)->forMapping([], []);
+		$self = $root->createChildNode('self', $rootValue)->forMapping(
+			target: [],
+			arguments: [],
+		);
 
 		$this->expectException(MappingException::class);
 		$this->expectExceptionMessage("path 'self'");
@@ -134,8 +140,14 @@ final class MappingNodeTest extends TestCase
 		$shared = new stdClass();
 		$root = MappingNode::root(['first' => $shared, 'second' => $shared], [], new MappingContext(ConversionGateway::createDefault()));
 
-		$first = $root->child('first', $shared)->forMapping([], []);
-		$second = $root->child('second', $shared)->forMapping([], []);
+		$first = $root->createChildNode('first', $shared)->forMapping(
+			target: [],
+			arguments: [],
+		);
+		$second = $root->createChildNode('second', $shared)->forMapping(
+			target: [],
+			arguments: [],
+		);
 
 		$first->assertNoObjectCycle();
 		$second->assertNoObjectCycle();

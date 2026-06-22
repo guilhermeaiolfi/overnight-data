@@ -199,13 +199,6 @@ final class RecursiveMappingTest extends TestCase
 				'contextCollection' => false,
 			],
 			[
-				'path' => 'authors',
-				'nodeArguments' => [],
-				'contextArguments' => [],
-				'nodeCollection' => true,
-				'contextCollection' => true,
-			],
-			[
 				'path' => 'authors.0',
 				'nodeArguments' => [],
 				'contextArguments' => [],
@@ -213,7 +206,7 @@ final class RecursiveMappingTest extends TestCase
 				'contextCollection' => false,
 			],
 		], RecordingArrayMapper::$frames);
-		self::assertContains([
+		self::assertNotContains([
 			'arguments' => [],
 			'collection' => true,
 		], RecordingArrayMapper::$selections);
@@ -380,7 +373,7 @@ final class RecursiveMappingTest extends TestCase
 		self::assertSame(['author' => ['id' => 2, 'active' => false]], $result);
 	}
 
-	public function testCompatibleTypedCollectionItemPreservesIdentity(): void
+	public function testCompatibleTypedCollectionItemIsStillRemapped(): void
 	{
 		$author = new AuthorDto();
 		$author->id = 2;
@@ -390,10 +383,12 @@ final class RecursiveMappingTest extends TestCase
 			'authors' => [$author],
 		])->to(PostDto::class);
 
-		self::assertSame($author, $result->authors[0]);
+		self::assertNotSame($author, $result->authors[0]);
+		self::assertSame($author->id, $result->authors[0]->id);
+		self::assertSame($author->name, $result->authors[0]->name);
 	}
 
-	public function testMixedTypedCollectionPreservesCompatibleInstancesAndHydratesArrays(): void
+	public function testMixedTypedCollectionRemapsCompatibleInstancesAndHydratesArrays(): void
 	{
 		$existing = new AuthorDto();
 		$existing->id = 2;
@@ -406,7 +401,9 @@ final class RecursiveMappingTest extends TestCase
 			],
 		])->to(PostDto::class);
 
-		self::assertSame($existing, $result->authors[0]);
+		self::assertNotSame($existing, $result->authors[0]);
+		self::assertSame($existing->id, $result->authors[0]->id);
+		self::assertSame($existing->name, $result->authors[0]->name);
 		self::assertInstanceOf(AuthorDto::class, $result->authors[1]);
 		self::assertSame('Linus', $result->authors[1]->name);
 	}

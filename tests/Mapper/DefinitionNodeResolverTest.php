@@ -127,7 +127,10 @@ final class DefinitionNodeResolverTest extends TestCase
 			[],
 			[],
 			$this->context()->withArguments($arguments),
-		)->child($name, $value);
+		)->createChildNode(
+			name: $name,
+			value: $value,
+		);
 	}
 
 	private function context(): MappingContext

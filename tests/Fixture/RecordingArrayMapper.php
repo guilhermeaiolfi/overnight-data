@@ -5,12 +5,11 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Fixture;
 
 use ON\Data\Mapper\Exception\MappingException;
-use ON\Data\Mapper\Mapper\Mapper;
-use ON\Data\Mapper\MapperManager;
+use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\MappingContext;
-use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingRuntime;
 
-final class RecordingArrayMapper extends Mapper
+final class RecordingArrayMapper implements MapperInterface
 {
 	/**
 	 * @var list<array{
@@ -46,10 +45,9 @@ final class RecordingArrayMapper extends Mapper
 		return is_array($source);
 	}
 
-	public function map(
-		MappingNode $node,
-		MapperManager $mapperManager,
-	): mixed {
+	public function map(MappingRuntime $runtime): mixed
+	{
+		$node = $runtime->getMappingNode();
 		self::$frames[] = [
 			'path' => $node->getPath(),
 			'nodeArguments' => $node->getArguments(),
@@ -58,27 +56,15 @@ final class RecordingArrayMapper extends Mapper
 			'contextCollection' => $node->getContext()->isCollection(),
 		];
 
-		if ($node->isCollection()) {
-			return $this->mapCollection($node, $mapperManager);
-		}
-
-		$source = $node->getValue();
+		$source = $runtime->getSource();
 		if (! is_array($source)) {
 			throw new MappingException('RecordingArrayMapper can only map array sources.');
 		}
 
-		$writer = $mapperManager->resolveWriter($node->getTarget(), $node->getContext());
-		$result = $writer->prepare($node->getTarget(), $node->getContext());
-		$frame = $node->withTarget($result);
-		$resolvers = $mapperManager->createResolverChain($frame->getContext());
-		$converter = $mapperManager->createFieldConversionCoordinator();
-
 		foreach ($source as $name => $value) {
-			$child = $frame->child($name, $value);
-			$mappedValue = $this->mapChild($child, $resolvers, $converter, $mapperManager);
-			$result = $writer->write($result, $child, $mappedValue);
+			$runtime->write(name: $name, value: $value);
 		}
 
-		return $writer->finish($result, $frame->getContext());
+		return $runtime->getResult();
 	}
 }

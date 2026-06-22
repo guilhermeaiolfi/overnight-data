@@ -21,18 +21,28 @@ final class MappingNodePropertyFinderTest extends TestCase
 	public function testFindSourcePropertyDelegatesToNodeEvidence(): void
 	{
 		$property = new ReflectionProperty(PropertyContextFixture::class, 'name');
-		$node = MappingNode::root((object) ['name' => 'Ada'], [], $this->context())
-			->child('name', 'Ada', $property);
+		$node = MappingNode::root(
+			(new ReflectionClass(PropertyContextFixture::class))->newInstanceWithoutConstructor(),
+			[],
+			$this->context(),
+		)->createChildNode('name', 'Ada');
 
-		self::assertSame($property, $this->finder()->findSourceProperty($node));
+		$found = $this->finder()->findSourceProperty($node);
+
+		self::assertSame($property->getDeclaringClass()->getName(), $found?->getDeclaringClass()->getName());
+		self::assertSame($property->getName(), $found?->getName());
 	}
 
 	public function testTargetPropertyLookupSupportsMapFrom(): void
 	{
 		$target = (new ReflectionClass(UserInputDto::class))->newInstanceWithoutConstructor();
-		$node = MappingNode::root([], $target, $this->context())
+		$node = MappingNode::root(
+			(new ReflectionClass(PropertyContextFixture::class))->newInstanceWithoutConstructor(),
+			$target,
+			$this->context(),
+		)
 			->withTarget($target)
-			->child('user_score', '3.5');
+			->createChildNode('user_score', '3.5');
 
 		$property = $this->finder()->findTargetProperty($node);
 
@@ -45,7 +55,7 @@ final class MappingNodePropertyFinderTest extends TestCase
 	{
 		$node = MappingNode::root([], $preparedTarget, $this->context())
 			->withTarget($preparedTarget)
-			->child('name', 'Ada');
+			->createChildNode('name', 'Ada');
 
 		self::assertNull($this->finder()->findTargetProperty($node));
 	}

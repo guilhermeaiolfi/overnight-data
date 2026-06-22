@@ -32,10 +32,10 @@ final class RuntimeInvariantWriter implements WriterInterface
 		return is_array($target) || $target instanceof stdClass || $target === stdClass::class;
 	}
 
-	public function prepare(
-		mixed $target,
-		MappingContext $context,
-	): array|stdClass {
+	public function createTarget(MappingNode $node): array|stdClass
+	{
+		$target = $node->getTarget();
+
 		if (is_array($target)) {
 			return $target;
 		}
@@ -45,8 +45,9 @@ final class RuntimeInvariantWriter implements WriterInterface
 
 	public function write(
 		mixed $target,
-		MappingNode $node,
+		string|int $name,
 		mixed $value,
+		MappingNode $node,
 	): array|stdClass {
 		self::$writes[] = [
 			'path' => $node->getPath(),
@@ -55,20 +56,13 @@ final class RuntimeInvariantWriter implements WriterInterface
 		];
 
 		if (is_array($target)) {
-			$target[$node->getName()] = $value;
+			$target[$name] = $value;
 
 			return $target;
 		}
 
-		$target->{(string) $node->getName()} = $value;
+		$target->{(string) $name} = $value;
 
-		return $target;
-	}
-
-	public function finish(
-		mixed $target,
-		MappingContext $context,
-	): array|stdClass {
 		return $target;
 	}
 

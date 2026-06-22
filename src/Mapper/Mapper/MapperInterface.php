@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper\Mapper;
 
-use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingContext;
-use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingRuntime;
 
 interface MapperInterface
 {
@@ -15,5 +14,5 @@ interface MapperInterface
 		MappingContext $context,
 	): bool;
 
-	public function map(MappingNode $node, MapperManager $mapperManager): mixed;
+	public function map(MappingRuntime $runtime): mixed;
 }
