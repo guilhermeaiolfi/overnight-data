@@ -3,81 +3,81 @@
         "name": "benchSingleFlatArrayToDto",
         "revs": 100,
         "its": 5,
-        "mem_peak": 2482704,
-        "mode": 736.3003131115446,
-        "rstdev": 7.597352266911677,
+        "mem_peak": 2484960,
+        "mode": 717.0784931506846,
+        "rstdev": 0.3964795075532939,
         "diff": "1.00x"
     },
     {
         "name": "benchFlatArrayCollectionToArray1000",
         "revs": 1,
         "its": 5,
-        "mem_peak": 8494720,
-        "mode": 114054.30136986263,
-        "rstdev": 5.243109023970293,
-        "diff": "154.90x"
+        "mem_peak": 8497008,
+        "mode": 112117.28571428532,
+        "rstdev": 5.013375836926941,
+        "diff": "156.35x"
     },
     {
         "name": "benchFlatArrayCollectionToDto1000",
         "revs": 1,
         "its": 5,
-        "mem_peak": 7799064,
-        "mode": 747014.0743639881,
-        "rstdev": 2.2201915191517987,
-        "diff": "1014.55x"
+        "mem_peak": 7801352,
+        "mode": 705375.1095890407,
+        "rstdev": 1.171416872026068,
+        "diff": "983.68x"
     },
     {
         "name": "benchFlatDtoCollectionToArray1000",
         "revs": 1,
         "its": 5,
-        "mem_peak": 9115328,
-        "mode": 139672.75733855355,
-        "rstdev": 1.7896307129035658,
-        "diff": "189.70x"
+        "mem_peak": 9117616,
+        "mode": 139950.285714284,
+        "rstdev": 0.6400641501597384,
+        "diff": "195.17x"
     },
     {
         "name": "benchFlatArrayCollectionToDtoWithWireConversion1000",
         "revs": 1,
         "its": 5,
-        "mem_peak": 8115032,
-        "mode": 844972.4657534286,
-        "rstdev": 1.2304424069803641,
-        "diff": "1147.59x"
+        "mem_peak": 8117320,
+        "mode": 838992.7201565476,
+        "rstdev": 0.5417757842597609,
+        "diff": "1170.02x"
     },
     {
         "name": "benchDefinitionCollectionWithStorageConversion1000",
         "revs": 1,
         "its": 5,
-        "mem_peak": 9436944,
-        "mode": 220136.18786692707,
-        "rstdev": 2.9521348792782613,
-        "diff": "298.98x"
+        "mem_peak": 9439232,
+        "mode": 215707.58512720297,
+        "rstdev": 0.44305248522714963,
+        "diff": "300.81x"
     },
     {
         "name": "benchNestedArrayCollectionToDto1000",
         "revs": 1,
         "its": 5,
-        "mem_peak": 10137056,
-        "mode": 515549.2563600838,
-        "rstdev": 0.6405246596990744,
-        "diff": "700.19x"
+        "mem_peak": 10139408,
+        "mode": 494032.260273973,
+        "rstdev": 0.8337619904616609,
+        "diff": "688.95x"
     },
     {
         "name": "benchDottedArrayCollectionToDto1000",
         "revs": 1,
         "its": 5,
-        "mem_peak": 9699560,
-        "mode": 547494.894324854,
-        "rstdev": 0.5642330919792892,
-        "diff": "743.58x"
+        "mem_peak": 9701912,
+        "mode": 518536.72015655413,
+        "rstdev": 0.7838356488476195,
+        "diff": "723.12x"
     },
     {
         "name": "benchFlatArrayCollectionToDto10000",
         "revs": 1,
         "its": 3,
-        "mem_peak": 56161752,
-        "mode": 7996189.046966824,
-        "rstdev": 0.9326866169483509,
-        "diff": "10859.96x"
+        "mem_peak": 56164040,
+        "mode": 7277710.160469748,
+        "rstdev": 1.6200233788720602,
+        "diff": "10149.11x"
     }
 ]
