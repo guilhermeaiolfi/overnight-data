@@ -30,12 +30,23 @@ final class ReflectionPropertyNodeResolver implements NodeResolverInterface
 	public function resolve(
 		MappingNode $node,
 	): LeafNodeResolutionInterface|BranchNodeResolutionInterface|null {
-		$property = $this->findProperty($node);
+		$sourceProperty = $this->propertyFinder->findSourceProperty($node);
+		$mappedSourceName = $this->propertyFinder->getMappedSourceName(
+			node: $node,
+			sourceProperty: $sourceProperty,
+		);
+		$targetProperty = $this->propertyFinder->findTargetProperty(
+			node: $node,
+			mappedSourceName: $mappedSourceName,
+		);
+		$property = $targetProperty ?? $sourceProperty;
 		if (! $property instanceof ReflectionProperty) {
 			return null;
 		}
 
-		$name = $this->resolveName($node, $property);
+		$name = $targetProperty !== null
+			? $targetProperty->getName()
+			: $mappedSourceName;
 		$type = $property->getType();
 		if ($type instanceof ReflectionNamedType) {
 			$resolvedType = $this->resolveLeafType($type);
@@ -84,26 +95,6 @@ final class ReflectionPropertyNodeResolver implements NodeResolverInterface
 		}
 
 		return null;
-	}
-
-	private function findProperty(MappingNode $node): ?ReflectionProperty
-	{
-		return $this->propertyFinder->findTargetProperty($node)
-			?? $this->propertyFinder->findSourceProperty($node);
-	}
-
-	private function resolveName(MappingNode $node, ReflectionProperty $property): string
-	{
-		$targetProperty = $this->propertyFinder->findTargetProperty($node);
-		if (
-			$targetProperty !== null
-			&& $property->getDeclaringClass()->getName() === $targetProperty->getDeclaringClass()->getName()
-			&& $property->getName() === $targetProperty->getName()
-		) {
-			return $property->getName();
-		}
-
-		return $this->propertyFinder->getMappedSourceName($node);
 	}
 
 	private function branchInferrer(): BranchTargetInferrer

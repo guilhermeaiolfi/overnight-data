@@ -18,7 +18,7 @@ final class ArrayMapperTest extends TestCase
 		ArrayMapperNodeRecordingWriter::reset();
 	}
 
-	public function testArraySourcePropertiesAreAlwaysNull(): void
+	public function testArrayKeysBecomeRawNodeNames(): void
 	{
 		$this->mapWithRecorder([
 			'name' => 'Alice',
@@ -28,7 +28,6 @@ final class ArrayMapperTest extends TestCase
 			[
 				[
 					'name' => 'name',
-					'sourceProperty' => null,
 				],
 			],
 			ArrayMapperNodeRecordingWriter::$writes,
@@ -45,7 +44,6 @@ final class ArrayMapperTest extends TestCase
 			[
 				[
 					'name' => 0,
-					'sourceProperty' => null,
 				],
 			],
 			ArrayMapperNodeRecordingWriter::$writes,
@@ -67,7 +65,7 @@ final class ArrayMapperTest extends TestCase
 final class ArrayMapperNodeRecordingWriter implements WriterInterface
 {
 	/**
-	 * @var list<array{name: string|int|null, sourceProperty: string|null}>
+	 * @var list<array{name: string|int|null}>
 	 */
 	public static array $writes = [];
 
@@ -96,7 +94,6 @@ final class ArrayMapperNodeRecordingWriter implements WriterInterface
 	): array {
 		self::$writes[] = [
 			'name' => $node->getName(),
-			'sourceProperty' => null,
 		];
 
 		$target[$name] = $value;
