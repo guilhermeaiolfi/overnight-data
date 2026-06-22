@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Mapper;
 
+use ON\Data\Mapper\Attribute\MapFrom;
+use ON\Data\Mapper\Attribute\MapTo;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
@@ -50,6 +52,42 @@ final class MappingNodePropertyFinderTest extends TestCase
 		self::assertSame('score', $property->getName());
 	}
 
+	public function testTargetPropertyLookupPrefersMapFromBeforeActualPropertyName(): void
+	{
+		$target = new FinderPrecedenceTarget();
+		$node = MappingNode::root([], $target, $this->context())
+			->withTarget($target)
+			->createChildNode('external_name', 'Ada');
+
+		$property = $this->finder()->findTargetProperty($node);
+
+		self::assertInstanceOf(ReflectionProperty::class, $property);
+		self::assertSame('aliasedName', $property->getName());
+	}
+
+	public function testFinderCachesAreKeyedByConcreteSourceAndTargetClass(): void
+	{
+		$finder = $this->finder();
+		$context = $this->context();
+
+		$firstSource = new FinderFirstSource();
+		$firstTarget = new FinderFirstTarget();
+		$firstNode = MappingNode::root($firstSource, $firstTarget, $context)
+			->withTarget($firstTarget)
+			->createChildNode('name', 'Ada');
+
+		$secondSource = new FinderSecondSource();
+		$secondTarget = new FinderSecondTarget();
+		$secondNode = MappingNode::root($secondSource, $secondTarget, $context)
+			->withTarget($secondTarget)
+			->createChildNode('name', 'Grace');
+
+		self::assertSame('first_alias', $finder->getMappedSourceName($firstNode));
+		self::assertSame('firstValue', $finder->findTargetProperty($firstNode)?->getName());
+		self::assertSame('second_alias', $finder->getMappedSourceName($secondNode));
+		self::assertSame('secondValue', $finder->findTargetProperty($secondNode)?->getName());
+	}
+
 	#[DataProvider('nonReflectableTargetProvider')]
 	public function testNonReflectableTargetsReturnNoTargetProperty(mixed $preparedTarget): void
 	{
@@ -81,4 +119,36 @@ final class MappingNodePropertyFinderTest extends TestCase
 	{
 		return new MappingContext(ConversionGateway::createDefault());
 	}
+}
+
+final class FinderPrecedenceTarget
+{
+	public string $external_name;
+
+	#[MapFrom('external_name')]
+	public string $aliasedName;
+}
+
+final class FinderFirstSource
+{
+	#[MapTo('first_alias')]
+	public string $name = 'Ada';
+}
+
+final class FinderSecondSource
+{
+	#[MapTo('second_alias')]
+	public string $name = 'Grace';
+}
+
+final class FinderFirstTarget
+{
+	#[MapFrom('first_alias')]
+	public string $firstValue;
+}
+
+final class FinderSecondTarget
+{
+	#[MapFrom('second_alias')]
+	public string $secondValue;
 }

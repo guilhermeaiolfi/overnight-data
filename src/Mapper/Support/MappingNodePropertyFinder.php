@@ -12,6 +12,15 @@ use stdClass;
 
 final class MappingNodePropertyFinder
 {
+	/** @var array<class-string, ObjectPropertyMatcher> */
+	private array $targetMatchers = [];
+
+	/** @var array<class-string, array<string, ReflectionProperty|null>> */
+	private array $sourceProperties = [];
+
+	/** @var array<class-string, array<string, string>> */
+	private array $mappedSourceNames = [];
+
 	public function findSourceProperty(MappingNode $node): ?ReflectionProperty
 	{
 		$source = $node->getParentSource();
@@ -21,12 +30,19 @@ final class MappingNodePropertyFinder
 			return null;
 		}
 
-		$reflection = new ReflectionClass($source);
+		$class = $source::class;
+		if (array_key_exists($name, $this->sourceProperties[$class] ?? [])) {
+			return $this->sourceProperties[$class][$name];
+		}
+
+		$reflection = new ReflectionClass($class);
 		if (! $reflection->hasProperty($name)) {
+			$this->sourceProperties[$class][$name] = null;
+
 			return null;
 		}
 
-		return $reflection->getProperty($name);
+		return $this->sourceProperties[$class][$name] = $reflection->getProperty($name);
 	}
 
 	public function findTargetProperty(
@@ -38,9 +54,9 @@ final class MappingNodePropertyFinder
 			return null;
 		}
 
-		$matcher = new ObjectPropertyMatcher(new ReflectionClass($target));
-
-		return $matcher->match($mappedSourceName ?? $this->getMappedSourceName($node));
+		return $this->matcherFor($target::class)->match(
+			$mappedSourceName ?? $this->getMappedSourceName($node),
+		);
 	}
 
 	public function getMappedSourceName(
@@ -52,11 +68,35 @@ final class MappingNodePropertyFinder
 			return (string) $node->getName();
 		}
 
-		$attributes = $sourceProperty->getAttributes(MapTo::class);
-		if ($attributes === []) {
-			return $sourceProperty->getName();
+		$source = $node->getParentSource();
+		$propertyName = $sourceProperty->getName();
+		if (is_object($source)) {
+			$class = $source::class;
+			if (isset($this->mappedSourceNames[$class][$propertyName])) {
+				return $this->mappedSourceNames[$class][$propertyName];
+			}
 		}
 
-		return $attributes[0]->newInstance()->getName();
+		$attributes = $sourceProperty->getAttributes(MapTo::class);
+		if ($attributes === []) {
+			$mappedSourceName = $propertyName;
+		} else {
+			$mappedSourceName = $attributes[0]->newInstance()->getName();
+		}
+
+		if (is_object($source)) {
+			$this->mappedSourceNames[$source::class][$propertyName] = $mappedSourceName;
+		}
+
+		return $mappedSourceName;
+	}
+
+	/**
+	 * @param class-string $class
+	 */
+	private function matcherFor(string $class): ObjectPropertyMatcher
+	{
+		return $this->targetMatchers[$class]
+			??= new ObjectPropertyMatcher(new ReflectionClass($class));
 	}
 }
