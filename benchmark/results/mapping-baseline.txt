@@ -6,16 +6,16 @@ Aggregate results by subject and group by benchmark class.
 This is a preview report and may change in minor version updates.
 
 MappingBench
-+-----------------------------------------------------+------+-----+-----------+-----------------+--------+-----------+
-| name                                                | revs | its | mem_peak  | mode            | rstdev | diff      |
-+-----------------------------------------------------+------+-----+-----------+-----------------+--------+-----------+
-| benchSingleFlatArrayToDto                           | 100  | 5   | 165.770mb | 713.839μs       | ±2.08% | 1.00x     |
-| benchFlatArrayCollectionToArray1000                 | 1    | 5   | 165.770mb | 116,289.217μs   | ±1.97% | 162.91x   |
-| benchFlatArrayCollectionToDto1000                   | 1    | 5   | 165.770mb | 713,587.759μs   | ±2.14% | 999.65x   |
-| benchFlatDtoCollectionToArray1000                   | 1    | 5   | 165.770mb | 140,546.922μs   | ±3.23% | 196.89x   |
-| benchFlatArrayCollectionToDtoWithWireConversion1000 | 1    | 5   | 165.770mb | 903,877.276μs   | ±3.06% | 1266.22x  |
-| benchDefinitionCollectionWithStorageConversion1000  | 1    | 5   | 165.770mb | 219,586.493μs   | ±3.76% | 307.61x   |
-| benchNestedArrayCollectionToDto1000                 | 1    | 5   | 165.770mb | 510,962.771μs   | ±3.82% | 715.80x   |
-| benchDottedArrayCollectionToDto1000                 | 1    | 5   | 165.770mb | 547,921.769μs   | ±3.92% | 767.57x   |
-| benchFlatArrayCollectionToDto10000                  | 1    | 3   | 165.770mb | 8,116,367.613μs | ±2.69% | 11370.02x |
-+-----------------------------------------------------+------+-----+-----------+-----------------+--------+-----------+
++-----------------------------------------------------+------+-----+----------+-----------------+--------+-----------+
+| name                                                | revs | its | mem_peak | mode            | rstdev | diff      |
++-----------------------------------------------------+------+-----+----------+-----------------+--------+-----------+
+| benchSingleFlatArrayToDto                           | 100  | 5   | 2.483mb  | 719.148μs       | ±2.16% | 1.00x     |
+| benchFlatArrayCollectionToArray1000                 | 1    | 5   | 8.495mb  | 112,025.507μs   | ±0.56% | 155.78x   |
+| benchFlatArrayCollectionToDto1000                   | 1    | 5   | 7.799mb  | 723,527.096μs   | ±1.26% | 1006.09x  |
+| benchFlatDtoCollectionToArray1000                   | 1    | 5   | 9.115mb  | 136,759.417μs   | ±2.20% | 190.17x   |
+| benchFlatArrayCollectionToDtoWithWireConversion1000 | 1    | 5   | 8.115mb  | 847,574.689μs   | ±0.44% | 1178.58x  |
+| benchDefinitionCollectionWithStorageConversion1000  | 1    | 5   | 9.437mb  | 218,190.918μs   | ±1.01% | 303.40x   |
+| benchNestedArrayCollectionToDto1000                 | 1    | 5   | 10.137mb | 508,383.370μs   | ±1.58% | 706.92x   |
+| benchDottedArrayCollectionToDto1000                 | 1    | 5   | 9.699mb  | 541,068.869μs   | ±0.26% | 752.37x   |
+| benchFlatArrayCollectionToDto10000                  | 1    | 3   | 56.162mb | 7,663,357.393μs | ±3.45% | 10656.16x |
++-----------------------------------------------------+------+-----+----------+-----------------+--------+-----------+

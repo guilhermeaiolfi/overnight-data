@@ -18,70 +18,85 @@ use function ON\Data\Mapper\map;
  */
 final class MappingBench
 {
-	private ?MappingDataset $dataset = null;
 	private ?ConversionGateway $gateway = null;
+	private ?MappingDataset $dataset = null;
+	private mixed $source = null;
+
+	public function setUpGateway(): void
+	{
+		if ($this->dataset === null) {
+			$this->dataset = new MappingDataset();
+		}
+
+		if ($this->gateway !== null) {
+			return;
+		}
+
+		$this->gateway = ConversionGateway::createDefault();
+		$this->gateway->getMapperManager()->warmUp();
+	}
 
 	/**
-	 * @BeforeMethods({"setUpBenchmark"})
+	 * @BeforeMethods({"setUpGateway", "setUpSingleFlatArray"})
 	 * @Revs(100)
 	 */
 	public function benchSingleFlatArrayToDto(): void
 	{
-		map($this->dataset->singleFlatArray(), null, $this->gateway)->to(FlatTargetDto::class);
+		map($this->source, null, $this->gateway)->to(FlatTargetDto::class);
 	}
 
 	/**
-	 * @BeforeMethods({"setUpBenchmark"})
+	 * @BeforeMethods({"setUpGateway", "setUpFlatArrayCollection1000"})
 	 * @Revs(1)
 	 */
 	public function benchFlatArrayCollectionToArray1000(): void
 	{
-		map($this->dataset->flatArrayCollection1000(), null, $this->gateway)
+		map($this->source, null, $this->gateway)
 			->collection()
 			->to([]);
 	}
 
 	/**
-	 * @BeforeMethods({"setUpBenchmark"})
+	 * @BeforeMethods({"setUpGateway", "setUpFlatArrayCollection1000"})
 	 * @Revs(1)
 	 */
 	public function benchFlatArrayCollectionToDto1000(): void
 	{
-		map($this->dataset->flatArrayCollection1000(), null, $this->gateway)
+		map($this->source, null, $this->gateway)
 			->collection()
 			->to(FlatTargetDto::class);
 	}
 
 	/**
-	 * @BeforeMethods({"setUpBenchmark"})
+	 * @BeforeMethods({"setUpGateway", "setUpFlatDtoCollection1000"})
 	 * @Revs(1)
 	 */
 	public function benchFlatDtoCollectionToArray1000(): void
 	{
-		map($this->dataset->flatDtoCollection1000(), null, $this->gateway)
+		map($this->source, null, $this->gateway)
 			->collection()
 			->to([]);
 	}
 
 	/**
-	 * @BeforeMethods({"setUpBenchmark"})
+	 * @BeforeMethods({"setUpGateway", "setUpFlatWireArrayCollection1000"})
 	 * @Revs(1)
 	 */
 	public function benchFlatArrayCollectionToDtoWithWireConversion1000(): void
 	{
-		map($this->dataset->flatWireArrayCollection1000(), null, $this->gateway)
+		map($this->source, null, $this->gateway)
 			->from(WireRepresentation::class)
 			->collection()
 			->to(FlatTargetDto::class);
 	}
 
 	/**
-	 * @BeforeMethods({"setUpBenchmark"})
+	 * @BeforeMethods({"setUpGateway", "setUpFlatStorageArrayCollection1000"})
 	 * @Revs(1)
 	 */
 	public function benchDefinitionCollectionWithStorageConversion1000(): void
 	{
-		map($this->dataset->flatStorageArrayCollection1000(), null, $this->gateway)
+		map($this->source, null, $this->gateway)
 			->from(StorageRepresentation::class)
 			->args($this->dataset->flatDefinition())
 			->collection()
@@ -89,47 +104,76 @@ final class MappingBench
 	}
 
 	/**
-	 * @BeforeMethods({"setUpBenchmark"})
+	 * @BeforeMethods({"setUpGateway", "setUpNestedArrayCollection1000"})
 	 * @Revs(1)
 	 */
 	public function benchNestedArrayCollectionToDto1000(): void
 	{
-		map($this->dataset->nestedArrayCollection1000(), null, $this->gateway)
+		map($this->source, null, $this->gateway)
 			->collection()
 			->to(NestedTargetDto::class);
 	}
 
 	/**
-	 * @BeforeMethods({"setUpBenchmark"})
+	 * @BeforeMethods({"setUpGateway", "setUpDottedNestedArrayCollection1000"})
 	 * @Revs(1)
 	 */
 	public function benchDottedArrayCollectionToDto1000(): void
 	{
-		map($this->dataset->dottedNestedArrayCollection1000(), null, $this->gateway)
+		map($this->source, null, $this->gateway)
 			->collection()
 			->to(NestedTargetDto::class);
 	}
 
 	/**
-	 * @BeforeMethods({"setUpBenchmark"})
+	 * @BeforeMethods({"setUpGateway", "setUpFlatArrayCollection10000"})
 	 * @Revs(1)
 	 * @Iterations(3)
 	 */
 	public function benchFlatArrayCollectionToDto10000(): void
 	{
-		map($this->dataset->flatArrayCollection10000(), null, $this->gateway)
+		map($this->source, null, $this->gateway)
 			->collection()
 			->to(FlatTargetDto::class);
 	}
 
-	public function setUpBenchmark(): void
+	public function setUpSingleFlatArray(): void
 	{
-		if ($this->dataset !== null && $this->gateway !== null) {
-			return;
-		}
+		$this->source = $this->dataset?->createFlatArray(1);
+	}
 
-		$this->dataset = new MappingDataset();
-		$this->gateway = ConversionGateway::createDefault();
-		$this->gateway->getMapperManager()->warmUp();
+	public function setUpFlatArrayCollection1000(): void
+	{
+		$this->source = $this->dataset?->createFlatArrayCollection(1000);
+	}
+
+	public function setUpFlatDtoCollection1000(): void
+	{
+		$this->source = $this->dataset?->createFlatDtoCollection(1000);
+	}
+
+	public function setUpFlatWireArrayCollection1000(): void
+	{
+		$this->source = $this->dataset?->createFlatWireArrayCollection(1000);
+	}
+
+	public function setUpFlatStorageArrayCollection1000(): void
+	{
+		$this->source = $this->dataset?->createFlatStorageArrayCollection(1000);
+	}
+
+	public function setUpNestedArrayCollection1000(): void
+	{
+		$this->source = $this->dataset?->createNestedArrayCollection(1000);
+	}
+
+	public function setUpDottedNestedArrayCollection1000(): void
+	{
+		$this->source = $this->dataset?->createDottedNestedArrayCollection(1000);
+	}
+
+	public function setUpFlatArrayCollection10000(): void
+	{
+		$this->source = $this->dataset?->createFlatArrayCollection(10000);
 	}
 }

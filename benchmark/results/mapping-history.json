@@ -3,8 +3,8 @@
     "runs": [
         {
             "label": "before-operation-caches",
-            "recorded_at": "2026-06-22T17:58:08+00:00",
-            "commit": "2d220918c80db0a9801b5061817d98494eec6fb6",
+            "recorded_at": "2026-06-22T18:13:10+00:00",
+            "commit": "bae0b697b5d131a6cb09052992afab4a446b7b94",
             "dirty": true,
             "environment": {
                 "php": "8.3.14",
@@ -13,49 +13,49 @@
             },
             "benchmarks": {
                 "benchDefinitionCollectionWithStorageConversion1000": {
-                    "mode_us": 219586.4931506843,
-                    "rstdev_percent": 3.757503454951446,
-                    "memory_peak_bytes": 165769920
+                    "mode_us": 218190.91780821988,
+                    "rstdev_percent": 1.0090268886730163,
+                    "memory_peak_bytes": 9436856
                 },
                 "benchDottedArrayCollectionToDto1000": {
-                    "mode_us": 547921.7690802369,
-                    "rstdev_percent": 3.9174434081736167,
-                    "memory_peak_bytes": 165769904
+                    "mode_us": 541068.8688845397,
+                    "rstdev_percent": 0.2578968418796896,
+                    "memory_peak_bytes": 9699472
                 },
                 "benchFlatArrayCollectionToArray1000": {
-                    "mode_us": 116289.21722113529,
-                    "rstdev_percent": 1.9692091381657266,
-                    "memory_peak_bytes": 165769904
+                    "mode_us": 112025.50684931655,
+                    "rstdev_percent": 0.5589567887964332,
+                    "memory_peak_bytes": 8494632
                 },
                 "benchFlatArrayCollectionToDto1000": {
-                    "mode_us": 713587.759295499,
-                    "rstdev_percent": 2.1379973502070797,
-                    "memory_peak_bytes": 165769904
+                    "mode_us": 723527.0958903925,
+                    "rstdev_percent": 1.2573649209646165,
+                    "memory_peak_bytes": 7798976
                 },
                 "benchFlatArrayCollectionToDto10000": {
-                    "mode_us": 8116367.6125244545,
-                    "rstdev_percent": 2.6918952722865037,
-                    "memory_peak_bytes": 165769904
+                    "mode_us": 7663357.3933463935,
+                    "rstdev_percent": 3.4493165479963306,
+                    "memory_peak_bytes": 56161664
                 },
                 "benchFlatArrayCollectionToDtoWithWireConversion1000": {
-                    "mode_us": 903877.2759295693,
-                    "rstdev_percent": 3.0613740933489417,
-                    "memory_peak_bytes": 165769920
+                    "mode_us": 847574.6888454023,
+                    "rstdev_percent": 0.44227773322498953,
+                    "memory_peak_bytes": 8114944
                 },
                 "benchFlatDtoCollectionToArray1000": {
-                    "mode_us": 140546.92172211345,
-                    "rstdev_percent": 3.2335965847983013,
-                    "memory_peak_bytes": 165769904
+                    "mode_us": 136759.4168297458,
+                    "rstdev_percent": 2.2026467047788763,
+                    "memory_peak_bytes": 9115240
                 },
                 "benchNestedArrayCollectionToDto1000": {
-                    "mode_us": 510962.77103718126,
-                    "rstdev_percent": 3.819054860227624,
-                    "memory_peak_bytes": 165769904
+                    "mode_us": 508383.36986301496,
+                    "rstdev_percent": 1.578866856730143,
+                    "memory_peak_bytes": 10136968
                 },
                 "benchSingleFlatArrayToDto": {
-                    "mode_us": 713.8392367906008,
-                    "rstdev_percent": 2.084034363118709,
-                    "memory_peak_bytes": 165769896
+                    "mode_us": 719.148043052843,
+                    "rstdev_percent": 2.16037649104722,
+                    "memory_peak_bytes": 2482616
                 }
             }
         }

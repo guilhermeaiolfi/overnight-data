@@ -9,136 +9,100 @@ use ON\Data\Definition\Registry;
 
 final class MappingDataset
 {
-	/** @var array<string, mixed> */
-	private array $singleFlatArray;
-
-	/** @var list<array<string, mixed>> */
-	private array $flatArrayCollection1000;
-
-	/** @var list<array<string, mixed>> */
-	private array $flatArrayCollection10000;
-
-	/** @var list<array<string, mixed>> */
-	private array $flatWireArrayCollection1000;
-
-	/** @var list<array<string, mixed>> */
-	private array $flatStorageArrayCollection1000;
-
-	/** @var list<FlatSourceDto> */
-	private array $flatDtoCollection1000;
-
-	/** @var list<array<string, mixed>> */
-	private array $nestedArrayCollection1000;
-
-	/** @var list<array<string, mixed>> */
-	private array $dottedNestedArrayCollection1000;
-
 	private DefinitionInterface $flatDefinition;
 
 	public function __construct()
 	{
 		$this->flatDefinition = $this->createFlatDefinition();
-
-		$flatArrays = [];
-		$flatWireArrays = [];
-		$flatStorageArrays = [];
-		$flatDtos = [];
-
-		for ($index = 1; $index <= 10000; $index++) {
-			$flatArrays[] = $this->createFlatArray($index);
-			$flatWireArrays[] = $this->createFlatWireArray($index);
-			$flatStorageArrays[] = $this->createFlatStorageArray($index);
-
-			if ($index <= 1000) {
-				$flatDtos[] = $this->createFlatSourceDto($index);
-			}
-		}
-
-		$nestedArrays = [];
-		$dottedNestedArrays = [];
-
-		for ($index = 1; $index <= 1000; $index++) {
-			$nestedArrays[] = $this->createNestedArray($index);
-			$dottedNestedArrays[] = $this->createDottedNestedArray($index);
-		}
-
-		$this->singleFlatArray = $flatArrays[0];
-		$this->flatArrayCollection1000 = array_slice($flatArrays, 0, 1000);
-		$this->flatArrayCollection10000 = $flatArrays;
-		$this->flatWireArrayCollection1000 = array_slice($flatWireArrays, 0, 1000);
-		$this->flatStorageArrayCollection1000 = array_slice($flatStorageArrays, 0, 1000);
-		$this->flatDtoCollection1000 = $flatDtos;
-		$this->nestedArrayCollection1000 = $nestedArrays;
-		$this->dottedNestedArrayCollection1000 = $dottedNestedArrays;
-	}
-
-	/**
-	 * @return array<string, mixed>
-	 */
-	public function singleFlatArray(): array
-	{
-		return $this->singleFlatArray;
-	}
-
-	/**
-	 * @return list<array<string, mixed>>
-	 */
-	public function flatArrayCollection1000(): array
-	{
-		return $this->flatArrayCollection1000;
-	}
-
-	/**
-	 * @return list<array<string, mixed>>
-	 */
-	public function flatArrayCollection10000(): array
-	{
-		return $this->flatArrayCollection10000;
-	}
-
-	/**
-	 * @return list<array<string, mixed>>
-	 */
-	public function flatWireArrayCollection1000(): array
-	{
-		return $this->flatWireArrayCollection1000;
-	}
-
-	/**
-	 * @return list<array<string, mixed>>
-	 */
-	public function flatStorageArrayCollection1000(): array
-	{
-		return $this->flatStorageArrayCollection1000;
-	}
-
-	/**
-	 * @return list<FlatSourceDto>
-	 */
-	public function flatDtoCollection1000(): array
-	{
-		return $this->flatDtoCollection1000;
-	}
-
-	/**
-	 * @return list<array<string, mixed>>
-	 */
-	public function nestedArrayCollection1000(): array
-	{
-		return $this->nestedArrayCollection1000;
-	}
-
-	/**
-	 * @return list<array<string, mixed>>
-	 */
-	public function dottedNestedArrayCollection1000(): array
-	{
-		return $this->dottedNestedArrayCollection1000;
 	}
 
 	public function flatDefinition(): DefinitionInterface
 	{
 		return $this->flatDefinition;
+	}
+
+	/**
+	 * @return list<array<string, mixed>>
+	 */
+	public function createFlatArrayCollection(int $count): array
+	{
+		$rows = [];
+
+		for ($index = 1; $index <= $count; $index++) {
+			$rows[] = $this->createFlatArray($index);
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * @return list<array<string, mixed>>
+	 */
+	public function createFlatWireArrayCollection(int $count): array
+	{
+		$rows = [];
+
+		for ($index = 1; $index <= $count; $index++) {
+			$rows[] = $this->createFlatWireArray($index);
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * @return list<array<string, mixed>>
+	 */
+	public function createFlatStorageArrayCollection(int $count): array
+	{
+		$rows = [];
+
+		for ($index = 1; $index <= $count; $index++) {
+			$rows[] = $this->createFlatStorageArray($index);
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * @return list<FlatSourceDto>
+	 */
+	public function createFlatDtoCollection(int $count): array
+	{
+		$rows = [];
+
+		for ($index = 1; $index <= $count; $index++) {
+			$rows[] = $this->createFlatSourceDto($index);
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * @return list<array<string, mixed>>
+	 */
+	public function createNestedArrayCollection(int $count): array
+	{
+		$rows = [];
+
+		for ($index = 1; $index <= $count; $index++) {
+			$rows[] = $this->createNestedArray($index);
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * @return list<array<string, mixed>>
+	 */
+	public function createDottedNestedArrayCollection(int $count): array
+	{
+		$rows = [];
+
+		for ($index = 1; $index <= $count; $index++) {
+			$rows[] = $this->createDottedNestedArray($index);
+		}
+
+		return $rows;
 	}
 
 	private function createFlatDefinition(): DefinitionInterface
@@ -182,7 +146,7 @@ final class MappingDataset
 	/**
 	 * @return array<string, mixed>
 	 */
-	private function createFlatArray(int $index): array
+	public function createFlatArray(int $index): array
 	{
 		return [
 			'id' => $index,

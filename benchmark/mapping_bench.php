@@ -48,12 +48,21 @@ try {
 			exit(1);
 		}
 
+		$gitState = [
+			'commit' => trimRequiredCommandOutput(
+				$root,
+				['git', 'rev-parse', 'HEAD'],
+				'Unable to read current Git commit.',
+			),
+			'dirty' => trim(runCommand($root, ['git', 'status', '--short'])['stdout']) !== '',
+		];
+
 		copy($latestXml, $baselineXml);
 		copy($latestTxt, $baselineTxt);
 		copy($latestJson, $baselineJson);
 
 		$history = readHistoryFile($historyFile);
-		$history['runs'] = registerHistoryRun($history['runs'], $label, $latestJson, $root);
+		$history['runs'] = registerHistoryRun($history['runs'], $label, $latestJson, $gitState);
 		writeJsonFile($historyFile, $history);
 
 		echo "Recorded mapping baseline:\n";
@@ -133,17 +142,18 @@ function renderReport(string $root, array $xmlFiles, string $output): string
 
 /**
  * @param list<array<string, mixed>> $runs
+ * @param array{commit:string, dirty:bool} $gitState
  *
  * @return list<array<string, mixed>>
  */
-function registerHistoryRun(array $runs, string $label, string $latestJsonFile, string $root): array
+function registerHistoryRun(array $runs, string $label, string $latestJsonFile, array $gitState): array
 {
 	$latestBenchmarks = extractBenchmarksFromLatestJson($latestJsonFile);
 	$entry = [
 		'label' => $label,
 		'recorded_at' => date(DATE_ATOM),
-		'commit' => trimRequiredCommandOutput($root, ['git', 'rev-parse', 'HEAD'], 'Unable to read current Git commit.'),
-		'dirty' => trim(runCommand($root, ['git', 'status', '--short'])['stdout']) !== '',
+		'commit' => $gitState['commit'],
+		'dirty' => $gitState['dirty'],
 		'environment' => [
 			'php' => PHP_VERSION,
 			'os' => PHP_OS_FAMILY,
