@@ -1,0 +1,30 @@
+{
+    "runner.bootstrap": "vendor/autoload.php",
+    "runner.path": "benchmarks",
+    "runner.retry_threshold": 10,
+    "storage.xml_storage_path": "benchmark/results/storage",
+    "report.generators": {
+        "default": {
+            "generator": "table",
+            "cols": [
+                "subject",
+                "mode",
+                "mean",
+                "rstdev",
+                "mem_peak"
+            ]
+        },
+        "baseline-summary": {
+            "extends": "aggregate-preview",
+            "cols": [
+                "name",
+                "revs",
+                "its",
+                "mem_peak",
+                "mode",
+                "rstdev",
+                "diff"
+            ]
+        }
+    }
+}

@@ -4,3 +4,9 @@
 /.phpunit.result.cache
 /composer.lock
 /%TEMP%/
+/benchmark/results/mapping-latest.xml
+/benchmark/results/mapping-latest.txt
+/benchmark/results/mapping-latest.json
+/benchmark/results/mapping-compare.txt
+/benchmark/results/mapping-compare.json
+/benchmark/results/storage/

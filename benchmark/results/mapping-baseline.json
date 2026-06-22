@@ -1,0 +1,83 @@
+[
+    {
+        "name": "benchSingleFlatArrayToDto",
+        "revs": 100,
+        "its": 5,
+        "mem_peak": 165769896,
+        "mode": 713.8392367906008,
+        "rstdev": 2.084034363118709,
+        "diff": "1.00x"
+    },
+    {
+        "name": "benchFlatArrayCollectionToArray1000",
+        "revs": 1,
+        "its": 5,
+        "mem_peak": 165769904,
+        "mode": 116289.21722113529,
+        "rstdev": 1.9692091381657266,
+        "diff": "162.91x"
+    },
+    {
+        "name": "benchFlatArrayCollectionToDto1000",
+        "revs": 1,
+        "its": 5,
+        "mem_peak": 165769904,
+        "mode": 713587.759295499,
+        "rstdev": 2.1379973502070797,
+        "diff": "999.65x"
+    },
+    {
+        "name": "benchFlatDtoCollectionToArray1000",
+        "revs": 1,
+        "its": 5,
+        "mem_peak": 165769904,
+        "mode": 140546.92172211345,
+        "rstdev": 3.2335965847983013,
+        "diff": "196.89x"
+    },
+    {
+        "name": "benchFlatArrayCollectionToDtoWithWireConversion1000",
+        "revs": 1,
+        "its": 5,
+        "mem_peak": 165769920,
+        "mode": 903877.2759295693,
+        "rstdev": 3.0613740933489417,
+        "diff": "1266.22x"
+    },
+    {
+        "name": "benchDefinitionCollectionWithStorageConversion1000",
+        "revs": 1,
+        "its": 5,
+        "mem_peak": 165769920,
+        "mode": 219586.4931506843,
+        "rstdev": 3.757503454951446,
+        "diff": "307.61x"
+    },
+    {
+        "name": "benchNestedArrayCollectionToDto1000",
+        "revs": 1,
+        "its": 5,
+        "mem_peak": 165769904,
+        "mode": 510962.77103718126,
+        "rstdev": 3.819054860227624,
+        "diff": "715.80x"
+    },
+    {
+        "name": "benchDottedArrayCollectionToDto1000",
+        "revs": 1,
+        "its": 5,
+        "mem_peak": 165769904,
+        "mode": 547921.7690802369,
+        "rstdev": 3.9174434081736167,
+        "diff": "767.57x"
+    },
+    {
+        "name": "benchFlatArrayCollectionToDto10000",
+        "revs": 1,
+        "its": 3,
+        "mem_peak": 165769904,
+        "mode": 8116367.6125244545,
+        "rstdev": 2.6918952722865037,
+        "diff": "11370.02x"
+    }
+]
