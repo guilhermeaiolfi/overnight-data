@@ -1,29 +1,29 @@
-# Field Types and Mapper Runtime
+# Mapper Runtime Guide
 
 `ON\Data` includes scalar conversion and recursive structural mapping under `ON\Data\Mapper`.
 
-The mapper layer supports arrays, `stdClass`, and public-property DTOs, definition-aware scalar conversion through `->args($definition)`, ad-hoc scalar metadata through `->fieldMap(...)`, dotted-key expansion, and representation-aware conversion routed through canonical PHP values.
+The mapper runtime supports arrays, `stdClass`, and public-property DTOs. It also supports definition-aware scalar conversion through `->args($definition)`, ad-hoc scalar metadata through `->fieldMap(...)`, dotted-key expansion, and representation-aware conversion routed through canonical PHP values.
 
-## Core roles
+## Core concepts
 
 Representations are class-based markers implementing `ON\Data\Mapper\Representation\RepresentationInterface`.
 
 - `PhpRepresentation` is the canonical hub.
 - `StorageRepresentation` is the storage-facing marker.
-- `WireRepresentation` is the external-input and JSON-facing marker and now extends `StorageRepresentation`.
+- `WireRepresentation` is the external-input and JSON-facing marker and extends `StorageRepresentation`.
 
 Field types own:
 
-- their registered names;
-- their storage type hint;
-- default conversion to canonical PHP;
-- default conversion from canonical PHP.
+- their registered names
+- their storage type hint
+- default conversion to canonical PHP
+- default conversion from canonical PHP
 
 Codecs own one specific `FieldType + Representation` pair.
 
-## Canonical conversion path
+## Canonical conversion flow
 
-Non-identical representation conversions route through PHP:
+Conversions between non-identical representations route through canonical PHP:
 
 ```text
 source representation
@@ -41,7 +41,7 @@ nearest parent representation codec
 field type default conversion
 ```
 
-If source and target representations are equal, the original value is returned unchanged. `null` always passes through unchanged.
+If the source and target representations are the same, the original value is returned unchanged. `null` always passes through unchanged.
 
 ## Built-in field types
 
@@ -85,13 +85,13 @@ Alias lookup is case-insensitive.
 
 ## Registration
 
-`MapperManager` is the single public registration facade for:
+`MapperManager` is the public registration facade for:
 
-- Mappers;
-- writers;
-- node resolvers;
-- field types;
-- field-type codecs.
+- mappers
+- writers
+- node resolvers
+- field types
+- field-type codecs
 
 Register custom field types and codecs through the gateway-owned manager:
 
@@ -109,15 +109,14 @@ $gateway
 Custom representations do not need registration:
 
 ```php
-use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Representation\WireRepresentation;
 
-class ApiRepresentation extends WireRepresentation
+final class ApiRepresentation extends WireRepresentation
 {
 }
 ```
 
-## Field type example
+## Custom field type example
 
 ```php
 use ON\Data\Mapper\FieldTypeInterface;
@@ -147,7 +146,7 @@ final class MoneyFieldType implements FieldTypeInterface
 }
 ```
 
-## Codec example
+## Custom codec example
 
 ```php
 use ON\Data\Mapper\FieldTypeCodecInterface;
@@ -178,9 +177,9 @@ final class MoneyWireCodec implements FieldTypeCodecInterface
 }
 ```
 
-A codec registered for `WireRepresentation` automatically applies to child representations unless a more specific codec exists. Because `WireRepresentation` extends `StorageRepresentation`, a storage-oriented default can stay on the field type while a wire-only codec overrides just the wire-facing behavior.
+A codec registered for `WireRepresentation` automatically applies to child representations unless a more specific codec exists. Because `WireRepresentation` extends `StorageRepresentation`, a storage-oriented default can remain on the field type while a wire-only codec overrides just the wire-facing behavior.
 
-## ConversionGateway
+## Conversion gateway
 
 Create an empty gateway:
 
@@ -198,8 +197,8 @@ Convert values explicitly by naming the source and target representations:
 
 ```php
 use ON\Data\Mapper\Representation\PhpRepresentation;
-use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use ON\Data\Mapper\Representation\StorageRepresentation;
+use ON\Data\Mapper\Resolution\LeafNodeResolution;
 
 $phpValue = $gateway->to(
     StorageRepresentation::class,
@@ -209,7 +208,7 @@ $phpValue = $gateway->to(
 );
 ```
 
-## Mapper runtime
+## Runtime components
 
 Each `ConversionGateway` owns one `MapperManager`:
 
@@ -219,14 +218,14 @@ $runtime = $gateway->getMapperManager();
 
 Default registered runtime components:
 
-- Mappers: `ArrayMapper`, `ObjectMapper`
+- mappers: `ArrayMapper`, `ObjectMapper`
 - writers: `ArrayWriter`, `ObjectWriter`
 - resolvers: `FieldMapNodeResolver`, `DefinitionNodeResolver`, `ReflectionPropertyNodeResolver`, `GenericNodeResolver`, `PassthroughNodeResolver`
-- field types: the built-in scalar handlers above
+- field types: the built-in scalar handlers listed above
 
 Mappers and writers are cached reusable instances. Resolvers are constructed per mapping. Field types and codecs are static classes and are never instantiated.
 
-## Fluent mapping
+## Fluent mapping API
 
 Import the helper once:
 
@@ -259,19 +258,19 @@ map($source)
     ->to([]);
 ```
 
-## One-level mapper runtime
+## Mapping execution model
 
-A mapper maps one source branch level. It owns writer preparation, immediate child enumeration, node resolution, conversion, recursive branch dispatch, writing, and writer finishing. Concrete mappers only decide whether they can map a source value and how to enumerate that source value's immediate children.
+A mapper processes one source branch level at a time. It owns writer preparation, immediate child enumeration, node resolution, conversion, recursive branch dispatch, writing, and writer finalization. Concrete mappers only decide whether they can map a source value and how to enumerate that value's immediate children.
 
-When a child resolves as a branch, recursive dispatch returns through `MapperManager::mapNode()`. That means mapper selection happens from the branch's runtime source value, so hybrid trees such as array root -> object child -> array grandchild are handled naturally.
+When a child resolves as a branch, recursive dispatch flows through `MapperManager::mapNode()`. Mapper selection therefore happens from the branch's runtime source value, which allows hybrid trees such as array root -> object child -> array grandchild.
 
-## Definition-aware node resolution
+## Definition-aware resolution
 
 When one direct `DefinitionInterface` is supplied through `->args($definition)`, the default `DefinitionNodeResolver` can derive `LeafNodeResolution` values for fields and `BranchNodeResolution` values for relations. Definition collections describe metadata; runtime collection cardinality comes from relation cardinality, PHPDoc list metadata, or explicit root collection mapping.
 
-## FieldMap
+## FieldMap support
 
-`FieldMap` adds small mapping-local scalar metadata without recreating the old blueprint subsystem:
+`FieldMap` provides mapping-local scalar metadata without reintroducing the old blueprint subsystem:
 
 ```php
 use ON\Data\Mapper\FieldMap;
@@ -291,11 +290,11 @@ map($payload)
 - `'path' => 'type'`
 - `'path' => ['type' => 'type', 'nullable' => true]`
 
-Configured paths are case-sensitive dotted paths. Numeric configured segments are rejected, but runtime numeric segments are ignored during lookup so `items.price` applies to `items.0.price`, `items.1.price`, and so on.
+Configured paths are case-sensitive dotted paths. Numeric configured segments are rejected, but runtime numeric segments are ignored during lookup so `items.price` applies to `items.0.price`, `items.1.price`, and later list entries.
 
 ## Reflection fallback
 
-`ReflectionPropertyNodeResolver` still infers primitive scalar properties and now also infers:
+`ReflectionPropertyNodeResolver` still infers primitive scalar properties and also infers:
 
 - backed-enum property classes
 - immutable-compatible datetime properties such as `DateTimeImmutable` and `DateTimeInterface`
@@ -317,13 +316,13 @@ PassthroughNodeResolver
 
 Definition metadata therefore still wins over reflection, while `FieldMap` wins over both for the paths it explicitly defines. `PassthroughNodeResolver` is the final fallback and preserves unchanged values when no metadata applies.
 
-## Exact numeric field types
+## Exact numeric behavior
 
 `decimal` and `bigint` use normalized strings as their canonical PHP values.
 
 - `decimal` accepts decimal strings and PHP integers, and rejects floats to avoid precision loss
 - `bigint` accepts integer strings and PHP integers without coercing through platform-sized integers
-- `bigprimary` is only a field-type alias for mapper conversion and does not affect collection primary-key metadata
+- `bigprimary` is a field-type alias for mapper conversion only and does not affect collection primary-key metadata
 
 ## Current limitations
 
@@ -331,4 +330,4 @@ Definition metadata therefore still wins over reflection, while `FieldMap` wins 
 - no readonly-target hydration
 - no ORM or framework integration
 - no complete PHPDoc parsing beyond the currently supported DTO list forms
-- no decimal arithmetic, scale/precision policy, or bigint arithmetic helpers
+- no decimal arithmetic, scale or precision policy, or bigint arithmetic helpers

@@ -1,10 +1,10 @@
 # Overnight Data
 
-The definition foundation of a metadata-driven PHP data layer.
+`ON\Data` is the definition and mapper foundation for a metadata-driven PHP data layer.
 
-`ON\Data` currently ships the standalone definition subsystem extracted from Overnight plus the support layers needed to store, restore, convert, and recursively map data as plain PHP arrays, `stdClass` objects, and public-property DTOs through a composable Mapper/resolver/writer mapper runtime.
+The package currently ships the standalone definition subsystem extracted from Overnight, together with the support layers needed to store, restore, convert, and recursively map data across plain PHP arrays, `stdClass` objects, and public-property DTOs.
 
-## Status
+## Current Scope
 
 This repository currently includes:
 
@@ -29,7 +29,9 @@ This repository currently includes:
 - mapper attributes `MapFrom`, `MapTo`, and `Hidden` across nested DTO mapping;
 - tests and quality tooling.
 
-Definition arrays are now canonical at creation time. Names are stored only as owner-map keys, every stored wrapper is created by its owner over a final array slot, restored arrays must already be canonical, and old caches using legacy field-level `pk` flags should be discarded and regenerated.
+Definition arrays are canonical at creation time. Names are stored only as owner-map keys, every stored wrapper is created by its owner over a final array slot, restored arrays must already be canonical, and older caches using legacy field-level `pk` flags should be regenerated.
+
+## Current Limitations
 
 Not implemented yet:
 
@@ -63,15 +65,8 @@ composer check-style
 composer check
 ```
 
-## Docs
+## Documentation
 
-- `docs/definitions.md` covers the current public definition API.
-- `docs/extending-definitions.md` covers supported subclass-based extension points.
-- `docs/2-field-types-and-mapper.md` covers the implemented scalar FieldType, mapper runtime, and current recursive structural mapping support.
-- `docs/2-mappers/phase-10-one-level-mappers-and-node-resolution.md` summarizes one-level mappers and unified leaf/branch node resolution.
-- `docs/2-mappers/phase-10-a-concrete-mapper-loops.md` summarizes concrete mapper loop ownership.
-- `docs/2-mappers/phase-8-exact-numerics-and-field-map.md` summarizes reflected enums/datetimes, exact numerics, and ad-hoc mapper field maps.
-- `docs/2-mappers/phase-7-field-type-codecs.md` summarizes the field-type codec and centralized mapper registration phase.
-- `docs/2-mappers/phase-5-definition-field-resolver.md` summarizes the definition-aware field resolver phase.
-- `docs/2-mappers/phase-6-recursive-mapping-node.md` summarizes the recursive `MappingNode` phase.
-- `docs/release-0.1-checklist.md` summarizes the pre-release checklist for the definitions-only package.
+- `docs/definition-api.md` documents the canonical registry and public definition API.
+- `docs/definition-extension-guide.md` documents supported extension points and storage rules for custom definition nodes.
+- `docs/mapper-runtime-guide.md` documents field types, representations, conversion flow, and the recursive mapper runtime.
