@@ -16,6 +16,21 @@ use Throwable;
 
 final class ObjectWriter implements WriterInterface
 {
+	/**
+	 * @var array<class-string, ReflectionClass<object>>
+	 */
+	private array $reflections = [];
+
+	/**
+	 * @var array<class-string, ObjectPropertyMatcher>
+	 */
+	private array $propertyMatchers = [];
+
+	/**
+	 * @var array<class-string, true>
+	 */
+	private array $validatedTargets = [];
+
 	public static function canWrite(
 		mixed $target,
 		MappingContext $context,
@@ -54,8 +69,8 @@ final class ObjectWriter implements WriterInterface
 			return new stdClass();
 		}
 
-		$reflection = new ReflectionClass($target);
-		$this->assertSupportedTarget($reflection);
+		$reflection = $this->getReflection($target);
+		$this->assertSupportedTargetOnce($reflection);
 
 		try {
 			return $reflection->newInstanceWithoutConstructor();
@@ -80,8 +95,8 @@ final class ObjectWriter implements WriterInterface
 			return $target;
 		}
 
-		$matcher = new ObjectPropertyMatcher(new ReflectionClass($target));
-		$property = $matcher->match($name);
+		$reflection = $this->getReflection($target);
+		$property = $this->getPropertyMatcher($target)->match($name);
 		if ($property === null) {
 			return $target;
 		}
@@ -90,7 +105,7 @@ final class ObjectWriter implements WriterInterface
 			$property->setValue($target, $value);
 		} catch (Throwable $exception) {
 			throw $this->wrapPropertyFailure(
-				new ReflectionClass($target),
+				$reflection,
 				$property,
 				$node->getPath(),
 				$exception,
@@ -98,6 +113,47 @@ final class ObjectWriter implements WriterInterface
 		}
 
 		return $target;
+	}
+
+	/**
+	 * @return class-string
+	 */
+	private function getTargetClass(object|string $target): string
+	{
+		return is_object($target) ? $target::class : $target;
+	}
+
+	/**
+	 * @return ReflectionClass<object>
+	 */
+	private function getReflection(object|string $target): ReflectionClass
+	{
+		$class = $this->getTargetClass($target);
+
+		return $this->reflections[$class] ??= new ReflectionClass($class);
+	}
+
+	/**
+	 * @param ReflectionClass<object> $reflection
+	 */
+	private function assertSupportedTargetOnce(ReflectionClass $reflection): void
+	{
+		$class = $reflection->getName();
+		if (isset($this->validatedTargets[$class])) {
+			return;
+		}
+
+		$this->assertSupportedTarget($reflection);
+		$this->validatedTargets[$class] = true;
+	}
+
+	private function getPropertyMatcher(
+		object $target,
+	): ObjectPropertyMatcher {
+		$class = $target::class;
+
+		return $this->propertyMatchers[$class]
+			??= new ObjectPropertyMatcher($this->getReflection($target));
 	}
 
 	private function assertSupportedTarget(ReflectionClass $reflection): void
