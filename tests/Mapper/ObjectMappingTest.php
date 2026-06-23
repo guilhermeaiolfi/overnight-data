@@ -16,8 +16,12 @@ use function ON\Data\Mapper\map;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Representation\WireRepresentation;
+use ON\Data\Mapper\Mapper\ObjectMapper;
+use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingRuntime;
 use ON\Data\Mapper\Writer\ObjectWriter;
 use PHPUnit\Framework\TestCase;
+use ReflectionProperty;
 use stdClass;
 use Tests\ON\Data\Fixture\AbstractUserDto;
 use Tests\ON\Data\Fixture\AliasSourcePost;
@@ -193,6 +197,38 @@ final class ObjectMappingTest extends TestCase
 
 		self::assertArrayNotHasKey('password', $result);
 		self::assertArrayNotHasKey('age', $result);
+	}
+
+	public function testObjectMapperCachesSourceMetadataPerConcreteClass(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+		$mapper = new ObjectMapper();
+
+		$first = new UserOutputDto();
+		$first->id = 10;
+		$first->name = 'Ada';
+		$first->active = true;
+		$first->score = 3.5;
+		$first->profile = new MixedValueObject('admin');
+
+		$second = new UserOutputDto();
+		$second->id = 11;
+		$second->name = 'Linus';
+		$second->active = true;
+		$second->score = 4.5;
+		$second->profile = new MixedValueObject('editor');
+
+		$mapper->map($this->runtimeFor($gateway, $first));
+		$mapper->map($this->runtimeFor($gateway, $second));
+
+		$properties = $this->privatePropertyValue($mapper, 'sourcePropertiesByClass');
+		$hidden = $this->privatePropertyValue($mapper, 'hiddenSourcePropertiesByClass');
+
+		self::assertCount(1, $properties);
+		self::assertArrayHasKey(UserOutputDto::class, $properties);
+		self::assertCount(count($properties[UserOutputDto::class]), $hidden[UserOutputDto::class]);
+		self::assertTrue($hidden[UserOutputDto::class]['password']);
+		self::assertFalse($hidden[UserOutputDto::class]['id']);
 	}
 
 	public function testPrimitiveConversionFromWireRepresentation(): void
@@ -382,5 +418,20 @@ final class ObjectMappingTest extends TestCase
 	{
 		$this->expectException(InvalidArgumentException::class);
 		new MapTo('');
+	}
+
+	private function runtimeFor(ConversionGateway $gateway, object $source): MappingRuntime
+	{
+		return new MappingRuntime(
+			$gateway->getMapperManager(),
+			MappingNode::root($source, [], new MappingContext($gateway)),
+		);
+	}
+
+	private function privatePropertyValue(object $object, string $property): mixed
+	{
+		$reflection = new ReflectionProperty($object, $property);
+
+		return $reflection->getValue($object);
 	}
 }

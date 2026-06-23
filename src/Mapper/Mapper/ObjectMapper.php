@@ -17,6 +17,12 @@ use stdClass;
 
 final class ObjectMapper implements MapperInterface
 {
+	/** @var array<class-string, list<ReflectionProperty>> */
+	private array $sourcePropertiesByClass = [];
+
+	/** @var array<class-string, array<string, bool>> */
+	private array $hiddenSourcePropertiesByClass = [];
+
 	public static function canMap(
 		mixed $source,
 		MappingContext $context,
@@ -45,10 +51,10 @@ final class ObjectMapper implements MapperInterface
 			return $runtime->getResult();
 		}
 
-		$reflection = new ReflectionObject($source);
+		$className = $source::class;
 
-		foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
-			if ($property->isStatic() || ! $property->isInitialized($source) || $this->isHidden($property)) {
+		foreach ($this->getSourceProperties($source) as $property) {
+			if (! $property->isInitialized($source) || $this->isHidden($className, $property)) {
 				continue;
 			}
 
@@ -61,8 +67,37 @@ final class ObjectMapper implements MapperInterface
 		return $runtime->getResult();
 	}
 
-	private function isHidden(ReflectionProperty $property): bool
+	/**
+	 * @return list<ReflectionProperty>
+	 */
+	private function getSourceProperties(object $source): array
 	{
-		return $property->getAttributes(Hidden::class) !== [];
+		$className = $source::class;
+		if (array_key_exists($className, $this->sourcePropertiesByClass)) {
+			return $this->sourcePropertiesByClass[$className];
+		}
+
+		$properties = [];
+		$hiddenProperties = [];
+		$reflection = new ReflectionObject($source);
+
+		foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+			if ($property->isStatic()) {
+				continue;
+			}
+
+			$properties[] = $property;
+			$hiddenProperties[$property->getName()] = $property->getAttributes(Hidden::class) !== [];
+		}
+
+		$this->sourcePropertiesByClass[$className] = $properties;
+		$this->hiddenSourcePropertiesByClass[$className] = $hiddenProperties;
+
+		return $properties;
+	}
+
+	private function isHidden(string $className, ReflectionProperty $property): bool
+	{
+		return $this->hiddenSourcePropertiesByClass[$className][$property->getName()] ?? false;
 	}
 }
