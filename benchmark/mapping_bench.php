@@ -82,11 +82,13 @@ try {
 	$baselineBenchmarks = extractBenchmarksFromLatestJson($baselineJson);
 	$latestBenchmarks = extractBenchmarksFromLatestJson($latestJson);
 	$comparisonRows = buildComparisonRows($baselineBenchmarks, $latestBenchmarks);
+	$comparisonText = renderComparisonText($comparisonRows);
 
-	file_put_contents($compareTxt, renderComparisonText($comparisonRows));
+	file_put_contents($compareTxt, $comparisonText);
 	writeJsonFile($compareJson, $comparisonRows);
 
-	echo "Wrote mapping comparison artifacts:\n";
+	echo $comparisonText;
+	echo "\nWrote mapping comparison artifacts:\n";
 	echo " - {$latestTxt}\n";
 	echo " - {$latestJson}\n";
 	echo " - {$compareTxt}\n";
