@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\Mapper\Resolver;
 
 use ON\Data\Definition\DefinitionInterface;
-use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingRuntime;
 use ON\Data\Mapper\Resolution\BranchNodeResolution;

@@ -20,6 +20,7 @@ This repository currently includes:
 - `MapperManager`, `MappingContext`, `MappingNode`, one-level Mappers, writers, node resolvers, and the fluent `map()` / `MapBuilder` entry point;
 - default definition-aware node resolution through `->args($definition)` for scalar conversion and relation branches;
 - ad-hoc path-based scalar metadata through `FieldMap::fromArray()` and `MapBuilder::fieldMap()`;
+- the initial `ON\Data\Query` read-query model for database-independent select expressions and condition trees;
 - generic collection mapping through the same composable runtime;
 - recursive array, `stdClass`, and public-property object combinations selected independently by source Mapper and target writer, with cycle checks applied at recursive mapper dispatch;
 - typed nested DTO properties and PHPDoc-described DTO lists;
@@ -36,7 +37,7 @@ Definition arrays are canonical at creation time. Names are stored only as owner
 Not implemented yet:
 
 - semantic view fields and expressions;
-- query execution;
+- query execution, SQL compilation, and adapter integration;
 - persistence and ORM adapters;
 - constructor hydration and readonly-target hydration.
 
@@ -70,3 +71,4 @@ composer check
 - `docs/definition-api.md` documents the canonical registry and public definition API.
 - `docs/definition-extension-guide.md` documents supported extension points and storage rules for custom definition nodes.
 - `docs/mapper-runtime-guide.md` documents field types, representations, conversion flow, and the recursive mapper runtime.
+- `docs/3-query/phase-1-query-model.md` documents the Phase 1 database-independent query model.
