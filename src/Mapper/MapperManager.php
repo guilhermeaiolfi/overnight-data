@@ -243,6 +243,7 @@ final class MapperManager
 		$this->mapperInstances = [];
 		$this->writerInstances = [];
 		$this->resolvedFieldTypeCodecs = [];
+		$this->gateway->clearRoutes();
 	}
 
 	public function warmUp(): void
@@ -634,6 +635,8 @@ final class MapperManager
 		foreach ($names as $name) {
 			$this->fieldTypes[strtolower($name)] = $fieldType;
 		}
+
+		$this->gateway->clearRoutes();
 	}
 
 	/**
@@ -659,6 +662,7 @@ final class MapperManager
 		/** @var class-string<RepresentationInterface> $representation */
 		$this->fieldTypeCodecs[$representation][$fieldType] = $codec;
 		$this->resolvedFieldTypeCodecs = [];
+		$this->gateway->clearRoutes();
 	}
 
 	private function assertNotRegistered(string $component): void

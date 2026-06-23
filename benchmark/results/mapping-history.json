@@ -348,6 +348,64 @@
                     "memory_peak_bytes": 2513968
                 }
             }
+        },
+        {
+            "label": "after-convertion-routes-cache",
+            "recorded_at": "2026-06-23T17:17:35+00:00",
+            "commit": "3aa7d1c1989bec79e40a20df3362078930cc102c",
+            "dirty": true,
+            "environment": {
+                "php": "8.3.14",
+                "os": "Windows",
+                "architecture": "AMD64"
+            },
+            "benchmarks": {
+                "benchDefinitionCollectionWithStorageConversion1000": {
+                    "mode_us": 184137.08219178012,
+                    "rstdev_percent": 0.4175908186380719,
+                    "memory_peak_bytes": 9461680
+                },
+                "benchDottedArrayCollectionToDto1000": {
+                    "mode_us": 275351.93150684796,
+                    "rstdev_percent": 0.43744089853846363,
+                    "memory_peak_bytes": 9740856
+                },
+                "benchFlatArrayCollectionToArray1000": {
+                    "mode_us": 90398.68688845325,
+                    "rstdev_percent": 1.0736326809200072,
+                    "memory_peak_bytes": 8511760
+                },
+                "benchFlatArrayCollectionToDto1000": {
+                    "mode_us": 140307.14285714156,
+                    "rstdev_percent": 1.0158929448131575,
+                    "memory_peak_bytes": 7836456
+                },
+                "benchFlatArrayCollectionToDto10000": {
+                    "mode_us": 1390204.8454011735,
+                    "rstdev_percent": 1.0459706531242008,
+                    "memory_peak_bytes": 56199144
+                },
+                "benchFlatArrayCollectionToDtoWithWireConversion1000": {
+                    "mode_us": 216451.7123287627,
+                    "rstdev_percent": 0.2520176209498617,
+                    "memory_peak_bytes": 8158856
+                },
+                "benchFlatDtoCollectionToArray1000": {
+                    "mode_us": 120995.6223091979,
+                    "rstdev_percent": 0.8974393234427445,
+                    "memory_peak_bytes": 7817584
+                },
+                "benchNestedArrayCollectionToDto1000": {
+                    "mode_us": 245849.9823874766,
+                    "rstdev_percent": 0.5720913646136594,
+                    "memory_peak_bytes": 10178352
+                },
+                "benchSingleFlatArrayToDto": {
+                    "mode_us": 168.65508806262596,
+                    "rstdev_percent": 1.9433603201699106,
+                    "memory_peak_bytes": 2519528
+                }
+            }
         }
     ]
 }

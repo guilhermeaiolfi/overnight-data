@@ -16,6 +16,19 @@ final class ConversionGateway
 {
 	private MapperManager $mapperManager;
 
+	/**
+	 * @var array<
+	 *     string,
+	 *     array{
+	 *         fieldType: class-string<FieldTypeInterface>,
+	 *         sourceConverter: class-string<FieldTypeInterface>|class-string<FieldTypeCodecInterface>|null,
+	 *         destinationConverter: class-string<FieldTypeInterface>|class-string<FieldTypeCodecInterface>|null,
+	 *         sameRepresentation: bool
+	 *     }
+	 * >
+	 */
+	private array $routes = [];
+
 	public function __construct()
 	{
 		$this->mapperManager = new MapperManager($this);
@@ -32,6 +45,11 @@ final class ConversionGateway
 	public function getMapperManager(): MapperManager
 	{
 		return $this->mapperManager;
+	}
+
+	public function clearRoutes(): void
+	{
+		$this->routes = [];
 	}
 
 	/**
@@ -55,21 +73,16 @@ final class ConversionGateway
 			return $value;
 		}
 
-		$fieldType = $this->mapperManager->resolveFieldType($field);
-		if ($fieldType === null) {
-			throw new FieldTypeNotFoundException(
-				sprintf("Field '%s' uses unknown FieldType '%s'.", $field->getName(), $field->getType())
-			);
-		}
+		$route = $this->resolveRoute($from, $to, $field);
 
 		try {
-			$phpValue = $from === PhpRepresentation::class
+			$phpValue = $route['sourceConverter'] === null
 				? $value
-				: $this->resolveConverter($fieldType, $from)::toPhp($value, $field);
+				: $route['sourceConverter']::toPhp($value, $field);
 
-			return $to === PhpRepresentation::class
+			return $route['destinationConverter'] === null
 				? $phpValue
-				: $this->resolveConverter($fieldType, $to)::fromPhp($phpValue, $field);
+				: $route['destinationConverter']::fromPhp($phpValue, $field);
 		} catch (FieldTypeNotFoundException|UnsupportedConversionException $exception) {
 			throw $exception;
 		} catch (Throwable $exception) {
@@ -86,6 +99,58 @@ final class ConversionGateway
 	private function resolveConverter(string $fieldType, string $representation): string
 	{
 		return $this->mapperManager->resolveFieldTypeCodec($fieldType, $representation) ?? $fieldType;
+	}
+
+	/**
+	 * @param class-string<RepresentationInterface> $from
+	 * @param class-string<RepresentationInterface> $to
+	 *
+	 * @return array{
+	 *     fieldType: class-string<FieldTypeInterface>,
+	 *     sourceConverter: class-string<FieldTypeInterface>|class-string<FieldTypeCodecInterface>|null,
+	 *     destinationConverter: class-string<FieldTypeInterface>|class-string<FieldTypeCodecInterface>|null,
+	 *     sameRepresentation: bool
+	 * }
+	 */
+	private function resolveRoute(
+		string $from,
+		string $to,
+		LeafNodeResolutionInterface $field,
+	): array {
+		$routeKey = $this->routeKey($from, $to, $field);
+		if (isset($this->routes[$routeKey])) {
+			return $this->routes[$routeKey];
+		}
+
+		$fieldType = $this->mapperManager->resolveFieldType($field);
+		if ($fieldType === null) {
+			throw new FieldTypeNotFoundException(
+				sprintf("Field '%s' uses unknown FieldType '%s'.", $field->getName(), $field->getType())
+			);
+		}
+
+		return $this->routes[$routeKey] = [
+			'fieldType' => $fieldType,
+			'sourceConverter' => $from === PhpRepresentation::class
+				? null
+				: $this->resolveConverter($fieldType, $from),
+			'destinationConverter' => $to === PhpRepresentation::class
+				? null
+				: $this->resolveConverter($fieldType, $to),
+			'sameRepresentation' => false,
+		];
+	}
+
+	/**
+	 * @param class-string<RepresentationInterface> $from
+	 * @param class-string<RepresentationInterface> $to
+	 */
+	private function routeKey(
+		string $from,
+		string $to,
+		LeafNodeResolutionInterface $field,
+	): string {
+		return $from . '|' . $to . '|' . ($field->getType() ?? '<null>');
 	}
 
 	/**

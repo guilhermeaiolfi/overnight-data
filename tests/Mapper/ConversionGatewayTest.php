@@ -16,17 +16,21 @@ use ON\Data\Mapper\Representation\WireRepresentation;
 use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionProperty;
 use stdClass;
 use Tests\ON\Data\Fixture\ApiRepresentation;
 use Tests\ON\Data\Fixture\CacheRepresentation;
 use Tests\ON\Data\Fixture\CustomFieldType;
+use Tests\ON\Data\Fixture\FieldAwareTrackingFieldType;
 use Tests\ON\Data\Fixture\JsonApiRepresentation;
+use Tests\ON\Data\Fixture\LowerMoneyFieldType;
 use Tests\ON\Data\Fixture\ReplacementTrackingWireCodec;
 use Tests\ON\Data\Fixture\StatusEnum;
 use Tests\ON\Data\Fixture\TrackingApiCodec;
 use Tests\ON\Data\Fixture\TrackingCacheCodec;
 use Tests\ON\Data\Fixture\TrackingCustomFieldType;
 use Tests\ON\Data\Fixture\TrackingWireCodec;
+use Tests\ON\Data\Fixture\UpperMoneyFieldType;
 
 final class ConversionGatewayTest extends TestCase
 {
@@ -293,6 +297,7 @@ final class ConversionGatewayTest extends TestCase
 		$value = new stdClass();
 
 		self::assertSame($value, $gateway->to(PhpRepresentation::class, $value, PhpRepresentation::class, LeafNodeResolution::named('payload', 'missing')));
+		self::assertSame([], $this->resolvedRoutes($gateway));
 	}
 
 	public function testNullPassesThroughUnchanged(): void
@@ -605,6 +610,108 @@ final class ConversionGatewayTest extends TestCase
 		);
 	}
 
+	public function testSuccessfulRouteMetadataIsCachedAndReused(): void
+	{
+		$gateway = $this->trackingGateway();
+		$field = LeafNodeResolution::named('payload', 'tracked');
+
+		self::assertSame('wire<php<payload>>', $gateway->to(CacheRepresentation::class, 'payload', WireRepresentation::class, $field));
+
+		$routesAfterFirstConversion = $this->resolvedRoutes($gateway);
+		self::assertCount(1, $routesAfterFirstConversion);
+
+		self::assertSame('wire<php<other>>', $gateway->to(CacheRepresentation::class, 'other', WireRepresentation::class, $field));
+		self::assertSame($routesAfterFirstConversion, $this->resolvedRoutes($gateway));
+	}
+
+	public function testCachedRouteStillUsesCurrentFieldInstanceOnEachConversion(): void
+	{
+		$gateway = new ConversionGateway();
+		$gateway->getMapperManager()->register(FieldAwareTrackingFieldType::class);
+
+		self::assertSame(
+			'first<value>',
+			$gateway->to(StorageRepresentation::class, 'value', PhpRepresentation::class, LeafNodeResolution::named('first', 'field-aware-tracked')),
+		);
+		self::assertSame(
+			'second<value>',
+			$gateway->to(StorageRepresentation::class, 'value', PhpRepresentation::class, LeafNodeResolution::named('second', 'field-aware-tracked')),
+		);
+		self::assertCount(1, $this->resolvedRoutes($gateway));
+	}
+
+	public function testFailedConversionsDoNotPopulateRouteCache(): void
+	{
+		$gateway = new ConversionGateway();
+
+		try {
+			$gateway->to(StorageRepresentation::class, '10', PhpRepresentation::class, LeafNodeResolution::named('id', 'missing'));
+			self::fail('Expected field type resolution failure was not thrown.');
+		} catch (FieldTypeNotFoundException) {
+		}
+
+		self::assertSame([], $this->resolvedRoutes($gateway));
+	}
+
+	public function testRegisteringFieldTypeClearsCachedRoutes(): void
+	{
+		$gateway = new ConversionGateway();
+		$gateway->getMapperManager()->register(UpperMoneyFieldType::class);
+
+		self::assertSame(
+			'upper<10>',
+			$gateway->to(StorageRepresentation::class, '10', PhpRepresentation::class, LeafNodeResolution::named('amount', 'money')),
+		);
+		self::assertCount(1, $this->resolvedRoutes($gateway));
+
+		$gateway->getMapperManager()->register(LowerMoneyFieldType::class);
+
+		self::assertSame([], $this->resolvedRoutes($gateway));
+		self::assertSame(
+			'lower<10>',
+			$gateway->to(StorageRepresentation::class, '10', PhpRepresentation::class, LeafNodeResolution::named('amount', 'money')),
+		);
+	}
+
+	public function testRegisteringCodecClearsCachedRoutes(): void
+	{
+		$gateway = $this->trackingGateway();
+
+		self::assertSame(
+			'wire<payload>',
+			$gateway->to(PhpRepresentation::class, 'payload', ApiRepresentation::class, LeafNodeResolution::named('payload', 'tracked')),
+		);
+		self::assertCount(1, $this->resolvedRoutes($gateway));
+
+		$gateway->getMapperManager()->register(TrackingApiCodec::class);
+
+		self::assertSame([], $this->resolvedRoutes($gateway));
+		self::assertSame(
+			'api<payload>',
+			$gateway->to(PhpRepresentation::class, 'payload', ApiRepresentation::class, LeafNodeResolution::named('payload', 'tracked')),
+		);
+	}
+
+	public function testMapperManagerClearAlsoClearsCachedRoutes(): void
+	{
+		$gateway = $this->trackingGateway();
+
+		self::assertSame(
+			'wire<php<payload>>',
+			$gateway->to(CacheRepresentation::class, 'payload', WireRepresentation::class, LeafNodeResolution::named('payload', 'tracked')),
+		);
+		self::assertCount(1, $this->resolvedRoutes($gateway));
+
+		$gateway->getMapperManager()->clear();
+
+		self::assertSame([], $this->resolvedRoutes($gateway));
+		self::assertSame(
+			'wire<php<payload>>',
+			$gateway->to(CacheRepresentation::class, 'payload', WireRepresentation::class, LeafNodeResolution::named('payload', 'tracked')),
+		);
+		self::assertCount(1, $this->resolvedRoutes($gateway));
+	}
+
 	public function testConversionErrorsRetainPreviousExceptions(): void
 	{
 		$gateway = ConversionGateway::createDefault();
@@ -676,5 +783,12 @@ final class ConversionGatewayTest extends TestCase
 		}
 
 		return $gateway;
+	}
+
+	private function resolvedRoutes(ConversionGateway $gateway): array
+	{
+		$reflection = new ReflectionProperty($gateway, 'routes');
+
+		return $reflection->getValue($gateway);
 	}
 }
