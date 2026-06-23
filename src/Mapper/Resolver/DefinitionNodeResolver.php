@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper\Resolver;
 
+use BackedEnum;
+use DateTimeInterface;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingRuntime;
+use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Resolution\BranchNodeResolution;
 use ON\Data\Mapper\Resolution\BranchNodeResolutionInterface;
 use ON\Data\Mapper\Resolution\LeafNodeResolution;
@@ -30,8 +34,9 @@ final class DefinitionNodeResolver implements NodeResolverInterface
 
 	public function resolve(
 		MappingNode $node,
+		MappingRuntime $runtime,
 	): LeafNodeResolutionInterface|BranchNodeResolutionInterface|null {
-		$definition = $this->getDefinition($node);
+		$definition = $this->getDefinition($node, $runtime);
 		if ($definition === null || ! is_string($node->getName())) {
 			return null;
 		}
@@ -46,12 +51,15 @@ final class DefinitionNodeResolver implements NodeResolverInterface
 			return null;
 		}
 
-		if (! $this->branchInferrer()->isStructuralValue($node->getValue())) {
+		if (! $this->mayBeStructuralValue($node->getValue())) {
 			return null;
 		}
 
-		$reflectionTarget = $this->branchInferrer()->inferFromReflection($node);
-		$genericTarget = $this->branchInferrer()->inferGenericTarget($node->getParentTarget());
+		$inferrer = $this->inferrer
+			?? $runtime->getSharedInstance(BranchTargetInferrer::class);
+
+		$reflectionTarget = $inferrer->inferFromReflection($node, $runtime);
+		$genericTarget = $inferrer->inferGenericTarget($node->getParentTarget());
 		$target = $reflectionTarget['target'] ?? $genericTarget;
 		if ($target === null) {
 			return null;
@@ -60,7 +68,7 @@ final class DefinitionNodeResolver implements NodeResolverInterface
 		return BranchNodeResolution::named(
 			name: $relation->getName(),
 			target: $target,
-			arguments: $this->branchInferrer()->replaceDefinitionArguments(
+			arguments: $inferrer->replaceDefinitionArguments(
 				$node->getArguments(),
 				$definition,
 				$relation->getCollection(),
@@ -69,10 +77,12 @@ final class DefinitionNodeResolver implements NodeResolverInterface
 		);
 	}
 
-	private function getDefinition(MappingNode $node): ?DefinitionInterface
-	{
+	private function getDefinition(
+		MappingNode $node,
+		MappingRuntime $runtime,
+	): ?DefinitionInterface {
 		if (! $this->discoveryComplete) {
-			$this->discoverDefinition($node);
+			$this->discoverDefinition($node, $runtime);
 		}
 
 		if ($this->ambiguity !== null) {
@@ -82,20 +92,37 @@ final class DefinitionNodeResolver implements NodeResolverInterface
 		return $this->definition;
 	}
 
-	private function discoverDefinition(MappingNode $node): void
-	{
+	private function discoverDefinition(
+		MappingNode $node,
+		MappingRuntime $runtime,
+	): void {
 		$this->discoveryComplete = true;
 
 		try {
-			$this->definition = ($this->locator ?? new DefinitionArgumentLocator())
+			$locator = $this->locator
+				?? $runtime->getSharedInstance(
+					DefinitionArgumentLocator::class,
+				);
+			$this->definition = $locator
 				->getDefinition($node->getArguments());
 		} catch (MappingException $exception) {
 			$this->ambiguity = $exception;
 		}
 	}
 
-	private function branchInferrer(): BranchTargetInferrer
+	private function mayBeStructuralValue(mixed $value): bool
 	{
-		return $this->inferrer ?? new BranchTargetInferrer();
+		if ($value === null) {
+			return false;
+		}
+
+		if (is_array($value)) {
+			return true;
+		}
+
+		return is_object($value)
+			&& ! $value instanceof DateTimeInterface
+			&& ! $value instanceof BackedEnum
+			&& ! $value instanceof RepresentationInterface;
 	}
 }

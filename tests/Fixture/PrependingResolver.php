@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Fixture;
 
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingRuntime;
 use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
 
@@ -15,8 +16,10 @@ final class PrependingResolver implements NodeResolverInterface
 		ComponentTestState::recordConstruction(self::class);
 	}
 
-	public function resolve(MappingNode $node): ?LeafNodeResolution
-	{
+	public function resolve(
+		MappingNode $node,
+		MappingRuntime $runtime,
+	): ?LeafNodeResolution {
 		ComponentTestState::recordRuntime(self::class, $node->getPath());
 
 		if ($node->getName() !== 'id') {

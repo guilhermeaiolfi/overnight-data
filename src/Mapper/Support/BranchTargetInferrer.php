@@ -8,6 +8,7 @@ use BackedEnum;
 use DateTimeInterface;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingRuntime;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ReflectionNamedType;
 use ReflectionProperty;
@@ -23,9 +24,15 @@ final class BranchTargetInferrer
 	/**
 	 * @return array{target: mixed, collection: bool, arguments: list<mixed>}|null
 	 */
-	public function inferFromReflection(MappingNode $node): ?array
-	{
-		$targetProperty = $this->finder()->findTargetProperty($node);
+	public function inferFromReflection(
+		MappingNode $node,
+		MappingRuntime $runtime,
+	): ?array {
+		$finder = $this->propertyFinder
+			?? $runtime->getSharedInstance(
+				MappingNodePropertyFinder::class,
+			);
+		$targetProperty = $finder->findTargetProperty($node);
 		if ($targetProperty !== null) {
 			$target = $this->getTargetPropertyNestedTarget($node, $targetProperty);
 			if ($target !== null) {
@@ -33,7 +40,7 @@ final class BranchTargetInferrer
 			}
 		}
 
-		$sourceProperty = $this->finder()->findSourceProperty($node);
+		$sourceProperty = $finder->findSourceProperty($node);
 		if ($sourceProperty !== null) {
 			return $this->getSourcePropertyNestedTarget($node, $sourceProperty);
 		}
@@ -242,10 +249,5 @@ final class BranchTargetInferrer
 		return $value instanceof DateTimeInterface
 			|| $value instanceof BackedEnum
 			|| $value instanceof RepresentationInterface;
-	}
-
-	private function finder(): MappingNodePropertyFinder
-	{
-		return $this->propertyFinder ?? new MappingNodePropertyFinder();
 	}
 }

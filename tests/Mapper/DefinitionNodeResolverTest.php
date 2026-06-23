@@ -11,6 +11,7 @@ use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingRuntime;
 use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use ON\Data\Mapper\Resolver\DefinitionNodeResolver;
 use PHPUnit\Framework\TestCase;
@@ -21,8 +22,9 @@ final class DefinitionNodeResolverTest extends TestCase
 	public function testReturnsNullWhenMappingHasNoArguments(): void
 	{
 		$resolver = new DefinitionNodeResolver();
+		$node = $this->node('id', '42');
 
-		self::assertNull($resolver->resolve($this->node('id', '42')));
+		self::assertNull($resolver->resolve($node, $this->runtimeFor($node)));
 	}
 
 	public function testReturnsNullWhenArgumentsDoNotContainDefinition(): void
@@ -30,7 +32,7 @@ final class DefinitionNodeResolverTest extends TestCase
 		$resolver = new DefinitionNodeResolver();
 		$node = $this->node('id', '42', [new stdClass(), ['id' => '42'], 'users']);
 
-		self::assertNull($resolver->resolve($node));
+		self::assertNull($resolver->resolve($node, $this->runtimeFor($node)));
 	}
 
 	public function testDiscoversOneDirectDefinitionArgumentInAnyPosition(): void
@@ -39,8 +41,9 @@ final class DefinitionNodeResolverTest extends TestCase
 		$definition = $registry->collection('users');
 		$field = $definition->field('id', 'int')->nullable(true);
 		$resolver = new DefinitionNodeResolver();
+		$node = $this->node('id', '42', [new stdClass(), $definition]);
 
-		$resolved = $resolver->resolve($this->node('id', '42', [new stdClass(), $definition]));
+		$resolved = $resolver->resolve($node, $this->runtimeFor($node));
 
 		self::assertInstanceOf(LeafNodeResolution::class, $resolved);
 		self::assertSame('id', $resolved->getName());
@@ -54,8 +57,9 @@ final class DefinitionNodeResolverTest extends TestCase
 		$view = $this->viewDefinition();
 		$field = $view->field('title', 'string');
 		$resolver = new DefinitionNodeResolver();
+		$node = $this->node('title', 123, [$view]);
 
-		$resolved = $resolver->resolve($this->node('title', 123, [$view]));
+		$resolved = $resolver->resolve($node, $this->runtimeFor($node));
 
 		self::assertSame('title', $resolved?->getName());
 		self::assertSame('string', $resolved?->getType());
@@ -66,24 +70,27 @@ final class DefinitionNodeResolverTest extends TestCase
 	{
 		$definition = $this->collectionDefinition();
 		$resolver = new DefinitionNodeResolver();
+		$node = $this->node('missing', '42', [$definition]);
 
-		self::assertNull($resolver->resolve($this->node('missing', '42', [$definition])));
+		self::assertNull($resolver->resolve($node, $this->runtimeFor($node)));
 	}
 
 	public function testIntegerFieldNamesDoNotResolveAgainstDefinitions(): void
 	{
 		$definition = $this->collectionDefinition();
 		$resolver = new DefinitionNodeResolver();
+		$node = $this->node(0, '42', [$definition]);
 
-		self::assertNull($resolver->resolve($this->node(0, '42', [$definition])));
+		self::assertNull($resolver->resolve($node, $this->runtimeFor($node)));
 	}
 
 	public function testExtraMapperContextIsNotRequiredAndValueTypeDoesNotMatter(): void
 	{
 		$definition = $this->collectionDefinition();
 		$resolver = new DefinitionNodeResolver();
+		$node = $this->node('active', ['unexpected' => 'shape'], [$definition]);
 
-		$field = $resolver->resolve($this->node('active', ['unexpected' => 'shape'], [$definition]));
+		$field = $resolver->resolve($node, $this->runtimeFor($node));
 
 		self::assertSame('bool', $field?->getType());
 	}
@@ -94,13 +101,14 @@ final class DefinitionNodeResolverTest extends TestCase
 		$users = $registry->collection('users');
 		$posts = $registry->collection('posts');
 		$resolver = new DefinitionNodeResolver();
+		$node = $this->node('id', '42', [$users, new stdClass(), $posts]);
 
 		$this->expectException(MappingException::class);
 		$this->expectExceptionMessage('ambiguous');
 		$this->expectExceptionMessage('"users"');
 		$this->expectExceptionMessage('"posts"');
 
-		$resolver->resolve($this->node('id', '42', [$users, new stdClass(), $posts]));
+		$resolver->resolve($node, $this->runtimeFor($node));
 	}
 
 	public function testAmbiguityDiscoveryIsCachedPerResolverInstance(): void
@@ -114,7 +122,7 @@ final class DefinitionNodeResolverTest extends TestCase
 
 		foreach ([1, 2] as $attempt) {
 			try {
-				$resolver->resolve($node);
+				$resolver->resolve($node, $this->runtimeFor($node));
 			} catch (MappingException $exception) {
 				self::assertStringContainsString('ambiguous', $exception->getMessage());
 			}
@@ -158,5 +166,17 @@ final class DefinitionNodeResolverTest extends TestCase
 		$registry = new Registry();
 
 		return $registry->view('user_summary');
+	}
+
+	private function runtimeFor(MappingNode $node): MappingRuntime
+	{
+		return new MappingRuntime(
+			mapperManager: $node->getContext()->getGateway()->getMapperManager(),
+			mappingNode: MappingNode::root(
+				source: $node->getParentSource(),
+				target: $node->getParentTarget(),
+				context: $node->getContext(),
+			),
+		);
 	}
 }

@@ -27,6 +27,11 @@ final class MappingRuntime
 
 	private ?bool $conversionEnabled = null;
 
+	/**
+	 * @var array<class-string, object>
+	 */
+	private array $sharedInstances = [];
+
 	public function __construct(
 		private readonly MapperManager $mapperManager,
 		private readonly MappingNode $mappingNode,
@@ -47,6 +52,31 @@ final class MappingRuntime
 	public function getMapperManager(): MapperManager
 	{
 		return $this->mapperManager;
+	}
+
+	/**
+	 * @template T of object
+	 *
+	 * @param class-string<T> $class
+	 *
+	 * @return T
+	 */
+	public function getSharedInstance(string $class): object
+	{
+		if ($this->parentMappingRuntime !== null) {
+			return $this->parentMappingRuntime->getSharedInstance($class);
+		}
+
+		if (isset($this->sharedInstances[$class])) {
+			/** @var T */
+			return $this->sharedInstances[$class];
+		}
+
+		/** @var T $instance */
+		$instance = new $class();
+		$this->sharedInstances[$class] = $instance;
+
+		return $instance;
 	}
 
 	public function map(): mixed
@@ -174,7 +204,7 @@ final class MappingRuntime
 	private function resolveNode(MappingNode $node): LeafNodeResolutionInterface|BranchNodeResolutionInterface
 	{
 		foreach ($this->getResolvers() as $resolver) {
-			$resolution = $resolver->resolve($node);
+			$resolution = $resolver->resolve($node, $this);
 			if ($resolution !== null) {
 				return $resolution;
 			}

@@ -10,11 +10,11 @@ use function ON\Data\Mapper\map;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingRuntime;
+use ON\Data\Mapper\Representation\WireRepresentation;
 use ON\Data\Mapper\Resolution\BranchNodeResolution;
 use ON\Data\Mapper\Resolution\BranchNodeResolutionInterface;
 use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
-use ON\Data\Mapper\Representation\WireRepresentation;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
@@ -184,6 +184,7 @@ final class ConversionGateTrackedResolver implements NodeResolverInterface
 {
 	public function resolve(
 		MappingNode $node,
+		MappingRuntime $runtime,
 	): LeafNodeResolutionInterface|BranchNodeResolutionInterface|null {
 		if ($node->getName() === 'payload') {
 			return LeafNodeResolution::named('payload', 'tracked');
@@ -197,6 +198,7 @@ final class ConversionGateRecursiveResolver implements NodeResolverInterface
 {
 	public function resolve(
 		MappingNode $node,
+		MappingRuntime $runtime,
 	): LeafNodeResolutionInterface|BranchNodeResolutionInterface|null {
 		if ($node->getName() === 'child') {
 			return BranchNodeResolution::named(

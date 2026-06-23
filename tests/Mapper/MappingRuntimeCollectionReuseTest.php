@@ -258,6 +258,7 @@ final class RuntimeReuseSpyResolver implements NodeResolverInterface
 
 	public function resolve(
 		MappingNode $node,
+		MappingRuntime $runtime,
 	): LeafNodeResolutionInterface|BranchNodeResolutionInterface|null {
 		self::$resolvedPaths[] = $node->getPath();
 
@@ -279,6 +280,7 @@ final class RuntimeReusePrecedenceResolver implements NodeResolverInterface
 
 	public function resolve(
 		MappingNode $node,
+		MappingRuntime $runtime,
 	): LeafNodeResolutionInterface|BranchNodeResolutionInterface|null {
 		self::$resolvedPaths[] = $node->getPath();
 
@@ -294,6 +296,7 @@ final class RuntimeReuseTypedIdResolver implements NodeResolverInterface
 {
 	public function resolve(
 		MappingNode $node,
+		MappingRuntime $runtime,
 	): LeafNodeResolutionInterface|BranchNodeResolutionInterface|null {
 		if ($node->getName() === 'id') {
 			return LeafNodeResolution::named('id', 'runtime-reuse-counting');
@@ -319,6 +322,7 @@ final class RuntimeReuseBranchResolver implements NodeResolverInterface
 
 	public function resolve(
 		MappingNode $node,
+		MappingRuntime $runtime,
 	): LeafNodeResolutionInterface|BranchNodeResolutionInterface|null {
 		if ($node->getName() === 'child') {
 			return BranchNodeResolution::named(
@@ -348,6 +352,7 @@ final class RuntimeReuseCollectionBranchResolver implements NodeResolverInterfac
 
 	public function resolve(
 		MappingNode $node,
+		MappingRuntime $runtime,
 	): LeafNodeResolutionInterface|BranchNodeResolutionInterface|null {
 		if ($node->getName() === 'children') {
 			return BranchNodeResolution::named(

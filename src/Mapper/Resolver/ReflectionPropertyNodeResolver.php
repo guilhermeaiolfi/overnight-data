@@ -8,6 +8,8 @@ use BackedEnum;
 use DateTimeImmutable;
 use DateTimeInterface;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingRuntime;
+use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Resolution\BranchNodeResolution;
 use ON\Data\Mapper\Resolution\BranchNodeResolutionInterface;
 use ON\Data\Mapper\Resolution\LeafNodeResolution;
@@ -19,26 +21,21 @@ use ReflectionProperty;
 
 final class ReflectionPropertyNodeResolver implements NodeResolverInterface
 {
-	private readonly MappingNodePropertyFinder $propertyFinder;
-
 	public function __construct(
 		private readonly ?BranchTargetInferrer $inferrer = null,
 	) {
-		$this->propertyFinder = new MappingNodePropertyFinder();
 	}
 
 	public function resolve(
 		MappingNode $node,
+		MappingRuntime $runtime,
 	): LeafNodeResolutionInterface|BranchNodeResolutionInterface|null {
-		$sourceProperty = $this->propertyFinder->findSourceProperty($node);
-		$mappedSourceName = $this->propertyFinder->getMappedSourceName(
-			node: $node,
-			sourceProperty: $sourceProperty,
+		$propertyFinder = $runtime->getSharedInstance(
+			MappingNodePropertyFinder::class,
 		);
-		$targetProperty = $this->propertyFinder->findTargetProperty(
-			node: $node,
-			mappedSourceName: $mappedSourceName,
-		);
+		$sourceProperty = $propertyFinder->findSourceProperty($node);
+		$mappedSourceName = $propertyFinder->getMappedSourceName($node, $sourceProperty);
+		$targetProperty = $propertyFinder->findTargetProperty($node, $mappedSourceName);
 		$property = $targetProperty ?? $sourceProperty;
 		if (! $property instanceof ReflectionProperty) {
 			return null;
@@ -59,11 +56,14 @@ final class ReflectionPropertyNodeResolver implements NodeResolverInterface
 			}
 		}
 
-		if (! $this->branchInferrer()->isStructuralValue($node->getValue())) {
+		if (! $this->mayBeStructuralValue($node->getValue())) {
 			return null;
 		}
 
-		$target = $this->branchInferrer()->inferFromReflection($node);
+		$inferrer = $this->inferrer
+			?? $runtime->getSharedInstance(BranchTargetInferrer::class);
+
+		$target = $inferrer->inferFromReflection($node, $runtime);
 		if ($target === null) {
 			return null;
 		}
@@ -97,8 +97,19 @@ final class ReflectionPropertyNodeResolver implements NodeResolverInterface
 		return null;
 	}
 
-	private function branchInferrer(): BranchTargetInferrer
+	private function mayBeStructuralValue(mixed $value): bool
 	{
-		return $this->inferrer ?? new BranchTargetInferrer();
+		if ($value === null) {
+			return false;
+		}
+
+		if (is_array($value)) {
+			return true;
+		}
+
+		return is_object($value)
+			&& ! $value instanceof DateTimeInterface
+			&& ! $value instanceof BackedEnum
+			&& ! $value instanceof RepresentationInterface;
 	}
 }

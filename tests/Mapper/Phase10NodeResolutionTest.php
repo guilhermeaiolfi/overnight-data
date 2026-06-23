@@ -129,6 +129,7 @@ final class Phase10CustomNodeResolver implements NodeResolverInterface
 {
 	public function resolve(
 		MappingNode $node,
+		MappingRuntime $runtime,
 	): LeafNodeResolutionInterface|BranchNodeResolutionInterface|null {
 		if ($node->getName() === 'payload') {
 			return LeafNodeResolution::named('payload', 'json');
