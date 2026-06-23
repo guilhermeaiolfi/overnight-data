@@ -18,6 +18,11 @@ final class MappingRuntime
 	 */
 	private array $sharedInstances = [];
 
+	/**
+	 * @var array<string, list<NodeResolverInterface>>
+	 */
+	private array $resolverChains = [];
+
 	public function __construct(
 		private readonly MapperManager $mapperManager,
 	) {
@@ -106,9 +111,7 @@ final class MappingRuntime
 				options: $options,
 			);
 
-			$resolvers ??= $this->mapperManager->createResolverChain(
-				options: $options,
-			);
+			$resolvers ??= $this->getResolverChain($options);
 
 			$conversionEnabled ??= $this->isConversionEnabled($options);
 			$resolutionCache ??= new NodeResolutionCache();
@@ -149,14 +152,24 @@ final class MappingRuntime
 				target: $node->getTarget(),
 				options: $options,
 			),
-			resolvers: $resolvers ?? $this->mapperManager->createResolverChain(
-				options: $options,
-			),
+			resolvers: $resolvers ?? $this->getResolverChain($options),
 			conversionEnabled: $conversionEnabled ?? $this->isConversionEnabled($options),
 			resolutionCache: $resolutionCache,
 		);
 
 		return $mapper->map($context);
+	}
+
+	/**
+	 * @return list<NodeResolverInterface>
+	 */
+	private function getResolverChain(
+		MappingOptions $options,
+	): array {
+		$key = implode("\0", $options->getResolverClasses());
+
+		return $this->resolverChains[$key]
+			??= $this->mapperManager->createResolverChain($options);
 	}
 
 	private function getConverter(): FieldConversionCoordinator

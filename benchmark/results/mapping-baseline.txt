@@ -7,13 +7,13 @@ MappingBench
 +-----------------------------------------------------+------+-----+----------+---------------+--------+----------+
 | name                                                | revs | its | mem_peak | mode          | rstdev | diff     |
 +-----------------------------------------------------+------+-----+----------+---------------+--------+----------+
-| benchSingleFlatArrayToDto                           | 100  | 5   | 2.529mb  | 170.721μs     | ±2.12% | 1.00x    |
-| benchFlatArrayCollectionToArray1000                 | 1    | 5   | 8.530mb  | 101,121.250μs | ±3.61% | 592.32x  |
-| benchFlatArrayCollectionToDto1000                   | 1    | 5   | 7.858mb  | 59,465.344μs  | ±1.48% | 348.32x  |
-| benchFlatDtoCollectionToArray1000                   | 1    | 5   | 7.839mb  | 50,415.194μs  | ±2.17% | 295.31x  |
-| benchFlatArrayCollectionToDtoWithWireConversion1000 | 1    | 5   | 8.181mb  | 124,885.781μs | ±5.43% | 731.52x  |
-| benchDefinitionCollectionWithStorageConversion1000  | 1    | 5   | 9.483mb  | 115,879.714μs | ±1.43% | 678.77x  |
-| benchNestedArrayCollectionToDto1000                 | 1    | 5   | 10.199mb | 173,976.820μs | ±1.63% | 1019.07x |
-| benchDottedArrayCollectionToDto1000                 | 1    | 5   | 9.761mb  | 196,887.393μs | ±2.32% | 1153.27x |
-| benchFlatArrayCollectionToDto10000                  | 1    | 3   | 56.221mb | 665,851.830μs | ±6.48% | 3900.23x |
+| benchSingleFlatArrayToDto                           | 100  | 5   | 2.531mb  | 170.078μs     | ±3.25% | 1.00x    |
+| benchFlatArrayCollectionToArray1000                 | 1    | 5   | 8.532mb  | 101,898.955μs | ±2.14% | 599.13x  |
+| benchFlatArrayCollectionToDto1000                   | 1    | 5   | 7.860mb  | 59,392.777μs  | ±3.05% | 349.21x  |
+| benchFlatDtoCollectionToArray1000                   | 1    | 5   | 7.841mb  | 49,500.047μs  | ±3.43% | 291.04x  |
+| benchFlatArrayCollectionToDtoWithWireConversion1000 | 1    | 5   | 8.183mb  | 128,485.356μs | ±2.94% | 755.45x  |
+| benchDefinitionCollectionWithStorageConversion1000  | 1    | 5   | 9.485mb  | 116,405.151μs | ±2.25% | 684.42x  |
+| benchNestedArrayCollectionToDto1000                 | 1    | 5   | 10.200mb | 163,602.855μs | ±0.98% | 961.93x  |
+| benchDottedArrayCollectionToDto1000                 | 1    | 5   | 9.763mb  | 190,158.219μs | ±2.01% | 1118.06x |
+| benchFlatArrayCollectionToDto10000                  | 1    | 3   | 56.223mb | 595,798.497μs | ±1.33% | 3503.09x |
 +-----------------------------------------------------+------+-----+----------+---------------+--------+----------+

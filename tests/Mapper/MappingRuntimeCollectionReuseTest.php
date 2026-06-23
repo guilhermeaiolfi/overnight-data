@@ -31,6 +31,7 @@ final class MappingRuntimeCollectionReuseTest extends TestCase
 		RuntimeReusePrecedenceResolver::reset();
 		RuntimeReuseBranchResolver::reset();
 		RuntimeReuseCollectionBranchResolver::reset();
+		RuntimeReuseRecursiveBranchResolver::reset();
 		RuntimeReuseArrayMapper::reset();
 		RuntimeReuseObjectMapper::reset();
 		RuntimeReuseCountingFieldType::reset();
@@ -127,7 +128,7 @@ final class MappingRuntimeCollectionReuseTest extends TestCase
 		self::assertSame(1, RuntimeReuseObjectMapper::$mapCalls);
 	}
 
-	public function testNestedCollectionGetsSeparateReuseFrameFromParentCollection(): void
+	public function testNestedCollectionsReuseOneResolverChainPerTopLevelRuntime(): void
 	{
 		$gateway = ConversionGateway::createDefault();
 		$gateway->getMapperManager()->prepend(RuntimeReuseSpyWriter::class);
@@ -145,7 +146,7 @@ final class MappingRuntimeCollectionReuseTest extends TestCase
 			['children' => [['id' => 3]]],
 		], $result);
 		self::assertSame(3, RuntimeReuseSpyWriter::$canWriteCalls);
-		self::assertSame(3, RuntimeReuseCollectionBranchResolver::$constructions);
+		self::assertSame(1, RuntimeReuseCollectionBranchResolver::$constructions);
 	}
 
 	public function testBranchesWithDifferentTargetsDoNotInheritParentCollectionComponents(): void
@@ -194,6 +195,28 @@ final class MappingRuntimeCollectionReuseTest extends TestCase
 		self::assertSame(1, RuntimeReuseSpyWriter::$canWriteCalls);
 		self::assertSame(1, RuntimeReuseSpyWriter::$createTargetCalls);
 		self::assertSame(1, RuntimeReuseSpyResolver::$constructions);
+	}
+
+	public function testRecursiveBranchesReuseOneResolverChainPerTopLevelRuntime(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+
+		$result = map([
+			'left' => ['id' => 1],
+			'right' => ['id' => 2],
+		], null, $gateway)
+			->resolver(RuntimeReuseRecursiveBranchResolver::class)
+			->resolver(RuntimeReuseSpyResolver::class)
+			->to([]);
+
+		self::assertSame([
+			'left' => ['id' => 1],
+			'right' => ['id' => 2],
+		], $result);
+		self::assertSame(1, RuntimeReuseRecursiveBranchResolver::$constructions);
+		self::assertSame(1, RuntimeReuseSpyResolver::$constructions);
+		self::assertContains('left.id', RuntimeReuseSpyResolver::$resolvedPaths);
+		self::assertContains('right.id', RuntimeReuseSpyResolver::$resolvedPaths);
 	}
 }
 
@@ -361,6 +384,36 @@ final class RuntimeReuseCollectionBranchResolver implements NodeResolverInterfac
 				target: [],
 				arguments: [],
 				collection: true,
+			);
+		}
+
+		return null;
+	}
+}
+
+final class RuntimeReuseRecursiveBranchResolver implements NodeResolverInterface
+{
+	public static int $constructions = 0;
+
+	public function __construct()
+	{
+		self::$constructions++;
+	}
+
+	public static function reset(): void
+	{
+		self::$constructions = 0;
+	}
+
+	public function resolve(
+		MappingNode $node,
+		MappingRuntime $runtime,
+	): LeafNodeResolutionInterface|BranchNodeResolutionInterface|null {
+		if ($node->getName() === 'left' || $node->getName() === 'right') {
+			return BranchNodeResolution::named(
+				name: (string) $node->getName(),
+				target: [],
+				arguments: [],
 			);
 		}
 
