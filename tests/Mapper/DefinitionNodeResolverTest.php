@@ -111,22 +111,32 @@ final class DefinitionNodeResolverTest extends TestCase
 		$resolver->resolve($node, $this->runtimeFor($node));
 	}
 
-	public function testAmbiguityDiscoveryIsCachedPerResolverInstance(): void
+	public function testAmbiguityIsEvaluatedFromCurrentArgumentsOnEachResolve(): void
 	{
-		$first = $this->createMock(DefinitionInterface::class);
-		$first->expects(self::once())->method('getName')->willReturn('users');
-		$second = $this->createMock(DefinitionInterface::class);
-		$second->expects(self::once())->method('getName')->willReturn('posts');
+		$registry = new Registry();
+		$users = $registry->collection('users');
+		$users->field('id', 'int');
+		$posts = $registry->collection('posts');
+		$posts->field('id', 'int');
 		$resolver = new DefinitionNodeResolver();
-		$node = $this->node('id', '42', [$first, $second]);
 
-		foreach ([1, 2] as $attempt) {
-			try {
-				$resolver->resolve($node, $this->runtimeFor($node));
-			} catch (MappingException $exception) {
-				self::assertStringContainsString('ambiguous', $exception->getMessage());
-			}
+		try {
+			$resolver->resolve(
+				$this->node('id', '42', [$users, $posts]),
+				$this->runtimeFor($this->node('id', '42', [$users, $posts])),
+			);
+			self::fail('Expected ambiguity exception.');
+		} catch (MappingException $exception) {
+			self::assertStringContainsString('ambiguous', $exception->getMessage());
 		}
+
+		$resolved = $resolver->resolve(
+			$this->node('id', '42', [$users]),
+			$this->runtimeFor($this->node('id', '42', [$users])),
+		);
+
+		self::assertInstanceOf(LeafNodeResolution::class, $resolved);
+		self::assertSame('int', $resolved->getType());
 	}
 
 	private function node(string|int $name, mixed $value, array $arguments = []): MappingNode

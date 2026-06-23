@@ -19,11 +19,6 @@ use ON\Data\Mapper\Support\MappingNodePropertyFinder;
 
 final class DefinitionNodeResolver implements CacheableNodeResolverInterface
 {
-	/**
-	 * @var array<string, array{definition: ?DefinitionInterface, ambiguity: ?MappingException}>
-	 */
-	private array $definitionCache = [];
-
 	private ?DefinitionArgumentLocator $runtimeLocator = null;
 
 	private ?BranchTargetInferrer $runtimeInferrer = null;
@@ -112,53 +107,8 @@ final class DefinitionNodeResolver implements CacheableNodeResolverInterface
 		MappingNode $node,
 		MappingRuntime $runtime,
 	): ?DefinitionInterface {
-		$key = $this->definitionCacheKey($node->getArguments());
-
-		if (! array_key_exists($key, $this->definitionCache)) {
-			$this->discoverDefinition($key, $node, $runtime);
-		}
-
-		$cached = $this->definitionCache[$key];
-
-		if ($cached['ambiguity'] !== null) {
-			throw $cached['ambiguity'];
-		}
-
-		return $cached['definition'];
-	}
-
-	private function discoverDefinition(
-		string $key,
-		MappingNode $node,
-		MappingRuntime $runtime,
-	): void {
-		try {
-			$this->definitionCache[$key] = [
-				'definition' => $this->getLocator($runtime)->getDefinition($node->getArguments()),
-				'ambiguity' => null,
-			];
-		} catch (MappingException $exception) {
-			$this->definitionCache[$key] = [
-				'definition' => null,
-				'ambiguity' => $exception,
-			];
-		}
-	}
-
-	/**
-	 * @param list<mixed> $arguments
-	 */
-	private function definitionCacheKey(array $arguments): string
-	{
-		$definitions = [];
-
-		foreach ($arguments as $argument) {
-			if ($argument instanceof DefinitionInterface) {
-				$definitions[] = (string) spl_object_id($argument);
-			}
-		}
-
-		return implode(':', $definitions);
+		return $this->getLocator($runtime)
+			->getDefinition($node->getArguments());
 	}
 
 	private function getLocator(

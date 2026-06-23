@@ -14,19 +14,34 @@ final class DefinitionArgumentLocator
 	 */
 	public function getDefinition(array $arguments): ?DefinitionInterface
 	{
+		$definition = null;
+
+		foreach ($arguments as $argument) {
+			if (! $argument instanceof DefinitionInterface) {
+				continue;
+			}
+
+			if ($definition !== null) {
+				throw $this->ambiguousDefinition($arguments);
+			}
+
+			$definition = $argument;
+		}
+
+		return $definition;
+	}
+
+	/**
+	 * @param list<mixed> $arguments
+	 */
+	private function ambiguousDefinition(array $arguments): MappingException
+	{
 		$definitions = [];
+
 		foreach ($arguments as $argument) {
 			if ($argument instanceof DefinitionInterface) {
 				$definitions[] = $argument;
 			}
-		}
-
-		if ($definitions === []) {
-			return null;
-		}
-
-		if (count($definitions) === 1) {
-			return $definitions[0];
 		}
 
 		$names = array_map(
@@ -34,12 +49,10 @@ final class DefinitionArgumentLocator
 			$definitions,
 		);
 
-		throw new MappingException(
-			sprintf(
-				'Definition field resolution is ambiguous: mapping arguments contain %d definitions %s.',
-				count($definitions),
-				implode(' and ', $names),
-			),
-		);
+		return new MappingException(sprintf(
+			'Definition field resolution is ambiguous: mapping arguments contain %d definitions %s.',
+			count($definitions),
+			implode(' and ', $names),
+		));
 	}
 }
