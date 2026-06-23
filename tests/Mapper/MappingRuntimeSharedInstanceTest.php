@@ -191,6 +191,26 @@ final class MappingRuntimeSharedInstanceTest extends TestCase
 		);
 	}
 
+	public function testReflectionResolverDoesNotCacheNegativeResultsForValueSensitiveBranchPaths(): void
+	{
+		$resolver = new ReflectionPropertyNodeResolver();
+		$nullNode = $this->propertyNode('profile', 'not-structural');
+		$branchNode = $this->propertyNode('profile', ['name' => 'Ada']);
+		$runtime = $this->runtimeForNode(
+			$this->rootNode(
+				source: $nullNode->getParentSource(),
+				target: [],
+				context: $nullNode->getContext(),
+			),
+		);
+
+		self::assertNull($resolver->resolve($nullNode, $runtime));
+		self::assertInstanceOf(
+			BranchNodeResolutionInterface::class,
+			$resolver->resolve($branchNode, $runtime),
+		);
+	}
+
 	public function testDefinitionFieldsDoNotConstructBranchTargetInferrer(): void
 	{
 		$registry = new Registry();

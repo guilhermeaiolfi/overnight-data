@@ -101,7 +101,6 @@ final class ReflectionPropertyNodeResolver implements NodeResolverInterface
 
 		return null;
 	}
-
 	private function mayHaveReflectionMetadata(
 		MappingNode $node,
 	): bool {

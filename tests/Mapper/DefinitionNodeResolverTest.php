@@ -12,6 +12,7 @@ use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingRuntime;
+use ON\Data\Mapper\Resolution\BranchNodeResolutionInterface;
 use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use ON\Data\Mapper\Resolver\DefinitionNodeResolver;
 use PHPUnit\Framework\TestCase;
