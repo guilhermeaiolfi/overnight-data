@@ -51,13 +51,9 @@ final class MappingRuntime
 
 	public function mapNode(MappingNode $node): mixed
 	{
-		$node->assertNoObjectCycle();
-
-		if ($node->isCollection()) {
-			return $this->mapCollection($node);
-		}
-
-		return $this->mapSingle($node);
+		return $node->isCollection()
+			? $this->mapCollection($node)
+			: $this->mapSingle($node);
 	}
 
 	public function convert(
@@ -75,6 +71,8 @@ final class MappingRuntime
 	private function mapCollection(
 		MappingNode $node,
 	): array {
+		$node->assertNoObjectCycle();
+
 		$source = $node->getValue();
 
 		if (! is_iterable($source)) {
@@ -134,7 +132,6 @@ final class MappingRuntime
 		?bool $conversionEnabled = null,
 	): mixed {
 		$node->assertNoObjectCycle();
-
 		$options = $node->getOptions();
 		$mapper = $this->mapperManager->resolveMapper(
 			source: $node->getValue(),
