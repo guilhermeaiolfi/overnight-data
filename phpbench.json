@@ -5,17 +5,41 @@
     "storage.xml_storage_path": "benchmark/results/storage",
     "report.generators": {
         "default": {
-            "generator": "table",
+            "generator": "expression",
+            "title": "Aggregate by Subject",
+            "description": "Aggregate results by subject and group by benchmark class.",
+            "break": [
+                "benchmark"
+            ],
+            "expressions": {
+                "name": "if(first(variant_name) != \"\", first(subject_name) ~ \" (\" ~ first(variant_name) ~ \")\", first(subject_name))",
+                "_mode": "mode(result_time_avg)"
+            },
             "cols": [
-                "subject",
+                "name",
+                "revs",
+                "its",
                 "mode",
-                "mean",
                 "rstdev",
                 "mem_peak"
-            ]
+            ],
+            "derivations": {
+                "mode": "display_as_time(row[\"_mode\"], coalesce(row[\"time_unit\"], \"time\"), row[\"time_precision\"], row[\"time_mode\"])",
+                "mem_peak": "row[\"mem_peak\"] as memory",
+                "rstdev": "row[\"rstdev\"] as \"rstdev\""
+            }
         },
         "baseline-summary": {
-            "extends": "aggregate-preview",
+            "generator": "expression",
+            "title": "Aggregate by Subject",
+            "description": "Aggregate results by subject and group by benchmark class.",
+            "break": [
+                "benchmark"
+            ],
+            "expressions": {
+                "name": "if(first(variant_name) != \"\", first(subject_name) ~ \" (\" ~ first(variant_name) ~ \")\", first(subject_name))",
+                "_mode": "mode(result_time_avg)"
+            },
             "cols": [
                 "name",
                 "revs",
@@ -24,7 +48,13 @@
                 "mode",
                 "rstdev",
                 "diff"
-            ]
+            ],
+            "derivations": {
+                "diff": "if(min(table[\"_mode\"]) > 0, format(\"%.2fx\", row[\"_mode\"] / min(table[\"_mode\"])), \"N/A\")",
+                "mode": "display_as_time(row[\"_mode\"], coalesce(row[\"time_unit\"], \"time\"), row[\"time_precision\"], row[\"time_mode\"])",
+                "mem_peak": "row[\"mem_peak\"] as memory",
+                "rstdev": "row[\"rstdev\"] as \"rstdev\""
+            }
         }
     }
 }

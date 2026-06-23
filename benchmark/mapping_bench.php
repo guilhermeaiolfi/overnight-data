@@ -79,11 +79,12 @@ try {
 		exit(1);
 	}
 
-	$compareConsole = renderReport($root, [$baselineXml, $latestXml], 'console');
-	file_put_contents($compareTxt, normalizeOutput($compareConsole));
+	$baselineBenchmarks = extractBenchmarksFromLatestJson($baselineJson);
+	$latestBenchmarks = extractBenchmarksFromLatestJson($latestJson);
+	$comparisonRows = buildComparisonRows($baselineBenchmarks, $latestBenchmarks);
 
-	$compareJsonRaw = renderReport($root, [$baselineXml, $latestXml], 'json');
-	file_put_contents($compareJson, prettyJson($compareJsonRaw));
+	file_put_contents($compareTxt, renderComparisonText($comparisonRows));
+	writeJsonFile($compareJson, $comparisonRows);
 
 	echo "Wrote mapping comparison artifacts:\n";
 	echo " - {$latestTxt}\n";
@@ -207,6 +208,126 @@ function extractBenchmarksFromLatestJson(string $latestJsonFile): array
 	ksort($benchmarks);
 
 	return $benchmarks;
+}
+
+/**
+ * @param array<string, array{mode_us:float|int, rstdev_percent:float|int, memory_peak_bytes:int}> $baselineBenchmarks
+ * @param array<string, array{mode_us:float|int, rstdev_percent:float|int, memory_peak_bytes:int}> $latestBenchmarks
+ *
+ * @return list<array<string, float|int|string|null>>
+ */
+function buildComparisonRows(array $baselineBenchmarks, array $latestBenchmarks): array
+{
+	$names = array_unique([
+		...array_keys($baselineBenchmarks),
+		...array_keys($latestBenchmarks),
+	]);
+	sort($names);
+
+	$rows = [];
+
+	foreach ($names as $name) {
+		$baseline = $baselineBenchmarks[$name] ?? null;
+		$latest = $latestBenchmarks[$name] ?? null;
+
+		$rows[] = [
+			'name' => $name,
+			'baseline_mode_us' => $baseline['mode_us'] ?? null,
+			'current_mode_us' => $latest['mode_us'] ?? null,
+			'delta_mode_percent' => percentDelta($baseline['mode_us'] ?? null, $latest['mode_us'] ?? null),
+			'baseline_rstdev_percent' => $baseline['rstdev_percent'] ?? null,
+			'current_rstdev_percent' => $latest['rstdev_percent'] ?? null,
+			'delta_rstdev_percent' => percentDelta($baseline['rstdev_percent'] ?? null, $latest['rstdev_percent'] ?? null),
+			'baseline_memory_peak_bytes' => $baseline['memory_peak_bytes'] ?? null,
+			'current_memory_peak_bytes' => $latest['memory_peak_bytes'] ?? null,
+			'delta_memory_peak_percent' => percentDelta($baseline['memory_peak_bytes'] ?? null, $latest['memory_peak_bytes'] ?? null),
+		];
+	}
+
+	return $rows;
+}
+
+function percentDelta(float|int|null $baseline, float|int|null $current): ?float
+{
+	if ($baseline === null || $current === null || $baseline == 0.0) {
+		return null;
+	}
+
+	return (($current - $baseline) / $baseline) * 100;
+}
+
+/**
+ * @param list<array<string, float|int|string|null>> $rows
+ */
+function renderComparisonText(array $rows): string
+{
+	$headers = [
+		'name',
+		'baseline_us',
+		'current_us',
+		'delta_pct',
+	];
+
+	$tableRows = array_map(static function (array $row): array {
+		return [
+			'name' => (string) $row['name'],
+			'baseline_us' => formatNumber($row['baseline_mode_us']),
+			'current_us' => formatNumber($row['current_mode_us']),
+			'delta_pct' => formatPercent($row['delta_mode_percent']),
+		];
+	}, $rows);
+
+	$widths = [];
+	foreach ($headers as $header) {
+		$widths[$header] = strlen($header);
+	}
+
+	foreach ($tableRows as $row) {
+		foreach ($headers as $header) {
+			$widths[$header] = max($widths[$header], strlen($row[$header]));
+		}
+	}
+
+	$lines = [];
+	$lines[] = 'Mapping benchmark comparison';
+	$lines[] = '';
+	$lines[] = sprintf(
+		'%-' . $widths['name'] . 's  %' . $widths['baseline_us'] . 's  %' . $widths['current_us'] . 's  %' . $widths['delta_pct'] . 's',
+		'name',
+		'baseline_us',
+		'current_us',
+		'delta_pct',
+	);
+
+	foreach ($tableRows as $row) {
+		$lines[] = sprintf(
+			'%-' . $widths['name'] . 's  %' . $widths['baseline_us'] . 's  %' . $widths['current_us'] . 's  %' . $widths['delta_pct'] . 's',
+			$row['name'],
+			$row['baseline_us'],
+			$row['current_us'],
+			$row['delta_pct'],
+		);
+	}
+
+	return implode(PHP_EOL, $lines) . PHP_EOL;
+}
+
+function formatNumber(float|int|null $value): string
+{
+	if ($value === null) {
+		return 'n/a';
+	}
+
+	return number_format((float) $value, 3, '.', '');
+}
+
+function formatPercent(float|int|null $value): string
+{
+	if ($value === null) {
+		return 'n/a';
+	}
+
+	return sprintf('%+.2f%%', (float) $value);
 }
 
 function printHistory(string $historyFile): void
