@@ -9,7 +9,6 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingRuntime;
-use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Resolution\BranchNodeResolution;
 use ON\Data\Mapper\Resolution\BranchNodeResolutionInterface;
 use ON\Data\Mapper\Resolution\LeafNodeResolution;
@@ -18,9 +17,14 @@ use ON\Data\Mapper\Support\BranchTargetInferrer;
 use ON\Data\Mapper\Support\MappingNodePropertyFinder;
 use ReflectionNamedType;
 use ReflectionProperty;
+use stdClass;
 
 final class ReflectionPropertyNodeResolver implements NodeResolverInterface
 {
+	private ?MappingNodePropertyFinder $runtimePropertyFinder = null;
+
+	private ?BranchTargetInferrer $runtimeInferrer = null;
+
 	public function __construct(
 		private readonly ?BranchTargetInferrer $inferrer = null,
 	) {
@@ -30,9 +34,11 @@ final class ReflectionPropertyNodeResolver implements NodeResolverInterface
 		MappingNode $node,
 		MappingRuntime $runtime,
 	): LeafNodeResolutionInterface|BranchNodeResolutionInterface|null {
-		$propertyFinder = $runtime->getSharedInstance(
-			MappingNodePropertyFinder::class,
-		);
+		if (! $this->mayHaveReflectionMetadata($node)) {
+			return null;
+		}
+
+		$propertyFinder = $this->getPropertyFinder($runtime);
 		$sourceProperty = $propertyFinder->findSourceProperty($node);
 		$mappedSourceName = $propertyFinder->getMappedSourceName($node, $sourceProperty);
 		$targetProperty = $propertyFinder->findTargetProperty($node, $mappedSourceName);
@@ -56,14 +62,13 @@ final class ReflectionPropertyNodeResolver implements NodeResolverInterface
 			}
 		}
 
-		if (! $this->mayBeStructuralValue($node->getValue())) {
+		if (! BranchTargetInferrer::isStructuralValue($node->getValue())) {
 			return null;
 		}
 
-		$inferrer = $this->inferrer
-			?? $runtime->getSharedInstance(BranchTargetInferrer::class);
+		$inferrer = $this->getInferrer($runtime);
 
-		$target = $inferrer->inferFromReflection($node, $runtime);
+		$target = $inferrer->inferFromReflection($node, $propertyFinder);
 		if ($target === null) {
 			return null;
 		}
@@ -97,19 +102,38 @@ final class ReflectionPropertyNodeResolver implements NodeResolverInterface
 		return null;
 	}
 
-	private function mayBeStructuralValue(mixed $value): bool
-	{
-		if ($value === null) {
-			return false;
-		}
-
-		if (is_array($value)) {
+	private function mayHaveReflectionMetadata(
+		MappingNode $node,
+	): bool {
+		$source = $node->getParentSource();
+		if (is_object($source) && ! $source instanceof stdClass) {
 			return true;
 		}
 
-		return is_object($value)
-			&& ! $value instanceof DateTimeInterface
-			&& ! $value instanceof BackedEnum
-			&& ! $value instanceof RepresentationInterface;
+		$target = $node->getParentTarget();
+
+		return is_object($target)
+			&& ! $target instanceof stdClass;
+	}
+
+	private function getPropertyFinder(
+		MappingRuntime $runtime,
+	): MappingNodePropertyFinder {
+		return $this->runtimePropertyFinder
+			??= $runtime->getSharedInstance(
+				MappingNodePropertyFinder::class,
+			);
+	}
+
+	private function getInferrer(
+		MappingRuntime $runtime,
+	): BranchTargetInferrer {
+		return $this->inferrer
+			?? (
+				$this->runtimeInferrer
+				??= $runtime->getSharedInstance(
+					BranchTargetInferrer::class,
+				)
+			);
 	}
 }

@@ -63,18 +63,16 @@ final class MappingRuntime
 	 */
 	public function getSharedInstance(string $class): object
 	{
-		if ($this->parentMappingRuntime !== null) {
-			return $this->parentMappingRuntime->getSharedInstance($class);
-		}
+		$owner = $this->parentMappingRuntime ?? $this;
 
-		if (isset($this->sharedInstances[$class])) {
+		if (isset($owner->sharedInstances[$class])) {
 			/** @var T */
-			return $this->sharedInstances[$class];
+			return $owner->sharedInstances[$class];
 		}
 
 		/** @var T $instance */
 		$instance = new $class();
-		$this->sharedInstances[$class] = $instance;
+		$owner->sharedInstances[$class] = $instance;
 
 		return $instance;
 	}

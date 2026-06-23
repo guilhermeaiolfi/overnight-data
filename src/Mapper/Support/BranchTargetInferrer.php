@@ -8,7 +8,6 @@ use BackedEnum;
 use DateTimeInterface;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Mapper\MappingNode;
-use ON\Data\Mapper\MappingRuntime;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ReflectionNamedType;
 use ReflectionProperty;
@@ -26,12 +25,9 @@ final class BranchTargetInferrer
 	 */
 	public function inferFromReflection(
 		MappingNode $node,
-		MappingRuntime $runtime,
+		MappingNodePropertyFinder $propertyFinder,
 	): ?array {
-		$finder = $this->propertyFinder
-			?? $runtime->getSharedInstance(
-				MappingNodePropertyFinder::class,
-			);
+		$finder = $this->propertyFinder ?? $propertyFinder;
 		$targetProperty = $finder->findTargetProperty($node);
 		if ($targetProperty !== null) {
 			$target = $this->getTargetPropertyNestedTarget($node, $targetProperty);
@@ -61,7 +57,7 @@ final class BranchTargetInferrer
 		return null;
 	}
 
-	public function isStructuralValue(mixed $value): bool
+	public static function isStructuralValue(mixed $value): bool
 	{
 		if ($value === null) {
 			return false;
@@ -71,7 +67,10 @@ final class BranchTargetInferrer
 			return true;
 		}
 
-		return is_object($value) && ! $this->isExcludedObject($value);
+		return is_object($value)
+			&& ! $value instanceof DateTimeInterface
+			&& ! $value instanceof BackedEnum
+			&& ! $value instanceof RepresentationInterface;
 	}
 
 	/**
@@ -242,12 +241,5 @@ final class BranchTargetInferrer
 		$qualified = $namespace === '' ? $type : $namespace . '\\' . $type;
 
 		return class_exists($qualified) ? $qualified : null;
-	}
-
-	private function isExcludedObject(object $value): bool
-	{
-		return $value instanceof DateTimeInterface
-			|| $value instanceof BackedEnum
-			|| $value instanceof RepresentationInterface;
 	}
 }
