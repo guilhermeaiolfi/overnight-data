@@ -20,10 +20,8 @@ final class ConversionGateway
 	 * @var array<
 	 *     string,
 	 *     array{
-	 *         fieldType: class-string<FieldTypeInterface>,
 	 *         sourceConverter: class-string<FieldTypeInterface>|class-string<FieldTypeCodecInterface>|null,
-	 *         destinationConverter: class-string<FieldTypeInterface>|class-string<FieldTypeCodecInterface>|null,
-	 *         sameRepresentation: bool
+	 *         destinationConverter: class-string<FieldTypeInterface>|class-string<FieldTypeCodecInterface>|null
 	 *     }
 	 * >
 	 */
@@ -106,10 +104,8 @@ final class ConversionGateway
 	 * @param class-string<RepresentationInterface> $to
 	 *
 	 * @return array{
-	 *     fieldType: class-string<FieldTypeInterface>,
 	 *     sourceConverter: class-string<FieldTypeInterface>|class-string<FieldTypeCodecInterface>|null,
-	 *     destinationConverter: class-string<FieldTypeInterface>|class-string<FieldTypeCodecInterface>|null,
-	 *     sameRepresentation: bool
+	 *     destinationConverter: class-string<FieldTypeInterface>|class-string<FieldTypeCodecInterface>|null
 	 * }
 	 */
 	private function resolveRoute(
@@ -130,14 +126,12 @@ final class ConversionGateway
 		}
 
 		return $this->routes[$routeKey] = [
-			'fieldType' => $fieldType,
 			'sourceConverter' => $from === PhpRepresentation::class
 				? null
 				: $this->resolveConverter($fieldType, $from),
 			'destinationConverter' => $to === PhpRepresentation::class
 				? null
 				: $this->resolveConverter($fieldType, $to),
-			'sameRepresentation' => false,
 		];
 	}
 
