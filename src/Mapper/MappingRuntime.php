@@ -25,6 +25,8 @@ final class MappingRuntime
 
 	private ?FieldConversionCoordinator $converter = null;
 
+	private ?bool $conversionEnabled = null;
+
 	public function __construct(
 		private readonly MapperManager $mapperManager,
 		private readonly MappingNode $mappingNode,
@@ -95,11 +97,13 @@ final class MappingRuntime
 					),
 				);
 		} else {
-			$mappedValue = $this->getConverter()->convert(
-				value: $value,
-				leaf: $resolution,
-				node: $child,
-			);
+			$mappedValue = $this->isConversionEnabled()
+				? $this->getConverter()->convert(
+					value: $value,
+					leaf: $resolution,
+					node: $child,
+				)
+				: $value;
 		}
 
 		$mappingWriter->write(
@@ -200,5 +204,17 @@ final class MappingRuntime
 		}
 
 		return $this->converter ??= $this->mapperManager->createFieldConversionCoordinator();
+	}
+
+	private function isConversionEnabled(): bool
+	{
+		if ($this->parentMappingRuntime !== null) {
+			return $this->parentMappingRuntime->isConversionEnabled();
+		}
+
+		return $this->conversionEnabled ??= (
+			$this->mappingNode->getContext()->getSourceRepresentation() !== null
+			|| $this->mappingNode->getContext()->getOutputRepresentation() !== null
+		);
 	}
 }
