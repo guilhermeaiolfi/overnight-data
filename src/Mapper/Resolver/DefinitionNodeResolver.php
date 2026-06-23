@@ -12,11 +12,12 @@ use ON\Data\Mapper\Resolution\BranchNodeResolution;
 use ON\Data\Mapper\Resolution\BranchNodeResolutionInterface;
 use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
+use ON\Data\Mapper\Resolution\ResolutionNodeInterface;
 use ON\Data\Mapper\Support\BranchTargetInferrer;
 use ON\Data\Mapper\Support\DefinitionArgumentLocator;
 use ON\Data\Mapper\Support\MappingNodePropertyFinder;
 
-final class DefinitionNodeResolver implements NodeResolverInterface
+final class DefinitionNodeResolver implements CacheableNodeResolverInterface
 {
 	private bool $discoveryComplete = false;
 
@@ -81,6 +82,31 @@ final class DefinitionNodeResolver implements NodeResolverInterface
 			),
 			collection: $relation->getCardinality() === 'many',
 		);
+	}
+
+	public function isResolutionCacheable(
+		MappingNode $node,
+		?ResolutionNodeInterface $resolution,
+		MappingRuntime $runtime,
+	): bool {
+		if ($resolution instanceof LeafNodeResolutionInterface) {
+			return true;
+		}
+
+		if ($resolution instanceof BranchNodeResolutionInterface) {
+			return false;
+		}
+
+		$definition = $this->getDefinition($node, $runtime);
+		if ($definition === null || ! is_string($node->getName())) {
+			return true;
+		}
+
+		if ($definition->getField($node->getName()) !== null) {
+			return true;
+		}
+
+		return $definition->getRelation($node->getName()) === null;
 	}
 
 	private function getDefinition(

@@ -13,13 +13,14 @@ use ON\Data\Mapper\Resolution\BranchNodeResolution;
 use ON\Data\Mapper\Resolution\BranchNodeResolutionInterface;
 use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
+use ON\Data\Mapper\Resolution\ResolutionNodeInterface;
 use ON\Data\Mapper\Support\BranchTargetInferrer;
 use ON\Data\Mapper\Support\MappingNodePropertyFinder;
 use ReflectionNamedType;
 use ReflectionProperty;
 use stdClass;
 
-final class ReflectionPropertyNodeResolver implements NodeResolverInterface
+final class ReflectionPropertyNodeResolver implements CacheableNodeResolverInterface
 {
 	private ?MappingNodePropertyFinder $runtimePropertyFinder = null;
 
@@ -79,6 +80,14 @@ final class ReflectionPropertyNodeResolver implements NodeResolverInterface
 			arguments: $target['arguments'],
 			collection: $target['collection'],
 		);
+	}
+
+	public function isResolutionCacheable(
+		MappingNode $node,
+		?ResolutionNodeInterface $resolution,
+		MappingRuntime $runtime,
+	): bool {
+		return $resolution instanceof LeafNodeResolutionInterface;
 	}
 
 	private function resolveLeafType(ReflectionNamedType $type): ?string

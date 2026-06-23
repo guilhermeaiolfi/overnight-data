@@ -7,8 +7,9 @@ namespace ON\Data\Mapper\Resolver;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingRuntime;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
+use ON\Data\Mapper\Resolution\ResolutionNodeInterface;
 
-final class FieldMapNodeResolver implements NodeResolverInterface
+final class FieldMapNodeResolver implements CacheableNodeResolverInterface
 {
 	public function resolve(
 		MappingNode $node,
@@ -25,5 +26,13 @@ final class FieldMapNodeResolver implements NodeResolverInterface
 		}
 
 		return $fieldMap->getField($node->getPath(), $name);
+	}
+
+	public function isResolutionCacheable(
+		MappingNode $node,
+		?ResolutionNodeInterface $resolution,
+		MappingRuntime $runtime,
+	): bool {
+		return true;
 	}
 }

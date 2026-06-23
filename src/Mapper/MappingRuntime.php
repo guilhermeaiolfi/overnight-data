@@ -83,6 +83,7 @@ final class MappingRuntime
 		$resolvers = null;
 		$writer = null;
 		$conversionEnabled = null;
+		$resolutionCache = null;
 		$results = [];
 
 		foreach ($source as $key => $item) {
@@ -110,12 +111,14 @@ final class MappingRuntime
 			);
 
 			$conversionEnabled ??= $this->isConversionEnabled($options);
+			$resolutionCache ??= new NodeResolutionCache();
 
 			$results[] = $this->mapSingle(
 				node: $itemNode,
 				writer: $writer,
 				resolvers: $resolvers,
 				conversionEnabled: $conversionEnabled,
+				resolutionCache: $resolutionCache,
 			);
 		}
 
@@ -130,6 +133,7 @@ final class MappingRuntime
 		?WriterInterface $writer = null,
 		?array $resolvers = null,
 		?bool $conversionEnabled = null,
+		?NodeResolutionCache $resolutionCache = null,
 	): mixed {
 		$node->assertNoObjectCycle();
 		$options = $node->getOptions();
@@ -149,6 +153,7 @@ final class MappingRuntime
 				options: $options,
 			),
 			conversionEnabled: $conversionEnabled ?? $this->isConversionEnabled($options),
+			resolutionCache: $resolutionCache,
 		);
 
 		return $mapper->map($context);
