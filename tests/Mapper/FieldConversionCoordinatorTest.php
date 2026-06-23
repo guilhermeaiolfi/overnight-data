@@ -9,8 +9,8 @@ use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\FieldConversionCoordinator;
 use ON\Data\Mapper\FieldMap;
 use function ON\Data\Mapper\map;
-use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\MappingRuntime;
 use ON\Data\Mapper\Representation\StorageRepresentation;
 use ON\Data\Mapper\Representation\WireRepresentation;
@@ -48,7 +48,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 	{
 		$resolver = new ReflectionPropertyNodeResolver();
 		$target = (new ReflectionClass(UserInputDto::class))->newInstanceWithoutConstructor();
-		$node = MappingNode::root($this->source(), $target, $this->context())
+		$node = MappingNode::root($this->source(), $target, $this->options())
 			->withTarget($target)
 			->createChildNode('user_score', '3.5');
 
@@ -62,7 +62,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 	{
 		$resolver = new ReflectionPropertyNodeResolver();
 		$target = (new ReflectionClass(UserInputDto::class))->newInstanceWithoutConstructor();
-		$node = MappingNode::root($this->source(), $target, $this->context())
+		$node = MappingNode::root($this->source(), $target, $this->options())
 			->withTarget($target)
 			->createChildNode('user_score', '3.5');
 
@@ -143,7 +143,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 		$fieldMap = FieldMap::fromArray([
 			'items.price' => 'decimal',
 		]);
-		$root = MappingNode::root([], [], $this->context()->withFieldMap($fieldMap));
+		$root = MappingNode::root([], [], $this->options()->withFieldMap($fieldMap));
 		$node = $root->createChildNode('items', [])->withTarget([])->createChildNode(0, [])->withTarget([])->createChildNode('price', '12.50');
 
 		$field = $resolver->resolve($node, $this->runtimeFor($node));
@@ -155,8 +155,8 @@ final class FieldConversionCoordinatorTest extends TestCase
 	public function testFieldMapResolverReturnsNullWithoutStringNodeNameOrMap(): void
 	{
 		$resolver = new FieldMapNodeResolver();
-		$withoutMap = MappingNode::root([], [], $this->context())->createChildNode('price', '12.50');
-		$numericNode = MappingNode::root([], [], $this->context()->withFieldMap(FieldMap::fromArray(['id' => 'bigint'])))
+		$withoutMap = MappingNode::root([], [], $this->options())->createChildNode('price', '12.50');
+		$numericNode = MappingNode::root([], [], $this->options()->withFieldMap(FieldMap::fromArray(['id' => 'bigint'])))
 			->createChildNode(0, ['id' => '1']);
 
 		self::assertNull($resolver->resolve($withoutMap, $this->runtimeFor($withoutMap)));
@@ -175,7 +175,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 	public function testCoordinatorConvertsFromWireToPhp(): void
 	{
 		$coordinator = new FieldConversionCoordinator($this->gateway());
-		$node = $this->sourceNode('age', '42', $this->context()->withSourceRepresentation(WireRepresentation::class));
+		$node = $this->sourceNode('age', '42', $this->options()->withSourceRepresentation(WireRepresentation::class));
 		$field = (new ReflectionPropertyNodeResolver())->resolve($node, $this->runtimeFor($node));
 
 		self::assertSame(42, $coordinator->convert('42', $field, $node));
@@ -184,7 +184,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 	public function testCoordinatorConvertsFromPhpToWire(): void
 	{
 		$coordinator = new FieldConversionCoordinator($this->gateway());
-		$node = $this->sourceNode('name', 42, $this->context()->withOutputRepresentation(WireRepresentation::class));
+		$node = $this->sourceNode('name', 42, $this->options()->withOutputRepresentation(WireRepresentation::class));
 		$field = (new ReflectionPropertyNodeResolver())->resolve($node, $this->runtimeFor($node));
 
 		self::assertSame('42', $coordinator->convert(42, $field, $node));
@@ -193,7 +193,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 	public function testCoordinatorLeavesPassthroughValuesUnchanged(): void
 	{
 		$coordinator = new FieldConversionCoordinator($this->gateway());
-		$node = MappingNode::root([], [], $this->context()->withSourceRepresentation(WireRepresentation::class))
+		$node = MappingNode::root([], [], $this->options()->withSourceRepresentation(WireRepresentation::class))
 			->createChildNode('age', '42');
 
 		self::assertSame(
@@ -222,7 +222,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 					: null;
 			}
 		};
-		$node = MappingNode::root([], [], $this->context()->withSourceRepresentation(WireRepresentation::class))
+		$node = MappingNode::root([], [], $this->options()->withSourceRepresentation(WireRepresentation::class))
 			->createChildNode('code', 'ada');
 		$field = $resolver->resolve($node, $this->runtimeFor($node));
 
@@ -289,21 +289,21 @@ final class FieldConversionCoordinatorTest extends TestCase
 		return ConversionGateway::createDefault();
 	}
 
-	private function context(): MappingContext
+	private function options(): MappingOptions
 	{
-		return new MappingContext($this->gateway());
+		return new MappingOptions($this->gateway());
 	}
 
 	private function sourceNode(
 		string $name,
 		mixed $value,
-		?MappingContext $context = null,
+		?MappingOptions $options = null,
 		mixed $target = [],
 	): MappingNode {
 		return MappingNode::root(
 			$this->source(),
 			$target,
-			$context ?? $this->context(),
+			$options ?? $this->options(),
 		)->createChildNode($name, $value);
 	}
 
@@ -315,12 +315,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 	private function runtimeFor(MappingNode $node): MappingRuntime
 	{
 		return new MappingRuntime(
-			mapperManager: $node->getContext()->getGateway()->getMapperManager(),
-			mappingNode: MappingNode::root(
-				source: $node->getParentSource(),
-				target: $node->getParentTarget(),
-				context: $node->getContext(),
-			),
+			mapperManager: $node->getOptions()->getGateway()->getMapperManager(),
 		);
 	}
 }

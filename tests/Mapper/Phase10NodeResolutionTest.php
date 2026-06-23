@@ -10,6 +10,7 @@ use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\MappingRuntime;
 use ON\Data\Mapper\Representation\WireRepresentation;
 use ON\Data\Mapper\Resolution\BranchNodeResolution;
@@ -105,21 +106,21 @@ final class RecordingRootArrayMapper implements MapperInterface
 		self::$paths = [];
 	}
 
-	public function map(MappingRuntime $runtime): mixed
+	public function map(MappingContext $context): mixed
 	{
-		$node = $runtime->getMappingNode();
+		$node = $context->getNode();
 		self::$paths[] = $node->getPath();
 
-		foreach ($runtime->getSource() as $name => $value) {
-			$runtime->write(name: $name, value: $value);
+		foreach ($context->getSource() as $name => $value) {
+			$context->write(name: $name, value: $value);
 		}
 
-		return $runtime->getResult();
+		return $context->getResult();
 	}
 
 	public static function canMap(
 		mixed $source,
-		MappingContext $context,
+		MappingOptions $options,
 	): bool {
 		return is_array($source);
 	}

@@ -128,7 +128,7 @@ final class MapBuilder
 
 		return $this->gateway
 			->getMapperManager()
-			->map($this->source, $target, $this->createContext());
+			->map($this->source, $target, $this->createOptions());
 	}
 
 	public function toJson(): string
@@ -145,9 +145,9 @@ final class MapBuilder
 		}
 	}
 
-	private function createContext(): MappingContext
+	private function createOptions(): MappingOptions
 	{
-		$context = new MappingContext(
+		$options = new MappingOptions(
 			$this->gateway,
 			$this->sourceRepresentation,
 			$this->outputRepresentation,
@@ -159,9 +159,9 @@ final class MapBuilder
 		);
 
 		if ($this->collection) {
-			$context = $context->asCollection();
+			$options = $options->asCollection();
 		}
 
-		return $context;
+		return $options;
 	}
 }

@@ -5,27 +5,13 @@ declare(strict_types=1);
 namespace ON\Data\Mapper;
 
 use ON\Data\Mapper\Exception\MappingException;
-use ON\Data\Mapper\Resolution\BranchNodeResolutionInterface;
-use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
-use ON\Data\Mapper\Writer\MappingWriter;
 use ON\Data\Mapper\Writer\WriterInterface;
 
 final class MappingRuntime
 {
-	private ?MappingWriter $mappingWriter = null;
-
-	private ?WriterInterface $writer = null;
-
-	/**
-	 * @var list<NodeResolverInterface>|null
-	 */
-	private ?array $resolvers = null;
-
 	private ?FieldConversionCoordinator $converter = null;
-
-	private ?bool $conversionEnabled = null;
 
 	/**
 	 * @var array<class-string, object>
@@ -34,19 +20,7 @@ final class MappingRuntime
 
 	public function __construct(
 		private readonly MapperManager $mapperManager,
-		private readonly MappingNode $mappingNode,
-		private readonly ?self $parentMappingRuntime = null,
 	) {
-	}
-
-	public function getMappingNode(): MappingNode
-	{
-		return $this->mappingNode;
-	}
-
-	public function getSource(): mixed
-	{
-		return $this->mappingNode->getValue();
 	}
 
 	public function getMapperManager(): MapperManager
@@ -63,186 +37,135 @@ final class MappingRuntime
 	 */
 	public function getSharedInstance(string $class): object
 	{
-		$owner = $this->parentMappingRuntime ?? $this;
-
-		if (isset($owner->sharedInstances[$class])) {
+		if (isset($this->sharedInstances[$class])) {
 			/** @var T */
-			return $owner->sharedInstances[$class];
+			return $this->sharedInstances[$class];
 		}
 
 		/** @var T $instance */
 		$instance = new $class();
-		$owner->sharedInstances[$class] = $instance;
+		$this->sharedInstances[$class] = $instance;
 
 		return $instance;
 	}
 
-	public function map(): mixed
-	{
-		$this->mappingNode->assertNoObjectCycle();
-
-		if ($this->mappingNode->isCollection()) {
-			return $this->mapCollection();
-		}
-
-		$mapper = $this->mapperManager->resolveMapper(
-			source: $this->mappingNode->getValue(),
-			context: $this->mappingNode->getContext(),
-		);
-
-		return $mapper->map($this);
-	}
-
 	public function mapNode(MappingNode $node): mixed
 	{
-		return (new self(
-			mapperManager: $this->mapperManager,
-			mappingNode: $node,
-		))->map();
-	}
+		$node->assertNoObjectCycle();
 
-	public function write(
-		string|int $name,
-		mixed $value,
-	): void {
-		$mappingWriter = $this->getMappingWriter();
-
-		$child = $mappingWriter->createChildNode(
-			name: $name,
-			value: $value,
-		);
-
-		$resolution = $this->resolveNode($child);
-
-		if ($resolution instanceof BranchNodeResolutionInterface) {
-			$mappedValue = $value === null
-				? null
-				: $this->mapNode(
-					$child->forMapping(
-						target: $resolution->getTarget(),
-						arguments: $resolution->getArguments(),
-						collection: $resolution->isCollection(),
-					),
-				);
-		} else {
-			$mappedValue = $this->isConversionEnabled()
-				? $this->getConverter()->convert(
-					value: $value,
-					leaf: $resolution,
-					node: $child,
-				)
-				: $value;
+		if ($node->isCollection()) {
+			return $this->mapCollection($node);
 		}
 
-		$mappingWriter->write(
-			node: $child,
-			name: $resolution->getName(),
-			value: $mappedValue,
+		return $this->mapSingle($node);
+	}
+
+	public function convert(
+		mixed $value,
+		LeafNodeResolutionInterface $leaf,
+		MappingNode $node,
+	): mixed {
+		return $this->getConverter()->convert(
+			value: $value,
+			leaf: $leaf,
+			node: $node,
 		);
 	}
 
-	public function getResult(): mixed
-	{
-		return $this->getMappingWriter()->getResult();
-	}
-
-	private function mapCollection(): array
-	{
-		$source = $this->mappingNode->getValue();
+	private function mapCollection(
+		MappingNode $node,
+	): array {
+		$source = $node->getValue();
 
 		if (! is_iterable($source)) {
 			throw new MappingException('Collection mapping requires an iterable source.');
 		}
 
+		/** @var list<NodeResolverInterface>|null $resolvers */
+		$resolvers = null;
+		$writer = null;
+		$conversionEnabled = null;
 		$results = [];
 
 		foreach ($source as $key => $item) {
-			$itemNode = $this->mappingNode
+			$itemNode = $node
 				->createChildNode(
 					name: (string) $key,
 					value: $item,
 				)
 				->forMapping(
-					target: $this->mappingNode->getTarget(),
-					arguments: $this->mappingNode->getArguments(),
+					target: $node->getTarget(),
+					arguments: $node->getArguments(),
 					collection: false,
 					preserveComponentOverrides: true,
 				);
 
-			$results[] = (new self(
-				mapperManager: $this->mapperManager,
-				mappingNode: $itemNode,
-				parentMappingRuntime: $this,
-			))->map();
+			$options = $itemNode->getOptions();
+
+			$writer ??= $this->mapperManager->resolveWriter(
+				target: $itemNode->getTarget(),
+				options: $options,
+			);
+
+			$resolvers ??= $this->mapperManager->createResolverChain(
+				options: $options,
+			);
+
+			$conversionEnabled ??= $this->isConversionEnabled($options);
+
+			$results[] = $this->mapSingle(
+				node: $itemNode,
+				writer: $writer,
+				resolvers: $resolvers,
+				conversionEnabled: $conversionEnabled,
+			);
 		}
 
 		return $results;
 	}
 
-	private function getMappingWriter(): MappingWriter
-	{
-		return $this->mappingWriter ??= new MappingWriter(
-			mappingNode: $this->mappingNode,
-			writer: $this->getWriter(),
-		);
-	}
-
-	private function getWriter(): WriterInterface
-	{
-		if ($this->parentMappingRuntime !== null) {
-			return $this->parentMappingRuntime->getWriter();
-		}
-
-		return $this->writer ??= $this->mapperManager->resolveWriter(
-			target: $this->mappingNode->getTarget(),
-			context: $this->mappingNode->getContext(),
-		);
-	}
-
-	private function resolveNode(MappingNode $node): LeafNodeResolutionInterface|BranchNodeResolutionInterface
-	{
-		foreach ($this->getResolvers() as $resolver) {
-			$resolution = $resolver->resolve($node, $this);
-			if ($resolution !== null) {
-				return $resolution;
-			}
-		}
-
-		return LeafNodeResolution::passthrough((string) $node->getName());
-	}
-
 	/**
-	 * @return list<NodeResolverInterface>
+	 * @param list<NodeResolverInterface>|null $resolvers
 	 */
-	private function getResolvers(): array
-	{
-		if ($this->parentMappingRuntime !== null) {
-			return $this->parentMappingRuntime->getResolvers();
-		}
+	private function mapSingle(
+		MappingNode $node,
+		?WriterInterface $writer = null,
+		?array $resolvers = null,
+		?bool $conversionEnabled = null,
+	): mixed {
+		$node->assertNoObjectCycle();
 
-		return $this->resolvers ??= $this->mapperManager->createResolverChain(
-			context: $this->mappingNode->getContext(),
+		$options = $node->getOptions();
+		$mapper = $this->mapperManager->resolveMapper(
+			source: $node->getValue(),
+			options: $options,
 		);
+
+		$context = new MappingContext(
+			runtime: $this,
+			node: $node,
+			writer: $writer ?? $this->mapperManager->resolveWriter(
+				target: $node->getTarget(),
+				options: $options,
+			),
+			resolvers: $resolvers ?? $this->mapperManager->createResolverChain(
+				options: $options,
+			),
+			conversionEnabled: $conversionEnabled ?? $this->isConversionEnabled($options),
+		);
+
+		return $mapper->map($context);
 	}
 
 	private function getConverter(): FieldConversionCoordinator
 	{
-		if ($this->parentMappingRuntime !== null) {
-			return $this->parentMappingRuntime->getConverter();
-		}
-
 		return $this->converter ??= $this->mapperManager->createFieldConversionCoordinator();
 	}
 
-	private function isConversionEnabled(): bool
-	{
-		if ($this->parentMappingRuntime !== null) {
-			return $this->parentMappingRuntime->isConversionEnabled();
-		}
-
-		return $this->conversionEnabled ??= (
-			$this->mappingNode->getContext()->getSourceRepresentation() !== null
-			|| $this->mappingNode->getContext()->getOutputRepresentation() !== null
-		);
+	private function isConversionEnabled(
+		MappingOptions $options,
+	): bool {
+		return $options->getSourceRepresentation() !== null
+			|| $options->getOutputRepresentation() !== null;
 	}
 }

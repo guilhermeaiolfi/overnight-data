@@ -7,8 +7,8 @@ namespace Tests\ON\Data\Mapper;
 use ON\Data\Mapper\Attribute\MapFrom;
 use ON\Data\Mapper\Attribute\MapTo;
 use ON\Data\Mapper\ConversionGateway;
-use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\Support\MappingNodePropertyFinder;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -115,9 +115,9 @@ final class MappingNodePropertyFinderTest extends TestCase
 		return new MappingNodePropertyFinder();
 	}
 
-	private function context(): MappingContext
+	private function context(): MappingOptions
 	{
-		return new MappingContext(ConversionGateway::createDefault());
+		return new MappingOptions(ConversionGateway::createDefault());
 	}
 }
 

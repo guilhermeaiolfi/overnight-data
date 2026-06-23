@@ -12,7 +12,7 @@ final readonly class MappingNode
 		private string|int|null $name,
 		private mixed $value,
 		private mixed $target,
-		private MappingContext $context,
+		private MappingOptions $options,
 		private ?self $parent,
 	) {
 	}
@@ -20,9 +20,9 @@ final readonly class MappingNode
 	public static function root(
 		mixed $source,
 		mixed $target,
-		MappingContext $context,
+		MappingOptions $options,
 	): self {
-		return new self(null, $source, $target, $context, null);
+		return new self(null, $source, $target, $options, null);
 	}
 
 	public function getName(): string|int|null
@@ -40,9 +40,9 @@ final readonly class MappingNode
 		return $this->target;
 	}
 
-	public function getContext(): MappingContext
+	public function getOptions(): MappingOptions
 	{
-		return $this->context;
+		return $this->options;
 	}
 
 	/**
@@ -50,12 +50,12 @@ final readonly class MappingNode
 	 */
 	public function getArguments(): array
 	{
-		return $this->context->getArguments();
+		return $this->options->getArguments();
 	}
 
 	public function isCollection(): bool
 	{
-		return $this->context->isCollection();
+		return $this->options->isCollection();
 	}
 
 	public function getParent(): ?self
@@ -91,7 +91,7 @@ final readonly class MappingNode
 			$this->name,
 			$this->value,
 			$target,
-			$this->context,
+			$this->options,
 			$this->parent,
 		);
 	}
@@ -104,7 +104,7 @@ final readonly class MappingNode
 			$name,
 			$value,
 			null,
-			$this->context,
+			$this->options,
 			$this,
 		);
 	}
@@ -118,12 +118,12 @@ final readonly class MappingNode
 		bool $collection = false,
 		bool $preserveComponentOverrides = false,
 	): self {
-		$context = $this->context
+		$options = $this->options
 			->withArguments($arguments)
 			->withCollection($collection);
 
 		if (! $preserveComponentOverrides) {
-			$context = $context
+			$options = $options
 				->withMapperClass(null)
 				->withWriterClass(null);
 		}
@@ -132,7 +132,7 @@ final readonly class MappingNode
 			$this->name,
 			$this->value,
 			$target,
-			$context,
+			$options,
 			$this->parent,
 		);
 	}

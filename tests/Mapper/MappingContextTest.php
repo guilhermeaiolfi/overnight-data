@@ -6,7 +6,7 @@ namespace Tests\ON\Data\Mapper;
 
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\FieldMap;
-use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\Representation\WireRepresentation;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\Fixture\SpyArrayMapper;
@@ -18,7 +18,7 @@ final class MappingContextTest extends TestCase
 	public function testMappingContextStoresOnlyMappingWideConfiguration(): void
 	{
 		$gateway = ConversionGateway::createDefault();
-		$context = (new MappingContext($gateway))
+		$context = (new MappingOptions($gateway))
 			->withSourceRepresentation(WireRepresentation::class)
 			->withOutputRepresentation(WireRepresentation::class)
 			->withMapperClass(SpyArrayMapper::class)
@@ -41,7 +41,7 @@ final class MappingContextTest extends TestCase
 
 	public function testWithMethodsRemainImmutable(): void
 	{
-		$context = new MappingContext(ConversionGateway::createDefault());
+		$context = new MappingOptions(ConversionGateway::createDefault());
 		$fieldMap = FieldMap::fromArray(['id' => 'bigint']);
 		$updated = $context
 			->withMapperClass(SpyArrayMapper::class)

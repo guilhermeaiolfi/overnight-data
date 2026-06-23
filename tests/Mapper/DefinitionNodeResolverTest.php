@@ -9,10 +9,9 @@ use ON\Data\Definition\Registry;
 use ON\Data\Definition\View\ViewDefinitionInterface;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\MappingException;
-use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\MappingRuntime;
-use ON\Data\Mapper\Resolution\BranchNodeResolutionInterface;
 use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use ON\Data\Mapper\Resolver\DefinitionNodeResolver;
 use PHPUnit\Framework\TestCase;
@@ -135,16 +134,16 @@ final class DefinitionNodeResolverTest extends TestCase
 		return MappingNode::root(
 			[],
 			[],
-			$this->context()->withArguments($arguments),
+			$this->options()->withArguments($arguments),
 		)->createChildNode(
 			name: $name,
 			value: $value,
 		);
 	}
 
-	private function context(): MappingContext
+	private function options(): MappingOptions
 	{
-		return new MappingContext($this->gateway());
+		return new MappingOptions($this->gateway());
 	}
 
 	private function gateway(): ConversionGateway
@@ -172,12 +171,7 @@ final class DefinitionNodeResolverTest extends TestCase
 	private function runtimeFor(MappingNode $node): MappingRuntime
 	{
 		return new MappingRuntime(
-			mapperManager: $node->getContext()->getGateway()->getMapperManager(),
-			mappingNode: MappingNode::root(
-				source: $node->getParentSource(),
-				target: $node->getParentTarget(),
-				context: $node->getContext(),
-			),
+			mapperManager: $node->getOptions()->getGateway()->getMapperManager(),
 		);
 	}
 }

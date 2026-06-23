@@ -10,6 +10,7 @@ use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\MappingRuntime;
 use ON\Data\Mapper\Representation\WireRepresentation;
 use ON\Data\Mapper\Resolution\BranchNodeResolution;
@@ -210,7 +211,7 @@ final class RuntimeReuseSpyWriter implements WriterInterface
 
 	public static function canWrite(
 		mixed $target,
-		MappingContext $context,
+		MappingOptions $options,
 	): bool {
 		self::$canWriteCalls++;
 
@@ -417,14 +418,14 @@ final class RuntimeReuseArrayMapper implements MapperInterface
 
 	public static function canMap(
 		mixed $source,
-		MappingContext $context,
+		MappingOptions $options,
 	): bool {
 		self::$canMapCalls++;
 
 		return is_array($source);
 	}
 
-	public function map(MappingRuntime $runtime): mixed
+	public function map(MappingContext $context): mixed
 	{
 		self::$mapCalls++;
 
@@ -446,14 +447,14 @@ final class RuntimeReuseObjectMapper implements MapperInterface
 
 	public static function canMap(
 		mixed $source,
-		MappingContext $context,
+		MappingOptions $options,
 	): bool {
 		self::$canMapCalls++;
 
 		return is_object($source);
 	}
 
-	public function map(MappingRuntime $runtime): mixed
+	public function map(MappingContext $context): mixed
 	{
 		self::$mapCalls++;
 

@@ -6,23 +6,23 @@ namespace Tests\ON\Data\Fixture;
 
 use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\MappingContext;
-use ON\Data\Mapper\MappingRuntime;
+use ON\Data\Mapper\MappingOptions;
 
 final class OtherArrayMapper implements MapperInterface
 {
 	public static function canMap(
 		mixed $source,
-		MappingContext $context,
+		MappingOptions $options,
 	): bool {
 		return is_array($source);
 	}
 
-	public function map(MappingRuntime $runtime): mixed
+	public function map(MappingContext $context): mixed
 	{
-		foreach ($runtime->getSource() as $name => $value) {
-			$runtime->write(name: $name, value: $value);
+		foreach ($context->getSource() as $name => $value) {
+			$context->write(name: $name, value: $value);
 		}
 
-		return $runtime->getResult();
+		return $context->getResult();
 	}
 }

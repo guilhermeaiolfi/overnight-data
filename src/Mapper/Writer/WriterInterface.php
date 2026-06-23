@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper\Writer;
 
-use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingOptions;
 
 interface WriterInterface
 {
 	public static function canWrite(
 		mixed $target,
-		MappingContext $context,
+		MappingOptions $options,
 	): bool;
 
 	public function createTarget(

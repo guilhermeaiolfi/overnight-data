@@ -7,7 +7,7 @@ namespace Tests\ON\Data\Fixture;
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\MappingContext;
-use ON\Data\Mapper\MappingRuntime;
+use ON\Data\Mapper\MappingOptions;
 
 final class RecordingArrayMapper implements MapperInterface
 {
@@ -35,36 +35,36 @@ final class RecordingArrayMapper implements MapperInterface
 
 	public static function canMap(
 		mixed $source,
-		MappingContext $context,
+		MappingOptions $options,
 	): bool {
 		self::$selections[] = [
-			'arguments' => $context->getArguments(),
-			'collection' => $context->isCollection(),
+			'arguments' => $options->getArguments(),
+			'collection' => $options->isCollection(),
 		];
 
 		return is_array($source);
 	}
 
-	public function map(MappingRuntime $runtime): mixed
+	public function map(MappingContext $context): mixed
 	{
-		$node = $runtime->getMappingNode();
+		$node = $context->getNode();
 		self::$frames[] = [
 			'path' => $node->getPath(),
 			'nodeArguments' => $node->getArguments(),
-			'contextArguments' => $node->getContext()->getArguments(),
+			'contextArguments' => $node->getOptions()->getArguments(),
 			'nodeCollection' => $node->isCollection(),
-			'contextCollection' => $node->getContext()->isCollection(),
+			'contextCollection' => $node->getOptions()->isCollection(),
 		];
 
-		$source = $runtime->getSource();
+		$source = $context->getSource();
 		if (! is_array($source)) {
 			throw new MappingException('RecordingArrayMapper can only map array sources.');
 		}
 
 		foreach ($source as $name => $value) {
-			$runtime->write(name: $name, value: $value);
+			$context->write(name: $name, value: $value);
 		}
 
-		return $runtime->getResult();
+		return $context->getResult();
 	}
 }

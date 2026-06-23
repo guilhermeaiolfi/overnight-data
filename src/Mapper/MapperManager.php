@@ -226,16 +226,19 @@ final class MapperManager
 	public function map(
 		mixed $source,
 		mixed $target,
-		MappingContext $context,
+		MappingOptions $options,
 	): mixed {
-		return (new MappingRuntime(
+		$runtime = new MappingRuntime(
 			mapperManager: $this,
-			mappingNode: MappingNode::root(
+		);
+
+		return $runtime->mapNode(
+			MappingNode::root(
 				source: $source,
 				target: $target,
-				context: $context,
+				options: $options,
 			),
-		))->map();
+		);
 	}
 
 	public function clear(): void
@@ -284,11 +287,11 @@ final class MapperManager
 	/**
 	 * @return list<NodeResolverInterface>
 	 */
-	public function createResolverChain(MappingContext $context): array
+	public function createResolverChain(MappingOptions $options): array
 	{
 		$chain = [];
 
-		foreach ($context->getResolverClasses() as $resolverClass) {
+		foreach ($options->getResolverClasses() as $resolverClass) {
 			$chain[] = $this->constructResolver($resolverClass);
 		}
 
@@ -377,12 +380,12 @@ final class MapperManager
 
 	public function resolveMapper(
 		mixed $source,
-		MappingContext $context,
+		MappingOptions $options,
 	): MapperInterface {
-		$mapperClass = $context->getMapperClass();
+		$mapperClass = $options->getMapperClass();
 		if ($mapperClass !== null) {
 			$this->assertRoleOrThrow($mapperClass, MapperInterface::class);
-			if (! $mapperClass::canMap($source, $context)) {
+			if (! $mapperClass::canMap($source, $options)) {
 				throw new IncompatibleMapperException(
 					sprintf("Mapper '%s' cannot map the given source.", $mapperClass),
 				);
@@ -394,7 +397,7 @@ final class MapperManager
 		}
 
 		foreach ($this->mappers as $candidate) {
-			if ($candidate::canMap($source, $context)) {
+			if ($candidate::canMap($source, $options)) {
 				return $this->getMapper($candidate);
 			}
 		}
@@ -404,12 +407,12 @@ final class MapperManager
 
 	public function resolveWriter(
 		mixed $target,
-		MappingContext $context,
+		MappingOptions $options,
 	): WriterInterface {
-		$writerClass = $context->getWriterClass();
+		$writerClass = $options->getWriterClass();
 		if ($writerClass !== null) {
 			$this->assertRoleOrThrow($writerClass, WriterInterface::class);
-			if (! $writerClass::canWrite($target, $context)) {
+			if (! $writerClass::canWrite($target, $options)) {
 				throw new IncompatibleWriterException(
 					sprintf("Writer '%s' cannot write the given target.", $writerClass),
 				);
@@ -421,7 +424,7 @@ final class MapperManager
 		}
 
 		foreach ($this->writers as $candidate) {
-			if ($candidate::canWrite($target, $context)) {
+			if ($candidate::canWrite($target, $options)) {
 				return $this->getWriter($candidate);
 			}
 		}

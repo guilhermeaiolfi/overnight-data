@@ -4,192 +4,115 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper;
 
-use ON\Data\Mapper\Mapper\MapperInterface;
-use ON\Data\Mapper\Representation\RepresentationInterface;
+use ON\Data\Mapper\Resolution\BranchNodeResolutionInterface;
+use ON\Data\Mapper\Resolution\LeafNodeResolution;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
 use ON\Data\Mapper\Writer\WriterInterface;
 
 final class MappingContext
 {
+	private readonly MappingNode $node;
+
+	private mixed $result;
+
 	/**
-	 * @param class-string<RepresentationInterface>|null $sourceRepresentation
-	 * @param class-string<RepresentationInterface>|null $outputRepresentation
-	 * @param class-string<MapperInterface>|null $mapperClass
-	 * @param class-string<WriterInterface>|null $writerClass
-	 * @param list<class-string<NodeResolverInterface>> $resolverClasses
-	 * @param list<mixed> $arguments
+	 * @param list<NodeResolverInterface> $resolvers
 	 */
 	public function __construct(
-		private readonly ConversionGateway $gateway,
-		private ?string $sourceRepresentation = null,
-		private ?string $outputRepresentation = null,
-		private ?string $mapperClass = null,
-		private ?string $writerClass = null,
-		private array $resolverClasses = [],
-		private array $arguments = [],
-		private ?FieldMap $fieldMap = null,
-		private bool $collection = false,
+		private readonly MappingRuntime $runtime,
+		MappingNode $node,
+		private readonly WriterInterface $writer,
+		private readonly array $resolvers,
+		private readonly bool $conversionEnabled,
 	) {
+		$this->result = $this->writer->createTarget(
+			node: $node,
+		);
+
+		$this->node = $node->withTarget(
+			$this->result,
+		);
 	}
 
-	public function getGateway(): ConversionGateway
+	public function getRuntime(): MappingRuntime
 	{
-		return $this->gateway;
+		return $this->runtime;
 	}
 
-	/**
-	 * @return class-string<RepresentationInterface>|null
-	 */
-	public function getSourceRepresentation(): ?string
+	public function getNode(): MappingNode
 	{
-		return $this->sourceRepresentation;
+		return $this->node;
 	}
 
-	/**
-	 * @return class-string<RepresentationInterface>|null
-	 */
-	public function getOutputRepresentation(): ?string
+	public function getOptions(): MappingOptions
 	{
-		return $this->outputRepresentation;
+		return $this->node->getOptions();
 	}
 
-	/**
-	 * @return class-string<MapperInterface>|null
-	 */
-	public function getMapperClass(): ?string
+	public function getSource(): mixed
 	{
-		return $this->mapperClass;
+		return $this->node->getValue();
 	}
 
-	/**
-	 * @return class-string<WriterInterface>|null
-	 */
-	public function getWriterClass(): ?string
-	{
-		return $this->writerClass;
+	public function write(
+		string|int $name,
+		mixed $value,
+	): void {
+		$child = $this->node->createChildNode(
+			name: $name,
+			value: $value,
+		);
+
+		$resolution = $this->resolveNode($child);
+
+		if ($resolution instanceof BranchNodeResolutionInterface) {
+			$mappedValue = $value === null
+				? null
+				: $this->runtime->mapNode(
+					$child->forMapping(
+						target: $resolution->getTarget(),
+						arguments: $resolution->getArguments(),
+						collection: $resolution->isCollection(),
+					),
+				);
+		} else {
+			$mappedValue = $this->conversionEnabled
+				? $this->runtime->convert(
+					value: $value,
+					leaf: $resolution,
+					node: $child,
+				)
+				: $value;
+		}
+
+		$this->result = $this->writer->write(
+			target: $this->result,
+			name: $resolution->getName(),
+			value: $mappedValue,
+			node: $child,
+		);
 	}
 
-	/**
-	 * @return list<class-string<NodeResolverInterface>>
-	 */
-	public function getResolverClasses(): array
+	public function getResult(): mixed
 	{
-		return $this->resolverClasses;
+		return $this->result;
 	}
 
-	/**
-	 * @return list<mixed>
-	 */
-	public function getArguments(): array
-	{
-		return $this->arguments;
-	}
+	private function resolveNode(
+		MappingNode $node,
+	): LeafNodeResolutionInterface|BranchNodeResolutionInterface {
+		foreach ($this->resolvers as $resolver) {
+			$resolution = $resolver->resolve(
+				node: $node,
+				runtime: $this->runtime,
+			);
 
-	public function getFieldMap(): ?FieldMap
-	{
-		return $this->fieldMap;
-	}
+			if ($resolution !== null) {
+				return $resolution;
+			}
+		}
 
-	public function isCollection(): bool
-	{
-		return $this->collection;
-	}
-
-	/**
-	 * @param class-string<RepresentationInterface>|null $representation
-	 */
-	public function withSourceRepresentation(?string $representation): self
-	{
-		$clone = clone $this;
-		$clone->sourceRepresentation = $representation;
-
-		return $clone;
-	}
-
-	/**
-	 * @param class-string<RepresentationInterface>|null $representation
-	 */
-	public function withOutputRepresentation(?string $representation): self
-	{
-		$clone = clone $this;
-		$clone->outputRepresentation = $representation;
-
-		return $clone;
-	}
-
-	/**
-	 * @param class-string<MapperInterface>|null $mapper
-	 */
-	public function withMapperClass(?string $mapper): self
-	{
-		$clone = clone $this;
-		$clone->mapperClass = $mapper;
-
-		return $clone;
-	}
-
-	/**
-	 * @param class-string<WriterInterface>|null $writer
-	 */
-	public function withWriterClass(?string $writer): self
-	{
-		$clone = clone $this;
-		$clone->writerClass = $writer;
-
-		return $clone;
-	}
-
-	/**
-	 * @param list<class-string<NodeResolverInterface>> $resolverClasses
-	 */
-	public function withResolverClasses(array $resolverClasses): self
-	{
-		$clone = clone $this;
-		$clone->resolverClasses = $resolverClasses;
-
-		return $clone;
-	}
-
-	/**
-	 * @param class-string<NodeResolverInterface> $resolverClass
-	 */
-	public function withAddedResolverClass(string $resolverClass): self
-	{
-		$clone = clone $this;
-		$clone->resolverClasses[] = $resolverClass;
-
-		return $clone;
-	}
-
-	/**
-	 * @param list<mixed> $arguments
-	 */
-	public function withArguments(array $arguments): self
-	{
-		$clone = clone $this;
-		$clone->arguments = $arguments;
-
-		return $clone;
-	}
-
-	public function withFieldMap(?FieldMap $fieldMap): self
-	{
-		$clone = clone $this;
-		$clone->fieldMap = $fieldMap;
-
-		return $clone;
-	}
-
-	public function asCollection(): self
-	{
-		return $this->withCollection(true);
-	}
-
-	public function withCollection(bool $collection): self
-	{
-		$clone = clone $this;
-		$clone->collection = $collection;
-
-		return $clone;
+		return LeafNodeResolution::passthrough((string) $node->getName());
 	}
 }

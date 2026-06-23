@@ -7,7 +7,7 @@ namespace ON\Data\Mapper\Mapper;
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
-use ON\Data\Mapper\MappingRuntime;
+use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\Support\ArrayPathExpander;
 
 final class ArrayMapper implements MapperInterface
@@ -19,30 +19,30 @@ final class ArrayMapper implements MapperInterface
 
 	public static function canMap(
 		mixed $source,
-		MappingContext $context,
+		MappingOptions $options,
 	): bool {
 		return is_array($source);
 	}
 
-	public function map(MappingRuntime $runtime): mixed
+	public function map(MappingContext $context): mixed
 	{
-		$source = $runtime->getSource();
+		$source = $context->getSource();
 		if (! is_array($source)) {
 			throw new MappingException('ArrayMapper can only map array sources.');
 		}
 
-		$source = $this->shouldExpandDottedKeys($runtime->getMappingNode())
+		$source = $this->shouldExpandDottedKeys($context->getNode())
 			? ($this->pathExpander ?? new ArrayPathExpander())->expand($source)
 			: $source;
 
 		foreach ($source as $name => $value) {
-			$runtime->write(
+			$context->write(
 				name: $name,
 				value: $value,
 			);
 		}
 
-		return $runtime->getResult();
+		return $context->getResult();
 	}
 
 	private function shouldExpandDottedKeys(MappingNode $node): bool

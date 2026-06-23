@@ -8,8 +8,8 @@ use ON\Data\Mapper\Attribute\Hidden;
 use ON\Data\Mapper\Attribute\MapTo;
 use ON\Data\Mapper\ConversionGateway;
 use function ON\Data\Mapper\map;
-use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\Writer\WriterInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -97,7 +97,7 @@ final class Phase10ARecordingWriter implements WriterInterface
 
 	public static function canWrite(
 		mixed $target,
-		MappingContext $context,
+		MappingOptions $options,
 	): bool {
 		return is_array($target);
 	}

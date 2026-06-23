@@ -6,7 +6,7 @@ namespace Tests\ON\Data\Fixture;
 
 use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\MappingContext;
-use ON\Data\Mapper\MappingRuntime;
+use ON\Data\Mapper\MappingOptions;
 use stdClass;
 
 final class PrependingStdClassMapper implements MapperInterface
@@ -18,18 +18,18 @@ final class PrependingStdClassMapper implements MapperInterface
 
 	public static function canMap(
 		mixed $source,
-		MappingContext $context,
+		MappingOptions $options,
 	): bool {
 		ComponentTestState::recordSelection(self::class);
 
 		return $source instanceof stdClass;
 	}
 
-	public function map(MappingRuntime $runtime): mixed
+	public function map(MappingContext $context): mixed
 	{
-		ComponentTestState::recordRuntime(self::class, $runtime->getMappingNode()->getPath());
-		$runtime->write(name: 'specialized', value: 'Mapper');
+		ComponentTestState::recordRuntime(self::class, $context->getNode()->getPath());
+		$context->write(name: 'specialized', value: 'Mapper');
 
-		return $runtime->getResult();
+		return $context->getResult();
 	}
 }

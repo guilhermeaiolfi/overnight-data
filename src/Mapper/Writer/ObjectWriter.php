@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace ON\Data\Mapper\Writer;
 
 use ON\Data\Mapper\Exception\MappingException;
-use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Support\ObjectPropertyMatcher;
 use ReflectionClass;
@@ -33,7 +33,7 @@ final class ObjectWriter implements WriterInterface
 
 	public static function canWrite(
 		mixed $target,
-		MappingContext $context,
+		MappingOptions $options,
 	): bool {
 		if ($target instanceof stdClass) {
 			return true;

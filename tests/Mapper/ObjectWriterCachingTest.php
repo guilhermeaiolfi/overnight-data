@@ -8,8 +8,8 @@ use ON\Data\Mapper\Attribute\MapFrom;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\MappingException;
 use function ON\Data\Mapper\map;
-use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Writer\ObjectWriter;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -31,12 +31,12 @@ final class ObjectWriterCachingTest extends TestCase
 		$first = $gateway->getMapperManager()->map(
 			['id' => 1, 'name' => 'Ada', 'age' => 30],
 			UserInputDto::class,
-			new MappingContext($gateway),
+			new MappingOptions($gateway),
 		);
 		$second = $gateway->getMapperManager()->map(
 			['id' => 2, 'name' => 'Linus', 'age' => 31],
 			UserInputDto::class,
-			new MappingContext($gateway),
+			new MappingOptions($gateway),
 		);
 
 		self::assertNotSame($first, $second);
@@ -63,12 +63,12 @@ final class ObjectWriterCachingTest extends TestCase
 		$first = $gateway->getMapperManager()->map(
 			['first_name' => 'Ada'],
 			FirstNamedTarget::class,
-			new MappingContext($gateway),
+			new MappingOptions($gateway),
 		);
 		$second = $gateway->getMapperManager()->map(
 			['display_name' => 'Linus'],
 			SecondNamedTarget::class,
-			new MappingContext($gateway),
+			new MappingOptions($gateway),
 		);
 
 		self::assertSame('Ada', $first->name);
@@ -82,12 +82,12 @@ final class ObjectWriterCachingTest extends TestCase
 		$parent = $gateway->getMapperManager()->map(
 			['parent_name' => 'Ada'],
 			ParentCacheTarget::class,
-			new MappingContext($gateway),
+			new MappingOptions($gateway),
 		);
 		$child = $gateway->getMapperManager()->map(
 			['parent_name' => 'Linus', 'child_name' => 'Editor'],
 			ChildCacheTarget::class,
-			new MappingContext($gateway),
+			new MappingOptions($gateway),
 		);
 
 		self::assertSame('Ada', $parent->name);
@@ -105,7 +105,7 @@ final class ObjectWriterCachingTest extends TestCase
 				['first_name' => 'Linus'],
 			],
 			FirstNamedTarget::class,
-			(new MappingContext($gateway))->withCollection(true),
+			(new MappingOptions($gateway))->withCollection(true),
 		);
 		$secondBatch = $gateway->getMapperManager()->map(
 			[
@@ -113,7 +113,7 @@ final class ObjectWriterCachingTest extends TestCase
 				['display_name' => 'Alan'],
 			],
 			SecondNamedTarget::class,
-			(new MappingContext($gateway))->withCollection(true),
+			(new MappingOptions($gateway))->withCollection(true),
 		);
 
 		self::assertSame(['Ada', 'Linus'], array_map(static fn (FirstNamedTarget $target): string => $target->name, $firstBatch));
@@ -123,7 +123,7 @@ final class ObjectWriterCachingTest extends TestCase
 	public function testStdClassMappingBypassesObjectWriterCaches(): void
 	{
 		$writer = new ObjectWriter();
-		$node = MappingNode::root(['id' => 10], stdClass::class, new MappingContext(ConversionGateway::createDefault()));
+		$node = MappingNode::root(['id' => 10], stdClass::class, new MappingOptions(ConversionGateway::createDefault()));
 
 		$target = $writer->createTarget($node);
 		$written = $writer->write($target, 'id', 10, $node->createChildNode('id', 10));
@@ -223,7 +223,7 @@ final class ObjectWriterCachingTest extends TestCase
 
 	private function rootNode(object|string $target): MappingNode
 	{
-		return MappingNode::root([], $target, new MappingContext(ConversionGateway::createDefault()));
+		return MappingNode::root([], $target, new MappingOptions(ConversionGateway::createDefault()));
 	}
 
 	private function privatePropertyValue(object $object, string $property): mixed

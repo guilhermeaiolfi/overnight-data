@@ -16,9 +16,11 @@ use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Mapper\ObjectMapper;
 use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\MappingRuntime;
 use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Representation\WireRepresentation;
+use ON\Data\Mapper\Writer\ArrayWriter;
 use ON\Data\Mapper\Writer\ObjectWriter;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
@@ -218,8 +220,8 @@ final class ObjectMappingTest extends TestCase
 		$second->score = 4.5;
 		$second->profile = new MixedValueObject('editor');
 
-		$mapper->map($this->runtimeFor($gateway, $first));
-		$mapper->map($this->runtimeFor($gateway, $second));
+		$mapper->map($this->contextFor($gateway, $first));
+		$mapper->map($this->contextFor($gateway, $second));
 
 		$properties = $this->privatePropertyValue($mapper, 'sourcePropertiesByClass');
 		$hidden = $this->privatePropertyValue($mapper, 'hiddenSourcePropertiesByClass');
@@ -353,7 +355,7 @@ final class ObjectMappingTest extends TestCase
 				$gateway->getMapperManager()->map(
 					['id' => 10],
 					$target,
-					new MappingContext($gateway),
+					new MappingOptions($gateway),
 				);
 				self::fail('Expected no-writer exception was not thrown.');
 			} catch (NoWriterFoundException $exception) {
@@ -364,7 +366,7 @@ final class ObjectMappingTest extends TestCase
 
 	public function testObjectWriterCapabilityChecksDoNotClaimUnsupportedTargets(): void
 	{
-		$context = new MappingContext(ConversionGateway::createDefault());
+		$context = new MappingOptions(ConversionGateway::createDefault());
 
 		self::assertFalse(ObjectWriter::canWrite(UserContract::class, $context));
 		self::assertFalse(ObjectWriter::canWrite(AbstractUserDto::class, $context));
@@ -381,7 +383,7 @@ final class ObjectMappingTest extends TestCase
 		$gateway = ConversionGateway::createDefault();
 		$gateway->getMapperManager()->prepend(PrependingContractWriter::class);
 
-		$result = $gateway->getMapperManager()->map(['specialized' => 'writer'], UserContract::class, new MappingContext($gateway));
+		$result = $gateway->getMapperManager()->map(['specialized' => 'writer'], UserContract::class, new MappingOptions($gateway));
 
 		self::assertSame('writer', $result->specialized);
 	}
@@ -420,11 +422,16 @@ final class ObjectMappingTest extends TestCase
 		new MapTo('');
 	}
 
-	private function runtimeFor(ConversionGateway $gateway, object $source): MappingRuntime
+	private function contextFor(ConversionGateway $gateway, object $source): MappingContext
 	{
-		return new MappingRuntime(
-			$gateway->getMapperManager(),
-			MappingNode::root($source, [], new MappingContext($gateway)),
+		$runtime = new MappingRuntime($gateway->getMapperManager());
+
+		return new MappingContext(
+			runtime: $runtime,
+			node: MappingNode::root($source, [], new MappingOptions($gateway)),
+			writer: new ArrayWriter(),
+			resolvers: [],
+			conversionEnabled: false,
 		);
 	}
 

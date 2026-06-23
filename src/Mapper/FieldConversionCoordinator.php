@@ -24,9 +24,9 @@ final class FieldConversionCoordinator
 			return $value;
 		}
 
-		$context = $node->getContext();
-		$from = $context->getSourceRepresentation();
-		$to = $context->getOutputRepresentation();
+		$options = $node->getOptions();
+		$from = $options->getSourceRepresentation();
+		$to = $options->getOutputRepresentation();
 
 		if ($from === null && $to === null) {
 			return $value;

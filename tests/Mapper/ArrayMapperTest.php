@@ -6,8 +6,8 @@ namespace Tests\ON\Data\Mapper;
 
 use ON\Data\Mapper\ConversionGateway;
 use function ON\Data\Mapper\map;
-use ON\Data\Mapper\MappingContext;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\Writer\WriterInterface;
 use PHPUnit\Framework\TestCase;
 
@@ -76,7 +76,7 @@ final class ArrayMapperNodeRecordingWriter implements WriterInterface
 
 	public static function canWrite(
 		mixed $target,
-		MappingContext $context,
+		MappingOptions $options,
 	): bool {
 		return is_array($target);
 	}

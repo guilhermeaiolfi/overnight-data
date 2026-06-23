@@ -14,7 +14,7 @@ final class FieldMapNodeResolver implements NodeResolverInterface
 		MappingNode $node,
 		MappingRuntime $runtime,
 	): ?LeafNodeResolutionInterface {
-		$fieldMap = $node->getContext()->getFieldMap();
+		$fieldMap = $node->getOptions()->getFieldMap();
 		if ($fieldMap === null) {
 			return null;
 		}

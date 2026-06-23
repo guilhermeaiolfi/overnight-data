@@ -9,7 +9,7 @@ use DateTimeInterface;
 use ON\Data\Mapper\Attribute\Hidden;
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\MappingContext;
-use ON\Data\Mapper\MappingRuntime;
+use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ReflectionObject;
 use ReflectionProperty;
@@ -25,7 +25,7 @@ final class ObjectMapper implements MapperInterface
 
 	public static function canMap(
 		mixed $source,
-		MappingContext $context,
+		MappingOptions $options,
 	): bool {
 		return is_object($source)
 			&& ! $source instanceof DateTimeInterface
@@ -33,22 +33,22 @@ final class ObjectMapper implements MapperInterface
 			&& ! $source instanceof RepresentationInterface;
 	}
 
-	public function map(MappingRuntime $runtime): mixed
+	public function map(MappingContext $context): mixed
 	{
-		$source = $runtime->getSource();
+		$source = $context->getSource();
 		if (! is_object($source)) {
 			throw new MappingException('ObjectMapper can only map object sources.');
 		}
 
 		if ($source instanceof stdClass) {
 			foreach (get_object_vars($source) as $name => $value) {
-				$runtime->write(
+				$context->write(
 					name: $name,
 					value: $value,
 				);
 			}
 
-			return $runtime->getResult();
+			return $context->getResult();
 		}
 
 		$className = $source::class;
@@ -58,13 +58,13 @@ final class ObjectMapper implements MapperInterface
 				continue;
 			}
 
-			$runtime->write(
+			$context->write(
 				name: $property->getName(),
 				value: $property->getValue($source),
 			);
 		}
 
-		return $runtime->getResult();
+		return $context->getResult();
 	}
 
 	/**

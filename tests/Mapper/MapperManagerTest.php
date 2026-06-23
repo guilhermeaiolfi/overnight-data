@@ -28,7 +28,7 @@ use ON\Data\Mapper\Field\UrlFieldType;
 use ON\Data\Mapper\Mapper\ArrayMapper;
 use ON\Data\Mapper\Mapper\ObjectMapper;
 use ON\Data\Mapper\MapperManager;
-use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\Representation\WireRepresentation;
 use ON\Data\Mapper\Resolver\DefinitionNodeResolver;
 use ON\Data\Mapper\Resolver\FieldMapNodeResolver;
@@ -44,7 +44,7 @@ use Tests\ON\Data\Fixture\ApiRepresentation;
 use Tests\ON\Data\Fixture\ComponentTestState;
 use Tests\ON\Data\Fixture\ContractDto;
 use Tests\ON\Data\Fixture\CustomFieldType;
-use Tests\ON\Data\Fixture\CustomMapper;
+use Tests\ON\Data\Fixture\CustomSource;
 use Tests\ON\Data\Fixture\InvalidCodecFieldTypeTarget;
 use Tests\ON\Data\Fixture\InvalidCodecRepresentationTarget;
 use Tests\ON\Data\Fixture\MultiRoleComponent;
@@ -140,7 +140,7 @@ final class MapperManagerTest extends TestCase
 		$manager = new MapperManager($this->gateway());
 
 		$this->expectException(InvalidMapperComponentException::class);
-		$manager->register(CustomMapper::class);
+		$manager->register(CustomSource::class);
 	}
 
 	public function testMultiRoleComponentsAreRejected(): void
@@ -197,8 +197,8 @@ final class MapperManagerTest extends TestCase
 		$manager->register(NeverWriter::class);
 		$manager->register(SpyArrayWriter::class);
 
-		$first = $manager->map(['id' => 10], [], new MappingContext($gateway));
-		$second = $manager->map(['id' => 11], [], new MappingContext($gateway));
+		$first = $manager->map(['id' => 10], [], new MappingOptions($gateway));
+		$second = $manager->map(['id' => 11], [], new MappingOptions($gateway));
 
 		self::assertSame(['id' => 10], $first);
 		self::assertSame(['id' => 11], $second);
@@ -219,13 +219,13 @@ final class MapperManagerTest extends TestCase
 		$manager->register(SpyArrayWriter::class);
 		$manager->register(TrackingWireCodec::class);
 
-		$manager->map(['id' => 1], [], new MappingContext($gateway));
+		$manager->map(['id' => 1], [], new MappingOptions($gateway));
 		self::assertSame(TrackingWireCodec::class, $manager->resolveFieldTypeCodec(TrackingCustomFieldType::class, WireRepresentation::class));
 
 		$manager->clear();
 
 		self::assertSame([], $this->resolvedCodecCache($manager));
-		$manager->map(['id' => 2], [], new MappingContext($gateway));
+		$manager->map(['id' => 2], [], new MappingOptions($gateway));
 
 		self::assertSame(
 			[
@@ -270,7 +270,7 @@ final class MapperManagerTest extends TestCase
 		$manager->register(SpyArrayWriter::class);
 		$manager->register(SpyResolver::class);
 
-		$manager->map(['id' => '10'], [], (new MappingContext($gateway))->withAddedResolverClass(SpyResolver::class));
+		$manager->map(['id' => '10'], [], (new MappingOptions($gateway))->withAddedResolverClass(SpyResolver::class));
 
 		self::assertSame(
 			[
@@ -327,7 +327,7 @@ final class MapperManagerTest extends TestCase
 		);
 
 		$this->expectException(MapperComponentConfigurationException::class);
-		$manager->createResolverChain((new MappingContext($this->gateway()))->withAddedResolverClass(SpyResolver::class));
+		$manager->createResolverChain((new MappingOptions($this->gateway()))->withAddedResolverClass(SpyResolver::class));
 	}
 
 	public function testChangingConstructorAfterReusableInstantiationFails(): void
@@ -401,7 +401,7 @@ final class MapperManagerTest extends TestCase
 			array_map(
 				static fn (object $resolver): string => $resolver::class,
 				$manager->createResolverChain(
-					(new MappingContext($this->gateway()))->withAddedResolverClass(SpyResolver::class),
+					(new MappingOptions($this->gateway()))->withAddedResolverClass(SpyResolver::class),
 				),
 			),
 		);
@@ -415,7 +415,7 @@ final class MapperManagerTest extends TestCase
 		$source = new stdClass();
 		$source->id = 10;
 
-		$result = $manager->map($source, [], new MappingContext($gateway));
+		$result = $manager->map($source, [], new MappingOptions($gateway));
 
 		self::assertSame(['specialized' => 'Mapper'], $result);
 	}
@@ -426,7 +426,7 @@ final class MapperManagerTest extends TestCase
 		$manager = MapperManager::createDefault($gateway);
 		$manager->prepend(PrependingContractWriter::class);
 
-		$result = $manager->map(['specialized' => 'writer'], UserContract::class, new MappingContext($gateway));
+		$result = $manager->map(['specialized' => 'writer'], UserContract::class, new MappingOptions($gateway));
 
 		self::assertInstanceOf(ContractDto::class, $result);
 		self::assertSame('writer', $result->specialized);
@@ -441,7 +441,7 @@ final class MapperManagerTest extends TestCase
 		$result = $manager->map(
 			['id' => 10],
 			[],
-			(new MappingContext($gateway))->withOutputRepresentation(WireRepresentation::class),
+			(new MappingOptions($gateway))->withOutputRepresentation(WireRepresentation::class),
 		);
 
 		self::assertSame(['id' => '10'], $result);
@@ -503,7 +503,7 @@ final class MapperManagerTest extends TestCase
 		$manager = new MapperManager($this->gateway());
 
 		$this->expectException(IncompatibleMapperException::class);
-		$manager->map(['id' => 10], [], (new MappingContext($this->gateway()))->withMapperClass(NeverMapper::class));
+		$manager->map(['id' => 10], [], (new MappingOptions($this->gateway()))->withMapperClass(NeverMapper::class));
 	}
 
 	public function testIncompatibleExplicitWriterFails(): void
@@ -511,7 +511,7 @@ final class MapperManagerTest extends TestCase
 		$manager = new MapperManager($this->gateway());
 
 		$this->expectException(IncompatibleWriterException::class);
-		$manager->map(['id' => 10], [], (new MappingContext($this->gateway()))
+		$manager->map(['id' => 10], [], (new MappingOptions($this->gateway()))
 			->withMapperClass(SpyArrayMapper::class)
 			->withWriterClass(NeverWriter::class));
 	}
@@ -522,7 +522,7 @@ final class MapperManagerTest extends TestCase
 		$manager->register(SpyArrayWriter::class);
 
 		$this->expectException(NoMapperFoundException::class);
-		$manager->map(new stdClass(), [], new MappingContext($this->gateway()));
+		$manager->map(new stdClass(), [], new MappingOptions($this->gateway()));
 	}
 
 	public function testNoWriterFoundFails(): void
@@ -531,7 +531,7 @@ final class MapperManagerTest extends TestCase
 		$manager->register(SpyArrayMapper::class);
 
 		$this->expectException(NoWriterFoundException::class);
-		$manager->map(['id' => 10], stdClass::class, new MappingContext($this->gateway()));
+		$manager->map(['id' => 10], stdClass::class, new MappingOptions($this->gateway()));
 	}
 
 	private function gateway(): ConversionGateway

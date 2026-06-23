@@ -6,7 +6,7 @@ namespace Tests\ON\Data\Fixture;
 
 use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\MappingContext;
-use ON\Data\Mapper\MappingRuntime;
+use ON\Data\Mapper\MappingOptions;
 
 final class NeverMapper implements MapperInterface
 {
@@ -17,16 +17,16 @@ final class NeverMapper implements MapperInterface
 
 	public static function canMap(
 		mixed $source,
-		MappingContext $context,
+		MappingOptions $options,
 	): bool {
 		ComponentTestState::recordSelection(self::class);
 
 		return false;
 	}
 
-	public function map(MappingRuntime $runtime): mixed
+	public function map(MappingContext $context): mixed
 	{
-		ComponentTestState::recordRuntime(self::class, $runtime->getMappingNode()->getPath());
+		ComponentTestState::recordRuntime(self::class, $context->getNode()->getPath());
 
 		return [];
 	}

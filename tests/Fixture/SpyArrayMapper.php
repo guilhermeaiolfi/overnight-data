@@ -6,7 +6,7 @@ namespace Tests\ON\Data\Fixture;
 
 use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\MappingContext;
-use ON\Data\Mapper\MappingRuntime;
+use ON\Data\Mapper\MappingOptions;
 
 final class SpyArrayMapper implements MapperInterface
 {
@@ -17,21 +17,21 @@ final class SpyArrayMapper implements MapperInterface
 
 	public static function canMap(
 		mixed $source,
-		MappingContext $context,
+		MappingOptions $options,
 	): bool {
 		ComponentTestState::recordSelection(self::class);
 
 		return is_array($source);
 	}
 
-	public function map(MappingRuntime $runtime): mixed
+	public function map(MappingContext $context): mixed
 	{
-		ComponentTestState::recordRuntime(self::class, $runtime->getMappingNode()->getPath());
+		ComponentTestState::recordRuntime(self::class, $context->getNode()->getPath());
 
-		foreach ($runtime->getSource() as $name => $value) {
-			$runtime->write(name: $name, value: $value);
+		foreach ($context->getSource() as $name => $value) {
+			$context->write(name: $name, value: $value);
 		}
 
-		return $runtime->getResult();
+		return $context->getResult();
 	}
 }
