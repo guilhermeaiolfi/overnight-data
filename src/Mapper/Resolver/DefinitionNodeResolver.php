@@ -19,11 +19,10 @@ use ON\Data\Mapper\Support\MappingNodePropertyFinder;
 
 final class DefinitionNodeResolver implements CacheableNodeResolverInterface
 {
-	private bool $discoveryComplete = false;
-
-	private ?DefinitionInterface $definition = null;
-
-	private ?MappingException $ambiguity = null;
+	/**
+	 * @var array<string, array{definition: ?DefinitionInterface, ambiguity: ?MappingException}>
+	 */
+	private array $definitionCache = [];
 
 	private ?DefinitionArgumentLocator $runtimeLocator = null;
 
@@ -113,29 +112,53 @@ final class DefinitionNodeResolver implements CacheableNodeResolverInterface
 		MappingNode $node,
 		MappingRuntime $runtime,
 	): ?DefinitionInterface {
-		if (! $this->discoveryComplete) {
-			$this->discoverDefinition($node, $runtime);
+		$key = $this->definitionCacheKey($node->getArguments());
+
+		if (! array_key_exists($key, $this->definitionCache)) {
+			$this->discoverDefinition($key, $node, $runtime);
 		}
 
-		if ($this->ambiguity !== null) {
-			throw $this->ambiguity;
+		$cached = $this->definitionCache[$key];
+
+		if ($cached['ambiguity'] !== null) {
+			throw $cached['ambiguity'];
 		}
 
-		return $this->definition;
+		return $cached['definition'];
 	}
 
 	private function discoverDefinition(
+		string $key,
 		MappingNode $node,
 		MappingRuntime $runtime,
 	): void {
-		$this->discoveryComplete = true;
-
 		try {
-			$this->definition = $this->getLocator($runtime)
-				->getDefinition($node->getArguments());
+			$this->definitionCache[$key] = [
+				'definition' => $this->getLocator($runtime)->getDefinition($node->getArguments()),
+				'ambiguity' => null,
+			];
 		} catch (MappingException $exception) {
-			$this->ambiguity = $exception;
+			$this->definitionCache[$key] = [
+				'definition' => null,
+				'ambiguity' => $exception,
+			];
 		}
+	}
+
+	/**
+	 * @param list<mixed> $arguments
+	 */
+	private function definitionCacheKey(array $arguments): string
+	{
+		$definitions = [];
+
+		foreach ($arguments as $argument) {
+			if ($argument instanceof DefinitionInterface) {
+				$definitions[] = (string) spl_object_id($argument);
+			}
+		}
+
+		return implode(':', $definitions);
 	}
 
 	private function getLocator(

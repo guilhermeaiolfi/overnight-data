@@ -6,6 +6,7 @@ namespace Benchmarks\ON\Data\Mapper;
 
 use Benchmarks\ON\Data\Mapper\Support\FlatTargetDto;
 use Benchmarks\ON\Data\Mapper\Support\MappingDataset;
+use Benchmarks\ON\Data\Mapper\Support\MinimalNestedTargetDto;
 use Benchmarks\ON\Data\Mapper\Support\NestedTargetDto;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Representation\StorageRepresentation;
@@ -115,6 +116,17 @@ final class MappingBench
 	}
 
 	/**
+	 * @BeforeMethods({"setUpGateway", "setUpMinimalNestedArrayCollection1000"})
+	 * @Revs(1)
+	 */
+	public function benchMinimalNestedArrayCollectionToDto1000(): void
+	{
+		map($this->source, null, $this->gateway)
+			->collection()
+			->to(MinimalNestedTargetDto::class);
+	}
+
+	/**
 	 * @BeforeMethods({"setUpGateway", "setUpDottedNestedArrayCollection1000"})
 	 * @Revs(1)
 	 */
@@ -170,6 +182,19 @@ final class MappingBench
 	public function setUpDottedNestedArrayCollection1000(): void
 	{
 		$this->source = $this->dataset?->createDottedNestedArrayCollection(1000);
+	}
+
+	public function setUpMinimalNestedArrayCollection1000(): void
+	{
+		$this->source = array_fill(
+			0,
+			1000,
+			[
+				'children' => [
+					['id' => 1],
+				],
+			],
+		);
 	}
 
 	public function setUpFlatArrayCollection10000(): void

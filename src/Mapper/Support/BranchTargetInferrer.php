@@ -15,6 +15,11 @@ use stdClass;
 
 final class BranchTargetInferrer
 {
+	/**
+	 * @var array<class-string, array<string, class-string|null>>
+	 */
+	private array $phpDocListTargets = [];
+
 	public function __construct(
 		private readonly ?MappingNodePropertyFinder $propertyFinder = null,
 	) {
@@ -209,6 +214,19 @@ final class BranchTargetInferrer
 	}
 
 	private function resolvePhpDocListTarget(ReflectionProperty $property): ?string
+	{
+		$class = $property->getDeclaringClass()->getName();
+		$name = $property->getName();
+
+		if (array_key_exists($name, $this->phpDocListTargets[$class] ?? [])) {
+			return $this->phpDocListTargets[$class][$name];
+		}
+
+		return $this->phpDocListTargets[$class][$name]
+			= $this->parsePhpDocListTarget($property);
+	}
+
+	private function parsePhpDocListTarget(ReflectionProperty $property): ?string
 	{
 		$doc = $property->getDocComment();
 		if (! is_string($doc)) {

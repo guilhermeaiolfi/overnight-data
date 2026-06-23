@@ -101,8 +101,7 @@ try {
 function runBenchmarkDump(string $root, string $dumpFile): void
 {
 	$result = runCommand($root, [
-		PHP_BINARY,
-		$root . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'phpbench',
+		...phpBenchCommand($root),
 		'run',
 		'--config=phpbench.json',
 		'--filter=MappingBench',
@@ -121,8 +120,7 @@ function runBenchmarkDump(string $root, string $dumpFile): void
 function renderReport(string $root, array $xmlFiles, string $output): string
 {
 	$command = [
-		PHP_BINARY,
-		$root . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'phpbench',
+		...phpBenchCommand($root),
 		'report',
 		'--config=phpbench.json',
 		'--report=baseline-summary',
@@ -446,6 +444,32 @@ function trimRequiredCommandOutput(string $cwd, array $command, string $error): 
 	}
 
 	return trim($result['stdout']);
+}
+
+/**
+ * @return list<string>
+ */
+function phpBenchCommand(string $root): array
+{
+	$binDir = $root . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'bin';
+	$phpBench = $binDir . DIRECTORY_SEPARATOR . 'phpbench';
+	$phpBenchBat = $binDir . DIRECTORY_SEPARATOR . 'phpbench.bat';
+
+	if (is_file($phpBench)) {
+		return [PHP_BINARY, $phpBench];
+	}
+
+	if (is_file($phpBenchBat)) {
+		return ['cmd', '/c', $phpBenchBat];
+	}
+
+	throw new RuntimeException(
+		sprintf(
+			'PHPBench executable not found. Expected `%s` or `%s`. Run `composer install` to install dev dependencies before using benchmark helpers.',
+			$phpBench,
+			$phpBenchBat,
+		)
+	);
 }
 
 /**

@@ -373,6 +373,16 @@ final class RecursiveMappingTest extends TestCase
 		self::assertSame(['author' => ['id' => 2, 'active' => false]], $result);
 	}
 
+	public function testNestedRelationUsesRelationDefinitionWhenResolverChainIsReused(): void
+	{
+		$result = map(['author' => ['id' => '2']])
+			->from(StorageRepresentation::class)
+			->args($this->conflictingPostsDefinition())
+			->to([]);
+
+		self::assertSame(['author' => ['id' => 2]], $result);
+	}
+
 	public function testCompatibleTypedCollectionItemIsStillRemapped(): void
 	{
 		$author = new AuthorDto();
@@ -420,6 +430,19 @@ final class RecursiveMappingTest extends TestCase
 		$posts->field('id', 'int');
 		$posts->belongsTo('author', 'users');
 		$posts->belongsTo('writer', 'users');
+
+		return $posts;
+	}
+
+	private function conflictingPostsDefinition(): object
+	{
+		$registry = new Registry();
+		$users = $registry->collection('users');
+		$users->field('id', 'int');
+
+		$posts = $registry->collection('posts');
+		$posts->field('id', 'string');
+		$posts->belongsTo('author', 'users');
 
 		return $posts;
 	}
