@@ -70,19 +70,19 @@ final class BranchTargetInferrerTest extends TestCase
 
 final class PhpDocBracketListTargetDto
 {
-	/** @var \Tests\ON\Data\Fixture\AuthorDto[] */
+	/** @var AuthorDto[] */
 	public array $authors = [];
 }
 
 final class PhpDocListGenericTargetDto
 {
-	/** @var list<\Tests\ON\Data\Fixture\AuthorDto> */
+	/** @var list<AuthorDto> */
 	public array $authors = [];
 }
 
 final class PhpDocArrayGenericTargetDto
 {
-	/** @var array<\Tests\ON\Data\Fixture\AuthorDto> */
+	/** @var array<AuthorDto> */
 	public array $authors = [];
 }
 
