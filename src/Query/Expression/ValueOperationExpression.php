@@ -26,6 +26,12 @@ final class ValueOperationExpression extends AbstractAggregateableExpression
 			throw new InvalidArgumentException('Value operations require at least one argument.');
 		}
 
+		foreach ($this->arguments as $argument) {
+			if (! $argument instanceof ValueExpressionInterface) {
+				throw new InvalidArgumentException('Value-operation arguments must be value expressions.');
+			}
+		}
+
 		$count = count($this->arguments);
 
 		if (match ($this->operation) {

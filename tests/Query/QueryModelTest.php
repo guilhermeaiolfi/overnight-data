@@ -405,6 +405,20 @@ final class QueryModelTest extends TestCase
 		new AggregateExpression(AggregateFunction::SUM, $query->amount->sum());
 	}
 
+	public function testAggregateExpressionConstructorRejectsAggregateContainingValueOperations(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+
+		$this->expectException(InvalidArgumentException::class);
+		new AggregateExpression(
+			AggregateFunction::SUM,
+			x()->add(
+				$query->subtotal->sum(),
+				$query->tax,
+			),
+		);
+	}
+
 	public function testValueOperationEnumAndConstructorArityRulesAreEnforced(): void
 	{
 		self::assertSame('upper', ValueOperation::UPPER->value);
@@ -432,6 +446,25 @@ final class QueryModelTest extends TestCase
 				self::fail('Expected invalid constructor arity rejection.');
 			} catch (InvalidArgumentException) {
 				self::assertTrue(true);
+			}
+		}
+	}
+
+	public function testValueOperationConstructorRejectsNonValueExpressionArguments(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+
+		foreach ([
+			[$query->id, 10],
+			[$query->name, $query->star()],
+			[$query->name, x()->isNull($query->name)],
+			[$query->name, $query->name->as('title')],
+		] as $arguments) {
+			try {
+				new ValueOperationExpression(ValueOperation::ADD, $arguments);
+				self::fail('Expected malformed value-operation constructor rejection.');
+			} catch (InvalidArgumentException $exception) {
+				self::assertSame('Value-operation arguments must be value expressions.', $exception->getMessage());
 			}
 		}
 	}

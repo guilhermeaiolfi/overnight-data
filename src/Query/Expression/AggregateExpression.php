@@ -16,6 +16,10 @@ final class AggregateExpression extends AbstractValueExpression
 			throw new InvalidArgumentException('Aggregate expressions cannot be aggregated directly.');
 		}
 
+		if ($this->containsAggregateAtCurrentLevel($this->expression)) {
+			throw new InvalidArgumentException('Aggregate expressions cannot be aggregated directly.');
+		}
+
 		if ($this->expression instanceof StarExpression && $this->function !== AggregateFunction::COUNT) {
 			throw new InvalidArgumentException('Only COUNT may use a StarExpression operand.');
 		}
@@ -29,5 +33,28 @@ final class AggregateExpression extends AbstractValueExpression
 	public function getExpression(): ValueExpressionInterface|StarExpression
 	{
 		return $this->expression;
+	}
+
+	private function containsAggregateAtCurrentLevel(ValueExpressionInterface|StarExpression $expression): bool
+	{
+		if ($expression instanceof StarExpression) {
+			return false;
+		}
+
+		if ($expression instanceof self) {
+			return true;
+		}
+
+		if (! $expression instanceof ValueOperationExpression) {
+			return false;
+		}
+
+		foreach ($expression->getArguments() as $argument) {
+			if ($this->containsAggregateAtCurrentLevel($argument)) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 }
