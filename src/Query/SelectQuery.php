@@ -9,6 +9,7 @@ use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
+use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 
@@ -20,7 +21,7 @@ final class SelectQuery
 	private array $fieldRefs = [];
 
 	/**
-	 * @var list<ValueExpressionInterface>
+	 * @var list<ValueExpressionInterface|AliasedExpression>
 	 */
 	private array $selections = [];
 
@@ -59,7 +60,7 @@ final class SelectQuery
 		return $this->field($name);
 	}
 
-	public function select(ValueExpressionInterface ...$expressions): self
+	public function select(ValueExpressionInterface|AliasedExpression ...$expressions): self
 	{
 		if ($expressions === []) {
 			throw new InvalidArgumentException('SelectQuery::select() requires at least one expression.');
@@ -82,7 +83,7 @@ final class SelectQuery
 	}
 
 	/**
-	 * @return list<ValueExpressionInterface>
+	 * @return list<ValueExpressionInterface|AliasedExpression>
 	 */
 	public function getSelections(): array
 	{

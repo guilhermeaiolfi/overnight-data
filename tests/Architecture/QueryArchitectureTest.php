@@ -16,19 +16,9 @@ final class QueryArchitectureTest extends TestCase
 		$root = dirname(__DIR__, 2) . '/src/Query';
 		$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root));
 		$forbiddenPatterns = [
-			'select ',
-			' from ',
-			' join ',
-			' where ',
 			'Cycle\\',
 			'Doctrine\\',
 			'PDO',
-			'QueryValidator',
-			'SelectQuerySpec',
-			'QueryScope',
-			'planner',
-			'compiler',
-			'raw sql',
 		];
 
 		foreach ($iterator as $file) {

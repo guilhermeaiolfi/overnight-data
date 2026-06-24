@@ -27,6 +27,7 @@ use ON\Data\Query\SelectQuery;
 use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\Fixture\CustomRelation;
+use TypeError;
 
 final class QueryModelTest extends TestCase
 {
@@ -252,6 +253,29 @@ final class QueryModelTest extends TestCase
 
 		$this->expectException(InvalidArgumentException::class);
 		x()->eq($query->id, $query->title->as('headline'));
+	}
+
+	public function testAliasedExpressionsAreStructurallySelectionOnly(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$alias = $query->id->as('user_id');
+
+		try {
+			x()->eq($alias, 1);
+			self::fail('Expected aliased left operand rejection.');
+		} catch (TypeError) {
+			self::assertTrue(true);
+		}
+
+		try {
+			x()->isNull($alias);
+			self::fail('Expected aliased null-check rejection.');
+		} catch (TypeError) {
+			self::assertTrue(true);
+		}
+
+		$this->expectException(TypeError::class);
+		new ComparisonCondition($alias, ComparisonOperator::EQ, x()->literal(1));
 	}
 
 	private static function assertComparison(

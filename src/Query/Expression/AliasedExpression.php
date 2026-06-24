@@ -6,7 +6,7 @@ namespace ON\Data\Query\Expression;
 
 use InvalidArgumentException;
 
-final class AliasedExpression implements ValueExpressionInterface
+final class AliasedExpression
 {
 	private string $alias;
 
