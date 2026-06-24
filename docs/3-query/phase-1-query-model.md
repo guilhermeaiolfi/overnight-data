@@ -109,14 +109,8 @@ $u->getConditions();
 
 No SQL or execution layer exists in this phase.
 
-## Deferred Direction
+## Next Phase
 
-The current model intentionally leaves room for future scalar subqueries without implementing them yet:
+Phase 2 builds on this base with aggregate expressions, scalar subqueries, `EXISTS`, and `IN` while keeping the model database-independent and execution-free.
 
-```php
-query($posts, fn ($p) => $p
-	->select($p->id)
-);
-```
-
-Later phases can extend the expression tree from this base once a real planner or compiler needs more structure.
+See [Phase 2 aggregate and subquery expressions](./phase-2-aggregate-subqueries.md).

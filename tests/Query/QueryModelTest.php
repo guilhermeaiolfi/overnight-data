@@ -12,15 +12,22 @@ use ON\Data\Definition\Registry;
 use ON\Data\Definition\View\ViewDefinitionInterface;
 use ON\Data\Query\Condition\ComparisonCondition;
 use ON\Data\Query\Condition\ComparisonOperator;
+use ON\Data\Query\Condition\ExistsCondition;
+use ON\Data\Query\Condition\InCondition;
 use ON\Data\Query\Condition\LogicalCondition;
 use ON\Data\Query\Condition\LogicalOperator;
 use ON\Data\Query\Condition\NotCondition;
 use ON\Data\Query\Condition\NullCondition;
 use ON\Data\Query\Condition\NullOperator;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
+use ON\Data\Query\Expression\AggregateExpression;
+use ON\Data\Query\Expression\AggregateFunction;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\LiteralExpression;
+use ON\Data\Query\Expression\StarExpression;
+use ON\Data\Query\Expression\SubqueryExpression;
+use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\ExpressionFactory;
 use function ON\Data\Query\query;
 use ON\Data\Query\SelectQuery;
@@ -278,6 +285,204 @@ final class QueryModelTest extends TestCase
 		new ComparisonCondition($alias, ComparisonOperator::EQ, x()->literal(1));
 	}
 
+	public function testStarExpressionsAreQueryOwnedCachedAndCountable(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+		$posts = query($registry->getCollection('posts'));
+		$userStar = $users->star();
+		$factoryCount = x()->count($users->star());
+
+		self::assertInstanceOf(StarExpression::class, $userStar);
+		self::assertSame($userStar, $users->star());
+		self::assertNotSame($userStar, $posts->star());
+		self::assertSame($users, $userStar->getQuery());
+		self::assertInstanceOf(AggregateExpression::class, $factoryCount);
+		self::assertSame(AggregateFunction::COUNT, $factoryCount->getFunction());
+		self::assertSame($userStar, $factoryCount->getExpression());
+	}
+
+	public function testStarIsNotSelectableAndOnlySupportsCount(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+
+		try {
+			$query->select($query->star());
+			self::fail('Expected star selection to fail by type.');
+		} catch (TypeError) {
+			self::assertTrue(true);
+		}
+
+		try {
+			x()->countDistinct($query->star());
+			self::fail('Expected countDistinct(star) to fail by type.');
+		} catch (TypeError) {
+			self::assertTrue(true);
+		}
+
+		$this->expectException(TypeError::class);
+		x()->sum($query->star());
+	}
+
+	public function testAggregateFluentAndFactoryFormsAreEquivalent(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('posts'));
+
+		$fieldCount = $query->id->count();
+		$factoryCount = x()->count($query->id);
+		$fieldCountDistinct = $query->userId->countDistinct();
+		$factoryCountDistinct = x()->countDistinct($query->userId);
+		$fieldSum = $query->amount->sum();
+		$factorySum = x()->sum($query->amount);
+
+		self::assertAggregateEquivalent($fieldCount, $factoryCount);
+		self::assertAggregateEquivalent($fieldCountDistinct, $factoryCountDistinct);
+		self::assertAggregateEquivalent($fieldSum, $factorySum);
+		self::assertSame('total_amount', $query->amount->sum()->as(' total_amount ')->getAlias());
+	}
+
+	public function testAggregateNodesRetainExactInputsAndFunctions(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('posts'));
+		$starCount = $query->star()->count();
+		$fieldCount = $query->id->count();
+		$countDistinct = $query->userId->countDistinct();
+		$sum = $query->amount->sum();
+
+		self::assertSame($query->star(), $starCount->getExpression());
+		self::assertSame($query->id, $fieldCount->getExpression());
+		self::assertSame(AggregateFunction::COUNT_DISTINCT, $countDistinct->getFunction());
+		self::assertSame(AggregateFunction::SUM, $sum->getFunction());
+	}
+
+	public function testAggregateExpressionsAreNotAggregateableInPhaseTwo(): void
+	{
+		$aggregate = query($this->makeRegistry()->getCollection('posts'))->amount->sum();
+
+		$this->expectException(Error::class);
+		$aggregate->sum();
+	}
+
+	public function testDirectSubquerySelectionAndQueryAliasingNormalizeToSubqueryExpressions(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+		$posts = query($registry->getCollection('posts'));
+
+		$users->select($users->id, $posts);
+		$aliased = $posts->as('post_count');
+		$posts->select($posts->id->count());
+
+		$selections = $users->getSelections();
+
+		self::assertCount(2, $selections);
+		self::assertInstanceOf(SubqueryExpression::class, $selections[1]);
+		self::assertSame($posts, $selections[1]->getQuery());
+		self::assertInstanceOf(AliasedExpression::class, $aliased);
+		self::assertInstanceOf(SubqueryExpression::class, $aliased->getExpression());
+		self::assertSame($posts, $aliased->getExpression()->getQuery());
+		self::assertCount(1, $selections[1]->getQuery()->getSelections());
+		self::assertFalse(is_a($posts, ValueExpressionInterface::class));
+	}
+
+	public function testCorrelatedReferencesRetainTheirOwningQueries(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+		$posts = query($registry->getCollection('posts'));
+		$condition = x()->eq($posts->userId, $users->id);
+
+		self::assertSame($posts, $condition->getLeft()->getQuery());
+		self::assertSame($users, $condition->getRight()->getQuery());
+	}
+
+	public function testScalarComparisonsNormalizeSelectQueriesOnEitherSide(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+		$posts = query($registry->getCollection('posts'), fn (SelectQuery $query) => $query->select($query->id));
+		$right = x()->eq($users->lastPostId, $posts);
+		$left = x()->gt($posts, 10);
+		$nullLeft = x()->eq($posts, null);
+
+		self::assertInstanceOf(SubqueryExpression::class, $right->getRight());
+		self::assertSame($posts, $right->getRight()->getQuery());
+		self::assertInstanceOf(SubqueryExpression::class, $left->getLeft());
+		self::assertSame($posts, $left->getLeft()->getQuery());
+		self::assertInstanceOf(NullCondition::class, $nullLeft);
+		self::assertInstanceOf(SubqueryExpression::class, $nullLeft->getExpression());
+	}
+
+	public function testExistsAndNotExistsRetainTheExactNestedQuery(): void
+	{
+		$posts = query($this->makeRegistry()->getCollection('posts'));
+		$exists = x()->exists($posts);
+		$notExists = x()->notExists($posts);
+
+		self::assertInstanceOf(ExistsCondition::class, $exists);
+		self::assertSame($posts, $exists->getQuery());
+		self::assertFalse($exists->isNegated());
+		self::assertSame($posts, $notExists->getQuery());
+		self::assertTrue($notExists->isNegated());
+		self::assertSame([], $posts->getSelections());
+	}
+
+	public function testInAndNotInSupportLiteralListsExpressionsAndSubqueries(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+		$posts = query($registry->getCollection('posts'), fn (SelectQuery $query) => $query->select($query->userId));
+		$literalIn = x()->in($users->status, ['active', $users->title]);
+		$subqueryIn = x()->notIn($users->id, $posts);
+
+		self::assertInstanceOf(InCondition::class, $literalIn);
+		self::assertInstanceOf(LiteralExpression::class, $literalIn->getSet()[0]);
+		self::assertSame('active', $literalIn->getSet()[0]->getValue());
+		self::assertSame($users->title, $literalIn->getSet()[1]);
+		self::assertInstanceOf(SubqueryExpression::class, $subqueryIn->getSet());
+		self::assertSame($posts, $subqueryIn->getSet()->getQuery());
+		self::assertTrue($subqueryIn->isNegated());
+	}
+
+	public function testInRejectsEmptyNullAliasAndStarInputs(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+
+		$this->expectException(InvalidArgumentException::class);
+		x()->in($query->status, []);
+	}
+
+	public function testInRejectsNullEntries(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+
+		$this->expectException(InvalidArgumentException::class);
+		x()->in($query->status, ['active', null]);
+	}
+
+	public function testInRejectsAliasedSetEntries(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+
+		$this->expectException(InvalidArgumentException::class);
+		x()->in($query->status, [$query->title->as('headline')]);
+	}
+
+	public function testInRejectsStarSetEntriesAndAliasedExpressions(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+
+		try {
+			x()->in($query->status, [$query->star()]);
+			self::fail('Expected star IN entry rejection.');
+		} catch (InvalidArgumentException) {
+			self::assertTrue(true);
+		}
+
+		$this->expectException(TypeError::class);
+		x()->in($query->status->as('user_status'), ['active']);
+	}
+
 	private static function assertComparison(
 		ComparisonCondition $condition,
 		ComparisonOperator $operator,
@@ -290,11 +495,17 @@ final class QueryModelTest extends TestCase
 		self::assertSame($rightLiteral, $condition->getRight()->getValue());
 	}
 
-	private static function assertNullCondition(object $condition, NullOperator $operator, FieldRef $expression): void
+	private static function assertNullCondition(object $condition, NullOperator $operator, ValueExpressionInterface $expression): void
 	{
 		self::assertInstanceOf(NullCondition::class, $condition);
 		self::assertSame($operator, $condition->getOperator());
 		self::assertSame($expression, $condition->getExpression());
+	}
+
+	private static function assertAggregateEquivalent(AggregateExpression $left, AggregateExpression $right): void
+	{
+		self::assertSame($left->getFunction(), $right->getFunction());
+		self::assertSame($left->getExpression(), $right->getExpression());
 	}
 
 	private function makeRegistry(): Registry
@@ -305,10 +516,18 @@ final class QueryModelTest extends TestCase
 		$users->field('title', 'string');
 		$users->field('email', 'string')->alias('mail_address');
 		$users->field('active', 'bool');
+		$users->field('status', 'string');
+		$users->field('lastPostId', 'int');
 		$users->field('deletedAt', 'datetime');
 		$users->field('createdAt', 'datetime');
 		$users->field('updatedAt', 'datetime');
 		$users->relation('posts', CustomRelation::class);
+
+		$posts = $registry->collection('posts');
+		$posts->field('id', 'int');
+		$posts->field('userId', 'int');
+		$posts->field('amount', 'float');
+		$posts->field('published', 'bool');
 
 		$view = $registry->view('user_summary');
 		$view->source($users);

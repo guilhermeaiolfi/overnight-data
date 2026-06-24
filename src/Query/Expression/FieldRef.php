@@ -7,7 +7,7 @@ namespace ON\Data\Query\Expression;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Query\SelectQuery;
 
-final class FieldRef extends AbstractValueExpression
+final class FieldRef extends AbstractAggregateableExpression
 {
 	public function __construct(
 		private readonly SelectQuery $query,

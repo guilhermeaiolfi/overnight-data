@@ -11,6 +11,8 @@ use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\StarExpression;
+use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 
 final class SelectQuery
@@ -19,6 +21,8 @@ final class SelectQuery
 	 * @var array<string, FieldRef>
 	 */
 	private array $fieldRefs = [];
+
+	private ?StarExpression $star = null;
 
 	/**
 	 * @var list<ValueExpressionInterface|AliasedExpression>
@@ -60,13 +64,28 @@ final class SelectQuery
 		return $this->field($name);
 	}
 
-	public function select(ValueExpressionInterface|AliasedExpression ...$expressions): self
+	public function star(): StarExpression
+	{
+		return $this->star ??= new StarExpression($this);
+	}
+
+	public function as(string $alias): AliasedExpression
+	{
+		return (new SubqueryExpression($this))->as($alias);
+	}
+
+	public function select(ValueExpressionInterface|AliasedExpression|SelectQuery ...$expressions): self
 	{
 		if ($expressions === []) {
 			throw new InvalidArgumentException('SelectQuery::select() requires at least one expression.');
 		}
 
-		array_push($this->selections, ...$expressions);
+		array_push($this->selections, ...array_map(
+			static fn (ValueExpressionInterface|AliasedExpression|SelectQuery $expression): ValueExpressionInterface|AliasedExpression => $expression instanceof SelectQuery
+				? new SubqueryExpression($expression)
+				: $expression,
+			$expressions,
+		));
 
 		return $this;
 	}
