@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace ON\Data\Query;
 
 use InvalidArgumentException;
+use ON\Data\Database\Exception\QueryNotExecutableException;
+use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Query\Condition\ConditionInterface;
@@ -62,12 +64,25 @@ final class SelectQuery
 
 	public function __construct(
 		private readonly DefinitionInterface $source,
+		private ?QueryExecutorInterface $executor = null,
 	) {
 	}
 
 	public function getSource(): DefinitionInterface
 	{
 		return $this->source;
+	}
+
+	public function isExecutable(): bool
+	{
+		return $this->executor instanceof QueryExecutorInterface;
+	}
+
+	public function detach(): self
+	{
+		$this->executor = null;
+
+		return $this;
 	}
 
 	public function field(string $name): FieldRef
@@ -271,6 +286,30 @@ final class SelectQuery
 		return $this->offset;
 	}
 
+	/**
+	 * @return list<array<string, mixed>>
+	 */
+	public function fetchAll(): array
+	{
+		return $this->requireExecutor()->fetchAll($this);
+	}
+
+	/**
+	 * @return array<string, mixed>|null
+	 */
+	public function fetchOne(): ?array
+	{
+		return $this->requireExecutor()->fetchOne($this);
+	}
+
+	/**
+	 * @return iterable<array<string, mixed>>
+	 */
+	public function iterate(): iterable
+	{
+		return $this->requireExecutor()->iterate($this);
+	}
+
 	private function normalizeValueExpression(ValueExpressionInterface|SelectQuery $expression): ValueExpressionInterface
 	{
 		if ($expression instanceof SelectQuery) {
@@ -278,5 +317,14 @@ final class SelectQuery
 		}
 
 		return $expression;
+	}
+
+	private function requireExecutor(): QueryExecutorInterface
+	{
+		if (! $this->executor instanceof QueryExecutorInterface) {
+			throw QueryNotExecutableException::forQuery($this);
+		}
+
+		return $this->executor;
 	}
 }

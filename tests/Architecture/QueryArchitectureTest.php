@@ -13,29 +13,48 @@ final class QueryArchitectureTest extends TestCase
 {
 	public function testQueryNamespaceRemainsDatabaseIndependent(): void
 	{
-		$root = dirname(__DIR__, 2) . '/src/Query';
-		$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root));
+		$roots = [
+			dirname(__DIR__, 2) . '/src/Query',
+			dirname(__DIR__, 2) . '/src/Database',
+		];
 		$forbiddenPatterns = [
 			'Cycle\\',
 			'Doctrine\\',
 			'PDO',
 		];
 
-		foreach ($iterator as $file) {
-			/** @var SplFileInfo $file */
-			if (! $file->isFile() || $file->getExtension() !== 'php') {
-				continue;
-			}
+		foreach ($roots as $root) {
+			$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root));
 
-			$contents = strtolower((string) file_get_contents($file->getPathname()));
+			foreach ($iterator as $file) {
+				/** @var SplFileInfo $file */
+				if (! $file->isFile() || $file->getExtension() !== 'php') {
+					continue;
+				}
 
-			foreach ($forbiddenPatterns as $pattern) {
-				self::assertStringNotContainsString(
-					strtolower($pattern),
-					$contents,
-					sprintf('Forbidden query-layer pattern "%s" found in %s', $pattern, $file->getPathname()),
-				);
+				$contents = strtolower((string) file_get_contents($file->getPathname()));
+
+				foreach ($forbiddenPatterns as $pattern) {
+					self::assertStringNotContainsString(
+						strtolower($pattern),
+						$contents,
+						sprintf('Forbidden query-layer pattern "%s" found in %s', $pattern, $file->getPathname()),
+					);
+				}
 			}
+		}
+	}
+
+	public function testComposerKeepsTheCorePackageFreeOfCycleDependencies(): void
+	{
+		$composer = json_decode((string) file_get_contents(dirname(__DIR__, 2) . '/composer.json'), true, flags: JSON_THROW_ON_ERROR);
+		$packages = array_merge(
+			array_keys($composer['require'] ?? []),
+			array_keys($composer['require-dev'] ?? []),
+		);
+
+		foreach ($packages as $package) {
+			self::assertStringStartsNotWith('cycle/', $package);
 		}
 	}
 }
