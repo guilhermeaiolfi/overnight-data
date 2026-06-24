@@ -23,7 +23,8 @@
             "ON\\Data\\": "src/"
         },
         "files": [
-            "src/Mapper/functions.php"
+            "src/Mapper/functions.php",
+            "src/Query/functions.php"
         ]
     },
     "autoload-dev": {
