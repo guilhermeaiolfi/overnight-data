@@ -393,6 +393,14 @@ final class QueryModelTest extends TestCase
 		new AggregateExpression(AggregateFunction::SUM, $query->star());
 	}
 
+	public function testAggregateExpressionConstructorRejectsNestedAggregateOperands(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('posts'));
+
+		$this->expectException(InvalidArgumentException::class);
+		new AggregateExpression(AggregateFunction::SUM, $query->amount->sum());
+	}
+
 	public function testDirectSubquerySelectionAndQueryAliasingNormalizeToSubqueryExpressions(): void
 	{
 		$registry = $this->makeRegistry();

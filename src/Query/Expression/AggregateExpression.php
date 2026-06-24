@@ -12,6 +12,10 @@ final class AggregateExpression extends AbstractValueExpression
 		private readonly AggregateFunction $function,
 		private readonly ValueExpressionInterface|StarExpression $expression,
 	) {
+		if ($this->expression instanceof self) {
+			throw new InvalidArgumentException('Aggregate expressions cannot be aggregated directly.');
+		}
+
 		if ($this->expression instanceof StarExpression && $this->function !== AggregateFunction::COUNT) {
 			throw new InvalidArgumentException('Only COUNT may use a StarExpression operand.');
 		}
