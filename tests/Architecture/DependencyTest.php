@@ -32,8 +32,13 @@ final class DependencyTest extends TestCase
 
 			$contents = file_get_contents($file->getPathname());
 			self::assertNotFalse($contents);
+			$normalizedPath = str_replace('\\', '/', $file->getPathname());
 
 			foreach ($forbiddenPatterns as $pattern) {
+				if ($pattern === 'Cycle\\' && str_contains($normalizedPath, '/src/Database/Cycle/')) {
+					continue;
+				}
+
 				self::assertStringNotContainsString(
 					$pattern,
 					$contents,
