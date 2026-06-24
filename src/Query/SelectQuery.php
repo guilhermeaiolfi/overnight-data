@@ -15,6 +15,7 @@ use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
+use ON\Data\Query\Sort\Sort;
 
 final class SelectQuery
 {
@@ -39,6 +40,25 @@ final class SelectQuery
 	 * @var list<ConditionInterface>
 	 */
 	private array $conditions = [];
+
+	/**
+	 * @var list<ValueExpressionInterface>
+	 */
+	private array $groups = [];
+
+	/**
+	 * @var list<ConditionInterface>
+	 */
+	private array $havingConditions = [];
+
+	/**
+	 * @var list<Sort>
+	 */
+	private array $sorts = [];
+
+	private ?int $limit = null;
+
+	private ?int $offset = null;
 
 	public function __construct(
 		private readonly DefinitionInterface $source,
@@ -131,6 +151,61 @@ final class SelectQuery
 		return $this;
 	}
 
+	public function groupBy(ValueExpressionInterface|SelectQuery ...$expressions): self
+	{
+		if ($expressions === []) {
+			throw new InvalidArgumentException('SelectQuery::groupBy() requires at least one expression.');
+		}
+
+		array_push($this->groups, ...array_map($this->normalizeValueExpression(...), $expressions));
+
+		return $this;
+	}
+
+	public function having(ConditionInterface ...$conditions): self
+	{
+		if ($conditions === []) {
+			throw new InvalidArgumentException('SelectQuery::having() requires at least one condition.');
+		}
+
+		array_push($this->havingConditions, ...$conditions);
+
+		return $this;
+	}
+
+	public function orderBy(Sort ...$sorts): self
+	{
+		if ($sorts === []) {
+			throw new InvalidArgumentException('SelectQuery::orderBy() requires at least one sort.');
+		}
+
+		array_push($this->sorts, ...$sorts);
+
+		return $this;
+	}
+
+	public function limit(?int $limit): self
+	{
+		if ($limit !== null && $limit < 0) {
+			throw new InvalidArgumentException('SelectQuery::limit() requires a non-negative integer or null.');
+		}
+
+		$this->limit = $limit;
+
+		return $this;
+	}
+
+	public function offset(?int $offset): self
+	{
+		if ($offset !== null && $offset < 0) {
+			throw new InvalidArgumentException('SelectQuery::offset() requires a non-negative integer or null.');
+		}
+
+		$this->offset = $offset;
+
+		return $this;
+	}
+
 	/**
 	 * @return list<ValueExpressionInterface|AliasedExpression>
 	 */
@@ -160,5 +235,48 @@ final class SelectQuery
 	public function getConditions(): array
 	{
 		return $this->conditions;
+	}
+
+	/**
+	 * @return list<ValueExpressionInterface>
+	 */
+	public function getGroups(): array
+	{
+		return $this->groups;
+	}
+
+	/**
+	 * @return list<ConditionInterface>
+	 */
+	public function getHavingConditions(): array
+	{
+		return $this->havingConditions;
+	}
+
+	/**
+	 * @return list<Sort>
+	 */
+	public function getSorts(): array
+	{
+		return $this->sorts;
+	}
+
+	public function getLimit(): ?int
+	{
+		return $this->limit;
+	}
+
+	public function getOffset(): ?int
+	{
+		return $this->offset;
+	}
+
+	private function normalizeValueExpression(ValueExpressionInterface|SelectQuery $expression): ValueExpressionInterface
+	{
+		if ($expression instanceof SelectQuery) {
+			return new SubqueryExpression($expression);
+		}
+
+		return $expression;
 	}
 }

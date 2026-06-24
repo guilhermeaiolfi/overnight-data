@@ -24,6 +24,8 @@ use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Expression\ValueOperation;
 use ON\Data\Query\Expression\ValueOperationExpression;
+use ON\Data\Query\Sort\Sort;
+use ON\Data\Query\Sort\SortDirection;
 
 final class ExpressionFactory
 {
@@ -134,6 +136,16 @@ final class ExpressionFactory
 	public function add(mixed ...$arguments): ValueOperationExpression
 	{
 		return new ValueOperationExpression(ValueOperation::ADD, $this->normalizeOperationArguments($arguments));
+	}
+
+	public function asc(ValueExpressionInterface|SelectQuery $expression): Sort
+	{
+		return new Sort($this->normalizeExpression($expression), SortDirection::ASC);
+	}
+
+	public function desc(ValueExpressionInterface|SelectQuery $expression): Sort
+	{
+		return new Sort($this->normalizeExpression($expression), SortDirection::DESC);
 	}
 
 	public function and(ConditionInterface ...$conditions): LogicalCondition

@@ -34,6 +34,8 @@ use ON\Data\Query\Expression\ValueOperationExpression;
 use ON\Data\Query\ExpressionFactory;
 use function ON\Data\Query\query;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Query\Sort\Sort;
+use ON\Data\Query\Sort\SortDirection;
 use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -152,6 +154,146 @@ final class QueryModelTest extends TestCase
 	{
 		$this->expectException(InvalidArgumentException::class);
 		query($this->makeRegistry()->getCollection('users'))->where();
+	}
+
+	public function testGroupByAppendsExpressionsPreservesIdentityAndNormalizesSubqueries(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+		$postCount = query($registry->getCollection('posts'), fn (SelectQuery $query) => $query->select($query->id->count()));
+		$normalized = $users->name->upper();
+		$users->select($normalized->as('normalized_name'));
+
+		$returned = $users
+			->groupBy($users->status, $users->get('normalized_name'))
+			->groupBy($postCount);
+
+		$groups = $users->getGroups();
+
+		self::assertSame($users, $returned);
+		self::assertCount(3, $groups);
+		self::assertSame($users->status, $groups[0]);
+		self::assertSame($normalized, $groups[1]);
+		self::assertInstanceOf(SubqueryExpression::class, $groups[2]);
+		self::assertSame($postCount, $groups[2]->getQuery());
+	}
+
+	public function testGroupByRejectsEmptyCalls(): void
+	{
+		$this->expectException(InvalidArgumentException::class);
+		query($this->makeRegistry()->getCollection('users'))->groupBy();
+	}
+
+	public function testHavingAppendsConditionsPreservesOrderAndSupportsNamedAggregatesWithoutGroups(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$total = $query->id->count();
+		$query->select($total->as('total'));
+
+		$first = x()->gt($query->get('total'), 10);
+		$second = x()->or(
+			x()->lt($query->tax->sum(), 1000),
+			x()->gt($query->subtotal->sum(), 5),
+		);
+
+		$returned = $query->having($first)->having($second);
+
+		self::assertSame($query, $returned);
+		self::assertSame([$first, $second], $query->getHavingConditions());
+		self::assertInstanceOf(LogicalCondition::class, $query->getHavingConditions()[1]);
+		self::assertSame(LogicalOperator::OR, $query->getHavingConditions()[1]->getOperator());
+	}
+
+	public function testHavingRejectsEmptyCalls(): void
+	{
+		$this->expectException(InvalidArgumentException::class);
+		query($this->makeRegistry()->getCollection('users'))->having();
+	}
+
+	public function testSortNodesRetainExpressionAndDirectionAcrossFluentAndFactoryForms(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+		$posts = query($registry->getCollection('posts'), fn (SelectQuery $query) => $query->select($query->id));
+		$expression = $users->name->upper();
+
+		$ascending = $expression->asc();
+		$descending = $expression->desc();
+		$factoryAscending = x()->asc($expression);
+		$factoryDescending = x()->desc($posts);
+
+		self::assertSame('asc', SortDirection::ASC->value);
+		self::assertSame('desc', SortDirection::DESC->value);
+		self::assertInstanceOf(Sort::class, $ascending);
+		self::assertSame($expression, $ascending->getExpression());
+		self::assertSame(SortDirection::ASC, $ascending->getDirection());
+		self::assertSame($expression, $descending->getExpression());
+		self::assertSame(SortDirection::DESC, $descending->getDirection());
+		self::assertSame($ascending->getExpression(), $factoryAscending->getExpression());
+		self::assertSame($ascending->getDirection(), $factoryAscending->getDirection());
+		self::assertInstanceOf(SubqueryExpression::class, $factoryDescending->getExpression());
+		self::assertSame($posts, $factoryDescending->getExpression()->getQuery());
+	}
+
+	public function testOrderByAppendsSortsPreservesPrecedenceAndSupportsNamedExpressions(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$title = $query->name->upper();
+		$query->select($title->as('title'));
+
+		$first = $query->get('title')->asc();
+		$second = $query->id->desc();
+		$third = $query->subtotal->sum()->asc();
+
+		$returned = $query->orderBy($first, $second)->orderBy($third);
+
+		self::assertSame($query, $returned);
+		self::assertSame([$first, $second, $third], $query->getSorts());
+		self::assertSame($title, $query->getSorts()[0]->getExpression());
+		self::assertSame(SortDirection::DESC, $query->getSorts()[1]->getDirection());
+		self::assertInstanceOf(AggregateExpression::class, $query->getSorts()[2]->getExpression());
+	}
+
+	public function testOrderByRejectsEmptyCalls(): void
+	{
+		$this->expectException(InvalidArgumentException::class);
+		query($this->makeRegistry()->getCollection('users'))->orderBy();
+	}
+
+	public function testPaginationDefaultsSupportZeroClearingAndLastCallWins(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+
+		self::assertNull($query->getLimit());
+		self::assertNull($query->getOffset());
+		self::assertSame($query, $query->limit(0));
+		self::assertSame(0, $query->getLimit());
+		self::assertSame($query, $query->offset(50));
+		self::assertSame(50, $query->getOffset());
+
+		$query->limit(25)->offset(0);
+		self::assertSame(25, $query->getLimit());
+		self::assertSame(0, $query->getOffset());
+
+		$query->limit(null)->offset(null);
+		self::assertNull($query->getLimit());
+		self::assertNull($query->getOffset());
+	}
+
+	public function testPaginationRejectsNegativeValues(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+
+		try {
+			$query->limit(-1);
+			self::fail('Expected negative limit rejection.');
+		} catch (InvalidArgumentException $exception) {
+			self::assertSame('SelectQuery::limit() requires a non-negative integer or null.', $exception->getMessage());
+		}
+
+		$this->expectException(InvalidArgumentException::class);
+		$this->expectExceptionMessage('SelectQuery::offset() requires a non-negative integer or null.');
+		$query->offset(-1);
 	}
 
 	public function testExpressionFactoryCoversLiteralsComparisonsLogicalNodesAndNullNormalization(): void
