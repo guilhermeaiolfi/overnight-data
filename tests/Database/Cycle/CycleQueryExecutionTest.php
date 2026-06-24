@@ -6,8 +6,8 @@ namespace Tests\ON\Data\Database\Cycle;
 
 use DateTimeImmutable;
 use ON\Data\Database\ConnectionConfig;
-use ON\Data\Database\Cycle\CycleDatabaseFactory;
 use ON\Data\Database\Database;
+use ON\Data\Database\Exception\QueryExecutionException;
 use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\Definition\Registry;
 use function ON\Data\Query\query;
@@ -36,9 +36,7 @@ final class CycleQueryExecutionTest extends TestCase
 
 		$this->seedDatabase();
 
-		$this->database = (new CycleDatabaseFactory())->create(
-			ConnectionConfig::dsn('sqlite', $this->dsn),
-		);
+		$this->database = Database::connect(ConnectionConfig::dsn('sqlite', $this->dsn));
 	}
 
 	protected function tearDown(): void
@@ -91,6 +89,19 @@ final class CycleQueryExecutionTest extends TestCase
 		self::assertSame(1, $users->getOffset());
 	}
 
+	public function testFetchOnePreservesExplicitLimitZero(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$row = $users
+			->select($users->id)
+			->limit(0)
+			->fetchOne();
+
+		self::assertNull($row);
+		self::assertSame(0, $users->getLimit());
+	}
+
 	public function testIterateYieldsMappedRowsLazily(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
@@ -128,6 +139,25 @@ final class CycleQueryExecutionTest extends TestCase
 		]], $rows);
 	}
 
+	public function testNullConditionsPreserveExpressionParameters(): void
+	{
+		$isNullUsers = $this->database->query($this->registry->getCollection('users'));
+		$isNull = $isNullUsers
+			->select($isNullUsers->id)
+			->where(x()->isNull(x()->coalesce($isNullUsers->nickname, 'fallback')))
+			->fetchAll();
+
+		$isNotNullUsers = $this->database->query($this->registry->getCollection('users'));
+		$isNotNull = $isNotNullUsers
+			->select($isNotNullUsers->id)
+			->where(x()->isNotNull(x()->coalesce($isNotNullUsers->nickname, 'fallback')))
+			->orderBy($isNotNullUsers->id->asc())
+			->fetchAll();
+
+		self::assertSame([], $isNull);
+		self::assertSame([['id' => 1], ['id' => 2], ['id' => 3]], $isNotNull);
+	}
+
 	public function testExistsAndScalarSubqueriesExecute(): void
 	{
 		$usersDefinition = $this->registry->getCollection('users');
@@ -157,6 +187,87 @@ final class CycleQueryExecutionTest extends TestCase
 			['name' => 'Ada', 'post_count' => 2],
 			['name' => 'Grace', 'post_count' => 1],
 		], $rows);
+	}
+
+	public function testInNotInNotOrAndNotExistsExecute(): void
+	{
+		$usersDefinition = $this->registry->getCollection('users');
+		$postsDefinition = $this->registry->getCollection('posts');
+		$postUserIds = query($postsDefinition, fn (SelectQuery $query) => $query->select($query->userId));
+
+		$inUsers = $this->database->query($usersDefinition);
+		$inRows = $inUsers
+			->select($inUsers->id)
+			->where(x()->in($inUsers->id, [1, 3]))
+			->orderBy($inUsers->id->asc())
+			->fetchAll();
+
+		$subqueryUsers = $this->database->query($usersDefinition);
+		$subqueryRows = $subqueryUsers
+			->select($subqueryUsers->id)
+			->where(x()->in($subqueryUsers->id, $postUserIds))
+			->orderBy($subqueryUsers->id->asc())
+			->fetchAll();
+
+		$notUsers = $this->database->query($usersDefinition);
+		$notRows = $notUsers
+			->select($notUsers->id)
+			->where(
+				x()->not(
+					x()->or(
+						x()->eq($notUsers->id, 1),
+						x()->eq($notUsers->id, 2),
+					),
+				),
+			)
+			->fetchAll();
+
+		$notExistsUsers = $this->database->query($usersDefinition);
+		$publishedPosts = query($postsDefinition, function (SelectQuery $query) use ($notExistsUsers): void {
+			$query
+				->where(x()->eq($query->userId, $notExistsUsers->id))
+				->where(x()->eq($query->published, true));
+		});
+		$notExistsRows = $notExistsUsers
+			->select($notExistsUsers->id)
+			->where(x()->notExists($publishedPosts))
+			->fetchAll();
+
+		self::assertSame([['id' => 1], ['id' => 3]], $inRows);
+		self::assertSame([['id' => 1], ['id' => 2]], $subqueryRows);
+		self::assertSame([['id' => 3]], $notRows);
+		self::assertSame([['id' => 3]], $notExistsRows);
+	}
+
+	public function testCountStarCountDistinctAndValueOperationsExecute(): void
+	{
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$postCounts = $posts
+			->select(
+				$posts->star()->count()->as('all_count'),
+				$posts->userId->countDistinct()->as('distinct_users'),
+			)
+			->fetchOne();
+
+		$userRows = $users
+			->select(
+				$users->name->upper()->as('upper_name'),
+				$users->email->lower()->as('lower_email'),
+				x()->concat($users->name, ' <', $users->email, '>')->as('label'),
+				x()->coalesce($users->nickname, 'n/a')->as('nickname_value'),
+				x()->add($users->score, 1)->as('score_plus_one'),
+			)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame(['all_count' => 3, 'distinct_users' => 2], $postCounts);
+		self::assertSame('ADA', $userRows[0]['upper_name']);
+		self::assertSame('ada@example.test', $userRows[0]['lower_email']);
+		self::assertSame('Ada <ada@example.test>', $userRows[0]['label']);
+		self::assertSame('n/a', $userRows[2]['nickname_value']);
+		self::assertSame(11, $userRows[0]['score_plus_one']);
 	}
 
 	public function testRootExecutionRequiresSelections(): void
@@ -204,6 +315,21 @@ final class CycleQueryExecutionTest extends TestCase
 			->fetchAll();
 	}
 
+	public function testCyclicQueryGraphsAreRejected(): void
+	{
+		$cyclic = query($this->registry->getCollection('users'));
+		$cyclic->select($cyclic->id, $cyclic->as('self_cycle'));
+
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$this->expectException(UnsupportedQueryException::class);
+		$this->expectExceptionMessage('Cyclic query references are not supported.');
+
+		$users
+			->select($users->id, $cyclic->as('outer_cycle'))
+			->fetchAll();
+	}
+
 	public function testScalarSubqueriesRequireExactlyOneSelection(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
@@ -220,6 +346,55 @@ final class CycleQueryExecutionTest extends TestCase
 			->fetchAll();
 	}
 
+	public function testInSubqueriesRequireExactlyOneSelection(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$posts = query($this->registry->getCollection('posts'), function (SelectQuery $query): void {
+			$query->select($query->id, $query->title);
+		});
+
+		$this->expectException(UnsupportedQueryException::class);
+		$this->expectExceptionMessage('IN subqueries require exactly one selection');
+
+		$users
+			->select($users->id)
+			->where(x()->in($users->id, $posts))
+			->fetchAll();
+	}
+
+	public function testNullFieldValuesAreNotSentThroughCodecs(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$row = $users
+			->select($users->profile)
+			->where(x()->eq($users->id, 3))
+			->fetchOne();
+
+		self::assertSame(['profile' => null], $row);
+	}
+
+	public function testLazyIterationWrapsBackendMappingFailures(): void
+	{
+		$pdo = new PDO($this->dsn);
+		$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+		$pdo->exec("UPDATE users SET created_at = 'not-a-datetime' WHERE id = 2");
+
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$this->expectException(QueryExecutionException::class);
+		$this->expectExceptionMessage("definition 'users'");
+
+		foreach (
+			$users
+				->select($users->id, $users->createdAt)
+				->orderBy($users->id->asc())
+				->iterate() as $row
+		) {
+			// Consume the generator until the invalid row is mapped.
+		}
+	}
+
 	private function makeRegistry(): Registry
 	{
 		$registry = new Registry();
@@ -232,6 +407,8 @@ final class CycleQueryExecutionTest extends TestCase
 		$users->field('active', 'bool');
 		$users->field('createdAt', 'datetime')->column('created_at');
 		$users->field('profile', 'json')->column('profile_json')->nullable(true);
+		$users->field('nickname', 'string')->nullable(true);
+		$users->field('score', 'int');
 		$users->primaryKey('id');
 
 		$posts = $registry->collection('posts');
@@ -251,13 +428,13 @@ final class CycleQueryExecutionTest extends TestCase
 		$pdo = new PDO($this->dsn);
 		$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-		$pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, mail_address TEXT, active INTEGER, created_at TEXT, profile_json TEXT)');
+		$pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, mail_address TEXT, active INTEGER, created_at TEXT, profile_json TEXT, nickname TEXT NULL, score INTEGER)');
 		$pdo->exec('CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER, title TEXT, amount REAL, published INTEGER)');
 
-		$users = $pdo->prepare('INSERT INTO users (id, name, mail_address, active, created_at, profile_json) VALUES (?, ?, ?, ?, ?, ?)');
-		$users->execute([1, 'Ada', 'ada@example.test', 1, '2026-06-24 10:00:00', '{"role":"admin"}']);
-		$users->execute([2, 'Grace', 'grace@example.test', 1, '2026-06-24 11:00:00', '{"role":"editor"}']);
-		$users->execute([3, 'Linus', 'linus@example.test', 0, '2026-06-24 12:00:00', null]);
+		$users = $pdo->prepare('INSERT INTO users (id, name, mail_address, active, created_at, profile_json, nickname, score) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+		$users->execute([1, 'Ada', 'ada@example.test', 1, '2026-06-24 10:00:00', '{"role":"admin"}', 'Ada', 10]);
+		$users->execute([2, 'Grace', 'grace@example.test', 1, '2026-06-24 11:00:00', '{"role":"editor"}', 'Grace', 20]);
+		$users->execute([3, 'Linus', 'linus@example.test', 0, '2026-06-24 12:00:00', null, null, 30]);
 
 		$posts = $pdo->prepare('INSERT INTO posts (id, user_id, title, amount, published) VALUES (?, ?, ?, ?, ?)');
 		$posts->execute([1, 1, 'Hello', 10.0, 1]);

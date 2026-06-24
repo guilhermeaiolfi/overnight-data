@@ -56,6 +56,13 @@ final class CycleTranslationContext
 	 */
 	public function within(SelectQuery $query, callable $callback): mixed
 	{
+		if ($this->contains($query)) {
+			throw UnsupportedQueryException::forQuery(
+				$query,
+				'Cyclic query references are not supported.',
+			);
+		}
+
 		$this->stack[] = spl_object_id($query);
 
 		try {
@@ -69,12 +76,32 @@ final class CycleTranslationContext
 	{
 		$id = spl_object_id($field->getQuery());
 		if (! in_array($id, $this->stack, true)) {
-			throw new UnsupportedQueryException(
+			throw UnsupportedQueryException::forQuery(
+				$this->root,
 				sprintf(
 					"Field '%s' is referenced outside the active query scope.",
 					$field->getName(),
 				)
 			);
 		}
+	}
+
+	public function contains(SelectQuery $query): bool
+	{
+		return in_array(spl_object_id($query), $this->stack, true);
+	}
+
+	public function isAncestor(SelectQuery $query): bool
+	{
+		$id = spl_object_id($query);
+
+		return $this->stack !== [] && in_array($id, array_slice($this->stack, 0, -1), true);
+	}
+
+	public function isCurrent(SelectQuery $query): bool
+	{
+		$id = spl_object_id($query);
+
+		return $this->stack !== [] && $id === $this->stack[array_key_last($this->stack)];
 	}
 }

@@ -47,12 +47,13 @@ final class CycleQueryExecutor implements QueryExecutorInterface
 	public function fetchOne(SelectQuery $query): ?array
 	{
 		try {
-			$plan = $this->translator->translate($query);
-			$select = clone $plan->query();
-			$select->limit(1);
+			$translated = $this->translator->translate($query);
+			$select = clone $translated->query();
+			$currentLimit = $select->getLimit();
+			$select->limit($currentLimit === null ? 1 : min($currentLimit, 1));
 			$row = $select->fetchAll(StatementInterface::FETCH_ASSOC)[0] ?? null;
 
-			return $row === null ? null : $this->mapper->map($row, $plan);
+			return $row === null ? null : $this->mapper->map($row, $translated);
 		} catch (UnsupportedQueryException $exception) {
 			throw $exception;
 		} catch (Throwable $exception) {
@@ -63,10 +64,10 @@ final class CycleQueryExecutor implements QueryExecutorInterface
 	public function iterate(SelectQuery $query): iterable
 	{
 		try {
-			$plan = $this->translator->translate($query);
-			$statement = $plan->query()->run();
+			$translated = $this->translator->translate($query);
+			$statement = $translated->query()->run();
 
-			return $this->iterateMapped($statement, $plan);
+			return $this->iterateMapped($statement, $translated, $query);
 		} catch (UnsupportedQueryException $exception) {
 			throw $exception;
 		} catch (Throwable $exception) {
@@ -77,15 +78,29 @@ final class CycleQueryExecutor implements QueryExecutorInterface
 	/**
 	 * @return iterable<array<string, mixed>>
 	 */
-	private function iterateMapped(StatementInterface $statement, CycleQueryPlan $plan): iterable
-	{
+	private function iterateMapped(
+		StatementInterface $statement,
+		CycleTranslatedQuery $translated,
+		SelectQuery $query,
+	): iterable {
 		try {
-			while (($row = $statement->fetch(StatementInterface::FETCH_ASSOC)) !== false) {
-				if (! is_array($row)) {
-					continue;
-				}
+			while (true) {
+				try {
+					$row = $statement->fetch(StatementInterface::FETCH_ASSOC);
+					if ($row === false) {
+						break;
+					}
 
-				yield $this->mapper->map($row, $plan);
+					if (! is_array($row)) {
+						continue;
+					}
+
+					yield $this->mapper->map($row, $translated);
+				} catch (UnsupportedQueryException $exception) {
+					throw $exception;
+				} catch (Throwable $exception) {
+					throw QueryExecutionException::forQuery($query, $exception);
+				}
 			}
 		} finally {
 			$statement->close();

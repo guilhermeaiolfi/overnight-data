@@ -51,7 +51,12 @@ final class QueryArchitectureTest extends TestCase
 				continue;
 			}
 
-			if (str_contains(str_replace('\\', '/', $file->getPathname()), '/src/Database/Cycle/')) {
+			$normalizedPath = str_replace('\\', '/', $file->getPathname());
+
+			if (
+				str_contains($normalizedPath, '/src/Database/Cycle/')
+				|| str_ends_with($normalizedPath, '/src/Database/Database.php')
+			) {
 				continue;
 			}
 

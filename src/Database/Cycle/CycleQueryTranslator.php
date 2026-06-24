@@ -11,7 +11,7 @@ use Cycle\Database\Injection\ParameterInterface;
 use Cycle\Database\Query\QueryParameters;
 use Cycle\Database\Query\SelectQuery as CycleSelectQuery;
 use ON\Data\Database\Exception\UnsupportedQueryException;
-use ON\Data\Definition\Collection\Collection;
+use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\View\ViewDefinition;
@@ -53,11 +53,11 @@ final class CycleQueryTranslator
 	) {
 	}
 
-	public function translate(SelectQuery $query): CycleQueryPlan
+	public function translate(SelectQuery $query): CycleTranslatedQuery
 	{
 		$context = new CycleTranslationContext($query, $this->database->getDriver()->getQueryCompiler());
 
-		return $context->within($query, function () use ($query, $context): CycleQueryPlan {
+		return $context->within($query, function () use ($query, $context): CycleTranslatedQuery {
 			$cycle = $this->database->select();
 			$cycle->from($this->fromSource($query, $context)->toCycleFragment());
 
@@ -86,7 +86,7 @@ final class CycleQueryTranslator
 			$cycle->limit($query->getLimit());
 			$cycle->offset($query->getOffset());
 
-			return new CycleQueryPlan($cycle, $resultColumns);
+			return new CycleTranslatedQuery($cycle, $resultColumns);
 		});
 	}
 
@@ -166,11 +166,7 @@ final class CycleQueryTranslator
 	{
 		return match (true) {
 			$condition instanceof ComparisonCondition => $this->translateComparison($condition, $context),
-			$condition instanceof NullCondition => SqlFragment::raw(sprintf(
-				'%s %s',
-				$this->translateExpression($condition->getExpression(), $context)->sql(),
-				$condition->getOperator() === NullOperator::IS_NULL ? 'IS NULL' : 'IS NOT NULL',
-			)),
+			$condition instanceof NullCondition => $this->translateNullCondition($condition, $context),
 			$condition instanceof LogicalCondition => $this->translateLogical($condition, $context),
 			$condition instanceof NotCondition => $this->wrapSql(
 				'NOT (%s)',
@@ -225,6 +221,20 @@ final class CycleQueryTranslator
 		) . ')';
 
 		return SqlFragment::withParameters($sql, $this->mergeParameters($parts));
+	}
+
+	private function translateNullCondition(NullCondition $condition, CycleTranslationContext $context): SqlFragment
+	{
+		$expression = $this->translateExpression($condition->getExpression(), $context);
+
+		return SqlFragment::withParameters(
+			sprintf(
+				'%s %s',
+				$expression->sql(),
+				$condition->getOperator() === NullOperator::IS_NULL ? 'IS NULL' : 'IS NOT NULL',
+			),
+			$expression->parameters(),
+		);
 	}
 
 	private function translateIn(InCondition $condition, CycleTranslationContext $context): SqlFragment
@@ -293,9 +303,17 @@ final class CycleQueryTranslator
 	private function translateFieldRef(FieldRef $field, CycleTranslationContext $context): SqlFragment
 	{
 		$context->assertAccessible($field);
+		$query = $field->getQuery();
+
+		if (! $context->isCurrent($query) && ! $context->isAncestor($query)) {
+			throw UnsupportedQueryException::forQuery(
+				$context->root(),
+				sprintf("Field '%s' is referenced outside the active query scope.", $field->getName()),
+			);
+		}
 
 		return SqlFragment::raw($this->quote(
-			$context->aliasFor($field->getQuery()) . '.' . $field->getField()->getColumn()
+			$context->aliasFor($query) . '.' . $field->getField()->getColumn()
 		));
 	}
 
@@ -431,7 +449,7 @@ final class CycleQueryTranslator
 
 	private function resolvePhysicalSource(DefinitionInterface $definition, array $visited): string
 	{
-		if ($definition instanceof Collection) {
+		if ($definition instanceof CollectionInterface) {
 			$table = $definition->getTable();
 
 			return $table !== '' ? $table : $definition->getName();

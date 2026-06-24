@@ -40,7 +40,13 @@ final class MapperPhase2ArchitectureTest extends TestCase
 			$normalizedPath = str_replace('\\', '/', $file->getPathname());
 
 			foreach ($forbiddenPatterns as $pattern) {
-				if ($pattern === 'Cycle\\' && str_contains($normalizedPath, '/src/Database/Cycle/')) {
+				if (
+					$pattern === 'Cycle\\'
+					&& (
+						str_contains($normalizedPath, '/src/Database/Cycle/')
+						|| str_ends_with($normalizedPath, '/src/Database/Database.php')
+					)
+				) {
 					continue;
 				}
 

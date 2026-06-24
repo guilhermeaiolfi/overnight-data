@@ -23,15 +23,15 @@ final class CycleResultMapper
 	 * @param array<string, mixed> $row
 	 * @return array<string, mixed>
 	 */
-	public function map(array $row, CycleQueryPlan $plan): array
+	public function map(array $row, CycleTranslatedQuery $query): array
 	{
 		$mapped = [];
 
-		foreach ($plan->columns() as $column) {
+		foreach ($query->columns() as $column) {
 			$value = $row[$column->backendName()] ?? null;
 			$field = $column->field();
 
-			if ($field !== null) {
+			if ($value !== null && $field !== null) {
 				$value = $this->gateway->to(
 					StorageRepresentation::class,
 					$value,

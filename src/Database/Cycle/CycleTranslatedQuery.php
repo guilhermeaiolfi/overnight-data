@@ -9,7 +9,7 @@ use Cycle\Database\Query\SelectQuery as CycleSelectQuery;
 /**
  * @internal
  */
-final class CycleQueryPlan
+final class CycleTranslatedQuery
 {
 	/**
 	 * @param list<CycleResultColumn> $columns
