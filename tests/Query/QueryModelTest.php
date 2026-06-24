@@ -19,6 +19,7 @@ use ON\Data\Query\Condition\LogicalOperator;
 use ON\Data\Query\Condition\NotCondition;
 use ON\Data\Query\Condition\NullCondition;
 use ON\Data\Query\Condition\NullOperator;
+use ON\Data\Query\Exception\UnknownQueryExpressionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Expression\AggregateExpression;
 use ON\Data\Query\Expression\AggregateFunction;
@@ -28,11 +29,14 @@ use ON\Data\Query\Expression\LiteralExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
+use ON\Data\Query\Expression\ValueOperation;
+use ON\Data\Query\Expression\ValueOperationExpression;
 use ON\Data\Query\ExpressionFactory;
 use function ON\Data\Query\query;
 use ON\Data\Query\SelectQuery;
 use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
+use stdClass;
 use Tests\ON\Data\Fixture\CustomRelation;
 use TypeError;
 
@@ -401,6 +405,258 @@ final class QueryModelTest extends TestCase
 		new AggregateExpression(AggregateFunction::SUM, $query->amount->sum());
 	}
 
+	public function testValueOperationEnumAndConstructorArityRulesAreEnforced(): void
+	{
+		self::assertSame('upper', ValueOperation::UPPER->value);
+		self::assertSame('lower', ValueOperation::LOWER->value);
+		self::assertSame('concat', ValueOperation::CONCAT->value);
+		self::assertSame('coalesce', ValueOperation::COALESCE->value);
+		self::assertSame('add', ValueOperation::ADD->value);
+
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$operation = new ValueOperationExpression(ValueOperation::ADD, [$query->subtotal, $query->tax, $query->id]);
+
+		self::assertSame(ValueOperation::ADD, $operation->getOperation());
+		self::assertSame([$query->subtotal, $query->tax, $query->id], $operation->getArguments());
+
+		foreach ([
+			[ValueOperation::UPPER, []],
+			[ValueOperation::UPPER, [$query->name, $query->email]],
+			[ValueOperation::LOWER, []],
+			[ValueOperation::CONCAT, [$query->name]],
+			[ValueOperation::COALESCE, [$query->name]],
+			[ValueOperation::ADD, [$query->subtotal]],
+		] as [$operationName, $arguments]) {
+			try {
+				new ValueOperationExpression($operationName, $arguments);
+				self::fail('Expected invalid constructor arity rejection.');
+			} catch (InvalidArgumentException) {
+				self::assertTrue(true);
+			}
+		}
+	}
+
+	public function testValueOperationFactoryNormalizesArgumentsAndRejectsKnownNonValueNodes(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+		$posts = query($registry->getCollection('posts'), fn (SelectQuery $query) => $query->select($query->id));
+		$valueObject = new stdClass();
+
+		$concat = x()->concat($users->firstName, ' ', $users->lastName);
+		$coalesce = x()->coalesce($users->preferredName, null, $valueObject);
+		$add = x()->add($users->subtotal, 10, $posts);
+
+		self::assertSame(ValueOperation::CONCAT, $concat->getOperation());
+		self::assertSame([$users->firstName, x()->literal(' ')->getValue(), $users->lastName], [
+			$concat->getArguments()[0],
+			$concat->getArguments()[1] instanceof LiteralExpression ? $concat->getArguments()[1]->getValue() : null,
+			$concat->getArguments()[2],
+		]);
+		self::assertInstanceOf(LiteralExpression::class, $coalesce->getArguments()[1]);
+		self::assertNull($coalesce->getArguments()[1]->getValue());
+		self::assertInstanceOf(LiteralExpression::class, $coalesce->getArguments()[2]);
+		self::assertSame($valueObject, $coalesce->getArguments()[2]->getValue());
+		self::assertInstanceOf(LiteralExpression::class, $add->getArguments()[1]);
+		self::assertSame(10, $add->getArguments()[1]->getValue());
+		self::assertInstanceOf(SubqueryExpression::class, $add->getArguments()[2]);
+		self::assertSame($posts, $add->getArguments()[2]->getQuery());
+
+		foreach ([
+			fn () => x()->upper($users->name->as('title')),
+			fn () => x()->concat($users->name, $users->star()),
+			fn () => x()->coalesce($users->name, x()->isNull($users->name)),
+			fn () => x()->eq($users->id, $users->star()),
+			fn () => x()->eq($users->id, x()->eq($users->active, true)),
+		] as $assertion) {
+			try {
+				$assertion();
+				self::fail('Expected invalid operand rejection.');
+			} catch (InvalidArgumentException) {
+				self::assertTrue(true);
+			}
+		}
+	}
+
+	public function testFluentUpperAndLowerDelegateToFactorySemantics(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+
+		self::assertValueOperationEquivalent($query->name->upper(), x()->upper($query->name));
+		self::assertValueOperationEquivalent($query->email->lower(), x()->lower($query->email));
+	}
+
+	public function testValueOperationsSupportOrderingNestingAndSelectionComposition(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+		$posts = query($registry->getCollection('posts'), fn (SelectQuery $query) => $query->select($query->id));
+
+		$nested = x()->coalesce(
+			x()->concat($users->firstName, ' ', $users->lastName),
+			x()->upper($posts),
+			'Unknown',
+		);
+
+		self::assertSame(ValueOperation::COALESCE, $nested->getOperation());
+		self::assertInstanceOf(ValueOperationExpression::class, $nested->getArguments()[0]);
+		self::assertSame(ValueOperation::CONCAT, $nested->getArguments()[0]->getOperation());
+		self::assertSame([$users->firstName, $users->lastName], [
+			$nested->getArguments()[0]->getArguments()[0],
+			$nested->getArguments()[0]->getArguments()[2],
+		]);
+		self::assertInstanceOf(ValueOperationExpression::class, $nested->getArguments()[1]);
+		self::assertSame(ValueOperation::UPPER, $nested->getArguments()[1]->getOperation());
+		self::assertInstanceOf(SubqueryExpression::class, $nested->getArguments()[1]->getArguments()[0]);
+		self::assertInstanceOf(LiteralExpression::class, $nested->getArguments()[2]);
+		self::assertSame('Unknown', $nested->getArguments()[2]->getValue());
+
+		$selection = x()->add($users->subtotal, $users->tax)->sum()->as('total');
+		self::assertSame('total', $selection->getAlias());
+		self::assertInstanceOf(AggregateExpression::class, $selection->getExpression());
+	}
+
+	public function testAggregateCompositionSupportsValueOperationsWithoutReintroducingNestedAggregates(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+
+		$sum = x()->add($query->subtotal, $query->tax)->sum();
+		$factoryForm = x()->sum(x()->add($query->subtotal, $query->tax));
+		$aggregateCombination = x()->add($query->subtotal->sum(), $query->tax->sum());
+		$subqueryAggregate = query($this->makeRegistry()->getCollection('posts'), fn (SelectQuery $posts) => $posts->select($posts->amount->sum()));
+
+		self::assertSame(AggregateFunction::SUM, $sum->getFunction());
+		self::assertInstanceOf(ValueOperationExpression::class, $sum->getExpression());
+		self::assertSame(AggregateFunction::SUM, $factoryForm->getFunction());
+		self::assertInstanceOf(ValueOperationExpression::class, $factoryForm->getExpression());
+		self::assertSame(ValueOperation::ADD, $aggregateCombination->getOperation());
+		self::assertInstanceOf(AggregateExpression::class, $aggregateCombination->getArguments()[0]);
+		self::assertInstanceOf(AggregateExpression::class, $aggregateCombination->getArguments()[1]);
+		self::assertSame(AggregateFunction::SUM, x()->sum(x()->add($query->subtotal, $subqueryAggregate))->getFunction());
+
+		foreach ([
+			fn () => x()->add($query->subtotal->sum(), $query->tax)->sum(),
+			fn () => x()->sum(x()->coalesce(x()->add($query->subtotal->sum(), $query->tax), 0)),
+		] as $assertion) {
+			try {
+				$assertion();
+				self::fail('Expected aggregate nesting rejection.');
+			} catch (InvalidArgumentException) {
+				self::assertTrue(true);
+			}
+		}
+	}
+
+	public function testSelectingAliasesRegistersUnderlyingExpressionsAndSupportsLookup(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$expression = $query->name->upper();
+		$alias = $expression->as(' title ');
+
+		try {
+			$query->get('title');
+			self::fail('Expected lookup to fail before selection.');
+		} catch (UnknownQueryExpressionException) {
+			self::assertTrue(true);
+		}
+
+		$query->select($query->name, $alias);
+
+		self::assertSame($expression, $query->get('title'));
+		self::assertSame($expression, $query->get(' title '));
+		self::assertSame($query->get('title'), $query->get('title'));
+		self::assertFalse($query->getSelections()[0] instanceof AliasedExpression);
+
+		try {
+			$query->get('   ');
+			self::fail('Expected empty lookup rejection.');
+		} catch (InvalidArgumentException) {
+			self::assertTrue(true);
+		}
+
+		try {
+			$query->get('missing');
+			self::fail('Expected unknown lookup rejection.');
+		} catch (UnknownQueryExpressionException $exception) {
+			self::assertSame("Unknown query expression 'missing' on definition 'users'.", $exception->getMessage());
+		}
+	}
+
+	public function testSelectRejectsDuplicateAliasesAndPreservesAtomicBehavior(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$existing = $query->name->upper();
+
+		$query->select($query->id, $existing->as('title'));
+		$beforeSelections = $query->getSelections();
+
+		try {
+			$query->select(
+				$query->email->as('other'),
+				$query->title->as('other'),
+			);
+			self::fail('Expected duplicate alias rejection within one select() call.');
+		} catch (InvalidArgumentException) {
+			self::assertSame($beforeSelections, $query->getSelections());
+			self::assertSame($existing, $query->get('title'));
+
+			try {
+				$query->get('other');
+				self::fail('Expected failed batch alias to remain unregistered.');
+			} catch (UnknownQueryExpressionException) {
+				self::assertTrue(true);
+			}
+		}
+
+		try {
+			$query->select($query->email->as('title'));
+			self::fail('Expected duplicate alias rejection across select() calls.');
+		} catch (InvalidArgumentException) {
+			self::assertSame($beforeSelections, $query->getSelections());
+		}
+
+		$sameExpression = $query->name->upper();
+		$query->select(
+			$sameExpression->as('name_upper'),
+			$sameExpression->as('Title'),
+		);
+
+		self::assertSame($sameExpression, $query->get('name_upper'));
+		self::assertSame($sameExpression, $query->get('Title'));
+		self::assertNotSame($query->get('Title'), $query->email);
+	}
+
+	public function testNamedExpressionsRemainQueryLocalAcrossNestedQueries(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+		$posts = query($registry->getCollection('posts'));
+		$correlated = x()->upper($users->name);
+
+		$users->select($correlated->as('title'));
+		$posts->select($posts->id->as('post_id'));
+
+		self::assertSame($correlated, $users->get('title'));
+
+		try {
+			$users->get('post_id');
+			self::fail('Expected outer query to reject inner alias lookup.');
+		} catch (UnknownQueryExpressionException) {
+			self::assertTrue(true);
+		}
+
+		try {
+			$posts->get('title');
+			self::fail('Expected inner query to reject outer alias lookup.');
+		} catch (UnknownQueryExpressionException) {
+			self::assertTrue(true);
+		}
+
+		$posts->select(x()->concat($posts->id, '-', $users->id)->as('pair_key'));
+		self::assertSame($users, $correlated->getArguments()[0]->getQuery());
+		self::assertSame($posts, $posts->get('pair_key')->getArguments()[0]->getQuery());
+	}
+
 	public function testDirectSubquerySelectionAndQueryAliasingNormalizeToSubqueryExpressions(): void
 	{
 		$registry = $this->makeRegistry();
@@ -594,16 +850,28 @@ final class QueryModelTest extends TestCase
 		self::assertSame($left->getExpression(), $right->getExpression());
 	}
 
+	private static function assertValueOperationEquivalent(ValueOperationExpression $left, ValueOperationExpression $right): void
+	{
+		self::assertSame($left->getOperation(), $right->getOperation());
+		self::assertSame($left->getArguments(), $right->getArguments());
+	}
+
 	private function makeRegistry(): Registry
 	{
 		$registry = new Registry();
 		$users = $registry->collection('users');
 		$users->field('id', 'int');
+		$users->field('name', 'string');
+		$users->field('firstName', 'string');
+		$users->field('lastName', 'string');
+		$users->field('preferredName', 'string');
 		$users->field('title', 'string');
 		$users->field('email', 'string')->alias('mail_address');
 		$users->field('active', 'bool');
 		$users->field('status', 'string');
 		$users->field('lastPostId', 'int');
+		$users->field('subtotal', 'float');
+		$users->field('tax', 'float');
 		$users->field('deletedAt', 'datetime');
 		$users->field('createdAt', 'datetime');
 		$users->field('updatedAt', 'datetime');

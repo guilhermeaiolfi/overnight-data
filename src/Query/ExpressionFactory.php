@@ -22,6 +22,8 @@ use ON\Data\Query\Expression\LiteralExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
+use ON\Data\Query\Expression\ValueOperation;
+use ON\Data\Query\Expression\ValueOperationExpression;
 
 final class ExpressionFactory
 {
@@ -36,7 +38,7 @@ final class ExpressionFactory
 			return new NullCondition($this->normalizeExpression($left), NullOperator::IS_NULL);
 		}
 
-		return new ComparisonCondition($this->normalizeExpression($left), ComparisonOperator::EQ, $this->normalizeOperand($right));
+		return new ComparisonCondition($this->normalizeExpression($left), ComparisonOperator::EQ, $this->normalizeOperand($right, 'comparison'));
 	}
 
 	public function neq(ValueExpressionInterface|SelectQuery $left, mixed $right): ConditionInterface
@@ -45,7 +47,7 @@ final class ExpressionFactory
 			return new NullCondition($this->normalizeExpression($left), NullOperator::IS_NOT_NULL);
 		}
 
-		return new ComparisonCondition($this->normalizeExpression($left), ComparisonOperator::NEQ, $this->normalizeOperand($right));
+		return new ComparisonCondition($this->normalizeExpression($left), ComparisonOperator::NEQ, $this->normalizeOperand($right, 'comparison'));
 	}
 
 	public function gt(ValueExpressionInterface|SelectQuery $left, mixed $right): ComparisonCondition
@@ -101,6 +103,37 @@ final class ExpressionFactory
 		$this->assertAggregateInput($expression);
 
 		return new AggregateExpression(AggregateFunction::SUM, $expression);
+	}
+
+	public function upper(mixed $expression): ValueOperationExpression
+	{
+		return new ValueOperationExpression(
+			ValueOperation::UPPER,
+			[$this->normalizeOperand($expression, 'value operation')],
+		);
+	}
+
+	public function lower(mixed $expression): ValueOperationExpression
+	{
+		return new ValueOperationExpression(
+			ValueOperation::LOWER,
+			[$this->normalizeOperand($expression, 'value operation')],
+		);
+	}
+
+	public function concat(mixed ...$arguments): ValueOperationExpression
+	{
+		return new ValueOperationExpression(ValueOperation::CONCAT, $this->normalizeOperationArguments($arguments));
+	}
+
+	public function coalesce(mixed ...$arguments): ValueOperationExpression
+	{
+		return new ValueOperationExpression(ValueOperation::COALESCE, $this->normalizeOperationArguments($arguments));
+	}
+
+	public function add(mixed ...$arguments): ValueOperationExpression
+	{
+		return new ValueOperationExpression(ValueOperation::ADD, $this->normalizeOperationArguments($arguments));
 	}
 
 	public function and(ConditionInterface ...$conditions): LogicalCondition
@@ -164,10 +197,10 @@ final class ExpressionFactory
 	private function normalizeOrderedOperand(mixed $operand, string $method): ValueExpressionInterface
 	{
 		if ($operand === null) {
-			throw new InvalidArgumentException(sprintf("ExpressionFactory::%s() does not accept null.", $method));
+			throw new InvalidArgumentException(sprintf('ExpressionFactory::%s() does not accept null.', $method));
 		}
 
-		return $this->normalizeOperand($operand);
+		return $this->normalizeOperand($operand, 'comparison');
 	}
 
 	private function normalizeExpression(ValueExpressionInterface|SelectQuery $expression): ValueExpressionInterface
@@ -183,10 +216,18 @@ final class ExpressionFactory
 		return $expression;
 	}
 
-	private function normalizeOperand(mixed $operand): ValueExpressionInterface
+	private function normalizeOperand(mixed $operand, string $context): ValueExpressionInterface
 	{
 		if ($operand instanceof AliasedExpression) {
-			throw new InvalidArgumentException('AliasedExpression cannot be used as a comparison operand.');
+			throw new InvalidArgumentException(sprintf('AliasedExpression cannot be used as a %s operand.', $context));
+		}
+
+		if ($operand instanceof StarExpression) {
+			throw new InvalidArgumentException(sprintf('StarExpression cannot be used as a %s operand.', $context));
+		}
+
+		if ($operand instanceof ConditionInterface) {
+			throw new InvalidArgumentException(sprintf('ConditionInterface cannot be used as a %s operand.', $context));
 		}
 
 		if ($operand instanceof SelectQuery) {
@@ -225,20 +266,47 @@ final class ExpressionFactory
 				throw new InvalidArgumentException('ExpressionFactory::in() does not accept subqueries inside literal lists.');
 			}
 
-			if ($value instanceof StarExpression) {
-				throw new InvalidArgumentException('StarExpression cannot be used in an IN set.');
-			}
-
-			$normalized[] = $this->normalizeOperand($value);
+			$normalized[] = $this->normalizeOperand($value, 'IN set');
 		}
 
 		return $normalized;
 	}
 
+	/**
+	 * @param list<mixed> $arguments
+	 * @return list<ValueExpressionInterface>
+	 */
+	private function normalizeOperationArguments(array $arguments): array
+	{
+		return array_map(
+			fn (mixed $argument): ValueExpressionInterface => $this->normalizeOperand($argument, 'value operation'),
+			$arguments,
+		);
+	}
+
 	private function assertAggregateInput(ValueExpressionInterface $expression): void
 	{
-		if ($expression instanceof AggregateExpression) {
+		if ($this->containsAggregateAtCurrentLevel($expression)) {
 			throw new InvalidArgumentException('Aggregate expressions cannot be aggregated directly.');
 		}
+	}
+
+	private function containsAggregateAtCurrentLevel(ValueExpressionInterface $expression): bool
+	{
+		if ($expression instanceof AggregateExpression) {
+			return true;
+		}
+
+		if (! $expression instanceof ValueOperationExpression) {
+			return false;
+		}
+
+		foreach ($expression->getArguments() as $argument) {
+			if ($this->containsAggregateAtCurrentLevel($argument)) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

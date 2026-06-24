@@ -20,7 +20,7 @@ This repository currently includes:
 - `MapperManager`, `MappingContext`, `MappingNode`, one-level Mappers, writers, node resolvers, and the fluent `map()` / `MapBuilder` entry point;
 - default definition-aware node resolution through `->args($definition)` for scalar conversion and relation branches;
 - ad-hoc path-based scalar metadata through `FieldMap::fromArray()` and `MapBuilder::fieldMap()`;
-- the Phase 1 and Phase 2 `ON\Data\Query` read-query model for database-independent select expressions, aggregate nodes, scalar subqueries, and condition trees;
+- the Phase 1, Phase 2, and Phase 3 `ON\Data\Query` read-query model for database-independent select expressions, semantic value operations, aggregate nodes, scalar subqueries, query-local named expressions, and condition trees;
 - generic collection mapping through the same composable runtime;
 - recursive array, `stdClass`, and public-property object combinations selected independently by source Mapper and target writer, with cycle checks applied at recursive mapper dispatch;
 - typed nested DTO properties and PHPDoc-described DTO lists;
@@ -73,3 +73,4 @@ composer check
 - `docs/mapper-runtime-guide.md` documents field types, representations, conversion flow, and the recursive mapper runtime.
 - `docs/3-query/phase-1-query-model.md` documents the Phase 1 database-independent query model.
 - `docs/3-query/phase-2-aggregate-subqueries.md` documents Phase 2 aggregate, subquery, `EXISTS`, and `IN` query modeling.
+- `docs/3-query/phase-3-semantic-value-operations.md` documents Phase 3 semantic value operations and query-local named expression lookup.

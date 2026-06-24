@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Query\Condition\ConditionInterface;
+use ON\Data\Query\Exception\UnknownQueryExpressionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
@@ -28,6 +29,11 @@ final class SelectQuery
 	 * @var list<ValueExpressionInterface|AliasedExpression>
 	 */
 	private array $selections = [];
+
+	/**
+	 * @var array<string, ValueExpressionInterface>
+	 */
+	private array $namedExpressions = [];
 
 	/**
 	 * @var list<ConditionInterface>
@@ -80,12 +86,36 @@ final class SelectQuery
 			throw new InvalidArgumentException('SelectQuery::select() requires at least one expression.');
 		}
 
-		array_push($this->selections, ...array_map(
+		$normalized = array_map(
 			static fn (ValueExpressionInterface|AliasedExpression|SelectQuery $expression): ValueExpressionInterface|AliasedExpression => $expression instanceof SelectQuery
 				? new SubqueryExpression($expression)
 				: $expression,
 			$expressions,
-		));
+		);
+
+		$incomingAliases = [];
+		$incomingExpressions = [];
+
+		foreach ($normalized as $expression) {
+			if (! $expression instanceof AliasedExpression) {
+				continue;
+			}
+
+			$alias = $expression->getAlias();
+
+			if (isset($this->namedExpressions[$alias]) || isset($incomingExpressions[$alias])) {
+				throw new InvalidArgumentException(sprintf("Query expression alias '%s' is already selected.", $alias));
+			}
+
+			$incomingAliases[] = $alias;
+			$incomingExpressions[$alias] = $expression->getExpression();
+		}
+
+		array_push($this->selections, ...$normalized);
+
+		foreach ($incomingAliases as $alias) {
+			$this->namedExpressions[$alias] = $incomingExpressions[$alias];
+		}
 
 		return $this;
 	}
@@ -107,6 +137,21 @@ final class SelectQuery
 	public function getSelections(): array
 	{
 		return $this->selections;
+	}
+
+	public function get(string $name): ValueExpressionInterface
+	{
+		$name = trim($name);
+
+		if ($name === '') {
+			throw new InvalidArgumentException('SelectQuery::get() requires a non-empty expression name.');
+		}
+
+		if (! isset($this->namedExpressions[$name])) {
+			throw UnknownQueryExpressionException::forQuery($name, $this->source->getName());
+		}
+
+		return $this->namedExpressions[$name];
 	}
 
 	/**
