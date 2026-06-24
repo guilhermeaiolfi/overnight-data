@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Condition;
 
 use InvalidArgumentException;
+use ON\Data\Query\Expression\AggregateExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 
@@ -18,8 +19,26 @@ final class InCondition implements ConditionInterface
 		private readonly array|SubqueryExpression $set,
 		private readonly bool $negated = false,
 	) {
-		if (is_array($this->set) && $this->set === []) {
+		if (! is_array($this->set)) {
+			return;
+		}
+
+		if ($this->set === []) {
 			throw new InvalidArgumentException('InCondition requires a non-empty set.');
+		}
+
+		foreach ($this->set as $item) {
+			if (! $item instanceof ValueExpressionInterface) {
+				throw new InvalidArgumentException('IN literal lists must contain only value expressions.');
+			}
+
+			if ($item instanceof SubqueryExpression) {
+				throw new InvalidArgumentException('IN literal lists cannot contain subqueries.');
+			}
+
+			if ($item instanceof AggregateExpression) {
+				throw new InvalidArgumentException('IN literal lists cannot contain aggregate expressions.');
+			}
 		}
 	}
 

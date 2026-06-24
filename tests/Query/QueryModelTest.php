@@ -363,6 +363,36 @@ final class QueryModelTest extends TestCase
 		$aggregate->sum();
 	}
 
+	public function testFactoryRejectsNestedAggregateInputs(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('posts'));
+
+		try {
+			x()->sum($query->amount->sum());
+			self::fail('Expected nested SUM aggregate rejection.');
+		} catch (InvalidArgumentException) {
+			self::assertTrue(true);
+		}
+
+		try {
+			x()->count($query->amount->count());
+			self::fail('Expected nested COUNT aggregate rejection.');
+		} catch (InvalidArgumentException) {
+			self::assertTrue(true);
+		}
+
+		$this->expectException(InvalidArgumentException::class);
+		x()->countDistinct($query->amount->sum());
+	}
+
+	public function testAggregateExpressionConstructorRejectsNonCountStarOperands(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('posts'));
+
+		$this->expectException(InvalidArgumentException::class);
+		new AggregateExpression(AggregateFunction::SUM, $query->star());
+	}
+
 	public function testDirectSubquerySelectionAndQueryAliasingNormalizeToSubqueryExpressions(): void
 	{
 		$registry = $this->makeRegistry();
@@ -481,6 +511,54 @@ final class QueryModelTest extends TestCase
 
 		$this->expectException(TypeError::class);
 		x()->in($query->status->as('user_status'), ['active']);
+	}
+
+	public function testInRejectsSubqueriesInsideLiteralLists(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+		$posts = query($registry->getCollection('posts'), fn (SelectQuery $query) => $query->select($query->userId));
+
+		try {
+			x()->in($users->id, [$posts]);
+			self::fail('Expected single subquery list entry rejection.');
+		} catch (InvalidArgumentException) {
+			self::assertTrue(true);
+		}
+
+		try {
+			x()->in($users->id, [1, $posts]);
+			self::fail('Expected mixed literal/subquery list rejection.');
+		} catch (InvalidArgumentException) {
+			self::assertTrue(true);
+		}
+
+		$this->expectException(InvalidArgumentException::class);
+		x()->in($users->id, [new SubqueryExpression($posts)]);
+	}
+
+	public function testInConditionConstructorRejectsInvalidArrayMembers(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+		$posts = query($registry->getCollection('posts'));
+
+		try {
+			new InCondition($users->id, [$users->star()]);
+			self::fail('Expected star list member constructor rejection.');
+		} catch (InvalidArgumentException) {
+			self::assertTrue(true);
+		}
+
+		try {
+			new InCondition($users->id, [new SubqueryExpression($posts)]);
+			self::fail('Expected subquery list member constructor rejection.');
+		} catch (InvalidArgumentException) {
+			self::assertTrue(true);
+		}
+
+		$this->expectException(InvalidArgumentException::class);
+		new InCondition($users->id, []);
 	}
 
 	private static function assertComparison(

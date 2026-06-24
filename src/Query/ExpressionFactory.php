@@ -74,6 +74,10 @@ final class ExpressionFactory
 			throw new InvalidArgumentException('AliasedExpression cannot be used as an aggregate operand.');
 		}
 
+		if ($expression instanceof ValueExpressionInterface) {
+			$this->assertAggregateInput($expression);
+		}
+
 		return new AggregateExpression(AggregateFunction::COUNT, $expression);
 	}
 
@@ -83,6 +87,8 @@ final class ExpressionFactory
 			throw new InvalidArgumentException('AliasedExpression cannot be used as an aggregate operand.');
 		}
 
+		$this->assertAggregateInput($expression);
+
 		return new AggregateExpression(AggregateFunction::COUNT_DISTINCT, $expression);
 	}
 
@@ -91,6 +97,8 @@ final class ExpressionFactory
 		if ($expression instanceof AliasedExpression) {
 			throw new InvalidArgumentException('AliasedExpression cannot be used as an aggregate operand.');
 		}
+
+		$this->assertAggregateInput($expression);
 
 		return new AggregateExpression(AggregateFunction::SUM, $expression);
 	}
@@ -213,6 +221,10 @@ final class ExpressionFactory
 				throw new InvalidArgumentException('ExpressionFactory::in() does not accept null inside literal lists.');
 			}
 
+			if ($value instanceof SelectQuery || $value instanceof SubqueryExpression) {
+				throw new InvalidArgumentException('ExpressionFactory::in() does not accept subqueries inside literal lists.');
+			}
+
 			if ($value instanceof StarExpression) {
 				throw new InvalidArgumentException('StarExpression cannot be used in an IN set.');
 			}
@@ -221,5 +233,12 @@ final class ExpressionFactory
 		}
 
 		return $normalized;
+	}
+
+	private function assertAggregateInput(ValueExpressionInterface $expression): void
+	{
+		if ($expression instanceof AggregateExpression) {
+			throw new InvalidArgumentException('Aggregate expressions cannot be aggregated directly.');
+		}
 	}
 }
