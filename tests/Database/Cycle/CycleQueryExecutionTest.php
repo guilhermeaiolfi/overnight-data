@@ -209,6 +209,12 @@ final class CycleQueryExecutionTest extends TestCase
 			->orderBy($subqueryUsers->id->asc())
 			->fetchAll();
 
+		$notInUsers = $this->database->query($usersDefinition);
+		$notInRows = $notInUsers
+			->select($notInUsers->id)
+			->where(x()->notIn($notInUsers->id, [1, 2]))
+			->fetchAll();
+
 		$notUsers = $this->database->query($usersDefinition);
 		$notRows = $notUsers
 			->select($notUsers->id)
@@ -235,6 +241,7 @@ final class CycleQueryExecutionTest extends TestCase
 
 		self::assertSame([['id' => 1], ['id' => 3]], $inRows);
 		self::assertSame([['id' => 1], ['id' => 2]], $subqueryRows);
+		self::assertSame([['id' => 3]], $notInRows);
 		self::assertSame([['id' => 3]], $notRows);
 		self::assertSame([['id' => 3]], $notExistsRows);
 	}

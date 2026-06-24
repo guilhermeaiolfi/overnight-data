@@ -20,7 +20,9 @@ This repository currently includes:
 - `MapperManager`, `MappingContext`, `MappingNode`, one-level Mappers, writers, node resolvers, and the fluent `map()` / `MapBuilder` entry point;
 - default definition-aware node resolution through `->args($definition)` for scalar conversion and relation branches;
 - ad-hoc path-based scalar metadata through `FieldMap::fromArray()` and `MapBuilder::fieldMap()`;
-- the Phase 1 through Phase 4 `ON\Data\Query` read-query model for database-independent select expressions, semantic value operations, aggregate nodes, scalar subqueries, query-local named expressions, condition trees, grouping, `HAVING`, ordering, and limit/offset pagination;
+- the Phase 1 through Phase 5 `ON\Data\Query` read-query model for database-independent select expressions, semantic value operations, aggregate nodes, scalar subqueries, query-local named expressions, condition trees, grouping, `HAVING`, ordering, limit/offset pagination, and optional bound execution;
+- the neutral `ON\Data\Database` execution surface with `Database`, `ConnectionConfig`, and `QueryExecutorInterface`;
+- the built-in internal Cycle Database backend currently used as the default execution adapter;
 - generic collection mapping through the same composable runtime;
 - recursive array, `stdClass`, and public-property object combinations selected independently by source Mapper and target writer, with cycle checks applied at recursive mapper dispatch;
 - typed nested DTO properties and PHPDoc-described DTO lists;
@@ -37,8 +39,8 @@ Definition arrays are canonical at creation time. Names are stored only as owner
 Not implemented yet:
 
 - semantic view fields and expressions;
-- query execution, SQL compilation, and adapter integration;
 - persistence and ORM adapters;
+- relation loading;
 - constructor hydration and readonly-target hydration.
 
 ## Namespace
@@ -75,3 +77,4 @@ composer check
 - `docs/3-query/phase-2-aggregate-subqueries.md` documents Phase 2 aggregate, subquery, `EXISTS`, and `IN` query modeling.
 - `docs/3-query/phase-3-semantic-value-operations.md` documents Phase 3 semantic value operations and query-local named expression lookup.
 - `docs/3-query/phase-4-ordering-grouping-pagination.md` documents Phase 4 grouping, `HAVING`, ordering, and limit/offset pagination.
+- `docs/3-query/phase-5-bound-execution.md` documents Phase 5 bound execution, the neutral database facade, and the built-in Cycle backend.
