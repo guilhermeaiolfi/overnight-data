@@ -13,11 +13,19 @@
 ## Naming model
 
 Collection names and view names share one namespace within a registry.
+Field names and relation names share one member namespace within each collection or view.
 
 - Names must be strings.
 - Whitespace-only names are rejected.
 - Valid names are preserved exactly as provided.
 - Names are runtime context supplied by the owner map key and are not stored redundantly inside canonical child arrays.
+- A definition cannot contain both `field('posts')` and `relation('posts', ...)`.
+- This keeps future member access unambiguous, for example `$users->name` and `$users->posts`.
+
+```php
+$users->field('posts');
+$users->relation('posts', ...); // invalid
+```
 
 ## Canonical storage model
 

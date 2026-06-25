@@ -7,6 +7,7 @@ namespace ON\Data\Definition\Relation;
 use ArrayIterator;
 use IteratorAggregate;
 use ON\Data\Definition\DefinitionInterface;
+use ON\Data\Definition\Exception\DefinitionNameConflictException;
 use ON\Data\Definition\Exception\InvalidDefinitionClassException;
 use ON\Data\Definition\Exception\RelationException;
 use ON\Data\Definition\Internal\DefinitionFactory;
@@ -54,6 +55,16 @@ final class RelationMap implements IteratorAggregate
 
 	public function createOrReturn(string $name, string $class, array $values = []): RelationInterface
 	{
+		if ($this->parent->hasField($name)) {
+			throw new DefinitionNameConflictException(
+				sprintf(
+					"Definition '%s' member name '%s' is already used by a field.",
+					$this->parent->getName(),
+					$name
+				)
+			);
+		}
+
 		if ($this->has($name)) {
 			$relation = $this->get($name);
 			if ($relation::class !== $class) {
