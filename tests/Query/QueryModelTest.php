@@ -21,6 +21,7 @@ use ON\Data\Query\Condition\NullCondition;
 use ON\Data\Query\Condition\NullOperator;
 use ON\Data\Query\Exception\UnknownQueryExpressionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
+use ON\Data\Query\Exception\UnknownQueryMemberException;
 use ON\Data\Query\Expression\AggregateExpression;
 use ON\Data\Query\Expression\AggregateFunction;
 use ON\Data\Query\Expression\AliasedExpression;
@@ -106,8 +107,8 @@ final class QueryModelTest extends TestCase
 		try {
 			$query->missing;
 			self::fail('Expected missing field access to throw.');
-		} catch (UnknownQueryFieldException $exception) {
-			self::assertSame("Unknown query field 'missing' on definition 'users'.", $exception->getMessage());
+		} catch (UnknownQueryMemberException $exception) {
+			self::assertSame("Unknown query member 'missing' on definition 'users'.", $exception->getMessage());
 		}
 
 		$this->expectException(UnknownQueryFieldException::class);

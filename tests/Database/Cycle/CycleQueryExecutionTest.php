@@ -16,6 +16,7 @@ use function ON\Data\Query\x;
 use PDO;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
+use Tests\ON\Data\Fixture\CustomRelation;
 
 #[RequiresPhpExtension('pdo_sqlite')]
 final class CycleQueryExecutionTest extends TestCase
@@ -385,6 +386,31 @@ final class CycleQueryExecutionTest extends TestCase
 			->fetchAll();
 	}
 
+	public function testRelatedFieldTranslationIsRejectedExplicitly(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$this->expectException(UnsupportedQueryException::class);
+		$this->expectExceptionMessage('posts.title');
+
+		$users
+			->select($users->posts->title)
+			->fetchAll();
+	}
+
+	public function testNestedRelatedExpressionTranslationIsRejectedExplicitly(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$this->expectException(UnsupportedQueryException::class);
+		$this->expectExceptionMessage('posts.title');
+
+		$users
+			->select($users->id)
+			->where(x()->eq($users->posts->title->upper(), 'HELLO'))
+			->fetchAll();
+	}
+
 	public function testCyclicQueryGraphsAreRejected(): void
 	{
 		$cyclic = query($this->registry->getCollection('users'));
@@ -479,6 +505,7 @@ final class CycleQueryExecutionTest extends TestCase
 		$users->field('profile', 'json')->column('profile_json')->nullable(true);
 		$users->field('nickname', 'string')->nullable(true);
 		$users->field('score', 'int');
+		$users->relation('posts', CustomRelation::class)->collection('posts');
 		$users->primaryKey('id');
 
 		$posts = $registry->collection('posts');
@@ -488,6 +515,7 @@ final class CycleQueryExecutionTest extends TestCase
 		$posts->field('title', 'string');
 		$posts->field('amount', 'float');
 		$posts->field('published', 'bool');
+		$posts->relation('author', CustomRelation::class)->collection('users');
 		$posts->primaryKey('id');
 
 		return $registry;

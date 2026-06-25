@@ -9,14 +9,18 @@ use ON\Data\Database\Exception\QueryNotExecutableException;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Field\FieldInterface;
+use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Exception\UnknownQueryExpressionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
+use ON\Data\Query\Exception\UnknownQueryMemberException;
+use ON\Data\Query\Exception\UnknownQueryRelationException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
+use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Sort\Sort;
 
@@ -26,6 +30,11 @@ final class SelectQuery
 	 * @var array<string, FieldRef>
 	 */
 	private array $fieldRefs = [];
+
+	/**
+	 * @var array<string, RelationRef>
+	 */
+	private array $relationRefs = [];
 
 	private ?StarExpression $star = null;
 
@@ -94,9 +103,32 @@ final class SelectQuery
 		return $this->fieldRefs[$name] = new FieldRef($this, $field);
 	}
 
-	public function __get(string $name): FieldRef
+	public function relation(string $name): RelationRef
 	{
-		return $this->field($name);
+		if (isset($this->relationRefs[$name])) {
+			return $this->relationRefs[$name];
+		}
+
+		$relation = $this->source->getRelation($name);
+
+		if (! $relation instanceof RelationInterface) {
+			throw UnknownQueryRelationException::forDefinition($name, $this->source->getName());
+		}
+
+		return $this->relationRefs[$name] = new RelationRef($this, $relation);
+	}
+
+	public function __get(string $name): FieldRef|RelationRef
+	{
+		if ($this->source->hasField($name)) {
+			return $this->field($name);
+		}
+
+		if ($this->source->hasRelation($name)) {
+			return $this->relation($name);
+		}
+
+		throw UnknownQueryMemberException::forDefinition($name, $this->source->getName());
 	}
 
 	public function star(): StarExpression

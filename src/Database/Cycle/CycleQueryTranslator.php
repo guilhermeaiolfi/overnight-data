@@ -348,6 +348,18 @@ final class CycleQueryTranslator
 
 	private function translateFieldRef(FieldRef $field, CycleTranslationContext $context): SqlFragment
 	{
+		$relation = $field->getRelation();
+
+		if ($relation !== null) {
+			throw UnsupportedQueryException::forQuery(
+				$context->root(),
+				sprintf(
+					"relation field path '%s' is not supported until relation joins are implemented",
+					implode('.', $field->getPath()),
+				),
+			);
+		}
+
 		$context->assertAccessible($field);
 		$query = $field->getQuery();
 
