@@ -103,7 +103,31 @@ final class CycleQueryTranslator
 
 		$columns = [];
 		$resultColumns = [];
-		$logicalNames = [];
+		$usedNames = [];
+		$implicitCounter = 0;
+
+		if ($root) {
+			foreach ($selections as $selection) {
+				if (! $selection->isExplicit()) {
+					continue;
+				}
+
+				$selectionExpression = $selection->getExpression();
+				$expression = $selectionExpression instanceof AliasedExpression
+					? $selectionExpression->getExpression()
+					: $selectionExpression;
+				$logicalName = $this->resolveRootResultName($query, $selection, $expression);
+
+				if (isset($usedNames[$logicalName])) {
+					throw UnsupportedQueryException::forQuery($query, sprintf(
+						"duplicate root result name '%s' is not supported",
+						$logicalName,
+					));
+				}
+
+				$usedNames[$logicalName] = true;
+			}
+		}
 
 		foreach ($selections as $index => $selection) {
 			$selectionExpression = $selection->getExpression();
@@ -117,22 +141,13 @@ final class CycleQueryTranslator
 			if ($root && $selection->isExplicit()) {
 				$logicalName = $this->resolveRootResultName($query, $selection, $expression);
 				$backendName = $logicalName;
-
-				if (isset($logicalNames[$logicalName])) {
-					throw UnsupportedQueryException::forQuery($query, sprintf(
-						"duplicate root result name '%s' is not supported",
-						$logicalName,
-					));
-				}
-
-				$logicalNames[$logicalName] = true;
 			}
 
 			$sql = $this->translateExpression($expression, $context);
 
 			if ($root || $aliased) {
 				if ($root && $selection->isImplicit()) {
-					$backendName = sprintf('__ondata_implicit_%d', $index);
+					$backendName = $this->allocateImplicitAlias($usedNames, $implicitCounter);
 				}
 
 				$alias = $backendName ?? $selectionExpression->getAlias();
@@ -156,6 +171,20 @@ final class CycleQueryTranslator
 		}
 
 		return [$columns, $resultColumns];
+	}
+
+	/**
+	 * @param array<string, true> $usedNames
+	 */
+	private function allocateImplicitAlias(array &$usedNames, int &$counter): string
+	{
+		do {
+			$alias = sprintf('__ondata_implicit_%d', $counter++);
+		} while (isset($usedNames[$alias]));
+
+		$usedNames[$alias] = true;
+
+		return $alias;
 	}
 
 	private function resolveRootResultName(

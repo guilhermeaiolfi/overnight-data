@@ -13,12 +13,16 @@ final class Selection
 	/**
 	 * @param list<string> $reasons
 	 */
+	private readonly array $reasons;
+
 	public function __construct(
 		private readonly ValueExpressionInterface|AliasedExpression $expression,
 		private readonly bool $explicit = false,
-		private readonly array $reasons = [],
+		array $reasons = [],
 	) {
-		$this->assertReasons($this->reasons);
+		$this->reasons = array_values(array_unique(
+			array_map($this->normalizeReason(...), $reasons),
+		));
 	}
 
 	public function getExpression(): ValueExpressionInterface|AliasedExpression
@@ -69,16 +73,6 @@ final class Selection
 		}
 
 		return new self($this->expression, $this->explicit, [...$this->reasons, $reason]);
-	}
-
-	/**
-	 * @param list<string> $reasons
-	 */
-	private function assertReasons(array $reasons): void
-	{
-		foreach ($reasons as $reason) {
-			$this->normalizeReason($reason);
-		}
 	}
 
 	private function normalizeReason(string $reason): string

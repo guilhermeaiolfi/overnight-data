@@ -139,6 +139,16 @@ final class QueryModelTest extends TestCase
 		self::assertSame([], $selections[0]->getReasons());
 	}
 
+	public function testSelectionConstructorNormalizesAndDeduplicatesReasons(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$selection = new Selection($query->id, false, [' relation-key ', 'relation-key', ' result-grouping-key ']);
+
+		self::assertSame(['relation-key', 'result-grouping-key'], $selection->getReasons());
+		self::assertTrue($selection->hasReason('relation-key'));
+		self::assertTrue($selection->hasReason(' result-grouping-key '));
+	}
+
 	public function testSelectAppendsExpressionsPreservesOrderAndExposesAliases(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));

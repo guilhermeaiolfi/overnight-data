@@ -302,6 +302,23 @@ final class CycleQueryExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testImplicitAliasesAvoidCollisionsWithExplicitBackendNames(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name->as('__ondata_implicit_0'))
+			->require($users->id, 'relation-key')
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['__ondata_implicit_0' => 'Ada'],
+			['__ondata_implicit_0' => 'Grace'],
+			['__ondata_implicit_0' => 'Linus'],
+		], $rows);
+	}
+
 	public function testExplicitSelectionsMayAlsoCarryInternalRequirementReasonsAndRemainVisible(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
