@@ -42,6 +42,20 @@ final class M2MLoader extends AbstractLoader
 		$throughOuterKeys = $this->throughKeys($relation, $throughDefinition, 'outer');
 		$this->assertM2MMatchingKeys($relation, $relationInnerKeys, $throughInnerKeys, 'has mismatched through key counts.');
 		$this->assertM2MMatchingKeys($relation, $throughOuterKeys, $relationOuterKeys, 'has mismatched through key counts.');
+		$this->assertKeyFieldsExist(
+			$relation,
+			$source->getCollection(),
+			$relationInnerKeys,
+			$throughDefinition->getCollection(),
+			$throughInnerKeys,
+		);
+		$this->assertKeyFieldsExist(
+			$relation,
+			$throughDefinition->getCollection(),
+			$throughOuterKeys,
+			$definition->getCollection(),
+			$relationOuterKeys,
+		);
 
 		$through = $query->join(
 			$throughDefinition->getCollection(),

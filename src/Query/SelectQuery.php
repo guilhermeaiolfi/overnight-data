@@ -288,17 +288,11 @@ final class SelectQuery implements QuerySourceInterface
 			throw new InvalidArgumentException('Join name cannot be empty.');
 		}
 
-		foreach ($this->joins as $join) {
-			if ($join->getName() === $name) {
-				throw new InvalidArgumentException(sprintf(
-					'Join name "%s" is already used by this query.',
-					$name,
-				));
-			}
-		}
+		$this->assertJoinNameAvailable($name);
 
 		if ($source instanceof RelationRef) {
 			$source = $source->getJoinedSource();
+			$this->assertJoinNameAvailable($name);
 		}
 
 		$join = new Join($this, $source, $collection, $type, $name);
@@ -388,6 +382,18 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		return $expression;
+	}
+
+	private function assertJoinNameAvailable(string $name): void
+	{
+		foreach ($this->joins as $join) {
+			if ($join->getName() === $name) {
+				throw new InvalidArgumentException(sprintf(
+					'Join name "%s" is already used by this query.',
+					$name,
+				));
+			}
+		}
 	}
 
 	private function requireExecutor(): QueryExecutorInterface

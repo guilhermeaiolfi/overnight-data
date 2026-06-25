@@ -924,6 +924,22 @@ final class QueryModelTest extends TestCase
 		self::assertSame($users->getJoins()[0], $join->getSource());
 	}
 
+	public function testExplicitJoinRechecksNameAvailabilityAfterRelationSourceResolution(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+
+		try {
+			$users->join($registry->getCollection('posts'), source: $users->posts, name: 'posts');
+			self::fail('Expected duplicate join-name rejection.');
+		} catch (InvalidArgumentException $exception) {
+			self::assertStringContainsString('Join name "posts" is already used by this query.', $exception->getMessage());
+		}
+
+		self::assertCount(1, $users->getJoins());
+		self::assertSame('posts', $users->getJoins()[0]->getName());
+	}
+
 	public function testRelationLoaderRejectsAbstractAndArgumentfulClasses(): void
 	{
 		$registry = $this->makeRegistry();
