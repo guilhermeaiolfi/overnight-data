@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition;
 
+use ON\Data\Definition\Exception\DefinitionNameConflictException;
 use ON\Data\Definition\Field\Field;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Field\FieldMap;
@@ -92,6 +93,19 @@ abstract class AbstractDefinition extends DefinitionNode implements DefinitionIn
 			$relationItems = &$this->items['relations'];
 		} else {
 			$relationItems = [];
+		}
+
+		$conflicts = array_intersect(array_keys($fieldItems), array_keys($relationItems));
+		if ($conflicts !== []) {
+			$name = (string) array_values($conflicts)[0];
+
+			throw new DefinitionNameConflictException(
+				sprintf(
+					"Definition '%s' member name '%s' is used by both a field and a relation.",
+					$this->getName(),
+					$name
+				)
+			);
 		}
 
 		$this->fields = new FieldMap($this, $fieldItems);

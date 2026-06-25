@@ -8,6 +8,7 @@ use ArrayIterator;
 use Countable;
 use IteratorAggregate;
 use ON\Data\Definition\DefinitionInterface;
+use ON\Data\Definition\Exception\DefinitionNameConflictException;
 use ON\Data\Definition\Exception\FieldException;
 use ON\Data\Definition\Exception\InvalidDefinitionClassException;
 use ON\Data\Definition\Internal\DefinitionFactory;
@@ -93,6 +94,16 @@ final class FieldMap implements IteratorAggregate, Countable
 
 	public function createOrReturn(string $name, string $class, array $values = []): FieldInterface
 	{
+		if ($this->parent->hasRelation($name)) {
+			throw new DefinitionNameConflictException(
+				sprintf(
+					"Definition '%s' member name '%s' is already used by a relation.",
+					$this->parent->getName(),
+					$name
+				)
+			);
+		}
+
 		if ($this->has($name)) {
 			$field = $this->get($name);
 			if ($field::class !== $class) {
