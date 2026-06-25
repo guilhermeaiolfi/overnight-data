@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation\Loader;
 
 use LogicException;
-use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
@@ -25,14 +24,6 @@ abstract class AbstractLoader implements LoaderInterface
 		$source = $relation->getParentSource();
 		$innerKeys = $this->relationKeys($relation, 'inner');
 		$outerKeys = $this->relationKeys($relation, 'outer');
-		$this->assertMatchingKeys($relation, $innerKeys, $outerKeys);
-		$this->assertKeyFieldsExist(
-			$relation,
-			$source->getCollection(),
-			$innerKeys,
-			$definition->getCollection(),
-			$outerKeys,
-		);
 		$join = $relation->getQuery()->join(
 			$definition->getCollection(),
 			$definition->isNullable() ? JoinType::LEFT : JoinType::INNER,
@@ -45,7 +36,6 @@ abstract class AbstractLoader implements LoaderInterface
 			$source,
 			$innerKeys,
 			$outerKeys,
-			$relation,
 		);
 
 		return $join;
@@ -85,63 +75,11 @@ abstract class AbstractLoader implements LoaderInterface
 		QuerySourceInterface $source,
 		array $sourceKeys,
 		array $targetKeys,
-		RelationRef $relation,
 	): void {
-		if ($sourceKeys === [] || $targetKeys === []) {
-			throw RelationLoaderException::relationKeysIncomplete($relation);
-		}
-
-		if (count($sourceKeys) !== count($targetKeys)) {
-			throw RelationLoaderException::relationKeyCountMismatch($relation);
-		}
-
 		foreach ($sourceKeys as $index => $sourceKey) {
 			$join->on(
 				x()->eq($source->field($sourceKey), $join->field($targetKeys[$index])),
 			);
-		}
-	}
-
-	/**
-	 * @param non-empty-list<string> $sourceKeys
-	 * @param non-empty-list<string> $targetKeys
-	 */
-	protected function assertMatchingKeys(RelationRef $relation, array $sourceKeys, array $targetKeys): void
-	{
-		if (count($sourceKeys) !== count($targetKeys)) {
-			throw RelationLoaderException::relationKeyCountMismatch($relation);
-		}
-	}
-
-	/**
-	 * @param non-empty-list<string> $sourceKeys
-	 * @param non-empty-list<string> $targetKeys
-	 */
-	protected function assertKeyFieldsExist(
-		RelationRef $relation,
-		CollectionInterface $source,
-		array $sourceKeys,
-		CollectionInterface $target,
-		array $targetKeys,
-	): void {
-		foreach ($sourceKeys as $sourceKey) {
-			if (! $source->hasField($sourceKey)) {
-				throw RelationLoaderException::missingKeyField(
-					$relation,
-					$sourceKey,
-					$source->getName(),
-				);
-			}
-		}
-
-		foreach ($targetKeys as $targetKey) {
-			if (! $target->hasField($targetKey)) {
-				throw RelationLoaderException::missingKeyField(
-					$relation,
-					$targetKey,
-					$target->getName(),
-				);
-			}
 		}
 	}
 

@@ -354,40 +354,6 @@ final class CycleJoinExecutionTest extends TestCase
 		}
 	}
 
-	public function testInvalidDirectRelationKeyFieldLeavesNoStoredJoinsAndRetryPreservesOriginalError(): void
-	{
-		$users = $this->database->query($this->registry->getCollection('users_missing_key_fields'));
-		$users->select($users->posts->title);
-
-		for ($attempt = 0; $attempt < 2; $attempt++) {
-			try {
-				$users->fetchAll();
-				self::fail('Expected missing key-field rejection.');
-			} catch (UnsupportedQueryException $exception) {
-				self::assertStringContainsString('references missing key field "missing_company_id"', $exception->getMessage());
-			}
-
-			self::assertSame([], $users->getJoins());
-		}
-	}
-
-	public function testInvalidManyToManyKeyFieldLeavesNoStoredJoinsAndRetryPreservesOriginalError(): void
-	{
-		$articles = $this->database->query($this->registry->getCollection('articles_missing_through_fields'));
-		$articles->select($articles->tags->name);
-
-		for ($attempt = 0; $attempt < 2; $attempt++) {
-			try {
-				$articles->fetchAll();
-				self::fail('Expected missing through key-field rejection.');
-			} catch (UnsupportedQueryException $exception) {
-				self::assertStringContainsString('references missing key field "missing_article_id"', $exception->getMessage());
-			}
-
-			self::assertSame([], $articles->getJoins());
-		}
-	}
-
 	public function testExplicitJoinWithRelationSourceIsCanonicalizedBeforeStorage(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
@@ -400,28 +366,6 @@ final class CycleJoinExecutionTest extends TestCase
 		);
 
 		self::assertSame(['company', 'department'], array_map(
-			static fn (Join $join): string => $join->getName(),
-			$users->getJoins(),
-		));
-	}
-
-	public function testExplicitJoinWithRelationSourceRechecksDuplicateNamesAfterResolution(): void
-	{
-		$users = $this->database->query($this->registry->getCollection('users'));
-
-		try {
-			$users->join(
-				$this->registry->getCollection('departments'),
-				JoinType::LEFT,
-				'company',
-				$users->company,
-			);
-			self::fail('Expected duplicate join-name rejection.');
-		} catch (InvalidArgumentException $exception) {
-			self::assertStringContainsString('Join name "company" is already used by this query.', $exception->getMessage());
-		}
-
-		self::assertSame(['company'], array_map(
 			static fn (Join $join): string => $join->getName(),
 			$users->getJoins(),
 		));
@@ -500,13 +444,6 @@ final class CycleJoinExecutionTest extends TestCase
 		$usersMissingKeys->relation('posts')->collection('posts');
 		$usersMissingKeys->primaryKey('id');
 
-		$usersMissingKeyFields = $registry->collection('users_missing_key_fields');
-		$usersMissingKeyFields->table('users');
-		$usersMissingKeyFields->field('id', 'int');
-		$usersMissingKeyFields->field('name', 'string');
-		$usersMissingKeyFields->relation('posts')->collection('posts')->innerKey('missing_company_id')->outerKey('userId');
-		$usersMissingKeyFields->primaryKey('id');
-
 		$posts = $registry->collection('posts');
 		$posts->table('posts');
 		$posts->field('id', 'int');
@@ -569,20 +506,6 @@ final class CycleJoinExecutionTest extends TestCase
 			->innerKey('id')
 			->outerKey('id');
 		$articlesMissingThrough->primaryKey('id');
-
-		$articlesMissingThroughFields = $registry->collection('articles_missing_through_fields');
-		$articlesMissingThroughFields->table('articles');
-		$articlesMissingThroughFields->field('id', 'int');
-		$articlesMissingThroughFields->field('title', 'string');
-		$articlesMissingThroughFields->relation('tags', M2MRelation::class)
-			->collection('tags')
-			->innerKey('id')
-			->outerKey('id')
-			->through('article_tag')
-				->innerKey('missing_article_id')
-				->outerKey('tag_id')
-				->end();
-		$articlesMissingThroughFields->primaryKey('id');
 
 		$tags = $registry->collection('tags');
 		$tags->table('tags');

@@ -924,7 +924,7 @@ final class QueryModelTest extends TestCase
 		self::assertSame($users->getJoins()[0], $join->getSource());
 	}
 
-	public function testExplicitJoinRechecksNameAvailabilityAfterRelationSourceResolution(): void
+	public function testExplicitJoinRejectsNameCreatedWhileResolvingRelationSource(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = query($registry->getCollection('users'));

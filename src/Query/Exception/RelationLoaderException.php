@@ -62,24 +62,6 @@ final class RelationLoaderException extends InvalidArgumentException
 		));
 	}
 
-	public static function relationKeyCountMismatch(RelationRef $relation): self
-	{
-		return new self(sprintf(
-			'Relation "%s" has mismatched key counts.',
-			implode('.', $relation->getPath()),
-		));
-	}
-
-	public static function missingKeyField(RelationRef $relation, string $fieldName, string $collectionName): self
-	{
-		return new self(sprintf(
-			'Relation "%s" references missing key field "%s" on collection "%s".',
-			implode('.', $relation->getPath()),
-			$fieldName,
-			$collectionName,
-		));
-	}
-
 	public static function loadingNotImplemented(RelationRef $relation): self
 	{
 		return new self(sprintf(

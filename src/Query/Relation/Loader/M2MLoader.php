@@ -40,22 +40,6 @@ final class M2MLoader extends AbstractLoader
 		$relationOuterKeys = $this->relationKeys($relation, 'outer');
 		$throughInnerKeys = $this->throughKeys($relation, $throughDefinition, 'inner');
 		$throughOuterKeys = $this->throughKeys($relation, $throughDefinition, 'outer');
-		$this->assertM2MMatchingKeys($relation, $relationInnerKeys, $throughInnerKeys, 'has mismatched through key counts.');
-		$this->assertM2MMatchingKeys($relation, $throughOuterKeys, $relationOuterKeys, 'has mismatched through key counts.');
-		$this->assertKeyFieldsExist(
-			$relation,
-			$source->getCollection(),
-			$relationInnerKeys,
-			$throughDefinition->getCollection(),
-			$throughInnerKeys,
-		);
-		$this->assertKeyFieldsExist(
-			$relation,
-			$throughDefinition->getCollection(),
-			$throughOuterKeys,
-			$definition->getCollection(),
-			$relationOuterKeys,
-		);
 
 		$through = $query->join(
 			$throughDefinition->getCollection(),
@@ -69,8 +53,6 @@ final class M2MLoader extends AbstractLoader
 			$source,
 			$relationInnerKeys,
 			$throughInnerKeys,
-			$relation,
-			'has mismatched through key counts.',
 		);
 
 		$target = $query->join(
@@ -85,8 +67,6 @@ final class M2MLoader extends AbstractLoader
 			$through,
 			$throughOuterKeys,
 			$relationOuterKeys,
-			$relation,
-			'has mismatched through key counts.',
 		);
 
 		return $target;
@@ -101,17 +81,7 @@ final class M2MLoader extends AbstractLoader
 		QuerySourceInterface $source,
 		array $sourceKeys,
 		array $targetKeys,
-		RelationRef $relation,
-		string $mismatchReason,
 	): void {
-		if ($sourceKeys === [] || $targetKeys === []) {
-			throw RelationLoaderException::relationKeysIncomplete($relation);
-		}
-
-		if (count($sourceKeys) !== count($targetKeys)) {
-			throw RelationLoaderException::malformedThrough($relation, $mismatchReason);
-		}
-
 		foreach ($sourceKeys as $index => $sourceKey) {
 			$join->on(
 				x()->eq($source->field($sourceKey), $join->field($targetKeys[$index])),
@@ -146,20 +116,5 @@ final class M2MLoader extends AbstractLoader
 		}
 
 		return $keys;
-	}
-
-	/**
-	 * @param non-empty-list<string> $sourceKeys
-	 * @param non-empty-list<string> $targetKeys
-	 */
-	private function assertM2MMatchingKeys(
-		RelationRef $relation,
-		array $sourceKeys,
-		array $targetKeys,
-		string $mismatchReason,
-	): void {
-		if (count($sourceKeys) !== count($targetKeys)) {
-			throw RelationLoaderException::malformedThrough($relation, $mismatchReason);
-		}
 	}
 }

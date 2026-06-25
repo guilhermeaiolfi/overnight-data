@@ -288,12 +288,11 @@ final class SelectQuery implements QuerySourceInterface
 			throw new InvalidArgumentException('Join name cannot be empty.');
 		}
 
-		$this->assertJoinNameAvailable($name);
-
 		if ($source instanceof RelationRef) {
 			$source = $source->getJoinedSource();
-			$this->assertJoinNameAvailable($name);
 		}
+
+		$this->assertJoinNameAvailable($name);
 
 		$join = new Join($this, $source, $collection, $type, $name);
 		$this->joins[] = $join;
