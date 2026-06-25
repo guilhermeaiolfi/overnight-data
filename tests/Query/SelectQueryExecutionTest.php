@@ -113,6 +113,7 @@ final class SelectQueryExecutionTest extends TestCase
 		self::assertSame($field, $query->id);
 		self::assertSame($star, $query->star());
 		self::assertSame($selections, $query->getSelections());
+		self::assertSame($selections->getAll(), $query->getSelections()->getAll());
 		self::assertSame($conditions, $query->getConditions());
 		self::assertSame($groups, $query->getGroups());
 		self::assertSame($having, $query->getHavingConditions());

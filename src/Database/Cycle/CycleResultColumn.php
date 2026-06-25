@@ -14,6 +14,7 @@ final class CycleResultColumn
 	public function __construct(
 		private readonly string $backendName,
 		private readonly string $logicalName,
+		private readonly bool $visible,
 		private readonly ?FieldInterface $field = null,
 	) {
 	}
@@ -26,6 +27,11 @@ final class CycleResultColumn
 	public function logicalName(): string
 	{
 		return $this->logicalName;
+	}
+
+	public function visible(): bool
+	{
+		return $this->visible;
 	}
 
 	public function field(): ?FieldInterface

@@ -40,6 +40,10 @@ final class CycleResultMapper
 				);
 			}
 
+			if (! $column->visible()) {
+				continue;
+			}
+
 			$mapped[$column->logicalName()] = $value;
 		}
 

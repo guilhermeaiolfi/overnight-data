@@ -39,6 +39,7 @@ use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Expression\ValueOperation;
 use ON\Data\Query\Expression\ValueOperationExpression;
+use ON\Data\Query\Selection\Selection;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\SortDirection;
 
@@ -95,23 +96,27 @@ final class CycleQueryTranslator
 	 */
 	private function translateSelections(SelectQuery $query, CycleTranslationContext $context, bool $root): array
 	{
-		$selections = $query->getSelections();
-		if ($root && $selections === []) {
-			throw UnsupportedQueryException::forQuery($query, 'root execution requires at least one selection');
+		$selections = $query->getSelections()->getAll();
+		if ($root && $query->getSelections()->getExplicit() === []) {
+			throw UnsupportedQueryException::forQuery($query, 'root execution requires at least one explicit selection');
 		}
 
 		$columns = [];
 		$resultColumns = [];
 		$logicalNames = [];
 
-		foreach ($selections as $selection) {
-			$aliased = $selection instanceof AliasedExpression;
-			$expression = $aliased ? $selection->getExpression() : $selection;
+		foreach ($selections as $index => $selection) {
+			$selectionExpression = $selection->getExpression();
+			$aliased = $selectionExpression instanceof AliasedExpression;
+			$expression = $aliased ? $selectionExpression->getExpression() : $selectionExpression;
 			$logicalName = null;
+			$backendName = null;
 			$field = $expression instanceof FieldRef ? $expression->getField() : null;
+			$visible = ! $root || $selection->isExplicit();
 
-			if ($root) {
+			if ($root && $selection->isExplicit()) {
 				$logicalName = $this->resolveRootResultName($query, $selection, $expression);
+				$backendName = $logicalName;
 
 				if (isset($logicalNames[$logicalName])) {
 					throw UnsupportedQueryException::forQuery($query, sprintf(
@@ -126,7 +131,12 @@ final class CycleQueryTranslator
 			$sql = $this->translateExpression($expression, $context);
 
 			if ($root || $aliased) {
-				$alias = $logicalName ?? $selection->getAlias();
+				if ($root && $selection->isImplicit()) {
+					$backendName = sprintf('__ondata_implicit_%d', $index);
+				}
+
+				$alias = $backendName ?? $selectionExpression->getAlias();
+
 				$columns[] = SqlFragment::withParameters(
 					$sql->sql() . ' AS ' . $this->quote($alias),
 					$sql->parameters(),
@@ -135,8 +145,13 @@ final class CycleQueryTranslator
 				$columns[] = $sql->toCycleFragment();
 			}
 
-			if ($root && $logicalName !== null) {
-				$resultColumns[] = new CycleResultColumn($logicalName, $logicalName, $field);
+			if ($root) {
+				$resultColumns[] = new CycleResultColumn(
+					$backendName ?? sprintf('__ondata_implicit_%d', $index),
+					$logicalName ?? sprintf('__ondata_implicit_%d', $index),
+					$visible,
+					$field,
+				);
 			}
 		}
 
@@ -145,11 +160,13 @@ final class CycleQueryTranslator
 
 	private function resolveRootResultName(
 		SelectQuery $query,
-		ValueExpressionInterface|AliasedExpression $selection,
+		Selection $selection,
 		ValueExpressionInterface $expression,
 	): string {
-		if ($selection instanceof AliasedExpression) {
-			return $selection->getAlias();
+		$selectionExpression = $selection->getExpression();
+
+		if ($selectionExpression instanceof AliasedExpression) {
+			return $selectionExpression->getAlias();
 		}
 
 		if ($expression instanceof FieldRef) {

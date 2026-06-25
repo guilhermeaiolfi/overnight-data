@@ -280,9 +280,55 @@ final class CycleQueryExecutionTest extends TestCase
 	public function testRootExecutionRequiresSelections(): void
 	{
 		$this->expectException(UnsupportedQueryException::class);
-		$this->expectExceptionMessage('root execution requires at least one selection');
+		$this->expectExceptionMessage('root execution requires at least one explicit selection');
 
 		$this->database->query($this->registry->getCollection('users'))->fetchAll();
+	}
+
+	public function testImplicitSelectionsAreIncludedInSqlButHiddenFromPublicRows(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name)
+			->require($users->id, 'relation-key')
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada'],
+			['name' => 'Grace'],
+			['name' => 'Linus'],
+		], $rows);
+	}
+
+	public function testExplicitSelectionsMayAlsoCarryInternalRequirementReasonsAndRemainVisible(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->id, $users->name)
+			->require($users->id, 'relation-key')
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['id' => 1, 'name' => 'Ada'],
+			['id' => 2, 'name' => 'Grace'],
+			['id' => 3, 'name' => 'Linus'],
+		], $rows);
+	}
+
+	public function testRootQueriesWithOnlyImplicitSelectionsAreRejected(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$this->expectException(UnsupportedQueryException::class);
+		$this->expectExceptionMessage('root execution requires at least one explicit selection');
+
+		$users
+			->require($users->id, 'relation-key')
+			->fetchAll();
 	}
 
 	public function testUnaliasedComputedRootSelectionsAreRejected(): void

@@ -33,6 +33,8 @@ use ON\Data\Query\Expression\ValueOperation;
 use ON\Data\Query\Expression\ValueOperationExpression;
 use ON\Data\Query\ExpressionFactory;
 use function ON\Data\Query\query;
+use ON\Data\Query\Selection\Selection;
+use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
 use ON\Data\Query\Sort\SortDirection;
@@ -112,20 +114,45 @@ final class QueryModelTest extends TestCase
 		$query->field('posts');
 	}
 
+	public function testAccessingFieldDoesNotCreateASelection(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$field = $query->name;
+
+		self::assertInstanceOf(FieldRef::class, $field);
+		self::assertCount(0, $query->getSelections());
+		self::assertSame([], $query->getSelections()->getAll());
+	}
+
+	public function testSelectCreatesAnExplicitSelectionUsingTheCachedFieldReference(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$field = $query->name;
+		$returned = $query->select($field);
+		$selections = $query->getSelections()->getAll();
+
+		self::assertSame($query, $returned);
+		self::assertCount(1, $selections);
+		self::assertInstanceOf(Selection::class, $selections[0]);
+		self::assertSame($field, $selections[0]->getExpression());
+		self::assertTrue($selections[0]->isExplicit());
+		self::assertSame([], $selections[0]->getReasons());
+	}
+
 	public function testSelectAppendsExpressionsPreservesOrderAndExposesAliases(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$firstReturn = $query->select($query->id);
 		$secondReturn = $query->select($query->title->as(' headline '));
-		$selections = $query->getSelections();
+		$selections = $query->getSelections()->getAll();
 
 		self::assertSame($query, $firstReturn);
 		self::assertSame($query, $secondReturn);
 		self::assertCount(2, $selections);
-		self::assertSame($query->id, $selections[0]);
-		self::assertInstanceOf(AliasedExpression::class, $selections[1]);
-		self::assertSame('headline', $selections[1]->getAlias());
-		self::assertSame($query->title, $selections[1]->getExpression());
+		self::assertSame($query->id, $selections[0]->getExpression());
+		self::assertInstanceOf(AliasedExpression::class, $selections[1]->getExpression());
+		self::assertSame('headline', $selections[1]->getExpression()->getAlias());
+		self::assertSame($query->title, $selections[1]->getExpression()->getExpression());
 	}
 
 	public function testSelectRejectsEmptyCalls(): void
@@ -148,6 +175,14 @@ final class QueryModelTest extends TestCase
 		self::assertSame([$first, $second], $query->getConditions());
 		self::assertInstanceOf(LogicalCondition::class, $query->getConditions()[1]);
 		self::assertSame(LogicalOperator::OR, $query->getConditions()[1]->getOperator());
+	}
+
+	public function testFieldUsedOnlyInWhereIsNotASelection(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$query->where(x()->eq($query->name, 'Ada'));
+
+		self::assertCount(0, $query->getSelections());
 	}
 
 	public function testWhereRejectsEmptyCalls(): void
@@ -740,7 +775,7 @@ final class QueryModelTest extends TestCase
 		self::assertSame($expression, $query->get('title'));
 		self::assertSame($expression, $query->get(' title '));
 		self::assertSame($query->get('title'), $query->get('title'));
-		self::assertFalse($query->getSelections()[0] instanceof AliasedExpression);
+		self::assertFalse($query->getSelections()->getAll()[0]->getExpression() instanceof AliasedExpression);
 
 		try {
 			$query->get('   ');
@@ -763,7 +798,7 @@ final class QueryModelTest extends TestCase
 		$existing = $query->name->upper();
 
 		$query->select($query->id, $existing->as('title'));
-		$beforeSelections = $query->getSelections();
+		$beforeSelections = $query->getSelections()->getAll();
 
 		try {
 			$query->select(
@@ -772,7 +807,7 @@ final class QueryModelTest extends TestCase
 			);
 			self::fail('Expected duplicate alias rejection within one select() call.');
 		} catch (InvalidArgumentException) {
-			self::assertSame($beforeSelections, $query->getSelections());
+			self::assertSame($beforeSelections, $query->getSelections()->getAll());
 			self::assertSame($existing, $query->get('title'));
 
 			try {
@@ -787,7 +822,7 @@ final class QueryModelTest extends TestCase
 			$query->select($query->email->as('title'));
 			self::fail('Expected duplicate alias rejection across select() calls.');
 		} catch (InvalidArgumentException) {
-			self::assertSame($beforeSelections, $query->getSelections());
+			self::assertSame($beforeSelections, $query->getSelections()->getAll());
 		}
 
 		$sameExpression = $query->name->upper();
@@ -842,15 +877,15 @@ final class QueryModelTest extends TestCase
 		$aliased = $posts->as('post_count');
 		$posts->select($posts->id->count());
 
-		$selections = $users->getSelections();
+		$selections = $users->getSelections()->getAll();
 
 		self::assertCount(2, $selections);
-		self::assertInstanceOf(SubqueryExpression::class, $selections[1]);
-		self::assertSame($posts, $selections[1]->getQuery());
+		self::assertInstanceOf(SubqueryExpression::class, $selections[1]->getExpression());
+		self::assertSame($posts, $selections[1]->getExpression()->getQuery());
 		self::assertInstanceOf(AliasedExpression::class, $aliased);
 		self::assertInstanceOf(SubqueryExpression::class, $aliased->getExpression());
 		self::assertSame($posts, $aliased->getExpression()->getQuery());
-		self::assertCount(1, $selections[1]->getQuery()->getSelections());
+		self::assertCount(1, $selections[1]->getExpression()->getQuery()->getSelections());
 		self::assertFalse(is_a($posts, ValueExpressionInterface::class));
 	}
 
@@ -893,7 +928,97 @@ final class QueryModelTest extends TestCase
 		self::assertFalse($exists->isNegated());
 		self::assertSame($posts, $notExists->getQuery());
 		self::assertTrue($notExists->isNegated());
-		self::assertSame([], $posts->getSelections());
+		self::assertSame([], $posts->getSelections()->getAll());
+	}
+
+	public function testComputedAndAliasedExpressionsAreStoredInsideSelections(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$computed = $query->name->upper();
+		$aliased = $computed->as('upper_name');
+
+		$query->select($computed, $aliased);
+		$selections = $query->getSelections()->getAll();
+
+		self::assertSame($computed, $selections[0]->getExpression());
+		self::assertSame($aliased, $selections[1]->getExpression());
+	}
+
+	public function testSelectionListInspectionApisExposeExplicitImplicitReasonAndFilteredEntries(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$query
+			->select($query->name, $query->email->as('mail'))
+			->require($query->id, 'relation-key')
+			->require($query->id, 'result-grouping-key');
+
+		$selections = $query->getSelections();
+
+		self::assertInstanceOf(SelectionList::class, $selections);
+		self::assertCount(2, $selections->getExplicit());
+		self::assertCount(1, $selections->getImplicit());
+		self::assertCount(1, $selections->getByReason('relation-key'));
+		self::assertCount(1, $selections->getFiltered(static fn (Selection $selection): bool => $selection->hasReason('result-grouping-key')));
+	}
+
+	public function testRequireCreatesAnImplicitSelectionAndAccumulatesUniqueReasons(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$query
+			->require($query->id, ' relation-key ')
+			->require($query->id, 'result-grouping-key')
+			->require($query->id, 'relation-key');
+
+		$selections = $query->getSelections()->getAll();
+
+		self::assertCount(1, $selections);
+		self::assertTrue($selections[0]->isImplicit());
+		self::assertSame(['relation-key', 'result-grouping-key'], $selections[0]->getReasons());
+	}
+
+	public function testRequireAfterSelectAnnotatesTheExistingExplicitEntry(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$query->select($query->id)->require($query->id, 'relation-key');
+
+		$selection = $query->getSelections()->getAll()[0];
+
+		self::assertTrue($selection->isExplicit());
+		self::assertTrue($selection->hasReason('relation-key'));
+	}
+
+	public function testSelectAfterRequirePromotesTheExistingEntryAndAnotherExplicitSelectMayStillDuplicateIt(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$query->require($query->id, 'relation-key');
+		$query->select($query->id);
+
+		$selections = $query->getSelections()->getAll();
+		self::assertCount(1, $selections);
+		self::assertTrue($selections[0]->isExplicit());
+		self::assertSame(['relation-key'], $selections[0]->getReasons());
+
+		$query->select($query->id);
+		$selections = $query->getSelections()->getAll();
+
+		self::assertCount(2, $selections);
+		self::assertSame($query->id, $selections[0]->getExpression());
+		self::assertSame($query->id, $selections[1]->getExpression());
+	}
+
+	public function testAliasedAndUnaliasedOccurrencesRemainDistinctAcrossSelectAndRequire(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$query
+			->select($query->id->as('user_id'))
+			->require($query->id, 'relation-key');
+
+		$selections = $query->getSelections()->getAll();
+
+		self::assertCount(2, $selections);
+		self::assertInstanceOf(AliasedExpression::class, $selections[0]->getExpression());
+		self::assertSame($query->id, $selections[1]->getExpression());
+		self::assertTrue($selections[1]->hasReason('relation-key'));
 	}
 
 	public function testInAndNotInSupportLiteralListsExpressionsAndSubqueries(): void

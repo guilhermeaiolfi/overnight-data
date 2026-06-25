@@ -17,6 +17,7 @@ use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
+use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Sort\Sort;
 
 final class SelectQuery
@@ -28,15 +29,7 @@ final class SelectQuery
 
 	private ?StarExpression $star = null;
 
-	/**
-	 * @var list<ValueExpressionInterface|AliasedExpression>
-	 */
-	private array $selections = [];
-
-	/**
-	 * @var array<string, ValueExpressionInterface>
-	 */
-	private array $namedExpressions = [];
+	private readonly SelectionList $selections;
 
 	/**
 	 * @var list<ConditionInterface>
@@ -66,6 +59,7 @@ final class SelectQuery
 		private readonly DefinitionInterface $source,
 		private ?QueryExecutorInterface $executor = null,
 	) {
+		$this->selections = new SelectionList();
 	}
 
 	public function getSource(): DefinitionInterface
@@ -128,29 +122,14 @@ final class SelectQuery
 			$expressions,
 		);
 
-		$incomingAliases = [];
-		$incomingExpressions = [];
+		$this->selections->addExplicit($normalized);
 
-		foreach ($normalized as $expression) {
-			if (! $expression instanceof AliasedExpression) {
-				continue;
-			}
+		return $this;
+	}
 
-			$alias = $expression->getAlias();
-
-			if (isset($this->namedExpressions[$alias]) || isset($incomingExpressions[$alias])) {
-				throw new InvalidArgumentException(sprintf("Query expression alias '%s' is already selected.", $alias));
-			}
-
-			$incomingAliases[] = $alias;
-			$incomingExpressions[$alias] = $expression->getExpression();
-		}
-
-		array_push($this->selections, ...$normalized);
-
-		foreach ($incomingAliases as $alias) {
-			$this->namedExpressions[$alias] = $incomingExpressions[$alias];
-		}
+	public function require(FieldRef $field, string $reason): self
+	{
+		$this->selections->require($field, $reason);
 
 		return $this;
 	}
@@ -221,10 +200,7 @@ final class SelectQuery
 		return $this;
 	}
 
-	/**
-	 * @return list<ValueExpressionInterface|AliasedExpression>
-	 */
-	public function getSelections(): array
+	public function getSelections(): SelectionList
 	{
 		return $this->selections;
 	}
@@ -237,11 +213,11 @@ final class SelectQuery
 			throw new InvalidArgumentException('SelectQuery::get() requires a non-empty expression name.');
 		}
 
-		if (! isset($this->namedExpressions[$name])) {
+		if (! $this->selections->hasNamedExpression($name)) {
 			throw UnknownQueryExpressionException::forQuery($name, $this->source->getName());
 		}
 
-		return $this->namedExpressions[$name];
+		return $this->selections->getNamedExpression($name);
 	}
 
 	/**
