@@ -217,32 +217,39 @@ final class CycleQueryTranslator
 		);
 	}
 
-	private function translateCondition(ConditionInterface $condition, CycleTranslationContext $context): SqlFragment
-	{
+	private function translateCondition(
+		ConditionInterface $condition,
+		CycleTranslationContext $context,
+		?Join $joinContext = null,
+	): SqlFragment {
 		return match (true) {
-			$condition instanceof ComparisonCondition => $this->translateComparison($condition, $context),
-			$condition instanceof NullCondition => $this->translateNullCondition($condition, $context),
-			$condition instanceof LogicalCondition => $this->translateLogical($condition, $context),
+			$condition instanceof ComparisonCondition => $this->translateComparison($condition, $context, $joinContext),
+			$condition instanceof NullCondition => $this->translateNullCondition($condition, $context, $joinContext),
+			$condition instanceof LogicalCondition => $this->translateLogical($condition, $context, $joinContext),
 			$condition instanceof NotCondition => $this->wrapSql(
 				'NOT (%s)',
-				[$this->translateCondition($condition->getCondition(), $context)],
+				[$this->translateCondition($condition->getCondition(), $context, $joinContext)],
 			),
-			$condition instanceof InCondition => $this->translateIn($condition, $context),
+			$condition instanceof InCondition => $this->translateIn($condition, $context, $joinContext),
 			$condition instanceof ExistsCondition => $this->translateExists($condition, $context),
 			default => throw UnsupportedQueryException::forQuery($context->root(), 'unknown condition type'),
 		};
 	}
 
-	private function translateComparison(ComparisonCondition $condition, CycleTranslationContext $context): SqlFragment
-	{
+	private function translateComparison(
+		ComparisonCondition $condition,
+		CycleTranslationContext $context,
+		?Join $joinContext = null,
+	): SqlFragment {
 		$left = $condition->getLeft();
 		$right = $condition->getRight();
 
-		$leftSql = $this->translateExpression($left, $context);
+		$leftSql = $this->translateExpression($left, $context, null, $joinContext);
 		$rightSql = $this->translateExpression(
 			$right,
 			$context,
 			$left instanceof FieldRef && $right instanceof LiteralExpression ? $left->getField() : null,
+			$joinContext,
 		);
 
 		return $this->wrapSql(
@@ -262,11 +269,14 @@ final class CycleQueryTranslator
 		);
 	}
 
-	private function translateLogical(LogicalCondition $condition, CycleTranslationContext $context): SqlFragment
-	{
+	private function translateLogical(
+		LogicalCondition $condition,
+		CycleTranslationContext $context,
+		?Join $joinContext = null,
+	): SqlFragment {
 		$operator = $condition->getOperator() === LogicalOperator::AND ? ' AND ' : ' OR ';
 		$parts = array_map(
-			fn (ConditionInterface $nested): SqlFragment => $this->translateCondition($nested, $context),
+			fn (ConditionInterface $nested): SqlFragment => $this->translateCondition($nested, $context, $joinContext),
 			$condition->getConditions(),
 		);
 
@@ -278,9 +288,12 @@ final class CycleQueryTranslator
 		return SqlFragment::withParameters($sql, $this->mergeParameters($parts));
 	}
 
-	private function translateNullCondition(NullCondition $condition, CycleTranslationContext $context): SqlFragment
-	{
-		$expression = $this->translateExpression($condition->getExpression(), $context);
+	private function translateNullCondition(
+		NullCondition $condition,
+		CycleTranslationContext $context,
+		?Join $joinContext = null,
+	): SqlFragment {
+		$expression = $this->translateExpression($condition->getExpression(), $context, null, $joinContext);
 
 		return SqlFragment::withParameters(
 			sprintf(
@@ -292,9 +305,12 @@ final class CycleQueryTranslator
 		);
 	}
 
-	private function translateIn(InCondition $condition, CycleTranslationContext $context): SqlFragment
-	{
-		$expression = $this->translateExpression($condition->getExpression(), $context);
+	private function translateIn(
+		InCondition $condition,
+		CycleTranslationContext $context,
+		?Join $joinContext = null,
+	): SqlFragment {
+		$expression = $this->translateExpression($condition->getExpression(), $context, null, $joinContext);
 		$operator = $condition->isNegated() ? 'NOT IN' : 'IN';
 
 		if ($condition->getSet() instanceof SubqueryExpression) {
@@ -312,6 +328,7 @@ final class CycleQueryTranslator
 				$item,
 				$context,
 				$field !== null && $item instanceof LiteralExpression ? $field : null,
+				$joinContext,
 			),
 			$condition->getSet(),
 		);
@@ -344,19 +361,23 @@ final class CycleQueryTranslator
 		ValueExpressionInterface $expression,
 		CycleTranslationContext $context,
 		?FieldInterface $literalFieldContext = null,
+		?Join $joinContext = null,
 	): SqlFragment {
 		return match (true) {
-			$expression instanceof FieldRef => $this->translateFieldRef($expression, $context),
+			$expression instanceof FieldRef => $this->translateFieldRef($expression, $context, $joinContext),
 			$expression instanceof LiteralExpression => $this->translateLiteral($expression, $literalFieldContext),
-			$expression instanceof AggregateExpression => $this->translateAggregate($expression, $context),
-			$expression instanceof ValueOperationExpression => $this->translateValueOperation($expression, $context),
+			$expression instanceof AggregateExpression => $this->translateAggregate($expression, $context, $joinContext),
+			$expression instanceof ValueOperationExpression => $this->translateValueOperation($expression, $context, $joinContext),
 			$expression instanceof SubqueryExpression => $this->compileNestedQuery($expression->getQuery(), $context, QueryUsage::SCALAR_SUBQUERY),
 			default => throw UnsupportedQueryException::forQuery($context->root(), 'unknown value expression type'),
 		};
 	}
 
-	private function translateFieldRef(FieldRef $field, CycleTranslationContext $context): SqlFragment
-	{
+	private function translateFieldRef(
+		FieldRef $field,
+		CycleTranslationContext $context,
+		?Join $joinContext = null,
+	): SqlFragment {
 		$context->assertAccessible($field);
 		$query = $field->getQuery();
 
@@ -368,7 +389,7 @@ final class CycleQueryTranslator
 		}
 
 		try {
-			$source = $this->resolveFieldSource($field->getSource());
+			$source = $this->resolveFieldSource($field->getSource(), $context->root(), $joinContext);
 		} catch (RelationLoaderException $exception) {
 			throw UnsupportedQueryException::forQuery($context->root(), $exception->getMessage());
 		}
@@ -394,13 +415,16 @@ final class CycleQueryTranslator
 		return SqlFragment::withParameters('?', [new Parameter($value)]);
 	}
 
-	private function translateAggregate(AggregateExpression $expression, CycleTranslationContext $context): SqlFragment
-	{
+	private function translateAggregate(
+		AggregateExpression $expression,
+		CycleTranslationContext $context,
+		?Join $joinContext = null,
+	): SqlFragment {
 		if ($expression->getExpression() instanceof StarExpression) {
 			return SqlFragment::raw('COUNT(*)');
 		}
 
-		$inner = $this->translateExpression($expression->getExpression(), $context);
+		$inner = $this->translateExpression($expression->getExpression(), $context, null, $joinContext);
 
 		$sql = match ($expression->getFunction()) {
 			AggregateFunction::COUNT => $expression->getExpression() instanceof StarExpression
@@ -413,10 +437,13 @@ final class CycleQueryTranslator
 		return SqlFragment::withParameters($sql, $inner->parameters());
 	}
 
-	private function translateValueOperation(ValueOperationExpression $expression, CycleTranslationContext $context): SqlFragment
-	{
+	private function translateValueOperation(
+		ValueOperationExpression $expression,
+		CycleTranslationContext $context,
+		?Join $joinContext = null,
+	): SqlFragment {
 		$arguments = array_map(
-			fn (ValueExpressionInterface $argument): SqlFragment => $this->translateExpression($argument, $context),
+			fn (ValueExpressionInterface $argument): SqlFragment => $this->translateExpression($argument, $context, null, $joinContext),
 			$expression->getArguments(),
 		);
 		$sqlArguments = array_map(static fn (SqlFragment $argument): string => $argument->sql(), $arguments);
@@ -544,7 +571,7 @@ final class CycleQueryTranslator
 		}
 
 		$fragments = array_map(
-			fn (ConditionInterface $condition): SqlFragment => $this->translateCondition($condition, $context),
+			fn (ConditionInterface $condition): SqlFragment => $this->translateCondition($condition, $context, $join),
 			$conditions,
 		);
 
@@ -557,11 +584,38 @@ final class CycleQueryTranslator
 		);
 	}
 
-	private function resolveFieldSource(QuerySourceInterface $source): QuerySourceInterface
-	{
-		return $source instanceof RelationRef
-			? $source->getJoinedSource()
-			: $source;
+	private function resolveFieldSource(
+		QuerySourceInterface $source,
+		SelectQuery $query,
+		?Join $joinContext = null,
+	): QuerySourceInterface {
+		if (! $source instanceof RelationRef) {
+			return $source;
+		}
+
+		if ($joinContext === null) {
+			return $source->getJoinedSource();
+		}
+
+		$path = implode('.', $source->getPath());
+		$declaredPath = $joinContext->getDeclaredRelationSourcePath();
+
+		if ($declaredPath !== null && $path === $declaredPath) {
+			return $joinContext->getSource();
+		}
+
+		if ($source->hasJoinedSource()) {
+			return $source->getJoinedSource();
+		}
+
+		throw UnsupportedQueryException::forQuery(
+			$query,
+			sprintf(
+				'Join "%s" cannot use unresolved relation path "%s" inside ON conditions.',
+				$joinContext->getName(),
+				$path,
+			),
+		);
 	}
 
 	/**

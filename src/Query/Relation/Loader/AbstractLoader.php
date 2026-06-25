@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation\Loader;
 
+use LogicException;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
@@ -31,8 +32,8 @@ abstract class AbstractLoader implements LoaderInterface
 		$this->addKeyConditions(
 			$join,
 			$source,
-			$definition->innerKeys(),
-			$definition->outerKeys(),
+			$this->relationKeys($relation, 'inner'),
+			$this->relationKeys($relation, 'outer'),
 			$relation,
 		);
 
@@ -88,5 +89,25 @@ abstract class AbstractLoader implements LoaderInterface
 				x()->eq($source->field($sourceKey), $join->field($targetKeys[$index])),
 			);
 		}
+	}
+
+	/**
+	 * @return non-empty-list<string>
+	 */
+	protected function relationKeys(RelationRef $relation, string $side): array
+	{
+		try {
+			$keys = $side === 'inner'
+				? $relation->getRelation()->innerKeys()
+				: $relation->getRelation()->outerKeys();
+		} catch (LogicException) {
+			throw RelationLoaderException::relationKeysIncomplete($relation);
+		}
+
+		if ($keys === []) {
+			throw RelationLoaderException::relationKeysIncomplete($relation);
+		}
+
+		return $keys;
 	}
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
+use ArgumentCountError;
+use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
@@ -15,6 +17,8 @@ use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\SelectQuery;
+use ReflectionClass;
+use ReflectionException;
 
 final class RelationRef implements QuerySourceInterface
 {
@@ -63,6 +67,11 @@ final class RelationRef implements QuerySourceInterface
 	public function getJoinedSource(): QuerySourceInterface
 	{
 		return $this->joinedSource ??= $this->getLoader()->join($this);
+	}
+
+	public function hasJoinedSource(): bool
+	{
+		return $this->joinedSource !== null;
 	}
 
 	public function getCollection(): CollectionInterface
@@ -143,6 +152,30 @@ final class RelationRef implements QuerySourceInterface
 			throw RelationLoaderException::invalidLoader($this, $loader);
 		}
 
-		return $this->loader = new $loader();
+		try {
+			$reflection = new ReflectionClass($loader);
+
+			if (! $reflection->isInstantiable()) {
+				throw RelationLoaderException::invalidLoaderClass($this, $loader, 'class is not instantiable.');
+			}
+
+			$constructor = $reflection->getConstructor();
+
+			if ($constructor !== null && $constructor->getNumberOfRequiredParameters() > 0) {
+				throw RelationLoaderException::invalidLoaderClass(
+					$this,
+					$loader,
+					'constructor must not require arguments.',
+				);
+			}
+
+			$instance = $reflection->newInstance();
+		} catch (RelationLoaderException $exception) {
+			throw $exception;
+		} catch (LogicException|ReflectionException|ArgumentCountError $exception) {
+			throw RelationLoaderException::invalidLoaderClass($this, $loader, $exception->getMessage());
+		}
+
+		return $this->loader = $instance;
 	}
 }

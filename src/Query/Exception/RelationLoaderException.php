@@ -20,6 +20,16 @@ final class RelationLoaderException extends InvalidArgumentException
 		));
 	}
 
+	public static function invalidLoaderClass(RelationRef $relation, string $loader, string $reason): self
+	{
+		return new self(sprintf(
+			'Relation "%s" has invalid loader "%s": %s',
+			implode('.', $relation->getPath()),
+			$loader,
+			$reason,
+		));
+	}
+
 	public static function nestedJoinNotSupported(RelationRef $relation): self
 	{
 		return new self(sprintf(

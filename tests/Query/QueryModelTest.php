@@ -33,6 +33,7 @@ use ON\Data\Query\Expression\ValueOperation;
 use ON\Data\Query\Expression\ValueOperationExpression;
 use ON\Data\Query\ExpressionFactory;
 use function ON\Data\Query\query;
+use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Selection\Selection;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\SelectQuery;
@@ -41,7 +42,9 @@ use ON\Data\Query\Sort\SortDirection;
 use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\Fixture\AbstractTestLoader;
 use Tests\ON\Data\Fixture\CustomRelation;
+use Tests\ON\Data\Fixture\RequiredCtorLoader;
 use TypeError;
 
 final class QueryModelTest extends TestCase
@@ -895,6 +898,63 @@ final class QueryModelTest extends TestCase
 		self::assertFalse(is_a($posts, ValueExpressionInterface::class));
 	}
 
+	public function testExplicitJoinRejectsSourceFromAnotherQuery(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+		$other = query($registry->getCollection('users'));
+
+		$this->expectException(InvalidArgumentException::class);
+		$this->expectExceptionMessage('belongs to a different SelectQuery');
+
+		$users->join($registry->getCollection('posts'), source: $other);
+	}
+
+	public function testExplicitJoinCanonicalizesRelationSourceBeforeStorage(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+		$users->posts->getJoinedSource();
+
+		$join = $users->join($registry->getCollection('posts'), source: $users->posts, name: 'post_copy');
+
+		self::assertCount(2, $users->getJoins());
+		self::assertSame('posts', $users->getJoins()[0]->getName());
+		self::assertSame('post_copy', $users->getJoins()[1]->getName());
+		self::assertSame($users->getJoins()[0], $join->getSource());
+	}
+
+	public function testRelationLoaderRejectsAbstractAndArgumentfulClasses(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+		$users->getCollection()->getRelation('posts')?->loader(AbstractTestLoader::class);
+
+		try {
+			$users->posts->getLoader();
+			self::fail('Expected abstract loader rejection.');
+		} catch (InvalidArgumentException $exception) {
+			self::assertStringContainsString('not instantiable', $exception->getMessage());
+		}
+
+		$usersWithCtor = query($registry->getCollection('users'));
+		$usersWithCtor->getCollection()->getRelation('posts')?->loader(RequiredCtorLoader::class);
+
+		$this->expectException(InvalidArgumentException::class);
+		$this->expectExceptionMessage('constructor must not require arguments');
+		$usersWithCtor->posts->getLoader();
+	}
+
+	public function testRelationLoaderLoadIsReservedAndNotImplemented(): void
+	{
+		$users = query($this->makeRegistry()->getCollection('users'));
+
+		$this->expectException(InvalidArgumentException::class);
+		$this->expectExceptionMessage('Relation loading is not implemented for relation "posts".');
+
+		$users->posts->getLoader()->load($users->posts, new LoadRuntime());
+	}
+
 	public function testCorrelatedReferencesRetainTheirOwningQueries(): void
 	{
 		$registry = $this->makeRegistry();
@@ -1181,7 +1241,10 @@ final class QueryModelTest extends TestCase
 		$users->field('deletedAt', 'datetime');
 		$users->field('createdAt', 'datetime');
 		$users->field('updatedAt', 'datetime');
-		$users->relation('posts', CustomRelation::class);
+		$users->relation('posts', CustomRelation::class)
+			->collection('posts')
+			->innerKey('id')
+			->outerKey('userId');
 
 		$posts = $registry->collection('posts');
 		$posts->field('id', 'int');

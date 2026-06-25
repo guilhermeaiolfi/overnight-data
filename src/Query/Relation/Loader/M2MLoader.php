@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation\Loader;
 
+use LogicException;
 use ON\Data\Definition\Relation\M2MRelation;
+use ON\Data\Definition\Relation\M2MThrough;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
@@ -25,7 +27,7 @@ final class M2MLoader extends AbstractLoader
 			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');
 		}
 
-		$throughDefinition = $definition->getThrough();
+		$throughDefinition = $this->throughDefinition($relation, $definition);
 
 		if ($throughDefinition->getWhere() !== []) {
 			throw RelationLoaderException::throughWhereNotSupported($relation);
@@ -44,8 +46,8 @@ final class M2MLoader extends AbstractLoader
 		$this->addM2MConditions(
 			$through,
 			$source,
-			$definition->innerKeys(),
-			$throughDefinition->throughInnerKeys(),
+			$this->relationKeys($relation, 'inner'),
+			$this->throughKeys($relation, $throughDefinition, 'inner'),
 			$relation,
 			'has mismatched through key counts.',
 		);
@@ -60,8 +62,8 @@ final class M2MLoader extends AbstractLoader
 		$this->addM2MConditions(
 			$target,
 			$through,
-			$throughDefinition->throughOuterKeys(),
-			$definition->outerKeys(),
+			$this->throughKeys($relation, $throughDefinition, 'outer'),
+			$this->relationKeys($relation, 'outer'),
 			$relation,
 			'has mismatched through key counts.',
 		);
@@ -94,5 +96,34 @@ final class M2MLoader extends AbstractLoader
 				x()->eq($source->field($sourceKey), $join->field($targetKeys[$index])),
 			);
 		}
+	}
+
+	private function throughDefinition(RelationRef $relation, M2MRelation $definition): M2MThrough
+	{
+		try {
+			return $definition->getThrough();
+		} catch (LogicException) {
+			throw RelationLoaderException::missingThrough($relation);
+		}
+	}
+
+	/**
+	 * @return non-empty-list<string>
+	 */
+	private function throughKeys(RelationRef $relation, M2MThrough $throughDefinition, string $side): array
+	{
+		try {
+			$keys = $side === 'inner'
+				? $throughDefinition->throughInnerKeys()
+				: $throughDefinition->throughOuterKeys();
+		} catch (LogicException) {
+			throw RelationLoaderException::relationKeysIncomplete($relation);
+		}
+
+		if ($keys === []) {
+			throw RelationLoaderException::relationKeysIncomplete($relation);
+		}
+
+		return $keys;
 	}
 }
