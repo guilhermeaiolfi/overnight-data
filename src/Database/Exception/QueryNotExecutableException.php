@@ -13,7 +13,7 @@ final class QueryNotExecutableException extends LogicException
 	{
 		return new self(sprintf(
 			"Query for definition '%s' is not executable because no executor is bound.",
-			$query->getSource()->getName(),
+			$query->getCollection()->getName(),
 		));
 	}
 }

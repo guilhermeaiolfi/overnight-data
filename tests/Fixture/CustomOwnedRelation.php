@@ -13,6 +13,8 @@ use ON\Data\Definition\Interface\InterfaceTrait;
 use ON\Data\Definition\Internal\DefinitionFactory;
 use ON\Data\Definition\MetadataTrait;
 use ON\Data\Definition\Relation\RelationInterface;
+use ON\Data\Query\Relation\Loader\HasManyLoader;
+use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Support\DefinitionNode;
 
 final class CustomOwnedRelation extends DefinitionNode implements RelationInterface
@@ -35,7 +37,7 @@ final class CustomOwnedRelation extends DefinitionNode implements RelationInterf
 			'outer_keys' => [],
 			'where' => [],
 			'orderBy' => [],
-			'loader' => null,
+			'loader' => HasManyLoader::class,
 			'metadata' => [],
 			'options' => null,
 		];
@@ -162,16 +164,28 @@ final class CustomOwnedRelation extends DefinitionNode implements RelationInterf
 
 	public function loader(string $loader): self
 	{
+		if (! is_a($loader, LoaderInterface::class, true)) {
+			throw new LogicException(sprintf('Relation "%s" loader must implement %s.', $this->getName(), LoaderInterface::class));
+		}
+
 		$this->set('loader', $loader);
 
 		return $this;
 	}
 
-	public function getLoader(): ?string
+	public function getLoader(): string
 	{
 		$loader = $this->get('loader');
 
-		return is_string($loader) ? $loader : null;
+		if (! is_string($loader) || $loader === '') {
+			throw new LogicException(sprintf('Relation "%s" does not define a loader.', $this->getName()));
+		}
+
+		if (! is_a($loader, LoaderInterface::class, true)) {
+			throw new LogicException(sprintf('Relation "%s" loader must implement %s.', $this->getName(), LoaderInterface::class));
+		}
+
+		return $loader;
 	}
 
 	public function where(array $where): self

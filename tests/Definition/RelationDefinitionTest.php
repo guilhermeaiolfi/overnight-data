@@ -12,7 +12,13 @@ use ON\Data\Definition\Relation\FirstOfManyRelation;
 use ON\Data\Definition\Relation\HasManyRelation;
 use ON\Data\Definition\Relation\HasOneRelation;
 use ON\Data\Definition\Relation\M2MRelation;
+use ON\Data\Query\Relation\Loader\BelongsToLoader;
+use ON\Data\Query\Relation\Loader\FirstOfManyLoader;
+use ON\Data\Query\Relation\Loader\HasManyLoader;
+use ON\Data\Query\Relation\Loader\HasOneLoader;
+use ON\Data\Query\Relation\Loader\M2MLoader;
 use PHPUnit\Framework\TestCase;
+use stdClass;
 use Tests\ON\Data\Fixture\CustomRelation;
 
 final class RelationDefinitionTest extends TestCase
@@ -158,5 +164,45 @@ final class RelationDefinitionTest extends TestCase
 
 		self::assertSame('single', $relation->getCardinality());
 		self::assertFalse($relation->isJunction());
+	}
+
+	public function testBuiltInRelationsDeclareOnDataLoaderDefaults(): void
+	{
+		$registry = new Registry();
+		$registry->collection('users')->primaryKey('id')->field('id', 'int')->end()->end();
+		$registry->collection('posts')->primaryKey('id')->field('id', 'int')->end()->field('userId', 'int')->end()->end();
+		$registry->collection('article_tag')->field('article_id', 'int')->end()->field('tag_id', 'int')->end()->end();
+		$registry->collection('tags')->primaryKey('id')->field('id', 'int')->end()->end();
+
+		self::assertSame(
+			HasOneLoader::class,
+			$registry->getCollection('users')?->relation('profile', HasOneRelation::class)->collection('posts')->getLoader(),
+		);
+		self::assertSame(
+			BelongsToLoader::class,
+			$registry->getCollection('posts')?->relation('author', BelongsToRelation::class)->collection('users')->getLoader(),
+		);
+		self::assertSame(
+			HasManyLoader::class,
+			$registry->getCollection('users')?->relation('posts', HasManyRelation::class)->collection('posts')->getLoader(),
+		);
+		self::assertSame(
+			FirstOfManyLoader::class,
+			$registry->getCollection('users')?->relation('latestPost', FirstOfManyRelation::class)->collection('posts')->getLoader(),
+		);
+		self::assertSame(
+			M2MLoader::class,
+			$registry->getCollection('users')?->relation('tags', M2MRelation::class)->collection('tags')->getLoader(),
+		);
+	}
+
+	public function testInvalidLoaderIsRejected(): void
+	{
+		$relation = (new Registry())->collection('users')->relation('posts', CustomRelation::class);
+
+		$this->expectException(InvalidArgumentException::class);
+		$this->expectExceptionMessage('loader must implement');
+
+		$relation->loader(stdClass::class);
 	}
 }

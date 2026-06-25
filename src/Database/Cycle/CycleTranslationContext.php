@@ -7,6 +7,7 @@ namespace ON\Data\Database\Cycle;
 use Cycle\Database\Driver\CompilerInterface;
 use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
 
 /**
@@ -20,11 +21,16 @@ final class CycleTranslationContext
 	private array $aliases = [];
 
 	/**
+	 * @var array<int, int>
+	 */
+	private array $nextJoinAlias = [];
+
+	private int $nextQueryAlias = 0;
+
+	/**
 	 * @var list<int>
 	 */
 	private array $stack = [];
-
-	private int $nextAlias = 0;
 
 	public function __construct(
 		private readonly SelectQuery $root,
@@ -42,11 +48,23 @@ final class CycleTranslationContext
 		return $this->compiler;
 	}
 
-	public function aliasFor(SelectQuery $query): string
+	public function aliasFor(QuerySourceInterface $source): string
 	{
-		$id = spl_object_id($query);
+		$id = spl_object_id($source);
 
-		return $this->aliases[$id] ??= 'q' . $this->nextAlias++;
+		if (isset($this->aliases[$id])) {
+			return $this->aliases[$id];
+		}
+
+		if ($source instanceof SelectQuery) {
+			return $this->aliases[$id] = 'q' . $this->nextQueryAlias++;
+		}
+
+		$queryId = spl_object_id($source->getQuery());
+		$next = $this->nextJoinAlias[$queryId] ?? 0;
+		$this->nextJoinAlias[$queryId] = $next + 1;
+
+		return $this->aliases[$id] = 'j' . $next;
 	}
 
 	/**
@@ -63,7 +81,10 @@ final class CycleTranslationContext
 			);
 		}
 
-		$this->stack[] = spl_object_id($query);
+		$id = spl_object_id($query);
+		$this->stack[] = $id;
+		$this->aliases[$id] ??= 'q' . $this->nextQueryAlias++;
+		$this->nextJoinAlias[$id] ??= 0;
 
 		try {
 			return $callback();

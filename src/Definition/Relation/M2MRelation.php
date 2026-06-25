@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Relation;
 
+use LogicException;
 use ON\Data\Definition\Internal\DefinitionFactory;
+use ON\Data\Query\Relation\Loader\M2MLoader;
 
 class M2MRelation extends AbstractRelation
 {
@@ -15,7 +17,17 @@ class M2MRelation extends AbstractRelation
 		return array_replace(parent::definitionDefaults(), [
 			'collection_factory' => '',
 			'through' => null,
+			'loader' => M2MLoader::class,
 		]);
+	}
+
+	public function getThrough(): M2MThrough
+	{
+		return $this->through ??= $this->restoreThrough()
+			?? throw new LogicException(sprintf(
+				'Relation "%s" is missing through metadata.',
+				$this->getName(),
+			));
 	}
 
 	public function getCardinality(): string

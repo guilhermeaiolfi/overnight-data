@@ -6,6 +6,7 @@ namespace ON\Data\Definition\Relation;
 
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Field\FieldInterface;
+use ON\Data\Query\Relation\Loader\HasOneLoader;
 
 class HasOneRelation extends AbstractRelation
 {
@@ -13,6 +14,7 @@ class HasOneRelation extends AbstractRelation
 	{
 		return array_replace(parent::definitionDefaults(), [
 			'exclusive' => false,
+			'loader' => HasOneLoader::class,
 		]);
 	}
 
@@ -62,11 +64,6 @@ class HasOneRelation extends AbstractRelation
 			->type($type);
 
 		return $field;
-	}
-
-	public function getLoader(): ?string
-	{
-		return parent::getLoader();
 	}
 
 	protected function initializeRuntimeState(): void

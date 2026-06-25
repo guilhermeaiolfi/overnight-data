@@ -5,31 +5,30 @@ declare(strict_types=1);
 namespace ON\Data\Query\Expression;
 
 use ON\Data\Definition\Field\FieldInterface;
-use ON\Data\Query\Relation\RelationRef;
+use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
 
 final class FieldRef extends AbstractAggregateableExpression
 {
 	public function __construct(
-		private readonly SelectQuery $query,
+		private readonly QuerySourceInterface $source,
 		private readonly FieldInterface $field,
-		private readonly ?RelationRef $relation = null,
 	) {
+	}
+
+	public function getSource(): QuerySourceInterface
+	{
+		return $this->source;
 	}
 
 	public function getQuery(): SelectQuery
 	{
-		return $this->query;
+		return $this->source->getQuery();
 	}
 
 	public function getField(): FieldInterface
 	{
 		return $this->field;
-	}
-
-	public function getRelation(): ?RelationRef
-	{
-		return $this->relation;
 	}
 
 	public function getName(): string
@@ -42,9 +41,9 @@ final class FieldRef extends AbstractAggregateableExpression
 	 */
 	public function getPath(): array
 	{
-		$path = $this->relation?->getPath() ?? [];
-		$path[] = $this->getName();
-
-		return $path;
+		return [
+			...$this->source->getPath(),
+			$this->getName(),
+		];
 	}
 }

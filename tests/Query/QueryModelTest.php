@@ -9,7 +9,6 @@ use Error;
 use InvalidArgumentException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\Definition\View\ViewDefinitionInterface;
 use ON\Data\Query\Condition\ComparisonCondition;
 use ON\Data\Query\Condition\ComparisonOperator;
 use ON\Data\Query\Condition\ExistsCondition;
@@ -51,17 +50,13 @@ final class QueryModelTest extends TestCase
 	{
 		$registry = $this->makeRegistry();
 		$collection = $registry->getCollection('users');
-		$view = $registry->getView('user_summary');
 
 		self::assertInstanceOf(CollectionInterface::class, $collection);
-		self::assertInstanceOf(ViewDefinitionInterface::class, $view);
 
 		$collectionQuery = query($collection);
-		$viewQuery = query($view);
 
 		self::assertInstanceOf(SelectQuery::class, $collectionQuery);
-		self::assertSame($collection, $collectionQuery->getSource());
-		self::assertSame($view, $viewQuery->getSource());
+		self::assertSame($collection, $collectionQuery->getCollection());
 
 		$callbackResult = query($collection, function (SelectQuery $query): string {
 			$query->select($query->id);
@@ -75,11 +70,11 @@ final class QueryModelTest extends TestCase
 
 		$arrowResult = query($collection, fn (SelectQuery $query) => $query->select($query->title));
 
-		self::assertSame($collection, $callbackResult->getSource());
+		self::assertSame($collection, $callbackResult->getCollection());
 		self::assertCount(1, $callbackResult->getSelections());
-		self::assertSame($collection, $voidResult->getSource());
+		self::assertSame($collection, $voidResult->getCollection());
 		self::assertCount(1, $voidResult->getConditions());
-		self::assertSame($collection, $arrowResult->getSource());
+		self::assertSame($collection, $arrowResult->getCollection());
 		self::assertCount(1, $arrowResult->getSelections());
 	}
 

@@ -386,16 +386,20 @@ final class CycleQueryExecutionTest extends TestCase
 			->fetchAll();
 	}
 
-	public function testRelatedFieldTranslationIsRejectedExplicitly(): void
+	public function testRelatedFieldSelectionUsesAutomaticFlatJoin(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
-		$this->expectException(UnsupportedQueryException::class);
-		$this->expectExceptionMessage('posts.title');
-
-		$users
-			->select($users->posts->title)
+		$rows = $users
+			->select($users->id, $users->posts->title)
+			->orderBy($users->id->asc(), $users->posts->title->asc())
 			->fetchAll();
+
+		self::assertSame([
+			['id' => 1, 'posts.title' => 'Hello'],
+			['id' => 1, 'posts.title' => 'World'],
+			['id' => 2, 'posts.title' => 'Graph'],
+		], $rows);
 	}
 
 	public function testNestedRelatedExpressionTranslationIsRejectedExplicitly(): void
@@ -403,12 +407,28 @@ final class CycleQueryExecutionTest extends TestCase
 		$users = $this->database->query($this->registry->getCollection('users'));
 
 		$this->expectException(UnsupportedQueryException::class);
-		$this->expectExceptionMessage('posts.title');
+		$this->expectExceptionMessage('posts.author');
 
 		$users
 			->select($users->id)
-			->where(x()->eq($users->posts->title->upper(), 'HELLO'))
+			->where(x()->eq($users->posts->author->name, 'Ada'))
 			->fetchAll();
+	}
+
+	public function testRelatedFieldInWhereUsesAutomaticJoin(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->posts->title)
+			->where(x()->eq($users->posts->published, true))
+			->orderBy($users->posts->title->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['posts.title' => 'Graph'],
+			['posts.title' => 'Hello'],
+		], $rows);
 	}
 
 	public function testCyclicQueryGraphsAreRejected(): void
@@ -505,7 +525,10 @@ final class CycleQueryExecutionTest extends TestCase
 		$users->field('profile', 'json')->column('profile_json')->nullable(true);
 		$users->field('nickname', 'string')->nullable(true);
 		$users->field('score', 'int');
-		$users->relation('posts', CustomRelation::class)->collection('posts');
+		$users->relation('posts', CustomRelation::class)
+			->collection('posts')
+			->innerKey('id')
+			->outerKey('userId');
 		$users->primaryKey('id');
 
 		$posts = $registry->collection('posts');
@@ -515,7 +538,10 @@ final class CycleQueryExecutionTest extends TestCase
 		$posts->field('title', 'string');
 		$posts->field('amount', 'float');
 		$posts->field('published', 'bool');
-		$posts->relation('author', CustomRelation::class)->collection('users');
+		$posts->relation('author', CustomRelation::class)
+			->collection('users')
+			->innerKey('userId')
+			->outerKey('id');
 		$posts->primaryKey('id');
 
 		return $registry;

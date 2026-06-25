@@ -10,6 +10,7 @@ use ON\Data\Definition\Display\DisplayInterface;
 use ON\Data\Definition\Display\RawDisplay;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Interface\InterfaceInterface;
+use ON\Data\Query\Relation\Loader\LoaderInterface;
 
 interface RelationInterface
 {
@@ -61,7 +62,10 @@ interface RelationInterface
 
 	public function loader(string $loader): self;
 
-	public function getLoader(): ?string;
+	/**
+	 * @return class-string<LoaderInterface>
+	 */
+	public function getLoader(): string;
 
 	public function where(array $where): self;
 

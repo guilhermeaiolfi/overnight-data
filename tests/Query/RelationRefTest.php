@@ -23,7 +23,7 @@ final class RelationRefTest extends TestCase
 		$users = query($this->makeRegistry()->getCollection('users'));
 
 		self::assertInstanceOf(FieldRef::class, $users->name);
-		self::assertNull($users->name->getRelation());
+		self::assertSame($users, $users->name->getSource());
 		self::assertSame(['name'], $users->name->getPath());
 		self::assertSame($users->name, $users->field('name'));
 	}
@@ -35,7 +35,7 @@ final class RelationRefTest extends TestCase
 
 		self::assertInstanceOf(RelationRef::class, $posts);
 		self::assertSame($users, $posts->getQuery());
-		self::assertSame($users->getSource()->getRelation('posts'), $posts->getRelation());
+		self::assertSame($users->getCollection()->getRelation('posts'), $posts->getRelation());
 		self::assertNull($posts->getParentRelation());
 		self::assertSame('posts', $posts->getCollection()->getName());
 		self::assertSame('posts', $posts->getName());
@@ -58,7 +58,7 @@ final class RelationRefTest extends TestCase
 		self::assertInstanceOf(FieldRef::class, $title);
 		self::assertSame($users, $title->getQuery());
 		self::assertSame($users->posts->getCollection()->getField('title'), $title->getField());
-		self::assertSame($users->posts, $title->getRelation());
+		self::assertSame($users->posts, $title->getSource());
 		self::assertSame(['posts', 'title'], $title->getPath());
 		self::assertSame($title, $users->posts->title);
 	}

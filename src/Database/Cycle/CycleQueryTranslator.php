@@ -12,9 +12,7 @@ use Cycle\Database\Query\QueryParameters;
 use Cycle\Database\Query\SelectQuery as CycleSelectQuery;
 use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Field\FieldInterface;
-use ON\Data\Definition\View\ViewDefinition;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Representation\StorageRepresentation;
@@ -29,6 +27,7 @@ use ON\Data\Query\Condition\LogicalOperator;
 use ON\Data\Query\Condition\NotCondition;
 use ON\Data\Query\Condition\NullCondition;
 use ON\Data\Query\Condition\NullOperator;
+use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Expression\AggregateExpression;
 use ON\Data\Query\Expression\AggregateFunction;
 use ON\Data\Query\Expression\AliasedExpression;
@@ -39,6 +38,10 @@ use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Expression\ValueOperation;
 use ON\Data\Query\Expression\ValueOperationExpression;
+use ON\Data\Query\Join;
+use ON\Data\Query\JoinType;
+use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Selection\Selection;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\SortDirection;
@@ -83,6 +86,8 @@ final class CycleQueryTranslator
 					$sort->getDirection() === SortDirection::ASC ? CycleSelectQuery::SORT_ASC : CycleSelectQuery::SORT_DESC,
 				);
 			}
+
+			$this->translateJoins($query, $cycle, $context);
 
 			$cycle->limit($query->getLimit());
 			$cycle->offset($query->getOffset());
@@ -153,7 +158,7 @@ final class CycleQueryTranslator
 				$alias = $backendName ?? $selectionExpression->getAlias();
 
 				$columns[] = SqlFragment::withParameters(
-					$sql->sql() . ' AS ' . $this->quote($alias),
+					$sql->sql() . ' AS ' . $this->quoteResultAlias($alias),
 					$sql->parameters(),
 				)->toCycleFragment();
 			} else {
@@ -199,7 +204,11 @@ final class CycleQueryTranslator
 		}
 
 		if ($expression instanceof FieldRef) {
-			return $expression->getField()->getName();
+			$path = $expression->getPath();
+
+			return count($path) === 1
+				? $expression->getField()->getName()
+				: implode('.', $path);
 		}
 
 		throw UnsupportedQueryException::forQuery(
@@ -348,18 +357,6 @@ final class CycleQueryTranslator
 
 	private function translateFieldRef(FieldRef $field, CycleTranslationContext $context): SqlFragment
 	{
-		$relation = $field->getRelation();
-
-		if ($relation !== null) {
-			throw UnsupportedQueryException::forQuery(
-				$context->root(),
-				sprintf(
-					"relation field path '%s' is not supported until relation joins are implemented",
-					implode('.', $field->getPath()),
-				),
-			);
-		}
-
 		$context->assertAccessible($field);
 		$query = $field->getQuery();
 
@@ -370,8 +367,14 @@ final class CycleQueryTranslator
 			);
 		}
 
+		try {
+			$source = $this->resolveFieldSource($field->getSource());
+		} catch (RelationLoaderException $exception) {
+			throw UnsupportedQueryException::forQuery($context->root(), $exception->getMessage());
+		}
+
 		return SqlFragment::raw($this->quote(
-			$context->aliasFor($query) . '.' . $field->getField()->getColumn()
+			$context->aliasFor($source) . '.' . $field->getField()->getColumn()
 		));
 	}
 
@@ -486,6 +489,8 @@ final class CycleQueryTranslator
 				);
 			}
 
+			$this->translateJoins($query, $cycle, $context);
+
 			$cycle->limit($query->getLimit());
 			$cycle->offset($query->getOffset());
 
@@ -498,47 +503,65 @@ final class CycleQueryTranslator
 
 	private function fromSource(SelectQuery $query, CycleTranslationContext $context): SqlFragment
 	{
-		$source = $this->database->getPrefix() . $this->resolvePhysicalSource($query->getSource(), []);
+		$source = $this->database->getPrefix() . $this->resolvePhysicalSource($query->getCollection());
 
 		return SqlFragment::raw(
 			$this->quote($source) . ' AS ' . $this->quote($context->aliasFor($query))
 		);
 	}
 
-	private function resolvePhysicalSource(DefinitionInterface $definition, array $visited): string
+	private function resolvePhysicalSource(CollectionInterface $collection): string
 	{
-		if ($definition instanceof CollectionInterface) {
-			$table = $definition->getTable();
+		$table = $collection->getTable();
 
-			return $table !== '' ? $table : $definition->getName();
+		return $table !== '' ? $table : $collection->getName();
+	}
+
+	private function translateJoins(SelectQuery $query, CycleSelectQuery $cycle, CycleTranslationContext $context): void
+	{
+		foreach ($query->getJoins() as $join) {
+			$cycle->join(
+				$join->getType() === JoinType::INNER ? 'INNER' : 'LEFT',
+				$this->database->getPrefix() . $this->resolvePhysicalSource($join->getCollection()),
+				$context->aliasFor($join),
+				$this->translateJoinConditions($query, $join, $context)->toCycleFragment(),
+			);
+		}
+	}
+
+	private function translateJoinConditions(
+		SelectQuery $query,
+		Join $join,
+		CycleTranslationContext $context,
+	): SqlFragment {
+		$conditions = $join->getConditions();
+
+		if ($conditions === []) {
+			throw UnsupportedQueryException::forQuery(
+				$query,
+				sprintf('Join "%s" requires at least one ON condition.', $join->getName()),
+			);
 		}
 
-		if ($definition instanceof ViewDefinition) {
-			$name = $definition->getName();
-			if (in_array($name, $visited, true)) {
-				throw UnsupportedQueryException::forQuery(
-					new SelectQuery($definition),
-					sprintf("view source cycle detected at '%s'", $name),
-				);
-			}
-
-			$source = $definition->getSource();
-			if ($source === null) {
-				throw UnsupportedQueryException::forQuery(
-					new SelectQuery($definition),
-					sprintf("view '%s' has no executable source", $name),
-				);
-			}
-
-			$visited[] = $name;
-
-			return $this->resolvePhysicalSource($source, $visited);
-		}
-
-		throw UnsupportedQueryException::forQuery(
-			new SelectQuery($definition),
-			sprintf("definition '%s' cannot be resolved to a physical source", $definition->getName()),
+		$fragments = array_map(
+			fn (ConditionInterface $condition): SqlFragment => $this->translateCondition($condition, $context),
+			$conditions,
 		);
+
+		return SqlFragment::withParameters(
+			implode(
+				' AND ',
+				array_map(static fn (SqlFragment $fragment): string => '(' . $fragment->sql() . ')', $fragments),
+			),
+			$this->mergeParameters($fragments),
+		);
+	}
+
+	private function resolveFieldSource(QuerySourceInterface $source): QuerySourceInterface
+	{
+		return $source instanceof RelationRef
+			? $source->getJoinedSource()
+			: $source;
 	}
 
 	/**
@@ -575,5 +598,10 @@ final class CycleQueryTranslator
 	private function quote(string $identifier): string
 	{
 		return $this->database->getDriver()->getQueryCompiler()->quoteIdentifier($identifier);
+	}
+
+	private function quoteResultAlias(string $alias): string
+	{
+		return '"' . str_replace('"', '""', $alias) . '"';
 	}
 }

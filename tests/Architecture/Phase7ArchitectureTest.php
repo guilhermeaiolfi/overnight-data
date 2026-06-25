@@ -6,6 +6,10 @@ namespace Tests\ON\Data\Architecture;
 
 use ON\Data\Definition\Internal\DefinitionFactory;
 use ON\Data\Definition\Registry;
+use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\Relation\Loader\LoaderInterface;
+use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
@@ -86,5 +90,31 @@ final class Phase7ArchitectureTest extends TestCase
 				);
 			}
 		}
+	}
+
+	public function testSelectQueryExposesCanonicalCollectionApiWithoutLegacySourceGetter(): void
+	{
+		$reflection = new ReflectionClass(SelectQuery::class);
+
+		self::assertTrue($reflection->hasMethod('getCollection'));
+		self::assertTrue($reflection->hasMethod('getQuery'));
+		self::assertTrue($reflection->implementsInterface(QuerySourceInterface::class));
+		self::assertFalse($reflection->hasMethod('getSource'));
+	}
+
+	public function testFieldRefUsesCanonicalSourceApiWithoutLegacyRelationGetter(): void
+	{
+		$reflection = new ReflectionClass(FieldRef::class);
+
+		self::assertTrue($reflection->hasMethod('getSource'));
+		self::assertFalse($reflection->hasMethod('getRelation'));
+	}
+
+	public function testRelationInterfaceRequiresConcreteLoaderClassStrings(): void
+	{
+		$reflection = new ReflectionClass(LoaderInterface::class);
+
+		self::assertTrue($reflection->hasMethod('join'));
+		self::assertTrue($reflection->hasMethod('load'));
 	}
 }

@@ -13,6 +13,7 @@ use ON\Data\Definition\Exception\InvalidRelationParentException;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Interface\InterfaceTrait;
 use ON\Data\Definition\MetadataTrait;
+use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Support\DefinitionNode;
 
 abstract class AbstractRelation extends DefinitionNode implements RelationInterface
@@ -213,16 +214,36 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 
 	public function loader(string $loader): self
 	{
+		if (! is_a($loader, LoaderInterface::class, true)) {
+			throw new InvalidArgumentException(sprintf(
+				'Relation "%s" loader must implement %s.',
+				$this->getName(),
+				LoaderInterface::class,
+			));
+		}
+
 		$this->set('loader', $loader);
 
 		return $this;
 	}
 
-	public function getLoader(): ?string
+	public function getLoader(): string
 	{
 		$value = $this->get('loader');
 
-		return is_string($value) ? $value : null;
+		if (! is_string($value) || $value === '') {
+			throw new LogicException(sprintf('Relation "%s" does not define a loader.', $this->getName()));
+		}
+
+		if (! is_a($value, LoaderInterface::class, true)) {
+			throw new InvalidArgumentException(sprintf(
+				'Relation "%s" loader must implement %s.',
+				$this->getName(),
+				LoaderInterface::class,
+			));
+		}
+
+		return $value;
 	}
 
 	public function getCardinality(): string

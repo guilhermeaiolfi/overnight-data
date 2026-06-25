@@ -7,13 +7,16 @@ namespace ON\Data\Query\Relation;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
+use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Exception\UnknownQueryMemberException;
 use ON\Data\Query\Exception\UnknownQueryRelationException;
 use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\SelectQuery;
 
-final class RelationRef
+final class RelationRef implements QuerySourceInterface
 {
 	/**
 	 * @var array<string, FieldRef>
@@ -24,6 +27,10 @@ final class RelationRef
 	 * @var array<string, self>
 	 */
 	private array $relationRefs = [];
+
+	private ?LoaderInterface $loader = null;
+
+	private ?QuerySourceInterface $joinedSource = null;
 
 	public function __construct(
 		private readonly SelectQuery $query,
@@ -45,6 +52,17 @@ final class RelationRef
 	public function getParentRelation(): ?self
 	{
 		return $this->parentRelation;
+	}
+
+	public function getParentSource(): QuerySourceInterface
+	{
+		return $this->parentRelation?->getJoinedSource()
+			?? $this->query;
+	}
+
+	public function getJoinedSource(): QuerySourceInterface
+	{
+		return $this->joinedSource ??= $this->getLoader()->join($this);
 	}
 
 	public function getCollection(): CollectionInterface
@@ -80,7 +98,7 @@ final class RelationRef
 			throw UnknownQueryFieldException::forDefinition($name, $this->getCollection()->getName());
 		}
 
-		return $this->fieldRefs[$name] = new FieldRef($this->query, $field, $this);
+		return $this->fieldRefs[$name] = new FieldRef($this, $field);
 	}
 
 	public function relation(string $name): self
@@ -111,5 +129,20 @@ final class RelationRef
 		}
 
 		throw UnknownQueryMemberException::forDefinition($name, $collection->getName());
+	}
+
+	public function getLoader(): LoaderInterface
+	{
+		if ($this->loader !== null) {
+			return $this->loader;
+		}
+
+		$loader = $this->relation->getLoader();
+
+		if (! is_a($loader, LoaderInterface::class, true)) {
+			throw RelationLoaderException::invalidLoader($this, $loader);
+		}
+
+		return $this->loader = new $loader();
 	}
 }

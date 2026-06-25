@@ -7,7 +7,7 @@ namespace ON\Data\Query;
 use InvalidArgumentException;
 use ON\Data\Database\Exception\QueryNotExecutableException;
 use ON\Data\Database\QueryExecutorInterface;
-use ON\Data\Definition\DefinitionInterface;
+use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Query\Condition\ConditionInterface;
@@ -24,7 +24,7 @@ use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Sort\Sort;
 
-final class SelectQuery
+final class SelectQuery implements QuerySourceInterface
 {
 	/**
 	 * @var array<string, FieldRef>
@@ -35,6 +35,11 @@ final class SelectQuery
 	 * @var array<string, RelationRef>
 	 */
 	private array $relationRefs = [];
+
+	/**
+	 * @var list<Join>
+	 */
+	private array $joins = [];
 
 	private ?StarExpression $star = null;
 
@@ -65,15 +70,25 @@ final class SelectQuery
 	private ?int $offset = null;
 
 	public function __construct(
-		private readonly DefinitionInterface $source,
+		private readonly CollectionInterface $collection,
 		private ?QueryExecutorInterface $executor = null,
 	) {
 		$this->selections = new SelectionList();
 	}
 
-	public function getSource(): DefinitionInterface
+	public function getQuery(): SelectQuery
 	{
-		return $this->source;
+		return $this;
+	}
+
+	public function getCollection(): CollectionInterface
+	{
+		return $this->collection;
+	}
+
+	public function getPath(): array
+	{
+		return [];
 	}
 
 	public function isExecutable(): bool
@@ -94,10 +109,10 @@ final class SelectQuery
 			return $this->fieldRefs[$name];
 		}
 
-		$field = $this->source->getField($name);
+		$field = $this->collection->getField($name);
 
 		if (! $field instanceof FieldInterface) {
-			throw UnknownQueryFieldException::forDefinition($name, $this->source->getName());
+			throw UnknownQueryFieldException::forDefinition($name, $this->collection->getName());
 		}
 
 		return $this->fieldRefs[$name] = new FieldRef($this, $field);
@@ -109,10 +124,10 @@ final class SelectQuery
 			return $this->relationRefs[$name];
 		}
 
-		$relation = $this->source->getRelation($name);
+		$relation = $this->collection->getRelation($name);
 
 		if (! $relation instanceof RelationInterface) {
-			throw UnknownQueryRelationException::forDefinition($name, $this->source->getName());
+			throw UnknownQueryRelationException::forDefinition($name, $this->collection->getName());
 		}
 
 		return $this->relationRefs[$name] = new RelationRef($this, $relation);
@@ -120,15 +135,15 @@ final class SelectQuery
 
 	public function __get(string $name): FieldRef|RelationRef
 	{
-		if ($this->source->hasField($name)) {
+		if ($this->collection->hasField($name)) {
 			return $this->field($name);
 		}
 
-		if ($this->source->hasRelation($name)) {
+		if ($this->collection->hasRelation($name)) {
 			return $this->relation($name);
 		}
 
-		throw UnknownQueryMemberException::forDefinition($name, $this->source->getName());
+		throw UnknownQueryMemberException::forDefinition($name, $this->collection->getName());
 	}
 
 	public function star(): StarExpression
@@ -246,10 +261,54 @@ final class SelectQuery
 		}
 
 		if (! $this->selections->hasNamedExpression($name)) {
-			throw UnknownQueryExpressionException::forQuery($name, $this->source->getName());
+			throw UnknownQueryExpressionException::forQuery($name, $this->collection->getName());
 		}
 
 		return $this->selections->getNamedExpression($name);
+	}
+
+	public function join(
+		CollectionInterface $collection,
+		JoinType $type = JoinType::INNER,
+		?string $name = null,
+		?QuerySourceInterface $source = null,
+	): Join {
+		$source ??= $this;
+
+		if ($source->getQuery() !== $this) {
+			throw new InvalidArgumentException(sprintf(
+				'Join source "%s" belongs to a different SelectQuery.',
+				$this->describeSource($source),
+			));
+		}
+
+		$name = trim($name ?? $collection->getName());
+
+		if ($name === '') {
+			throw new InvalidArgumentException('Join name cannot be empty.');
+		}
+
+		foreach ($this->joins as $join) {
+			if ($join->getName() === $name) {
+				throw new InvalidArgumentException(sprintf(
+					'Join name "%s" is already used by this query.',
+					$name,
+				));
+			}
+		}
+
+		$join = new Join($this, $source, $collection, $type, $name);
+		$this->joins[] = $join;
+
+		return $join;
+	}
+
+	/**
+	 * @return list<Join>
+	 */
+	public function getJoins(): array
+	{
+		return $this->joins;
 	}
 
 	/**
@@ -334,5 +393,14 @@ final class SelectQuery
 		}
 
 		return $this->executor;
+	}
+
+	private function describeSource(QuerySourceInterface $source): string
+	{
+		$path = $source->getPath();
+
+		return $path === []
+			? $source->getCollection()->getName()
+			: implode('.', $path);
 	}
 }

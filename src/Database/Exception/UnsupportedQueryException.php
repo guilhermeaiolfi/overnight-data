@@ -13,7 +13,7 @@ final class UnsupportedQueryException extends LogicException
 	{
 		return new self(sprintf(
 			"Query for definition '%s' is unsupported: %s",
-			$query->getSource()->getName(),
+			$query->getCollection()->getName(),
 			trim($reason),
 		));
 	}
