@@ -36,6 +36,13 @@ final class M2MLoader extends AbstractLoader
 		$source = $relation->getParentSource();
 		$type = $definition->isNullable() ? JoinType::LEFT : JoinType::INNER;
 		$query = $relation->getQuery();
+		$relationInnerKeys = $this->relationKeys($relation, 'inner');
+		$relationOuterKeys = $this->relationKeys($relation, 'outer');
+		$throughInnerKeys = $this->throughKeys($relation, $throughDefinition, 'inner');
+		$throughOuterKeys = $this->throughKeys($relation, $throughDefinition, 'outer');
+		$this->assertM2MMatchingKeys($relation, $relationInnerKeys, $throughInnerKeys, 'has mismatched through key counts.');
+		$this->assertM2MMatchingKeys($relation, $throughOuterKeys, $relationOuterKeys, 'has mismatched through key counts.');
+
 		$through = $query->join(
 			$throughDefinition->getCollection(),
 			$type,
@@ -46,8 +53,8 @@ final class M2MLoader extends AbstractLoader
 		$this->addM2MConditions(
 			$through,
 			$source,
-			$this->relationKeys($relation, 'inner'),
-			$this->throughKeys($relation, $throughDefinition, 'inner'),
+			$relationInnerKeys,
+			$throughInnerKeys,
 			$relation,
 			'has mismatched through key counts.',
 		);
@@ -62,8 +69,8 @@ final class M2MLoader extends AbstractLoader
 		$this->addM2MConditions(
 			$target,
 			$through,
-			$this->throughKeys($relation, $throughDefinition, 'outer'),
-			$this->relationKeys($relation, 'outer'),
+			$throughOuterKeys,
+			$relationOuterKeys,
 			$relation,
 			'has mismatched through key counts.',
 		);
@@ -125,5 +132,20 @@ final class M2MLoader extends AbstractLoader
 		}
 
 		return $keys;
+	}
+
+	/**
+	 * @param non-empty-list<string> $sourceKeys
+	 * @param non-empty-list<string> $targetKeys
+	 */
+	private function assertM2MMatchingKeys(
+		RelationRef $relation,
+		array $sourceKeys,
+		array $targetKeys,
+		string $mismatchReason,
+	): void {
+		if (count($sourceKeys) !== count($targetKeys)) {
+			throw RelationLoaderException::malformedThrough($relation, $mismatchReason);
+		}
 	}
 }

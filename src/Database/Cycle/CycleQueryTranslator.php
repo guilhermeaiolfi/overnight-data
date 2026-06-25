@@ -597,16 +597,11 @@ final class CycleQueryTranslator
 			return $source->getJoinedSource();
 		}
 
-		$path = implode('.', $source->getPath());
-		$declaredPath = $joinContext->getDeclaredRelationSourcePath();
-
-		if ($declaredPath !== null && $path === $declaredPath) {
-			return $joinContext->getSource();
-		}
-
 		if ($source->hasJoinedSource()) {
 			return $source->getJoinedSource();
 		}
+
+		$path = implode('.', $source->getPath());
 
 		throw UnsupportedQueryException::forQuery(
 			$query,

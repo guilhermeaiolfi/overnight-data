@@ -274,18 +274,12 @@ final class SelectQuery implements QuerySourceInterface
 		?QuerySourceInterface $source = null,
 	): Join {
 		$source ??= $this;
-		$declaredRelationSourcePath = null;
 
 		if ($source->getQuery() !== $this) {
 			throw new InvalidArgumentException(sprintf(
 				'Join source "%s" belongs to a different SelectQuery.',
 				$this->describeSource($source),
 			));
-		}
-
-		if ($source instanceof RelationRef) {
-			$declaredRelationSourcePath = implode('.', $source->getPath());
-			$source = $source->getJoinedSource();
 		}
 
 		$name = trim($name ?? $collection->getName());
@@ -303,7 +297,11 @@ final class SelectQuery implements QuerySourceInterface
 			}
 		}
 
-		$join = new Join($this, $source, $collection, $type, $name, $declaredRelationSourcePath);
+		if ($source instanceof RelationRef) {
+			$source = $source->getJoinedSource();
+		}
+
+		$join = new Join($this, $source, $collection, $type, $name);
 		$this->joins[] = $join;
 
 		return $join;

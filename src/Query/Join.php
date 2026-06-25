@@ -30,7 +30,6 @@ final class Join implements QuerySourceInterface
 		private readonly CollectionInterface $collection,
 		private readonly JoinType $type,
 		private readonly string $name,
-		private readonly ?string $declaredRelationSourcePath = null,
 	) {
 	}
 
@@ -68,11 +67,6 @@ final class Join implements QuerySourceInterface
 	public function getName(): string
 	{
 		return $this->name;
-	}
-
-	public function getDeclaredRelationSourcePath(): ?string
-	{
-		return $this->declaredRelationSourcePath;
 	}
 
 	public function getPath(): array

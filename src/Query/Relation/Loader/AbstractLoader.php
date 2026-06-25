@@ -22,6 +22,9 @@ abstract class AbstractLoader implements LoaderInterface
 
 		$definition = $relation->getRelation();
 		$source = $relation->getParentSource();
+		$innerKeys = $this->relationKeys($relation, 'inner');
+		$outerKeys = $this->relationKeys($relation, 'outer');
+		$this->assertMatchingKeys($relation, $innerKeys, $outerKeys);
 		$join = $relation->getQuery()->join(
 			$definition->getCollection(),
 			$definition->isNullable() ? JoinType::LEFT : JoinType::INNER,
@@ -32,8 +35,8 @@ abstract class AbstractLoader implements LoaderInterface
 		$this->addKeyConditions(
 			$join,
 			$source,
-			$this->relationKeys($relation, 'inner'),
-			$this->relationKeys($relation, 'outer'),
+			$innerKeys,
+			$outerKeys,
 			$relation,
 		);
 
@@ -88,6 +91,17 @@ abstract class AbstractLoader implements LoaderInterface
 			$join->on(
 				x()->eq($source->field($sourceKey), $join->field($targetKeys[$index])),
 			);
+		}
+	}
+
+	/**
+	 * @param non-empty-list<string> $sourceKeys
+	 * @param non-empty-list<string> $targetKeys
+	 */
+	protected function assertMatchingKeys(RelationRef $relation, array $sourceKeys, array $targetKeys): void
+	{
+		if (count($sourceKeys) !== count($targetKeys)) {
+			throw RelationLoaderException::relationKeyCountMismatch($relation);
 		}
 	}
 

@@ -320,6 +320,40 @@ final class CycleJoinExecutionTest extends TestCase
 		$articles->select($articles->tags->name)->fetchAll();
 	}
 
+	public function testFailedDirectRelationResolutionLeavesNoStoredJoinsAndRetryPreservesOriginalError(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users_missing_keys'));
+		$users->select($users->posts->title);
+
+		for ($attempt = 0; $attempt < 2; $attempt++) {
+			try {
+				$users->fetchAll();
+				self::fail('Expected missing-key rejection.');
+			} catch (UnsupportedQueryException $exception) {
+				self::assertStringContainsString('cannot be joined because its key lists are incomplete', $exception->getMessage());
+			}
+
+			self::assertSame([], $users->getJoins());
+		}
+	}
+
+	public function testFailedManyToManyResolutionLeavesNoStoredJoinsAndRetryPreservesOriginalError(): void
+	{
+		$articles = $this->database->query($this->registry->getCollection('articles_missing_through'));
+		$articles->select($articles->tags->name);
+
+		for ($attempt = 0; $attempt < 2; $attempt++) {
+			try {
+				$articles->fetchAll();
+				self::fail('Expected missing-through rejection.');
+			} catch (UnsupportedQueryException $exception) {
+				self::assertStringContainsString('is missing through metadata', $exception->getMessage());
+			}
+
+			self::assertSame([], $articles->getJoins());
+		}
+	}
+
 	public function testExplicitJoinWithRelationSourceIsCanonicalizedBeforeStorage(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
