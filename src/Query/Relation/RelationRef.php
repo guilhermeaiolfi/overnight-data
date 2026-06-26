@@ -193,6 +193,10 @@ final class RelationRef implements QuerySourceInterface
 
 	public function withFields(array $fields): self
 	{
+		if (! array_is_list($fields)) {
+			throw RelationSelectionException::invalidRelationFieldsType($this->getPath());
+		}
+
 		$fields = $this->normalizeSelectionFields($fields);
 
 		if ($fields === $this->fields) {
@@ -225,7 +229,7 @@ final class RelationRef implements QuerySourceInterface
 			}
 
 			if ($name === 'fields') {
-				if (! is_array($value) || ! array_is_list($value)) {
+				if (! is_array($value)) {
 					throw RelationSelectionException::invalidRelationFieldsType($this->getPath());
 				}
 

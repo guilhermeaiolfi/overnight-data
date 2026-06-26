@@ -118,6 +118,17 @@ final class RelationRefTest extends TestCase
 		self::assertNull($users->posts->getFields());
 	}
 
+	public function testWithFieldsRejectsAssociativeArrays(): void
+	{
+		$users = query($this->makeRegistry()->getCollection('users'));
+
+		$this->expectException(RelationSelectionException::class);
+
+		$users->posts->withFields([
+			'field' => 'title',
+		]);
+	}
+
 	public function testInvalidRelationSelectionOptionsAreRejected(): void
 	{
 		$users = query($this->makeRegistry()->getCollection('users'));
