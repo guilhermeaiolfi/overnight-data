@@ -25,6 +25,11 @@ final class StaticNode extends OutputNode
 		$this->setIdentityFields($this->validateFieldList($identityFields, 'Identity fields'));
 	}
 
+	public function parseRow(int $offset, array $row): int
+	{
+		throw new ParserException('StaticNode does not support parseRow(); provide already loaded records through push().');
+	}
+
 	public function push(array &$data): void
 	{
 		parent::push($data);

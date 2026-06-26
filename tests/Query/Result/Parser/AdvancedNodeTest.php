@@ -6,6 +6,7 @@ namespace Tests\ON\Data\Query\Result\Parser;
 
 use ON\Data\Query\Result\Parser\CollectionNode;
 use ON\Data\Query\Result\Parser\EmbeddedNode;
+use ON\Data\Query\Result\Parser\ParserException;
 use ON\Data\Query\Result\Parser\ParentMergeNode;
 use ON\Data\Query\Result\Parser\ProxyNode;
 use ON\Data\Query\Result\Parser\RootNode;
@@ -40,6 +41,29 @@ final class AdvancedNodeTest extends TestCase
 
 		self::assertSame('First', $root->getResult()[0]['posts'][0]['title']);
 		self::assertSame([], $root->getResult()[1]['posts']);
+	}
+
+	public function testStaticNodeRejectsParseRowToAvoidDoubleRegistration(): void
+	{
+		$this->expectException(ParserException::class);
+
+		$root = new StaticNode(['id', 'name'], ['id']);
+		$root->parseRow(0, [1, 'Ada']);
+	}
+
+	public function testStaticNodeIndexesExistingDataExactlyOnce(): void
+	{
+		$root = new StaticNode(['id', 'name'], ['id']);
+		$root->linkNode('posts', $posts = new CollectionNode(['id', 'user_id', 'title'], ['id'], ['user_id'], ['id']));
+
+		$user = ['id' => 1, 'name' => 'Ada'];
+		$root->push($user);
+
+		$posts->parseRow(0, [10, 1, 'First']);
+		$posts->parseRow(0, [11, 1, 'Second']);
+
+		self::assertCount(2, $root->getResult()[0]['posts']);
+		self::assertSame(['First', 'Second'], array_column($root->getResult()[0]['posts'], 'title'));
 	}
 
 	public function testProxyNodeMountsRoleSpecificSingularChildren(): void

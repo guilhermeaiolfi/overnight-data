@@ -487,14 +487,14 @@ abstract class AbstractNode
 			$criteria = array_values($lastReferenceValues);
 		}
 
-		if ($index->getRecordCountByValues($criteria) === 0) {
+		$records = $index->getRecordsByValues($criteria);
+
+		if ($records === []) {
 			throw new ParserException(sprintf(
 				'Undefined reference for parent fields `%s`.',
 				implode(', ', $index->getFields()),
 			));
 		}
-
-		$records = $index->getRecordsByValues($criteria);
 
 		return $records;
 	}

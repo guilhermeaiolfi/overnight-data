@@ -80,7 +80,7 @@ final class ReferenceIndex
 			}
 
 			$rawValues[$field] = $value;
-			$encodedValues[] = $this->encodeIndexValue($value);
+			$encodedValues[] = IndexValueEncoder::encodeIndexValue($value);
 		}
 
 		$bucket = &$this->data;
@@ -139,7 +139,7 @@ final class ReferenceIndex
 	 */
 	public function getRecordsByValues(array $values): array
 	{
-		$bucket = &$this->getBucket($values);
+		$bucket = $this->getBucket($values);
 		$records = [];
 
 		foreach ($bucket as &$record) {
@@ -155,7 +155,7 @@ final class ReferenceIndex
 	 */
 	public function getRecordCountByValues(array $values): int
 	{
-		$bucket = &$this->getBucket($values);
+		$bucket = $this->getBucket($values);
 
 		return count($bucket);
 	}
@@ -187,26 +187,22 @@ final class ReferenceIndex
 	 * @param list<scalar> $values
 	 * @return array<int, array<string, mixed>>
 	 */
-	private function &getBucket(array $values): array
+	private function getBucket(array $values): array
 	{
 		if (count($values) !== count($this->fields)) {
 			throw new ParserException('Reference value count does not match the configured reference field count.');
 		}
 
-		$bucket = &$this->data;
+		$bucket = $this->data;
 
-		foreach ($values as $position => $value) {
-			$encodedValue = $this->encodeIndexValue($value);
+		foreach ($values as $value) {
+			$encodedValue = IndexValueEncoder::encodeIndexValue($value);
 
 			if (! array_key_exists($encodedValue, $bucket)) {
-				throw new ParserException(sprintf(
-					'Undefined reference for field `%s` and value `%s`.',
-					$this->fields[$position],
-					(string) $value,
-				));
+				return [];
 			}
 
-			$bucket = &$bucket[$encodedValue];
+			$bucket = $bucket[$encodedValue];
 		}
 
 		return $bucket;
@@ -224,16 +220,5 @@ final class ReferenceIndex
 		}
 
 		return $key;
-	}
-
-	private function encodeIndexValue(mixed $value): string
-	{
-		return match (true) {
-			is_int($value) => 'i:' . $value,
-			is_string($value) => 's:' . strlen($value) . ':' . $value,
-			is_float($value) => 'f:' . serialize($value),
-			is_bool($value) => 'b:' . ($value ? '1' : '0'),
-			default => throw new ParserException(sprintf('Non-scalar identity or reference value of type `%s` is not supported.', get_debug_type($value))),
-		};
 	}
 }

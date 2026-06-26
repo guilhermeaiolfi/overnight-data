@@ -10,5 +10,6 @@ This project includes source and tests adapted from the Cycle ORM parser subsyst
 - Imported area: structural parser subsystem and parser-focused tests
 - Adaptation scope: namespace migration into `ON\Data\Query\Result\Parser`, replacement of `ArrayNode` with `CollectionNode`, replacement of `MultiKeyCollection` with `ReferenceIndex`, removal of parser-local typecasting and database-criteria generation, and standalone data-layer validation changes
 - Upstream license: MIT
+- Upstream license text included at: `LICENSES/Cycle-ORM-MIT.txt`
 
 The adapted sources remain subject to the upstream MIT license and retain upstream provenance in the relevant file headers.

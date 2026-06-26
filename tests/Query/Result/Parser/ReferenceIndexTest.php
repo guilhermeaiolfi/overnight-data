@@ -78,4 +78,24 @@ final class ReferenceIndexTest extends TestCase
 		$index = new ReferenceIndex(['tenant_id', 'id']);
 		$index->getRecords(['tenant_id' => 10]);
 	}
+
+	public function testValidReferenceShapeWithNoMatchingRecordReturnsZeroCount(): void
+	{
+		$index = new ReferenceIndex(['tenant_id']);
+		$record = ['tenant_id' => 10, 'id' => 1];
+
+		$index->add($record);
+
+		self::assertSame(0, $index->getRecordCount(['tenant_id' => 999]));
+	}
+
+	public function testValidReferenceShapeWithNoMatchingRecordReturnsEmptyRecords(): void
+	{
+		$index = new ReferenceIndex(['tenant_id']);
+		$record = ['tenant_id' => 10, 'id' => 1];
+
+		$index->add($record);
+
+		self::assertSame([], $index->getRecords(['tenant_id' => 999]));
+	}
 }
