@@ -9,7 +9,6 @@ use Countable;
 use InvalidArgumentException;
 use IteratorAggregate;
 use ON\Data\Query\Expression\AliasedExpression;
-use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use Traversable;
 
@@ -56,7 +55,7 @@ final class SelectionList implements IteratorAggregate, Countable
 					continue;
 				}
 
-				if ($entry->getExpression() !== $expression) {
+				if (! $this->expressionsMatch($entry->getExpression(), $expression)) {
 					continue;
 				}
 
@@ -78,10 +77,10 @@ final class SelectionList implements IteratorAggregate, Countable
 		}
 	}
 
-	public function require(FieldRef $field, string $reason): void
+	public function require(ValueExpressionInterface|AliasedExpression $expression, string $reason): void
 	{
 		foreach ($this->entries as $index => $entry) {
-			if ($entry->getExpression() !== $field) {
+			if (! $this->expressionsMatch($entry->getExpression(), $expression)) {
 				continue;
 			}
 
@@ -90,7 +89,25 @@ final class SelectionList implements IteratorAggregate, Countable
 			return;
 		}
 
-		$this->entries[] = (new Selection($field))->withReason($reason);
+		if ($expression instanceof AliasedExpression && isset($this->namedExpressions[$expression->getAlias()])) {
+			throw new InvalidArgumentException(sprintf("Query expression alias '%s' is already selected.", $expression->getAlias()));
+		}
+
+		$this->entries[] = (new Selection($expression))->withReason($reason);
+	}
+
+	private function expressionsMatch(
+		ValueExpressionInterface|AliasedExpression $left,
+		ValueExpressionInterface|AliasedExpression $right,
+	): bool {
+		if ($left instanceof AliasedExpression || $right instanceof AliasedExpression) {
+			return $left instanceof AliasedExpression
+				&& $right instanceof AliasedExpression
+				&& $left->getAlias() === $right->getAlias()
+				&& $left->getExpression() === $right->getExpression();
+		}
+
+		return $left === $right;
 	}
 
 	/**

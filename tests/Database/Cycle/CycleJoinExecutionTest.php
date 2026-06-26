@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Database\Cycle;
 
-use InvalidArgumentException;
 use ON\Data\Database\ConnectionConfig;
 use ON\Data\Database\Database;
 use ON\Data\Database\Exception\UnsupportedQueryException;
+use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\FirstOfManyRelation;
 use ON\Data\Definition\Relation\M2MRelation;
+use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\Relation\LoadRuntime;
@@ -263,6 +264,52 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testStructuredBelongsToSelectionMountsJoinedSingularResults(): void
+	{
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+
+		$rows = $posts
+			->select($posts->id, $posts->title, $posts->author)
+			->orderBy($posts->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['id' => 1, 'title' => 'Hello', 'author' => ['id' => 1, 'name' => 'Ada', 'companyId' => 1]],
+			['id' => 2, 'title' => 'World', 'author' => ['id' => 1, 'name' => 'Ada', 'companyId' => 1]],
+			['id' => 3, 'title' => 'Graph', 'author' => ['id' => 2, 'name' => 'Grace', 'companyId' => 1]],
+		], $rows);
+	}
+
+	public function testStructuredHasManySelectionLoadsRelatedRowsInOneSeparateQuery(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name, $users->posts)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'posts' => [
+					['id' => 1, 'userId' => 1, 'title' => 'Hello', 'published' => true],
+					['id' => 2, 'userId' => 1, 'title' => 'World', 'published' => false],
+				],
+			],
+			[
+				'name' => 'Grace',
+				'posts' => [
+					['id' => 3, 'userId' => 2, 'title' => 'Graph', 'published' => true],
+				],
+			],
+			[
+				'name' => 'Linus',
+				'posts' => [],
+			],
+		], $rows);
+	}
+
 	public function testFirstOfManyJoinFailsExplicitly(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
@@ -382,13 +429,30 @@ final class CycleJoinExecutionTest extends TestCase
 		$users->select($users->name)->fetchAll();
 	}
 
-	public function testLoadBoundaryRemainsReserved(): void
+	public function testLoaderLoadRequiresRuntimeRegistrationContext(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
-		$this->expectException(InvalidArgumentException::class);
-		$this->expectExceptionMessage('Relation loading is not implemented for relation "posts".');
-		$users->posts->getLoader()->load($users->posts, new LoadRuntime());
+		$this->expectException(LoadRuntimeException::class);
+		$users->posts->getLoader()->load(
+			$users->posts,
+			new LoadRuntime($users, new class () implements QueryExecutorInterface {
+				public function fetchAll(SelectQuery $query): array
+				{
+					return [];
+				}
+
+				public function fetchOne(SelectQuery $query): ?array
+				{
+					return null;
+				}
+
+				public function iterate(SelectQuery $query): iterable
+				{
+					return [];
+				}
+			}),
+		);
 	}
 
 	private function makeRegistry(): Registry

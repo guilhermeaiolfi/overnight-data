@@ -7,6 +7,7 @@ namespace Tests\ON\Data\Query;
 use DateTimeImmutable;
 use Error;
 use InvalidArgumentException;
+use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Query\Condition\ComparisonCondition;
@@ -18,6 +19,8 @@ use ON\Data\Query\Condition\LogicalOperator;
 use ON\Data\Query\Condition\NotCondition;
 use ON\Data\Query\Condition\NullCondition;
 use ON\Data\Query\Condition\NullOperator;
+use ON\Data\Query\Exception\LoadRuntimeException;
+use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Exception\UnknownQueryExpressionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Exception\UnknownQueryMemberException;
@@ -34,6 +37,7 @@ use ON\Data\Query\Expression\ValueOperationExpression;
 use ON\Data\Query\ExpressionFactory;
 use function ON\Data\Query\query;
 use ON\Data\Query\Relation\LoadRuntime;
+use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Selection\Selection;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\SelectQuery;
@@ -961,14 +965,60 @@ final class QueryModelTest extends TestCase
 		$usersWithCtor->posts->getLoader();
 	}
 
-	public function testRelationLoaderLoadIsReservedAndNotImplemented(): void
+	public function testIterateRejectsStructuredRelationSelections(): void
 	{
 		$users = query($this->makeRegistry()->getCollection('users'));
+		$users->select($users->posts);
 
-		$this->expectException(InvalidArgumentException::class);
-		$this->expectExceptionMessage('Relation loading is not implemented for relation "posts".');
+		$this->expectException(RelationSelectionException::class);
+		$this->expectExceptionMessage('iterate() is not supported');
+		iterator_to_array($users->iterate(), false);
+	}
 
-		$users->posts->getLoader()->load($users->posts, new LoadRuntime());
+	public function testLoadRuntimeMetadataAndRegistrationRequireAnActiveBranch(): void
+	{
+		$runtime = new LoadRuntime(
+			query($this->makeRegistry()->getCollection('users')),
+			new class () implements QueryExecutorInterface {
+				public function fetchAll(SelectQuery $query): array
+				{
+					return [];
+				}
+
+				public function fetchOne(SelectQuery $query): ?array
+				{
+					return null;
+				}
+
+				public function iterate(SelectQuery $query): iterable
+				{
+					return [];
+				}
+			},
+		);
+
+		$this->expectException(LoadRuntimeException::class);
+		$runtime->getNodeColumns();
+	}
+
+	public function testBuiltInLoaderDefaultsMatchStructuredLoadingStrategies(): void
+	{
+		$registry = new Registry();
+		$users = $registry->collection('users');
+		$users->field('id', 'int');
+		$users->primaryKey('id');
+		$posts = $registry->collection('posts');
+		$posts->field('id', 'int');
+		$posts->field('userId', 'int');
+		$posts->primaryKey('id');
+		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('userId')->end();
+		$posts->belongsTo('author', 'users')->innerKey('userId')->outerKey('id')->end();
+
+		$userQuery = query($registry->getCollection('users'));
+		$postQuery = query($registry->getCollection('posts'));
+
+		self::assertSame(LoadStrategy::SEPARATE_QUERY, $userQuery->posts->getLoader()->getDefaultLoadStrategy());
+		self::assertSame(LoadStrategy::JOIN, $postQuery->author->getLoader()->getDefaultLoadStrategy());
 	}
 
 	public function testCorrelatedReferencesRetainTheirOwningQueries(): void

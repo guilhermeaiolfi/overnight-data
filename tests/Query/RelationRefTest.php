@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Query;
 
 use ON\Data\Definition\Registry;
+use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Exception\UnknownQueryMemberException;
 use ON\Data\Query\Exception\UnknownQueryRelationException;
@@ -14,7 +15,6 @@ use function ON\Data\Query\query;
 use ON\Data\Query\Relation\RelationRef;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\Fixture\CustomRelation;
-use TypeError;
 
 final class RelationRefTest extends TestCase
 {
@@ -159,13 +159,39 @@ final class RelationRefTest extends TestCase
 		self::assertSame([], $users->getSorts());
 	}
 
-	public function testRelationRefIsNotSelectableOrAValueExpression(): void
+	public function testRelationRefIsSelectableWithoutBecomingAValueExpression(): void
 	{
 		$users = query($this->makeRegistry()->getCollection('users'));
 
 		self::assertFalse(is_a($users->posts, ValueExpressionInterface::class));
-		$this->expectException(TypeError::class);
 		$users->select($users->posts);
+
+		self::assertCount(0, $users->getSelections());
+		self::assertSame([$users->posts], $users->getRelationSelections()->getAll());
+	}
+
+	public function testNestedRelationSelectionAddsAncestorsOnce(): void
+	{
+		$users = query($this->makeRegistry()->getCollection('users'));
+
+		$users
+			->select($users->posts->author)
+			->select($users->posts);
+
+		self::assertSame(
+			[$users->posts, $users->posts->author],
+			$users->getRelationSelections()->getAll(),
+		);
+	}
+
+	public function testSelectingAForeignRelationIsRejected(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+		$other = query($registry->getCollection('users'));
+
+		$this->expectException(RelationSelectionException::class);
+		$users->select($other->posts);
 	}
 
 	private function makeRegistry(): Registry

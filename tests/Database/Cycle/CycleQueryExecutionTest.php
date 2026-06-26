@@ -402,17 +402,19 @@ final class CycleQueryExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testNestedRelatedExpressionTranslationIsRejectedExplicitly(): void
+	public function testNestedRelatedExpressionTranslationUsesNestedJoins(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
-		$this->expectException(UnsupportedQueryException::class);
-		$this->expectExceptionMessage('posts.author');
-
-		$users
+		$rows = $users
 			->select($users->id)
 			->where(x()->eq($users->posts->author->name, 'Ada'))
 			->fetchAll();
+
+		self::assertSame([
+			['id' => 1],
+			['id' => 1],
+		], $rows);
 	}
 
 	public function testRelatedFieldInWhereUsesAutomaticJoin(): void

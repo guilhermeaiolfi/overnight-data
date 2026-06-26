@@ -10,6 +10,7 @@ use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
+use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationRef;
 use function ON\Data\Query\x;
 
@@ -48,9 +49,21 @@ abstract class AbstractLoader implements LoaderInterface
 
 	protected function assertSupportedRelationPath(RelationRef $relation): void
 	{
-		if ($relation->getParentRelation() !== null) {
-			throw RelationLoaderException::nestedJoinNotSupported($relation);
-		}
+	}
+
+	public function getDefaultLoadStrategy(): LoadStrategy
+	{
+		return LoadStrategy::SEPARATE_QUERY;
+	}
+
+	public function getParentKeyFields(RelationRef $relation): array
+	{
+		return $this->relationKeys($relation, 'inner');
+	}
+
+	public function getChildKeyFields(RelationRef $relation): array
+	{
+		return $this->relationKeys($relation, 'outer');
 	}
 
 	protected function assertSupportedRelationConstraints(RelationRef $relation): void
