@@ -12,6 +12,7 @@ use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationRef;
+use ON\Data\Query\Result\Parser\AbstractNode;
 use function ON\Data\Query\x;
 
 abstract class AbstractLoader implements LoaderInterface
@@ -47,6 +48,11 @@ abstract class AbstractLoader implements LoaderInterface
 		throw RelationLoaderException::loadingNotImplemented($relation);
 	}
 
+	public function register(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	{
+		throw RelationLoaderException::loadingNotImplemented($relation);
+	}
+
 	protected function assertSupportedRelationPath(RelationRef $relation): void
 	{
 	}
@@ -54,16 +60,6 @@ abstract class AbstractLoader implements LoaderInterface
 	public function getDefaultLoadStrategy(): LoadStrategy
 	{
 		return LoadStrategy::SEPARATE_QUERY;
-	}
-
-	public function getParentKeyFields(RelationRef $relation): array
-	{
-		return $this->relationKeys($relation, 'inner');
-	}
-
-	public function getChildKeyFields(RelationRef $relation): array
-	{
-		return $this->relationKeys($relation, 'outer');
 	}
 
 	protected function assertSupportedRelationConstraints(RelationRef $relation): void

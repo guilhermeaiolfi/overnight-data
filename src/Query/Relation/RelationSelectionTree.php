@@ -7,37 +7,50 @@ namespace ON\Data\Query\Relation;
 use ArrayIterator;
 use Countable;
 use IteratorAggregate;
+use ON\Data\Query\Exception\RelationSelectionException;
 use Traversable;
 
 /**
- * @implements IteratorAggregate<int, RelationRef>
+ * @implements IteratorAggregate<int, RelationSelection>
  */
 final class RelationSelectionTree implements IteratorAggregate, Countable
 {
 	/**
-	 * @var array<string, RelationRef>
+	 * @var array<string, RelationSelection>
 	 */
 	private array $relations = [];
 
 	public function add(RelationRef $relation): void
 	{
-		$ancestors = [];
-
-		for ($current = $relation; $current !== null; $current = $current->getParentRelation()) {
-			$ancestors[] = $current;
+		if (! $relation->isVisible()) {
+			throw RelationSelectionException::hiddenTerminalRelation($relation->getPath());
 		}
 
-		foreach (array_reverse($ancestors) as $ancestor) {
-			$key = $this->identityFor($ancestor);
+		$segments = [];
 
-			if (! isset($this->relations[$key])) {
-				$this->relations[$key] = $ancestor;
-			}
+		for ($current = $relation; $current !== null; $current = $current->getParentRelation()) {
+			$segments[] = $current;
+		}
+
+		$segments = array_reverse($segments);
+		$terminalIndex = count($segments) - 1;
+
+		foreach ($segments as $index => $segment) {
+			$key = $this->identityFor($segment);
+			$selection = new RelationSelection(
+				$segment,
+				$index === $terminalIndex ? true : $segment->isLoaded(),
+				$index === $terminalIndex ? true : $segment->isVisible(),
+			);
+
+			$this->relations[$key] = isset($this->relations[$key])
+				? $this->relations[$key]->merge($selection)
+				: $selection;
 		}
 	}
 
 	/**
-	 * @return list<RelationRef>
+	 * @return list<RelationSelection>
 	 */
 	public function getAll(): array
 	{
@@ -55,7 +68,7 @@ final class RelationSelectionTree implements IteratorAggregate, Countable
 	}
 
 	/**
-	 * @return Traversable<int, RelationRef>
+	 * @return Traversable<int, RelationSelection>
 	 */
 	public function getIterator(): Traversable
 	{

@@ -8,39 +8,57 @@ use LogicException;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
-use ON\Data\Query\Result\Parser\RootNode;
 use ON\Data\Query\SelectQuery;
 
 final class LoadBranch
 {
 	private ?AbstractNode $node = null;
 
+	private ?SelectQuery $query = null;
+
+	private ?QuerySourceInterface $source = null;
+
+	private ?RelationRef $queryLocalRelation = null;
+
 	/**
-	 * @param list<string> $nodeColumns
-	 * @param list<string> $nodeValueAliases
-	 * @param list<string> $nodeIdentityFields
-	 * @param non-empty-list<string> $nodeParentFields
-	 * @param non-empty-list<string> $nodeChildFields
+	 * @var array<string, true>
+	 */
+	private array $fieldMap = [];
+
+	/**
+	 * @var list<string>
+	 */
+	private array $fieldOrder = [];
+
+	/**
+	 * @var list<string>
+	 */
+	private array $valueAliases = [];
+
+	private ?string $scheduledMethod = null;
+
+	private ?SelectQuery $scheduledBoundaryQuery = null;
+
+	/**
+	 * @param list<string> $publicFields
 	 */
 	public function __construct(
-		private readonly RelationRef $relation,
+		private readonly RelationSelection $selection,
 		private readonly ?self $parent,
 		private readonly LoaderInterface $loader,
-		private readonly LoadStrategy $strategy,
-		private readonly SelectQuery $query,
-		private readonly QuerySourceInterface $source,
-		private readonly ?RelationRef $queryLocalRelation,
-		private readonly array $nodeColumns,
-		private readonly array $nodeValueAliases,
-		private readonly array $nodeIdentityFields,
-		private readonly array $nodeParentFields,
-		private readonly array $nodeChildFields,
+		array $publicFields,
 	) {
+		$this->addFields($publicFields);
+	}
+
+	public function getSelection(): RelationSelection
+	{
+		return $this->selection;
 	}
 
 	public function getRelation(): RelationRef
 	{
-		return $this->relation;
+		return $this->selection->getRelation();
 	}
 
 	public function getParent(): ?self
@@ -53,24 +71,22 @@ final class LoadBranch
 		return $this->loader;
 	}
 
-	public function getStrategy(): LoadStrategy
+	public function addFields(array $fieldNames): array
 	{
-		return $this->strategy;
-	}
+		$added = [];
 
-	public function getQuery(): SelectQuery
-	{
-		return $this->query;
-	}
+		foreach ($fieldNames as $fieldName) {
+			if (isset($this->fieldMap[$fieldName])) {
+				$added[] = $fieldName;
+				continue;
+			}
 
-	public function getSource(): QuerySourceInterface
-	{
-		return $this->source;
-	}
+			$this->fieldMap[$fieldName] = true;
+			$this->fieldOrder[] = $fieldName;
+			$added[] = $fieldName;
+		}
 
-	public function getQueryLocalRelation(): ?RelationRef
-	{
-		return $this->queryLocalRelation;
+		return $added;
 	}
 
 	/**
@@ -78,49 +94,7 @@ final class LoadBranch
 	 */
 	public function getNodeColumns(): array
 	{
-		return $this->nodeColumns;
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	public function getNodeValueAliases(): array
-	{
-		return $this->nodeValueAliases;
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	public function getNodeIdentityFields(): array
-	{
-		return $this->nodeIdentityFields;
-	}
-
-	/**
-	 * @return non-empty-list<string>
-	 */
-	public function getNodeParentFields(): array
-	{
-		return $this->nodeParentFields;
-	}
-
-	/**
-	 * @return non-empty-list<string>
-	 */
-	public function getNodeChildFields(): array
-	{
-		return $this->nodeChildFields;
-	}
-
-	public function getParentNode(RootNode $rootNode): AbstractNode
-	{
-		return $this->parent?->getNode() ?? $rootNode;
-	}
-
-	public function hasNode(): bool
-	{
-		return $this->node !== null;
+		return $this->fieldOrder;
 	}
 
 	public function setNode(AbstractNode $node): void
@@ -131,5 +105,70 @@ final class LoadBranch
 	public function getNode(): AbstractNode
 	{
 		return $this->node ?? throw new LogicException('Load branch parser node is not registered.');
+	}
+
+	public function hasNode(): bool
+	{
+		return $this->node !== null;
+	}
+
+	/**
+	 * @param list<string> $aliases
+	 */
+	public function setQueryContext(
+		SelectQuery $query,
+		QuerySourceInterface $source,
+		?RelationRef $queryLocalRelation,
+		array $aliases,
+	): void {
+		$this->query = $query;
+		$this->source = $source;
+		$this->queryLocalRelation = $queryLocalRelation;
+		$this->valueAliases = $aliases;
+	}
+
+	public function getQuery(): SelectQuery
+	{
+		return $this->query ?? throw new LogicException('Load branch query context is not configured.');
+	}
+
+	public function getSource(): QuerySourceInterface
+	{
+		return $this->source ?? throw new LogicException('Load branch source context is not configured.');
+	}
+
+	public function getQueryLocalRelation(): ?RelationRef
+	{
+		return $this->queryLocalRelation;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	public function getNodeValueAliases(): array
+	{
+		return $this->valueAliases;
+	}
+
+	public function schedule(string $method, SelectQuery $boundaryQuery): void
+	{
+		$this->scheduledMethod = $method;
+		$this->scheduledBoundaryQuery = $boundaryQuery;
+	}
+
+	public function clearSchedule(): void
+	{
+		$this->scheduledMethod = null;
+		$this->scheduledBoundaryQuery = null;
+	}
+
+	public function getScheduledMethod(): ?string
+	{
+		return $this->scheduledMethod;
+	}
+
+	public function getScheduledBoundaryQuery(): ?SelectQuery
+	{
+		return $this->scheduledBoundaryQuery;
 	}
 }

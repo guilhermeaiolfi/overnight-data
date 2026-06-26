@@ -8,10 +8,12 @@ use LogicException;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Exception\LoadRuntimeException;
+use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
-use ON\Data\Query\Relation\Loader\LoaderInterface;
+use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
+use ON\Data\Query\Result\Parser\CollectionNode;
 use ON\Data\Query\Result\Parser\RootNode;
 use ON\Data\Query\SelectQuery;
 use function ON\Data\Query\x;
@@ -23,12 +25,15 @@ final class LoadRuntime
 	 */
 	private array $branches = [];
 
-	/**
-	 * @var array<string, list<LoadBranch>>
-	 */
-	private array $linkedChildren = [];
-
 	private ?LoadBranch $activeBranch = null;
+
+	private ?string $activeMethod = null;
+
+	private bool $registering = false;
+
+	private bool $scheduledInInvocation = false;
+
+	private ?SelectQuery $schedulingBoundaryQuery = null;
 
 	private int $aliasCounter = 0;
 
@@ -64,7 +69,7 @@ final class LoadRuntime
 	{
 		$this->buildPlan();
 		$this->parseRootRows($this->executor->fetchAll($this->rootQuery));
-		$this->loadLinkedChildren($this->rootQuery);
+		$this->completeBoundary($this->rootQuery);
 
 		return $this->cleanupRootRecords($this->requireRootNode()->getResult());
 	}
@@ -79,28 +84,39 @@ final class LoadRuntime
 		}
 
 		$this->parseRootRows([$row]);
-		$this->loadLinkedChildren($this->rootQuery);
+		$this->completeBoundary($this->rootQuery);
 
 		return $this->cleanupRootRecords($this->requireRootNode()->getResult())[0] ?? null;
 	}
 
-	public function register(AbstractNode $node): void
+	/**
+	 * @param non-empty-list<string> $fieldNames
+	 * @return non-empty-list<string>
+	 */
+	public function requireBranchFields(array $fieldNames): array
 	{
 		$branch = $this->requireActiveBranch();
+		$collection = $branch->getRelation()->getCollection();
 
-		if ($branch->hasNode()) {
-			throw LoadRuntimeException::nodeAlreadyRegistered($branch->getRelation());
+		return $branch->addFields($this->normalizeFieldNames($collection, $fieldNames));
+	}
+
+	/**
+	 * @param non-empty-list<string> $fieldNames
+	 * @return non-empty-list<string>
+	 */
+	public function requireParentFields(array $fieldNames): array
+	{
+		$branch = $this->requireActiveBranch();
+		$parent = $branch->getParent();
+		$collection = $parent?->getRelation()->getCollection() ?? $this->rootQuery->getCollection();
+		$normalized = $this->normalizeFieldNames($collection, $fieldNames);
+
+		if ($parent === null) {
+			return array_map($this->ensureRootFieldParserName(...), $normalized);
 		}
 
-		$parentNode = $branch->getParentNode($this->requireRootNode());
-
-		if ($branch->getStrategy() === LoadStrategy::JOIN) {
-			$parentNode->joinNode($branch->getRelation()->getName(), $node);
-		} else {
-			$parentNode->linkNode($branch->getRelation()->getName(), $node);
-		}
-
-		$branch->setNode($node);
+		return $parent->addFields($normalized);
 	}
 
 	/**
@@ -108,31 +124,115 @@ final class LoadRuntime
 	 */
 	public function getNodeColumns(): array
 	{
-		return $this->requireActiveBranchMetadata('node columns', fn (LoadBranch $branch): array => $branch->getNodeColumns());
+		return $this->requireActiveBranch()->getNodeColumns();
+	}
+
+	public function getNode(): AbstractNode
+	{
+		return $this->requireActiveBranch()->getNode();
+	}
+
+	public function getParentNode(): AbstractNode
+	{
+		$branch = $this->requireActiveBranch();
+		$parent = $branch->getParent();
+
+		return $parent?->getNode() ?? $this->requireRootNode();
+	}
+
+	public function getQuery(): SelectQuery
+	{
+		return $this->requireActiveBranch()->getQuery();
+	}
+
+	public function getSource(): QuerySourceInterface
+	{
+		return $this->requireActiveBranch()->getSource();
+	}
+
+	public function getQueryRelation(): RelationRef
+	{
+		$branch = $this->requireActiveBranch();
+		$parent = $branch->getParent();
+		$query = $parent?->getQuery() ?? $this->rootQuery;
+
+		if ($parent === null || $parent->getQueryLocalRelation() === null) {
+			return $query->relation($branch->getRelation()->getName());
+		}
+
+		return $parent->getQueryLocalRelation()
+			->relation($branch->getRelation()->getName());
+	}
+
+	public function createQuery(CollectionInterface $collection): SelectQuery
+	{
+		return $this->rootQuery->related($collection);
+	}
+
+	public function setQueryContext(
+		SelectQuery $query,
+		QuerySourceInterface $source,
+		?RelationRef $queryLocalRelation = null,
+	): void {
+		$branch = $this->requireActiveBranch();
+		$aliases = [];
+
+		foreach ($branch->getNodeColumns() as $fieldName) {
+			$aliases[] = $this->ensureBranchFieldSelection(
+				$branch,
+				$query,
+				$source,
+				$fieldName,
+			);
+		}
+
+		$branch->setQueryContext($query, $source, $queryLocalRelation, $aliases);
 	}
 
 	/**
-	 * @return list<string>
+	 * @return list<array<string, scalar>>
 	 */
-	public function getNodeIdentityFields(): array
+	public function getReferenceValues(): array
 	{
-		return $this->requireActiveBranchMetadata('node identity fields', fn (LoadBranch $branch): array => $branch->getNodeIdentityFields());
+		return $this->requireActiveBranch()->getNode()->getReferenceValues();
 	}
 
-	/**
-	 * @return non-empty-list<string>
-	 */
-	public function getNodeParentFields(): array
+	public function nextPass(string $method = 'load'): void
 	{
-		return $this->requireActiveBranchMetadata('node parent fields', fn (LoadBranch $branch): array => $branch->getNodeParentFields());
+		if ($this->registering) {
+			throw LoadRuntimeException::nextPassNotAllowedDuringRegister($this->requireActiveBranch()->getRelation());
+		}
+
+		if ($this->scheduledInInvocation) {
+			throw LoadRuntimeException::multipleNextPasses($this->requireActiveBranch()->getRelation(), $this->activeMethod ?? 'load');
+		}
+
+		$this->assertSchedulableMethod($method);
+		$this->requireActiveBranch()->schedule(
+			$method,
+			$this->schedulingBoundaryQuery ?? throw LoadRuntimeException::scheduleBoundaryMissing($this->requireActiveBranch()->getRelation()),
+		);
+		$this->scheduledInInvocation = true;
 	}
 
-	/**
-	 * @return non-empty-list<string>
-	 */
-	public function getNodeChildFields(): array
+	public function execute(SelectQuery $query): void
 	{
-		return $this->requireActiveBranchMetadata('node child fields', fn (LoadBranch $branch): array => $branch->getNodeChildFields());
+		$branch = $this->requireActiveBranch();
+		$rows = $this->executor->fetchAll($query);
+
+		if ($query === $branch->getQuery()) {
+			foreach ($rows as $row) {
+				$branch->getNode()->parseRow(0, $this->orderedValues($row, $this->branchAliasTraversal($branch)));
+			}
+		}
+
+		$this->schedulingBoundaryQuery = $query;
+		$this->completeBoundary($query);
+	}
+
+	public function getLoadStrategy(LoadStrategy $default): LoadStrategy
+	{
+		return $default;
 	}
 
 	private function buildPlan(): void
@@ -142,12 +242,10 @@ final class LoadRuntime
 		}
 
 		$this->planRootSelections();
-		$this->reserveRootRelationParentFields();
+		$this->buildBranchSkeletons();
+		$this->registerBranches();
 		$this->rootNode = new RootNode($this->rootColumns, $this->rootIdentityFields());
-
-		foreach ($this->rootQuery->getRelationSelections()->getAll() as $relation) {
-			$this->planBranch($relation);
-		}
+		$this->loadBranches();
 	}
 
 	private function planRootSelections(): void
@@ -189,118 +287,106 @@ final class LoadRuntime
 		}
 	}
 
-	private function planBranch(RelationRef $relation): void
+	private function buildBranchSkeletons(): void
 	{
-		$key = $this->branchKey($relation);
+		foreach ($this->rootQuery->getRelationSelections()->getAll() as $selection) {
+			$key = $this->branchKey($selection->getPath());
+			$parent = $selection->getParentPathKey() === null
+				? null
+				: $this->branches[$selection->getParentPathKey()] ?? throw LoadRuntimeException::parentBranchMissing($selection->getRelation());
 
-		if (isset($this->branches[$key])) {
-			return;
+			$this->branches[$key] = new LoadBranch(
+				$selection,
+				$parent,
+				$selection->getRelation()->getLoader(),
+				$selection->isLoaded()
+					? $this->collectionFieldNames($selection->getRelation()->getCollection())
+					: [],
+			);
 		}
+	}
 
-		$parent = $relation->getParentRelation() === null
-			? null
-			: $this->branches[$this->branchKey($relation->getParentRelation())] ?? throw LoadRuntimeException::parentBranchMissing($relation);
-		$loader = $relation->getLoader();
-		$strategy = $loader->getDefaultLoadStrategy();
-		$query = $strategy === LoadStrategy::JOIN
-			? ($parent?->getQuery() ?? $this->rootQuery)
-			: $this->rootQuery->related($relation->getCollection());
-		$queryLocalRelation = $strategy === LoadStrategy::JOIN ? $this->resolveQueryLocalRelation($relation, $parent, $query) : null;
-		$source = $strategy === LoadStrategy::JOIN
-			? ($queryLocalRelation ?? throw LoadRuntimeException::queryLocalRelationMissing($relation))->getJoinedSource()
-			: $query;
-		$columns = $this->collectionFieldNames($relation->getCollection());
-		$valueAliases = [];
+	private function registerBranches(): void
+	{
+		$branches = array_values($this->branches);
+		usort($branches, static fn (LoadBranch $left, LoadBranch $right): int => count($right->getRelation()->getPath()) <=> count($left->getRelation()->getPath()));
 
-		foreach ($columns as $fieldName) {
-			if ($strategy === LoadStrategy::JOIN) {
-				$alias = $this->allocateAlias($relation->getPath(), $fieldName);
+		foreach ($branches as $branch) {
+			$this->activeBranch = $branch;
+			$this->activeMethod = 'register';
+			$this->registering = true;
 
-				if (! $query->getSelections()->hasNamedExpression($alias)) {
-					$query->select(($queryLocalRelation ?? throw LoadRuntimeException::queryLocalRelationMissing($relation))->field($fieldName)->as($alias));
-				}
-
-				$valueAliases[] = $alias;
-
-				continue;
+			try {
+				$node = $branch->getLoader()->register($branch->getRelation(), $this);
+			} finally {
+				$this->registering = false;
+				$this->activeMethod = null;
+				$this->activeBranch = null;
 			}
 
-			$query->select($query->field($fieldName));
-			$valueAliases[] = $fieldName;
+			if (! $node instanceof AbstractNode) {
+				throw LoadRuntimeException::nodeNotRegistered($branch->getRelation());
+			}
+
+			$branch->setNode($node);
 		}
+	}
 
-		$nodeIdentityFields = $this->normalizeBranchFieldNames($relation->getCollection(), $relation->getCollection()->getPrimaryKey());
-		$nodeParentFields = $this->prepareParentFields($relation, $parent, $loader);
-		$nodeChildFields = $this->normalizeBranchFieldNames($relation->getCollection(), $loader->getChildKeyFields($relation));
+	private function loadBranches(): void
+	{
+		$branches = array_values($this->branches);
+		usort($branches, static fn (LoadBranch $left, LoadBranch $right): int => count($left->getRelation()->getPath()) <=> count($right->getRelation()->getPath()));
 
-		$branch = new LoadBranch(
-			$relation,
-			$parent,
-			$loader,
-			$strategy,
-			$query,
-			$source,
-			$queryLocalRelation,
-			$columns,
-			$valueAliases,
-			$nodeIdentityFields,
-			$nodeParentFields,
-			$nodeChildFields,
-		);
+		foreach ($branches as $branch) {
+			$boundary = $branch->getParent()?->getQuery() ?? $this->rootQuery;
+			$this->invokeLoaderMethod($branch, 'load', $boundary);
 
-		$this->branches[$key] = $branch;
-
-		if ($strategy === LoadStrategy::SEPARATE_QUERY) {
-			$this->linkedChildren[$this->queryIdentity($parent?->getQuery() ?? $this->rootQuery)][] = $branch;
+			if ($branch->getQuery()->getCollection()->getName() === '') {
+				throw LoadRuntimeException::queryNotConfigured($branch->getRelation());
+			}
 		}
+	}
 
+	private function invokeLoaderMethod(LoadBranch $branch, string $method, SelectQuery $boundaryQuery): void
+	{
+		$loader = $branch->getLoader();
 		$this->activeBranch = $branch;
+		$this->activeMethod = $method;
+		$this->scheduledInInvocation = false;
+		$this->schedulingBoundaryQuery = $boundaryQuery;
+		$branch->clearSchedule();
 
 		try {
-			$loader->load($relation, $this);
+			$loader->{$method}($branch->getRelation(), $this);
 		} finally {
 			$this->activeBranch = null;
-		}
-
-		if (! $branch->hasNode()) {
-			throw LoadRuntimeException::nodeNotRegistered($relation);
+			$this->activeMethod = null;
+			$this->scheduledInInvocation = false;
+			$this->schedulingBoundaryQuery = null;
 		}
 	}
 
-	private function reserveRootRelationParentFields(): void
+	private function completeBoundary(SelectQuery $query): void
 	{
-		foreach ($this->rootQuery->getRelationSelections()->getAll() as $relation) {
-			if ($relation->getParentRelation() !== null) {
-				continue;
+		do {
+			$ran = false;
+
+			foreach ($this->branches as $branch) {
+				if ($branch->getScheduledBoundaryQuery() !== $query) {
+					continue;
+				}
+
+				$method = $branch->getScheduledMethod();
+
+				if ($method === null) {
+					continue;
+				}
+
+				$branch->clearSchedule();
+				$this->invokeLoaderMethod($branch, $method, $query);
+				$ran = true;
 			}
-
-			foreach ($relation->getLoader()->getParentKeyFields($relation) as $fieldName) {
-				$canonical = $this->rootQuery->getCollection()->getField($fieldName)->getName();
-				$this->ensureRootFieldParserName($canonical);
-			}
-		}
-	}
-
-	private function resolveQueryLocalRelation(RelationRef $relation, ?LoadBranch $parent, SelectQuery $query): RelationRef
-	{
-		if ($parent === null || $parent->getStrategy() === LoadStrategy::SEPARATE_QUERY) {
-			return $query->relation($relation->getName());
-		}
-
-		return ($parent->getQueryLocalRelation() ?? throw LoadRuntimeException::queryLocalRelationMissing($parent->getRelation()))
-			->relation($relation->getName());
-	}
-
-	private function prepareParentFields(RelationRef $relation, ?LoadBranch $parent, LoaderInterface $loader): array
-	{
-		$parentFieldNames = $loader->getParentKeyFields($relation);
-		$parentCollection = $parent?->getRelation()->getCollection() ?? $this->rootQuery->getCollection();
-
-		if ($parent === null) {
-			return $this->normalizeRootParentFields($parentCollection, $parentFieldNames);
-		}
-
-		return $this->normalizeBranchFieldNames($parentCollection, $parentFieldNames);
+		} while ($ran);
 	}
 
 	/**
@@ -314,65 +400,6 @@ final class LoadRuntime
 		foreach ($rows as $row) {
 			$rootNode->parseRow(0, $this->orderedValues($row, $aliases));
 		}
-	}
-
-	private function loadLinkedChildren(SelectQuery $query): void
-	{
-		foreach ($this->linkedChildren[$this->queryIdentity($query)] ?? [] as $branch) {
-			$node = $branch->getNode();
-			$referenceValues = $node->getReferenceValues();
-
-			if ($referenceValues === []) {
-				continue;
-			}
-
-			$this->applyReferencePredicate($branch, $referenceValues);
-
-			foreach ($this->executor->fetchAll($branch->getQuery()) as $row) {
-				$node->parseRow(0, $this->orderedValues($row, $this->branchAliasTraversal($branch)));
-			}
-
-			$this->loadLinkedChildren($branch->getQuery());
-		}
-	}
-
-	/**
-	 * @param list<array<string, scalar>> $referenceValues
-	 */
-	private function applyReferencePredicate(LoadBranch $branch, array $referenceValues): void
-	{
-		$childFields = $branch->getNodeChildFields();
-
-		foreach ($referenceValues as $values) {
-			if (count($values) !== count($childFields)) {
-				throw LoadRuntimeException::invalidReferenceValues($branch->getRelation());
-			}
-		}
-
-		if (count($childFields) === 1) {
-			$branch->getQuery()->where(
-				x()->in(
-					$branch->getQuery()->field($childFields[0]),
-					array_map(static fn (array $values) => array_values($values)[0], $referenceValues),
-				),
-			);
-
-			return;
-		}
-
-		$predicates = [];
-
-		foreach ($referenceValues as $values) {
-			$comparisons = [];
-
-			foreach ($childFields as $index => $fieldName) {
-				$comparisons[] = x()->eq($branch->getQuery()->field($fieldName), array_values($values)[$index]);
-			}
-
-			$predicates[] = x()->and(...$comparisons);
-		}
-
-		$branch->getQuery()->where(x()->or(...$predicates));
 	}
 
 	/**
@@ -403,25 +430,255 @@ final class LoadRuntime
 			$item = [];
 
 			foreach ($record as $key => $value) {
-				if (! isset($this->rootPublicColumns[$key])) {
-					continue;
+				if (isset($this->rootPublicColumns[$key])) {
+					$item[$key] = $value;
 				}
-
-				$item[$key] = $value;
 			}
 
-			foreach ($this->rootQuery->getRelationSelections()->getAll() as $relation) {
-				if ($relation->getParentRelation() !== null || ! array_key_exists($relation->getName(), $record)) {
+			foreach ($this->rootBranches() as $branch) {
+				$name = $branch->getRelation()->getName();
+				$value = $record[$name] ?? ($this->isCollectionBranch($branch) ? [] : null);
+
+				if ($branch->getSelection()->isVisible()) {
+					$item[$name] = $this->projectVisibleBranch($branch, $value);
 					continue;
 				}
 
-				$item[$relation->getName()] = $record[$relation->getName()];
+				$this->mergePromotions(
+					$item,
+					$this->projectHiddenBranch($branch, $value),
+					'root',
+				);
 			}
 
 			$cleaned[] = $item;
 		}
 
 		return $cleaned;
+	}
+
+	private function projectVisibleBranch(LoadBranch $branch, mixed $value): mixed
+	{
+		if ($this->isCollectionBranch($branch)) {
+			$projected = [];
+
+			foreach (is_array($value) ? $value : [] as $item) {
+				$projected[] = $this->projectVisibleRecord($branch, is_array($item) ? $item : []);
+			}
+
+			return $projected;
+		}
+
+		if ($value === null) {
+			return null;
+		}
+
+		return $this->projectVisibleRecord($branch, is_array($value) ? $value : []);
+	}
+
+	/**
+	 * @param array<string, mixed> $record
+	 * @return array<string, mixed>
+	 */
+	private function projectVisibleRecord(LoadBranch $branch, array $record): array
+	{
+		$item = [];
+
+		if ($branch->getSelection()->isLoaded()) {
+			foreach ($branch->getRelation()->getCollection()->getVisibleFields() as $fieldName) {
+				if (array_key_exists($fieldName, $record)) {
+					$item[$fieldName] = $record[$fieldName];
+				}
+			}
+		}
+
+		foreach ($this->childBranches($branch) as $child) {
+			$name = $child->getRelation()->getName();
+			$value = $record[$name] ?? ($this->isCollectionBranch($child) ? [] : null);
+
+			if ($child->getSelection()->isVisible()) {
+				$item[$name] = $this->projectVisibleBranch($child, $value);
+				continue;
+			}
+
+			$this->mergePromotions(
+				$item,
+				$this->projectHiddenBranch($child, $value),
+				implode('.', $branch->getRelation()->getPath()),
+			);
+		}
+
+		return $item;
+	}
+
+	/**
+	 * @return array<string, array{branch: LoadBranch, collection: bool, value: mixed}>
+	 */
+	private function projectHiddenBranch(LoadBranch $branch, mixed $value): array
+	{
+		if ($this->isCollectionBranch($branch)) {
+			$promoted = $this->defaultHiddenPromotions($branch, true);
+
+			foreach (is_array($value) ? $value : [] as $item) {
+				$this->mergeHiddenCollectionPromotions(
+					$promoted,
+					$this->projectHiddenRecord($branch, is_array($item) ? $item : []),
+				);
+			}
+
+			return $promoted;
+		}
+
+		if ($value === null) {
+			return $this->defaultHiddenPromotions($branch);
+		}
+
+		return $this->projectHiddenRecord($branch, is_array($value) ? $value : []);
+	}
+
+	/**
+	 * @param array<string, mixed> $record
+	 * @return array<string, array{branch: LoadBranch, collection: bool, value: mixed}>
+	 */
+	private function projectHiddenRecord(LoadBranch $branch, array $record): array
+	{
+		$promoted = [];
+
+		foreach ($this->childBranches($branch) as $child) {
+			$name = $child->getRelation()->getName();
+			$value = $record[$name] ?? ($this->isCollectionBranch($child) ? [] : null);
+
+			if ($child->getSelection()->isVisible()) {
+				$promoted[$name] = [
+					'branch' => $child,
+					'collection' => $this->isCollectionBranch($child),
+					'value' => $this->projectVisibleBranch($child, $value),
+				];
+				continue;
+			}
+
+			$this->mergeHiddenNameMaps($promoted, $this->projectHiddenBranch($child, $value), $branch);
+		}
+
+		return $promoted;
+	}
+
+	/**
+	 * @param array<string, mixed> $item
+	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed}> $promotions
+	 */
+	private function mergePromotions(array &$item, array $promotions, string $parentPath): void
+	{
+		foreach ($promotions as $name => $entry) {
+			if (array_key_exists($name, $item)) {
+				throw RelationSelectionException::ambiguousPromotion($parentPath, $name);
+			}
+
+			$item[$name] = $entry['value'];
+		}
+	}
+
+	/**
+	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed}> $target
+	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed}> $incoming
+	 */
+	private function mergeHiddenNameMaps(array &$target, array $incoming, LoadBranch $hiddenBranch): void
+	{
+		foreach ($incoming as $name => $entry) {
+			if (isset($target[$name]) && $target[$name]['branch'] !== $entry['branch']) {
+				throw RelationSelectionException::ambiguousPromotion(implode('.', $hiddenBranch->getRelation()->getPath()), $name);
+			}
+
+			$target[$name] = $entry;
+		}
+	}
+
+	/**
+	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed}> $target
+	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed}> $incoming
+	 */
+	private function mergeHiddenCollectionPromotions(array &$target, array $incoming): void
+	{
+		foreach ($incoming as $name => $entry) {
+			$branch = $entry['branch'];
+			$values = $entry['collection']
+				? (is_array($entry['value']) ? $entry['value'] : [])
+				: ($entry['value'] === null ? [] : [$entry['value']]);
+
+			if (! isset($target[$name])) {
+				$target[$name] = [
+					'branch' => $branch,
+					'collection' => true,
+					'value' => [],
+				];
+			} elseif ($target[$name]['branch'] !== $branch) {
+				throw RelationSelectionException::ambiguousPromotion(implode('.', $branch->getRelation()->getPath()), $name);
+			}
+
+			foreach ($values as $value) {
+				if (! $this->containsProjectedValue($target[$name]['value'], $value, $branch)) {
+					$target[$name]['value'][] = $value;
+				}
+			}
+		}
+	}
+
+	/**
+	 * @return array<string, array{branch: LoadBranch, collection: bool, value: mixed}>
+	 */
+	private function defaultHiddenPromotions(LoadBranch $branch, bool $forceCollection = false): array
+	{
+		$promoted = [];
+
+		foreach ($this->childBranches($branch) as $child) {
+			$name = $child->getRelation()->getName();
+
+			if ($child->getSelection()->isVisible()) {
+				$collection = $forceCollection || $this->isCollectionBranch($child);
+				$promoted[$name] = [
+					'branch' => $child,
+					'collection' => $collection,
+					'value' => $collection ? [] : null,
+				];
+				continue;
+			}
+
+			foreach ($this->defaultHiddenPromotions($child, $forceCollection || $this->isCollectionBranch($child)) as $childName => $entry) {
+				if (isset($promoted[$childName]) && $promoted[$childName]['branch'] !== $entry['branch']) {
+					throw RelationSelectionException::ambiguousPromotion(implode('.', $branch->getRelation()->getPath()), $childName);
+				}
+
+				$promoted[$childName] = $entry;
+			}
+		}
+
+		return $promoted;
+	}
+
+	private function containsProjectedValue(array $existing, mixed $candidate, LoadBranch $branch): bool
+	{
+		foreach ($existing as $item) {
+			if ($this->projectedIdentity($item, $branch) === $this->projectedIdentity($candidate, $branch)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function projectedIdentity(mixed $value, LoadBranch $branch): string
+	{
+		if (! is_array($value)) {
+			return json_encode($value, JSON_THROW_ON_ERROR);
+		}
+
+		$identity = [];
+
+		foreach ($branch->getRelation()->getCollection()->getPrimaryKey() as $fieldName) {
+			$identity[$fieldName] = $value[$fieldName] ?? null;
+		}
+
+		return json_encode($identity, JSON_THROW_ON_ERROR);
 	}
 
 	/**
@@ -442,7 +699,7 @@ final class LoadRuntime
 	 * @param non-empty-list<string> $fieldNames
 	 * @return non-empty-list<string>
 	 */
-	private function normalizeBranchFieldNames(CollectionInterface $collection, array $fieldNames): array
+	private function normalizeFieldNames(CollectionInterface $collection, array $fieldNames): array
 	{
 		return array_map(
 			static fn (string $fieldName): string => $collection->getField($fieldName)->getName(),
@@ -451,28 +708,12 @@ final class LoadRuntime
 	}
 
 	/**
-	 * @param non-empty-list<string> $fieldNames
-	 * @return non-empty-list<string>
-	 */
-	private function normalizeRootParentFields(CollectionInterface $collection, array $fieldNames): array
-	{
-		$normalized = [];
-
-		foreach ($fieldNames as $fieldName) {
-			$canonical = $collection->getField($fieldName)->getName();
-			$normalized[] = $this->ensureRootFieldParserName($canonical);
-		}
-
-		return $normalized;
-	}
-
-	/**
 	 * @return non-empty-list<string>
 	 */
 	private function rootIdentityFields(): array
 	{
 		return array_map(
-			fn (string $fieldName): string => $this->ensureRootFieldParserName($fieldName),
+			$this->ensureRootFieldParserName(...),
 			$this->rootPrimaryKeyFields(),
 		);
 	}
@@ -482,23 +723,7 @@ final class LoadRuntime
 	 */
 	private function rootPrimaryKeyFields(): array
 	{
-		return $this->normalizeBranchFieldNames($this->rootQuery->getCollection(), $this->rootQuery->getCollection()->getPrimaryKey());
-	}
-
-	/**
-	 * @template T
-	 * @param callable(LoadBranch): T $resolver
-	 * @return T
-	 */
-	private function requireActiveBranchMetadata(string $name, callable $resolver): mixed
-	{
-		$branch = $this->activeBranch;
-
-		if (! $branch instanceof LoadBranch) {
-			throw LoadRuntimeException::activeBranchMetadataUnavailable($name);
-		}
-
-		return $resolver($branch);
+		return $this->normalizeFieldNames($this->rootQuery->getCollection(), $this->rootQuery->getCollection()->getPrimaryKey());
 	}
 
 	private function requireActiveBranch(): LoadBranch
@@ -514,6 +739,62 @@ final class LoadRuntime
 	/**
 	 * @param list<string> $path
 	 */
+	private function branchKey(array $path): string
+	{
+		return json_encode($path, JSON_THROW_ON_ERROR);
+	}
+
+	/**
+	 * @return list<LoadBranch>
+	 */
+	private function rootBranches(): array
+	{
+		return array_values(array_filter(
+			$this->branches,
+			static fn (LoadBranch $branch): bool => $branch->getParent() === null,
+		));
+	}
+
+	/**
+	 * @return list<LoadBranch>
+	 */
+	private function childBranches(LoadBranch $branch): array
+	{
+		return array_values(array_filter(
+			$this->branches,
+			static fn (LoadBranch $child): bool => $child->getParent() === $branch,
+		));
+	}
+
+	private function isCollectionBranch(LoadBranch $branch): bool
+	{
+		return $branch->getNode() instanceof CollectionNode;
+	}
+
+	private function ensureBranchFieldSelection(
+		LoadBranch $branch,
+		SelectQuery $query,
+		QuerySourceInterface $source,
+		string $fieldName,
+	): string {
+		if ($source === $query) {
+			$query->select($query->field($fieldName));
+
+			return $fieldName;
+		}
+
+		$alias = $this->allocateAlias($branch->getRelation()->getPath(), $fieldName);
+
+		if (! $query->getSelections()->hasNamedExpression($alias)) {
+			$query->select($source->field($fieldName)->as($alias));
+		}
+
+		return $alias;
+	}
+
+	/**
+	 * @param list<string> $path
+	 */
 	private function allocateAlias(array $path, string $fieldName): string
 	{
 		return sprintf(
@@ -523,41 +804,17 @@ final class LoadRuntime
 		);
 	}
 
-	private function branchKey(RelationRef $relation): string
-	{
-		return json_encode($relation->getPath(), JSON_THROW_ON_ERROR);
-	}
-
-	private function queryIdentity(SelectQuery $query): string
-	{
-		return (string) spl_object_id($query);
-	}
-
-	private function ensureInternalFieldSelection(
-		SelectQuery $query,
-		string $fieldName,
-		array $path,
-	): string {
-		$alias = $this->allocateAlias($path, $fieldName);
-
-		if (! $query->getSelections()->hasNamedExpression($alias)) {
-			$query->select($query->field($fieldName)->as($alias));
-		}
-
-		return $alias;
-	}
-
 	private function ensureRootFieldParserName(string $fieldName): string
 	{
 		if (isset($this->rootFieldParserNames[$fieldName])) {
 			return $this->rootFieldParserNames[$fieldName];
 		}
 
-		$alias = $this->ensureInternalFieldSelection(
-			$this->rootQuery,
-			$fieldName,
-			['root', 'required', $fieldName],
-		);
+		$alias = $this->allocateAlias(['root', 'required'], $fieldName);
+
+		if (! $this->rootQuery->getSelections()->hasNamedExpression($alias)) {
+			$this->rootQuery->select($this->rootQuery->field($fieldName)->as($alias));
+		}
 
 		$this->rootFieldParserNames[$fieldName] = $alias;
 		$this->rootColumns[] = $alias;
@@ -573,14 +830,8 @@ final class LoadRuntime
 	{
 		$aliases = $this->rootValueAliases;
 
-		foreach ($this->rootQuery->getRelationSelections()->getAll() as $relation) {
-			if ($relation->getParentRelation() !== null) {
-				continue;
-			}
-
-			$branch = $this->branches[$this->branchKey($relation)] ?? null;
-
-			if (! $branch instanceof LoadBranch || $branch->getStrategy() !== LoadStrategy::JOIN) {
+		foreach ($this->rootBranches() as $branch) {
+			if ($branch->getQuery() !== $this->rootQuery) {
 				continue;
 			}
 
@@ -597,14 +848,8 @@ final class LoadRuntime
 	{
 		$aliases = $branch->getNodeValueAliases();
 
-		foreach ($this->rootQuery->getRelationSelections()->getAll() as $relation) {
-			if ($relation->getParentRelation() !== $branch->getRelation()) {
-				continue;
-			}
-
-			$child = $this->branches[$this->branchKey($relation)] ?? null;
-
-			if (! $child instanceof LoadBranch || $child->getStrategy() !== LoadStrategy::JOIN) {
+		foreach ($this->childBranches($branch) as $child) {
+			if ($child->getQuery() !== $branch->getQuery()) {
 				continue;
 			}
 
@@ -612,6 +857,25 @@ final class LoadRuntime
 		}
 
 		return $aliases;
+	}
+
+	private function assertSchedulableMethod(string $method): void
+	{
+		$loader = $this->requireActiveBranch()->getLoader();
+
+		if ($method === 'register' || $method === 'join') {
+			throw LoadRuntimeException::invalidScheduledMethod($this->requireActiveBranch()->getRelation(), $method);
+		}
+
+		if (! method_exists($loader, $method)) {
+			throw LoadRuntimeException::invalidScheduledMethod($this->requireActiveBranch()->getRelation(), $method);
+		}
+
+		$reflection = new \ReflectionMethod($loader, $method);
+
+		if (! $reflection->isPublic() || $reflection->getNumberOfParameters() !== 2) {
+			throw LoadRuntimeException::invalidScheduledMethod($this->requireActiveBranch()->getRelation(), $method);
+		}
 	}
 
 	private function isInternalSelection(mixed $expression): bool

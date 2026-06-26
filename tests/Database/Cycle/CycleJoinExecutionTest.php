@@ -310,6 +310,129 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testNestedStructuredTraversalKeepsIntermediateRelationsVisibleButStructuralByDefault(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name, $users->posts->author)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'posts' => [
+					['author' => ['id' => 1, 'name' => 'Ada', 'companyId' => 1]],
+					['author' => ['id' => 1, 'name' => 'Ada', 'companyId' => 1]],
+				],
+			],
+			[
+				'name' => 'Grace',
+				'posts' => [
+					['author' => ['id' => 2, 'name' => 'Grace', 'companyId' => 1]],
+				],
+			],
+			[
+				'name' => 'Linus',
+				'posts' => [],
+			],
+		], $rows);
+	}
+
+	public function testIntermediateStructuredRelationsCanBeExplicitlyLoaded(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name, $users->posts(load: true)->author)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'posts' => [
+					['id' => 1, 'userId' => 1, 'title' => 'Hello', 'published' => true, 'author' => ['id' => 1, 'name' => 'Ada', 'companyId' => 1]],
+					['id' => 2, 'userId' => 1, 'title' => 'World', 'published' => false, 'author' => ['id' => 1, 'name' => 'Ada', 'companyId' => 1]],
+				],
+			],
+			[
+				'name' => 'Grace',
+				'posts' => [
+					['id' => 3, 'userId' => 2, 'title' => 'Graph', 'published' => true, 'author' => ['id' => 2, 'name' => 'Grace', 'companyId' => 1]],
+				],
+			],
+			[
+				'name' => 'Linus',
+				'posts' => [],
+			],
+		], $rows);
+	}
+
+	public function testHiddenIntermediatePluralRelationsPromoteVisibleDescendants(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name, $users->posts(visible: false)->author)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'author' => [
+					['id' => 1, 'name' => 'Ada', 'companyId' => 1],
+				],
+			],
+			[
+				'name' => 'Grace',
+				'author' => [
+					['id' => 2, 'name' => 'Grace', 'companyId' => 1],
+				],
+			],
+			[
+				'name' => 'Linus',
+				'author' => [],
+			],
+		], $rows);
+	}
+
+	public function testStrongerSelectionsUpgradeHiddenTraversalBranchesInsteadOfDuplicatingOutput(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select(
+				$users->name,
+				$users->posts(visible: false)->author,
+				$users->posts,
+			)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'posts' => [
+					['id' => 1, 'userId' => 1, 'title' => 'Hello', 'published' => true, 'author' => ['id' => 1, 'name' => 'Ada', 'companyId' => 1]],
+					['id' => 2, 'userId' => 1, 'title' => 'World', 'published' => false, 'author' => ['id' => 1, 'name' => 'Ada', 'companyId' => 1]],
+				],
+			],
+			[
+				'name' => 'Grace',
+				'posts' => [
+					['id' => 3, 'userId' => 2, 'title' => 'Graph', 'published' => true, 'author' => ['id' => 2, 'name' => 'Grace', 'companyId' => 1]],
+				],
+			],
+			[
+				'name' => 'Linus',
+				'posts' => [],
+			],
+		], $rows);
+	}
+
 	public function testFirstOfManyJoinFailsExplicitly(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));

@@ -10,6 +10,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Query\Exception\RelationLoaderException;
+use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Exception\UnknownQueryMemberException;
 use ON\Data\Query\Exception\UnknownQueryRelationException;
@@ -40,6 +41,8 @@ final class RelationRef implements QuerySourceInterface
 		private readonly SelectQuery $query,
 		private readonly RelationInterface $relation,
 		private readonly ?self $parentRelation = null,
+		private readonly bool $load = false,
+		private readonly bool $visible = true,
 	) {
 	}
 
@@ -56,6 +59,16 @@ final class RelationRef implements QuerySourceInterface
 	public function getParentRelation(): ?self
 	{
 		return $this->parentRelation;
+	}
+
+	public function isLoaded(): bool
+	{
+		return $this->load;
+	}
+
+	public function isVisible(): bool
+	{
+		return $this->visible;
 	}
 
 	public function getParentSource(): QuerySourceInterface
@@ -138,6 +151,66 @@ final class RelationRef implements QuerySourceInterface
 		}
 
 		throw UnknownQueryMemberException::forDefinition($name, $collection->getName());
+	}
+
+	public function __call(string $name, array $arguments): self
+	{
+		if (! $this->getCollection()->hasRelation($name)) {
+			throw UnknownQueryMemberException::forDefinition($name, $this->getCollection()->getName());
+		}
+
+		return $this->relation($name)->withSelectionArguments($arguments);
+	}
+
+	public function withSelectionOptions(?bool $load = null, ?bool $visible = null): self
+	{
+		$load ??= $this->load;
+		$visible ??= $this->visible;
+
+		if ($load && ! $visible) {
+			throw RelationSelectionException::hiddenLoadedRelation($this->getPath());
+		}
+
+		if ($load === $this->load && $visible === $this->visible) {
+			return $this;
+		}
+
+		return new self(
+			$this->query,
+			$this->relation,
+			$this->parentRelation,
+			$load,
+			$visible,
+		);
+	}
+
+	public function withSelectionArguments(array $arguments): self
+	{
+		$load = null;
+		$visible = null;
+
+		foreach ($arguments as $name => $value) {
+			if (is_int($name)) {
+				throw RelationSelectionException::positionalRelationOption($this->getPath());
+			}
+
+			if ($name !== 'load' && $name !== 'visible') {
+				throw RelationSelectionException::unknownRelationOption($this->getPath(), (string) $name);
+			}
+
+			if (! is_bool($value)) {
+				throw RelationSelectionException::invalidRelationOptionType($this->getPath(), (string) $name);
+			}
+
+			if ($name === 'load') {
+				$load = $value;
+				continue;
+			}
+
+			$visible = $value;
+		}
+
+		return $this->withSelectionOptions($load, $visible);
 	}
 
 	public function getLoader(): LoaderInterface

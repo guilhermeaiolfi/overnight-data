@@ -4,7 +4,7 @@ Phase 8B connects relation selections to the Phase 8A structural parser so one `
 
 ## Public API
 
-`SelectQuery::select()` now accepts `RelationRef` in addition to scalar expressions:
+`SelectQuery::select()` accepts `RelationRef` in addition to scalar expressions:
 
 ```php
 $users->select(
@@ -17,6 +17,18 @@ $users->select(
 
 Relation selections describe result shape, not necessarily SQL join shape.
 
+Each relation-path segment has two independent result options:
+
+- `load`: include that relation's own public/default fields
+- `visible`: preserve that relation as a container in the nested result
+
+Defaults for traversed intermediate segments are:
+
+- `load = false`
+- `visible = true`
+
+The terminal relation passed directly to `select()` is always treated as loaded and visible.
+
 This means:
 
 - scalar expressions still produce flat root values
@@ -24,13 +36,44 @@ This means:
 - `RelationRef` selections produce nested arrays
 - nested selections automatically register missing ancestors
 
-Example:
+Examples:
 
 ```php
 $users->select($users->posts->author);
 ```
 
-Behaves structurally like:
+This traverses `posts` as a visible structural container but does not load ordinary post fields:
+
+```php
+[
+    [
+        'posts' => [
+            [
+                'author' => [
+                    'id' => 10,
+                    'name' => 'Ana',
+                ],
+            ],
+        ],
+    ],
+]
+```
+
+To load the intermediate relation's own fields too:
+
+```php
+$users->select($users->posts(load: true)->author);
+```
+
+To hide an intermediate relation and promote its visible descendants:
+
+```php
+$users->select($users->posts(visible: false)->author);
+```
+
+This removes `posts` from the public result and promotes `author` to the nearest visible ancestor. If the hidden segment is plural, the promoted descendant is also exposed as a collection.
+
+Equivalent structural expansion for a loaded intermediate relation is:
 
 ```php
 $users->select(
@@ -39,7 +82,13 @@ $users->select(
 );
 ```
 
-Repeated relation selection is idempotent, and every selected relation must belong to the same `SelectQuery`.
+Repeated relation selection merges by logical relation path. Stronger selections upgrade weaker ones:
+
+- loaded and visible
+- visible structural traversal
+- hidden traversal
+
+Every selected relation must belong to the same `SelectQuery`.
 
 ## Root Projection Rules
 
@@ -63,7 +112,14 @@ Phase 8B ships with loader-owned defaults:
 - `HasOneLoader` uses `LoadStrategy::JOIN`
 - `HasManyLoader` uses `LoadStrategy::SEPARATE_QUERY`
 
-The strategy affects query execution and parser-node attachment, but not node creation:
+The strategy affects query execution and parser-node attachment, but not public path semantics:
+
+- `load` controls public relation fields
+- `visible` controls result shape
+- neither option forces `JOIN` or separate-query loading
+- the concrete relation loader owns acquisition strategy
+
+The built-in loaders currently create these parser nodes:
 
 - `BelongsTo` creates `SingularNode`
 - `HasOne` creates `SingularNode`
@@ -97,7 +153,7 @@ Built-in relation result containers follow these shapes:
 - `HasOne`: nested record or `null`
 - `HasMany`: list of nested records or `[]`
 
-Related rows currently include the target collection's full field set in storage representation.
+Loaded terminal relations and `load: true` intermediate relations expose their default/public fields. Visible structural relations keep only internally required fields during parsing and projection strips those fields from the public result.
 
 ## Composite Keys
 

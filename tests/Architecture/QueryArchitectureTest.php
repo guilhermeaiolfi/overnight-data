@@ -8,7 +8,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\BelongsToRelation;
 use ON\Data\Definition\Relation\HasManyRelation;
 use ON\Data\Definition\Relation\HasOneRelation;
-use ON\Data\Query\Relation\LoadRuntime;
+use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
@@ -90,14 +90,14 @@ final class QueryArchitectureTest extends TestCase
 		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Definition/Relation/BuiltInRelationTypes.php');
 	}
 
-	public function testLoadRuntimeRegisterAcceptsOnlyAbstractParserNodes(): void
+	public function testLoaderRegisterReturnsAnAbstractParserNode(): void
 	{
-		$reflection = new ReflectionMethod(LoadRuntime::class, 'register');
+		$reflection = new ReflectionMethod(LoaderInterface::class, 'register');
 		$parameters = $reflection->getParameters();
 
-		self::assertCount(1, $parameters);
-		self::assertInstanceOf(ReflectionNamedType::class, $parameters[0]->getType());
-		self::assertSame(AbstractNode::class, $parameters[0]->getType()->getName());
+		self::assertCount(2, $parameters);
+		self::assertInstanceOf(ReflectionNamedType::class, $reflection->getReturnType());
+		self::assertSame(AbstractNode::class, $reflection->getReturnType()->getName());
 	}
 
 	public function testQueryAndDatabaseInfrastructureDoesNotInterpretConcreteRelationExecutionSemantics(): void

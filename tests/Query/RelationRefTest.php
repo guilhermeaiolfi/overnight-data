@@ -83,6 +83,43 @@ final class RelationRefTest extends TestCase
 		self::assertSame($users->posts->author->name, $users->posts->author->field('name'));
 	}
 
+	public function testRelationMethodAccessSupportsImmutableSelectionOptions(): void
+	{
+		$users = query($this->makeRegistry()->getCollection('users'));
+		$default = $users->posts;
+		$loaded = $users->posts(load: true);
+		$hidden = $users->posts(visible: false);
+
+		self::assertFalse($default->isLoaded());
+		self::assertTrue($default->isVisible());
+		self::assertTrue($loaded->isLoaded());
+		self::assertTrue($loaded->isVisible());
+		self::assertFalse($hidden->isLoaded());
+		self::assertFalse($hidden->isVisible());
+		self::assertSame($default, $users->posts);
+		self::assertNotSame($default, $loaded);
+		self::assertNotSame($default, $hidden);
+	}
+
+	public function testInvalidRelationSelectionOptionsAreRejected(): void
+	{
+		$users = query($this->makeRegistry()->getCollection('users'));
+
+		foreach ([
+			static fn () => $users->posts(load: true, visible: false),
+			static fn () => $users->posts(foo: true),
+			static fn () => $users->posts(true),
+			static fn () => $users->posts(load: 'yes'),
+		] as $call) {
+			try {
+				$call();
+				self::fail('Expected invalid relation-selection options to throw.');
+			} catch (RelationSelectionException) {
+				self::assertTrue(true);
+			}
+		}
+	}
+
 	public function testSeparatePathsToSameTargetRemainDistinct(): void
 	{
 		$orders = query($this->makeRegistry()->getCollection('orders'));
@@ -167,7 +204,9 @@ final class RelationRefTest extends TestCase
 		$users->select($users->posts);
 
 		self::assertCount(0, $users->getSelections());
-		self::assertSame([$users->posts], $users->getRelationSelections()->getAll());
+		self::assertSame([
+			['posts', true, true],
+		], $this->selectionState($users));
 	}
 
 	public function testNestedRelationSelectionAddsAncestorsOnce(): void
@@ -178,10 +217,44 @@ final class RelationRefTest extends TestCase
 			->select($users->posts->author)
 			->select($users->posts);
 
-		self::assertSame(
-			[$users->posts, $users->posts->author],
-			$users->getRelationSelections()->getAll(),
+		self::assertSame([
+			['posts', true, true],
+			['posts.author', true, true],
+		], $this->selectionState($users));
+	}
+
+	public function testNestedRelationSelectionDefaultsIntermediateSegmentsToVisibleStructuralTraversal(): void
+	{
+		$users = query($this->makeRegistry()->getCollection('users'));
+		$users->select($users->posts->author);
+
+		self::assertSame([
+			['posts', false, true],
+			['posts.author', true, true],
+		], $this->selectionState($users));
+	}
+
+	public function testNestedRelationSelectionMergesToTheStrongestPathOptions(): void
+	{
+		$users = query($this->makeRegistry()->getCollection('users'));
+
+		$users->select(
+			$users->posts(visible: false)->author,
+			$users->posts,
 		);
+
+		self::assertSame([
+			['posts', true, true],
+			['posts.author', true, true],
+		], $this->selectionState($users));
+	}
+
+	public function testHiddenTerminalRelationSelectionIsRejected(): void
+	{
+		$users = query($this->makeRegistry()->getCollection('users'));
+
+		$this->expectException(RelationSelectionException::class);
+		$users->select($users->posts(visible: false));
 	}
 
 	public function testSelectingAForeignRelationIsRejected(): void
@@ -226,5 +299,20 @@ final class RelationRefTest extends TestCase
 		$employees->relation('manager', CustomRelation::class)->collection('employees');
 
 		return $registry;
+	}
+
+	/**
+	 * @return list<array{0: string, 1: bool, 2: bool}>
+	 */
+	private function selectionState(\ON\Data\Query\SelectQuery $query): array
+	{
+		return array_map(
+			static fn ($selection): array => [
+				implode('.', $selection->getPath()),
+				$selection->isLoaded(),
+				$selection->isVisible(),
+			],
+			$query->getRelationSelections()->getAll(),
+		);
 	}
 }

@@ -69,4 +69,46 @@ final class LoadRuntimeException extends LogicException
 			implode('.', $relation->getPath()),
 		));
 	}
+
+	public static function nextPassNotAllowedDuringRegister(RelationRef $relation): self
+	{
+		return new self(sprintf(
+			'Loader cannot schedule nextPass() during register() for relation "%s".',
+			implode('.', $relation->getPath()),
+		));
+	}
+
+	public static function multipleNextPasses(RelationRef $relation, string $method): self
+	{
+		return new self(sprintf(
+			'Loader scheduled more than one next pass from "%s" for relation "%s".',
+			$method,
+			implode('.', $relation->getPath()),
+		));
+	}
+
+	public static function invalidScheduledMethod(RelationRef $relation, string $method): self
+	{
+		return new self(sprintf(
+			'Loader cannot schedule method "%s" for relation "%s".',
+			$method,
+			implode('.', $relation->getPath()),
+		));
+	}
+
+	public static function scheduleBoundaryMissing(RelationRef $relation): self
+	{
+		return new self(sprintf(
+			'LoadRuntime could not determine a scheduling boundary for relation "%s".',
+			implode('.', $relation->getPath()),
+		));
+	}
+
+	public static function queryNotConfigured(RelationRef $relation): self
+	{
+		return new self(sprintf(
+			'Loader did not configure a result query for relation "%s".',
+			implode('.', $relation->getPath()),
+		));
+	}
 }

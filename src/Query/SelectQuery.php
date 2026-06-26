@@ -151,6 +151,15 @@ final class SelectQuery implements QuerySourceInterface
 		throw UnknownQueryMemberException::forDefinition($name, $this->collection->getName());
 	}
 
+	public function __call(string $name, array $arguments): RelationRef
+	{
+		if (! $this->collection->hasRelation($name)) {
+			throw UnknownQueryMemberException::forDefinition($name, $this->collection->getName());
+		}
+
+		return $this->relation($name)->withSelectionArguments($arguments);
+	}
+
 	public function star(): StarExpression
 	{
 		return $this->star ??= new StarExpression($this);
@@ -472,7 +481,7 @@ final class SelectQuery implements QuerySourceInterface
 		$rootRelationNames = [];
 
 		foreach ($this->relationSelections->getAll() as $relation) {
-			if ($relation->getParentRelation() !== null) {
+			if ($relation->getParentPathKey() !== null) {
 				continue;
 			}
 
