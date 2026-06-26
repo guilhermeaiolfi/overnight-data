@@ -318,9 +318,7 @@ final class LoadRuntime
 				$selection,
 				$parent,
 				$selection->getRelation()->getLoader(),
-				$selection->isLoaded()
-					? $this->collectionFieldNames($selection->getRelation()->getCollection())
-					: [],
+				$this->publicFieldsForSelection($selection),
 			);
 		}
 	}
@@ -472,7 +470,14 @@ final class LoadRuntime
 
 		try {
 			while ($this->pendingBoundaryQueries !== []) {
-				$query = array_shift($this->pendingBoundaryQueries);
+				$key = array_key_first($this->pendingBoundaryQueries);
+
+				if ($key === null) {
+					break;
+				}
+
+				$query = $this->pendingBoundaryQueries[$key];
+				unset($this->pendingBoundaryQueries[$key]);
 
 				if (! $query instanceof SelectQuery) {
 					continue;
@@ -582,7 +587,7 @@ final class LoadRuntime
 		$item = [];
 
 		if ($branch->getSelection()->isLoaded()) {
-			foreach ($branch->getRelation()->getCollection()->getVisibleFields() as $fieldName) {
+			foreach ($branch->getPublicFields() as $fieldName) {
 				if (array_key_exists($fieldName, $record)) {
 					$item[$fieldName] = $record[$fieldName];
 				}
@@ -828,6 +833,22 @@ final class LoadRuntime
 		}
 
 		return $fields;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function publicFieldsForSelection(RelationSelection $selection): array
+	{
+		if (! $selection->isLoaded()) {
+			return [];
+		}
+
+		if ($selection->getFields() !== null) {
+			return $selection->getFields();
+		}
+
+		return $selection->getRelation()->getCollection()->getVisibleFields();
 	}
 
 	/**
