@@ -125,6 +125,12 @@ The built-in loaders currently create these parser nodes:
 - `HasOne` creates `SingularNode`
 - `HasMany` creates `CollectionNode`
 
+The structured-loading lifecycle is now split deliberately:
+
+- a preparatory field-collection pass runs bottom-up so every parent node knows all required identity/reference fields before construction
+- `register()` runs parent-first, constructs the parser node, chooses joined versus linked attachment from the strategy, and attaches the node immediately
+- `load()` configures acquisition only: joins, related queries, query context, and later scheduled passes
+
 ## Mixed Nested Loading
 
 Nested branches can mix joined and separate-query execution.

@@ -100,6 +100,38 @@ final class QueryArchitectureTest extends TestCase
 		self::assertSame(AbstractNode::class, $reflection->getReturnType()->getName());
 	}
 
+	public function testLoaderInterfaceDoesNotExposeCollectFieldsHook(): void
+	{
+		self::assertFalse(method_exists(LoaderInterface::class, 'collectFields'));
+	}
+
+	public function testRuntimeAndBuiltInLoadersDoNotContainCollectFieldsLifecycle(): void
+	{
+		foreach ([
+			dirname(__DIR__, 2) . '/src/Query/Relation/LoadRuntime.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/AbstractLoader.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/BelongsToLoader.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasOneLoader.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasManyLoader.php',
+		] as $path) {
+			self::assertStringNotContainsString('collectFields', (string) file_get_contents($path), $path);
+			self::assertStringNotContainsString('collectBranchFields', (string) file_get_contents($path), $path);
+		}
+	}
+
+	public function testProductionLoaderLoadMethodsDoNotPerformParserAttachment(): void
+	{
+		foreach ([
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/BelongsToLoader.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasOneLoader.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasManyLoader.php',
+		] as $path) {
+			$contents = (string) file_get_contents($path);
+			self::assertStringNotContainsString('->joinNode(', $contents, $path);
+			self::assertStringNotContainsString('->linkNode(', $contents, $path);
+		}
+	}
+
 	public function testQueryAndDatabaseInfrastructureDoesNotInterpretConcreteRelationExecutionSemantics(): void
 	{
 		$root = dirname(__DIR__, 2);

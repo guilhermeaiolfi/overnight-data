@@ -14,8 +14,6 @@ interface LoaderInterface
 {
 	public function join(RelationRef $relation): QuerySourceInterface;
 
-	public function collectFields(RelationRef $relation, LoadRuntime $runtime): void;
-
 	public function register(RelationRef $relation, LoadRuntime $runtime): AbstractNode;
 
 	public function load(RelationRef $relation, LoadRuntime $runtime): void;

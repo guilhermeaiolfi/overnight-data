@@ -48,10 +48,6 @@ abstract class AbstractLoader implements LoaderInterface
 		throw RelationLoaderException::loadingNotImplemented($relation);
 	}
 
-	public function collectFields(RelationRef $relation, LoadRuntime $runtime): void
-	{
-	}
-
 	public function register(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
 		throw RelationLoaderException::loadingNotImplemented($relation);

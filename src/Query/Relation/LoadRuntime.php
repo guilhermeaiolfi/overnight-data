@@ -140,6 +140,11 @@ final class LoadRuntime
 		return $parent?->getNode() ?? $this->requireRootNode();
 	}
 
+	public function setJoinedAttachment(bool $joined): void
+	{
+		$this->requireActiveBranch()->setJoinedAttachment($joined);
+	}
+
 	public function getQuery(): SelectQuery
 	{
 		return $this->requireActiveBranch()->getQuery();
@@ -174,19 +179,7 @@ final class LoadRuntime
 		QuerySourceInterface $source,
 		?RelationRef $queryLocalRelation = null,
 	): void {
-		$branch = $this->requireActiveBranch();
-		$aliases = [];
-
-		foreach ($branch->getNodeColumns() as $fieldName) {
-			$aliases[] = $this->ensureBranchFieldSelection(
-				$branch,
-				$query,
-				$source,
-				$fieldName,
-			);
-		}
-
-		$branch->setQueryContext($query, $source, $queryLocalRelation, $aliases);
+		$this->requireActiveBranch()->setQueryContext($query, $source, $queryLocalRelation);
 	}
 
 	/**
@@ -243,10 +236,9 @@ final class LoadRuntime
 
 		$this->planRootSelections();
 		$this->buildBranchSkeletons();
-		$this->collectBranchFields();
-		$this->rootNode = new RootNode($this->rootColumns, $this->rootIdentityFields());
-		$this->registerBranches();
 		$this->loadBranches();
+		$this->registerParserTree();
+		$this->finalizeBranchSelections();
 	}
 
 	private function planRootSelections(): void
@@ -307,50 +299,6 @@ final class LoadRuntime
 		}
 	}
 
-	private function collectBranchFields(): void
-	{
-		$branches = array_values($this->branches);
-		usort($branches, static fn (LoadBranch $left, LoadBranch $right): int => count($right->getRelation()->getPath()) <=> count($left->getRelation()->getPath()));
-
-		foreach ($branches as $branch) {
-			$this->activeBranch = $branch;
-			$this->activeMethod = 'collectFields';
-
-			try {
-				$branch->getLoader()->collectFields($branch->getRelation(), $this);
-			} finally {
-				$this->activeMethod = null;
-				$this->activeBranch = null;
-			}
-		}
-	}
-
-	private function registerBranches(): void
-	{
-		$branches = array_values($this->branches);
-		usort($branches, static fn (LoadBranch $left, LoadBranch $right): int => count($left->getRelation()->getPath()) <=> count($right->getRelation()->getPath()));
-
-		foreach ($branches as $branch) {
-			$this->activeBranch = $branch;
-			$this->activeMethod = 'register';
-			$this->registering = true;
-
-			try {
-				$node = $branch->getLoader()->register($branch->getRelation(), $this);
-			} finally {
-				$this->registering = false;
-				$this->activeMethod = null;
-				$this->activeBranch = null;
-			}
-
-			if (! $node instanceof AbstractNode) {
-				throw LoadRuntimeException::nodeNotRegistered($branch->getRelation());
-			}
-
-			$branch->setNode($node);
-		}
-	}
-
 	private function loadBranches(): void
 	{
 		$branches = array_values($this->branches);
@@ -364,6 +312,85 @@ final class LoadRuntime
 				throw LoadRuntimeException::queryNotConfigured($branch->getRelation());
 			}
 		}
+	}
+
+	private function registerParserTree(): void
+	{
+		$children = [];
+
+		foreach ($this->rootBranches() as $branch) {
+			$children[] = [$branch, $this->registerBranch($branch)];
+		}
+
+		$this->rootNode = new RootNode($this->rootColumns, $this->rootIdentityFields());
+
+		foreach ($children as [$branch, $node]) {
+			if ($branch->isJoinedAttachment()) {
+				$this->rootNode->joinNode($branch->getRelation()->getName(), $node);
+				continue;
+			}
+
+			$this->rootNode->linkNode($branch->getRelation()->getName(), $node);
+		}
+	}
+
+	private function finalizeBranchSelections(): void
+	{
+		$branches = array_values($this->branches);
+		usort($branches, static fn (LoadBranch $left, LoadBranch $right): int => count($left->getRelation()->getPath()) <=> count($right->getRelation()->getPath()));
+
+		foreach ($branches as $branch) {
+			$aliases = [];
+
+			foreach ($branch->getNodeColumns() as $fieldName) {
+				$aliases[] = $this->ensureBranchFieldSelection(
+					$branch,
+					$branch->getQuery(),
+					$branch->getSource(),
+					$fieldName,
+				);
+			}
+
+			$branch->setNodeValueAliases($aliases);
+		}
+	}
+
+	private function registerBranch(LoadBranch $branch): AbstractNode
+	{
+		$children = [];
+
+		foreach ($this->childBranches($branch) as $child) {
+			$children[] = [$child, $this->registerBranch($child)];
+		}
+
+		$this->activeBranch = $branch;
+		$this->activeMethod = 'register';
+		$this->registering = true;
+
+		try {
+			$node = $branch->getLoader()->register($branch->getRelation(), $this);
+		} finally {
+			$this->registering = false;
+			$this->activeMethod = null;
+			$this->activeBranch = null;
+		}
+
+		if (! $node instanceof AbstractNode) {
+			throw LoadRuntimeException::nodeNotRegistered($branch->getRelation());
+		}
+
+		$branch->setNode($node);
+
+		foreach ($children as [$child, $childNode]) {
+			if ($child->isJoinedAttachment()) {
+				$node->joinNode($child->getRelation()->getName(), $childNode);
+				continue;
+			}
+
+			$node->linkNode($child->getRelation()->getName(), $childNode);
+		}
+
+		return $node;
 	}
 
 	private function invokeLoaderMethod(LoadBranch $branch, string $method, SelectQuery $boundaryQuery): void

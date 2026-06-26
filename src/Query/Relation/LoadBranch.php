@@ -39,6 +39,8 @@ final class LoadBranch
 
 	private ?SelectQuery $scheduledBoundaryQuery = null;
 
+	private ?bool $joinedAttachment = null;
+
 	/**
 	 * @param list<string> $publicFields
 	 */
@@ -113,18 +115,16 @@ final class LoadBranch
 	}
 
 	/**
-	 * @param list<string> $aliases
+	 * Store the query/source chosen during the initial load-planning stage.
 	 */
 	public function setQueryContext(
 		SelectQuery $query,
 		QuerySourceInterface $source,
 		?RelationRef $queryLocalRelation,
-		array $aliases,
 	): void {
 		$this->query = $query;
 		$this->source = $source;
 		$this->queryLocalRelation = $queryLocalRelation;
-		$this->valueAliases = $aliases;
 	}
 
 	public function getQuery(): SelectQuery
@@ -150,6 +150,14 @@ final class LoadBranch
 		return $this->valueAliases;
 	}
 
+	/**
+	 * @param list<string> $aliases
+	 */
+	public function setNodeValueAliases(array $aliases): void
+	{
+		$this->valueAliases = $aliases;
+	}
+
 	public function schedule(string $method, SelectQuery $boundaryQuery): void
 	{
 		$this->scheduledMethod = $method;
@@ -170,5 +178,15 @@ final class LoadBranch
 	public function getScheduledBoundaryQuery(): ?SelectQuery
 	{
 		return $this->scheduledBoundaryQuery;
+	}
+
+	public function setJoinedAttachment(bool $joined): void
+	{
+		$this->joinedAttachment = $joined;
+	}
+
+	public function isJoinedAttachment(): bool
+	{
+		return $this->joinedAttachment ?? throw new LogicException('Load branch attachment mode is not configured.');
 	}
 }

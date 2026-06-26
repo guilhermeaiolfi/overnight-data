@@ -13,40 +13,24 @@ use function ON\Data\Query\x;
 
 final class HasManyLoader extends AbstractLoader
 {
-	public function collectFields(RelationRef $relation, LoadRuntime $runtime): void
-	{
-		$runtime->requireBranchFields($relation->getCollection()->getPrimaryKey());
-		$runtime->requireBranchFields($this->relationKeys($relation, 'outer'));
-		$runtime->requireParentFields($this->relationKeys($relation, 'inner'));
-	}
-
 	public function register(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
 		$identity = $runtime->requireBranchFields($relation->getCollection()->getPrimaryKey());
 		$child = $runtime->requireBranchFields($this->relationKeys($relation, 'outer'));
 		$parent = $runtime->requireParentFields($this->relationKeys($relation, 'inner'));
-		$node = new CollectionNode(
+
+		return new CollectionNode(
 			$runtime->getNodeColumns(),
 			$identity,
 			$child,
 			$parent,
 		);
-		$strategy = $runtime->getLoadStrategy($this->getDefaultLoadStrategy());
-
-		if ($strategy === LoadStrategy::JOIN) {
-			$runtime->getParentNode()->joinNode($relation->getName(), $node);
-
-			return $node;
-		}
-
-		$runtime->getParentNode()->linkNode($relation->getName(), $node);
-
-		return $node;
 	}
 
 	public function load(RelationRef $relation, LoadRuntime $runtime): void
 	{
 		$strategy = $runtime->getLoadStrategy($this->getDefaultLoadStrategy());
+		$runtime->setJoinedAttachment($strategy === LoadStrategy::JOIN);
 
 		if ($strategy === LoadStrategy::JOIN) {
 			$queryRelation = $runtime->getQueryRelation();
