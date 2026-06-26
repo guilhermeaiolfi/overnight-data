@@ -11,6 +11,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Query\Condition\ConditionInterface;
+use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Exception\UnknownQueryExpressionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Exception\UnknownQueryMemberException;
@@ -21,6 +22,7 @@ use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Relation\RelationRef;
+use ON\Data\Query\Relation\RelationSelectionTree;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Sort\Sort;
 
@@ -44,6 +46,8 @@ final class SelectQuery implements QuerySourceInterface
 	private ?StarExpression $star = null;
 
 	private readonly SelectionList $selections;
+
+	private readonly RelationSelectionTree $relationSelections;
 
 	/**
 	 * @var list<ConditionInterface>
@@ -74,6 +78,7 @@ final class SelectQuery implements QuerySourceInterface
 		private ?QueryExecutorInterface $executor = null,
 	) {
 		$this->selections = new SelectionList();
+		$this->relationSelections = new RelationSelectionTree();
 	}
 
 	public function getQuery(): SelectQuery
@@ -156,27 +161,46 @@ final class SelectQuery implements QuerySourceInterface
 		return (new SubqueryExpression($this))->as($alias);
 	}
 
-	public function select(ValueExpressionInterface|AliasedExpression|SelectQuery ...$expressions): self
+	public function select(ValueExpressionInterface|AliasedExpression|SelectQuery|RelationRef ...$expressions): self
 	{
 		if ($expressions === []) {
 			throw new InvalidArgumentException('SelectQuery::select() requires at least one expression.');
 		}
 
-		$normalized = array_map(
-			static fn (ValueExpressionInterface|AliasedExpression|SelectQuery $expression): ValueExpressionInterface|AliasedExpression => $expression instanceof SelectQuery
-				? new SubqueryExpression($expression)
-				: $expression,
-			$expressions,
-		);
+		$normalized = [];
 
-		$this->selections->addExplicit($normalized);
+		foreach ($expressions as $expression) {
+			if ($expression instanceof RelationRef) {
+				if ($expression->getQuery() !== $this) {
+					throw RelationSelectionException::foreignQueryRelation($expression, $this);
+				}
+
+				$this->relationSelections->add($expression);
+
+				continue;
+			}
+
+			$normalized[] = $expression instanceof SelectQuery
+				? new SubqueryExpression($expression)
+				: $expression;
+		}
+
+		if ($normalized !== []) {
+			$this->selections->addExplicit($normalized);
+		}
+
+		$this->assertNoRelationSelectionCollisions();
 
 		return $this;
 	}
 
-	public function require(FieldRef $field, string $reason): self
+	public function require(FieldRef|ValueExpressionInterface|AliasedExpression|SelectQuery $field, string $reason): self
 	{
-		$this->selections->require($field, $reason);
+		$expression = $field instanceof SelectQuery
+			? new SubqueryExpression($field)
+			: $field;
+
+		$this->selections->require($expression, $reason);
 
 		return $this;
 	}
@@ -250,6 +274,11 @@ final class SelectQuery implements QuerySourceInterface
 	public function getSelections(): SelectionList
 	{
 		return $this->selections;
+	}
+
+	public function getRelationSelections(): RelationSelectionTree
+	{
+		return $this->relationSelections;
 	}
 
 	public function get(string $name): ValueExpressionInterface
@@ -355,7 +384,13 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	public function fetchAll(): array
 	{
-		return $this->requireExecutor()->fetchAll($this);
+		$executor = $this->requireExecutor();
+
+		if ($this->relationSelections->isEmpty()) {
+			return $executor->fetchAll($this);
+		}
+
+		return (new Relation\LoadRuntime($this, $executor))->fetchAll();
 	}
 
 	/**
@@ -363,7 +398,13 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	public function fetchOne(): ?array
 	{
-		return $this->requireExecutor()->fetchOne($this);
+		$executor = $this->requireExecutor();
+
+		if ($this->relationSelections->isEmpty()) {
+			return $executor->fetchOne($this);
+		}
+
+		return (new Relation\LoadRuntime($this, $executor))->fetchOne();
 	}
 
 	/**
@@ -371,7 +412,16 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	public function iterate(): iterable
 	{
+		if (! $this->relationSelections->isEmpty()) {
+			throw RelationSelectionException::iterateNotSupported();
+		}
+
 		return $this->requireExecutor()->iterate($this);
+	}
+
+	public function related(CollectionInterface $collection): self
+	{
+		return new self($collection, $this->executor);
 	}
 
 	private function normalizeValueExpression(ValueExpressionInterface|SelectQuery $expression): ValueExpressionInterface
@@ -411,5 +461,34 @@ final class SelectQuery implements QuerySourceInterface
 		return $path === []
 			? $source->getCollection()->getName()
 			: implode('.', $path);
+	}
+
+	private function assertNoRelationSelectionCollisions(): void
+	{
+		if ($this->relationSelections->isEmpty()) {
+			return;
+		}
+
+		$rootRelationNames = [];
+
+		foreach ($this->relationSelections->getAll() as $relation) {
+			if ($relation->getParentRelation() !== null) {
+				continue;
+			}
+
+			$rootRelationNames[$relation->getName()] = true;
+		}
+
+		foreach ($this->selections->getExplicit() as $selection) {
+			$expression = $selection->getExpression();
+
+			if (! $expression instanceof AliasedExpression) {
+				continue;
+			}
+
+			if (isset($rootRelationNames[$expression->getAlias()])) {
+				throw RelationSelectionException::rootAliasCollision($expression->getAlias());
+			}
+		}
 	}
 }
