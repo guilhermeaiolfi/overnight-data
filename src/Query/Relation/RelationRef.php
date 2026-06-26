@@ -43,6 +43,7 @@ final class RelationRef implements QuerySourceInterface
 		private readonly ?self $parentRelation = null,
 		private readonly bool $load = false,
 		private readonly bool $visible = true,
+		private readonly ?array $fields = null,
 	) {
 	}
 
@@ -69,6 +70,11 @@ final class RelationRef implements QuerySourceInterface
 	public function isVisible(): bool
 	{
 		return $this->visible;
+	}
+
+	public function getFields(): ?array
+	{
+		return $this->fields;
 	}
 
 	public function getParentSource(): QuerySourceInterface
@@ -181,6 +187,25 @@ final class RelationRef implements QuerySourceInterface
 			$this->parentRelation,
 			$load,
 			$visible,
+			$this->fields,
+		);
+	}
+
+	public function withFields(array $fields): self
+	{
+		$fields = $this->normalizeSelectionFields($fields);
+
+		if ($fields === $this->fields) {
+			return $this;
+		}
+
+		return new self(
+			$this->query,
+			$this->relation,
+			$this->parentRelation,
+			$this->load,
+			$this->visible,
+			$fields,
 		);
 	}
 
@@ -188,14 +213,25 @@ final class RelationRef implements QuerySourceInterface
 	{
 		$load = null;
 		$visible = null;
+		$fields = null;
 
 		foreach ($arguments as $name => $value) {
 			if (is_int($name)) {
 				throw RelationSelectionException::positionalRelationOption($this->getPath());
 			}
 
-			if ($name !== 'load' && $name !== 'visible') {
+			if ($name !== 'load' && $name !== 'visible' && $name !== 'fields') {
 				throw RelationSelectionException::unknownRelationOption($this->getPath(), (string) $name);
+			}
+
+			if ($name === 'fields') {
+				if (! is_array($value) || ! array_is_list($value)) {
+					throw RelationSelectionException::invalidRelationFieldsType($this->getPath());
+				}
+
+				$fields = $value;
+
+				continue;
 			}
 
 			if (! is_bool($value)) {
@@ -211,7 +247,46 @@ final class RelationRef implements QuerySourceInterface
 			$visible = $value;
 		}
 
-		return $this->withSelectionOptions($load, $visible);
+		$relation = $this->withSelectionOptions($load, $visible);
+
+		if ($fields !== null) {
+			$relation = $relation->withFields($fields);
+		}
+
+		return $relation;
+	}
+
+	/**
+	 * @param list<mixed> $fields
+	 * @return list<string>
+	 */
+	private function normalizeSelectionFields(array $fields): array
+	{
+		$normalized = [];
+		$seen = [];
+
+		foreach ($fields as $fieldName) {
+			if (! is_string($fieldName) || trim($fieldName) === '') {
+				throw RelationSelectionException::invalidRelationFieldName($this->getPath(), $fieldName);
+			}
+
+			if (! $this->getCollection()->hasField($fieldName)) {
+				throw RelationSelectionException::unknownRelationField($this->getPath(), $fieldName);
+			}
+
+			$field = $this->getCollection()->getField($fieldName);
+
+			$canonicalName = $field->getName();
+
+			if (isset($seen[$canonicalName])) {
+				continue;
+			}
+
+			$seen[$canonicalName] = true;
+			$normalized[] = $canonicalName;
+		}
+
+		return $normalized;
 	}
 
 	public function getLoader(): LoaderInterface

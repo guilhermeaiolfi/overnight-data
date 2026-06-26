@@ -15,6 +15,7 @@ use function ON\Data\Query\query;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
+use stdClass;
 use Tests\ON\Data\Fixture\CustomRelation;
 
 final class RelationRefTest extends TestCase
@@ -90,16 +91,31 @@ final class RelationRefTest extends TestCase
 		$default = $users->posts;
 		$loaded = $users->posts(load: true);
 		$hidden = $users->posts(visible: false);
+		$fields = $users->posts(fields: ['id', 'title', 'id']);
 
 		self::assertFalse($default->isLoaded());
 		self::assertTrue($default->isVisible());
+		self::assertNull($default->getFields());
 		self::assertTrue($loaded->isLoaded());
 		self::assertTrue($loaded->isVisible());
 		self::assertFalse($hidden->isLoaded());
 		self::assertFalse($hidden->isVisible());
+		self::assertSame(['id', 'title'], $fields->getFields());
 		self::assertSame($default, $users->posts);
 		self::assertNotSame($default, $loaded);
 		self::assertNotSame($default, $hidden);
+		self::assertNotSame($default, $fields);
+	}
+
+	public function testRelationMethodSelectionArgumentsCanBeCombinedInAnyNamedOrder(): void
+	{
+		$users = query($this->makeRegistry()->getCollection('users'));
+		$relation = $users->posts(fields: ['title'], visible: true, load: true);
+
+		self::assertTrue($relation->isLoaded());
+		self::assertTrue($relation->isVisible());
+		self::assertSame(['title'], $relation->getFields());
+		self::assertNull($users->posts->getFields());
 	}
 
 	public function testInvalidRelationSelectionOptionsAreRejected(): void
@@ -111,6 +127,11 @@ final class RelationRefTest extends TestCase
 			static fn () => $users->posts(foo: true),
 			static fn () => $users->posts(true),
 			static fn () => $users->posts(load: 'yes'),
+			static fn () => $users->posts(fields: 'title'),
+			static fn () => $users->posts(fields: ['id' => 'title']),
+			static fn () => $users->posts(fields: [new stdClass()]),
+			static fn () => $users->posts(fields: ['']),
+			static fn () => $users->posts(fields: ['author']),
 		] as $call) {
 			try {
 				$call();
@@ -206,7 +227,7 @@ final class RelationRefTest extends TestCase
 
 		self::assertCount(0, $users->getSelections());
 		self::assertSame([
-			['posts', true, true],
+			['posts', true, true, null],
 		], $this->selectionState($users));
 	}
 
@@ -219,8 +240,8 @@ final class RelationRefTest extends TestCase
 			->select($users->posts);
 
 		self::assertSame([
-			['posts', true, true],
-			['posts.author', true, true],
+			['posts', true, true, null],
+			['posts.author', true, true, null],
 		], $this->selectionState($users));
 	}
 
@@ -230,8 +251,8 @@ final class RelationRefTest extends TestCase
 		$users->select($users->posts->author);
 
 		self::assertSame([
-			['posts', false, true],
-			['posts.author', true, true],
+			['posts', false, true, null],
+			['posts.author', true, true, null],
 		], $this->selectionState($users));
 	}
 
@@ -245,8 +266,36 @@ final class RelationRefTest extends TestCase
 		);
 
 		self::assertSame([
-			['posts', true, true],
-			['posts.author', true, true],
+			['posts', true, true, null],
+			['posts.author', true, true, null],
+		], $this->selectionState($users));
+	}
+
+	public function testRepeatedRelationSelectionsUnionRequestedFieldsInStableOrder(): void
+	{
+		$users = query($this->makeRegistry()->getCollection('users'));
+
+		$users->select(
+			$users->posts(fields: ['id']),
+			$users->posts(fields: ['title', 'id']),
+		);
+
+		self::assertSame([
+			['posts', true, true, ['id', 'title']],
+		], $this->selectionState($users));
+	}
+
+	public function testUnrestrictedRepeatedRelationSelectionDominatesRestrictedFields(): void
+	{
+		$users = query($this->makeRegistry()->getCollection('users'));
+
+		$users->select(
+			$users->posts(fields: ['title']),
+			$users->posts,
+		);
+
+		self::assertSame([
+			['posts', true, true, null],
 		], $this->selectionState($users));
 	}
 
@@ -303,7 +352,7 @@ final class RelationRefTest extends TestCase
 	}
 
 	/**
-	 * @return list<array{0: string, 1: bool, 2: bool}>
+	 * @return list<array{0: string, 1: bool, 2: bool, 3: ?array}>
 	 */
 	private function selectionState(SelectQuery $query): array
 	{
@@ -312,6 +361,7 @@ final class RelationRefTest extends TestCase
 				implode('.', $selection->getPath()),
 				$selection->isLoaded(),
 				$selection->isVisible(),
+				$selection->getFields(),
 			],
 			$query->getRelationSelections()->getAll(),
 		);

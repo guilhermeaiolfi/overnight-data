@@ -26,9 +26,19 @@ final class LoadBranch
 	private array $fieldMap = [];
 
 	/**
+	 * @var array<string, true>
+	 */
+	private array $publicFieldMap = [];
+
+	/**
 	 * @var list<string>
 	 */
 	private array $fieldOrder = [];
+
+	/**
+	 * @var list<string>
+	 */
+	private array $publicFieldOrder = [];
 
 	/**
 	 * @var list<string>
@@ -50,7 +60,7 @@ final class LoadBranch
 		private readonly LoaderInterface $loader,
 		array $publicFields,
 	) {
-		$this->addFields($publicFields);
+		$this->addPublicFields($publicFields);
 	}
 
 	public function getSelection(): RelationSelection
@@ -92,12 +102,38 @@ final class LoadBranch
 		return $added;
 	}
 
+	public function addPublicFields(array $fieldNames): array
+	{
+		$added = [];
+
+		foreach ($fieldNames as $fieldName) {
+			if (! isset($this->publicFieldMap[$fieldName])) {
+				$this->publicFieldMap[$fieldName] = true;
+				$this->publicFieldOrder[] = $fieldName;
+			}
+
+			$added[] = $fieldName;
+		}
+
+		$this->addFields($fieldNames);
+
+		return $added;
+	}
+
 	/**
 	 * @return list<string>
 	 */
 	public function getNodeColumns(): array
 	{
 		return $this->fieldOrder;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	public function getPublicFields(): array
+	{
+		return $this->publicFieldOrder;
 	}
 
 	public function setNode(AbstractNode $node): void

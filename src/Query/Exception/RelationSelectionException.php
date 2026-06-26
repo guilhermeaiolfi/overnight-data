@@ -91,6 +91,41 @@ final class RelationSelectionException extends InvalidArgumentException
 		));
 	}
 
+	/**
+	 * @param list<string> $path
+	 */
+	public static function invalidRelationFieldsType(array $path): self
+	{
+		return new self(sprintf(
+			'Relation "%s" selection option "fields" must be a list of non-empty field names.',
+			implode('.', $path),
+		));
+	}
+
+	/**
+	 * @param list<string> $path
+	 */
+	public static function invalidRelationFieldName(array $path, mixed $value): self
+	{
+		return new self(sprintf(
+			'Relation "%s" selection option "fields" contains invalid field name %s.',
+			implode('.', $path),
+			var_export($value, true),
+		));
+	}
+
+	/**
+	 * @param list<string> $path
+	 */
+	public static function unknownRelationField(array $path, string $name): self
+	{
+		return new self(sprintf(
+			'Relation "%s" selection option "fields" references unknown field "%s".',
+			implode('.', $path),
+			$name,
+		));
+	}
+
 	public static function ambiguousPromotion(string $parentPath, string $name): self
 	{
 		return new self(sprintf(

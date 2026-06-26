@@ -108,6 +108,41 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		self::assertSame(['authorId', 'id', 'userId'], $columns);
 	}
 
+	public function testRequestedPublicFieldsRemainSeparateFromInternallyRequiredNodeColumns(): void
+	{
+		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
+		$users->select($users->posts(fields: ['title']));
+		$runtime = $this->buildPlan($users);
+		$branches = $this->readProperty($runtime, 'branches');
+		$branch = array_values($branches)[0];
+
+		self::assertSame(['title'], $branch->getPublicFields());
+		self::assertSame(['title', 'id', 'userId'], $branch->getNodeColumns());
+	}
+
+	public function testCompositePrimaryKeyDeduplicationStillWorksWhenPublicKeyFieldsAreOmitted(): void
+	{
+		$employees = new SelectQuery($this->makeCompositeDedupRegistry()->getCollection('employees'), new CompositeDedupExecutor());
+		$employees->select($employees->tenantId, $employees->name, $employees->badges(fields: ['label']));
+
+		self::assertSame([
+			[
+				'tenantId' => 1,
+				'name' => 'Ada',
+				'badges' => [
+					['label' => 'Core'],
+				],
+			],
+			[
+				'tenantId' => 1,
+				'name' => 'Grace',
+				'badges' => [
+					['label' => 'Core'],
+				],
+			],
+		], $employees->fetchAll());
+	}
+
 	public function testRootFieldsRequiredByRootRelationsArePresentBeforeRootNodeConstruction(): void
 	{
 		$users = new SelectQuery($this->makeRootRequirementRegistry()->getCollection('users'), new LifecycleExecutor());
@@ -329,6 +364,29 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		return $registry;
 	}
 
+	private function makeCompositeDedupRegistry(): Registry
+	{
+		$registry = new Registry();
+
+		$badges = $registry->collection('employee_badges');
+		$badges->field('tenantId', 'int');
+		$badges->field('employeeName', 'string');
+		$badges->field('label', 'string');
+		$badges->primaryKey('tenantId', 'employeeName');
+
+		$employees = $registry->collection('employees');
+		$employees->field('tenantId', 'int');
+		$employees->field('accountId', 'int');
+		$employees->field('name', 'string');
+		$employees->hasMany('badges', 'employee_badges')
+			->innerKey(['tenantId', 'name'])
+			->outerKey(['tenantId', 'employeeName'])
+			->end();
+		$employees->primaryKey('tenantId', 'name');
+
+		return $registry;
+	}
+
 	private function buildPlan(SelectQuery $query): LoadRuntime
 	{
 		$runtime = new LoadRuntime($query, new LifecycleExecutor());
@@ -518,6 +576,35 @@ final class MultiPassBoundaryExecutor implements QueryExecutorInterface
 				'postId' => 10,
 				'body' => 'Hi',
 			]],
+			default => [],
+		};
+	}
+
+	public function fetchOne(SelectQuery $query): ?array
+	{
+		return null;
+	}
+
+	public function iterate(SelectQuery $query): iterable
+	{
+		return [];
+	}
+}
+
+final class CompositeDedupExecutor implements QueryExecutorInterface
+{
+	public function fetchAll(SelectQuery $query): array
+	{
+		return match ($query->getCollection()->getName()) {
+			'employees' => [
+				['tenantId' => 1, 'accountId' => 10, 'name' => 'Ada'],
+				['tenantId' => 1, 'accountId' => 10, 'name' => 'Grace'],
+			],
+			'employee_badges' => [
+				['tenantId' => 1, 'employeeName' => 'Ada', 'label' => 'Core'],
+				['tenantId' => 1, 'employeeName' => 'Ada', 'label' => 'Core'],
+				['tenantId' => 1, 'employeeName' => 'Grace', 'label' => 'Core'],
+			],
 			default => [],
 		};
 	}

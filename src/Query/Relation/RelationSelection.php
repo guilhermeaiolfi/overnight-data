@@ -10,6 +10,7 @@ final class RelationSelection
 		private readonly RelationRef $relation,
 		private readonly bool $load,
 		private readonly bool $visible,
+		private readonly ?array $fields,
 	) {
 	}
 
@@ -54,15 +55,42 @@ final class RelationSelection
 		return $this->visible;
 	}
 
+	public function getFields(): ?array
+	{
+		return $this->fields;
+	}
+
 	public function merge(self $incoming): self
 	{
 		$load = $this->load || $incoming->load;
 		$visible = $this->visible || $incoming->visible || $load;
+		$fields = $this->mergeFields($incoming);
 
-		if ($load === $this->load && $visible === $this->visible) {
+		if ($load === $this->load && $visible === $this->visible && $fields === $this->fields) {
 			return $this;
 		}
 
-		return new self($this->relation, $load, $visible);
+		return new self($this->relation, $load, $visible, $fields);
+	}
+
+	private function mergeFields(self $incoming): ?array
+	{
+		if ($this->fields === null || $incoming->fields === null) {
+			return null;
+		}
+
+		$merged = $this->fields;
+		$seen = array_fill_keys($merged, true);
+
+		foreach ($incoming->fields as $fieldName) {
+			if (isset($seen[$fieldName])) {
+				continue;
+			}
+
+			$seen[$fieldName] = true;
+			$merged[] = $fieldName;
+		}
+
+		return $merged;
 	}
 }

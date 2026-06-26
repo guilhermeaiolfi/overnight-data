@@ -41,6 +41,7 @@ final class RelationSelectionTree implements IteratorAggregate, Countable
 				$segment,
 				$index === $terminalIndex ? true : $segment->isLoaded(),
 				$index === $terminalIndex ? true : $segment->isVisible(),
+				$segment->getFields(),
 			);
 
 			$this->relations[$key] = isset($this->relations[$key])

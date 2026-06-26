@@ -280,6 +280,22 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testStructuredBelongsToFieldsOptionHidesInternallyRequiredJoinKeys(): void
+	{
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+
+		$rows = $posts
+			->select($posts->id, $posts->author(fields: ['name']))
+			->orderBy($posts->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['id' => 1, 'author' => ['name' => 'Ada']],
+			['id' => 2, 'author' => ['name' => 'Ada']],
+			['id' => 3, 'author' => ['name' => 'Grace']],
+		], $rows);
+	}
+
 	public function testStructuredHasManySelectionLoadsRelatedRowsInOneSeparateQuery(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
@@ -310,6 +326,66 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testStructuredRelationFieldsOptionReturnsOnlyRequestedScalarFields(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name, $users->posts(fields: ['title']))
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'posts' => [
+					['title' => 'Hello'],
+					['title' => 'World'],
+				],
+			],
+			[
+				'name' => 'Grace',
+				'posts' => [
+					['title' => 'Graph'],
+				],
+			],
+			[
+				'name' => 'Linus',
+				'posts' => [],
+			],
+		], $rows);
+	}
+
+	public function testStructuredRelationFieldsOptionSupportsExplicitEmptyLists(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name, $users->posts(fields: []))
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'posts' => [
+					[],
+					[],
+				],
+			],
+			[
+				'name' => 'Grace',
+				'posts' => [
+					[],
+				],
+			],
+			[
+				'name' => 'Linus',
+				'posts' => [],
+			],
+		], $rows);
+	}
+
 	public function testNestedStructuredTraversalKeepsIntermediateRelationsVisibleButStructuralByDefault(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
@@ -331,6 +407,104 @@ final class CycleJoinExecutionTest extends TestCase
 				'name' => 'Grace',
 				'posts' => [
 					['author' => ['id' => 2, 'name' => 'Grace', 'companyId' => 1]],
+				],
+			],
+			[
+				'name' => 'Linus',
+				'posts' => [],
+			],
+		], $rows);
+	}
+
+	public function testIntermediateStructuredRelationsCanUseIndependentFieldLists(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name, $users->posts(load: true, fields: ['title'])->author(fields: ['name']))
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'posts' => [
+					['title' => 'Hello', 'author' => ['name' => 'Ada']],
+					['title' => 'World', 'author' => ['name' => 'Ada']],
+				],
+			],
+			[
+				'name' => 'Grace',
+				'posts' => [
+					['title' => 'Graph', 'author' => ['name' => 'Grace']],
+				],
+			],
+			[
+				'name' => 'Linus',
+				'posts' => [],
+			],
+		], $rows);
+	}
+
+	public function testRepeatedStructuredRelationSelectionsUnionRequestedFields(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select(
+				$users->name,
+				$users->posts(fields: ['id']),
+				$users->posts(fields: ['title']),
+			)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'posts' => [
+					['id' => 1, 'title' => 'Hello'],
+					['id' => 2, 'title' => 'World'],
+				],
+			],
+			[
+				'name' => 'Grace',
+				'posts' => [
+					['id' => 3, 'title' => 'Graph'],
+				],
+			],
+			[
+				'name' => 'Linus',
+				'posts' => [],
+			],
+		], $rows);
+	}
+
+	public function testUnrestrictedStructuredRelationSelectionDominatesRestrictedSelections(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select(
+				$users->name,
+				$users->posts(fields: ['title']),
+				$users->posts,
+			)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'posts' => [
+					['id' => 1, 'userId' => 1, 'title' => 'Hello', 'published' => true],
+					['id' => 2, 'userId' => 1, 'title' => 'World', 'published' => false],
+				],
+			],
+			[
+				'name' => 'Grace',
+				'posts' => [
+					['id' => 3, 'userId' => 2, 'title' => 'Graph', 'published' => true],
 				],
 			],
 			[
