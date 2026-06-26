@@ -35,6 +35,15 @@ final class LoadRuntime
 
 	private ?SelectQuery $schedulingBoundaryQuery = null;
 
+	/**
+	 * @var array<int, SelectQuery>
+	 */
+	private array $pendingBoundaryQueries = [];
+
+	private int $loaderInvocationDepth = 0;
+
+	private bool $flushingPendingBoundaries = false;
+
 	private int $aliasCounter = 0;
 
 	private ?RootNode $rootNode = null;
@@ -220,7 +229,7 @@ final class LoadRuntime
 		}
 
 		$this->schedulingBoundaryQuery = $query;
-		$this->completeBoundary($query);
+		$this->pendingBoundaryQueries[spl_object_id($query)] = $query;
 	}
 
 	public function getLoadStrategy(LoadStrategy $default): LoadStrategy
@@ -404,19 +413,29 @@ final class LoadRuntime
 	private function invokeLoaderMethod(LoadBranch $branch, string $method, SelectQuery $boundaryQuery): void
 	{
 		$loader = $branch->getLoader();
+		$previousBranch = $this->activeBranch;
+		$previousMethod = $this->activeMethod;
+		$previousScheduledInInvocation = $this->scheduledInInvocation;
+		$previousSchedulingBoundaryQuery = $this->schedulingBoundaryQuery;
 		$this->activeBranch = $branch;
 		$this->activeMethod = $method;
 		$this->scheduledInInvocation = false;
 		$this->schedulingBoundaryQuery = $boundaryQuery;
+		$this->loaderInvocationDepth++;
 		$branch->clearSchedule();
 
 		try {
 			$loader->{$method}($branch->getRelation(), $this);
 		} finally {
-			$this->activeBranch = null;
-			$this->activeMethod = null;
-			$this->scheduledInInvocation = false;
-			$this->schedulingBoundaryQuery = null;
+			$this->loaderInvocationDepth--;
+			$this->activeBranch = $previousBranch;
+			$this->activeMethod = $previousMethod;
+			$this->scheduledInInvocation = $previousScheduledInInvocation;
+			$this->schedulingBoundaryQuery = $previousSchedulingBoundaryQuery;
+		}
+
+		if ($this->loaderInvocationDepth === 0) {
+			$this->flushPendingBoundaries();
 		}
 	}
 
@@ -441,6 +460,29 @@ final class LoadRuntime
 				$ran = true;
 			}
 		} while ($ran);
+	}
+
+	private function flushPendingBoundaries(): void
+	{
+		if ($this->flushingPendingBoundaries) {
+			return;
+		}
+
+		$this->flushingPendingBoundaries = true;
+
+		try {
+			while ($this->pendingBoundaryQueries !== []) {
+				$query = array_shift($this->pendingBoundaryQueries);
+
+				if (! $query instanceof SelectQuery) {
+					continue;
+				}
+
+				$this->completeBoundary($query);
+			}
+		} finally {
+			$this->flushingPendingBoundaries = false;
+		}
 	}
 
 	/**
@@ -568,7 +610,7 @@ final class LoadRuntime
 	}
 
 	/**
-	 * @return array<string, array{branch: LoadBranch, collection: bool, value: mixed}>
+	 * @return array<string, array{branch: LoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}>
 	 */
 	private function projectHiddenBranch(LoadBranch $branch, mixed $value): array
 	{
@@ -594,7 +636,7 @@ final class LoadRuntime
 
 	/**
 	 * @param array<string, mixed> $record
-	 * @return array<string, array{branch: LoadBranch, collection: bool, value: mixed}>
+	 * @return array<string, array{branch: LoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}>
 	 */
 	private function projectHiddenRecord(LoadBranch $branch, array $record): array
 	{
@@ -605,10 +647,14 @@ final class LoadRuntime
 			$value = $record[$name] ?? ($this->isCollectionBranch($child) ? [] : null);
 
 			if ($child->getSelection()->isVisible()) {
+				$items = $this->projectPromotionItems($child, $value);
 				$promoted[$name] = [
 					'branch' => $child,
 					'collection' => $this->isCollectionBranch($child),
-					'value' => $this->projectVisibleBranch($child, $value),
+					'value' => $this->isCollectionBranch($child)
+						? array_column($items, 'value')
+						: ($items[0]['value'] ?? null),
+					'items' => $items,
 				];
 
 				continue;
@@ -622,7 +668,7 @@ final class LoadRuntime
 
 	/**
 	 * @param array<string, mixed> $item
-	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed}> $promotions
+	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}> $promotions
 	 */
 	private function mergePromotions(array &$item, array $promotions, string $parentPath): void
 	{
@@ -636,8 +682,8 @@ final class LoadRuntime
 	}
 
 	/**
-	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed}> $target
-	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed}> $incoming
+	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}> $target
+	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}> $incoming
 	 */
 	private function mergeHiddenNameMaps(array &$target, array $incoming, LoadBranch $hiddenBranch): void
 	{
@@ -651,37 +697,36 @@ final class LoadRuntime
 	}
 
 	/**
-	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed}> $target
-	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed}> $incoming
+	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}> $target
+	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}> $incoming
 	 */
 	private function mergeHiddenCollectionPromotions(array &$target, array $incoming): void
 	{
 		foreach ($incoming as $name => $entry) {
 			$branch = $entry['branch'];
-			$values = $entry['collection']
-				? (is_array($entry['value']) ? $entry['value'] : [])
-				: ($entry['value'] === null ? [] : [$entry['value']]);
 
 			if (! isset($target[$name])) {
 				$target[$name] = [
 					'branch' => $branch,
 					'collection' => true,
 					'value' => [],
+					'items' => [],
 				];
 			} elseif ($target[$name]['branch'] !== $branch) {
 				throw RelationSelectionException::ambiguousPromotion(implode('.', $branch->getRelation()->getPath()), $name);
 			}
 
-			foreach ($values as $value) {
-				if (! $this->containsProjectedValue($target[$name]['value'], $value, $branch)) {
-					$target[$name]['value'][] = $value;
+			foreach ($entry['items'] as $item) {
+				if (! $this->containsPromotionItem($target[$name]['items'], $item['identity'])) {
+					$target[$name]['items'][] = $item;
+					$target[$name]['value'][] = $item['value'];
 				}
 			}
 		}
 	}
 
 	/**
-	 * @return array<string, array{branch: LoadBranch, collection: bool, value: mixed}>
+	 * @return array<string, array{branch: LoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}>
 	 */
 	private function defaultHiddenPromotions(LoadBranch $branch, bool $forceCollection = false): array
 	{
@@ -696,6 +741,7 @@ final class LoadRuntime
 					'branch' => $child,
 					'collection' => $collection,
 					'value' => $collection ? [] : null,
+					'items' => [],
 				];
 
 				continue;
@@ -713,10 +759,45 @@ final class LoadRuntime
 		return $promoted;
 	}
 
-	private function containsProjectedValue(array $existing, mixed $candidate, LoadBranch $branch): bool
+	/**
+	 * @return list<array{identity: string, value: mixed}>
+	 */
+	private function projectPromotionItems(LoadBranch $branch, mixed $value): array
+	{
+		if ($this->isCollectionBranch($branch)) {
+			$items = [];
+
+			foreach (is_array($value) ? $value : [] as $record) {
+				if (! is_array($record)) {
+					continue;
+				}
+
+				$items[] = [
+					'identity' => $this->recordIdentity($record, $branch),
+					'value' => $this->projectVisibleRecord($branch, $record),
+				];
+			}
+
+			return $items;
+		}
+
+		if (! is_array($value)) {
+			return [];
+		}
+
+		return [[
+			'identity' => $this->recordIdentity($value, $branch),
+			'value' => $this->projectVisibleRecord($branch, $value),
+		]];
+	}
+
+	/**
+	 * @param list<array{identity: string, value: mixed}> $existing
+	 */
+	private function containsPromotionItem(array $existing, string $candidateIdentity): bool
 	{
 		foreach ($existing as $item) {
-			if ($this->projectedIdentity($item, $branch) === $this->projectedIdentity($candidate, $branch)) {
+			if ($item['identity'] === $candidateIdentity) {
 				return true;
 			}
 		}
@@ -724,12 +805,8 @@ final class LoadRuntime
 		return false;
 	}
 
-	private function projectedIdentity(mixed $value, LoadBranch $branch): string
+	private function recordIdentity(array $value, LoadBranch $branch): string
 	{
-		if (! is_array($value)) {
-			return json_encode($value, JSON_THROW_ON_ERROR);
-		}
-
 		$identity = [];
 
 		foreach ($branch->getRelation()->getCollection()->getPrimaryKey() as $fieldName) {

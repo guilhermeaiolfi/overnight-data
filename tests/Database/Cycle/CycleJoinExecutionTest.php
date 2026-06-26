@@ -433,6 +433,36 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testHiddenPluralPromotionKeepsDistinctStructuralRecordsWithoutExposingTheirKeys(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name, $users->posts(visible: false)->comments->author)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'comments' => [
+					['author' => ['id' => 1, 'name' => 'Ada', 'companyId' => 1]],
+					['author' => ['id' => 2, 'name' => 'Grace', 'companyId' => 1]],
+				],
+			],
+			[
+				'name' => 'Grace',
+				'comments' => [
+					['author' => ['id' => 1, 'name' => 'Ada', 'companyId' => 1]],
+				],
+			],
+			[
+				'name' => 'Linus',
+				'comments' => [],
+			],
+		], $rows);
+	}
+
 	public function testFirstOfManyJoinFailsExplicitly(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
@@ -638,7 +668,17 @@ final class CycleJoinExecutionTest extends TestCase
 		$posts->field('title', 'string');
 		$posts->field('published', 'bool');
 		$posts->belongsTo('author', 'users')->innerKey('userId')->outerKey('id')->end();
+		$posts->hasMany('comments', 'comments')->innerKey('id')->outerKey('postId')->end();
 		$posts->primaryKey('id');
+
+		$comments = $registry->collection('comments');
+		$comments->table('comments');
+		$comments->field('id', 'int');
+		$comments->field('postId', 'int')->column('post_id');
+		$comments->field('authorId', 'int')->column('author_id');
+		$comments->field('body', 'string');
+		$comments->belongsTo('author', 'users')->innerKey('authorId')->outerKey('id')->end();
+		$comments->primaryKey('id');
 
 		$addresses = $registry->collection('addresses');
 		$addresses->table('addresses');
@@ -772,6 +812,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$pdo->exec('CREATE TABLE companies (id INTEGER PRIMARY KEY, name TEXT, active INTEGER)');
 		$pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, company_id INTEGER NULL)');
 		$pdo->exec('CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER, title TEXT, published INTEGER)');
+		$pdo->exec('CREATE TABLE comments (id INTEGER PRIMARY KEY, post_id INTEGER, author_id INTEGER, body TEXT)');
 		$pdo->exec('CREATE TABLE profiles (id INTEGER PRIMARY KEY, user_id INTEGER, bio TEXT)');
 		$pdo->exec('CREATE TABLE addresses (id INTEGER PRIMARY KEY, city TEXT)');
 		$pdo->exec('CREATE TABLE orders (id INTEGER PRIMARY KEY, billing_address_id INTEGER, shipping_address_id INTEGER)');
@@ -788,6 +829,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$pdo->exec("INSERT INTO companies (id, name, active) VALUES (1, 'Acme', 1), (2, 'Dormant', 0)");
 		$pdo->exec("INSERT INTO users (id, name, company_id) VALUES (1, 'Ada', 1), (2, 'Grace', 1), (3, 'Linus', NULL)");
 		$pdo->exec("INSERT INTO posts (id, user_id, title, published) VALUES (1, 1, 'Hello', 1), (2, 1, 'World', 0), (3, 2, 'Graph', 1)");
+		$pdo->exec("INSERT INTO comments (id, post_id, author_id, body) VALUES (1, 1, 1, 'First'), (2, 2, 2, 'Second'), (3, 3, 1, 'Third')");
 		$pdo->exec("INSERT INTO profiles (id, user_id, bio) VALUES (1, 1, 'Mathematician'), (2, 2, 'Compiler pioneer')");
 		$pdo->exec("INSERT INTO addresses (id, city) VALUES (1, 'Sao Paulo'), (2, 'Rio')");
 		$pdo->exec("INSERT INTO orders (id, billing_address_id, shipping_address_id) VALUES (1, 1, 2), (2, 2, 1)");

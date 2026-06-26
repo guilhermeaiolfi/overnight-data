@@ -157,6 +157,25 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		], LifecycleEvents::$initCalls);
 	}
 
+	public function testExecuteKeepsParentInvocationContextUntilItSchedulesItsNextPass(): void
+	{
+		$users = new SelectQuery($this->makeMultiPassBoundaryRegistry()->getCollection('users'), new MultiPassBoundaryExecutor());
+		$users->select($users->posts->comments);
+
+		$users->fetchAll();
+
+		self::assertSame([
+			'load:posts',
+			'load:comments',
+			'initNode:comments',
+			'initNode:posts',
+			'loadPivot:posts:start',
+			'loadPivot:posts:after-execute',
+			'loadTargets:posts',
+			'loadData:comments',
+		], LifecycleEvents::$events);
+	}
+
 	private function makeBasicRegistry(string $loader): Registry
 	{
 		$registry = new Registry();
@@ -280,6 +299,32 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$users->field('name', 'string');
 		$users->primaryKey('id');
 		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('userId')->loader(SeparateNestedPostsLoader::class)->end();
+
+		return $registry;
+	}
+
+	private function makeMultiPassBoundaryRegistry(): Registry
+	{
+		$registry = new Registry();
+
+		$comments = $registry->collection('comments');
+		$comments->field('id', 'int');
+		$comments->field('postId', 'int');
+		$comments->field('body', 'string');
+		$comments->primaryKey('id');
+
+		$posts = $registry->collection('posts');
+		$posts->field('id', 'int');
+		$posts->field('userId', 'int');
+		$posts->field('title', 'string');
+		$posts->primaryKey('id');
+		$posts->hasMany('comments', 'comments')->innerKey('id')->outerKey('postId')->loader(BoundaryChildLoader::class)->end();
+
+		$users = $registry->collection('users');
+		$users->field('id', 'int');
+		$users->field('name', 'string');
+		$users->primaryKey('id');
+		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('userId')->loader(BoundaryParentLoader::class)->end();
 
 		return $registry;
 	}
@@ -433,6 +478,40 @@ final class NestedAttachmentExecutor implements QueryExecutorInterface
 				'title' => 'Hello',
 				'__on_data_posts_author_id_0' => 7,
 				'__on_data_posts_author_name_1' => 'Ana',
+			]],
+			'comments' => [[
+				'id' => 100,
+				'postId' => 10,
+				'body' => 'Hi',
+			]],
+			default => [],
+		};
+	}
+
+	public function fetchOne(SelectQuery $query): ?array
+	{
+		return null;
+	}
+
+	public function iterate(SelectQuery $query): iterable
+	{
+		return [];
+	}
+}
+
+final class MultiPassBoundaryExecutor implements QueryExecutorInterface
+{
+	public function fetchAll(SelectQuery $query): array
+	{
+		return match ($query->getCollection()->getName()) {
+			'users' => [[
+				'id' => 1,
+				'name' => 'Ada',
+			]],
+			'posts' => [[
+				'id' => 10,
+				'userId' => 1,
+				'title' => 'Hello',
 			]],
 			'comments' => [[
 				'id' => 100,
@@ -672,6 +751,49 @@ final class NestedCommentsLoader extends LifecycleTestLoader
 
 	public function loadData(RelationRef $relation, LoadRuntime $runtime): void
 	{
+		$runtime->execute($runtime->getQuery());
+	}
+}
+
+final class BoundaryParentLoader extends LifecycleTestLoader
+{
+	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	{
+		LifecycleEvents::$events[] = 'load:' . $relation->getName();
+		$query = new SelectQuery($relation->getCollection(), new MultiPassBoundaryExecutor());
+		$runtime->setJoinedAttachment(false);
+		$runtime->setQueryContext($query, $query);
+		$runtime->nextPass('loadPivot');
+	}
+
+	public function loadPivot(RelationRef $relation, LoadRuntime $runtime): void
+	{
+		LifecycleEvents::$events[] = 'loadPivot:' . $relation->getName() . ':start';
+		$runtime->execute($runtime->getQuery());
+		LifecycleEvents::$events[] = 'loadPivot:' . $relation->getName() . ':after-execute';
+		$runtime->nextPass('loadTargets');
+	}
+
+	public function loadTargets(RelationRef $relation, LoadRuntime $runtime): void
+	{
+		LifecycleEvents::$events[] = 'loadTargets:' . $relation->getName();
+	}
+}
+
+final class BoundaryChildLoader extends LifecycleTestLoader
+{
+	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	{
+		LifecycleEvents::$events[] = 'load:' . $relation->getName();
+		$query = new SelectQuery($relation->getCollection(), new MultiPassBoundaryExecutor());
+		$runtime->setJoinedAttachment(false);
+		$runtime->setQueryContext($query, $query);
+		$runtime->nextPass('loadData');
+	}
+
+	public function loadData(RelationRef $relation, LoadRuntime $runtime): void
+	{
+		LifecycleEvents::$events[] = 'loadData:' . $relation->getName();
 		$runtime->execute($runtime->getQuery());
 	}
 }
