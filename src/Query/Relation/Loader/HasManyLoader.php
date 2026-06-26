@@ -13,18 +13,35 @@ use function ON\Data\Query\x;
 
 final class HasManyLoader extends AbstractLoader
 {
+	public function collectFields(RelationRef $relation, LoadRuntime $runtime): void
+	{
+		$runtime->requireBranchFields($relation->getCollection()->getPrimaryKey());
+		$runtime->requireBranchFields($this->relationKeys($relation, 'outer'));
+		$runtime->requireParentFields($this->relationKeys($relation, 'inner'));
+	}
+
 	public function register(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
 		$identity = $runtime->requireBranchFields($relation->getCollection()->getPrimaryKey());
 		$child = $runtime->requireBranchFields($this->relationKeys($relation, 'outer'));
 		$parent = $runtime->requireParentFields($this->relationKeys($relation, 'inner'));
-
-		return new CollectionNode(
+		$node = new CollectionNode(
 			$runtime->getNodeColumns(),
 			$identity,
 			$child,
 			$parent,
 		);
+		$strategy = $runtime->getLoadStrategy($this->getDefaultLoadStrategy());
+
+		if ($strategy === LoadStrategy::JOIN) {
+			$runtime->getParentNode()->joinNode($relation->getName(), $node);
+
+			return $node;
+		}
+
+		$runtime->getParentNode()->linkNode($relation->getName(), $node);
+
+		return $node;
 	}
 
 	public function load(RelationRef $relation, LoadRuntime $runtime): void
@@ -35,7 +52,6 @@ final class HasManyLoader extends AbstractLoader
 			$queryRelation = $runtime->getQueryRelation();
 			$source = $this->join($queryRelation);
 
-			$runtime->getParentNode()->joinNode($relation->getName(), $runtime->getNode());
 			$runtime->setQueryContext($queryRelation->getQuery(), $source, $queryRelation);
 
 			return;
@@ -43,7 +59,6 @@ final class HasManyLoader extends AbstractLoader
 
 		$query = $runtime->createQuery($relation->getCollection());
 
-		$runtime->getParentNode()->linkNode($relation->getName(), $runtime->getNode());
 		$runtime->setQueryContext($query, $query);
 		$runtime->nextPass('loadData');
 	}

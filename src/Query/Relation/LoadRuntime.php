@@ -243,8 +243,9 @@ final class LoadRuntime
 
 		$this->planRootSelections();
 		$this->buildBranchSkeletons();
-		$this->registerBranches();
+		$this->collectBranchFields();
 		$this->rootNode = new RootNode($this->rootColumns, $this->rootIdentityFields());
+		$this->registerBranches();
 		$this->loadBranches();
 	}
 
@@ -306,10 +307,28 @@ final class LoadRuntime
 		}
 	}
 
-	private function registerBranches(): void
+	private function collectBranchFields(): void
 	{
 		$branches = array_values($this->branches);
 		usort($branches, static fn (LoadBranch $left, LoadBranch $right): int => count($right->getRelation()->getPath()) <=> count($left->getRelation()->getPath()));
+
+		foreach ($branches as $branch) {
+			$this->activeBranch = $branch;
+			$this->activeMethod = 'collectFields';
+
+			try {
+				$branch->getLoader()->collectFields($branch->getRelation(), $this);
+			} finally {
+				$this->activeMethod = null;
+				$this->activeBranch = null;
+			}
+		}
+	}
+
+	private function registerBranches(): void
+	{
+		$branches = array_values($this->branches);
+		usort($branches, static fn (LoadBranch $left, LoadBranch $right): int => count($left->getRelation()->getPath()) <=> count($right->getRelation()->getPath()));
 
 		foreach ($branches as $branch) {
 			$this->activeBranch = $branch;

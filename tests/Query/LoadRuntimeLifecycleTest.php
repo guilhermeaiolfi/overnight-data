@@ -111,6 +111,13 @@ final class LifecycleExecutor implements QueryExecutorInterface
 
 abstract class LifecycleTestLoader extends AbstractLoader
 {
+	public function collectFields(RelationRef $relation, LoadRuntime $runtime): void
+	{
+		$runtime->requireBranchFields($relation->getCollection()->getPrimaryKey());
+		$runtime->requireBranchFields($this->relationKeys($relation, 'outer'));
+		$runtime->requireParentFields($this->relationKeys($relation, 'inner'));
+	}
+
 	public function register(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
 		$identity = $runtime->requireBranchFields($relation->getCollection()->getPrimaryKey());
