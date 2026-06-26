@@ -8,9 +8,7 @@ use ON\Data\Definition\AbstractDefinition;
 use ON\Data\Definition\Exception\InvalidPrimaryKeyException;
 use ON\Data\Definition\Exception\PrimaryKeyNotDefinedException;
 use ON\Data\Definition\Field\FieldInterface;
-use ON\Data\Definition\Relation\BelongsToRelation;
-use ON\Data\Definition\Relation\HasManyRelation;
-use ON\Data\Definition\Relation\HasOneRelation;
+use ON\Data\Definition\Relation\BuiltInRelationTypes;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Key;
 use stdClass;
@@ -201,33 +199,30 @@ class Collection extends AbstractDefinition implements CollectionInterface
 	 * @param class-string<T> $type
 	 * @return T
 	 */
-	public function relation(string $name, string $type = HasOneRelation::class): RelationInterface
+	public function relation(string $name, string $type = BuiltInRelationTypes::DEFAULT): RelationInterface
 	{
 		return parent::relation($name, $type);
 	}
 
-	public function hasMany(string $name, string $targetCollection): HasManyRelation
+	public function hasMany(string $name, string $targetCollection): RelationInterface
 	{
-		/** @var HasManyRelation $relation */
-		$relation = $this->relation($name, HasManyRelation::class);
+		$relation = $this->relation($name, BuiltInRelationTypes::hasMany());
 		$relation->collection($targetCollection);
 
 		return $relation;
 	}
 
-	public function hasOne(string $name, string $targetCollection): HasOneRelation
+	public function hasOne(string $name, string $targetCollection): RelationInterface
 	{
-		/** @var HasOneRelation $relation */
-		$relation = $this->relation($name, HasOneRelation::class);
+		$relation = $this->relation($name, BuiltInRelationTypes::hasOne());
 		$relation->collection($targetCollection);
 
 		return $relation;
 	}
 
-	public function belongsTo(string $name, string $targetCollection): BelongsToRelation
+	public function belongsTo(string $name, string $targetCollection): RelationInterface
 	{
-		/** @var BelongsToRelation $relation */
-		$relation = $this->relation($name, BelongsToRelation::class);
+		$relation = $this->relation($name, BuiltInRelationTypes::belongsTo());
 		$relation->collection($targetCollection);
 
 		return $relation;

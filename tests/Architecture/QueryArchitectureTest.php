@@ -76,10 +76,9 @@ final class QueryArchitectureTest extends TestCase
 		$targets = [
 			$root . '/src/Query',
 			$root . '/src/Database',
-			$root . '/src/Definition/Registry.php',
+			$root . '/src/Definition',
 		];
 		$allowedPaths = [
-			'/src/Query/Relation/',
 			'/src/Query/Relation/Loader/',
 			'/src/Definition/Relation/',
 		];
@@ -97,7 +96,9 @@ final class QueryArchitectureTest extends TestCase
 			'FirstOfManyLoader',
 			'->getParentRelation(',
 			'->getParentSource(',
+			'->getCardinality(',
 			'->innerKeys(',
+			'->isJunction(',
 			'->outerKeys(',
 			'->getWhere(',
 			'->getOrderBy(',
