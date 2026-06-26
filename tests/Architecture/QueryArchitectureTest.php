@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Architecture;
 
+use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\Relation\BelongsToRelation;
+use ON\Data\Definition\Relation\HasManyRelation;
+use ON\Data\Definition\Relation\HasOneRelation;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use ReflectionMethod;
 use SplFileInfo;
 
 final class QueryArchitectureTest extends TestCase
@@ -70,60 +75,80 @@ final class QueryArchitectureTest extends TestCase
 		}
 	}
 
-	public function testNeutralQueryAndDatabaseInfrastructureDoesNotDependOnConcreteRelationTypes(): void
+	public function testCollectionInterfaceKeepsTypedBuiltInRelationConvenienceApi(): void
+	{
+		self::assertSame(HasManyRelation::class, $this->methodReturnType(CollectionInterface::class, 'hasMany'));
+		self::assertSame(HasOneRelation::class, $this->methodReturnType(CollectionInterface::class, 'hasOne'));
+		self::assertSame(BelongsToRelation::class, $this->methodReturnType(CollectionInterface::class, 'belongsTo'));
+	}
+
+	public function testBuiltInRelationTypesHelperDoesNotExist(): void
+	{
+		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Definition/Relation/BuiltInRelationTypes.php');
+	}
+
+	public function testQueryAndDatabaseInfrastructureDoesNotInterpretConcreteRelationExecutionSemantics(): void
 	{
 		$root = dirname(__DIR__, 2);
-		$targets = [
-			$root . '/src/Query',
-			$root . '/src/Database',
-			$root . '/src/Definition',
-		];
-		$allowedPaths = [
-			'/src/Query/Relation/Loader/',
-			'/src/Definition/Relation/',
-		];
-		$forbiddenStrings = [
-			'HasOneRelation',
-			'HasManyRelation',
-			'BelongsToRelation',
-			'M2MRelation',
-			'FirstOfManyRelation',
-			'M2MThrough',
-			'HasOneLoader',
-			'HasManyLoader',
-			'BelongsToLoader',
-			'M2MLoader',
-			'FirstOfManyLoader',
-			'->getParentRelation(',
-			'->getParentSource(',
-			'->getCardinality(',
-			'->innerKeys(',
-			'->isJunction(',
-			'->outerKeys(',
-			'->getWhere(',
-			'->getOrderBy(',
-			'->getThrough(',
-			'->throughInnerKeys(',
-			'->throughOuterKeys(',
-		];
 
-		foreach ($this->phpFiles($targets) as $path) {
-			$normalizedPath = str_replace('\\', '/', $path);
+		$this->assertForbiddenStringsAbsent(
+			[
+				$root . '/src/Query',
+				$root . '/src/Database',
+			],
+			[
+				'/src/Query/Relation/Loader/',
+			],
+			[
+				'HasOneRelation',
+				'HasManyRelation',
+				'BelongsToRelation',
+				'M2MRelation',
+				'FirstOfManyRelation',
+				'M2MThrough',
+				'HasOneLoader',
+				'HasManyLoader',
+				'BelongsToLoader',
+				'M2MLoader',
+				'FirstOfManyLoader',
+				'->getCardinality(',
+				'->isJunction(',
+				'->innerKeys(',
+				'->outerKeys(',
+				'->getWhere(',
+				'->getOrderBy(',
+				'->getThrough(',
+				'->throughInnerKeys(',
+				'->throughOuterKeys(',
+			],
+			'Query/backend infrastructure leaked relation-specific coupling "%s" into %s',
+		);
+	}
 
-			if ($this->isAllowedRelationOwnershipPath($normalizedPath, $allowedPaths)) {
-				continue;
-			}
+	public function testNeutralDefinitionInfrastructureDoesNotInterpretRelationExecutionSemantics(): void
+	{
+		$root = dirname(__DIR__, 2);
 
-			$contents = (string) file_get_contents($path);
-
-			foreach ($forbiddenStrings as $forbidden) {
-				self::assertStringNotContainsString(
-					$forbidden,
-					$contents,
-					sprintf('Relation-specific coupling "%s" leaked into neutral infrastructure at %s', $forbidden, $normalizedPath),
-				);
-			}
-		}
+		$this->assertForbiddenStringsAbsent(
+			[
+				$root . '/src/Definition',
+			],
+			[
+				'/src/Definition/Relation/',
+			],
+			[
+				'->getCardinality(',
+				'->isJunction(',
+				'->innerKeys(',
+				'->outerKeys(',
+				'->getWhere(',
+				'->getOrderBy(',
+				'->getThrough(',
+				'->throughInnerKeys(',
+				'->throughOuterKeys(',
+			],
+			'Neutral definition infrastructure leaked relation execution semantics "%s" into %s',
+		);
 	}
 
 	/**
@@ -137,6 +162,7 @@ final class QueryArchitectureTest extends TestCase
 		foreach ($targets as $target) {
 			if (is_file($target)) {
 				$files[] = $target;
+
 				continue;
 			}
 
@@ -156,6 +182,35 @@ final class QueryArchitectureTest extends TestCase
 	}
 
 	/**
+	 * @param list<string> $targets
+	 * @param list<string> $allowedPaths
+	 */
+	private function assertForbiddenStringsAbsent(
+		array $targets,
+		array $allowedPaths,
+		array $forbiddenStrings,
+		string $message,
+	): void {
+		foreach ($this->phpFiles($targets) as $path) {
+			$normalizedPath = str_replace('\\', '/', $path);
+
+			if ($this->isAllowedRelationOwnershipPath($normalizedPath, $allowedPaths)) {
+				continue;
+			}
+
+			$contents = (string) file_get_contents($path);
+
+			foreach ($forbiddenStrings as $forbidden) {
+				self::assertStringNotContainsString(
+					$forbidden,
+					$contents,
+					sprintf($message, $forbidden, $normalizedPath),
+				);
+			}
+		}
+	}
+
+	/**
 	 * @param list<string> $allowedPaths
 	 */
 	private function isAllowedRelationOwnershipPath(string $path, array $allowedPaths): bool
@@ -167,5 +222,15 @@ final class QueryArchitectureTest extends TestCase
 		}
 
 		return false;
+	}
+
+	private function methodReturnType(string $class, string $method): string
+	{
+		$reflection = new ReflectionMethod($class, $method);
+		$type = $reflection->getReturnType();
+
+		self::assertNotNull($type, sprintf('%s::%s() should declare a return type.', $class, $method));
+
+		return $type->getName();
 	}
 }

@@ -8,7 +8,9 @@ use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Exception\InvalidPrimaryKeyException;
 use ON\Data\Definition\Exception\PrimaryKeyNotDefinedException;
 use ON\Data\Definition\Field\FieldInterface;
-use ON\Data\Definition\Relation\RelationInterface;
+use ON\Data\Definition\Relation\BelongsToRelation;
+use ON\Data\Definition\Relation\HasManyRelation;
+use ON\Data\Definition\Relation\HasOneRelation;
 use ON\Data\Key;
 
 interface CollectionInterface extends DefinitionInterface
@@ -45,11 +47,11 @@ interface CollectionInterface extends DefinitionInterface
 
 	public function isHidden(): bool;
 
-	public function hasMany(string $name, string $targetCollection): RelationInterface;
+	public function hasMany(string $name, string $targetCollection): HasManyRelation;
 
-	public function hasOne(string $name, string $targetCollection): RelationInterface;
+	public function hasOne(string $name, string $targetCollection): HasOneRelation;
 
-	public function belongsTo(string $name, string $targetCollection): RelationInterface;
+	public function belongsTo(string $name, string $targetCollection): BelongsToRelation;
 
 	public function primaryKey(string ...$fieldNames): self;
 
