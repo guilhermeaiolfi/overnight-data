@@ -8,6 +8,10 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\BelongsToRelation;
 use ON\Data\Definition\Relation\HasManyRelation;
 use ON\Data\Definition\Relation\HasOneRelation;
+use ON\Data\Query\Relation\Loader\AbstractLoader;
+use ON\Data\Query\Relation\Loader\BelongsToLoader;
+use ON\Data\Query\Relation\Loader\HasManyLoader;
+use ON\Data\Query\Relation\Loader\HasOneLoader;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use PHPUnit\Framework\TestCase;
@@ -100,6 +104,23 @@ final class QueryArchitectureTest extends TestCase
 		self::assertSame(AbstractNode::class, $reflection->getReturnType()->getName());
 	}
 
+	public function testAbstractLoaderProvidesFinalRegisterReturningAbstractNode(): void
+	{
+		$reflection = new ReflectionMethod(AbstractLoader::class, 'register');
+
+		self::assertTrue($reflection->isFinal());
+		self::assertInstanceOf(ReflectionNamedType::class, $reflection->getReturnType());
+		self::assertSame(AbstractNode::class, $reflection->getReturnType()->getName());
+	}
+
+	public function testBuiltInLoadersImplementInitNodeInsteadOfRegister(): void
+	{
+		foreach ([BelongsToLoader::class, HasOneLoader::class, HasManyLoader::class] as $class) {
+			self::assertSame(AbstractLoader::class, (new ReflectionMethod($class, 'register'))->getDeclaringClass()->getName());
+			self::assertSame($class, (new ReflectionMethod($class, 'initNode'))->getDeclaringClass()->getName());
+		}
+	}
+
 	public function testLoaderInterfaceDoesNotExposeCollectFieldsHook(): void
 	{
 		self::assertFalse(method_exists(LoaderInterface::class, 'collectFields'));
@@ -130,6 +151,16 @@ final class QueryArchitectureTest extends TestCase
 			self::assertStringNotContainsString('->joinNode(', $contents, $path);
 			self::assertStringNotContainsString('->linkNode(', $contents, $path);
 		}
+	}
+
+	public function testRuntimeOnlyAttachesRootParserNodes(): void
+	{
+		$contents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/LoadRuntime.php');
+
+		self::assertStringContainsString('$rootNode->joinNode(', $contents);
+		self::assertStringContainsString('$rootNode->linkNode(', $contents);
+		self::assertStringNotContainsString('$node->joinNode(', $contents);
+		self::assertStringNotContainsString('$node->linkNode(', $contents);
 	}
 
 	public function testQueryAndDatabaseInfrastructureDoesNotInterpretConcreteRelationExecutionSemantics(): void

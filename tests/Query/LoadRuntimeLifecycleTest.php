@@ -7,15 +7,17 @@ namespace Tests\ON\Data\Query;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Query\Exception\LoadRuntimeException;
+use ON\Data\Query\Relation\Loader\AbstractLoader;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
-use ON\Data\Query\Relation\Loader\AbstractLoader;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\CollectionNode;
 use ON\Data\Query\Result\Parser\SingularNode;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
+use ReflectionProperty;
 
 final class LoadRuntimeLifecycleTest extends TestCase
 {
@@ -27,6 +29,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		LifecycleEvents::$registerColumns = [];
 		LifecycleEvents::$loadCalls = 0;
 		LifecycleEvents::$attachmentModes = [];
+		LifecycleEvents::$initCalls = [];
 	}
 
 	public function testNamedNextPassRunsAfterParentRowsAreParsed(): void
@@ -36,7 +39,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 
 		$users->fetchAll();
 
-		self::assertSame(['load:posts', 'register:posts', 'loadData:posts'], LifecycleEvents::$events);
+		self::assertSame(['load:posts', 'initNode:posts', 'loadData:posts'], LifecycleEvents::$events);
 		self::assertSame([['id' => 1]], LifecycleEvents::$referenceSnapshots[0]);
 	}
 
@@ -77,6 +80,20 @@ final class LoadRuntimeLifecycleTest extends TestCase
 
 		self::assertCount(1, LifecycleEvents::$returnedNodes);
 		self::assertInstanceOf(CollectionNode::class, LifecycleEvents::$returnedNodes[0]);
+		self::assertSame(['posts' => 1], LifecycleEvents::$initCalls);
+	}
+
+	public function testAbstractLoaderRegisterRecursivelyRegistersChildBranchesBeforeParentNodeConstruction(): void
+	{
+		$users = new SelectQuery($this->makeNestedRegistry()->getCollection('users'), new NestedLifecycleExecutor());
+		$users->select($users->posts->author);
+
+		$this->buildPlan($users);
+
+		self::assertSame([
+			'initNode:author',
+			'initNode:posts',
+		], LifecycleEvents::$events);
 	}
 
 	public function testDescendantRequiredFieldsArePresentInParentParserNodeColumns(): void
@@ -118,6 +135,26 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		], LifecycleEvents::$attachmentModes);
 		self::assertTrue($this->readProperty($profileNode, 'joined'));
 		self::assertFalse($this->readProperty($postsNode, 'joined'));
+	}
+
+	public function testNestedCustomLoadersAttachJoinedAndLinkedChildrenWithoutCustomRegisterOverrides(): void
+	{
+		$users = new SelectQuery($this->makeNestedAttachmentRegistry()->getCollection('users'), new NestedAttachmentExecutor());
+		$users->select($users->posts->author, $users->posts->comments);
+		$runtime = $this->buildPlan($users);
+		$rootNode = $this->readProperty($runtime, 'rootNode');
+		$postsNode = $rootNode->getNode('posts');
+		$authorNode = $postsNode->getNode('author');
+		$commentsNode = $postsNode->getNode('comments');
+
+		self::assertFalse($this->readProperty($postsNode, 'joined'));
+		self::assertTrue($this->readProperty($authorNode, 'joined'));
+		self::assertFalse($this->readProperty($commentsNode, 'joined'));
+		self::assertSame([
+			'author' => 1,
+			'comments' => 1,
+			'posts' => 1,
+		], LifecycleEvents::$initCalls);
 	}
 
 	private function makeBasicRegistry(string $loader): Registry
@@ -214,10 +251,43 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		return $registry;
 	}
 
+	private function makeNestedAttachmentRegistry(): Registry
+	{
+		$registry = new Registry();
+
+		$authors = $registry->collection('authors');
+		$authors->field('id', 'int');
+		$authors->field('name', 'string');
+		$authors->primaryKey('id');
+
+		$comments = $registry->collection('comments');
+		$comments->field('id', 'int');
+		$comments->field('postId', 'int');
+		$comments->field('body', 'string');
+		$comments->primaryKey('id');
+
+		$posts = $registry->collection('posts');
+		$posts->field('id', 'int');
+		$posts->field('userId', 'int');
+		$posts->field('authorId', 'int');
+		$posts->field('title', 'string');
+		$posts->primaryKey('id');
+		$posts->belongsTo('author', 'authors')->innerKey('authorId')->outerKey('id')->loader(NestedAuthorLoader::class)->end();
+		$posts->hasMany('comments', 'comments')->innerKey('id')->outerKey('postId')->loader(NestedCommentsLoader::class)->end();
+
+		$users = $registry->collection('users');
+		$users->field('id', 'int');
+		$users->field('name', 'string');
+		$users->primaryKey('id');
+		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('userId')->loader(SeparateNestedPostsLoader::class)->end();
+
+		return $registry;
+	}
+
 	private function buildPlan(SelectQuery $query): LoadRuntime
 	{
 		$runtime = new LoadRuntime($query, new LifecycleExecutor());
-		$method = new \ReflectionMethod(LoadRuntime::class, 'buildPlan');
+		$method = new ReflectionMethod(LoadRuntime::class, 'buildPlan');
 		$method->setAccessible(true);
 		$method->invoke($runtime);
 
@@ -226,7 +296,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 
 	private function readProperty(object $object, string $name): mixed
 	{
-		$property = new \ReflectionProperty($object, $name);
+		$property = new ReflectionProperty($object, $name);
 		$property->setAccessible(true);
 
 		return $property->getValue($object);
@@ -261,6 +331,11 @@ final class LifecycleEvents
 	 * @var array<string, bool>
 	 */
 	public static array $attachmentModes = [];
+
+	/**
+	 * @var array<string, int>
+	 */
+	public static array $initCalls = [];
 }
 
 final class LifecycleExecutor implements QueryExecutorInterface
@@ -342,9 +417,46 @@ final class MixedAttachmentExecutor implements QueryExecutorInterface
 	}
 }
 
+final class NestedAttachmentExecutor implements QueryExecutorInterface
+{
+	public function fetchAll(SelectQuery $query): array
+	{
+		return match ($query->getCollection()->getName()) {
+			'users' => [[
+				'id' => 1,
+				'name' => 'Ada',
+			]],
+			'posts' => [[
+				'id' => 10,
+				'userId' => 1,
+				'authorId' => 7,
+				'title' => 'Hello',
+				'__on_data_posts_author_id_0' => 7,
+				'__on_data_posts_author_name_1' => 'Ana',
+			]],
+			'comments' => [[
+				'id' => 100,
+				'postId' => 10,
+				'body' => 'Hi',
+			]],
+			default => [],
+		};
+	}
+
+	public function fetchOne(SelectQuery $query): ?array
+	{
+		return null;
+	}
+
+	public function iterate(SelectQuery $query): iterable
+	{
+		return [];
+	}
+}
+
 abstract class LifecycleTestLoader extends AbstractLoader
 {
-	public function register(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
 		$identity = $runtime->requireBranchFields($relation->getCollection()->getPrimaryKey());
 		$child = $runtime->requireBranchFields($this->relationKeys($relation, 'outer'));
@@ -357,6 +469,8 @@ abstract class LifecycleTestLoader extends AbstractLoader
 			$parent,
 		);
 
+		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
+		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
 		LifecycleEvents::$returnedNodes[] = $node;
 		LifecycleEvents::$registerColumns[$relation->getName()] = $runtime->getNodeColumns();
 
@@ -374,13 +488,6 @@ abstract class LifecycleTestLoader extends AbstractLoader
 
 final class LifecycleRecordingLoader extends LifecycleTestLoader
 {
-	public function register(RelationRef $relation, LoadRuntime $runtime): AbstractNode
-	{
-		LifecycleEvents::$events[] = 'register:' . $relation->getName();
-
-		return parent::register($relation, $runtime);
-	}
-
 	public function load(RelationRef $relation, LoadRuntime $runtime): void
 	{
 		LifecycleEvents::$events[] = 'load:' . $relation->getName();
@@ -419,9 +526,9 @@ final class InvalidScheduledMethodLoader extends LifecycleTestLoader
 
 final class RegisterSchedulingLoader extends LifecycleTestLoader
 {
-	public function register(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
-		$node = parent::register($relation, $runtime);
+		$node = parent::initNode($relation, $runtime);
 		$runtime->nextPass('loadData');
 
 		return $node;
@@ -437,13 +544,15 @@ final class RegisterSchedulingLoader extends LifecycleTestLoader
 	}
 }
 
-final class NestedPostsLoader extends AbstractLoader
+class NestedPostsLoader extends AbstractLoader
 {
-	public function register(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
 		$identity = $runtime->requireBranchFields(['id']);
 		$child = $runtime->requireBranchFields(['userId']);
 		$parent = $runtime->requireParentFields(['id']);
+		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
+		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
 		LifecycleEvents::$registerColumns['posts'] = $runtime->getNodeColumns();
 
 		return new CollectionNode($runtime->getNodeColumns(), $identity, $child, $parent);
@@ -470,11 +579,13 @@ final class NestedAuthorLoader extends AbstractLoader
 		return LoadStrategy::JOIN;
 	}
 
-	public function register(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
 		$identity = $runtime->requireBranchFields(['id']);
 		$child = $runtime->requireBranchFields(['id']);
 		$parent = $runtime->requireParentFields(['authorId']);
+		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
+		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
 		LifecycleEvents::$registerColumns['author'] = $runtime->getNodeColumns();
 
 		return new SingularNode($runtime->getNodeColumns(), $identity, $child, $parent);
@@ -490,12 +601,12 @@ final class NestedAuthorLoader extends AbstractLoader
 
 final class RootFieldRequirementLoader extends LifecycleTestLoader
 {
-	public function register(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
 		$runtime->requireParentFields(['name']);
 		LifecycleEvents::$registerColumns['root-parent'] = ['name'];
 
-		return parent::register($relation, $runtime);
+		return parent::initNode($relation, $runtime);
 	}
 
 	public function load(RelationRef $relation, LoadRuntime $runtime): void
@@ -511,11 +622,12 @@ final class JoinedProfileLoader extends AbstractLoader
 		return LoadStrategy::JOIN;
 	}
 
-	public function register(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
 		$identity = $runtime->requireBranchFields(['id']);
 		$child = $runtime->requireBranchFields(['userId']);
 		$parent = $runtime->requireParentFields(['id']);
+		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
 
 		return new SingularNode($runtime->getNodeColumns(), $identity, $child, $parent);
 	}
@@ -534,5 +646,32 @@ final class LinkedPostsLoader extends LifecycleTestLoader
 	public function load(RelationRef $relation, LoadRuntime $runtime): void
 	{
 		$this->prepareSeparateQuery($relation, $runtime);
+	}
+}
+
+final class SeparateNestedPostsLoader extends NestedPostsLoader
+{
+	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	{
+		$query = new SelectQuery($relation->getCollection(), new NestedAttachmentExecutor());
+		$runtime->setJoinedAttachment(false);
+		$runtime->setQueryContext($query, $query);
+		$runtime->nextPass('loadData');
+	}
+}
+
+final class NestedCommentsLoader extends LifecycleTestLoader
+{
+	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	{
+		$query = new SelectQuery($relation->getCollection(), new NestedAttachmentExecutor());
+		$runtime->setJoinedAttachment(false);
+		$runtime->setQueryContext($query, $query);
+		$runtime->nextPass('loadData');
+	}
+
+	public function loadData(RelationRef $relation, LoadRuntime $runtime): void
+	{
+		$runtime->execute($runtime->getQuery());
 	}
 }

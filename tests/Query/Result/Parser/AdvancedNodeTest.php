@@ -6,8 +6,8 @@ namespace Tests\ON\Data\Query\Result\Parser;
 
 use ON\Data\Query\Result\Parser\CollectionNode;
 use ON\Data\Query\Result\Parser\EmbeddedNode;
-use ON\Data\Query\Result\Parser\ParserException;
 use ON\Data\Query\Result\Parser\ParentMergeNode;
+use ON\Data\Query\Result\Parser\ParserException;
 use ON\Data\Query\Result\Parser\ProxyNode;
 use ON\Data\Query\Result\Parser\RootNode;
 use ON\Data\Query\Result\Parser\SingularNode;

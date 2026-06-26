@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation\Loader;
 
 use LogicException;
+use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
@@ -48,10 +49,31 @@ abstract class AbstractLoader implements LoaderInterface
 		throw RelationLoaderException::loadingNotImplemented($relation);
 	}
 
-	public function register(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	final public function register(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
-		throw RelationLoaderException::loadingNotImplemented($relation);
+		$runtime->registerChildBranches();
+		$node = $this->initNode($relation, $runtime);
+
+		foreach ($runtime->getChildBranches() as $child) {
+			if (! $child->hasNode()) {
+				throw LoadRuntimeException::nodeNotRegistered($child->getRelation());
+			}
+
+			$childNode = $child->getNode();
+
+			if ($child->isJoinedAttachment()) {
+				$node->joinNode($child->getRelation()->getName(), $childNode);
+
+				continue;
+			}
+
+			$node->linkNode($child->getRelation()->getName(), $childNode);
+		}
+
+		return $node;
 	}
+
+	abstract protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode;
 
 	protected function assertSupportedRelationPath(RelationRef $relation): void
 	{

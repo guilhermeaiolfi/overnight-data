@@ -93,7 +93,7 @@ Relation loaders live under `ON\Data\Query\Relation\Loader`.
 
 They are ON\Data-owned and stateless. They do not extend or wrap Cycle ORM relation loaders.
 
-Every loader exposes two methods:
+Every loader exposes relation-join and relation-load entry points:
 
 ```php
 public function join(RelationRef $relation): QuerySourceInterface;
@@ -101,12 +101,7 @@ public function join(RelationRef $relation): QuerySourceInterface;
 public function load(RelationRef $relation, LoadRuntime $runtime): void;
 ```
 
-In this phase:
-
-- `join()` is implemented
-- `load()` establishes the boundary and throws by default
-
-`load()` is reserved for later nested relation loading and may eventually coordinate extra queries, dependent batching, and parser integration.
+Phase 7 established the ownership boundary for these operations. Phase 8B later connects `load()` to structured relation selection for built-in `BelongsTo`, `HasOne`, and `HasMany` result loading.
 
 ## Built-In Loader Defaults
 
@@ -162,15 +157,13 @@ The terminal target join is returned to relation field translation, but the back
 
 ## Current Limits
 
-This phase intentionally does not implement:
+Phase 7 intentionally did not implement:
 
-- nested relation join execution
-- nested relation loading
+- structured relation loading
 - `SelectQuery::load()`
 - collection folding or hydration
 - `FirstOfMany` execution
 - relation-level `where`
 - relation-level `orderBy`
 - M2M through-level `where`
-
-Nested relation paths such as `posts.author.name` are rejected until a later bounded phase defines their semantics.
+Nested relation joins and structured relation results are specified later in Phase 8B.

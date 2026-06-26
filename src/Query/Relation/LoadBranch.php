@@ -80,6 +80,7 @@ final class LoadBranch
 		foreach ($fieldNames as $fieldName) {
 			if (isset($this->fieldMap[$fieldName])) {
 				$added[] = $fieldName;
+
 				continue;
 			}
 

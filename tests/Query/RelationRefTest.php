@@ -13,6 +13,7 @@ use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use function ON\Data\Query\query;
 use ON\Data\Query\Relation\RelationRef;
+use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\Fixture\CustomRelation;
 
@@ -304,7 +305,7 @@ final class RelationRefTest extends TestCase
 	/**
 	 * @return list<array{0: string, 1: bool, 2: bool}>
 	 */
-	private function selectionState(\ON\Data\Query\SelectQuery $query): array
+	private function selectionState(SelectQuery $query): array
 	{
 		return array_map(
 			static fn ($selection): array => [

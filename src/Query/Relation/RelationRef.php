@@ -204,6 +204,7 @@ final class RelationRef implements QuerySourceInterface
 
 			if ($name === 'load') {
 				$load = $value;
+
 				continue;
 			}
 

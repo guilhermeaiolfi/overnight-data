@@ -17,12 +17,12 @@ final class BelongsToLoader extends AbstractLoader
 		return LoadStrategy::JOIN;
 	}
 
-	public function register(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
 		$identity = $runtime->requireBranchFields($relation->getCollection()->getPrimaryKey());
 		$child = $runtime->requireBranchFields($this->relationKeys($relation, 'outer'));
 		$parent = $runtime->requireParentFields($this->relationKeys($relation, 'inner'));
-		
+
 		return new SingularNode(
 			$runtime->getNodeColumns(),
 			$identity,

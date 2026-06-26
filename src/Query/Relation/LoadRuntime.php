@@ -16,7 +16,7 @@ use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\CollectionNode;
 use ON\Data\Query\Result\Parser\RootNode;
 use ON\Data\Query\SelectQuery;
-use function ON\Data\Query\x;
+use ReflectionMethod;
 
 final class LoadRuntime
 {
@@ -228,6 +228,23 @@ final class LoadRuntime
 		return $default;
 	}
 
+	public function registerChildBranches(): void
+	{
+		$parent = $this->requireActiveBranch();
+
+		foreach ($this->childBranches($parent) as $child) {
+			$this->registerBranch($child);
+		}
+	}
+
+	/**
+	 * @return list<LoadBranch>
+	 */
+	public function getChildBranches(): array
+	{
+		return $this->childBranches($this->requireActiveBranch());
+	}
+
 	private function buildPlan(): void
 	{
 		if ($this->rootNode instanceof RootNode) {
@@ -237,7 +254,7 @@ final class LoadRuntime
 		$this->planRootSelections();
 		$this->buildBranchSkeletons();
 		$this->loadBranches();
-		$this->registerParserTree();
+		$this->rootNode = $this->registerParserTree();
 		$this->finalizeBranchSelections();
 	}
 
@@ -314,24 +331,27 @@ final class LoadRuntime
 		}
 	}
 
-	private function registerParserTree(): void
+	private function registerParserTree(): RootNode
 	{
-		$children = [];
-
 		foreach ($this->rootBranches() as $branch) {
-			$children[] = [$branch, $this->registerBranch($branch)];
+			$this->registerBranch($branch);
 		}
 
-		$this->rootNode = new RootNode($this->rootColumns, $this->rootIdentityFields());
+		$rootNode = new RootNode($this->rootColumns, $this->rootIdentityFields());
 
-		foreach ($children as [$branch, $node]) {
+		foreach ($this->rootBranches() as $branch) {
+			$node = $branch->getNode();
+
 			if ($branch->isJoinedAttachment()) {
-				$this->rootNode->joinNode($branch->getRelation()->getName(), $node);
+				$rootNode->joinNode($branch->getRelation()->getName(), $node);
+
 				continue;
 			}
 
-			$this->rootNode->linkNode($branch->getRelation()->getName(), $node);
+			$rootNode->linkNode($branch->getRelation()->getName(), $node);
 		}
+
+		return $rootNode;
 	}
 
 	private function finalizeBranchSelections(): void
@@ -357,12 +377,9 @@ final class LoadRuntime
 
 	private function registerBranch(LoadBranch $branch): AbstractNode
 	{
-		$children = [];
-
-		foreach ($this->childBranches($branch) as $child) {
-			$children[] = [$child, $this->registerBranch($child)];
-		}
-
+		$previousBranch = $this->activeBranch;
+		$previousMethod = $this->activeMethod;
+		$previousRegistering = $this->registering;
 		$this->activeBranch = $branch;
 		$this->activeMethod = 'register';
 		$this->registering = true;
@@ -370,9 +387,9 @@ final class LoadRuntime
 		try {
 			$node = $branch->getLoader()->register($branch->getRelation(), $this);
 		} finally {
-			$this->registering = false;
-			$this->activeMethod = null;
-			$this->activeBranch = null;
+			$this->registering = $previousRegistering;
+			$this->activeMethod = $previousMethod;
+			$this->activeBranch = $previousBranch;
 		}
 
 		if (! $node instanceof AbstractNode) {
@@ -380,15 +397,6 @@ final class LoadRuntime
 		}
 
 		$branch->setNode($node);
-
-		foreach ($children as [$child, $childNode]) {
-			if ($child->isJoinedAttachment()) {
-				$node->joinNode($child->getRelation()->getName(), $childNode);
-				continue;
-			}
-
-			$node->linkNode($child->getRelation()->getName(), $childNode);
-		}
 
 		return $node;
 	}
@@ -487,6 +495,7 @@ final class LoadRuntime
 
 				if ($branch->getSelection()->isVisible()) {
 					$item[$name] = $this->projectVisibleBranch($branch, $value);
+
 					continue;
 				}
 
@@ -544,6 +553,7 @@ final class LoadRuntime
 
 			if ($child->getSelection()->isVisible()) {
 				$item[$name] = $this->projectVisibleBranch($child, $value);
+
 				continue;
 			}
 
@@ -600,6 +610,7 @@ final class LoadRuntime
 					'collection' => $this->isCollectionBranch($child),
 					'value' => $this->projectVisibleBranch($child, $value),
 				];
+
 				continue;
 			}
 
@@ -686,6 +697,7 @@ final class LoadRuntime
 					'collection' => $collection,
 					'value' => $collection ? [] : null,
 				];
+
 				continue;
 			}
 
@@ -917,7 +929,7 @@ final class LoadRuntime
 			throw LoadRuntimeException::invalidScheduledMethod($this->requireActiveBranch()->getRelation(), $method);
 		}
 
-		$reflection = new \ReflectionMethod($loader, $method);
+		$reflection = new ReflectionMethod($loader, $method);
 
 		if (! $reflection->isPublic() || $reflection->getNumberOfParameters() !== 2) {
 			throw LoadRuntimeException::invalidScheduledMethod($this->requireActiveBranch()->getRelation(), $method);

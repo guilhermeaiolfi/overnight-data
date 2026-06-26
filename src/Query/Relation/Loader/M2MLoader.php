@@ -11,11 +11,18 @@ use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\RelationRef;
+use ON\Data\Query\Result\Parser\AbstractNode;
 use function ON\Data\Query\x;
 
 final class M2MLoader extends AbstractLoader
 {
+	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	{
+		throw RelationLoaderException::loadingNotImplemented($relation);
+	}
+
 	public function join(RelationRef $relation): QuerySourceInterface
 	{
 		$this->assertSupportedRelationPath($relation);
