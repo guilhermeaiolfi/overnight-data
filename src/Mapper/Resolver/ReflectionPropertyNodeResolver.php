@@ -121,8 +121,8 @@ final class ReflectionPropertyNodeResolver implements CacheableNodeResolverInter
 
 		$target = $node->getParentTarget();
 
-		return is_object($target)
-			&& ! $target instanceof stdClass;
+		return (is_object($target) && ! $target instanceof stdClass)
+			|| (is_string($target) && $target !== stdClass::class && class_exists($target));
 	}
 
 	private function getPropertyFinder(

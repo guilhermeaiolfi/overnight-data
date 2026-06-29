@@ -17,7 +17,6 @@ use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use stdClass;
 use Tests\ON\Data\Fixture\AbstractUserDto;
-use Tests\ON\Data\Fixture\ReadonlyUserDto;
 use Tests\ON\Data\Fixture\StatusEnum;
 use Tests\ON\Data\Fixture\UserContract;
 use Tests\ON\Data\Fixture\UserInputDto;
@@ -211,14 +210,6 @@ final class ObjectWriterCachingTest extends TestCase
 			PhpRepresentation::class,
 			sprintf("Cannot map to representation target '%s'.", PhpRepresentation::class),
 		];
-		yield 'readonly class' => [
-			ReadonlyClassTarget::class,
-			sprintf("Cannot map to readonly target '%s'.", ReadonlyClassTarget::class),
-		];
-		yield 'readonly property' => [
-			ReadonlyUserDto::class,
-			sprintf("Cannot map to readonly property '%s::\$id'.", ReadonlyUserDto::class),
-		];
 	}
 
 	private function rootNode(object|string $target): MappingNode
@@ -264,14 +255,4 @@ final class ChildCacheTarget extends ParentCacheTarget
 {
 	#[MapFrom('child_name')]
 	public string $childLabel = '';
-}
-
-readonly class ReadonlyClassTarget
-{
-	public int $id;
-
-	public function __construct()
-	{
-		$this->id = 0;
-	}
 }

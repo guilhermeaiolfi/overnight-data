@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Query;
 
+use Error;
 use ON\Data\Definition\Registry;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
@@ -15,6 +16,7 @@ use function ON\Data\Query\query;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
+use stdClass;
 use Tests\ON\Data\Fixture\CustomRelation;
 
 final class RelationRefTest extends TestCase
@@ -128,7 +130,7 @@ final class RelationRefTest extends TestCase
 			static fn () => $users->posts->fields(),
 			static fn () => $users->posts->fields(''),
 			static fn () => $users->posts->fields(['id' => 'title']),
-			static fn () => $users->posts->fields([new \stdClass()]),
+			static fn () => $users->posts->fields([new stdClass()]),
 			static fn () => $users->posts->fields($users->name),
 			static fn () => $users->posts->fields('missing'),
 		] as $call) {
@@ -328,7 +330,7 @@ final class RelationRefTest extends TestCase
 	{
 		$users = $this->makeQuery('users');
 
-		$this->expectException(\Error::class);
+		$this->expectException(Error::class);
 		$users->posts();
 	}
 

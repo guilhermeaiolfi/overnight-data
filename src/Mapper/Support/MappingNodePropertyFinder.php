@@ -50,11 +50,18 @@ final class MappingNodePropertyFinder
 		?string $mappedSourceName = null,
 	): ?ReflectionProperty {
 		$target = $node->getParentTarget();
-		if (! is_object($target) || $target instanceof stdClass) {
+		if ($target instanceof stdClass || $target === stdClass::class) {
 			return null;
 		}
 
-		return $this->matcherFor($target::class)->match(
+		$class = is_object($target)
+			? $target::class
+			: (is_string($target) ? $target : null);
+		if (! is_string($class) || ! class_exists($class)) {
+			return null;
+		}
+
+		return $this->matcherFor($class)->match(
 			$mappedSourceName ?? $this->getMappedSourceName($node),
 		);
 	}

@@ -16,6 +16,8 @@ use stdClass;
 use Tests\ON\Data\Fixture\AuthorDto;
 use Tests\ON\Data\Fixture\ParentAwareWriter;
 use Tests\ON\Data\Fixture\PostDto;
+use Tests\ON\Data\Fixture\ReadonlyPromotedAuthorDto;
+use Tests\ON\Data\Fixture\ReadonlyPromotedPostDto;
 use Tests\ON\Data\Fixture\RecordingArrayMapper;
 use Tests\ON\Data\Fixture\RecursiveNode;
 use Tests\ON\Data\Fixture\RuntimeInvariantWriter;
@@ -51,6 +53,24 @@ final class RecursiveMappingTest extends TestCase
 		self::assertSame('Ada', $result->author->name);
 		self::assertCount(2, $result->authors);
 		self::assertContainsOnlyInstancesOf(AuthorDto::class, $result->authors);
+		self::assertSame('Grace', $result->authors[1]->name);
+	}
+
+	public function testRecursiveMappingStillWorksForNestedConstructorDtos(): void
+	{
+		$result = map([
+			'id' => 10,
+			'author' => ['id' => 2, 'name' => 'Ada'],
+			'authors' => [
+				['id' => 3, 'name' => 'Linus'],
+				['id' => 4, 'name' => 'Grace'],
+			],
+		])->to(ReadonlyPromotedPostDto::class);
+
+		self::assertSame(10, $result->id);
+		self::assertInstanceOf(ReadonlyPromotedAuthorDto::class, $result->author);
+		self::assertSame('Ada', $result->author->name);
+		self::assertContainsOnlyInstancesOf(ReadonlyPromotedAuthorDto::class, $result->authors);
 		self::assertSame('Grace', $result->authors[1]->name);
 	}
 

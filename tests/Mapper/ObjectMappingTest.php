@@ -31,6 +31,7 @@ use Tests\ON\Data\Fixture\AliasTargetPost;
 use Tests\ON\Data\Fixture\CtorSpyDto;
 use Tests\ON\Data\Fixture\MixedValueObject;
 use Tests\ON\Data\Fixture\PrependingContractWriter;
+use Tests\ON\Data\Fixture\ReadonlyPromotedUserDto;
 use Tests\ON\Data\Fixture\ReadonlyUserDto;
 use Tests\ON\Data\Fixture\StatusEnum;
 use Tests\ON\Data\Fixture\UserContract;
@@ -110,6 +111,55 @@ final class ObjectMappingTest extends TestCase
 		self::assertSame(0, CtorSpyDto::$constructorCalls);
 		self::assertSame(10, $result->id);
 		self::assertSame('Anonymous', $result->name);
+	}
+
+	public function testArrayMapsToReadonlyPromotedDto(): void
+	{
+		$result = map([
+			'id' => 10,
+			'name' => 'Ada',
+			'user_score' => 3.5,
+		])->to(ReadonlyPromotedUserDto::class);
+
+		self::assertInstanceOf(ReadonlyPromotedUserDto::class, $result);
+		self::assertSame(10, $result->id);
+		self::assertSame('Ada', $result->name);
+		self::assertSame(3.5, $result->score);
+		self::assertSame(0, $result->age);
+	}
+
+	public function testObjectMapsToReadonlyPromotedDto(): void
+	{
+		$source = new UserInputDto();
+		$source->id = 10;
+		$source->name = 'Ada';
+		$source->age = 42;
+		$source->score = 7.25;
+
+		$result = map($source)->to(ReadonlyPromotedUserDto::class);
+
+		self::assertSame(10, $result->id);
+		self::assertSame('Ada', $result->name);
+		self::assertSame(42, $result->age);
+		self::assertSame(7.25, $result->score);
+	}
+
+	public function testConstructorDefaultsArePreservedWhenSourceOmitsOptionalParameters(): void
+	{
+		$result = map(['id' => 10])->to(ReadonlyPromotedUserDto::class);
+
+		self::assertSame('Anonymous', $result->name);
+		self::assertNull($result->nickname);
+		self::assertSame(0, $result->age);
+		self::assertSame(0.0, $result->score);
+	}
+
+	public function testMissingRequiredConstructorParameterFailsClearly(): void
+	{
+		$this->expectException(MappingException::class);
+		$this->expectExceptionMessage(ReadonlyPromotedUserDto::class . '::__construct($id)');
+
+		map(['name' => 'Ada'])->to(ReadonlyPromotedUserDto::class);
 	}
 
 	public function testInheritedAndVisiblePropertyRulesAreApplied(): void
@@ -347,7 +397,6 @@ final class ObjectMappingTest extends TestCase
 				AbstractUserDto::class,
 				UserContract::class,
 				StatusEnum::class,
-				ReadonlyUserDto::class,
 				PhpRepresentation::class,
 			] as $target
 		) {
@@ -371,7 +420,7 @@ final class ObjectMappingTest extends TestCase
 		self::assertFalse(ObjectWriter::canWrite(UserContract::class, $context));
 		self::assertFalse(ObjectWriter::canWrite(AbstractUserDto::class, $context));
 		self::assertFalse(ObjectWriter::canWrite(StatusEnum::class, $context));
-		self::assertFalse(ObjectWriter::canWrite(ReadonlyUserDto::class, $context));
+		self::assertTrue(ObjectWriter::canWrite(ReadonlyUserDto::class, $context));
 		self::assertFalse(ObjectWriter::canWrite(PhpRepresentation::class, $context));
 		self::assertFalse(ObjectWriter::canWrite('Missing\\ClassName', $context));
 		self::assertTrue(ObjectWriter::canWrite(stdClass::class, $context));

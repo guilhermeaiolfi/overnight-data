@@ -12,6 +12,7 @@ use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\FirstOfManyRelation;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\Query\Exception\LoadRuntimeException;
+use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\Relation\LoadRuntime;
@@ -360,7 +361,7 @@ final class CycleJoinExecutionTest extends TestCase
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
-		$this->expectException(\ON\Data\Query\Exception\RelationSelectionException::class);
+		$this->expectException(RelationSelectionException::class);
 		$users->posts->fields([]);
 	}
 

@@ -4,13 +4,21 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper;
 
+use ON\Data\Mapper\Attribute\Hidden;
+use ON\Data\Mapper\Exception\MappingException;
+use ON\Data\Mapper\Mapper\ArrayMapperOptions;
 use ON\Data\Mapper\Resolution\BranchNodeResolutionInterface;
 use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 use ON\Data\Mapper\Resolution\ResolutionNodeInterface;
 use ON\Data\Mapper\Resolver\CacheableNodeResolverInterface;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
+use ON\Data\Mapper\Support\ArrayPathExpander;
+use ON\Data\Mapper\Writer\ObjectWriter;
 use ON\Data\Mapper\Writer\WriterInterface;
+use ReflectionObject;
+use ReflectionProperty;
+use stdClass;
 
 final class MappingContext
 {
@@ -19,6 +27,11 @@ final class MappingContext
 	private mixed $result;
 
 	private readonly ?string $resolutionShape;
+
+	/**
+	 * @var array<string, true>
+	 */
+	private array $preprocessedSourceNames = [];
 
 	/**
 	 * @param list<NodeResolverInterface> $resolvers
@@ -30,10 +43,9 @@ final class MappingContext
 		private readonly array $resolvers,
 		private readonly bool $conversionEnabled,
 		private readonly ?NodeResolutionCache $resolutionCache = null,
+		private readonly bool $enableConstructorHydration = false,
 	) {
-		$this->result = $this->writer->createTarget(
-			node: $node,
-		);
+		[$this->result, $this->preprocessedSourceNames] = $this->bootstrapTarget($node);
 
 		$this->node = $node->withTarget(
 			$this->result,
@@ -69,6 +81,10 @@ final class MappingContext
 		string|int $name,
 		mixed $value,
 	): void {
+		if (isset($this->preprocessedSourceNames[$this->sourceEntryKey($name)])) {
+			return;
+		}
+
 		$cached = $this->resolutionShape !== null
 			? $this->resolutionCache?->find(
 				$this->resolutionShape,
@@ -127,6 +143,59 @@ final class MappingContext
 		return $this->result;
 	}
 
+	/**
+	 * @return array{0: mixed, 1: array<string, true>}
+	 */
+	private function bootstrapTarget(MappingNode $node): array
+	{
+		if (! $this->enableConstructorHydration || ! $this->writer instanceof ObjectWriter) {
+			return [$this->writer->createTarget($node), []];
+		}
+
+		if (! $this->writer->shouldUseConstructorHydration($node)) {
+			return [$this->writer->createTarget($node), []];
+		}
+
+		$resolvedEntries = [];
+		foreach ($this->sourceEntries($node) as [$name, $value]) {
+			$child = $node->createChildNode($name, $value);
+			$resolution = $this->resolveNode($child);
+
+			$resolvedEntries[] = [
+				'sourceName' => $name,
+				'name' => $resolution->getName(),
+				'value' => $this->resolveMappedValue($child, $value, $resolution),
+			];
+		}
+
+		$prepared = $this->writer->createTargetUsingConstructor(
+			node: $node,
+			resolvedEntries: $resolvedEntries,
+		);
+
+		$result = $prepared['target'];
+		$hydratedNode = $node->withTarget($result);
+		$handled = [];
+
+		foreach ($resolvedEntries as $entry) {
+			$handled[$this->sourceEntryKey($entry['sourceName'])] = true;
+
+			if (isset($prepared['consumed'][$entry['name']])) {
+				continue;
+			}
+
+			$child = $hydratedNode->createChildNode($entry['sourceName'], $entry['value']);
+			$result = $this->writer->write(
+				target: $result,
+				name: $entry['name'],
+				value: $entry['value'],
+				node: $child,
+			);
+		}
+
+		return [$result, $handled];
+	}
+
 	private function resolveNode(
 		MappingNode $node,
 	): LeafNodeResolutionInterface|BranchNodeResolutionInterface {
@@ -183,8 +252,23 @@ final class MappingContext
 		mixed $value,
 		ResolutionNodeInterface $resolution,
 	): void {
+		$mappedValue = $this->resolveMappedValue($child, $value, $resolution);
+
+		$this->result = $this->writer->write(
+			target: $this->result,
+			name: $resolution->getName(),
+			value: $mappedValue,
+			node: $child,
+		);
+	}
+
+	private function resolveMappedValue(
+		MappingNode $child,
+		mixed $value,
+		ResolutionNodeInterface $resolution,
+	): mixed {
 		if ($resolution instanceof BranchNodeResolutionInterface) {
-			$mappedValue = $value === null
+			return $value === null
 				? null
 				: $this->runtime->mapNode(
 					$child->forMapping(
@@ -193,21 +277,84 @@ final class MappingContext
 						collection: $resolution->isCollection(),
 					),
 				);
-		} else {
-			$mappedValue = $this->conversionEnabled
-				? $this->runtime->convert(
-					value: $value,
-					leaf: $resolution,
-					node: $child,
-				)
-				: $value;
 		}
 
-		$this->result = $this->writer->write(
-			target: $this->result,
-			name: $resolution->getName(),
-			value: $mappedValue,
-			node: $child,
-		);
+		return $this->conversionEnabled
+			? $this->runtime->convert(
+				value: $value,
+				leaf: $resolution,
+				node: $child,
+			)
+			: $value;
+	}
+
+	/**
+	 * @return iterable<array{0: string|int, 1: mixed}>
+	 */
+	private function sourceEntries(MappingNode $node): iterable
+	{
+		$source = $node->getValue();
+		if (is_array($source)) {
+			$source = $this->shouldExpandDottedKeys($node)
+				? (new ArrayPathExpander())->expand($source)
+				: $source;
+
+			foreach ($source as $name => $value) {
+				yield [$name, $value];
+			}
+
+			return;
+		}
+
+		if (! is_object($source)) {
+			return;
+		}
+
+		if ($source instanceof stdClass) {
+			foreach (get_object_vars($source) as $name => $value) {
+				yield [$name, $value];
+			}
+
+			return;
+		}
+
+		$reflection = new ReflectionObject($source);
+		foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+			if (
+				$property->isStatic()
+				|| ! $property->isInitialized($source)
+				|| $property->getAttributes(Hidden::class) !== []
+			) {
+				continue;
+			}
+
+			yield [$property->getName(), $property->getValue($source)];
+		}
+	}
+
+	private function shouldExpandDottedKeys(MappingNode $node): bool
+	{
+		$options = [];
+
+		foreach ($node->getArguments() as $argument) {
+			if ($argument instanceof ArrayMapperOptions) {
+				$options[] = $argument;
+			}
+		}
+
+		if ($options === []) {
+			return true;
+		}
+
+		if (count($options) > 1) {
+			throw new MappingException('ArrayMapperOptions is ambiguous: mapping arguments contain multiple direct options.');
+		}
+
+		return $options[0]->getExpandDottedKeys();
+	}
+
+	private function sourceEntryKey(string|int $name): string
+	{
+		return (is_int($name) ? 'i:' : 's:') . (string) $name;
 	}
 }

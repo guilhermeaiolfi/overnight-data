@@ -10,6 +10,8 @@ use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Support\ObjectPropertyMatcher;
 use ReflectionClass;
+use ReflectionMethod;
+use ReflectionParameter;
 use ReflectionProperty;
 use stdClass;
 use Throwable;
@@ -54,6 +56,90 @@ final class ObjectWriter implements WriterInterface
 		$reflection = new ReflectionClass($target);
 
 		return self::supportsReflectionTarget($reflection);
+	}
+
+	public function shouldUseConstructorHydration(MappingNode $node): bool
+	{
+		$target = $node->getTarget();
+		if (! is_string($target) || ! class_exists($target) || $target === stdClass::class) {
+			return false;
+		}
+
+		$reflection = $this->getReflection($target);
+		$constructor = $reflection->getConstructor();
+		if (! $constructor instanceof ReflectionMethod) {
+			return false;
+		}
+
+		return $constructor->getNumberOfParameters() > 0
+			|| $this->isReadonlyTarget($reflection);
+	}
+
+	/**
+	 * @param list<array{sourceName: string|int, name: string, value: mixed}> $resolvedEntries
+	 *
+	 * @return array{target: object, consumed: array<string, true>}
+	 */
+	public function createTargetUsingConstructor(
+		MappingNode $node,
+		array $resolvedEntries,
+	): array {
+		$target = $node->getTarget();
+		if (! is_string($target) || $target === stdClass::class) {
+			return [
+				'target' => $this->createTarget($node),
+				'consumed' => [],
+			];
+		}
+
+		$reflection = $this->getReflection($target);
+		$this->assertSupportedTargetOnce($reflection);
+		$constructor = $reflection->getConstructor();
+		if (! $constructor instanceof ReflectionMethod) {
+			return [
+				'target' => $this->createTarget($node),
+				'consumed' => [],
+			];
+		}
+
+		$valuesByName = [];
+		foreach ($resolvedEntries as $entry) {
+			$valuesByName[$entry['name']] = $entry['value'];
+		}
+
+		$arguments = [];
+		$consumed = [];
+
+		foreach ($constructor->getParameters() as $parameter) {
+			$name = $parameter->getName();
+			if (array_key_exists($name, $valuesByName)) {
+				$arguments[] = $valuesByName[$name];
+				$consumed[$name] = true;
+
+				continue;
+			}
+
+			if ($parameter->isDefaultValueAvailable()) {
+				$arguments[] = $parameter->getDefaultValue();
+
+				continue;
+			}
+
+			throw $this->missingConstructorParameter($reflection, $parameter);
+		}
+
+		try {
+			return [
+				'target' => $reflection->newInstanceArgs($arguments),
+				'consumed' => $consumed,
+			];
+		} catch (Throwable $exception) {
+			throw new MappingException(
+				sprintf("Unable to instantiate '%s' using constructor hydration.", $reflection->getName()),
+				0,
+				$exception,
+			);
+		}
 	}
 
 	public function createTarget(
@@ -179,18 +265,6 @@ final class ObjectWriter implements WriterInterface
 		if (is_a($class, RepresentationInterface::class, true)) {
 			throw new MappingException(sprintf("Cannot map to representation target '%s'.", $class));
 		}
-
-		if (method_exists($reflection, 'isReadOnly') && $reflection->isReadOnly()) {
-			throw new MappingException(sprintf("Cannot map to readonly target '%s'.", $class));
-		}
-
-		foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
-			if (! $property->isStatic() && $property->isReadOnly()) {
-				throw new MappingException(
-					sprintf("Cannot map to readonly property '%s::$%s'.", $class, $property->getName()),
-				);
-			}
-		}
 	}
 
 	private static function supportsReflectionTarget(ReflectionClass $reflection): bool
@@ -205,17 +279,41 @@ final class ObjectWriter implements WriterInterface
 			return false;
 		}
 
+		return true;
+	}
+
+	/**
+	 * @param ReflectionClass<object> $reflection
+	 */
+	private function isReadonlyTarget(ReflectionClass $reflection): bool
+	{
 		if (method_exists($reflection, 'isReadOnly') && $reflection->isReadOnly()) {
-			return false;
+			return true;
 		}
 
 		foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
 			if (! $property->isStatic() && $property->isReadOnly()) {
-				return false;
+				return true;
 			}
 		}
 
-		return true;
+		return false;
+	}
+
+	/**
+	 * @param ReflectionClass<object> $reflection
+	 */
+	private function missingConstructorParameter(
+		ReflectionClass $reflection,
+		ReflectionParameter $parameter,
+	): MappingException {
+		return new MappingException(
+			sprintf(
+				"Unable to resolve required constructor parameter '%s::__construct($%s)'.",
+				$reflection->getName(),
+				$parameter->getName(),
+			),
+		);
 	}
 
 	private function wrapPropertyFailure(

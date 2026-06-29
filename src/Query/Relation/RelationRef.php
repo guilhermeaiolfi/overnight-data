@@ -225,6 +225,7 @@ final class RelationRef implements QuerySourceInterface
 			$fields,
 		);
 	}
+
 	/**
 	 * @param list<mixed> $fields
 	 * @return list<string>
@@ -311,6 +312,7 @@ final class RelationRef implements QuerySourceInterface
 
 		return $field->getField()->getName();
 	}
+
 	public function getLoader(): LoaderInterface
 	{
 		if ($this->loader !== null) {
