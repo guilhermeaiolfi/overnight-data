@@ -324,6 +324,14 @@ final class RelationRefTest extends TestCase
 		], $this->selectionState($users));
 	}
 
+	public function testRelationRefsAreNotCallable(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$this->expectException(\Error::class);
+		$users->posts();
+	}
+
 	public function testNestedRelationNamedLikeConfigurationMethodResolvesThroughPropertyAccess(): void
 	{
 		$users = $this->makeQuery('users');
