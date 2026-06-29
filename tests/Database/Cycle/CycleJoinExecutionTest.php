@@ -399,7 +399,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$users = $this->database->query($this->registry->getCollection('users'));
 
 		$rows = $users
-			->select($users->name, $users->posts->load()->fields('title')->author->fields('name'))
+			->select($users->name, $users->posts->fields('title')->author->fields('name'))
 			->orderBy($users->id->asc())
 			->fetchAll();
 

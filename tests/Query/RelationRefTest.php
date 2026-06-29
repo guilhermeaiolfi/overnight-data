@@ -364,6 +364,16 @@ final class RelationRefTest extends TestCase
 		$users->posts->fields;
 	}
 
+	public function testFieldsRejectFieldRefsFromAnotherQueryEvenWithTheSamePath(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = query($registry->getCollection('users'));
+		$otherUsers = query($registry->getCollection('users'));
+
+		$this->expectException(RelationSelectionException::class);
+		$users->posts->fields($otherUsers->posts->title);
+	}
+
 	public function testSelectingAForeignRelationIsRejected(): void
 	{
 		$registry = $this->makeRegistry();

@@ -171,7 +171,9 @@ final class RelationRef implements QuerySourceInterface
 
 	public function fields(string|FieldRef|array ...$fields): self
 	{
-		return $this->withFields($this->normalizeFieldArguments($fields));
+		return $this
+			->load()
+			->withFields($this->normalizeFieldArguments($fields));
 	}
 
 	public function visible(bool $visible = true): self
@@ -385,7 +387,11 @@ final class RelationRef implements QuerySourceInterface
 
 		$source = $field->getSource();
 
-		if (! $source instanceof self || $source->getPath() !== $this->getPath()) {
+		if (
+			! $source instanceof self
+			|| $source->getQuery() !== $this->query
+			|| $source->getPath() !== $this->getPath()
+		) {
 			throw RelationSelectionException::invalidRelationFieldReference($this->getPath(), implode('.', $field->getPath()));
 		}
 
