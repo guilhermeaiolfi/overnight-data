@@ -340,13 +340,24 @@ final class RelationRefTest extends TestCase
 		$users->posts->comments(fields: ['body']);
 	}
 
-	public function testReservedRelationNamesThrowClearlyWhenAccessedThroughMagicProperty(): void
+	public function testNestedRelationNamedLikeConfigurationMethodResolvesThroughPropertyAccess(): void
 	{
 		$users = query($this->makeRegistry()->getCollection('users'));
+		$relation = $users->posts->fields;
 
-		$this->expectException(RelationSelectionException::class);
-		$this->expectExceptionMessage('reserved by the RelationRef configuration API');
-		$users->posts->fields;
+		self::assertInstanceOf(RelationRef::class, $relation);
+		self::assertSame(['posts', 'fields'], $relation->getPath());
+		self::assertSame('postFields', $relation->getCollection()->getName());
+	}
+
+	public function testNestedFieldNamedLikeGetterMethodResolvesThroughPropertyAccess(): void
+	{
+		$users = query($this->makeRegistry()->getCollection('users'));
+		$field = $users->posts->getRelation;
+
+		self::assertInstanceOf(FieldRef::class, $field);
+		self::assertSame(['posts', 'getRelation'], $field->getPath());
+		self::assertSame('getRelation', $field->getField()->getName());
 	}
 
 	public function testFieldsRejectFieldRefsFromAnotherQueryEvenWithTheSamePath(): void
@@ -388,6 +399,7 @@ final class RelationRefTest extends TestCase
 		$posts->field('id', 'int');
 		$posts->field('title', 'string');
 		$posts->field('published', 'bool');
+		$posts->field('getRelation', 'string');
 		$posts->relation('author', CustomRelation::class)->collection('users');
 		$posts->relation('comments', CustomRelation::class)->collection('comments');
 		$posts->relation('fields', CustomRelation::class)->collection('postFields');

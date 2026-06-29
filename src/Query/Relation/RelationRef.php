@@ -24,31 +24,6 @@ use ReflectionException;
 final class RelationRef implements QuerySourceInterface
 {
 	/**
-	 * @var list<string>
-	 */
-	private const RESERVED_RELATION_NAMES = [
-		'fields',
-		'visible',
-		'hidden',
-		'load',
-		'field',
-		'relation',
-		'getQuery',
-		'getRelation',
-		'getParentRelation',
-		'isLoaded',
-		'isVisible',
-		'getFields',
-		'getParentSource',
-		'getJoinedSource',
-		'hasJoinedSource',
-		'getCollection',
-		'getName',
-		'getPath',
-		'getLoader',
-	];
-
-	/**
 	 * @var array<string, FieldRef>
 	 */
 	private array $fieldRefs = [];
@@ -195,10 +170,6 @@ final class RelationRef implements QuerySourceInterface
 	{
 		$collection = $this->getCollection();
 
-		if ($collection->hasRelation($name) && $this->isReservedRelationName($name)) {
-			throw RelationSelectionException::reservedRelationName($collection->getName(), $name);
-		}
-
 		if ($collection->hasField($name)) {
 			return $this->field($name);
 		}
@@ -340,12 +311,6 @@ final class RelationRef implements QuerySourceInterface
 
 		return $field->getField()->getName();
 	}
-
-	private function isReservedRelationName(string $name): bool
-	{
-		return in_array($name, self::RESERVED_RELATION_NAMES, true);
-	}
-
 	public function getLoader(): LoaderInterface
 	{
 		if ($this->loader !== null) {

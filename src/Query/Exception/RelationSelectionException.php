@@ -114,15 +114,6 @@ final class RelationSelectionException extends InvalidArgumentException
 		));
 	}
 
-	public static function reservedRelationName(string $collection, string $name): self
-	{
-		return new self(sprintf(
-			'Collection "%s" defines relation "%s", but that name is reserved by the RelationRef configuration API.',
-			$collection,
-			$name,
-		));
-	}
-
 	public static function ambiguousPromotion(string $parentPath, string $name): self
 	{
 		return new self(sprintf(
