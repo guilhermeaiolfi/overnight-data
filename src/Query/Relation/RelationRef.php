@@ -24,6 +24,31 @@ use ReflectionException;
 final class RelationRef implements QuerySourceInterface
 {
 	/**
+	 * @var list<string>
+	 */
+	private const RESERVED_RELATION_NAMES = [
+		'fields',
+		'visible',
+		'hidden',
+		'load',
+		'field',
+		'relation',
+		'getQuery',
+		'getRelation',
+		'getParentRelation',
+		'isLoaded',
+		'isVisible',
+		'getFields',
+		'getParentSource',
+		'getJoinedSource',
+		'hasJoinedSource',
+		'getCollection',
+		'getName',
+		'getPath',
+		'getLoader',
+	];
+
+	/**
 	 * @var array<string, FieldRef>
 	 */
 	private array $fieldRefs = [];
@@ -144,9 +169,33 @@ final class RelationRef implements QuerySourceInterface
 		return $this->relationRefs[$name] = new self($this->query, $relation, $this);
 	}
 
+	public function fields(string|FieldRef|array ...$fields): self
+	{
+		return $this->withFields($this->normalizeFieldArguments($fields));
+	}
+
+	public function visible(bool $visible = true): self
+	{
+		return $this->withSelectionOptions(null, $visible);
+	}
+
+	public function hidden(): self
+	{
+		return $this->visible(false);
+	}
+
+	public function load(bool $load = true): self
+	{
+		return $this->withSelectionOptions($load, null);
+	}
+
 	public function __get(string $name): FieldRef|self
 	{
 		$collection = $this->getCollection();
+
+		if ($collection->hasRelation($name) && $this->isReservedRelationName($name)) {
+			throw RelationSelectionException::reservedRelationName($collection->getName(), $name);
+		}
 
 		if ($collection->hasField($name)) {
 			return $this->field($name);
@@ -266,11 +315,17 @@ final class RelationRef implements QuerySourceInterface
 	 */
 	private function normalizeSelectionFields(array $fields): array
 	{
+		if ($fields === []) {
+			throw RelationSelectionException::emptyRelationFields($this->getPath());
+		}
+
 		$normalized = [];
 		$seen = [];
 
-		foreach ($fields as $fieldName) {
-			if (! is_string($fieldName) || trim($fieldName) === '') {
+		foreach ($fields as $field) {
+			$fieldName = $this->normalizeFieldSelectionValue($field);
+
+			if (trim($fieldName) === '') {
 				throw RelationSelectionException::invalidRelationFieldName($this->getPath(), $fieldName);
 			}
 
@@ -291,6 +346,55 @@ final class RelationRef implements QuerySourceInterface
 		}
 
 		return $normalized;
+	}
+
+	/**
+	 * @param list<string|FieldRef|array<mixed>> $fields
+	 * @return list<string|FieldRef>
+	 */
+	private function normalizeFieldArguments(array $fields): array
+	{
+		$normalized = [];
+
+		foreach ($fields as $field) {
+			if (is_array($field)) {
+				if (! array_is_list($field)) {
+					throw RelationSelectionException::invalidRelationFieldsType($this->getPath());
+				}
+
+				array_push($normalized, ...$field);
+
+				continue;
+			}
+
+			$normalized[] = $field;
+		}
+
+		return $normalized;
+	}
+
+	private function normalizeFieldSelectionValue(mixed $field): string
+	{
+		if (is_string($field)) {
+			return $field;
+		}
+
+		if (! $field instanceof FieldRef) {
+			throw RelationSelectionException::invalidRelationFieldName($this->getPath(), $field);
+		}
+
+		$source = $field->getSource();
+
+		if (! $source instanceof self || $source->getPath() !== $this->getPath()) {
+			throw RelationSelectionException::invalidRelationFieldReference($this->getPath(), implode('.', $field->getPath()));
+		}
+
+		return $field->getField()->getName();
+	}
+
+	private function isReservedRelationName(string $name): bool
+	{
+		return in_array($name, self::RESERVED_RELATION_NAMES, true);
 	}
 
 	public function getLoader(): LoaderInterface

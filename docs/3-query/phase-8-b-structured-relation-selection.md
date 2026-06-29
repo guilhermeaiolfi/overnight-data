@@ -10,8 +10,8 @@ Phase 8B connects relation selections to the Phase 8A structural parser so one `
 $users->select(
     $users->id,
     $users->name,
-    $users->posts,
-    $users->posts->author,
+    $users->posts->fields('id', 'title'),
+    $users->posts->comments->fields('id', 'body'),
 );
 ```
 
@@ -62,13 +62,13 @@ This traverses `posts` as a visible structural container but does not load ordin
 To load the intermediate relation's own fields too:
 
 ```php
-$users->select($users->posts(load: true)->author);
+$users->select($users->posts->load()->author);
 ```
 
 To hide an intermediate relation and promote its visible descendants:
 
 ```php
-$users->select($users->posts(visible: false)->author);
+$users->select($users->posts->hidden()->author);
 ```
 
 This removes `posts` from the public result and promotes `author` to the nearest visible ancestor. If the hidden segment is plural, the promoted descendant is also exposed as a collection.
@@ -81,6 +81,17 @@ $users->select(
     $users->posts->author,
 );
 ```
+
+Preferred relation field restriction uses real `RelationRef` methods:
+
+```php
+$users->select(
+    $users->posts->fields('id', 'title'),
+    $users->posts->comments->fields('id', 'body'),
+);
+```
+
+Legacy named-argument relation calls such as `$users->posts(fields: ['id'])` remain supported for backward compatibility, but they are no longer the recommended public API.
 
 Repeated relation selection merges by logical relation path. Stronger selections upgrade weaker ones:
 

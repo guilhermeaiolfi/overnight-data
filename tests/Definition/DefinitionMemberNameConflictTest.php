@@ -26,6 +26,7 @@ final class DefinitionMemberNameConflictTest extends TestCase
 			self::fail('Expected field/relation name conflict.');
 		} catch (DefinitionNameConflictException $exception) {
 			self::assertStringContainsString("Definition 'users' member name 'posts' is already used by a relation.", $exception->getMessage());
+			self::assertStringContainsString('must be unique within a collection', $exception->getMessage());
 		}
 
 		self::assertTrue($users->hasRelation('posts'));
@@ -44,6 +45,7 @@ final class DefinitionMemberNameConflictTest extends TestCase
 			self::fail('Expected field/relation name conflict.');
 		} catch (DefinitionNameConflictException $exception) {
 			self::assertStringContainsString("Definition 'users' member name 'posts' is already used by a field.", $exception->getMessage());
+			self::assertStringContainsString('must be unique within a collection', $exception->getMessage());
 		}
 
 		self::assertTrue($users->hasField('posts'));

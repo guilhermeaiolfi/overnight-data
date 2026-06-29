@@ -97,7 +97,7 @@ final class FieldMap implements IteratorAggregate, Countable
 		if ($this->parent->hasRelation($name)) {
 			throw new DefinitionNameConflictException(
 				sprintf(
-					"Definition '%s' member name '%s' is already used by a relation.",
+					"Definition '%s' member name '%s' is already used by a relation. Field and relation member names must be unique within a collection.",
 					$this->parent->getName(),
 					$name
 				)

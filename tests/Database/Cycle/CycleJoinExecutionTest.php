@@ -285,7 +285,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$posts = $this->database->query($this->registry->getCollection('posts'));
 
 		$rows = $posts
-			->select($posts->id, $posts->author(fields: ['name']))
+			->select($posts->id, $posts->author->fields('name'))
 			->orderBy($posts->id->asc())
 			->fetchAll();
 
@@ -331,7 +331,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$users = $this->database->query($this->registry->getCollection('users'));
 
 		$rows = $users
-			->select($users->name, $users->posts(fields: ['title']))
+			->select($users->name, $users->posts->fields('title'))
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -356,34 +356,12 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testStructuredRelationFieldsOptionSupportsExplicitEmptyLists(): void
+	public function testStructuredRelationFieldsOptionRejectsExplicitEmptyLists(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
-		$rows = $users
-			->select($users->name, $users->posts(fields: []))
-			->orderBy($users->id->asc())
-			->fetchAll();
-
-		self::assertSame([
-			[
-				'name' => 'Ada',
-				'posts' => [
-					[],
-					[],
-				],
-			],
-			[
-				'name' => 'Grace',
-				'posts' => [
-					[],
-				],
-			],
-			[
-				'name' => 'Linus',
-				'posts' => [],
-			],
-		], $rows);
+		$this->expectException(\ON\Data\Query\Exception\RelationSelectionException::class);
+		$users->posts->fields([]);
 	}
 
 	public function testNestedStructuredTraversalKeepsIntermediateRelationsVisibleButStructuralByDefault(): void
@@ -421,7 +399,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$users = $this->database->query($this->registry->getCollection('users'));
 
 		$rows = $users
-			->select($users->name, $users->posts(load: true, fields: ['title'])->author(fields: ['name']))
+			->select($users->name, $users->posts->load()->fields('title')->author->fields('name'))
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -453,8 +431,8 @@ final class CycleJoinExecutionTest extends TestCase
 		$rows = $users
 			->select(
 				$users->name,
-				$users->posts(fields: ['id']),
-				$users->posts(fields: ['title']),
+				$users->posts->fields('id'),
+				$users->posts->fields('title'),
 			)
 			->orderBy($users->id->asc())
 			->fetchAll();
@@ -487,7 +465,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$rows = $users
 			->select(
 				$users->name,
-				$users->posts(fields: ['title']),
+				$users->posts->fields('title'),
 				$users->posts,
 			)
 			->orderBy($users->id->asc())
@@ -519,7 +497,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$users = $this->database->query($this->registry->getCollection('users'));
 
 		$rows = $users
-			->select($users->name, $users->posts(load: true)->author)
+			->select($users->name, $users->posts->load()->author)
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -549,7 +527,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$users = $this->database->query($this->registry->getCollection('users'));
 
 		$rows = $users
-			->select($users->name, $users->posts(visible: false)->author)
+			->select($users->name, $users->posts->hidden()->author)
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -580,7 +558,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$rows = $users
 			->select(
 				$users->name,
-				$users->posts(visible: false)->author,
+				$users->posts->hidden()->author,
 				$users->posts,
 			)
 			->orderBy($users->id->asc())
@@ -612,7 +590,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$users = $this->database->query($this->registry->getCollection('users'));
 
 		$rows = $users
-			->select($users->name, $users->posts(visible: false)->comments->author)
+			->select($users->name, $users->posts->hidden()->comments->author)
 			->orderBy($users->id->asc())
 			->fetchAll();
 

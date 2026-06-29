@@ -105,6 +105,17 @@ final class RelationSelectionException extends InvalidArgumentException
 	/**
 	 * @param list<string> $path
 	 */
+	public static function emptyRelationFields(array $path): self
+	{
+		return new self(sprintf(
+			'Relation "%s" selection option "fields" must select at least one field.',
+			implode('.', $path),
+		));
+	}
+
+	/**
+	 * @param list<string> $path
+	 */
 	public static function invalidRelationFieldName(array $path, mixed $value): self
 	{
 		return new self(sprintf(
@@ -122,6 +133,27 @@ final class RelationSelectionException extends InvalidArgumentException
 		return new self(sprintf(
 			'Relation "%s" selection option "fields" references unknown field "%s".',
 			implode('.', $path),
+			$name,
+		));
+	}
+
+	/**
+	 * @param list<string> $path
+	 */
+	public static function invalidRelationFieldReference(array $path, string $name): self
+	{
+		return new self(sprintf(
+			'Relation "%s" selection option "fields" cannot use field reference "%s" from a different relation path.',
+			implode('.', $path),
+			$name,
+		));
+	}
+
+	public static function reservedRelationName(string $collection, string $name): self
+	{
+		return new self(sprintf(
+			'Collection "%s" defines relation "%s", but that name is reserved by the RelationRef configuration API.',
+			$collection,
 			$name,
 		));
 	}

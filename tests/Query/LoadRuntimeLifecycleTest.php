@@ -111,7 +111,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testRequestedPublicFieldsRemainSeparateFromInternallyRequiredNodeColumns(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
-		$users->select($users->posts(fields: ['title']));
+		$users->select($users->posts->fields('title'));
 		$runtime = $this->buildPlan($users);
 		$branches = $this->readProperty($runtime, 'branches');
 		$branch = array_values($branches)[0];

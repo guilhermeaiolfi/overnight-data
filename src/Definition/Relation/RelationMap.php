@@ -58,7 +58,7 @@ final class RelationMap implements IteratorAggregate
 		if ($this->parent->hasField($name)) {
 			throw new DefinitionNameConflictException(
 				sprintf(
-					"Definition '%s' member name '%s' is already used by a field.",
+					"Definition '%s' member name '%s' is already used by a field. Field and relation member names must be unique within a collection.",
 					$this->parent->getName(),
 					$name
 				)

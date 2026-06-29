@@ -101,7 +101,7 @@ abstract class AbstractDefinition extends DefinitionNode implements DefinitionIn
 
 			throw new DefinitionNameConflictException(
 				sprintf(
-					"Definition '%s' member name '%s' is used by both a field and a relation.",
+					"Definition '%s' member name '%s' is used by both a field and a relation. Field and relation member names must be unique within a collection.",
 					$this->getName(),
 					$name
 				)
