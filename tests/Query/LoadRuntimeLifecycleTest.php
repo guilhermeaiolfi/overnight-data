@@ -123,7 +123,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testCompositePrimaryKeyDeduplicationStillWorksWhenPublicKeyFieldsAreOmitted(): void
 	{
 		$employees = new SelectQuery($this->makeCompositeDedupRegistry()->getCollection('employees'), new CompositeDedupExecutor());
-		$employees->select($employees->tenantId, $employees->name, $employees->badges(fields: ['label']));
+		$employees->select($employees->tenantId, $employees->name, $employees->badges->fields('label'));
 
 		self::assertSame([
 			[

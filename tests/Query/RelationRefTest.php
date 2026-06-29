@@ -15,7 +15,6 @@ use function ON\Data\Query\query;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
-use stdClass;
 use Tests\ON\Data\Fixture\CustomRelation;
 
 final class RelationRefTest extends TestCase
@@ -121,35 +120,15 @@ final class RelationRefTest extends TestCase
 		self::assertNull($users->posts->getFields());
 	}
 
-	public function testWithFieldsRejectsAssociativeArrays(): void
-	{
-		$users = query($this->makeRegistry()->getCollection('users'));
-
-		$this->expectException(RelationSelectionException::class);
-
-		$users->posts->withFields([
-			'field' => 'title',
-		]);
-	}
-
-	public function testInvalidRelationSelectionOptionsAreRejected(): void
+	public function testInvalidRelationFieldSelectionsAreRejected(): void
 	{
 		$users = query($this->makeRegistry()->getCollection('users'));
 
 		foreach ([
-			static fn () => $users->posts(load: true, visible: false),
-			static fn () => $users->posts(foo: true),
-			static fn () => $users->posts(true),
-			static fn () => $users->posts(load: 'yes'),
-			static fn () => $users->posts(fields: 'title'),
-			static fn () => $users->posts(fields: ['id' => 'title']),
-			static fn () => $users->posts(fields: [new stdClass()]),
-			static fn () => $users->posts(fields: ['']),
-			static fn () => $users->posts(fields: ['author']),
 			static fn () => $users->posts->fields(),
 			static fn () => $users->posts->fields(''),
 			static fn () => $users->posts->fields(['id' => 'title']),
-			static fn () => $users->posts->fields([new stdClass()]),
+			static fn () => $users->posts->fields([new \stdClass()]),
 			static fn () => $users->posts->fields($users->name),
 			static fn () => $users->posts->fields('missing'),
 		] as $call) {
@@ -345,14 +324,20 @@ final class RelationRefTest extends TestCase
 		], $this->selectionState($users));
 	}
 
-	public function testLegacyNamedArgumentRelationCallsRemainSupported(): void
+	public function testLegacyRootRelationMethodCallsAreNotSupported(): void
 	{
 		$users = query($this->makeRegistry()->getCollection('users'));
-		$relation = $users->posts(fields: ['title'], visible: true, load: true);
 
-		self::assertTrue($relation->isLoaded());
-		self::assertTrue($relation->isVisible());
-		self::assertSame(['title'], $relation->getFields());
+		$this->expectException(\Error::class);
+		$users->posts(fields: ['title']);
+	}
+
+	public function testLegacyNestedRelationMethodCallsAreNotSupported(): void
+	{
+		$users = query($this->makeRegistry()->getCollection('users'));
+
+		$this->expectException(\Error::class);
+		$users->posts->comments(fields: ['body']);
 	}
 
 	public function testReservedRelationNamesThrowClearlyWhenAccessedThroughMagicProperty(): void

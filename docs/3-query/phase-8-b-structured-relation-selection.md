@@ -91,8 +91,6 @@ $users->select(
 );
 ```
 
-Legacy named-argument relation calls such as `$users->posts(fields: ['id'])` remain supported for backward compatibility, but they are no longer the recommended public API.
-
 Repeated relation selection merges by logical relation path. Stronger selections upgrade weaker ones:
 
 - loaded and visible
@@ -170,7 +168,7 @@ Built-in relation result containers follow these shapes:
 - `HasOne`: nested record or `null`
 - `HasMany`: list of nested records or `[]`
 
-Loaded terminal relations and `load: true` intermediate relations expose their default/public fields. Visible structural relations keep only internally required fields during parsing and projection strips those fields from the public result.
+Loaded terminal relations and `->load()` intermediate relations expose their default/public fields. Visible structural relations keep only internally required fields during parsing and projection strips those fields from the public result.
 
 ## Composite Keys
 

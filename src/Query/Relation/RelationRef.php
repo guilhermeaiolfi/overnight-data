@@ -210,16 +210,7 @@ final class RelationRef implements QuerySourceInterface
 		throw UnknownQueryMemberException::forDefinition($name, $collection->getName());
 	}
 
-	public function __call(string $name, array $arguments): self
-	{
-		if (! $this->getCollection()->hasRelation($name)) {
-			throw UnknownQueryMemberException::forDefinition($name, $this->getCollection()->getName());
-		}
-
-		return $this->relation($name)->withSelectionArguments($arguments);
-	}
-
-	public function withSelectionOptions(?bool $load = null, ?bool $visible = null): self
+	private function withSelectionOptions(?bool $load = null, ?bool $visible = null): self
 	{
 		$load ??= $this->load;
 		$visible ??= $this->visible;
@@ -242,7 +233,7 @@ final class RelationRef implements QuerySourceInterface
 		);
 	}
 
-	public function withFields(array $fields): self
+	private function withFields(array $fields): self
 	{
 		if (! array_is_list($fields)) {
 			throw RelationSelectionException::invalidRelationFieldsType($this->getPath());
@@ -263,54 +254,6 @@ final class RelationRef implements QuerySourceInterface
 			$fields,
 		);
 	}
-
-	public function withSelectionArguments(array $arguments): self
-	{
-		$load = null;
-		$visible = null;
-		$fields = null;
-
-		foreach ($arguments as $name => $value) {
-			if (is_int($name)) {
-				throw RelationSelectionException::positionalRelationOption($this->getPath());
-			}
-
-			if ($name !== 'load' && $name !== 'visible' && $name !== 'fields') {
-				throw RelationSelectionException::unknownRelationOption($this->getPath(), (string) $name);
-			}
-
-			if ($name === 'fields') {
-				if (! is_array($value)) {
-					throw RelationSelectionException::invalidRelationFieldsType($this->getPath());
-				}
-
-				$fields = $value;
-
-				continue;
-			}
-
-			if (! is_bool($value)) {
-				throw RelationSelectionException::invalidRelationOptionType($this->getPath(), (string) $name);
-			}
-
-			if ($name === 'load') {
-				$load = $value;
-
-				continue;
-			}
-
-			$visible = $value;
-		}
-
-		$relation = $this->withSelectionOptions($load, $visible);
-
-		if ($fields !== null) {
-			$relation = $relation->withFields($fields);
-		}
-
-		return $relation;
-	}
-
 	/**
 	 * @param list<mixed> $fields
 	 * @return list<string>
