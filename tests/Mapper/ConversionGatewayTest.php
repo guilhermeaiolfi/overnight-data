@@ -743,7 +743,7 @@ final class ConversionGatewayTest extends TestCase
 	public function testLeafNodeResolutionFromFieldRetainsOnlyNameTypeAndNullability(): void
 	{
 		$registry = new Registry();
-		$field = $registry->collection('users')->field('id', 'int')->nullable(true)->description('ignored in phase 1');
+		$field = $registry->collection('users')->field('id', 'int')->nullable(true)->description('ignored in metadata copy');
 		$before = $registry->all();
 
 		$context = LeafNodeResolution::fromField($field);

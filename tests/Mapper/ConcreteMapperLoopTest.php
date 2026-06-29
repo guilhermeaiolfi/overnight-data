@@ -14,11 +14,11 @@ use ON\Data\Mapper\Writer\WriterInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
-final class Phase10AConcreteMapperLoopTest extends TestCase
+final class ConcreteMapperLoopTest extends TestCase
 {
 	protected function setUp(): void
 	{
-		Phase10ARecordingWriter::reset();
+		RecordingWriter::reset();
 	}
 
 	public function testArrayMapperOwnsImmediateArrayLoopAndNestedBranchLifecycle(): void
@@ -27,7 +27,7 @@ final class Phase10AConcreteMapperLoopTest extends TestCase
 		$child->name = 'Ada';
 
 		$gateway = ConversionGateway::createDefault();
-		$gateway->getMapperManager()->prepend(Phase10ARecordingWriter::class);
+		$gateway->getMapperManager()->prepend(RecordingWriter::class);
 
 		$result = map(
 			[
@@ -47,19 +47,19 @@ final class Phase10AConcreteMapperLoopTest extends TestCase
 				['event' => 'write', 'path' => 'child.name'],
 				['event' => 'write', 'path' => 'child'],
 			],
-			Phase10ARecordingWriter::$events,
+			RecordingWriter::$events,
 		);
 	}
 
 	public function testObjectMapperOwnsStdClassAndPropertyLoops(): void
 	{
-		$source = new Phase10AObjectSource();
+		$source = new ObjectSource();
 		$source->name = 'Ada';
 		$source->child = new stdClass();
 		$source->child->role = 'admin';
 
 		$gateway = ConversionGateway::createDefault();
-		$gateway->getMapperManager()->prepend(Phase10ARecordingWriter::class);
+		$gateway->getMapperManager()->prepend(RecordingWriter::class);
 
 		$result = map($source, null, $gateway)->to([]);
 
@@ -78,12 +78,12 @@ final class Phase10AConcreteMapperLoopTest extends TestCase
 				['event' => 'write', 'path' => 'child.role'],
 				['event' => 'write', 'path' => 'child'],
 			],
-			Phase10ARecordingWriter::$events,
+			RecordingWriter::$events,
 		);
 	}
 }
 
-final class Phase10ARecordingWriter implements WriterInterface
+final class RecordingWriter implements WriterInterface
 {
 	/**
 	 * @var list<array{event: string, path?: string}>
@@ -128,7 +128,7 @@ final class Phase10ARecordingWriter implements WriterInterface
 	}
 }
 
-final class Phase10AObjectSource
+final class ObjectSource
 {
 	#[MapTo('display_name')]
 	public string $name;

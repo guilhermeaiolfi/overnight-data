@@ -12,7 +12,7 @@ use RecursiveIteratorIterator;
 use ReflectionClass;
 use SplFileInfo;
 
-final class MapperPhase2ArchitectureTest extends TestCase
+final class MapperArchitectureTest extends TestCase
 {
 	public function testProductionCodeDoesNotReferenceExpandedForbiddenNamespaces(): void
 	{
@@ -77,7 +77,7 @@ final class MapperPhase2ArchitectureTest extends TestCase
 		self::assertTrue($mappingReflection->hasProperty('defaultGateway'));
 	}
 
-	public function testPhaseTwoApisNowExist(): void
+	public function testCanonicalMapperApisExist(): void
 	{
 		$root = dirname(__DIR__, 2) . '/src/Mapper';
 		$requiredFiles = [

@@ -13,7 +13,7 @@ use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
-final class Phase7ArchitectureTest extends TestCase
+final class DefinitionAndQueryArchitectureTest extends TestCase
 {
 	public function testRegistryNoLongerContainsRecursiveNormalizationMethods(): void
 	{
@@ -86,7 +86,7 @@ final class Phase7ArchitectureTest extends TestCase
 				self::assertStringNotContainsString(
 					$forbidden,
 					$contents,
-					sprintf('Forbidden phase-7 coupling "%s" found in %s', $forbidden, $relativePath),
+					sprintf('Forbidden generic infrastructure coupling "%s" found in %s', $forbidden, $relativePath),
 				);
 			}
 		}

@@ -16,7 +16,7 @@ use Tests\ON\Data\Fixture\OtherResolver;
 use Tests\ON\Data\Fixture\ReflectedArticleDto;
 use Tests\ON\Data\Fixture\StatusEnum;
 
-final class Phase9IntegrationTest extends TestCase
+final class FieldMapIntegrationTest extends TestCase
 {
 	public function testUntypedStorageArrayUsesFieldMapForExactNumericsAndEnum(): void
 	{

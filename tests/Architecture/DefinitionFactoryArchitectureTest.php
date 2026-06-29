@@ -19,7 +19,7 @@ use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
 
-final class Phase5ArchitectureTest extends TestCase
+final class DefinitionFactoryArchitectureTest extends TestCase
 {
 	public function testCollectionNoLongerExposesPublicBindDefinitionArrayMethod(): void
 	{

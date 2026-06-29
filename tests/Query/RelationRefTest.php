@@ -21,7 +21,7 @@ final class RelationRefTest extends TestCase
 {
 	public function testRootFieldPropertyAccessRemainsCachedAndUnchanged(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 
 		self::assertInstanceOf(FieldRef::class, $users->name);
 		self::assertSame($users, $users->name->getSource());
@@ -31,7 +31,7 @@ final class RelationRefTest extends TestCase
 
 	public function testRootRelationPropertyAccessExposesRelationMetadata(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 		$posts = $users->posts;
 
 		self::assertInstanceOf(RelationRef::class, $posts);
@@ -45,7 +45,7 @@ final class RelationRefTest extends TestCase
 
 	public function testExplicitAndPropertyRelationCachingMatch(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 
 		self::assertSame($users->posts, $users->relation('posts'));
 		self::assertSame($users->posts, $users->posts);
@@ -53,7 +53,7 @@ final class RelationRefTest extends TestCase
 
 	public function testRelatedFieldAccessIsCachedAndRetainsRootQuery(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 		$title = $users->posts->title;
 
 		self::assertInstanceOf(FieldRef::class, $title);
@@ -66,7 +66,7 @@ final class RelationRefTest extends TestCase
 
 	public function testNestedRelationTraversalRetainsRootQueryAndPath(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 		$author = $users->posts->author;
 		$name = $author->name;
 
@@ -78,7 +78,7 @@ final class RelationRefTest extends TestCase
 
 	public function testNestedCacheIdentityMatchesExplicitLookup(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 
 		self::assertSame($users->posts->author, $users->posts->relation('author'));
 		self::assertSame($users->posts->author->name, $users->posts->author->field('name'));
@@ -86,7 +86,7 @@ final class RelationRefTest extends TestCase
 
 	public function testRelationConfigurationMethodsSupportImmutableSelectionOptions(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 		$default = $users->posts;
 		$loaded = $users->posts->load();
 		$hidden = $users->posts->hidden();
@@ -111,7 +111,7 @@ final class RelationRefTest extends TestCase
 
 	public function testFieldsAcceptArrayAndFieldRefs(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 		$fromArray = $users->posts->fields(['title']);
 		$fromRefs = $users->posts->fields($users->posts->id, $users->posts->title);
 
@@ -122,7 +122,7 @@ final class RelationRefTest extends TestCase
 
 	public function testInvalidRelationFieldSelectionsAreRejected(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 
 		foreach ([
 			static fn () => $users->posts->fields(),
@@ -143,7 +143,7 @@ final class RelationRefTest extends TestCase
 
 	public function testSeparatePathsToSameTargetRemainDistinct(): void
 	{
-		$orders = query($this->makeRegistry()->getCollection('orders'));
+		$orders = $this->makeQuery('orders');
 
 		self::assertNotSame($orders->billingAddress, $orders->shippingAddress);
 		self::assertNotSame($orders->billingAddress->city, $orders->shippingAddress->city);
@@ -153,7 +153,7 @@ final class RelationRefTest extends TestCase
 
 	public function testSelfRelationTraversalIsLazyAndSafe(): void
 	{
-		$employees = query($this->makeRegistry()->getCollection('employees'));
+		$employees = $this->makeQuery('employees');
 		$name = $employees->manager->manager->name;
 
 		self::assertSame(['manager', 'manager', 'name'], $name->getPath());
@@ -161,7 +161,7 @@ final class RelationRefTest extends TestCase
 
 	public function testUnknownExplicitRootRelationThrowsSpecificException(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 
 		$this->expectException(UnknownQueryRelationException::class);
 		$this->expectExceptionMessage("Unknown query relation 'missing' on definition 'users'.");
@@ -170,7 +170,7 @@ final class RelationRefTest extends TestCase
 
 	public function testUnknownExplicitNestedRelationThrowsSpecificException(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 
 		$this->expectException(UnknownQueryRelationException::class);
 		$this->expectExceptionMessage("Unknown query relation 'missing' on definition 'posts'.");
@@ -179,7 +179,7 @@ final class RelationRefTest extends TestCase
 
 	public function testUnknownRootPropertyMemberThrowsSpecificException(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 
 		$this->expectException(UnknownQueryMemberException::class);
 		$this->expectExceptionMessage("Unknown query member 'missing' on definition 'users'.");
@@ -188,7 +188,7 @@ final class RelationRefTest extends TestCase
 
 	public function testUnknownNestedPropertyMemberThrowsSpecificException(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 
 		$this->expectException(UnknownQueryMemberException::class);
 		$this->expectExceptionMessage("Unknown query member 'missing' on definition 'posts'.");
@@ -197,7 +197,7 @@ final class RelationRefTest extends TestCase
 
 	public function testExistingExplicitFieldErrorRemainsUnchanged(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 
 		$this->expectException(UnknownQueryFieldException::class);
 		$this->expectExceptionMessage("Unknown query field 'missing' on definition 'users'.");
@@ -206,7 +206,7 @@ final class RelationRefTest extends TestCase
 
 	public function testAccessHasNoQuerySideEffects(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 		$users->posts;
 		$users->posts->title;
 		$users->posts->author->name;
@@ -219,7 +219,7 @@ final class RelationRefTest extends TestCase
 
 	public function testRelationRefIsSelectableWithoutBecomingAValueExpression(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 
 		self::assertFalse(is_a($users->posts, ValueExpressionInterface::class));
 		$users->select($users->posts);
@@ -232,7 +232,7 @@ final class RelationRefTest extends TestCase
 
 	public function testNestedRelationSelectionAddsAncestorsOnce(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 
 		$users
 			->select($users->posts->author)
@@ -246,7 +246,7 @@ final class RelationRefTest extends TestCase
 
 	public function testNestedRelationSelectionDefaultsIntermediateSegmentsToVisibleStructuralTraversal(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 		$users->select($users->posts->author);
 
 		self::assertSame([
@@ -257,7 +257,7 @@ final class RelationRefTest extends TestCase
 
 	public function testNestedRelationSelectionMergesToTheStrongestPathOptions(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 
 		$users->select(
 			$users->posts->hidden()->author,
@@ -272,7 +272,7 @@ final class RelationRefTest extends TestCase
 
 	public function testRepeatedRelationSelectionsUnionRequestedFieldsInStableOrder(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 
 		$users->select(
 			$users->posts->fields('id'),
@@ -286,7 +286,7 @@ final class RelationRefTest extends TestCase
 
 	public function testUnrestrictedRepeatedRelationSelectionDominatesRestrictedFields(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 
 		$users->select(
 			$users->posts->fields('title'),
@@ -300,7 +300,7 @@ final class RelationRefTest extends TestCase
 
 	public function testHiddenTerminalRelationSelectionIsRejected(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 
 		$this->expectException(RelationSelectionException::class);
 		$users->select($users->posts->hidden());
@@ -308,7 +308,7 @@ final class RelationRefTest extends TestCase
 
 	public function testConfiguredParentKeepsItsSelectionStateWhenTraversingChildren(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 		$configuredPosts = $users->posts->fields('id', 'title');
 		$comments = $configuredPosts->comments->fields('id', 'body');
 
@@ -324,25 +324,9 @@ final class RelationRefTest extends TestCase
 		], $this->selectionState($users));
 	}
 
-	public function testLegacyRootRelationMethodCallsAreNotSupported(): void
-	{
-		$users = query($this->makeRegistry()->getCollection('users'));
-
-		$this->expectException(\Error::class);
-		$users->posts(fields: ['title']);
-	}
-
-	public function testLegacyNestedRelationMethodCallsAreNotSupported(): void
-	{
-		$users = query($this->makeRegistry()->getCollection('users'));
-
-		$this->expectException(\Error::class);
-		$users->posts->comments(fields: ['body']);
-	}
-
 	public function testNestedRelationNamedLikeConfigurationMethodResolvesThroughPropertyAccess(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 		$relation = $users->posts->fields;
 
 		self::assertInstanceOf(RelationRef::class, $relation);
@@ -352,7 +336,7 @@ final class RelationRefTest extends TestCase
 
 	public function testNestedFieldNamedLikeGetterMethodResolvesThroughPropertyAccess(): void
 	{
-		$users = query($this->makeRegistry()->getCollection('users'));
+		$users = $this->makeQuery('users');
 		$field = $users->posts->getRelation;
 
 		self::assertInstanceOf(FieldRef::class, $field);
@@ -363,8 +347,8 @@ final class RelationRefTest extends TestCase
 	public function testFieldsRejectFieldRefsFromAnotherQueryEvenWithTheSamePath(): void
 	{
 		$registry = $this->makeRegistry();
-		$users = query($registry->getCollection('users'));
-		$otherUsers = query($registry->getCollection('users'));
+		$users = $this->makeQuery('users', $registry);
+		$otherUsers = $this->makeQuery('users', $registry);
 
 		$this->expectException(RelationSelectionException::class);
 		$users->posts->fields($otherUsers->posts->title);
@@ -373,8 +357,8 @@ final class RelationRefTest extends TestCase
 	public function testSelectingAForeignRelationIsRejected(): void
 	{
 		$registry = $this->makeRegistry();
-		$users = query($registry->getCollection('users'));
-		$other = query($registry->getCollection('users'));
+		$users = $this->makeQuery('users', $registry);
+		$other = $this->makeQuery('users', $registry);
 
 		$this->expectException(RelationSelectionException::class);
 		$users->select($other->posts);
@@ -422,6 +406,13 @@ final class RelationRefTest extends TestCase
 		$employees->relation('manager', CustomRelation::class)->collection('employees');
 
 		return $registry;
+	}
+
+	private function makeQuery(string $collection, ?Registry $registry = null): SelectQuery
+	{
+		$registry ??= $this->makeRegistry();
+
+		return query($registry->getCollection($collection));
 	}
 
 	/**

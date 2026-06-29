@@ -549,7 +549,7 @@ final class QueryModelTest extends TestCase
 		self::assertSame(AggregateFunction::SUM, $sum->getFunction());
 	}
 
-	public function testAggregateExpressionsAreNotAggregateableInPhaseTwo(): void
+	public function testAggregateExpressionsCannotBeAggregatedAgain(): void
 	{
 		$aggregate = query($this->makeRegistry()->getCollection('posts'))->amount->sum();
 

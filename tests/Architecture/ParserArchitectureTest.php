@@ -9,7 +9,7 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
-final class Phase8ParserArchitectureTest extends TestCase
+final class ParserArchitectureTest extends TestCase
 {
 	public function testParserNamespaceDoesNotDependOnForbiddenLayers(): void
 	{

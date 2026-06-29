@@ -21,7 +21,7 @@ use ON\Data\Mapper\Resolver\NodeResolverInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
-final class Phase10NodeResolutionTest extends TestCase
+final class NodeResolutionIntegrationTest extends TestCase
 {
 	public function testHybridBranchDispatchMapsArrayObjectAndArrayLevels(): void
 	{
@@ -85,7 +85,7 @@ final class Phase10NodeResolutionTest extends TestCase
 			'child' => ['name' => 'Ada'],
 		])
 			->as(WireRepresentation::class)
-			->resolver(Phase10CustomNodeResolver::class)
+			->resolver(CustomNodeResolver::class)
 			->to([]);
 
 		self::assertSame('{"theme":"dark"}', $result['payload']);
@@ -126,7 +126,7 @@ final class RecordingRootArrayMapper implements MapperInterface
 	}
 }
 
-final class Phase10CustomNodeResolver implements NodeResolverInterface
+final class CustomNodeResolver implements NodeResolverInterface
 {
 	public function resolve(
 		MappingNode $node,
