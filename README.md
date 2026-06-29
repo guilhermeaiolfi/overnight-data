@@ -1,55 +1,30 @@
 # Overnight Data
 
-`ON\Data` is the definition and mapper foundation for a metadata-driven PHP data layer.
+`ON\Data` is a standalone PHP data-layer library focused on metadata definitions, value conversion, mapping, and database-independent read-query modeling.
 
-The package currently ships the standalone definition subsystem extracted from Overnight, together with the support layers needed to store, restore, convert, and recursively map data across plain PHP arrays, `stdClass` objects, and public-property DTOs.
+It is independent from the Overnight framework. The package can be consumed on its own today and may be integrated elsewhere later.
 
 ## Current Scope
 
-This repository currently includes:
-
-- the `ON\Data` package scaffold;
-- `ON\Data\Support\Dot`;
-- `ON\Data\Support\DefinitionNode`;
-- the extracted `ON\Data\Definition` subsystem;
-- collection-owned primary-key metadata;
-- shared `DefinitionInterface` support for collections and views;
-- registry-managed `ViewDefinition` and `ViewField` wrappers backed by the same master-array storage;
-- the `ON\Data\Key` value object for simple and composite identities;
-- the standalone FieldType, representation, field-type codec, and conversion gateway foundation under `ON\Data\Mapper`;
-- `MapperManager`, `MappingContext`, `MappingNode`, one-level Mappers, writers, node resolvers, and the fluent `map()` / `MapBuilder` entry point;
-- default definition-aware node resolution through `->args($definition)` for scalar conversion and relation branches;
-- ad-hoc path-based scalar metadata through `FieldMap::fromArray()` and `MapBuilder::fieldMap()`;
-- the Phase 1 through Phase 5 `ON\Data\Query` read-query model for database-independent select expressions, semantic value operations, aggregate nodes, scalar subqueries, query-local named expressions, condition trees, grouping, `HAVING`, ordering, limit/offset pagination, and optional bound execution;
-- the neutral `ON\Data\Database` execution surface with `Database`, `ConnectionConfig`, and `QueryExecutorInterface`;
-- the built-in internal Cycle Database backend currently used as the default execution adapter;
-- generic collection mapping through the same composable runtime;
-- recursive array, `stdClass`, and public-property object combinations selected independently by source Mapper and target writer, with cycle checks applied at recursive mapper dispatch;
-- typed nested DTO properties and PHPDoc-described DTO lists;
-- automatic backed-enum and immutable-datetime reflection for public DTO properties;
-- exact numeric `decimal` and `bigint` field types using canonical strings;
-- default dotted-key expansion for flat joined rows and request payloads;
-- mapper attributes `MapFrom`, `MapTo`, and `Hidden` across nested DTO mapping;
-- tests and quality tooling.
-
-Definition arrays are canonical at creation time. Names are stored only as owner-map keys, every stored wrapper is created by its owner over a final array slot, restored arrays must already be canonical, and older caches using legacy field-level `pk` flags should be regenerated.
+- Definitions: canonical `Registry` storage, collection and view definitions, typed definition wrappers, shared metadata, and class-based extension points.
+- Field metadata and conversion: field types, representations, codecs, and the `ConversionGateway` used to convert values through canonical PHP representations.
+- Mapper runtime: recursive mapping across arrays, `stdClass`, and public-property DTOs, with definition-aware resolution, `FieldMap` support, and reusable mapper/writer/resolver registration through `MapperManager`.
+- Query model: database-independent `SelectQuery`, field and relation refs, selections, aliases, semantic value operations, aggregates, subqueries, joins, conditions, grouping, ordering, and pagination.
+- Bound execution: optional execution binding through `ON\Data\Database\QueryExecutorInterface`, plus the neutral `Database` facade and `ConnectionConfig`.
+- Relation loading: structured relation selection for nested results, loader-owned join or separate-query execution, and parser-backed result assembly for supported relation loaders.
 
 ## Current Limitations
 
-Not implemented yet:
-
-- semantic view fields and expressions;
-- persistence and ORM adapters;
-- relation loading;
-- constructor hydration and readonly-target hydration.
+- No persistence or write-side unit-of-work layer.
+- No ORM adapter layer.
+- No constructor hydration or readonly-target hydration in the mapper runtime.
+- Structured relation loading does not currently cover every relation type; built-in `M2M` and `FirstOfMany` structured loading remain deferred.
 
 ## Namespace
 
 Production code autoloads from the `ON\Data\` namespace.
 
 ## Installation
-
-During development, install from the repository with Composer:
 
 ```bash
 composer config repositories.overnight-data vcs <repository-url>
@@ -70,11 +45,13 @@ composer check
 
 ## Documentation
 
-- `docs/definition-api.md` documents the canonical registry and public definition API.
-- `docs/definition-extension-guide.md` documents supported extension points and storage rules for custom definition nodes.
-- `docs/mapper-runtime-guide.md` documents field types, representations, conversion flow, and the recursive mapper runtime.
-- `docs/3-query/phase-1-query-model.md` documents the Phase 1 database-independent query model.
-- `docs/3-query/phase-2-aggregate-subqueries.md` documents Phase 2 aggregate, subquery, `EXISTS`, and `IN` query modeling.
-- `docs/3-query/phase-3-semantic-value-operations.md` documents Phase 3 semantic value operations and query-local named expression lookup.
-- `docs/3-query/phase-4-ordering-grouping-pagination.md` documents Phase 4 grouping, `HAVING`, ordering, and limit/offset pagination.
-- `docs/3-query/phase-5-bound-execution.md` documents Phase 5 bound execution, the neutral database facade, and the built-in Cycle backend.
+- `docs/README.md` is the documentation index.
+- `docs/definition-api.md` documents the canonical registry and definition API.
+- `docs/definition-extension-guide.md` documents supported definition extension points and storage rules.
+- `docs/mapper-runtime-guide.md` documents the mapper runtime, conversion system, and runtime registration surface.
+- `docs/recursive-mapping-behavior.md` documents recursive mapping behavior and runtime traversal rules.
+- `docs/3-query/query-model.md` documents the current query model and reference types.
+- `docs/3-query/expressions-and-conditions.md` documents query expressions, aliases, and condition building.
+- `docs/3-query/grouping-ordering-pagination.md` documents grouping, ordering, and pagination.
+- `docs/3-query/bound-execution.md` documents bound execution and the neutral database facade.
+- `docs/3-query/relation-loading.md` documents relation selection, nested loading, and loader ownership boundaries.
