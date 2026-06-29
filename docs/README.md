@@ -9,8 +9,7 @@ Start here for the current public documentation. The files linked below are the 
 
 ## Mapper
 
-- [`mapper-runtime-guide.md`](./mapper-runtime-guide.md): Mapper runtime concepts, runtime registration, field types, representations, and conversion flow.
-- [`mapper-runtime-guide.md`](./mapper-runtime-guide.md): Use the built-in field types and conversion sections in this guide as the canonical reference for representations, codecs, and the conversion gateway surface.
+- [`mapper-runtime-guide.md`](./mapper-runtime-guide.md): Mapper runtime concepts, runtime registration, recursive conversion flow, and the canonical reference for field types, representations, codecs, and the `ConversionGateway`.
 - [`recursive-mapping-behavior.md`](./recursive-mapping-behavior.md): Recursive branch traversal, resolver precedence, and how mixed source and target structures are mapped.
 
 ## Query
