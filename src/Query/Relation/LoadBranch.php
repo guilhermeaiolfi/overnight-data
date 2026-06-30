@@ -255,7 +255,7 @@ final class LoadBranch
 		return $this->node !== null;
 	}
 
-	public function addChild(self $child): void
+	private function addChild(self $child): void
 	{
 		$this->children[] = $child;
 	}

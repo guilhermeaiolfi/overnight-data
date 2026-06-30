@@ -137,6 +137,13 @@ final class QueryArchitectureTest extends TestCase
 		self::assertFalse(method_exists(LoadRuntime::class, 'createInternalBranch'));
 	}
 
+	public function testLoadBranchDoesNotExposePublicChildAttachment(): void
+	{
+		$reflection = new ReflectionMethod(LoadBranch::class, 'addChild');
+
+		self::assertFalse($reflection->isPublic());
+	}
+
 	public function testRuntimeAndBuiltInLoadersDoNotContainCollectFieldsLifecycle(): void
 	{
 		foreach ([

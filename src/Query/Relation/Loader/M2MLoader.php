@@ -36,12 +36,11 @@ final class M2MLoader extends AbstractLoader
 		$throughInnerKeys = $through->getInnerKeys();
 		$throughOuterKeys = $through->getOuterKeys();
 		$current = $runtime->getCurrentBranch();
-		$parent = $runtime->getParentBranch();
+		$parent = $runtime->requireParentBranch();
 		$targetIdentity = $current->requireFields($relation->getCollection()->getPrimaryKey());
 		$current->requireFields($current->getPublicFields());
 		$targetOuterKeyColumns = $current->requireFields($relationOuterKeys);
-		$parentInnerKeyColumns = $parent?->requireFields($relationInnerKeys)
-			?? $runtime->requireRootFields($relationInnerKeys);
+		$parentInnerKeyColumns = $parent->requireFields($relationInnerKeys);
 		$throughColumns = array_values(array_unique([
 			...$throughInnerKeys,
 			...$throughOuterKeys,

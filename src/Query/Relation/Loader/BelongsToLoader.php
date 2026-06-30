@@ -21,11 +21,10 @@ final class BelongsToLoader extends AbstractLoader
 	{
 		$definition = $relation->getRelation();
 		$current = $runtime->getCurrentBranch();
-		$parentBranch = $runtime->getParentBranch();
+		$parentBranch = $runtime->requireParentBranch();
 		$identity = $current->requireFields($relation->getCollection()->getPrimaryKey());
 		$child = $current->requireFields($definition->getOuterKeys());
-		$parent = $parentBranch?->requireFields($definition->getInnerKeys())
-			?? $runtime->requireRootFields($definition->getInnerKeys());
+		$parent = $parentBranch->requireFields($definition->getInnerKeys());
 
 		return new SingularNode(
 			$runtime->getNodeColumns(),

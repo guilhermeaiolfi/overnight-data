@@ -84,20 +84,10 @@ final class LoadRuntime
 		return $this->requireActiveBranch();
 	}
 
-	public function getParentBranch(): ?LoadBranch
+	public function requireParentBranch(): LoadBranch
 	{
-		return $this->requireActiveBranch()->getParent();
-	}
-
-	/**
-	 * @param non-empty-list<string> $fieldNames
-	 * @return non-empty-list<string>
-	 */
-	public function requireRootFields(array $fieldNames): array
-	{
-		$normalized = $this->normalizeFieldNames($this->rootQuery->getCollection(), $fieldNames);
-
-		return array_map($this->ensureRootFieldParserName(...), $normalized);
+		return $this->requireActiveBranch()->getParent()
+			?? throw LoadRuntimeException::activeBranchMissing();
 	}
 
 	/**
