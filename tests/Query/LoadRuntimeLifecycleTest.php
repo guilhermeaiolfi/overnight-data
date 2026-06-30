@@ -249,9 +249,17 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$runtime = $this->prepareRuntime($users);
 		$rootBranch = $this->readProperty($runtime, 'rootBranch');
 		$columns = $this->readProperty($rootBranch->getNode(), 'columns');
+		$selections = $this->readProperty($rootBranch, 'selections');
+		$titleSelection = $selections->getPublicItems()[0];
 
 		self::assertSame(['title', '__on_data_root_required_id_0'], $columns);
 		self::assertSame(['title'], LifecycleEvents::$plannedRootColumns);
+		self::assertTrue($titleSelection->hasReason(SelectionReason::PUBLIC));
+		self::assertTrue($titleSelection->hasReason(SelectionReason::REQUIRED));
+		self::assertSame([[
+			'title' => 'Ada',
+			'posts' => [],
+		]], $users->fetchAll());
 	}
 
 	public function testJoinedAndLinkedAttachmentModesAreRecordedDuringLoadAndAppliedDuringRegistration(): void
