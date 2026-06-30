@@ -104,8 +104,20 @@ final class QueryArchitectureTest extends TestCase
 		$parameters = $reflection->getParameters();
 
 		self::assertCount(2, $parameters);
+		self::assertSame(RelationLoadBranch::class, $parameters[0]->getType()?->getName());
+		self::assertSame(LoadRuntime::class, $parameters[1]->getType()?->getName());
 		self::assertInstanceOf(ReflectionNamedType::class, $reflection->getReturnType());
 		self::assertSame(AbstractNode::class, $reflection->getReturnType()->getName());
+	}
+
+	public function testLoaderLoadReceivesRelationLoadBranch(): void
+	{
+		$reflection = new ReflectionMethod(LoaderInterface::class, 'load');
+		$parameters = $reflection->getParameters();
+
+		self::assertCount(2, $parameters);
+		self::assertSame(RelationLoadBranch::class, $parameters[0]->getType()?->getName());
+		self::assertSame(LoadRuntime::class, $parameters[1]->getType()?->getName());
 	}
 
 	public function testAbstractLoaderProvidesFinalRegisterReturningAbstractNode(): void
@@ -151,15 +163,32 @@ final class QueryArchitectureTest extends TestCase
 		self::assertSame(LoadBranch::class, $this->methodReturnType(RelationLoadBranch::class, 'getParent'));
 		self::assertSame('ON\Data\Query\Relation\RelationSelection', $this->methodReturnType(RelationLoadBranch::class, 'getSelection'));
 		self::assertSame(LoaderInterface::class, $this->methodReturnType(RelationLoadBranch::class, 'getLoader'));
+		self::assertSame('ON\Data\Query\Relation\RelationRef', $this->methodReturnType(RelationLoadBranch::class, 'getRelationRef'));
+		self::assertSame('bool', $this->methodReturnType(RelationLoadBranch::class, 'returnsMany'));
+		self::assertFalse(method_exists(RelationLoadBranch::class, 'getRelation'));
+		self::assertFalse(method_exists(RelationLoadBranch::class, 'nodeIsCollectionLike'));
 	}
 
 	public function testRootAndRelationBranchesKeepSeparateResponsibilities(): void
 	{
 		self::assertFalse(method_exists(RootLoadBranch::class, 'getSelection'));
 		self::assertFalse(method_exists(RootLoadBranch::class, 'getLoader'));
+		self::assertFalse(method_exists(RootLoadBranch::class, 'returnsMany'));
 		self::assertFalse(method_exists(RelationLoadBranch::class, 'addPublicColumn'));
 		self::assertFalse(method_exists(RelationLoadBranch::class, 'getRootNode'));
 		self::assertFalse(method_exists(LoadBranch::class, 'setRootFieldResolver'));
+	}
+
+	public function testRuntimeDoesNotExposeLoaderBranchIdentityApis(): void
+	{
+		self::assertFalse(method_exists(LoadRuntime::class, 'getCurrentBranch'));
+		self::assertFalse(method_exists(LoadRuntime::class, 'requireParentBranch'));
+	}
+
+	public function testRelationRefExposesDefinitionNaming(): void
+	{
+		self::assertSame('ON\Data\Definition\Relation\RelationInterface', $this->methodReturnType('ON\Data\Query\Relation\RelationRef', 'getDefinition'));
+		self::assertFalse(method_exists('ON\Data\Query\Relation\RelationRef', 'getRelation'));
 	}
 
 	public function testRuntimeAndBuiltInLoadersDoNotContainCollectFieldsLifecycle(): void
@@ -192,6 +221,32 @@ final class QueryArchitectureTest extends TestCase
 		}
 	}
 
+	public function testBuiltInLoadersDoNotUseRuntimeBranchLookupOrOldRelationNaming(): void
+	{
+		foreach ([
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/BelongsToLoader.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasOneLoader.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasManyLoader.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/M2MLoader.php',
+		] as $path) {
+			$contents = (string) file_get_contents($path);
+			self::assertStringNotContainsString('->getCurrentBranch(', $contents, $path);
+			self::assertStringNotContainsString('->requireParentBranch(', $contents, $path);
+			self::assertStringNotContainsString('->getRelation()', $contents, $path);
+		}
+	}
+
+	public function testBranchOutputShapingUsesRelationCardinalityInsteadOfParserCollectionChecks(): void
+	{
+		$relationBranchContents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/RelationLoadBranch.php');
+		$rootBranchContents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/RootLoadBranch.php');
+
+		self::assertStringContainsString('returnsMany(', $relationBranchContents);
+		self::assertStringNotContainsString('nodeIsCollectionLike(', $relationBranchContents);
+		self::assertStringNotContainsString('isCollectionLike(', $relationBranchContents);
+		self::assertStringNotContainsString('nodeIsCollectionLike(', $rootBranchContents);
+	}
+
 	public function testRuntimeOnlyAttachesRootParserNodes(): void
 	{
 		$contents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/LoadRuntime.php');
@@ -213,6 +268,7 @@ final class QueryArchitectureTest extends TestCase
 			],
 			[
 				'/src/Query/Relation/Loader/',
+				'/src/Query/Relation/RelationLoadBranch.php',
 			],
 			[
 				'HasOneRelation',

@@ -169,8 +169,8 @@ final class RootLoadBranch extends LoadBranch
 			}
 
 			foreach ($this->getChildren() as $child) {
-				$name = $child->getRelation()->getName();
-				$value = $record[$name] ?? ($child->nodeIsCollectionLike() ? [] : null);
+				$name = $child->getRelationRef()->getName();
+				$value = $record[$name] ?? ($child->returnsMany() ? [] : null);
 
 				if ($child->getSelection()->isVisible()) {
 					$item[$name] = $child->buildVisibleOutput($value);

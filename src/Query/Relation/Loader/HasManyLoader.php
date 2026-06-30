@@ -6,20 +6,20 @@ namespace ON\Data\Query\Relation\Loader;
 
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
-use ON\Data\Query\Relation\RelationRef;
+use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\CollectionNode;
 use function ON\Data\Query\x;
 
 final class HasManyLoader extends AbstractLoader
 {
-	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
 	{
-		$definition = $relation->getRelation();
-		$current = $runtime->getCurrentBranch();
-		$parentBranch = $runtime->requireParentBranch();
-		$identity = $current->requireFields($relation->getCollection()->getPrimaryKey());
-		$child = $current->requireFields($definition->getOuterKeys());
+		$relationRef = $branch->getRelationRef();
+		$definition = $relationRef->getDefinition();
+		$parentBranch = $branch->getParent();
+		$identity = $branch->requireFields($relationRef->getCollection()->getPrimaryKey());
+		$child = $branch->requireFields($definition->getOuterKeys());
 		$parent = $parentBranch->requireFields($definition->getInnerKeys());
 
 		return new CollectionNode(
@@ -30,13 +30,13 @@ final class HasManyLoader extends AbstractLoader
 		);
 	}
 
-	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		$definition = $relation->getRelation();
-		$current = $runtime->getCurrentBranch();
-		$parentBranch = $runtime->requireParentBranch();
-		$current->requireFields($relation->getCollection()->getPrimaryKey());
-		$current->requireFields($definition->getOuterKeys());
+		$relationRef = $branch->getRelationRef();
+		$definition = $relationRef->getDefinition();
+		$parentBranch = $branch->getParent();
+		$branch->requireFields($relationRef->getCollection()->getPrimaryKey());
+		$branch->requireFields($definition->getOuterKeys());
 		$parentBranch->requireFields($definition->getInnerKeys());
 
 		$strategy = $runtime->getLoadStrategy($this->getDefaultLoadStrategy());
@@ -51,13 +51,13 @@ final class HasManyLoader extends AbstractLoader
 			return;
 		}
 
-		$query = $runtime->createQuery($relation->getCollection());
+		$query = $runtime->createQuery($relationRef->getCollection());
 
 		$runtime->setQueryContext($query, $query);
 		$runtime->nextPass('loadData');
 	}
 
-	public function loadData(RelationRef $relation, LoadRuntime $runtime): void
+	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 		$references = $runtime->getReferenceValues();
 
@@ -66,7 +66,7 @@ final class HasManyLoader extends AbstractLoader
 		}
 
 		$query = $runtime->getQuery();
-		$childFields = $relation->getRelation()->getOuterKeys();
+		$childFields = $branch->getRelationRef()->getDefinition()->getOuterKeys();
 
 		if (count($childFields) === 1) {
 			$query->where(

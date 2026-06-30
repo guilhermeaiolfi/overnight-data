@@ -52,7 +52,7 @@ final class RelationRef implements QuerySourceInterface
 		return $this->query;
 	}
 
-	public function getRelation(): RelationInterface
+	public function getDefinition(): RelationInterface
 	{
 		return $this->relation;
 	}
@@ -95,12 +95,12 @@ final class RelationRef implements QuerySourceInterface
 
 	public function getCollection(): CollectionInterface
 	{
-		return $this->relation->getCollection();
+		return $this->getDefinition()->getCollection();
 	}
 
 	public function getName(): string
 	{
-		return $this->relation->getName();
+		return $this->getDefinition()->getName();
 	}
 
 	/**
@@ -319,7 +319,7 @@ final class RelationRef implements QuerySourceInterface
 			return $this->loader;
 		}
 
-		$loader = $this->relation->getLoader();
+		$loader = $this->getDefinition()->getLoader();
 
 		if (! is_a($loader, LoaderInterface::class, true)) {
 			throw RelationLoaderException::invalidLoader($this, $loader);

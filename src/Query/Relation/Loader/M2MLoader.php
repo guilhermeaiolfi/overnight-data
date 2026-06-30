@@ -12,6 +12,7 @@ use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
+use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
@@ -22,9 +23,10 @@ final class M2MLoader extends AbstractLoader
 {
 	private const THROUGH_CONTAINER = '__target';
 
-	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
 	{
-		$definition = $relation->getRelation();
+		$relation = $branch->getRelationRef();
+		$definition = $relation->getDefinition();
 
 		if (! $definition instanceof M2MRelation) {
 			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');
@@ -35,11 +37,10 @@ final class M2MLoader extends AbstractLoader
 		$relationOuterKeys = $definition->getOuterKeys();
 		$throughInnerKeys = $through->getInnerKeys();
 		$throughOuterKeys = $through->getOuterKeys();
-		$current = $runtime->getCurrentBranch();
-		$parent = $runtime->requireParentBranch();
-		$targetIdentity = $current->requireFields($relation->getCollection()->getPrimaryKey());
-		$current->requireFields($current->getPublicFields());
-		$targetOuterKeyColumns = $current->requireFields($relationOuterKeys);
+		$parent = $branch->getParent();
+		$targetIdentity = $branch->requireFields($relation->getCollection()->getPrimaryKey());
+		$branch->requireFields($branch->getPublicFields());
+		$targetOuterKeyColumns = $branch->requireFields($relationOuterKeys);
 		$parentInnerKeyColumns = $parent->requireFields($relationInnerKeys);
 		$throughColumns = array_values(array_unique([
 			...$throughInnerKeys,
@@ -52,8 +53,8 @@ final class M2MLoader extends AbstractLoader
 			$targetOuterKeyColumns,
 			$throughOuterKeys,
 		);
-		$current->setPublicNode($targetNode);
-		$current->setPublicPayloadChild(self::THROUGH_CONTAINER);
+		$branch->setPublicNode($targetNode);
+		$branch->setPublicPayloadChild(self::THROUGH_CONTAINER);
 
 		$throughNode = new M2MThroughNode(
 			$throughColumns,
@@ -68,23 +69,23 @@ final class M2MLoader extends AbstractLoader
 		return $throughNode;
 	}
 
-	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
+		$relation = $branch->getRelationRef();
 		$this->assertSupportedRelationPath($relation);
 		$this->assertSupportedRelationConstraints($relation);
 
-		$definition = $relation->getRelation();
+		$definition = $relation->getDefinition();
 
 		if (! $definition instanceof M2MRelation) {
 			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');
 		}
 
 		$through = $this->through($relation, $definition);
-		$current = $runtime->getCurrentBranch();
-		$parent = $runtime->requireParentBranch();
-		$current->requireFields($relation->getCollection()->getPrimaryKey());
-		$current->requireFields($current->getPublicFields());
-		$current->requireFields($definition->getOuterKeys());
+		$parent = $branch->getParent();
+		$branch->requireFields($relation->getCollection()->getPrimaryKey());
+		$branch->requireFields($branch->getPublicFields());
+		$branch->requireFields($definition->getOuterKeys());
 		$parent->requireFields($definition->getInnerKeys());
 
 		if ($through->getWhere() !== []) {
@@ -112,7 +113,7 @@ final class M2MLoader extends AbstractLoader
 		$runtime->nextPass('loadData');
 	}
 
-	public function loadData(RelationRef $relation, LoadRuntime $runtime): void
+	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 		$references = $runtime->getReferenceValues();
 
@@ -120,7 +121,8 @@ final class M2MLoader extends AbstractLoader
 			return;
 		}
 
-		$definition = $relation->getRelation();
+		$relation = $branch->getRelationRef();
+		$definition = $relation->getDefinition();
 
 		if (! $definition instanceof M2MRelation) {
 			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');
@@ -165,7 +167,7 @@ final class M2MLoader extends AbstractLoader
 		$this->assertSupportedRelationPath($relation);
 		$this->assertSupportedRelationConstraints($relation);
 
-		$definition = $relation->getRelation();
+		$definition = $relation->getDefinition();
 
 		if (! $definition instanceof M2MRelation) {
 			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');
@@ -288,7 +290,7 @@ final class M2MLoader extends AbstractLoader
 	 */
 	private function throughColumns(RelationRef $relation): array
 	{
-		$definition = $relation->getRelation();
+		$definition = $relation->getDefinition();
 
 		if (! $definition instanceof M2MRelation) {
 			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');

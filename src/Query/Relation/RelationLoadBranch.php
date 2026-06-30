@@ -53,7 +53,7 @@ final class RelationLoadBranch extends LoadBranch
 		return $this->selection;
 	}
 
-	public function getRelation(): RelationRef
+	public function getRelationRef(): RelationRef
 	{
 		return $this->selection->getRelation();
 	}
@@ -161,14 +161,14 @@ final class RelationLoadBranch extends LoadBranch
 		return $this->joinedAttachment ?? throw new \LogicException('Load branch attachment mode is not configured.');
 	}
 
-	public function nodeIsCollectionLike(): bool
+	public function returnsMany(): bool
 	{
-		return $this->isCollectionLike();
+		return $this->getRelationRef()->getDefinition()->getCardinality() === 'many';
 	}
 
 	public function buildVisibleOutput(mixed $value): mixed
 	{
-		if ($this->isCollectionLike()) {
+		if ($this->returnsMany()) {
 			$projected = [];
 
 			foreach (is_array($value) ? $value : [] as $item) {
@@ -200,7 +200,7 @@ final class RelationLoadBranch extends LoadBranch
 	 */
 	public function collectHiddenOutput(mixed $value): array
 	{
-		if ($this->isCollectionLike()) {
+		if ($this->returnsMany()) {
 			$promoted = $this->defaultHiddenPromotions(true);
 
 			foreach (is_array($value) ? $value : [] as $item) {
@@ -237,8 +237,8 @@ final class RelationLoadBranch extends LoadBranch
 		}
 
 		foreach ($this->getChildren() as $child) {
-			$name = $child->getRelation()->getName();
-			$value = $record[$name] ?? ($child->nodeIsCollectionLike() ? [] : null);
+			$name = $child->getRelationRef()->getName();
+			$value = $record[$name] ?? ($child->returnsMany() ? [] : null);
 
 			if ($child->getSelection()->isVisible()) {
 				$item[$name] = $child->buildVisibleOutput($value);
@@ -266,15 +266,15 @@ final class RelationLoadBranch extends LoadBranch
 		$payload = $this->payloadRecord($record) ?? [];
 
 		foreach ($this->getChildren() as $child) {
-			$name = $child->getRelation()->getName();
-			$value = $payload[$name] ?? ($child->nodeIsCollectionLike() ? [] : null);
+			$name = $child->getRelationRef()->getName();
+			$value = $payload[$name] ?? ($child->returnsMany() ? [] : null);
 
 			if ($child->getSelection()->isVisible()) {
 				$items = $child->projectPromotionItems($value);
 				$promoted[$name] = [
 					'branch' => $child,
-					'collection' => $child->nodeIsCollectionLike(),
-					'value' => $child->nodeIsCollectionLike()
+					'collection' => $child->returnsMany(),
+					'value' => $child->returnsMany()
 						? array_column($items, 'value')
 						: ($items[0]['value'] ?? null),
 					'items' => $items,
@@ -297,10 +297,10 @@ final class RelationLoadBranch extends LoadBranch
 		$promoted = [];
 
 		foreach ($this->getChildren() as $child) {
-			$name = $child->getRelation()->getName();
+			$name = $child->getRelationRef()->getName();
 
 			if ($child->getSelection()->isVisible()) {
-				$collection = $forceCollection || $child->nodeIsCollectionLike();
+				$collection = $forceCollection || $child->returnsMany();
 				$promoted[$name] = [
 					'branch' => $child,
 					'collection' => $collection,
@@ -311,7 +311,7 @@ final class RelationLoadBranch extends LoadBranch
 				continue;
 			}
 
-			foreach ($child->defaultHiddenPromotions($forceCollection || $child->nodeIsCollectionLike()) as $childName => $entry) {
+			foreach ($child->defaultHiddenPromotions($forceCollection || $child->returnsMany()) as $childName => $entry) {
 				if (isset($promoted[$childName]) && $promoted[$childName]['branch'] !== $entry['branch']) {
 					throw \ON\Data\Query\Exception\RelationSelectionException::ambiguousPromotion($this->promotionPath(), $childName);
 				}
@@ -328,7 +328,7 @@ final class RelationLoadBranch extends LoadBranch
 	 */
 	private function projectPromotionItems(mixed $value): array
 	{
-		if ($this->isCollectionLike()) {
+		if ($this->returnsMany()) {
 			$items = [];
 
 			foreach (is_array($value) ? $value : [] as $record) {
@@ -359,7 +359,7 @@ final class RelationLoadBranch extends LoadBranch
 	{
 		$identity = [];
 
-		foreach ($this->getRelation()->getCollection()->getPrimaryKey() as $fieldName) {
+		foreach ($this->getRelationRef()->getCollection()->getPrimaryKey() as $fieldName) {
 			$identity[$fieldName] = $value[$fieldName] ?? null;
 		}
 
@@ -368,6 +368,6 @@ final class RelationLoadBranch extends LoadBranch
 
 	private function promotionPath(): string
 	{
-		return implode('.', $this->getRelation()->getPath());
+		return implode('.', $this->getRelationRef()->getPath());
 	}
 }

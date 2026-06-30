@@ -100,11 +100,6 @@ abstract class LoadBranch
 		$this->children[] = $child;
 	}
 
-	protected function isCollectionLike(): bool
-	{
-		return $this->getNode()->isCollectionLike();
-	}
-
 	/**
 	 * @param array<string, mixed> $record
 	 * @return array<string, mixed>|null
@@ -169,7 +164,7 @@ abstract class LoadBranch
 					'items' => [],
 				];
 			} elseif ($target[$name]['branch'] !== $branch) {
-				throw RelationSelectionException::ambiguousPromotion(implode('.', $branch->getRelation()->getPath()), $name);
+				throw RelationSelectionException::ambiguousPromotion(implode('.', $branch->getRelationRef()->getPath()), $name);
 			}
 
 			foreach ($entry['items'] as $item) {

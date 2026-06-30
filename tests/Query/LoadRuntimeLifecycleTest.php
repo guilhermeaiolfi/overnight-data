@@ -11,7 +11,6 @@ use ON\Data\Query\Relation\Loader\AbstractLoader;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationLoadBranch;
-use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RootLoadBranch;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\CollectionNode;
@@ -665,13 +664,13 @@ final class CompositeDedupExecutor implements QueryExecutorInterface
 
 abstract class LifecycleTestLoader extends AbstractLoader
 {
-	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
 	{
-		$definition = $relation->getRelation();
-		$current = $runtime->getCurrentBranch();
-		$parentBranch = $runtime->requireParentBranch();
-		$identity = $current->requireFields($relation->getCollection()->getPrimaryKey());
-		$child = $current->requireFields($definition->getOuterKeys());
+		$relation = $branch->getRelationRef();
+		$definition = $relation->getDefinition();
+		$parentBranch = $branch->getParent();
+		$identity = $branch->requireFields($relation->getCollection()->getPrimaryKey());
+		$child = $branch->requireFields($definition->getOuterKeys());
 		$parent = $parentBranch->requireFields($definition->getInnerKeys());
 
 		$node = new CollectionNode(
@@ -689,8 +688,9 @@ abstract class LifecycleTestLoader extends AbstractLoader
 		return $node;
 	}
 
-	protected function prepareSeparateQuery(RelationRef $relation, LoadRuntime $runtime): void
+	protected function prepareSeparateQuery(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
+		$relation = $branch->getRelationRef();
 		$query = new SelectQuery($relation->getCollection(), new LifecycleExecutor());
 		$runtime->setJoinedAttachment(false);
 		LifecycleEvents::$attachmentModes[$relation->getName()] = false;
@@ -700,15 +700,17 @@ abstract class LifecycleTestLoader extends AbstractLoader
 
 final class LifecycleRecordingLoader extends LifecycleTestLoader
 {
-	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
+		$relation = $branch->getRelationRef();
 		LifecycleEvents::$events[] = 'load:' . $relation->getName();
-		$this->prepareSeparateQuery($relation, $runtime);
+		$this->prepareSeparateQuery($branch, $runtime);
 		$runtime->nextPass('loadData');
 	}
 
-	public function loadData(RelationRef $relation, LoadRuntime $runtime): void
+	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
+		$relation = $branch->getRelationRef();
 		LifecycleEvents::$events[] = 'loadData:' . $relation->getName();
 		LifecycleEvents::$referenceSnapshots[] = $runtime->getReferenceValues();
 	}
@@ -716,12 +718,12 @@ final class LifecycleRecordingLoader extends LifecycleTestLoader
 
 final class RepeatLoadLifecycleLoader extends LifecycleTestLoader
 {
-	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 		LifecycleEvents::$loadCalls++;
 
 		if (LifecycleEvents::$loadCalls === 1) {
-			$this->prepareSeparateQuery($relation, $runtime);
+			$this->prepareSeparateQuery($branch, $runtime);
 			$runtime->nextPass();
 		}
 	}
@@ -729,41 +731,41 @@ final class RepeatLoadLifecycleLoader extends LifecycleTestLoader
 
 final class InvalidScheduledMethodLoader extends LifecycleTestLoader
 {
-	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		$this->prepareSeparateQuery($relation, $runtime);
+		$this->prepareSeparateQuery($branch, $runtime);
 		$runtime->nextPass('missingMethod');
 	}
 }
 
 final class RegisterSchedulingLoader extends LifecycleTestLoader
 {
-	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
 	{
-		$node = parent::initNode($relation, $runtime);
+		$node = parent::initNode($branch, $runtime);
 		$runtime->nextPass('loadData');
 
 		return $node;
 	}
 
-	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		$this->prepareSeparateQuery($relation, $runtime);
+		$this->prepareSeparateQuery($branch, $runtime);
 	}
 
-	public function loadData(RelationRef $relation, LoadRuntime $runtime): void
+	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 	}
 }
 
 class NestedPostsLoader extends AbstractLoader
 {
-	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
 	{
-		$current = $runtime->getCurrentBranch();
-		$parentBranch = $runtime->requireParentBranch();
-		$identity = $current->requireFields(['id']);
-		$child = $current->requireFields(['userId']);
+		$relation = $branch->getRelationRef();
+		$parentBranch = $branch->getParent();
+		$identity = $branch->requireFields(['id']);
+		$child = $branch->requireFields(['userId']);
 		$parent = $parentBranch->requireFields(['id']);
 		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
@@ -772,15 +774,16 @@ class NestedPostsLoader extends AbstractLoader
 		return new CollectionNode($runtime->getNodeColumns(), $identity, $child, $parent);
 	}
 
-	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
+		$relation = $branch->getRelationRef();
 		$query = new SelectQuery($relation->getCollection(), new NestedLifecycleExecutor());
 		$runtime->setJoinedAttachment(false);
 		$runtime->setQueryContext($query, $query);
 		$runtime->nextPass('loadData');
 	}
 
-	public function loadData(RelationRef $relation, LoadRuntime $runtime): void
+	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 		$runtime->execute($runtime->getQuery());
 	}
@@ -793,12 +796,12 @@ final class NestedAuthorLoader extends AbstractLoader
 		return LoadStrategy::JOIN;
 	}
 
-	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
 	{
-		$current = $runtime->getCurrentBranch();
-		$parentBranch = $runtime->requireParentBranch();
-		$identity = $current->requireFields(['id']);
-		$child = $current->requireFields(['id']);
+		$relation = $branch->getRelationRef();
+		$parentBranch = $branch->getParent();
+		$identity = $branch->requireFields(['id']);
+		$child = $branch->requireFields(['id']);
 		$parent = $parentBranch->requireFields(['authorId']);
 		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
@@ -807,7 +810,7 @@ final class NestedAuthorLoader extends AbstractLoader
 		return new SingularNode($runtime->getNodeColumns(), $identity, $child, $parent);
 	}
 
-	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 		$queryRelation = $runtime->getQueryRelation();
 		$runtime->setJoinedAttachment(true);
@@ -817,10 +820,10 @@ final class NestedAuthorLoader extends AbstractLoader
 
 final class RootFieldRequirementLoader extends LifecycleTestLoader
 {
-	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		LifecycleEvents::$plannedRootColumns = $runtime->requireParentBranch()->requireFields(['name']);
-		$this->prepareSeparateQuery($relation, $runtime);
+		LifecycleEvents::$plannedRootColumns = $branch->getParent()->requireFields(['name']);
+		$this->prepareSeparateQuery($branch, $runtime);
 	}
 }
 
@@ -831,20 +834,21 @@ final class JoinedProfileLoader extends AbstractLoader
 		return LoadStrategy::JOIN;
 	}
 
-	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
 	{
-		$current = $runtime->getCurrentBranch();
-		$parentBranch = $runtime->requireParentBranch();
-		$identity = $current->requireFields(['id']);
-		$child = $current->requireFields(['userId']);
+		$relation = $branch->getRelationRef();
+		$parentBranch = $branch->getParent();
+		$identity = $branch->requireFields(['id']);
+		$child = $branch->requireFields(['userId']);
 		$parent = $parentBranch->requireFields(['id']);
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
 
 		return new SingularNode($runtime->getNodeColumns(), $identity, $child, $parent);
 	}
 
-	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
+		$relation = $branch->getRelationRef();
 		$queryRelation = $runtime->getQueryRelation();
 		$runtime->setJoinedAttachment(true);
 		LifecycleEvents::$attachmentModes[$relation->getName()] = true;
@@ -854,16 +858,17 @@ final class JoinedProfileLoader extends AbstractLoader
 
 final class LinkedPostsLoader extends LifecycleTestLoader
 {
-	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		$this->prepareSeparateQuery($relation, $runtime);
+		$this->prepareSeparateQuery($branch, $runtime);
 	}
 }
 
 final class SeparateNestedPostsLoader extends NestedPostsLoader
 {
-	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
+		$relation = $branch->getRelationRef();
 		$query = new SelectQuery($relation->getCollection(), new NestedAttachmentExecutor());
 		$runtime->setJoinedAttachment(false);
 		$runtime->setQueryContext($query, $query);
@@ -873,15 +878,16 @@ final class SeparateNestedPostsLoader extends NestedPostsLoader
 
 final class NestedCommentsLoader extends LifecycleTestLoader
 {
-	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
+		$relation = $branch->getRelationRef();
 		$query = new SelectQuery($relation->getCollection(), new NestedAttachmentExecutor());
 		$runtime->setJoinedAttachment(false);
 		$runtime->setQueryContext($query, $query);
 		$runtime->nextPass('loadData');
 	}
 
-	public function loadData(RelationRef $relation, LoadRuntime $runtime): void
+	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 		$runtime->execute($runtime->getQuery());
 	}
@@ -889,8 +895,9 @@ final class NestedCommentsLoader extends LifecycleTestLoader
 
 final class BoundaryParentLoader extends LifecycleTestLoader
 {
-	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
+		$relation = $branch->getRelationRef();
 		LifecycleEvents::$events[] = 'load:' . $relation->getName();
 		$query = new SelectQuery($relation->getCollection(), new MultiPassBoundaryExecutor());
 		$runtime->setJoinedAttachment(false);
@@ -898,24 +905,27 @@ final class BoundaryParentLoader extends LifecycleTestLoader
 		$runtime->nextPass('loadPivot');
 	}
 
-	public function loadPivot(RelationRef $relation, LoadRuntime $runtime): void
+	public function loadPivot(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
+		$relation = $branch->getRelationRef();
 		LifecycleEvents::$events[] = 'loadPivot:' . $relation->getName() . ':start';
 		$runtime->execute($runtime->getQuery());
 		LifecycleEvents::$events[] = 'loadPivot:' . $relation->getName() . ':after-execute';
 		$runtime->nextPass('loadTargets');
 	}
 
-	public function loadTargets(RelationRef $relation, LoadRuntime $runtime): void
+	public function loadTargets(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
+		$relation = $branch->getRelationRef();
 		LifecycleEvents::$events[] = 'loadTargets:' . $relation->getName();
 	}
 }
 
 final class BoundaryChildLoader extends LifecycleTestLoader
 {
-	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
+		$relation = $branch->getRelationRef();
 		LifecycleEvents::$events[] = 'load:' . $relation->getName();
 		$query = new SelectQuery($relation->getCollection(), new MultiPassBoundaryExecutor());
 		$runtime->setJoinedAttachment(false);
@@ -923,8 +933,9 @@ final class BoundaryChildLoader extends LifecycleTestLoader
 		$runtime->nextPass('loadData');
 	}
 
-	public function loadData(RelationRef $relation, LoadRuntime $runtime): void
+	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
+		$relation = $branch->getRelationRef();
 		LifecycleEvents::$events[] = 'loadData:' . $relation->getName();
 		$runtime->execute($runtime->getQuery());
 	}
@@ -932,15 +943,15 @@ final class BoundaryChildLoader extends LifecycleTestLoader
 
 final class TopLevelParentNodeLoader extends LifecycleTestLoader
 {
-	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
 	{
 		LifecycleEvents::$topLevelParentNodeIsRoot = $runtime->getParentNode() instanceof RootNode;
 
-		return parent::initNode($relation, $runtime);
+		return parent::initNode($branch, $runtime);
 	}
 
-	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		$this->prepareSeparateQuery($relation, $runtime);
+		$this->prepareSeparateQuery($branch, $runtime);
 	}
 }

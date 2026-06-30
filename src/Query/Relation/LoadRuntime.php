@@ -76,22 +76,12 @@ final class LoadRuntime
 		return $this->rootBranch->buildOutputRecords()[0] ?? null;
 	}
 
-	public function getCurrentBranch(): RelationLoadBranch
-	{
-		return $this->requireActiveBranch();
-	}
-
-	public function requireParentBranch(): LoadBranch
-	{
-		return $this->requireActiveBranch()->getParent();
-	}
-
 	/**
 	 * @return list<string>
 	 */
 	public function getNodeColumns(): array
 	{
-		return $this->getCurrentBranch()->getNodeColumns();
+		return $this->requireActiveBranch()->getNodeColumns();
 	}
 
 	public function getNode(): AbstractNode
@@ -126,11 +116,11 @@ final class LoadRuntime
 		$query = $parent->getQuery();
 
 		if ($parent->getQueryLocalRelation() === null) {
-			return $query->relation($branch->getRelation()->getName());
+			return $query->relation($branch->getRelationRef()->getName());
 		}
 
 		return $parent->getQueryLocalRelation()
-			->relation($branch->getRelation()->getName());
+			->relation($branch->getRelationRef()->getName());
 	}
 
 	public function createQuery(CollectionInterface $collection): SelectQuery
@@ -157,17 +147,17 @@ final class LoadRuntime
 	public function nextPass(string $method = 'load'): void
 	{
 		if ($this->registering) {
-			throw LoadRuntimeException::nextPassNotAllowedDuringRegister($this->requireActiveBranch()->getRelation());
+			throw LoadRuntimeException::nextPassNotAllowedDuringRegister($this->requireActiveBranch()->getRelationRef());
 		}
 
 		if ($this->scheduledInInvocation) {
-			throw LoadRuntimeException::multipleNextPasses($this->requireActiveBranch()->getRelation(), $this->activeMethod ?? 'load');
+			throw LoadRuntimeException::multipleNextPasses($this->requireActiveBranch()->getRelationRef(), $this->activeMethod ?? 'load');
 		}
 
 		$this->assertSchedulableMethod($method);
 		$this->requireActiveBranch()->schedule(
 			$method,
-			$this->schedulingBoundaryQuery ?? throw LoadRuntimeException::scheduleBoundaryMissing($this->requireActiveBranch()->getRelation()),
+			$this->schedulingBoundaryQuery ?? throw LoadRuntimeException::scheduleBoundaryMissing($this->requireActiveBranch()->getRelationRef()),
 		);
 		$this->scheduledInInvocation = true;
 	}
@@ -243,14 +233,14 @@ final class LoadRuntime
 	private function loadBranches(): void
 	{
 		$branches = array_values($this->branches);
-		usort($branches, static fn (RelationLoadBranch $left, RelationLoadBranch $right): int => count($left->getRelation()->getPath()) <=> count($right->getRelation()->getPath()));
+		usort($branches, static fn (RelationLoadBranch $left, RelationLoadBranch $right): int => count($left->getRelationRef()->getPath()) <=> count($right->getRelationRef()->getPath()));
 
 		foreach ($branches as $branch) {
 			$boundary = $branch->getParent()->getQuery();
 			$this->invokeLoaderMethod($branch, 'load', $boundary);
 
 			if ($branch->getQuery()->getCollection()->getName() === '') {
-				throw LoadRuntimeException::queryNotConfigured($branch->getRelation());
+				throw LoadRuntimeException::queryNotConfigured($branch->getRelationRef());
 			}
 		}
 	}
@@ -267,19 +257,19 @@ final class LoadRuntime
 			$node = $branch->getNode();
 
 			if ($branch->isJoinedAttachment()) {
-				$rootNode->joinNode($branch->getRelation()->getName(), $node);
+				$rootNode->joinNode($branch->getRelationRef()->getName(), $node);
 
 				continue;
 			}
 
-			$rootNode->linkNode($branch->getRelation()->getName(), $node);
+			$rootNode->linkNode($branch->getRelationRef()->getName(), $node);
 		}
 	}
 
 	private function finalizeBranchSelections(): void
 	{
 		$branches = array_values($this->branches);
-		usort($branches, static fn (RelationLoadBranch $left, RelationLoadBranch $right): int => count($left->getRelation()->getPath()) <=> count($right->getRelation()->getPath()));
+		usort($branches, static fn (RelationLoadBranch $left, RelationLoadBranch $right): int => count($left->getRelationRef()->getPath()) <=> count($right->getRelationRef()->getPath()));
 
 		foreach ($branches as $branch) {
 			$aliases = [];
@@ -288,7 +278,7 @@ final class LoadRuntime
 				$aliases[] = $this->ensureBranchFieldSelection(
 					$branch->getQuery(),
 					$branch->getSource(),
-					$branch->getRelation()->getPath(),
+					$branch->getRelationRef()->getPath(),
 					$fieldName,
 				);
 			}
@@ -307,7 +297,7 @@ final class LoadRuntime
 		$this->registering = true;
 
 		try {
-			$node = $branch->getLoader()->register($branch->getRelation(), $this);
+			$node = $branch->getLoader()->register($branch, $this);
 		} finally {
 			$this->registering = $previousRegistering;
 			$this->activeMethod = $previousMethod;
@@ -315,7 +305,7 @@ final class LoadRuntime
 		}
 
 		if (! $node instanceof AbstractNode) {
-			throw LoadRuntimeException::nodeNotRegistered($branch->getRelation());
+			throw LoadRuntimeException::nodeNotRegistered($branch->getRelationRef());
 		}
 
 		$branch->setNode($node);
@@ -338,7 +328,7 @@ final class LoadRuntime
 		$branch->clearSchedule();
 
 		try {
-			$loader->{$method}($branch->getRelation(), $this);
+			$loader->{$method}($branch, $this);
 		} finally {
 			$this->loaderInvocationDepth--;
 			$this->activeBranch = $previousBranch;
@@ -524,17 +514,17 @@ final class LoadRuntime
 		$loader = $this->requireActiveBranch()->getLoader();
 
 		if ($method === 'register' || $method === 'join') {
-			throw LoadRuntimeException::invalidScheduledMethod($this->requireActiveBranch()->getRelation(), $method);
+			throw LoadRuntimeException::invalidScheduledMethod($this->requireActiveBranch()->getRelationRef(), $method);
 		}
 
 		if (! method_exists($loader, $method)) {
-			throw LoadRuntimeException::invalidScheduledMethod($this->requireActiveBranch()->getRelation(), $method);
+			throw LoadRuntimeException::invalidScheduledMethod($this->requireActiveBranch()->getRelationRef(), $method);
 		}
 
 		$reflection = new ReflectionMethod($loader, $method);
 
 		if (! $reflection->isPublic() || $reflection->getNumberOfParameters() !== 2) {
-			throw LoadRuntimeException::invalidScheduledMethod($this->requireActiveBranch()->getRelation(), $method);
+			throw LoadRuntimeException::invalidScheduledMethod($this->requireActiveBranch()->getRelationRef(), $method);
 		}
 	}
 }

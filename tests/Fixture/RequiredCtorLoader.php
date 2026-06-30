@@ -7,7 +7,7 @@ namespace Tests\ON\Data\Fixture;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Relation\Loader\AbstractLoader;
 use ON\Data\Query\Relation\LoadRuntime;
-use ON\Data\Query\Relation\RelationRef;
+use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Result\Parser\AbstractNode;
 
 final class RequiredCtorLoader extends AbstractLoader
@@ -19,8 +19,8 @@ final class RequiredCtorLoader extends AbstractLoader
 		$this->value = $value;
 	}
 
-	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
 	{
-		throw RelationLoaderException::loadingNotImplemented($relation);
+		throw RelationLoaderException::loadingNotImplemented($branch->getRelationRef());
 	}
 }

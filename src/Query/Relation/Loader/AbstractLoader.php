@@ -12,6 +12,7 @@ use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
+use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use function ON\Data\Query\x;
@@ -23,7 +24,7 @@ abstract class AbstractLoader implements LoaderInterface
 		$this->assertSupportedRelationPath($relation);
 		$this->assertSupportedRelationConstraints($relation);
 
-		$definition = $relation->getRelation();
+		$definition = $relation->getDefinition();
 		$source = $relation->getParentSource();
 
 		try {
@@ -54,37 +55,37 @@ abstract class AbstractLoader implements LoaderInterface
 		return $join;
 	}
 
-	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		throw RelationLoaderException::loadingNotImplemented($relation);
+		throw RelationLoaderException::loadingNotImplemented($branch->getRelationRef());
 	}
 
-	final public function register(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	final public function register(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
 	{
 		$runtime->registerChildBranches();
-		$node = $this->initNode($relation, $runtime);
+		$node = $this->initNode($branch, $runtime);
 		$attachmentNode = $node->getRelationAttachmentNode();
 
 		foreach ($runtime->getChildBranches() as $child) {
 			if (! $child->hasNode()) {
-				throw LoadRuntimeException::nodeNotRegistered($child->getRelation());
+				throw LoadRuntimeException::nodeNotRegistered($child->getRelationRef());
 			}
 
 			$childNode = $child->getNode();
 
 			if ($child->isJoinedAttachment()) {
-				$attachmentNode->joinNode($child->getRelation()->getName(), $childNode);
+				$attachmentNode->joinNode($child->getRelationRef()->getName(), $childNode);
 
 				continue;
 			}
 
-			$attachmentNode->linkNode($child->getRelation()->getName(), $childNode);
+			$attachmentNode->linkNode($child->getRelationRef()->getName(), $childNode);
 		}
 
 		return $node;
 	}
 
-	abstract protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode;
+	abstract protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode;
 
 	protected function assertSupportedRelationPath(RelationRef $relation): void
 	{
@@ -97,7 +98,7 @@ abstract class AbstractLoader implements LoaderInterface
 
 	protected function assertSupportedRelationConstraints(RelationRef $relation): void
 	{
-		$definition = $relation->getRelation();
+		$definition = $relation->getDefinition();
 
 		if ($definition->getWhere() !== []) {
 			throw RelationLoaderException::relationWhereNotSupported($relation);

@@ -17,6 +17,9 @@ use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\Relation\LoadRuntime;
+use ON\Data\Query\Relation\RelationLoadBranch;
+use ON\Data\Query\Relation\RelationSelection;
+use ON\Data\Query\Relation\RootLoadBranch;
 use ON\Data\Query\SelectQuery;
 use function ON\Data\Query\x;
 use PDO;
@@ -862,10 +865,16 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testLoaderLoadRequiresRuntimeRegistrationContext(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
+		$branch = new RelationLoadBranch(
+			new RelationSelection($users->posts, false, true, null),
+			new RootLoadBranch($users, static fn (string $fieldName): string => $fieldName),
+			$users->posts->getLoader(),
+			[],
+		);
 
 		$this->expectException(LoadRuntimeException::class);
 		$users->posts->getLoader()->load(
-			$users->posts,
+			$branch,
 			new LoadRuntime($users, new class () implements QueryExecutorInterface {
 				public function fetchAll(SelectQuery $query): array
 				{

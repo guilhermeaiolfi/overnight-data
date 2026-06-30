@@ -38,7 +38,7 @@ final class RelationRefTest extends TestCase
 
 		self::assertInstanceOf(RelationRef::class, $posts);
 		self::assertSame($users, $posts->getQuery());
-		self::assertSame($users->getCollection()->getRelation('posts'), $posts->getRelation());
+		self::assertSame($users->getCollection()->getRelation('posts'), $posts->getDefinition());
 		self::assertNull($posts->getParentRelation());
 		self::assertSame('posts', $posts->getCollection()->getName());
 		self::assertSame('posts', $posts->getName());
