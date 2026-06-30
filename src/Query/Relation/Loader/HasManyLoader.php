@@ -23,7 +23,7 @@ final class HasManyLoader extends AbstractLoader
 		$parent = $parentBranch->requireFields($definition->getInnerKeys());
 
 		return new CollectionNode(
-			$runtime->getParserFields(),
+			$branch->getParserFields(),
 			$identity,
 			$child,
 			$parent,
@@ -40,32 +40,32 @@ final class HasManyLoader extends AbstractLoader
 		$parentBranch->requireFields($definition->getInnerKeys());
 
 		$strategy = $runtime->getLoadStrategy($this->getDefaultLoadStrategy());
-		$runtime->setJoinedAttachment($strategy === LoadStrategy::JOIN);
+		$branch->setJoinedAttachment($strategy === LoadStrategy::JOIN);
 
 		if ($strategy === LoadStrategy::JOIN) {
-			$queryRelation = $runtime->getQueryRelation();
+			$queryRelation = $runtime->getQueryRelation($branch);
 			$source = $this->join($queryRelation);
 
-			$runtime->setQueryContext($queryRelation->getQuery(), $source, $queryRelation);
+			$runtime->setQueryContext($branch, $queryRelation->getQuery(), $source, $queryRelation);
 
 			return;
 		}
 
 		$query = $runtime->createQuery($relationRef->getCollection());
 
-		$runtime->setQueryContext($query, $query);
-		$runtime->continueWith('loadData');
+		$runtime->setQueryContext($branch, $query, $query);
+		$runtime->continueWith($branch, 'loadData');
 	}
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		$references = $runtime->getReferenceValues();
+		$references = $branch->getReferenceValues();
 
 		if ($references === []) {
 			return;
 		}
 
-		$query = $runtime->getQuery();
+		$query = $branch->getQuery();
 		$childFields = $branch->getRelationRef()->getDefinition()->getOuterKeys();
 
 		if (count($childFields) === 1) {
@@ -76,7 +76,7 @@ final class HasManyLoader extends AbstractLoader
 				),
 			);
 
-			$runtime->execute($query);
+			$runtime->execute($branch, $query);
 
 			return;
 		}
@@ -94,6 +94,6 @@ final class HasManyLoader extends AbstractLoader
 		}
 
 		$query->where(x()->or(...$predicates));
-		$runtime->execute($query);
+		$runtime->execute($branch, $query);
 	}
 }

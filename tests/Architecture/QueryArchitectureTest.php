@@ -189,7 +189,30 @@ final class QueryArchitectureTest extends TestCase
 		self::assertFalse(method_exists(LoadRuntime::class, 'nextPass'));
 		self::assertFalse(method_exists(LoadRuntime::class, 'getCurrentBranch'));
 		self::assertFalse(method_exists(LoadRuntime::class, 'requireParentBranch'));
+		self::assertFalse(method_exists(LoadRuntime::class, 'getParserFields'));
+		self::assertFalse(method_exists(LoadRuntime::class, 'getNode'));
+		self::assertFalse(method_exists(LoadRuntime::class, 'getParentNode'));
+		self::assertFalse(method_exists(LoadRuntime::class, 'getQuery'));
+		self::assertFalse(method_exists(LoadRuntime::class, 'getSource'));
+		self::assertFalse(method_exists(LoadRuntime::class, 'getReferenceValues'));
+		self::assertFalse(method_exists(LoadRuntime::class, 'setJoinedAttachment'));
+		self::assertFalse(method_exists(LoadRuntime::class, 'getChildBranches'));
+		self::assertFalse(method_exists(LoadRuntime::class, 'registerChildBranches'));
 		self::assertTrue(method_exists(LoadRuntime::class, 'continueWith'));
+	}
+
+	public function testRuntimeBranchScopedServicesReceiveRelationLoadBranchExplicitly(): void
+	{
+		self::assertSame(RelationLoadBranch::class, (new ReflectionMethod(LoadRuntime::class, 'setQueryContext'))->getParameters()[0]->getType()?->getName());
+		self::assertSame(RelationLoadBranch::class, (new ReflectionMethod(LoadRuntime::class, 'getQueryRelation'))->getParameters()[0]->getType()?->getName());
+		self::assertSame(RelationLoadBranch::class, (new ReflectionMethod(LoadRuntime::class, 'execute'))->getParameters()[0]->getType()?->getName());
+		self::assertSame(RelationLoadBranch::class, (new ReflectionMethod(LoadRuntime::class, 'continueWith'))->getParameters()[0]->getType()?->getName());
+	}
+
+	public function testRuntimeDoesNotStoreActiveBranchIdentityInternally(): void
+	{
+		self::assertFalse(property_exists(LoadRuntime::class, 'activeBranch'));
+		self::assertFalse(method_exists(LoadRuntime::class, 'requireActiveBranch'));
 	}
 
 	public function testRelationRefExposesDefinitionNaming(): void
@@ -246,6 +269,15 @@ final class QueryArchitectureTest extends TestCase
 			self::assertStringNotContainsString('->getCurrentBranch(', $contents, $path);
 			self::assertStringNotContainsString('->requireParentBranch(', $contents, $path);
 			self::assertStringNotContainsString('->getRelation()', $contents, $path);
+			self::assertStringNotContainsString('$runtime->getParserFields(', $contents, $path);
+			self::assertStringNotContainsString('$runtime->getNode(', $contents, $path);
+			self::assertStringNotContainsString('$runtime->getParentNode(', $contents, $path);
+			self::assertStringNotContainsString('$runtime->setJoinedAttachment(', $contents, $path);
+			self::assertStringNotContainsString('$runtime->getQuery()', $contents, $path);
+			self::assertStringNotContainsString('$runtime->getSource()', $contents, $path);
+			self::assertStringNotContainsString('$runtime->getReferenceValues(', $contents, $path);
+			self::assertStringNotContainsString('$runtime->registerChildBranches(', $contents, $path);
+			self::assertStringNotContainsString('$runtime->getChildBranches(', $contents, $path);
 		}
 	}
 

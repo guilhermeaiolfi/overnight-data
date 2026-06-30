@@ -48,7 +48,7 @@ final class M2MLoader extends AbstractLoader
 		]));
 
 		$targetNode = new SingularNode(
-			$runtime->getParserFields(),
+			$branch->getParserFields(),
 			$targetIdentity,
 			$targetOuterKeyColumns,
 			$throughOuterKeys,
@@ -64,7 +64,7 @@ final class M2MLoader extends AbstractLoader
 			self::THROUGH_CONTAINER,
 			$targetNode,
 		);
-		$this->selectThroughFields($relation, $runtime, $throughNode);
+		$this->selectThroughFields($branch, $runtime, $throughNode);
 
 		return $throughNode;
 	}
@@ -108,14 +108,14 @@ final class M2MLoader extends AbstractLoader
 			$throughOuterKeys,
 		);
 
-		$runtime->setJoinedAttachment(false);
-		$runtime->setQueryContext($query, $query);
-		$runtime->continueWith('loadData');
+		$branch->setJoinedAttachment(false);
+		$runtime->setQueryContext($branch, $query, $query);
+		$runtime->continueWith($branch, 'loadData');
 	}
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		$references = $runtime->getReferenceValues();
+		$references = $branch->getReferenceValues();
 
 		if ($references === []) {
 			return;
@@ -129,7 +129,7 @@ final class M2MLoader extends AbstractLoader
 		}
 
 		$through = $this->through($relation, $definition);
-		$query = $runtime->getQuery();
+		$query = $branch->getQuery();
 		$throughSource = $this->throughSource($relation, $query);
 		$throughInnerKeys = $through->getInnerKeys();
 
@@ -141,7 +141,7 @@ final class M2MLoader extends AbstractLoader
 				),
 			);
 
-			$runtime->execute($query);
+			$runtime->execute($branch, $query);
 
 			return;
 		}
@@ -159,7 +159,7 @@ final class M2MLoader extends AbstractLoader
 		}
 
 		$query->where(x()->or(...$predicates));
-		$runtime->execute($query);
+		$runtime->execute($branch, $query);
 	}
 
 	public function join(RelationRef $relation): QuerySourceInterface
@@ -244,9 +244,10 @@ final class M2MLoader extends AbstractLoader
 		}
 	}
 
-	private function selectThroughFields(RelationRef $relation, LoadRuntime $runtime, M2MThroughNode $throughNode): void
+	private function selectThroughFields(RelationLoadBranch $branch, LoadRuntime $runtime, M2MThroughNode $throughNode): void
 	{
-		$query = $runtime->getQuery();
+		$relation = $branch->getRelationRef();
+		$query = $branch->getQuery();
 		$source = $this->throughSource($relation, $query);
 		$aliases = [];
 

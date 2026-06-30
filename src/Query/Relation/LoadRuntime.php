@@ -19,8 +19,6 @@ final class LoadRuntime
 	 */
 	private array $branches = [];
 
-	private ?RelationLoadBranch $activeBranch = null;
-
 	private ?string $activeMethod = null;
 
 	private bool $registering = false;
@@ -76,42 +74,8 @@ final class LoadRuntime
 		return $this->rootBranch->buildOutputRecords()[0] ?? null;
 	}
 
-	/**
-	 * @return list<string>
-	 */
-	public function getParserFields(): array
+	public function getQueryRelation(RelationLoadBranch $branch): RelationRef
 	{
-		return $this->requireActiveBranch()->getParserFields();
-	}
-
-	public function getNode(): AbstractNode
-	{
-		return $this->requireActiveBranch()->getNode();
-	}
-
-	public function getParentNode(): AbstractNode
-	{
-		return $this->requireActiveBranch()->getParent()->getNode();
-	}
-
-	public function setJoinedAttachment(bool $joined): void
-	{
-		$this->requireActiveBranch()->setJoinedAttachment($joined);
-	}
-
-	public function getQuery(): SelectQuery
-	{
-		return $this->requireActiveBranch()->getQuery();
-	}
-
-	public function getSource(): QuerySourceInterface
-	{
-		return $this->requireActiveBranch()->getSource();
-	}
-
-	public function getQueryRelation(): RelationRef
-	{
-		$branch = $this->requireActiveBranch();
 		$parent = $branch->getParent();
 		$query = $parent->getQuery();
 
@@ -129,42 +93,34 @@ final class LoadRuntime
 	}
 
 	public function setQueryContext(
+		RelationLoadBranch $branch,
 		SelectQuery $query,
 		QuerySourceInterface $source,
 		?RelationRef $queryLocalRelation = null,
 	): void {
-		$this->requireActiveBranch()->setQueryContext($query, $source, $queryLocalRelation);
+		$branch->setQueryContext($query, $source, $queryLocalRelation);
 	}
 
-	/**
-	 * @return list<array<string, scalar>>
-	 */
-	public function getReferenceValues(): array
-	{
-		return $this->requireActiveBranch()->getNode()->getReferenceValues();
-	}
-
-	public function continueWith(string $method = 'load'): void
+	public function continueWith(RelationLoadBranch $branch, string $method = 'load'): void
 	{
 		if ($this->registering) {
-			throw LoadRuntimeException::nextPassNotAllowedDuringRegister($this->requireActiveBranch()->getRelationRef());
+			throw LoadRuntimeException::nextPassNotAllowedDuringRegister($branch->getRelationRef());
 		}
 
 		if ($this->continuationRequested) {
-			throw LoadRuntimeException::multipleNextPasses($this->requireActiveBranch()->getRelationRef(), $this->activeMethod ?? 'load');
+			throw LoadRuntimeException::multipleNextPasses($branch->getRelationRef(), $this->activeMethod ?? 'load');
 		}
 
-		$this->assertSchedulableMethod($method);
-		$this->requireActiveBranch()->schedule(
+		$this->assertSchedulableMethod($branch, $method);
+		$branch->schedule(
 			$method,
-			$this->currentContinuationQuery ?? throw LoadRuntimeException::scheduleBoundaryMissing($this->requireActiveBranch()->getRelationRef()),
+			$this->currentContinuationQuery ?? throw LoadRuntimeException::scheduleBoundaryMissing($branch->getRelationRef()),
 		);
 		$this->continuationRequested = true;
 	}
 
-	public function execute(SelectQuery $query): void
+	public function execute(RelationLoadBranch $branch, SelectQuery $query): void
 	{
-		$branch = $this->requireActiveBranch();
 		$rows = $this->executor->fetchAll($query);
 
 		if ($query === $branch->getQuery()) {
@@ -180,23 +136,6 @@ final class LoadRuntime
 	public function getLoadStrategy(LoadStrategy $default): LoadStrategy
 	{
 		return $default;
-	}
-
-	public function registerChildBranches(): void
-	{
-		$parent = $this->requireActiveBranch();
-
-		foreach ($parent->getChildren() as $child) {
-			$this->registerBranch($child);
-		}
-	}
-
-	/**
-	 * @return list<RelationLoadBranch>
-	 */
-	public function getChildBranches(): array
-	{
-		return $this->requireActiveBranch()->getChildren();
 	}
 
 	private function prepare(): void
@@ -287,12 +226,10 @@ final class LoadRuntime
 		}
 	}
 
-	private function registerBranch(RelationLoadBranch $branch): AbstractNode
+	public function registerBranch(RelationLoadBranch $branch): AbstractNode
 	{
-		$previousBranch = $this->activeBranch;
 		$previousMethod = $this->activeMethod;
 		$previousRegistering = $this->registering;
-		$this->activeBranch = $branch;
 		$this->activeMethod = 'register';
 		$this->registering = true;
 
@@ -301,7 +238,6 @@ final class LoadRuntime
 		} finally {
 			$this->registering = $previousRegistering;
 			$this->activeMethod = $previousMethod;
-			$this->activeBranch = $previousBranch;
 		}
 
 		if (! $node instanceof AbstractNode) {
@@ -316,11 +252,9 @@ final class LoadRuntime
 	private function invokeLoaderMethod(RelationLoadBranch $branch, string $method, SelectQuery $boundaryQuery): void
 	{
 		$loader = $branch->getLoader();
-		$previousBranch = $this->activeBranch;
 		$previousMethod = $this->activeMethod;
 		$previousContinuationRequested = $this->continuationRequested;
 		$previousCurrentContinuationQuery = $this->currentContinuationQuery;
-		$this->activeBranch = $branch;
 		$this->activeMethod = $method;
 		$this->continuationRequested = false;
 		$this->currentContinuationQuery = $boundaryQuery;
@@ -331,7 +265,6 @@ final class LoadRuntime
 			$loader->{$method}($branch, $this);
 		} finally {
 			$this->loaderInvocationDepth--;
-			$this->activeBranch = $previousBranch;
 			$this->activeMethod = $previousMethod;
 			$this->continuationRequested = $previousContinuationRequested;
 			$this->currentContinuationQuery = $previousCurrentContinuationQuery;
@@ -427,11 +360,6 @@ final class LoadRuntime
 		return $selection->getRelationRef()->getCollection()->getVisibleFields();
 	}
 
-	private function requireActiveBranch(): RelationLoadBranch
-	{
-		return $this->activeBranch ?? throw LoadRuntimeException::activeBranchMissing();
-	}
-
 	/**
 	 * @param list<string> $path
 	 */
@@ -481,22 +409,22 @@ final class LoadRuntime
 		return $branch->getNode()->getValueAliasTraversal();
 	}
 
-	private function assertSchedulableMethod(string $method): void
+	private function assertSchedulableMethod(RelationLoadBranch $branch, string $method): void
 	{
-		$loader = $this->requireActiveBranch()->getLoader();
+		$loader = $branch->getLoader();
 
 		if ($method === 'register' || $method === 'join') {
-			throw LoadRuntimeException::invalidScheduledMethod($this->requireActiveBranch()->getRelationRef(), $method);
+			throw LoadRuntimeException::invalidScheduledMethod($branch->getRelationRef(), $method);
 		}
 
 		if (! method_exists($loader, $method)) {
-			throw LoadRuntimeException::invalidScheduledMethod($this->requireActiveBranch()->getRelationRef(), $method);
+			throw LoadRuntimeException::invalidScheduledMethod($branch->getRelationRef(), $method);
 		}
 
 		$reflection = new ReflectionMethod($loader, $method);
 
 		if (! $reflection->isPublic() || $reflection->getNumberOfParameters() !== 2) {
-			throw LoadRuntimeException::invalidScheduledMethod($this->requireActiveBranch()->getRelationRef(), $method);
+			throw LoadRuntimeException::invalidScheduledMethod($branch->getRelationRef(), $method);
 		}
 	}
 }

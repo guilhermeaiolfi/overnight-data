@@ -135,6 +135,14 @@ final class RelationLoadBranch extends LoadBranch
 		return $this->publicFieldOrder;
 	}
 
+	/**
+	 * @return list<array<string, mixed>>
+	 */
+	public function getReferenceValues(): array
+	{
+		return $this->getNode()->getReferenceValues();
+	}
+
 	public function schedule(string $method, SelectQuery $boundaryQuery): void
 	{
 		$this->continuationMethod = $method;

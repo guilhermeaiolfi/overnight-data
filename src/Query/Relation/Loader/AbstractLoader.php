@@ -62,11 +62,14 @@ abstract class AbstractLoader implements LoaderInterface
 
 	final public function register(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
 	{
-		$runtime->registerChildBranches();
+		foreach ($branch->getChildren() as $child) {
+			$runtime->registerBranch($child);
+		}
+
 		$node = $this->initNode($branch, $runtime);
 		$attachmentNode = $node->getRelationAttachmentNode();
 
-		foreach ($runtime->getChildBranches() as $child) {
+		foreach ($branch->getChildren() as $child) {
 			if (! $child->hasNode()) {
 				throw LoadRuntimeException::nodeNotRegistered($child->getRelationRef());
 			}

@@ -7,7 +7,6 @@ namespace Tests\ON\Data\Query;
 use DateTimeImmutable;
 use Error;
 use InvalidArgumentException;
-use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Query\Condition\ComparisonCondition;
@@ -19,7 +18,6 @@ use ON\Data\Query\Condition\LogicalOperator;
 use ON\Data\Query\Condition\NotCondition;
 use ON\Data\Query\Condition\NullCondition;
 use ON\Data\Query\Condition\NullOperator;
-use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Exception\UnknownQueryExpressionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
@@ -975,30 +973,9 @@ final class QueryModelTest extends TestCase
 		iterator_to_array($users->iterate(), false);
 	}
 
-	public function testLoadRuntimeMetadataAndRegistrationRequireAnActiveBranch(): void
+	public function testLoadRuntimeDoesNotExposeHiddenActiveBranchMetadataApis(): void
 	{
-		$runtime = new LoadRuntime(
-			query($this->makeRegistry()->getCollection('users')),
-			new class () implements QueryExecutorInterface {
-				public function fetchAll(SelectQuery $query): array
-				{
-					return [];
-				}
-
-				public function fetchOne(SelectQuery $query): ?array
-				{
-					return null;
-				}
-
-				public function iterate(SelectQuery $query): iterable
-				{
-					return [];
-				}
-			},
-		);
-
-		$this->expectException(LoadRuntimeException::class);
-		$runtime->getParserFields();
+		self::assertFalse(method_exists(LoadRuntime::class, 'getParserFields'));
 	}
 
 	public function testBuiltInLoaderDefaultsMatchStructuredLoadingStrategies(): void
