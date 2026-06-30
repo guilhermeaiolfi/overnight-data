@@ -183,21 +183,6 @@ abstract class AbstractNode
 	}
 
 	/**
-	 * @param list<string> $columns
-	 */
-	public function appendColumns(array $columns): void
-	{
-		if ($columns === []) {
-			return;
-		}
-
-		$this->columns = $this->validateColumns([
-			...$this->columns,
-			...$columns,
-		]);
-	}
-
-	/**
 	 * @return list<string>
 	 */
 	public function getValueAliasTraversal(): array

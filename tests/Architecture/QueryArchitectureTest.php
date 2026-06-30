@@ -15,6 +15,8 @@ use ON\Data\Query\Relation\Loader\HasManyLoader;
 use ON\Data\Query\Relation\Loader\HasOneLoader;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\Relation\LoadRuntime;
+use ON\Data\Query\Relation\RelationLoadBranch;
+use ON\Data\Query\Relation\RootLoadBranch;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
@@ -142,6 +144,22 @@ final class QueryArchitectureTest extends TestCase
 		$reflection = new ReflectionMethod(LoadBranch::class, 'addChild');
 
 		self::assertFalse($reflection->isPublic());
+	}
+
+	public function testRelationLoadBranchRequiresNonNullableParentSelectionAndLoader(): void
+	{
+		self::assertSame(LoadBranch::class, $this->methodReturnType(RelationLoadBranch::class, 'getParent'));
+		self::assertSame('ON\Data\Query\Relation\RelationSelection', $this->methodReturnType(RelationLoadBranch::class, 'getSelection'));
+		self::assertSame(LoaderInterface::class, $this->methodReturnType(RelationLoadBranch::class, 'getLoader'));
+	}
+
+	public function testRootAndRelationBranchesKeepSeparateResponsibilities(): void
+	{
+		self::assertFalse(method_exists(RootLoadBranch::class, 'getSelection'));
+		self::assertFalse(method_exists(RootLoadBranch::class, 'getLoader'));
+		self::assertFalse(method_exists(RelationLoadBranch::class, 'addPublicColumn'));
+		self::assertFalse(method_exists(RelationLoadBranch::class, 'getRootNode'));
+		self::assertFalse(method_exists(LoadBranch::class, 'setRootFieldResolver'));
 	}
 
 	public function testRuntimeAndBuiltInLoadersDoNotContainCollectFieldsLifecycle(): void

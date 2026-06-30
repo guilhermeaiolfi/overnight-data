@@ -80,6 +80,12 @@ final class M2MLoader extends AbstractLoader
 		}
 
 		$through = $this->through($relation, $definition);
+		$current = $runtime->getCurrentBranch();
+		$parent = $runtime->requireParentBranch();
+		$current->requireFields($relation->getCollection()->getPrimaryKey());
+		$current->requireFields($current->getPublicFields());
+		$current->requireFields($definition->getOuterKeys());
+		$parent->requireFields($definition->getInnerKeys());
 
 		if ($through->getWhere() !== []) {
 			throw RelationLoaderException::throughWhereNotSupported($relation);

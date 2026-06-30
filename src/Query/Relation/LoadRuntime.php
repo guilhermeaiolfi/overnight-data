@@ -4,26 +4,22 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
-use LogicException;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Exception\LoadRuntimeException;
-use ON\Data\Query\Expression\AliasedExpression;
-use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
-use ON\Data\Query\Result\Parser\RootNode;
 use ON\Data\Query\SelectQuery;
 use ReflectionMethod;
 
 final class LoadRuntime
 {
 	/**
-	 * @var array<string, LoadBranch>
+	 * @var array<string, RelationLoadBranch>
 	 */
 	private array $branches = [];
 
-	private ?LoadBranch $activeBranch = null;
+	private ?RelationLoadBranch $activeBranch = null;
 
 	private ?string $activeMethod = null;
 
@@ -44,23 +40,25 @@ final class LoadRuntime
 
 	private int $aliasCounter = 0;
 
-	private LoadBranch $rootBranch;
+	private RootLoadBranch $rootBranch;
 
 	public function __construct(
 		private readonly SelectQuery $rootQuery,
 		private readonly QueryExecutorInterface $executor,
 	) {
-		$this->rootBranch = LoadBranch::root($rootQuery);
-		$this->rootBranch->setRootFieldResolver(fn (string $fieldName): string => $this->ensureRootFieldParserName($fieldName));
+		$this->rootBranch = new RootLoadBranch(
+			$rootQuery,
+			fn (string $fieldName): string => $this->allocateAlias(['root', 'required'], $fieldName),
+		);
 	}
 
 	public function fetchAll(): array
 	{
 		$this->buildPlan();
-		$this->parseRootRows($this->executor->fetchAll($this->rootQuery));
+		$this->rootBranch->parseRows($this->executor->fetchAll($this->rootQuery));
 		$this->completeBoundary($this->rootQuery);
 
-		return $this->rootBranch->projectRootRecords($this->requireRootNode()->getResult());
+		return $this->rootBranch->buildOutputRecords();
 	}
 
 	public function fetchOne(): ?array
@@ -72,21 +70,20 @@ final class LoadRuntime
 			return null;
 		}
 
-		$this->parseRootRows([$row]);
+		$this->rootBranch->parseRows([$row]);
 		$this->completeBoundary($this->rootQuery);
 
-		return $this->rootBranch->projectRootRecords($this->requireRootNode()->getResult())[0] ?? null;
+		return $this->rootBranch->buildOutputRecords()[0] ?? null;
 	}
 
-	public function getCurrentBranch(): LoadBranch
+	public function getCurrentBranch(): RelationLoadBranch
 	{
 		return $this->requireActiveBranch();
 	}
 
 	public function requireParentBranch(): LoadBranch
 	{
-		return $this->requireActiveBranch()->getParent()
-			?? throw LoadRuntimeException::activeBranchMissing();
+		return $this->requireActiveBranch()->getParent();
 	}
 
 	/**
@@ -104,10 +101,7 @@ final class LoadRuntime
 
 	public function getParentNode(): AbstractNode
 	{
-		$branch = $this->requireActiveBranch();
-		$parent = $branch->getParent();
-
-		return $parent?->getNode() ?? throw LoadRuntimeException::activeBranchMissing();
+		return $this->requireActiveBranch()->getParent()->getNode();
 	}
 
 	public function setJoinedAttachment(bool $joined): void
@@ -128,10 +122,10 @@ final class LoadRuntime
 	public function getQueryRelation(): RelationRef
 	{
 		$branch = $this->requireActiveBranch();
-		$parent = $branch->getParent() ?? throw LoadRuntimeException::activeBranchMissing();
+		$parent = $branch->getParent();
 		$query = $parent->getQuery();
 
-		if ($parent->isRoot() || $parent->getQueryLocalRelation() === null) {
+		if ($parent->getQueryLocalRelation() === null) {
 			return $query->relation($branch->getRelation()->getName());
 		}
 
@@ -208,7 +202,7 @@ final class LoadRuntime
 	}
 
 	/**
-	 * @return list<LoadBranch>
+	 * @return list<RelationLoadBranch>
 	 */
 	public function getChildBranches(): array
 	{
@@ -230,40 +224,8 @@ final class LoadRuntime
 
 	private function planRootSelections(): void
 	{
-		$publicSelections = array_values(array_filter(
-			$this->rootQuery->getSelections()->getExplicit(),
-			fn ($selection): bool => ! $this->isInternalSelection($selection->getExpression()),
-		));
-
-		if ($publicSelections === []) {
-			foreach ($this->rootQuery->getCollection()->getVisibleFields() as $fieldName) {
-				$field = $this->rootQuery->field($fieldName);
-				$this->rootQuery->select($field);
-				$publicSelections = $this->rootQuery->getSelections()->getExplicit();
-			}
-		}
-
-		foreach ($publicSelections as $selection) {
-			$expression = $selection->getExpression();
-			$alias = $expression instanceof AliasedExpression
-				? $expression->getAlias()
-				: implode('.', $expression->getPath());
-
-			$fieldExpression = $expression instanceof AliasedExpression
-				? $expression->getExpression()
-				: $expression;
-
-			$fieldName = null;
-			if ($fieldExpression instanceof FieldRef && $fieldExpression->getSource() === $this->rootQuery) {
-				$fieldName = $fieldExpression->getField()->getName();
-			}
-
-			$this->rootBranch->addRootPublicColumn($alias, $fieldName);
-		}
-
-		foreach ($this->rootPrimaryKeyFields() as $fieldName) {
-			$this->ensureRootFieldParserName($fieldName);
-		}
+		$this->rootBranch->registerPublicSelections();
+		$this->rootBranch->requireFields($this->rootPrimaryKeyFields());
 	}
 
 	private function buildBranchSkeletons(): void
@@ -274,22 +236,17 @@ final class LoadRuntime
 				? $this->rootBranch
 				: $this->branches[$selection->getParentPathKey()] ?? throw LoadRuntimeException::parentBranchMissing($selection->getRelation());
 
-			$this->branches[$key] = LoadBranch::relation(
-				$selection,
-				$parent,
-				$selection->getRelation()->getLoader(),
-				$this->publicFieldsForSelection($selection),
-			);
+			$this->branches[$key] = new RelationLoadBranch($selection, $parent, $selection->getRelation()->getLoader(), $this->publicFieldsForSelection($selection));
 		}
 	}
 
 	private function loadBranches(): void
 	{
 		$branches = array_values($this->branches);
-		usort($branches, static fn (LoadBranch $left, LoadBranch $right): int => count($left->getRelation()->getPath()) <=> count($right->getRelation()->getPath()));
+		usort($branches, static fn (RelationLoadBranch $left, RelationLoadBranch $right): int => count($left->getRelation()->getPath()) <=> count($right->getRelation()->getPath()));
 
 		foreach ($branches as $branch) {
-			$boundary = $branch->getParent()?->getQuery() ?? throw LoadRuntimeException::activeBranchMissing();
+			$boundary = $branch->getParent()->getQuery();
 			$this->invokeLoaderMethod($branch, 'load', $boundary);
 
 			if ($branch->getQuery()->getCollection()->getName() === '') {
@@ -300,8 +257,7 @@ final class LoadRuntime
 
 	private function registerParserTree(): void
 	{
-		$rootNode = new RootNode($this->rootBranch->getRootColumns(), $this->rootIdentityFields());
-		$this->rootBranch->setNode($rootNode);
+		$rootNode = $this->rootBranch->createNode($this->rootIdentityFields());
 
 		foreach ($this->rootBranch->getChildren() as $branch) {
 			$this->registerBranch($branch);
@@ -323,7 +279,7 @@ final class LoadRuntime
 	private function finalizeBranchSelections(): void
 	{
 		$branches = array_values($this->branches);
-		usort($branches, static fn (LoadBranch $left, LoadBranch $right): int => count($left->getRelation()->getPath()) <=> count($right->getRelation()->getPath()));
+		usort($branches, static fn (RelationLoadBranch $left, RelationLoadBranch $right): int => count($left->getRelation()->getPath()) <=> count($right->getRelation()->getPath()));
 
 		foreach ($branches as $branch) {
 			$aliases = [];
@@ -341,7 +297,7 @@ final class LoadRuntime
 		}
 	}
 
-	private function registerBranch(LoadBranch $branch): AbstractNode
+	private function registerBranch(RelationLoadBranch $branch): AbstractNode
 	{
 		$previousBranch = $this->activeBranch;
 		$previousMethod = $this->activeMethod;
@@ -367,7 +323,7 @@ final class LoadRuntime
 		return $node;
 	}
 
-	private function invokeLoaderMethod(LoadBranch $branch, string $method, SelectQuery $boundaryQuery): void
+	private function invokeLoaderMethod(RelationLoadBranch $branch, string $method, SelectQuery $boundaryQuery): void
 	{
 		$loader = $branch->getLoader();
 		$previousBranch = $this->activeBranch;
@@ -450,19 +406,6 @@ final class LoadRuntime
 	}
 
 	/**
-	 * @param list<array<string, mixed>> $rows
-	 */
-	private function parseRootRows(array $rows): void
-	{
-		$rootNode = $this->requireRootNode();
-		$aliases = $this->rootAliasTraversal();
-
-		foreach ($rows as $row) {
-			$rootNode->parseRow(0, $this->orderedValues($row, $aliases));
-		}
-	}
-
-	/**
 	 * @param array<string, mixed> $row
 	 * @param list<string> $aliases
 	 * @return list<mixed>
@@ -476,20 +419,6 @@ final class LoadRuntime
 		}
 
 		return $ordered;
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	private function collectionFieldNames(CollectionInterface $collection): array
-	{
-		$fields = [];
-
-		foreach ($collection->getFields() as $field) {
-			$fields[] = $field->getName();
-		}
-
-		return $fields;
 	}
 
 	/**
@@ -525,10 +454,7 @@ final class LoadRuntime
 	 */
 	private function rootIdentityFields(): array
 	{
-		return array_map(
-			$this->ensureRootFieldParserName(...),
-			$this->rootPrimaryKeyFields(),
-		);
+		return $this->rootBranch->requireFields($this->rootPrimaryKeyFields());
 	}
 
 	/**
@@ -539,16 +465,9 @@ final class LoadRuntime
 		return $this->normalizeFieldNames($this->rootQuery->getCollection(), $this->rootQuery->getCollection()->getPrimaryKey());
 	}
 
-	private function requireActiveBranch(): LoadBranch
+	private function requireActiveBranch(): RelationLoadBranch
 	{
 		return $this->activeBranch ?? throw LoadRuntimeException::activeBranchMissing();
-	}
-
-	private function requireRootNode(): RootNode
-	{
-		return $this->rootBranch->hasNode()
-			? $this->rootBranch->getRootNode()
-			: throw new LogicException('LoadRuntime root node is not built.');
 	}
 
 	/**
@@ -592,45 +511,10 @@ final class LoadRuntime
 		);
 	}
 
-	private function ensureRootFieldParserName(string $fieldName): string
-	{
-		if ($this->rootBranch->hasRootFieldParserName($fieldName)) {
-			return $this->rootBranch->getRootFieldParserName($fieldName) ?? throw new LogicException('Root field parser alias is not configured.');
-		}
-
-		$alias = $this->allocateAlias(['root', 'required'], $fieldName);
-
-		if (! $this->rootQuery->getSelections()->hasNamedExpression($alias)) {
-			$this->rootQuery->select($this->rootQuery->field($fieldName)->as($alias));
-		}
-
-		$this->rootBranch->setRootFieldParserName($fieldName, $alias);
-
-		return $alias;
-	}
-
 	/**
 	 * @return list<string>
 	 */
-	private function rootAliasTraversal(): array
-	{
-		$aliases = $this->rootBranch->getRootValueAliases();
-
-		foreach ($this->rootBranch->getChildren() as $branch) {
-			if ($branch->getQuery() !== $this->rootQuery) {
-				continue;
-			}
-
-			array_push($aliases, ...$this->branchAliasTraversal($branch));
-		}
-
-		return $aliases;
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	private function branchAliasTraversal(LoadBranch $branch): array
+	private function branchAliasTraversal(RelationLoadBranch $branch): array
 	{
 		return $branch->getNode()->getValueAliasTraversal();
 	}
@@ -652,11 +536,5 @@ final class LoadRuntime
 		if (! $reflection->isPublic() || $reflection->getNumberOfParameters() !== 2) {
 			throw LoadRuntimeException::invalidScheduledMethod($this->requireActiveBranch()->getRelation(), $method);
 		}
-	}
-
-	private function isInternalSelection(mixed $expression): bool
-	{
-		return $expression instanceof AliasedExpression
-			&& str_starts_with($expression->getAlias(), '__on_data_');
 	}
 }

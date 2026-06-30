@@ -32,6 +32,13 @@ final class HasManyLoader extends AbstractLoader
 
 	public function load(RelationRef $relation, LoadRuntime $runtime): void
 	{
+		$definition = $relation->getRelation();
+		$current = $runtime->getCurrentBranch();
+		$parentBranch = $runtime->requireParentBranch();
+		$current->requireFields($relation->getCollection()->getPrimaryKey());
+		$current->requireFields($definition->getOuterKeys());
+		$parentBranch->requireFields($definition->getInnerKeys());
+
 		$strategy = $runtime->getLoadStrategy($this->getDefaultLoadStrategy());
 		$runtime->setJoinedAttachment($strategy === LoadStrategy::JOIN);
 

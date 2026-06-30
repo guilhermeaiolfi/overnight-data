@@ -36,6 +36,13 @@ final class HasOneLoader extends AbstractLoader
 
 	public function load(RelationRef $relation, LoadRuntime $runtime): void
 	{
+		$definition = $relation->getRelation();
+		$current = $runtime->getCurrentBranch();
+		$parentBranch = $runtime->requireParentBranch();
+		$current->requireFields($relation->getCollection()->getPrimaryKey());
+		$current->requireFields($definition->getOuterKeys());
+		$parentBranch->requireFields($definition->getInnerKeys());
+
 		$runtime->setJoinedAttachment(
 			$runtime->getLoadStrategy($this->getDefaultLoadStrategy()) === LoadStrategy::JOIN,
 		);

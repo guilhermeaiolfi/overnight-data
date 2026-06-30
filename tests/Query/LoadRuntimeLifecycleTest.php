@@ -10,7 +10,9 @@ use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Relation\Loader\AbstractLoader;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
+use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
+use ON\Data\Query\Relation\RootLoadBranch;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\CollectionNode;
 use ON\Data\Query\Result\Parser\RootNode;
@@ -32,6 +34,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		LifecycleEvents::$attachmentModes = [];
 		LifecycleEvents::$initCalls = [];
 		LifecycleEvents::$topLevelParentNodeIsRoot = false;
+		LifecycleEvents::$plannedRootColumns = [];
 	}
 
 	public function testNamedNextPassRunsAfterParentRowsAreParsed(): void
@@ -132,7 +135,8 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$branch = array_values($branches)[0];
 
 		self::assertSame($rootBranch, $branch->getParent());
-		self::assertTrue($rootBranch->isRoot());
+		self::assertInstanceOf(RootLoadBranch::class, $rootBranch);
+		self::assertInstanceOf(RelationLoadBranch::class, $branch);
 		self::assertSame([$branch], $rootBranch->getChildren());
 	}
 
@@ -159,7 +163,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		], $employees->fetchAll());
 	}
 
-	public function testRootFieldsRequiredByRootRelationsArePresentBeforeRootNodeConstruction(): void
+	public function testRootFieldsRequiredDuringPlanningArePresentBeforeRootNodeConstruction(): void
 	{
 		$users = new SelectQuery($this->makeRootRequirementRegistry()->getCollection('users'), new LifecycleExecutor());
 		$users->select($users->name, $users->posts);
@@ -169,7 +173,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$columns = $this->readProperty($rootNode, 'columns');
 
 		self::assertContains('name', $columns);
-		self::assertContains('name', LifecycleEvents::$registerColumns['root-parent']);
+		self::assertContains('name', LifecycleEvents::$plannedRootColumns);
 	}
 
 	public function testJoinedAndLinkedAttachmentModesAreRecordedDuringLoadAndAppliedDuringRegistration(): void
@@ -473,6 +477,11 @@ final class LifecycleEvents
 	public static array $initCalls = [];
 
 	public static bool $topLevelParentNodeIsRoot = false;
+
+	/**
+	 * @var list<string>
+	 */
+	public static array $plannedRootColumns = [];
 }
 
 final class LifecycleExecutor implements QueryExecutorInterface
@@ -808,16 +817,9 @@ final class NestedAuthorLoader extends AbstractLoader
 
 final class RootFieldRequirementLoader extends LifecycleTestLoader
 {
-	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
-	{
-		$runtime->requireParentBranch()->requireFields(['name']);
-		LifecycleEvents::$registerColumns['root-parent'] = ['name'];
-
-		return parent::initNode($relation, $runtime);
-	}
-
 	public function load(RelationRef $relation, LoadRuntime $runtime): void
 	{
+		LifecycleEvents::$plannedRootColumns = $runtime->requireParentBranch()->requireFields(['name']);
 		$this->prepareSeparateQuery($relation, $runtime);
 	}
 }
