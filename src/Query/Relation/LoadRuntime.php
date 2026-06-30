@@ -104,17 +104,17 @@ final class LoadRuntime
 	public function continueWith(RelationLoadBranch $branch, string $method = 'load'): void
 	{
 		if ($this->registering) {
-			throw LoadRuntimeException::nextPassNotAllowedDuringRegister($branch->getRelationRef());
+			throw LoadRuntimeException::continuationNotAllowedDuringRegister($branch->getRelationRef());
 		}
 
 		if ($this->continuationRequested) {
-			throw LoadRuntimeException::multipleNextPasses($branch->getRelationRef(), $this->activeMethod ?? 'load');
+			throw LoadRuntimeException::multipleContinuations($branch->getRelationRef(), $this->activeMethod ?? 'load');
 		}
 
-		$this->assertSchedulableMethod($branch, $method);
-		$branch->schedule(
+		$this->assertContinuableMethod($branch, $method);
+		$branch->setContinuation(
 			$method,
-			$this->currentContinuationQuery ?? throw LoadRuntimeException::scheduleBoundaryMissing($branch->getRelationRef()),
+			$this->currentContinuationQuery ?? throw LoadRuntimeException::continuationQueryMissing($branch->getRelationRef()),
 		);
 		$this->continuationRequested = true;
 	}
@@ -175,8 +175,8 @@ final class LoadRuntime
 		usort($branches, static fn (RelationLoadBranch $left, RelationLoadBranch $right): int => count($left->getRelationRef()->getPath()) <=> count($right->getRelationRef()->getPath()));
 
 		foreach ($branches as $branch) {
-			$boundary = $branch->getParent()->getQuery();
-			$this->invokeLoaderMethod($branch, 'load', $boundary);
+			$query = $branch->getParent()->getQuery();
+			$this->invokeLoaderMethod($branch, 'load', $query);
 
 			if ($branch->getQuery()->getCollection()->getName() === '') {
 				throw LoadRuntimeException::queryNotConfigured($branch->getRelationRef());
@@ -249,7 +249,7 @@ final class LoadRuntime
 		return $node;
 	}
 
-	private function invokeLoaderMethod(RelationLoadBranch $branch, string $method, SelectQuery $boundaryQuery): void
+	private function invokeLoaderMethod(RelationLoadBranch $branch, string $method, SelectQuery $query): void
 	{
 		$loader = $branch->getLoader();
 		$previousMethod = $this->activeMethod;
@@ -257,9 +257,9 @@ final class LoadRuntime
 		$previousCurrentContinuationQuery = $this->currentContinuationQuery;
 		$this->activeMethod = $method;
 		$this->continuationRequested = false;
-		$this->currentContinuationQuery = $boundaryQuery;
+		$this->currentContinuationQuery = $query;
 		$this->loaderInvocationDepth++;
-		$branch->clearSchedule();
+		$branch->clearContinuation();
 
 		try {
 			$loader->{$method}($branch, $this);
@@ -291,7 +291,7 @@ final class LoadRuntime
 					continue;
 				}
 
-				$branch->clearSchedule();
+				$branch->clearContinuation();
 				$this->invokeLoaderMethod($branch, $method, $query);
 				$ran = true;
 			}
@@ -409,22 +409,22 @@ final class LoadRuntime
 		return $branch->getNode()->getValueAliasTraversal();
 	}
 
-	private function assertSchedulableMethod(RelationLoadBranch $branch, string $method): void
+	private function assertContinuableMethod(RelationLoadBranch $branch, string $method): void
 	{
 		$loader = $branch->getLoader();
 
 		if ($method === 'register' || $method === 'join') {
-			throw LoadRuntimeException::invalidScheduledMethod($branch->getRelationRef(), $method);
+			throw LoadRuntimeException::invalidContinuationMethod($branch->getRelationRef(), $method);
 		}
 
 		if (! method_exists($loader, $method)) {
-			throw LoadRuntimeException::invalidScheduledMethod($branch->getRelationRef(), $method);
+			throw LoadRuntimeException::invalidContinuationMethod($branch->getRelationRef(), $method);
 		}
 
 		$reflection = new ReflectionMethod($loader, $method);
 
 		if (! $reflection->isPublic() || $reflection->getNumberOfParameters() !== 2) {
-			throw LoadRuntimeException::invalidScheduledMethod($branch->getRelationRef(), $method);
+			throw LoadRuntimeException::invalidContinuationMethod($branch->getRelationRef(), $method);
 		}
 	}
 }

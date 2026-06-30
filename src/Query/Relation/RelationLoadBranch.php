@@ -143,13 +143,13 @@ final class RelationLoadBranch extends LoadBranch
 		return $this->getNode()->getReferenceValues();
 	}
 
-	public function schedule(string $method, SelectQuery $boundaryQuery): void
+	public function setContinuation(string $method, SelectQuery $query): void
 	{
 		$this->continuationMethod = $method;
-		$this->continuationQuery = $boundaryQuery;
+		$this->continuationQuery = $query;
 	}
 
-	public function clearSchedule(): void
+	public function clearContinuation(): void
 	{
 		$this->continuationMethod = null;
 		$this->continuationQuery = null;

@@ -166,6 +166,10 @@ final class QueryArchitectureTest extends TestCase
 		self::assertSame('ON\Data\Query\Relation\RelationRef', $this->methodReturnType(RelationLoadBranch::class, 'getRelationRef'));
 		self::assertSame('ON\Data\Query\Relation\RelationRef', $this->methodReturnType('ON\Data\Query\Relation\RelationSelection', 'getRelationRef'));
 		self::assertSame('bool', $this->methodReturnType(RelationLoadBranch::class, 'returnsMany'));
+		self::assertTrue(method_exists(RelationLoadBranch::class, 'setContinuation'));
+		self::assertTrue(method_exists(RelationLoadBranch::class, 'clearContinuation'));
+		self::assertFalse(method_exists(RelationLoadBranch::class, 'schedule'));
+		self::assertFalse(method_exists(RelationLoadBranch::class, 'clearSchedule'));
 		self::assertFalse(method_exists(RelationLoadBranch::class, 'getRelation'));
 		self::assertFalse(method_exists(RelationLoadBranch::class, 'nodeIsCollectionLike'));
 		self::assertFalse(method_exists('ON\Data\Query\Relation\RelationSelection', 'getRelation'));
@@ -199,6 +203,29 @@ final class QueryArchitectureTest extends TestCase
 		self::assertFalse(method_exists(LoadRuntime::class, 'getChildBranches'));
 		self::assertFalse(method_exists(LoadRuntime::class, 'registerChildBranches'));
 		self::assertTrue(method_exists(LoadRuntime::class, 'continueWith'));
+	}
+
+	public function testContinuationVocabularyDoesNotUseLegacySchedulingNames(): void
+	{
+		$runtimeContents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/LoadRuntime.php');
+		$branchContents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/RelationLoadBranch.php');
+		$exceptionContents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Exception/LoadRuntimeException.php');
+
+		self::assertStringNotContainsString('nextPass', $runtimeContents);
+		self::assertStringNotContainsString('schedule(', $runtimeContents);
+		self::assertStringNotContainsString('clearSchedule(', $runtimeContents);
+		self::assertStringNotContainsString('boundaryQuery', $runtimeContents);
+		self::assertStringNotContainsString('assertSchedulableMethod', $runtimeContents);
+		self::assertStringNotContainsString('scheduled', $runtimeContents);
+
+		self::assertStringNotContainsString('schedule(', $branchContents);
+		self::assertStringNotContainsString('clearSchedule(', $branchContents);
+		self::assertStringNotContainsString('boundaryQuery', $branchContents);
+
+		self::assertStringNotContainsString('nextPass', $exceptionContents);
+		self::assertStringNotContainsString('scheduleBoundary', $exceptionContents);
+		self::assertStringNotContainsString('invalidScheduledMethod', $exceptionContents);
+		self::assertStringNotContainsString('multipleNextPasses', $exceptionContents);
 	}
 
 	public function testRuntimeBranchScopedServicesReceiveRelationLoadBranchExplicitly(): void

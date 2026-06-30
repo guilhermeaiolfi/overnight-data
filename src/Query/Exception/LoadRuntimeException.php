@@ -70,33 +70,33 @@ final class LoadRuntimeException extends LogicException
 		));
 	}
 
-	public static function nextPassNotAllowedDuringRegister(RelationRef $relation): self
+	public static function continuationNotAllowedDuringRegister(RelationRef $relation): self
 	{
 		return new self(sprintf(
-			'Loader cannot schedule continueWith() during register() for relation "%s".',
+			'Loader cannot request continueWith() during register() for relation "%s".',
 			implode('.', $relation->getPath()),
 		));
 	}
 
-	public static function multipleNextPasses(RelationRef $relation, string $method): self
+	public static function multipleContinuations(RelationRef $relation, string $method): self
 	{
 		return new self(sprintf(
-			'Loader scheduled more than one continuation from "%s" for relation "%s".',
+			'Loader requested more than one continuation from "%s" for relation "%s".',
 			$method,
 			implode('.', $relation->getPath()),
 		));
 	}
 
-	public static function invalidScheduledMethod(RelationRef $relation, string $method): self
+	public static function invalidContinuationMethod(RelationRef $relation, string $method): self
 	{
 		return new self(sprintf(
-			'Loader cannot schedule method "%s" for relation "%s".',
+			'Loader cannot continue with method "%s" for relation "%s".',
 			$method,
 			implode('.', $relation->getPath()),
 		));
 	}
 
-	public static function scheduleBoundaryMissing(RelationRef $relation): self
+	public static function continuationQueryMissing(RelationRef $relation): self
 	{
 		return new self(sprintf(
 			'LoadRuntime could not determine a continuation query for relation "%s".',
