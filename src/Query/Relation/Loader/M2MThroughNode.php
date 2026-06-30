@@ -2,17 +2,12 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\Query\Result\Parser;
+namespace ON\Data\Query\Relation\Loader;
 
-/**
- * Adapted from Cycle ORM parser code.
- *
- * Upstream commit:
- * a7a1db351df8037ff7a1196e19688bfc7d35c63e
- *
- * Original source licensed under the MIT License.
- */
-final class CollectionNode extends AbstractNode
+use ON\Data\Query\Result\Parser\AbstractNode;
+use ON\Data\Query\Result\Parser\ParserException;
+
+final class M2MThroughNode extends AbstractNode
 {
 	/**
 	 * @param list<string> $columns
@@ -23,12 +18,13 @@ final class CollectionNode extends AbstractNode
 	public function __construct(
 		array $columns,
 		array $identityFields,
-		protected array $childFields,
+		private array $childFields,
 		array $parentFields,
+		private readonly string $publicChildContainer,
+		private readonly AbstractNode $publicChildNode,
 	) {
 		parent::__construct($columns, $parentFields);
-
-		$this->childFields = $this->validateFieldList($childFields, 'Child reference fields', false);
+		$this->childFields = $this->validateFieldList($this->childFields, 'Child reference fields', false);
 		$this->assertFieldsExist($this->childFields, $this->columns, 'Child reference field');
 		$this->assertFieldsExist($identityFields, $this->columns, 'Identity field');
 
@@ -37,6 +33,12 @@ final class CollectionNode extends AbstractNode
 		}
 
 		$this->setIdentityFields($this->validateFieldList($identityFields, 'Identity fields'));
+		parent::joinNode($this->publicChildContainer, $this->publicChildNode);
+	}
+
+	public function getRelationAttachmentNode(): AbstractNode
+	{
+		return $this->publicChildNode;
 	}
 
 	public function isCollectionLike(): bool

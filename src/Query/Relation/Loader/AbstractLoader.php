@@ -53,6 +53,7 @@ abstract class AbstractLoader implements LoaderInterface
 	{
 		$runtime->registerChildBranches();
 		$node = $this->initNode($relation, $runtime);
+		$attachmentNode = $node->getRelationAttachmentNode();
 
 		foreach ($runtime->getChildBranches() as $child) {
 			if (! $child->hasNode()) {
@@ -62,12 +63,12 @@ abstract class AbstractLoader implements LoaderInterface
 			$childNode = $child->getNode();
 
 			if ($child->isJoinedAttachment()) {
-				$node->joinNode($child->getRelation()->getName(), $childNode);
+				$attachmentNode->joinNode($child->getRelation()->getName(), $childNode);
 
 				continue;
 			}
 
-			$node->linkNode($child->getRelation()->getName(), $childNode);
+			$attachmentNode->linkNode($child->getRelation()->getName(), $childNode);
 		}
 
 		return $node;

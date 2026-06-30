@@ -13,7 +13,6 @@ use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
-use ON\Data\Query\Result\Parser\CollectionNode;
 use ON\Data\Query\Result\Parser\RootNode;
 use ON\Data\Query\SelectQuery;
 use ReflectionMethod;
@@ -104,10 +103,7 @@ final class LoadRuntime
 	 */
 	public function requireBranchFields(array $fieldNames): array
 	{
-		$branch = $this->requireActiveBranch();
-		$collection = $branch->getRelation()->getCollection();
-
-		return $branch->addFields($this->normalizeFieldNames($collection, $fieldNames));
+		return $this->getCurrentBranch()->requireFields($fieldNames);
 	}
 
 	/**
@@ -116,16 +112,25 @@ final class LoadRuntime
 	 */
 	public function requireParentFields(array $fieldNames): array
 	{
-		$branch = $this->requireActiveBranch();
-		$parent = $branch->getParent();
-		$collection = $parent?->getRelation()->getCollection() ?? $this->rootQuery->getCollection();
+		$parent = $this->getParentBranch();
+		$collection = $parent?->getCollection() ?? $this->rootQuery->getCollection();
 		$normalized = $this->normalizeFieldNames($collection, $fieldNames);
 
 		if ($parent === null) {
 			return array_map($this->ensureRootFieldParserName(...), $normalized);
 		}
 
-		return $parent->addFields($normalized);
+		return $parent->requireFields($normalized);
+	}
+
+	public function getCurrentBranch(): LoadBranch
+	{
+		return $this->requireActiveBranch();
+	}
+
+	public function getParentBranch(): ?LoadBranch
+	{
+		return $this->requireActiveBranch()->getParent();
 	}
 
 	/**
@@ -133,7 +138,7 @@ final class LoadRuntime
 	 */
 	public function getNodeColumns(): array
 	{
-		return $this->requireActiveBranch()->getNodeColumns();
+		return $this->getCurrentBranch()->getNodeColumns();
 	}
 
 	public function getNode(): AbstractNode
@@ -371,14 +376,29 @@ final class LoadRuntime
 
 			foreach ($branch->getNodeColumns() as $fieldName) {
 				$aliases[] = $this->ensureBranchFieldSelection(
-					$branch,
 					$branch->getQuery(),
 					$branch->getSource(),
+					$branch->getRelation()->getPath(),
 					$fieldName,
 				);
 			}
 
-			$branch->setNodeValueAliases($aliases);
+			$branch->getPublicNode()->setValueAliases($aliases);
+
+			foreach ($branch->getOwnedPlans() as $plan) {
+				$ownedAliases = [];
+
+				foreach ($plan->getNodeColumns() as $fieldName) {
+					$ownedAliases[] = $this->ensureBranchFieldSelection(
+						$branch->getQuery(),
+						$plan->getSource(),
+						$plan->getPath(),
+						$fieldName,
+					);
+				}
+
+				$plan->getNode()->setValueAliases($ownedAliases);
+			}
 		}
 	}
 
@@ -565,7 +585,13 @@ final class LoadRuntime
 			$projected = [];
 
 			foreach (is_array($value) ? $value : [] as $item) {
-				$projected[] = $this->projectVisibleRecord($branch, is_array($item) ? $item : []);
+				$record = $this->payloadRecord($branch, is_array($item) ? $item : []);
+
+				if ($record === null) {
+					continue;
+				}
+
+				$projected[] = $this->projectVisibleRecord($branch, $record);
 			}
 
 			return $projected;
@@ -575,7 +601,11 @@ final class LoadRuntime
 			return null;
 		}
 
-		return $this->projectVisibleRecord($branch, is_array($value) ? $value : []);
+		$record = $this->payloadRecord($branch, is_array($value) ? $value : []);
+
+		return $record === null
+			? null
+			: $this->projectVisibleRecord($branch, $record);
 	}
 
 	/**
@@ -646,10 +676,11 @@ final class LoadRuntime
 	private function projectHiddenRecord(LoadBranch $branch, array $record): array
 	{
 		$promoted = [];
+		$payload = $this->payloadRecord($branch, $record) ?? [];
 
 		foreach ($this->childBranches($branch) as $child) {
 			$name = $child->getRelation()->getName();
-			$value = $record[$name] ?? ($this->isCollectionBranch($child) ? [] : null);
+			$value = $payload[$name] ?? ($this->isCollectionBranch($child) ? [] : null);
 
 			if ($child->getSelection()->isVisible()) {
 				$items = $this->projectPromotionItems($child, $value);
@@ -924,13 +955,13 @@ final class LoadRuntime
 
 	private function isCollectionBranch(LoadBranch $branch): bool
 	{
-		return $branch->getNode() instanceof CollectionNode;
+		return $branch->getNode()->isCollectionLike();
 	}
 
 	private function ensureBranchFieldSelection(
-		LoadBranch $branch,
 		SelectQuery $query,
 		QuerySourceInterface $source,
+		array $path,
 		string $fieldName,
 	): string {
 		if ($source === $query) {
@@ -939,7 +970,7 @@ final class LoadRuntime
 			return $fieldName;
 		}
 
-		$alias = $this->allocateAlias($branch->getRelation()->getPath(), $fieldName);
+		$alias = $this->allocateAlias($path, $fieldName);
 
 		if (! $query->getSelections()->hasNamedExpression($alias)) {
 			$query->select($source->field($fieldName)->as($alias));
@@ -1002,17 +1033,24 @@ final class LoadRuntime
 	 */
 	private function branchAliasTraversal(LoadBranch $branch): array
 	{
-		$aliases = $branch->getNodeValueAliases();
+		return $branch->getNode()->getValueAliasTraversal();
+	}
 
-		foreach ($this->childBranches($branch) as $child) {
-			if ($child->getQuery() !== $branch->getQuery()) {
-				continue;
-			}
+	/**
+	 * @param array<string, mixed> $record
+	 * @return array<string, mixed>|null
+	 */
+	private function payloadRecord(LoadBranch $branch, array $record): ?array
+	{
+		$container = $branch->getPublicPayloadChild();
 
-			array_push($aliases, ...$this->branchAliasTraversal($child));
+		if ($container === null) {
+			return $record;
 		}
 
-		return $aliases;
+		$payload = $record[$container] ?? null;
+
+		return is_array($payload) ? $payload : null;
 	}
 
 	private function assertSchedulableMethod(string $method): void

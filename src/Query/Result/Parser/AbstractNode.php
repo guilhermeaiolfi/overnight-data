@@ -52,6 +52,11 @@ abstract class AbstractNode
 	protected array $referenceIndexes = [];
 
 	/**
+	 * @var list<string>
+	 */
+	private array $valueAliases = [];
+
+	/**
 	 * @param list<string> $columns
 	 * @param list<string>|null $parentFields
 	 */
@@ -77,7 +82,7 @@ abstract class AbstractNode
 			return count($this->columns)
 				+ array_reduce(
 					$relatedNodes,
-					static fn (int $count, AbstractNode $node): int => $node instanceof CollectionNode
+					static fn (int $count, AbstractNode $node): int => $node->isCollectionLike()
 						? 0
 						: $count + count($node->columns),
 					0,
@@ -90,7 +95,7 @@ abstract class AbstractNode
 			}
 
 			foreach ($this->nodes as $name => $node) {
-				$data[$name] = $node instanceof CollectionNode ? [] : null;
+				$data[$name] = $node->isCollectionLike() ? [] : null;
 			}
 
 			$this->push($data);
@@ -159,6 +164,46 @@ abstract class AbstractNode
 		return $this->mergeSubclass;
 	}
 
+	public function getRelationAttachmentNode(): self
+	{
+		return $this;
+	}
+
+	public function isCollectionLike(): bool
+	{
+		return false;
+	}
+
+	/**
+	 * @param list<string> $aliases
+	 */
+	public function setValueAliases(array $aliases): void
+	{
+		$this->valueAliases = $aliases;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	public function getValueAliasTraversal(): array
+	{
+		$aliases = $this->valueAliases;
+
+		foreach (array_merge(
+			$this->mergeParent === null ? [] : [$this->mergeParent],
+			$this->nodes,
+			$this->mergeSubclass,
+		) as $node) {
+			if (! $node->joined) {
+				continue;
+			}
+
+			array_push($aliases, ...$node->getValueAliasTraversal());
+		}
+
+		return $aliases;
+	}
+
 	public function mergeInheritanceNodes(bool $includeDiscriminator = false): void
 	{
 		$this->mergeParent?->mergeInheritanceNodes();
@@ -176,6 +221,7 @@ abstract class AbstractNode
 		$this->mergeSubclass = [];
 		$this->referenceIndexes = [];
 		$this->duplicates = [];
+		$this->valueAliases = [];
 	}
 
 	/**

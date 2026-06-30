@@ -86,8 +86,11 @@ Built-in structured relation loading currently projects:
 - `BelongsTo`: nested record or `null`
 - `HasOne`: nested record or `null`
 - `HasMany`: list of nested records or `[]`
+- `M2M`: list of target records or `[]`
 
 When a loaded relation does not specify `fields(...)`, the public projection uses that relation collection's visible fields.
+
+Built-in `M2M` loading uses a loader-owned through-table shape internally. The parser/runtime keeps the through row and target row distinct, then projects the target child as the public relation payload. Internal through fields are not exposed in the final array result.
 
 ## Execution model
 
@@ -115,5 +118,5 @@ The acquisition strategy is loader-owned. Relation selection controls result sha
 - Structured loading is not the same as arbitrary related-field projection in flat scalar selections.
 - Public strategy overrides are not exposed.
 - `SelectQuery::load()` does not exist.
-- Structured loading for built-in `M2M` and `FirstOfMany` remains deferred.
+- Structured loading for built-in `FirstOfMany` remains deferred.
 - Relation-level `where` and `orderBy` are not part of the current public API.

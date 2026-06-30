@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation;
 
 use LogicException;
+use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
@@ -40,16 +41,20 @@ final class LoadBranch
 	 */
 	private array $publicFieldOrder = [];
 
-	/**
-	 * @var list<string>
-	 */
-	private array $valueAliases = [];
-
 	private ?string $scheduledMethod = null;
 
 	private ?SelectQuery $scheduledBoundaryQuery = null;
 
 	private ?bool $joinedAttachment = null;
+
+	private ?AbstractNode $publicNode = null;
+
+	private ?string $publicPayloadChild = null;
+
+	/**
+	 * @var array<string, OwnedBranchPlan>
+	 */
+	private array $ownedPlans = [];
 
 	/**
 	 * @param list<string> $publicFields
@@ -83,7 +88,12 @@ final class LoadBranch
 		return $this->loader;
 	}
 
-	public function addFields(array $fieldNames): array
+	public function getCollection(): CollectionInterface
+	{
+		return $this->getRelation()->getCollection();
+	}
+
+	public function requireFields(array $fieldNames): array
 	{
 		$added = [];
 
@@ -102,6 +112,11 @@ final class LoadBranch
 		return $added;
 	}
 
+	public function addFields(array $fieldNames): array
+	{
+		return $this->requireFields($fieldNames);
+	}
+
 	public function addPublicFields(array $fieldNames): array
 	{
 		$added = [];
@@ -115,7 +130,7 @@ final class LoadBranch
 			$added[] = $fieldName;
 		}
 
-		$this->addFields($fieldNames);
+		$this->requireFields($fieldNames);
 
 		return $added;
 	}
@@ -144,6 +159,16 @@ final class LoadBranch
 	public function getNode(): AbstractNode
 	{
 		return $this->node ?? throw new LogicException('Load branch parser node is not registered.');
+	}
+
+	public function setPublicNode(AbstractNode $node): void
+	{
+		$this->publicNode = $node;
+	}
+
+	public function getPublicNode(): AbstractNode
+	{
+		return $this->publicNode ?? $this->getNode();
 	}
 
 	public function hasNode(): bool
@@ -179,20 +204,27 @@ final class LoadBranch
 		return $this->queryLocalRelation;
 	}
 
-	/**
-	 * @return list<string>
-	 */
-	public function getNodeValueAliases(): array
+	public function setPublicPayloadChild(?string $container): void
 	{
-		return $this->valueAliases;
+		$this->publicPayloadChild = $container;
+	}
+
+	public function getPublicPayloadChild(): ?string
+	{
+		return $this->publicPayloadChild;
+	}
+
+	public function ownedPlan(string $name, CollectionInterface $collection, array $path): OwnedBranchPlan
+	{
+		return $this->ownedPlans[$name] ??= new OwnedBranchPlan($path, $collection);
 	}
 
 	/**
-	 * @param list<string> $aliases
+	 * @return array<string, OwnedBranchPlan>
 	 */
-	public function setNodeValueAliases(array $aliases): void
+	public function getOwnedPlans(): array
 	{
-		$this->valueAliases = $aliases;
+		return $this->ownedPlans;
 	}
 
 	public function schedule(string $method, SelectQuery $boundaryQuery): void

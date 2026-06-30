@@ -12,6 +12,7 @@ use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\FirstOfManyRelation;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\Query\Exception\LoadRuntimeException;
+use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
@@ -357,6 +358,120 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testStructuredManyToManySelectionLoadsTargetsWithoutExposingThroughFields(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name, $users->roles)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'roles' => [
+					['id' => 10, 'name' => 'Admin'],
+					['id' => 11, 'name' => 'Editor'],
+				],
+			],
+			[
+				'name' => 'Grace',
+				'roles' => [
+					['id' => 10, 'name' => 'Admin'],
+				],
+			],
+			[
+				'name' => 'Linus',
+				'roles' => [],
+			],
+		], $rows);
+	}
+
+	public function testStructuredManyToManyMountingUsesThroughRowsSoSharedTargetsAttachToMultipleParents(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name, $users->roles->fields('name'))
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'roles' => [['name' => 'Admin'], ['name' => 'Editor']]],
+			['name' => 'Grace', 'roles' => [['name' => 'Admin']]],
+			['name' => 'Linus', 'roles' => []],
+		], $rows);
+	}
+
+	public function testNestedStructuredRelationBelowManyToManyContinuesFromTheTargetBranch(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name, $users->roles->permissions)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'roles' => [
+					[
+						'permissions' => [
+							['id' => 100, 'roleId' => 10, 'name' => 'manage_users'],
+							['id' => 101, 'roleId' => 10, 'name' => 'deploy'],
+						],
+					],
+					[
+						'permissions' => [
+							['id' => 102, 'roleId' => 11, 'name' => 'edit_content'],
+						],
+					],
+				],
+			],
+			[
+				'name' => 'Grace',
+				'roles' => [
+					[
+						'permissions' => [
+							['id' => 100, 'roleId' => 10, 'name' => 'manage_users'],
+							['id' => 101, 'roleId' => 10, 'name' => 'deploy'],
+						],
+					],
+				],
+			],
+			[
+				'name' => 'Linus',
+				'roles' => [],
+			],
+		], $rows);
+	}
+
+	public function testStructuredManyToManySupportsCompositeParentAndThroughKeys(): void
+	{
+		$articles = $this->database->query($this->registry->getCollection('composite_articles'));
+
+		$rows = $articles
+			->select($articles->slug, $articles->tags)
+			->orderBy($articles->slug->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'slug' => 'joins',
+				'tags' => [
+					['tenantId' => 1, 'slug' => 'php', 'name' => 'php'],
+					['tenantId' => 1, 'slug' => 'orm', 'name' => 'orm'],
+				],
+			],
+			[
+				'slug' => 'lonely',
+				'tags' => [],
+			],
+		], $rows);
+	}
+
 	public function testStructuredRelationFieldsOptionRejectsExplicitEmptyLists(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
@@ -655,6 +770,15 @@ final class CycleJoinExecutionTest extends TestCase
 		$articles->select($articles->tags->name)->fetchAll();
 	}
 
+	public function testStructuredManyToManyStillRejectsUnsupportedThroughConstraints(): void
+	{
+		$articles = $this->database->query($this->registry->getCollection('articles_with_scoped_tags'));
+
+		$this->expectException(RelationLoaderException::class);
+		$this->expectExceptionMessage('through conditions that are not supported');
+		$articles->select($articles->id, $articles->tags)->fetchAll();
+	}
+
 	public function testMissingKeysAndMissingThroughMetadataBecomeUnsupportedQueryExceptions(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users_missing_keys'));
@@ -787,6 +911,14 @@ final class CycleJoinExecutionTest extends TestCase
 		$users->hasOne('profile', 'profiles')->innerKey('id')->outerKey('userId')->end();
 		$users->belongsTo('company', 'companies')->innerKey('companyId')->outerKey('id')->end();
 		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('userId')->end();
+		$users->relation('roles', M2MRelation::class)
+			->collection('roles')
+			->innerKey('id')
+			->outerKey('id')
+			->through('user_roles')
+				->innerKey('user_id')
+				->outerKey('role_id')
+				->end();
 		$users->relation('latestPost', FirstOfManyRelation::class)
 			->collection('posts')
 			->innerKey('id')
@@ -832,6 +964,25 @@ final class CycleJoinExecutionTest extends TestCase
 		$comments->field('body', 'string');
 		$comments->belongsTo('author', 'users')->innerKey('authorId')->outerKey('id')->end();
 		$comments->primaryKey('id');
+
+		$roles = $registry->collection('roles');
+		$roles->table('roles');
+		$roles->field('id', 'int');
+		$roles->field('name', 'string');
+		$roles->hasMany('permissions', 'permissions')->innerKey('id')->outerKey('roleId')->end();
+		$roles->primaryKey('id');
+
+		$userRoles = $registry->collection('user_roles');
+		$userRoles->table('user_roles');
+		$userRoles->field('user_id', 'int');
+		$userRoles->field('role_id', 'int');
+
+		$permissions = $registry->collection('permissions');
+		$permissions->table('permissions');
+		$permissions->field('id', 'int');
+		$permissions->field('roleId', 'int')->column('role_id');
+		$permissions->field('name', 'string');
+		$permissions->primaryKey('id');
 
 		$addresses = $registry->collection('addresses');
 		$addresses->table('addresses');
@@ -966,6 +1117,9 @@ final class CycleJoinExecutionTest extends TestCase
 		$pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, company_id INTEGER NULL)');
 		$pdo->exec('CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER, title TEXT, published INTEGER)');
 		$pdo->exec('CREATE TABLE comments (id INTEGER PRIMARY KEY, post_id INTEGER, author_id INTEGER, body TEXT)');
+		$pdo->exec('CREATE TABLE roles (id INTEGER PRIMARY KEY, name TEXT)');
+		$pdo->exec('CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER)');
+		$pdo->exec('CREATE TABLE permissions (id INTEGER PRIMARY KEY, role_id INTEGER, name TEXT)');
 		$pdo->exec('CREATE TABLE profiles (id INTEGER PRIMARY KEY, user_id INTEGER, bio TEXT)');
 		$pdo->exec('CREATE TABLE addresses (id INTEGER PRIMARY KEY, city TEXT)');
 		$pdo->exec('CREATE TABLE orders (id INTEGER PRIMARY KEY, billing_address_id INTEGER, shipping_address_id INTEGER)');
@@ -983,6 +1137,9 @@ final class CycleJoinExecutionTest extends TestCase
 		$pdo->exec("INSERT INTO users (id, name, company_id) VALUES (1, 'Ada', 1), (2, 'Grace', 1), (3, 'Linus', NULL)");
 		$pdo->exec("INSERT INTO posts (id, user_id, title, published) VALUES (1, 1, 'Hello', 1), (2, 1, 'World', 0), (3, 2, 'Graph', 1)");
 		$pdo->exec("INSERT INTO comments (id, post_id, author_id, body) VALUES (1, 1, 1, 'First'), (2, 2, 2, 'Second'), (3, 3, 1, 'Third')");
+		$pdo->exec("INSERT INTO roles (id, name) VALUES (10, 'Admin'), (11, 'Editor')");
+		$pdo->exec('INSERT INTO user_roles (user_id, role_id) VALUES (1, 10), (1, 11), (2, 10)');
+		$pdo->exec("INSERT INTO permissions (id, role_id, name) VALUES (100, 10, 'manage_users'), (101, 10, 'deploy'), (102, 11, 'edit_content')");
 		$pdo->exec("INSERT INTO profiles (id, user_id, bio) VALUES (1, 1, 'Mathematician'), (2, 2, 'Compiler pioneer')");
 		$pdo->exec("INSERT INTO addresses (id, city) VALUES (1, 'Sao Paulo'), (2, 'Rio')");
 		$pdo->exec("INSERT INTO orders (id, billing_address_id, shipping_address_id) VALUES (1, 1, 2), (2, 2, 1)");
