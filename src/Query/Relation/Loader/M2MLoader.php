@@ -15,15 +15,12 @@ use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
+use ON\Data\Query\SelectQuery;
 use function ON\Data\Query\x;
 
 final class M2MLoader extends AbstractLoader
 {
 	private const THROUGH_CONTAINER = '__target';
-
-	private ?QuerySourceInterface $throughSource = null;
-
-	private ?M2MThroughNode $throughNode = null;
 
 	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
@@ -59,7 +56,7 @@ final class M2MLoader extends AbstractLoader
 		$current->setPublicNode($targetNode);
 		$current->setPublicPayloadChild(self::THROUGH_CONTAINER);
 
-		$this->throughNode = new M2MThroughNode(
+		$throughNode = new M2MThroughNode(
 			$throughColumns,
 			$throughColumns,
 			$throughInnerKeys,
@@ -67,9 +64,9 @@ final class M2MLoader extends AbstractLoader
 			self::THROUGH_CONTAINER,
 			$targetNode,
 		);
-		$this->selectThroughFields($relation, $runtime, $this->throughNode);
+		$this->selectThroughFields($relation, $runtime, $throughNode);
 
-		return $this->throughNode;
+		return $throughNode;
 	}
 
 	public function load(RelationRef $relation, LoadRuntime $runtime): void
@@ -107,7 +104,6 @@ final class M2MLoader extends AbstractLoader
 
 		$runtime->setJoinedAttachment(false);
 		$runtime->setQueryContext($query, $query);
-		$this->throughSource = $throughSource;
 		$runtime->nextPass('loadData');
 	}
 
@@ -126,9 +122,9 @@ final class M2MLoader extends AbstractLoader
 		}
 
 		$through = $this->through($relation, $definition);
-		$throughSource = $this->throughSource ?? throw RelationLoaderException::loadingNotImplemented($relation);
-		$throughInnerKeys = $through->getInnerKeys();
 		$query = $runtime->getQuery();
+		$throughSource = $this->throughSource($relation, $query);
+		$throughInnerKeys = $through->getInnerKeys();
 
 		if (count($throughInnerKeys) === 1) {
 			$query->where(
@@ -244,7 +240,7 @@ final class M2MLoader extends AbstractLoader
 	private function selectThroughFields(RelationRef $relation, LoadRuntime $runtime, M2MThroughNode $throughNode): void
 	{
 		$query = $runtime->getQuery();
-		$source = $this->throughSource ?? throw RelationLoaderException::loadingNotImplemented($relation);
+		$source = $this->throughSource($relation, $query);
 		$aliases = [];
 
 		foreach ($this->throughColumns($relation) as $fieldName) {
@@ -262,6 +258,24 @@ final class M2MLoader extends AbstractLoader
 		}
 
 		$throughNode->setValueAliases($aliases);
+	}
+
+	private function throughSource(RelationRef $relation, SelectQuery $query): QuerySourceInterface
+	{
+		$name = $this->throughJoinName($relation);
+
+		foreach ($query->getJoins() as $join) {
+			if ($join->getName() === $name) {
+				return $join;
+			}
+		}
+
+		throw RelationLoaderException::loadingNotImplemented($relation);
+	}
+
+	private function throughJoinName(RelationRef $relation): string
+	{
+		return implode('.', $relation->getPath()) . '@through';
 	}
 
 	/**
