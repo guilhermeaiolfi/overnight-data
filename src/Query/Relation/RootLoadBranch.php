@@ -10,51 +10,21 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Result\Parser\RootNode;
+use ON\Data\Query\Selection\SelectionItem;
+use ON\Data\Query\Selection\SelectionList;
+use ON\Data\Query\Selection\SelectionReason;
 use ON\Data\Query\SelectQuery;
 
 final class RootLoadBranch extends LoadBranch
 {
-	/**
-	 * @var list<string>
-	 */
-	private array $columns = [];
-
-	/**
-	 * @var list<string>
-	 */
-	private array $valueAliases = [];
-
-	/**
-	 * @var array<string, true>
-	 */
-	private array $publicColumns = [];
-
-	/**
-	 * @var array<string, string>
-	 */
-	private array $fieldParserNames = [];
-
-	/**
-	 * @var list<string>
-	 */
-	private array $identityAliases = [];
+	private SelectionList $selections;
 
 	public function __construct(
 		private readonly SelectQuery $query,
 		private readonly Closure $allocateAlias,
 	) {
+		$this->selections = new SelectionList();
 		$this->setQueryContext($query, $query, null);
-	}
-
-	public function addPublicColumn(string $alias, ?string $fieldName = null): void
-	{
-		$this->columns[] = $alias;
-		$this->valueAliases[] = $alias;
-		$this->publicColumns[$alias] = true;
-
-		if ($fieldName !== null) {
-			$this->fieldParserNames[$fieldName] = $alias;
-		}
 	}
 
 	public function getCollection(): CollectionInterface
@@ -77,10 +47,10 @@ final class RootLoadBranch extends LoadBranch
 
 		foreach ($fieldNames as $fieldName) {
 			$normalized = $collection->getField($fieldName)->getName();
+			$existing = $this->findRootFieldSelection($normalized);
 
-			if (isset($this->fieldParserNames[$normalized])) {
-				$aliases[] = $this->fieldParserNames[$normalized];
-
+			if ($existing instanceof SelectionItem) {
+				$aliases[] = $this->selectionKey($existing);
 				continue;
 			}
 
@@ -94,9 +64,10 @@ final class RootLoadBranch extends LoadBranch
 				$this->query->select($this->query->field($normalized)->as($alias));
 			}
 
-			$this->fieldParserNames[$normalized] = $alias;
-			$this->columns[] = $alias;
-			$this->valueAliases[] = $alias;
+			$this->selections->add(
+				$this->query->field($normalized)->as($alias),
+				[SelectionReason::REQUIRED, SelectionReason::INTERNAL],
+			);
 			$aliases[] = $alias;
 		}
 
@@ -104,45 +75,38 @@ final class RootLoadBranch extends LoadBranch
 	}
 
 	/**
-	 * @return list<string>
-	 */
-	public function getColumns(): array
-	{
-		return $this->columns;
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	public function getValueAliases(): array
-	{
-		return $this->valueAliases;
-	}
-
-	/**
-	 * @return array<string, true>
-	 */
-	public function getPublicColumns(): array
-	{
-		return $this->publicColumns;
-	}
-
-	/**
 	 * @return non-empty-list<string>
 	 */
 	public function requirePrimaryKey(): array
 	{
-		/** @var non-empty-list<string> $identityAliases */
-		$identityAliases = parent::requirePrimaryKey();
-		$this->identityAliases = $identityAliases;
+		$identityAliases = $this->requireFields($this->getCollection()->getPrimaryKey());
+
+		foreach ($this->getCollection()->getPrimaryKey() as $fieldName) {
+			$selection = $this->findRootFieldSelection($this->getCollection()->getField($fieldName)->getName());
+
+			if (! $selection instanceof SelectionItem) {
+				continue;
+			}
+
+			$reasons = [SelectionReason::IDENTITY, SelectionReason::REQUIRED];
+
+			if (! $selection->hasReason(SelectionReason::PUBLIC)) {
+				$reasons[] = SelectionReason::INTERNAL;
+			}
+
+			$this->selections->add($selection->getExpression(), $reasons);
+		}
 
 		return $identityAliases;
 	}
 
 	public function createNode(): RootNode
 	{
-		$node = new RootNode($this->columns, $this->identityAliases);
-		$node->setValueAliases($this->valueAliases);
+		$columns = $this->selectionKeys($this->selections->getParserItems());
+		$identityAliases = $this->selectionKeys($this->selections->getIdentityItems());
+
+		$node = new RootNode($columns, $identityAliases);
+		$node->setValueAliases($columns);
 		$this->setNode($node);
 
 		return $node;
@@ -178,12 +142,13 @@ final class RootLoadBranch extends LoadBranch
 	public function buildOutputRecords(): array
 	{
 		$cleaned = [];
+		$publicColumns = array_fill_keys($this->selectionKeys($this->selections->getPublicItems()), true);
 
 		foreach ($this->getRootNode()->getResult() as $record) {
 			$item = [];
 
 			foreach ($record as $key => $value) {
-				if (isset($this->publicColumns[$key])) {
+				if (isset($publicColumns[$key])) {
 					$item[$key] = $value;
 				}
 			}
@@ -209,35 +174,18 @@ final class RootLoadBranch extends LoadBranch
 
 	public function registerPublicSelections(): void
 	{
-		$publicSelections = array_values(array_filter(
-			$this->query->getSelections()->getExplicit(),
-			fn ($selection): bool => ! $this->isInternalSelection($selection->getExpression()),
-		));
+		$publicSelections = $this->publicRootSelections();
 
 		if ($publicSelections === []) {
 			foreach ($this->query->getCollection()->getVisibleFields() as $fieldName) {
 				$this->query->select($this->query->field($fieldName));
 			}
 
-			$publicSelections = $this->query->getSelections()->getExplicit();
+			$publicSelections = $this->publicRootSelections();
 		}
 
 		foreach ($publicSelections as $selection) {
-			$expression = $selection->getExpression();
-			$alias = $expression instanceof AliasedExpression
-				? $expression->getAlias()
-				: implode('.', $expression->getPath());
-
-			$fieldExpression = $expression instanceof AliasedExpression
-				? $expression->getExpression()
-				: $expression;
-
-			$fieldName = null;
-			if ($fieldExpression instanceof FieldRef && $fieldExpression->getSource() === $this->query) {
-				$fieldName = $fieldExpression->getField()->getName();
-			}
-
-			$this->addPublicColumn($alias, $fieldName);
+			$this->selections->add($selection->getExpression(), SelectionReason::PUBLIC, $selection->isExplicit());
 		}
 	}
 
@@ -261,5 +209,55 @@ final class RootLoadBranch extends LoadBranch
 	{
 		return $expression instanceof AliasedExpression
 			&& str_starts_with($expression->getAlias(), '__on_data_');
+	}
+
+	/**
+	 * @return list<SelectionItem>
+	 */
+	private function publicRootSelections(): array
+	{
+		return array_values(array_filter(
+			$this->query->getSelections()->getExplicit(),
+			fn (SelectionItem $selection): bool => ! $this->isInternalSelection($selection->getExpression()),
+		));
+	}
+
+	private function findRootFieldSelection(string $fieldName): ?SelectionItem
+	{
+		foreach ($this->selections->getAll() as $selection) {
+			$fieldExpression = $selection->getExpression();
+
+			if ($fieldExpression instanceof AliasedExpression) {
+				$fieldExpression = $fieldExpression->getExpression();
+			}
+
+			if (
+				$fieldExpression instanceof FieldRef
+				&& $fieldExpression->getSource() === $this->query
+				&& $fieldExpression->getField()->getName() === $fieldName
+			) {
+				return $selection;
+			}
+		}
+
+		return null;
+	}
+
+	private function selectionKey(SelectionItem $selection): string
+	{
+		$expression = $selection->getExpression();
+
+		return $expression instanceof AliasedExpression
+			? $expression->getAlias()
+			: implode('.', $expression->getPath());
+	}
+
+	/**
+	 * @param list<SelectionItem> $selections
+	 * @return list<string>
+	 */
+	private function selectionKeys(array $selections): array
+	{
+		return array_map($this->selectionKey(...), $selections);
 	}
 }

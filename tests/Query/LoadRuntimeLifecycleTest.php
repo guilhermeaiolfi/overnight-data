@@ -16,6 +16,8 @@ use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\CollectionNode;
 use ON\Data\Query\Result\Parser\RootNode;
 use ON\Data\Query\Result\Parser\SingularNode;
+use ON\Data\Query\Selection\SelectionList;
+use ON\Data\Query\Selection\SelectionReason;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -184,6 +186,74 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		self::assertContains('name', LifecycleEvents::$plannedRootColumns);
 	}
 
+	public function testExplicitRootFieldRemainsPublicWhilePrimaryKeyStaysInternal(): void
+	{
+		$users = new SelectQuery($this->makeBasicRegistry(ExecutingLifecycleLoader::class)->getCollection('users'), new ExplicitRootSelectionExecutor());
+		$users->select($users->name, $users->posts);
+
+		self::assertSame([[
+			'name' => 'Ada',
+			'posts' => [
+				['id' => 10, 'userId' => 1, 'title' => 'Hello'],
+			],
+		]], $users->fetchAll());
+	}
+
+	public function testExplicitRootAliasedFieldIsPublicUnderItsAlias(): void
+	{
+		$users = new SelectQuery($this->makeBasicRegistry(ExecutingLifecycleLoader::class)->getCollection('users'), new AliasedRootSelectionExecutor());
+		$users->select($users->name->as('title'), $users->posts);
+
+		self::assertSame([[
+			'title' => 'Ada',
+			'posts' => [
+				['id' => 10, 'userId' => 1, 'title' => 'Hello'],
+			],
+		]], $users->fetchAll());
+	}
+
+	public function testDefaultVisibleRootFieldsRemainPublicWhenNoExplicitRootFieldsAreSelected(): void
+	{
+		$users = new SelectQuery($this->makeBasicRegistry(ExecutingLifecycleLoader::class)->getCollection('users'), new LifecycleExecutor());
+		$users->select($users->posts);
+
+		self::assertSame([[
+			'id' => 1,
+			'name' => 'Ada',
+			'posts' => [
+				['id' => 10, 'userId' => 1, 'title' => 'Hello'],
+			],
+		]], $users->fetchAll());
+	}
+
+	public function testInternalRootRequiredFieldsAreSelectedButDoNotLeakIntoPublicOutput(): void
+	{
+		$users = new SelectQuery($this->makeHiddenRootRequirementRegistry()->getCollection('users'), new HiddenRootRequirementExecutor());
+		$users->select($users->posts);
+		$runtime = $this->prepareRuntime($users);
+		$rootBranch = $this->readProperty($runtime, 'rootBranch');
+		$columns = $this->readProperty($rootBranch->getNode(), 'columns');
+
+		self::assertContains('__on_data_root_required_secret_0', $columns);
+		self::assertSame([[
+			'id' => 1,
+			'name' => 'Ada',
+			'posts' => [],
+		]], $users->fetchAll());
+	}
+
+	public function testRootFieldRequirementsReuseAnExistingPublicAlias(): void
+	{
+		$users = new SelectQuery($this->makeRootRequirementRegistry()->getCollection('users'), new AliasedRootSelectionExecutor());
+		$users->select($users->name->as('title'), $users->posts);
+		$runtime = $this->prepareRuntime($users);
+		$rootBranch = $this->readProperty($runtime, 'rootBranch');
+		$columns = $this->readProperty($rootBranch->getNode(), 'columns');
+
+		self::assertSame(['title', '__on_data_root_required_id_0'], $columns);
+		self::assertSame(['title'], LifecycleEvents::$plannedRootColumns);
+	}
+
 	public function testJoinedAndLinkedAttachmentModesAreRecordedDuringLoadAndAppliedDuringRegistration(): void
 	{
 		$users = new SelectQuery($this->makeMixedAttachmentRegistry()->getCollection('users'), new MixedAttachmentExecutor());
@@ -312,6 +382,25 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$posts = $registry->collection('posts');
 		$posts->field('id', 'int');
 		$posts->field('userId', 'int');
+		$posts->field('title', 'string');
+		$posts->primaryKey('id');
+
+		return $registry;
+	}
+
+	private function makeHiddenRootRequirementRegistry(): Registry
+	{
+		$registry = new Registry();
+
+		$users = $registry->collection('users');
+		$users->field('id', 'int');
+		$users->field('name', 'string');
+		$users->field('secret', 'string')->hidden(true)->end();
+		$users->primaryKey('id');
+		$users->hasMany('posts', 'posts')->innerKey('secret')->outerKey('title')->loader(HiddenRootFieldRequirementLoader::class)->end();
+
+		$posts = $registry->collection('posts');
+		$posts->field('id', 'int');
 		$posts->field('title', 'string');
 		$posts->primaryKey('id');
 
@@ -447,11 +536,49 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$users->select($users->tenantId, $users->name, $users->badges->fields('label'));
 		$runtime = $this->prepareRuntime($users);
 		$rootBranch = $this->readProperty($runtime, 'rootBranch');
-		$identityAliases = $this->readProperty($rootBranch, 'identityAliases');
+		$selections = $this->readProperty($rootBranch, 'selections');
+		$identityAliases = array_map(
+			static fn (object $selection): string => $selection->getExpression() instanceof \ON\Data\Query\Expression\AliasedExpression
+				? $selection->getExpression()->getAlias()
+				: implode('.', $selection->getExpression()->getPath()),
+			$selections->getIdentityItems(),
+		);
 		$rootIdentityFields = $this->readProperty($rootBranch->getRootNode(), 'identityFields');
 
 		self::assertCount(2, $identityAliases);
 		self::assertSame($identityAliases, $rootIdentityFields);
+	}
+
+	public function testRootPrimaryKeySelectionsAreTrackedAsIdentityItems(): void
+	{
+		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
+		$users->select($users->posts);
+		$runtime = $this->prepareRuntime($users);
+		$rootBranch = $this->readProperty($runtime, 'rootBranch');
+		$selections = $this->readProperty($rootBranch, 'selections');
+
+		self::assertInstanceOf(SelectionList::class, $selections);
+		self::assertSame(['id'], array_map(
+			static fn (object $selection): string => $selection->getExpression() instanceof \ON\Data\Query\Expression\AliasedExpression
+				? $selection->getExpression()->getAlias()
+				: implode('.', $selection->getExpression()->getPath()),
+			$selections->getIdentityItems(),
+		));
+		self::assertTrue($selections->getIdentityItems()[0]->hasReason(SelectionReason::REQUIRED));
+	}
+
+	public function testInternalExplicitRootSelectionsDoNotBecomePublicOutput(): void
+	{
+		$users = new SelectQuery($this->makeBasicRegistry(ExecutingLifecycleLoader::class)->getCollection('users'), new InternalExplicitRootExecutor());
+		$users->select($users->name->as('__on_data_manual_name'), $users->posts);
+
+		self::assertSame([[
+			'id' => 1,
+			'name' => 'Ada',
+			'posts' => [
+				['id' => 10, 'userId' => 1, 'title' => 'Hello'],
+			],
+		]], $users->fetchAll());
 	}
 
 	private function readProperty(object $object, string $name): mixed
@@ -511,6 +638,108 @@ final class LifecycleExecutor implements QueryExecutorInterface
 	{
 		return match ($query->getCollection()->getName()) {
 			'users' => [['id' => 1, 'name' => 'Ada']],
+			'posts' => [['id' => 10, 'userId' => 1, 'title' => 'Hello']],
+			default => [],
+		};
+	}
+
+	public function fetchOne(SelectQuery $query): ?array
+	{
+		return null;
+	}
+
+	public function iterate(SelectQuery $query): iterable
+	{
+		return [];
+	}
+}
+
+final class ExplicitRootSelectionExecutor implements QueryExecutorInterface
+{
+	public function fetchAll(SelectQuery $query): array
+	{
+		return match ($query->getCollection()->getName()) {
+			'users' => [[
+				'name' => 'Ada',
+				'__on_data_root_required_id_0' => 1,
+			]],
+			'posts' => [['id' => 10, 'userId' => 1, 'title' => 'Hello']],
+			default => [],
+		};
+	}
+
+	public function fetchOne(SelectQuery $query): ?array
+	{
+		return null;
+	}
+
+	public function iterate(SelectQuery $query): iterable
+	{
+		return [];
+	}
+}
+
+final class AliasedRootSelectionExecutor implements QueryExecutorInterface
+{
+	public function fetchAll(SelectQuery $query): array
+	{
+		return match ($query->getCollection()->getName()) {
+			'users' => [[
+				'title' => 'Ada',
+				'__on_data_root_required_id_0' => 1,
+			]],
+			'posts' => [['id' => 10, 'userId' => 1, 'title' => 'Hello']],
+			default => [],
+		};
+	}
+
+	public function fetchOne(SelectQuery $query): ?array
+	{
+		return null;
+	}
+
+	public function iterate(SelectQuery $query): iterable
+	{
+		return [];
+	}
+}
+
+final class HiddenRootRequirementExecutor implements QueryExecutorInterface
+{
+	public function fetchAll(SelectQuery $query): array
+	{
+		return match ($query->getCollection()->getName()) {
+			'users' => [[
+				'id' => 1,
+				'name' => 'Ada',
+				'__on_data_root_required_secret_0' => 'shh',
+			]],
+			'posts' => [],
+			default => [],
+		};
+	}
+
+	public function fetchOne(SelectQuery $query): ?array
+	{
+		return null;
+	}
+
+	public function iterate(SelectQuery $query): iterable
+	{
+		return [];
+	}
+}
+
+final class InternalExplicitRootExecutor implements QueryExecutorInterface
+{
+	public function fetchAll(SelectQuery $query): array
+	{
+		return match ($query->getCollection()->getName()) {
+			'users' => [[
+				'id' => 1,
+				'name' => 'Ada',
+				'__on_data_manual_name' => 'Ada',
+			]],
 			'posts' => [['id' => 10, 'userId' => 1, 'title' => 'Hello']],
 			default => [],
 		};
@@ -738,6 +967,20 @@ final class LifecycleRecordingLoader extends LifecycleTestLoader
 	}
 }
 
+final class ExecutingLifecycleLoader extends LifecycleTestLoader
+{
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
+	{
+		$this->prepareSeparateQuery($branch, $runtime);
+		$runtime->continueWith($branch, 'loadData');
+	}
+
+	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
+	{
+		$runtime->execute($branch, $branch->getQuery());
+	}
+}
+
 final class RepeatLoadLifecycleLoader extends LifecycleTestLoader
 {
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
@@ -845,6 +1088,15 @@ final class RootFieldRequirementLoader extends LifecycleTestLoader
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 		LifecycleEvents::$plannedRootColumns = $branch->getParent()->requireFields(['name']);
+		$this->prepareSeparateQuery($branch, $runtime);
+	}
+}
+
+final class HiddenRootFieldRequirementLoader extends LifecycleTestLoader
+{
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
+	{
+		LifecycleEvents::$plannedRootColumns = $branch->getParent()->requireFields(['secret']);
 		$this->prepareSeparateQuery($branch, $runtime);
 	}
 }

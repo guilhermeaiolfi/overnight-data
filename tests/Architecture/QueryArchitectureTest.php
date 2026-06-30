@@ -254,6 +254,27 @@ final class QueryArchitectureTest extends TestCase
 		self::assertTrue(method_exists(RootLoadBranch::class, 'createNode'));
 	}
 
+	public function testRootLoadBranchUsesSelectionListInsteadOfLegacyParallelArrays(): void
+	{
+		$reflection = new \ReflectionClass(RootLoadBranch::class);
+		$contents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/RootLoadBranch.php');
+
+		self::assertTrue($reflection->hasProperty('selections'));
+
+		foreach (['columns', 'valueAliases', 'publicColumns', 'fieldParserNames', 'identityAliases'] as $property) {
+			self::assertFalse($reflection->hasProperty($property), $property);
+		}
+
+		self::assertStringContainsString('SelectionList', $contents);
+	}
+
+	public function testRootLoadBranchDoesNotExposeLegacyRootSelectionApis(): void
+	{
+		foreach (['addPublicColumn', 'getColumns', 'getValueAliases', 'getPublicColumns', 'asParserKey', 'asRowAlias'] as $method) {
+			self::assertFalse(method_exists(RootLoadBranch::class, $method), $method);
+		}
+	}
+
 	public function testRuntimeAndBuiltInLoadersDoNotContainCollectFieldsLifecycle(): void
 	{
 		foreach ([
