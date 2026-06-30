@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
+use Closure;
 use LogicException;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Query\Result\Parser\RootNode;
 
 final class LoadBranch
 {
@@ -51,25 +53,89 @@ final class LoadBranch
 	private ?string $publicPayloadChild = null;
 
 	/**
+	 * @var list<self>
+	 */
+	private array $children = [];
+
+	private readonly ?RelationSelection $selection;
+
+	private readonly ?self $parent;
+
+	private readonly ?LoaderInterface $loader;
+
+	/**
+	 * @var list<string>
+	 */
+	private array $rootColumns = [];
+
+	/**
+	 * @var list<string>
+	 */
+	private array $rootValueAliases = [];
+
+	/**
+	 * @var array<string, true>
+	 */
+	private array $rootPublicColumns = [];
+
+	/**
+	 * @var array<string, string>
+	 */
+	private array $rootFieldParserNames = [];
+
+	private ?Closure $rootFieldResolver = null;
+
+	/**
 	 * @param list<string> $publicFields
 	 */
-	public function __construct(
-		private readonly RelationSelection $selection,
-		private readonly ?self $parent,
-		private readonly LoaderInterface $loader,
+	private function __construct(
+		?RelationSelection $selection,
+		?self $parent,
+		?LoaderInterface $loader,
 		array $publicFields,
 	) {
+		$this->selection = $selection;
+		$this->parent = $parent;
+		$this->loader = $loader;
 		$this->addPublicFields($publicFields);
+	}
+
+	public static function root(SelectQuery $query): self
+	{
+		$branch = new self(null, null, null, []);
+		$branch->setQueryContext($query, $query, null);
+
+		return $branch;
+	}
+
+	/**
+	 * @param list<string> $publicFields
+	 */
+	public static function relation(
+		RelationSelection $selection,
+		self $parent,
+		LoaderInterface $loader,
+		array $publicFields,
+	): self {
+		$branch = new self($selection, $parent, $loader, $publicFields);
+		$parent->addChild($branch);
+
+		return $branch;
+	}
+
+	public function isRoot(): bool
+	{
+		return $this->selection === null;
 	}
 
 	public function getSelection(): RelationSelection
 	{
-		return $this->selection;
+		return $this->selection ?? throw new LogicException('Root load branch does not have a relation selection.');
 	}
 
 	public function getRelation(): RelationRef
 	{
-		return $this->selection->getRelation();
+		return $this->getSelection()->getRelation();
 	}
 
 	public function getParent(): ?self
@@ -79,11 +145,29 @@ final class LoadBranch
 
 	public function getLoader(): LoaderInterface
 	{
-		return $this->loader;
+		return $this->loader ?? throw new LogicException('Root load branch does not have a relation loader.');
 	}
 
 	public function requireFields(array $fieldNames): array
 	{
+		if ($fieldNames === []) {
+			return [];
+		}
+
+		if ($this->isRoot()) {
+			$resolver = $this->rootFieldResolver ?? throw new LogicException('Root load branch field resolver is not configured.');
+			$collection = $this->getQuery()->getCollection();
+			$normalized = array_map(
+				static fn (string $fieldName): string => $collection->getField($fieldName)->getName(),
+				$fieldNames,
+			);
+
+			return array_map(
+				static fn (string $fieldName): string => $resolver($fieldName),
+				$normalized,
+			);
+		}
+
 		$added = [];
 
 		foreach ($fieldNames as $fieldName) {
@@ -145,6 +229,17 @@ final class LoadBranch
 		return $this->node ?? throw new LogicException('Load branch parser node is not registered.');
 	}
 
+	public function getRootNode(): RootNode
+	{
+		$node = $this->getNode();
+
+		if (! $node instanceof RootNode) {
+			throw new LogicException('Load branch parser node is not a root node.');
+		}
+
+		return $node;
+	}
+
 	public function setPublicNode(AbstractNode $node): void
 	{
 		$this->publicNode = $node;
@@ -158,6 +253,19 @@ final class LoadBranch
 	public function hasNode(): bool
 	{
 		return $this->node !== null;
+	}
+
+	public function addChild(self $child): void
+	{
+		$this->children[] = $child;
+	}
+
+	/**
+	 * @return list<self>
+	 */
+	public function getChildren(): array
+	{
+		return $this->children;
 	}
 
 	/**
@@ -186,6 +294,63 @@ final class LoadBranch
 	public function getQueryLocalRelation(): ?RelationRef
 	{
 		return $this->queryLocalRelation;
+	}
+
+	public function setRootFieldResolver(Closure $resolver): void
+	{
+		$this->rootFieldResolver = $resolver;
+	}
+
+	public function addRootPublicColumn(string $alias, ?string $fieldName = null): void
+	{
+		$this->rootColumns[] = $alias;
+		$this->rootValueAliases[] = $alias;
+		$this->rootPublicColumns[$alias] = true;
+
+		if ($fieldName !== null) {
+			$this->rootFieldParserNames[$fieldName] = $alias;
+		}
+	}
+
+	public function hasRootFieldParserName(string $fieldName): bool
+	{
+		return isset($this->rootFieldParserNames[$fieldName]);
+	}
+
+	public function getRootFieldParserName(string $fieldName): ?string
+	{
+		return $this->rootFieldParserNames[$fieldName] ?? null;
+	}
+
+	public function setRootFieldParserName(string $fieldName, string $alias): void
+	{
+		$this->rootFieldParserNames[$fieldName] = $alias;
+		$this->rootColumns[] = $alias;
+		$this->rootValueAliases[] = $alias;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	public function getRootColumns(): array
+	{
+		return $this->rootColumns;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	public function getRootValueAliases(): array
+	{
+		return $this->rootValueAliases;
+	}
+
+	/**
+	 * @return array<string, true>
+	 */
+	public function getRootPublicColumns(): array
+	{
+		return $this->rootPublicColumns;
 	}
 
 	public function setPublicPayloadChild(?string $container): void

@@ -120,6 +120,20 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		self::assertSame(['title', 'id', 'userId'], $branch->getNodeColumns());
 	}
 
+	public function testTopLevelRelationBranchesUseTheRootBranchAsParent(): void
+	{
+		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
+		$users->select($users->posts);
+		$runtime = $this->buildPlan($users);
+		$branches = $this->readProperty($runtime, 'branches');
+		$rootBranch = $this->readProperty($runtime, 'rootBranch');
+		$branch = array_values($branches)[0];
+
+		self::assertSame($rootBranch, $branch->getParent());
+		self::assertTrue($rootBranch->isRoot());
+		self::assertSame([$branch], $rootBranch->getChildren());
+	}
+
 	public function testCompositePrimaryKeyDeduplicationStillWorksWhenPublicKeyFieldsAreOmitted(): void
 	{
 		$employees = new SelectQuery($this->makeCompositeDedupRegistry()->getCollection('employees'), new CompositeDedupExecutor());
@@ -148,7 +162,8 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$users = new SelectQuery($this->makeRootRequirementRegistry()->getCollection('users'), new LifecycleExecutor());
 		$users->select($users->name, $users->posts);
 		$runtime = $this->buildPlan($users);
-		$rootNode = $this->readProperty($runtime, 'rootNode');
+		$rootBranch = $this->readProperty($runtime, 'rootBranch');
+		$rootNode = $rootBranch->getNode();
 		$columns = $this->readProperty($rootNode, 'columns');
 
 		self::assertContains('name', $columns);
@@ -160,7 +175,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$users = new SelectQuery($this->makeMixedAttachmentRegistry()->getCollection('users'), new MixedAttachmentExecutor());
 		$users->select($users->profile, $users->posts);
 		$runtime = $this->buildPlan($users);
-		$rootNode = $this->readProperty($runtime, 'rootNode');
+		$rootNode = $this->readProperty($runtime, 'rootBranch')->getNode();
 		$profileNode = $rootNode->getNode('profile');
 		$postsNode = $rootNode->getNode('posts');
 
@@ -177,7 +192,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$users = new SelectQuery($this->makeNestedAttachmentRegistry()->getCollection('users'), new NestedAttachmentExecutor());
 		$users->select($users->posts->author, $users->posts->comments);
 		$runtime = $this->buildPlan($users);
-		$rootNode = $this->readProperty($runtime, 'rootNode');
+		$rootNode = $this->readProperty($runtime, 'rootBranch')->getNode();
 		$postsNode = $rootNode->getNode('posts');
 		$authorNode = $postsNode->getNode('author');
 		$commentsNode = $postsNode->getNode('comments');
