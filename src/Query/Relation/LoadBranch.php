@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation;
 
 use LogicException;
+use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
@@ -42,6 +43,22 @@ abstract class LoadBranch
 	public function hasNode(): bool
 	{
 		return $this->node !== null;
+	}
+
+	abstract public function getCollection(): CollectionInterface;
+
+	/**
+	 * @param list<string> $fieldNames
+	 * @return list<string>
+	 */
+	abstract public function requireFields(array $fieldNames): array;
+
+	/**
+	 * @return non-empty-list<string>
+	 */
+	public function requirePrimaryKey(): array
+	{
+		return $this->requireFields($this->getCollection()->getPrimaryKey());
 	}
 
 	public function setPublicNode(AbstractNode $node): void

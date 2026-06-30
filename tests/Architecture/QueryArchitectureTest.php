@@ -183,14 +183,25 @@ final class QueryArchitectureTest extends TestCase
 
 	public function testRuntimeDoesNotExposeLoaderBranchIdentityApis(): void
 	{
+		self::assertFalse(method_exists(LoadRuntime::class, 'rootIdentityFields'));
+		self::assertFalse(method_exists(LoadRuntime::class, 'rootPrimaryKeyFields'));
+		self::assertFalse(method_exists(LoadRuntime::class, 'buildPlan'));
+		self::assertFalse(method_exists(LoadRuntime::class, 'nextPass'));
 		self::assertFalse(method_exists(LoadRuntime::class, 'getCurrentBranch'));
 		self::assertFalse(method_exists(LoadRuntime::class, 'requireParentBranch'));
+		self::assertTrue(method_exists(LoadRuntime::class, 'continueWith'));
 	}
 
 	public function testRelationRefExposesDefinitionNaming(): void
 	{
 		self::assertSame('ON\Data\Definition\Relation\RelationInterface', $this->methodReturnType('ON\Data\Query\Relation\RelationRef', 'getDefinition'));
 		self::assertFalse(method_exists('ON\Data\Query\Relation\RelationRef', 'getRelation'));
+	}
+
+	public function testRootBranchOwnsPrimaryKeyRequirementHelpers(): void
+	{
+		self::assertTrue(method_exists(LoadBranch::class, 'requirePrimaryKey'));
+		self::assertTrue(method_exists(RootLoadBranch::class, 'createNode'));
 	}
 
 	public function testRuntimeAndBuiltInLoadersDoNotContainCollectFieldsLifecycle(): void

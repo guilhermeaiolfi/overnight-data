@@ -48,7 +48,7 @@ final class M2MLoader extends AbstractLoader
 		]));
 
 		$targetNode = new SingularNode(
-			$runtime->getNodeColumns(),
+			$runtime->getParserFields(),
 			$targetIdentity,
 			$targetOuterKeyColumns,
 			$throughOuterKeys,
@@ -110,7 +110,7 @@ final class M2MLoader extends AbstractLoader
 
 		$runtime->setJoinedAttachment(false);
 		$runtime->setQueryContext($query, $query);
-		$runtime->nextPass('loadData');
+		$runtime->continueWith('loadData');
 	}
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void

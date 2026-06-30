@@ -27,7 +27,7 @@ final class HasOneLoader extends AbstractLoader
 		$parent = $parentBranch->requireFields($definition->getInnerKeys());
 
 		return new SingularNode(
-			$runtime->getNodeColumns(),
+			$runtime->getParserFields(),
 			$identity,
 			$child,
 			$parent,

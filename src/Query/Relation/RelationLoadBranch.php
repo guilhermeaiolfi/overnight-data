@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
+use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\SelectQuery;
 
@@ -12,7 +13,7 @@ final class RelationLoadBranch extends LoadBranch
 	/**
 	 * @var array<string, true>
 	 */
-	private array $fieldMap = [];
+	private array $parserFieldMap = [];
 
 	/**
 	 * @var array<string, true>
@@ -22,16 +23,16 @@ final class RelationLoadBranch extends LoadBranch
 	/**
 	 * @var list<string>
 	 */
-	private array $fieldOrder = [];
+	private array $parserFields = [];
 
 	/**
 	 * @var list<string>
 	 */
 	private array $publicFieldOrder = [];
 
-	private ?string $scheduledMethod = null;
+	private ?string $continuationMethod = null;
 
-	private ?SelectQuery $scheduledBoundaryQuery = null;
+	private ?SelectQuery $continuationQuery = null;
 
 	private ?bool $joinedAttachment = null;
 
@@ -68,6 +69,11 @@ final class RelationLoadBranch extends LoadBranch
 		return $this->loader;
 	}
 
+	public function getCollection(): CollectionInterface
+	{
+		return $this->getRelationRef()->getCollection();
+	}
+
 	/**
 	 * @param list<string> $fieldNames
 	 * @return list<string>
@@ -77,14 +83,14 @@ final class RelationLoadBranch extends LoadBranch
 		$added = [];
 
 		foreach ($fieldNames as $fieldName) {
-			if (isset($this->fieldMap[$fieldName])) {
+			if (isset($this->parserFieldMap[$fieldName])) {
 				$added[] = $fieldName;
 
 				continue;
 			}
 
-			$this->fieldMap[$fieldName] = true;
-			$this->fieldOrder[] = $fieldName;
+			$this->parserFieldMap[$fieldName] = true;
+			$this->parserFields[] = $fieldName;
 			$added[] = $fieldName;
 		}
 
@@ -116,9 +122,9 @@ final class RelationLoadBranch extends LoadBranch
 	/**
 	 * @return list<string>
 	 */
-	public function getNodeColumns(): array
+	public function getParserFields(): array
 	{
-		return $this->fieldOrder;
+		return $this->parserFields;
 	}
 
 	/**
@@ -131,24 +137,24 @@ final class RelationLoadBranch extends LoadBranch
 
 	public function schedule(string $method, SelectQuery $boundaryQuery): void
 	{
-		$this->scheduledMethod = $method;
-		$this->scheduledBoundaryQuery = $boundaryQuery;
+		$this->continuationMethod = $method;
+		$this->continuationQuery = $boundaryQuery;
 	}
 
 	public function clearSchedule(): void
 	{
-		$this->scheduledMethod = null;
-		$this->scheduledBoundaryQuery = null;
+		$this->continuationMethod = null;
+		$this->continuationQuery = null;
 	}
 
-	public function getScheduledMethod(): ?string
+	public function getContinuationMethod(): ?string
 	{
-		return $this->scheduledMethod;
+		return $this->continuationMethod;
 	}
 
-	public function getScheduledBoundaryQuery(): ?SelectQuery
+	public function getContinuationQuery(): ?SelectQuery
 	{
-		return $this->scheduledBoundaryQuery;
+		return $this->continuationQuery;
 	}
 
 	public function setJoinedAttachment(bool $joined): void

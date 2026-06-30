@@ -998,7 +998,7 @@ final class QueryModelTest extends TestCase
 		);
 
 		$this->expectException(LoadRuntimeException::class);
-		$runtime->getNodeColumns();
+		$runtime->getParserFields();
 	}
 
 	public function testBuiltInLoaderDefaultsMatchStructuredLoadingStrategies(): void

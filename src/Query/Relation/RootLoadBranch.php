@@ -6,6 +6,7 @@ namespace ON\Data\Query\Relation;
 
 use Closure;
 use LogicException;
+use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Result\Parser\RootNode;
@@ -33,6 +34,11 @@ final class RootLoadBranch extends LoadBranch
 	 */
 	private array $fieldParserNames = [];
 
+	/**
+	 * @var list<string>
+	 */
+	private array $identityAliases = [];
+
 	public function __construct(
 		private readonly SelectQuery $query,
 		private readonly Closure $allocateAlias,
@@ -49,6 +55,11 @@ final class RootLoadBranch extends LoadBranch
 		if ($fieldName !== null) {
 			$this->fieldParserNames[$fieldName] = $alias;
 		}
+	}
+
+	public function getCollection(): CollectionInterface
+	{
+		return $this->query->getCollection();
 	}
 
 	/**
@@ -117,11 +128,20 @@ final class RootLoadBranch extends LoadBranch
 	}
 
 	/**
-	 * @param list<string> $identityFields
+	 * @return non-empty-list<string>
 	 */
-	public function createNode(array $identityFields): RootNode
+	public function requirePrimaryKey(): array
 	{
-		$node = new RootNode($this->columns, $identityFields);
+		/** @var non-empty-list<string> $identityAliases */
+		$identityAliases = parent::requirePrimaryKey();
+		$this->identityAliases = $identityAliases;
+
+		return $identityAliases;
+	}
+
+	public function createNode(): RootNode
+	{
+		$node = new RootNode($this->columns, $this->identityAliases);
 		$node->setValueAliases($this->valueAliases);
 		$this->setNode($node);
 

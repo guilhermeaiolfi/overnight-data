@@ -25,18 +25,18 @@ final class LoadRuntime
 
 	private bool $registering = false;
 
-	private bool $scheduledInInvocation = false;
+	private bool $continuationRequested = false;
 
-	private ?SelectQuery $schedulingBoundaryQuery = null;
+	private ?SelectQuery $currentContinuationQuery = null;
 
 	/**
 	 * @var array<int, SelectQuery>
 	 */
-	private array $pendingBoundaryQueries = [];
+	private array $pendingContinuationQueries = [];
 
 	private int $loaderInvocationDepth = 0;
 
-	private bool $flushingPendingBoundaries = false;
+	private bool $flushingPendingContinuations = false;
 
 	private int $aliasCounter = 0;
 
@@ -54,16 +54,16 @@ final class LoadRuntime
 
 	public function fetchAll(): array
 	{
-		$this->buildPlan();
+		$this->prepare();
 		$this->rootBranch->parseRows($this->executor->fetchAll($this->rootQuery));
-		$this->completeBoundary($this->rootQuery);
+		$this->runContinuationsFor($this->rootQuery);
 
 		return $this->rootBranch->buildOutputRecords();
 	}
 
 	public function fetchOne(): ?array
 	{
-		$this->buildPlan();
+		$this->prepare();
 		$row = $this->executor->fetchOne($this->rootQuery);
 
 		if ($row === null) {
@@ -71,7 +71,7 @@ final class LoadRuntime
 		}
 
 		$this->rootBranch->parseRows([$row]);
-		$this->completeBoundary($this->rootQuery);
+		$this->runContinuationsFor($this->rootQuery);
 
 		return $this->rootBranch->buildOutputRecords()[0] ?? null;
 	}
@@ -79,9 +79,9 @@ final class LoadRuntime
 	/**
 	 * @return list<string>
 	 */
-	public function getNodeColumns(): array
+	public function getParserFields(): array
 	{
-		return $this->requireActiveBranch()->getNodeColumns();
+		return $this->requireActiveBranch()->getParserFields();
 	}
 
 	public function getNode(): AbstractNode
@@ -144,22 +144,22 @@ final class LoadRuntime
 		return $this->requireActiveBranch()->getNode()->getReferenceValues();
 	}
 
-	public function nextPass(string $method = 'load'): void
+	public function continueWith(string $method = 'load'): void
 	{
 		if ($this->registering) {
 			throw LoadRuntimeException::nextPassNotAllowedDuringRegister($this->requireActiveBranch()->getRelationRef());
 		}
 
-		if ($this->scheduledInInvocation) {
+		if ($this->continuationRequested) {
 			throw LoadRuntimeException::multipleNextPasses($this->requireActiveBranch()->getRelationRef(), $this->activeMethod ?? 'load');
 		}
 
 		$this->assertSchedulableMethod($method);
 		$this->requireActiveBranch()->schedule(
 			$method,
-			$this->schedulingBoundaryQuery ?? throw LoadRuntimeException::scheduleBoundaryMissing($this->requireActiveBranch()->getRelationRef()),
+			$this->currentContinuationQuery ?? throw LoadRuntimeException::scheduleBoundaryMissing($this->requireActiveBranch()->getRelationRef()),
 		);
-		$this->scheduledInInvocation = true;
+		$this->continuationRequested = true;
 	}
 
 	public function execute(SelectQuery $query): void
@@ -173,8 +173,8 @@ final class LoadRuntime
 			}
 		}
 
-		$this->schedulingBoundaryQuery = $query;
-		$this->pendingBoundaryQueries[spl_object_id($query)] = $query;
+		$this->currentContinuationQuery = $query;
+		$this->pendingContinuationQueries[spl_object_id($query)] = $query;
 	}
 
 	public function getLoadStrategy(LoadStrategy $default): LoadStrategy
@@ -199,26 +199,26 @@ final class LoadRuntime
 		return $this->requireActiveBranch()->getChildren();
 	}
 
-	private function buildPlan(): void
+	private function prepare(): void
 	{
 		if ($this->rootBranch->hasNode()) {
 			return;
 		}
 
-		$this->planRootSelections();
-		$this->buildBranchSkeletons();
-		$this->loadBranches();
-		$this->registerParserTree();
-		$this->finalizeBranchSelections();
+		$this->prepareRootBranch();
+		$this->createBranches();
+		$this->configureBranches();
+		$this->createParserTree();
+		$this->selectBranchFields();
 	}
 
-	private function planRootSelections(): void
+	private function prepareRootBranch(): void
 	{
 		$this->rootBranch->registerPublicSelections();
-		$this->rootBranch->requireFields($this->rootPrimaryKeyFields());
+		$this->rootBranch->requirePrimaryKey();
 	}
 
-	private function buildBranchSkeletons(): void
+	private function createBranches(): void
 	{
 		foreach ($this->rootQuery->getRelationSelections()->getAll() as $selection) {
 			$key = $this->branchKey($selection->getPath());
@@ -230,7 +230,7 @@ final class LoadRuntime
 		}
 	}
 
-	private function loadBranches(): void
+	private function configureBranches(): void
 	{
 		$branches = array_values($this->branches);
 		usort($branches, static fn (RelationLoadBranch $left, RelationLoadBranch $right): int => count($left->getRelationRef()->getPath()) <=> count($right->getRelationRef()->getPath()));
@@ -245,9 +245,9 @@ final class LoadRuntime
 		}
 	}
 
-	private function registerParserTree(): void
+	private function createParserTree(): void
 	{
-		$rootNode = $this->rootBranch->createNode($this->rootIdentityFields());
+		$rootNode = $this->rootBranch->createNode();
 
 		foreach ($this->rootBranch->getChildren() as $branch) {
 			$this->registerBranch($branch);
@@ -266,7 +266,7 @@ final class LoadRuntime
 		}
 	}
 
-	private function finalizeBranchSelections(): void
+	private function selectBranchFields(): void
 	{
 		$branches = array_values($this->branches);
 		usort($branches, static fn (RelationLoadBranch $left, RelationLoadBranch $right): int => count($left->getRelationRef()->getPath()) <=> count($right->getRelationRef()->getPath()));
@@ -274,7 +274,7 @@ final class LoadRuntime
 		foreach ($branches as $branch) {
 			$aliases = [];
 
-			foreach ($branch->getNodeColumns() as $fieldName) {
+			foreach ($branch->getParserFields() as $fieldName) {
 				$aliases[] = $this->ensureBranchFieldSelection(
 					$branch->getQuery(),
 					$branch->getSource(),
@@ -318,12 +318,12 @@ final class LoadRuntime
 		$loader = $branch->getLoader();
 		$previousBranch = $this->activeBranch;
 		$previousMethod = $this->activeMethod;
-		$previousScheduledInInvocation = $this->scheduledInInvocation;
-		$previousSchedulingBoundaryQuery = $this->schedulingBoundaryQuery;
+		$previousContinuationRequested = $this->continuationRequested;
+		$previousCurrentContinuationQuery = $this->currentContinuationQuery;
 		$this->activeBranch = $branch;
 		$this->activeMethod = $method;
-		$this->scheduledInInvocation = false;
-		$this->schedulingBoundaryQuery = $boundaryQuery;
+		$this->continuationRequested = false;
+		$this->currentContinuationQuery = $boundaryQuery;
 		$this->loaderInvocationDepth++;
 		$branch->clearSchedule();
 
@@ -333,26 +333,26 @@ final class LoadRuntime
 			$this->loaderInvocationDepth--;
 			$this->activeBranch = $previousBranch;
 			$this->activeMethod = $previousMethod;
-			$this->scheduledInInvocation = $previousScheduledInInvocation;
-			$this->schedulingBoundaryQuery = $previousSchedulingBoundaryQuery;
+			$this->continuationRequested = $previousContinuationRequested;
+			$this->currentContinuationQuery = $previousCurrentContinuationQuery;
 		}
 
 		if ($this->loaderInvocationDepth === 0) {
-			$this->flushPendingBoundaries();
+			$this->runPendingContinuations();
 		}
 	}
 
-	private function completeBoundary(SelectQuery $query): void
+	private function runContinuationsFor(SelectQuery $query): void
 	{
 		do {
 			$ran = false;
 
 			foreach ($this->branches as $branch) {
-				if ($branch->getScheduledBoundaryQuery() !== $query) {
+				if ($branch->getContinuationQuery() !== $query) {
 					continue;
 				}
 
-				$method = $branch->getScheduledMethod();
+				$method = $branch->getContinuationMethod();
 
 				if ($method === null) {
 					continue;
@@ -365,33 +365,33 @@ final class LoadRuntime
 		} while ($ran);
 	}
 
-	private function flushPendingBoundaries(): void
+	private function runPendingContinuations(): void
 	{
-		if ($this->flushingPendingBoundaries) {
+		if ($this->flushingPendingContinuations) {
 			return;
 		}
 
-		$this->flushingPendingBoundaries = true;
+		$this->flushingPendingContinuations = true;
 
 		try {
-			while ($this->pendingBoundaryQueries !== []) {
-				$key = array_key_first($this->pendingBoundaryQueries);
+			while ($this->pendingContinuationQueries !== []) {
+				$key = array_key_first($this->pendingContinuationQueries);
 
 				if ($key === null) {
 					break;
 				}
 
-				$query = $this->pendingBoundaryQueries[$key];
-				unset($this->pendingBoundaryQueries[$key]);
+				$query = $this->pendingContinuationQueries[$key];
+				unset($this->pendingContinuationQueries[$key]);
 
 				if (! $query instanceof SelectQuery) {
 					continue;
 				}
 
-				$this->completeBoundary($query);
+				$this->runContinuationsFor($query);
 			}
 		} finally {
-			$this->flushingPendingBoundaries = false;
+			$this->flushingPendingContinuations = false;
 		}
 	}
 
@@ -425,34 +425,6 @@ final class LoadRuntime
 		}
 
 		return $selection->getRelationRef()->getCollection()->getVisibleFields();
-	}
-
-	/**
-	 * @param non-empty-list<string> $fieldNames
-	 * @return non-empty-list<string>
-	 */
-	private function normalizeFieldNames(CollectionInterface $collection, array $fieldNames): array
-	{
-		return array_map(
-			static fn (string $fieldName): string => $collection->getField($fieldName)->getName(),
-			$fieldNames,
-		);
-	}
-
-	/**
-	 * @return non-empty-list<string>
-	 */
-	private function rootIdentityFields(): array
-	{
-		return $this->rootBranch->requireFields($this->rootPrimaryKeyFields());
-	}
-
-	/**
-	 * @return non-empty-list<string>
-	 */
-	private function rootPrimaryKeyFields(): array
-	{
-		return $this->normalizeFieldNames($this->rootQuery->getCollection(), $this->rootQuery->getCollection()->getPrimaryKey());
 	}
 
 	private function requireActiveBranch(): RelationLoadBranch

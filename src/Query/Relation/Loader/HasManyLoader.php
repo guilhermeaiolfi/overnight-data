@@ -23,7 +23,7 @@ final class HasManyLoader extends AbstractLoader
 		$parent = $parentBranch->requireFields($definition->getInnerKeys());
 
 		return new CollectionNode(
-			$runtime->getNodeColumns(),
+			$runtime->getParserFields(),
 			$identity,
 			$child,
 			$parent,
@@ -54,7 +54,7 @@ final class HasManyLoader extends AbstractLoader
 		$query = $runtime->createQuery($relationRef->getCollection());
 
 		$runtime->setQueryContext($query, $query);
-		$runtime->nextPass('loadData');
+		$runtime->continueWith('loadData');
 	}
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
