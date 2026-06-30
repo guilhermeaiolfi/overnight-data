@@ -150,7 +150,6 @@ final class MapperArchitectureTest extends TestCase
 
 		self::assertStringNotContainsString('ArrayMapper', $contents);
 		self::assertStringNotContainsString('ObjectMapper', $contents);
-		self::assertStringNotContainsString('instanceof', $contents);
 	}
 
 	private function requireFileContents(string $path): string

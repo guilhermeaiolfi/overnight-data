@@ -13,7 +13,7 @@ use Tests\ON\Data\Fixture\SpyArrayMapper;
 use Tests\ON\Data\Fixture\SpyArrayWriter;
 use Tests\ON\Data\Fixture\SpyResolver;
 
-final class MappingContextTest extends TestCase
+final class MappingOptionsTest extends TestCase
 {
 	public function testMappingOptionsStoreOnlyMappingWideConfiguration(): void
 	{
