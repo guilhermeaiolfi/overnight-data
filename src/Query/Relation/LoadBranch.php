@@ -327,6 +327,10 @@ final class LoadBranch
 		$this->rootFieldParserNames[$fieldName] = $alias;
 		$this->rootColumns[] = $alias;
 		$this->rootValueAliases[] = $alias;
+
+		if ($this->node instanceof RootNode) {
+			$this->node->appendColumns([$alias]);
+		}
 	}
 
 	/**

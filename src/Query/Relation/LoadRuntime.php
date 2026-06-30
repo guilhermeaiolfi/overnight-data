@@ -301,12 +301,12 @@ final class LoadRuntime
 
 	private function registerParserTree(): void
 	{
+		$rootNode = new RootNode($this->rootBranch->getRootColumns(), $this->rootIdentityFields());
+		$this->rootBranch->setNode($rootNode);
+
 		foreach ($this->rootBranch->getChildren() as $branch) {
 			$this->registerBranch($branch);
 		}
-
-		$rootNode = new RootNode($this->rootBranch->getRootColumns(), $this->rootIdentityFields());
-		$this->rootBranch->setNode($rootNode);
 
 		foreach ($this->rootBranch->getChildren() as $branch) {
 			$node = $branch->getNode();
@@ -319,7 +319,6 @@ final class LoadRuntime
 
 			$rootNode->linkNode($branch->getRelation()->getName(), $node);
 		}
-
 	}
 
 	private function finalizeBranchSelections(): void

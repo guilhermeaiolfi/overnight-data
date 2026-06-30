@@ -13,6 +13,7 @@ use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\CollectionNode;
+use ON\Data\Query\Result\Parser\RootNode;
 use ON\Data\Query\Result\Parser\SingularNode;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
@@ -30,6 +31,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		LifecycleEvents::$loadCalls = 0;
 		LifecycleEvents::$attachmentModes = [];
 		LifecycleEvents::$initCalls = [];
+		LifecycleEvents::$topLevelParentNodeIsRoot = false;
 	}
 
 	public function testNamedNextPassRunsAfterParentRowsAreParsed(): void
@@ -226,6 +228,16 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		], LifecycleEvents::$events);
 	}
 
+	public function testTopLevelRelationRegisterCanAccessTheRootParentNode(): void
+	{
+		$users = new SelectQuery($this->makeTopLevelParentNodeRegistry()->getCollection('users'), new LifecycleExecutor());
+		$users->select($users->posts);
+
+		$this->buildPlan($users);
+
+		self::assertTrue(LifecycleEvents::$topLevelParentNodeIsRoot);
+	}
+
 	private function makeBasicRegistry(string $loader): Registry
 	{
 		$registry = new Registry();
@@ -402,6 +414,11 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		return $registry;
 	}
 
+	private function makeTopLevelParentNodeRegistry(): Registry
+	{
+		return $this->makeBasicRegistry(TopLevelParentNodeLoader::class);
+	}
+
 	private function buildPlan(SelectQuery $query): LoadRuntime
 	{
 		$runtime = new LoadRuntime($query, new LifecycleExecutor());
@@ -454,6 +471,8 @@ final class LifecycleEvents
 	 * @var array<string, int>
 	 */
 	public static array $initCalls = [];
+
+	public static bool $topLevelParentNodeIsRoot = false;
 }
 
 final class LifecycleExecutor implements QueryExecutorInterface
@@ -906,5 +925,20 @@ final class BoundaryChildLoader extends LifecycleTestLoader
 	{
 		LifecycleEvents::$events[] = 'loadData:' . $relation->getName();
 		$runtime->execute($runtime->getQuery());
+	}
+}
+
+final class TopLevelParentNodeLoader extends LifecycleTestLoader
+{
+	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
+	{
+		LifecycleEvents::$topLevelParentNodeIsRoot = $runtime->getParentNode() instanceof RootNode;
+
+		return parent::initNode($relation, $runtime);
+	}
+
+	public function load(RelationRef $relation, LoadRuntime $runtime): void
+	{
+		$this->prepareSeparateQuery($relation, $runtime);
 	}
 }
