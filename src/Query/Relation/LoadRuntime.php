@@ -8,7 +8,6 @@ use LogicException;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Exception\LoadRuntimeException;
-use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\QuerySourceInterface;
@@ -61,7 +60,7 @@ final class LoadRuntime
 		$this->parseRootRows($this->executor->fetchAll($this->rootQuery));
 		$this->completeBoundary($this->rootQuery);
 
-		return $this->cleanupRootRecords($this->requireRootNode()->getResult());
+		return $this->rootBranch->projectRootRecords($this->requireRootNode()->getResult());
 	}
 
 	public function fetchOne(): ?array
@@ -76,7 +75,7 @@ final class LoadRuntime
 		$this->parseRootRows([$row]);
 		$this->completeBoundary($this->rootQuery);
 
-		return $this->cleanupRootRecords($this->requireRootNode()->getResult())[0] ?? null;
+		return $this->rootBranch->projectRootRecords($this->requireRootNode()->getResult())[0] ?? null;
 	}
 
 	public function getCurrentBranch(): LoadBranch
@@ -480,320 +479,6 @@ final class LoadRuntime
 	}
 
 	/**
-	 * @param list<array<string, mixed>> $records
-	 * @return list<array<string, mixed>>
-	 */
-	private function cleanupRootRecords(array $records): array
-	{
-		$cleaned = [];
-
-		foreach ($records as $record) {
-			$item = [];
-			$rootPublicColumns = $this->rootBranch->getRootPublicColumns();
-
-			foreach ($record as $key => $value) {
-				if (isset($rootPublicColumns[$key])) {
-					$item[$key] = $value;
-				}
-			}
-
-			foreach ($this->rootBranch->getChildren() as $branch) {
-				$name = $branch->getRelation()->getName();
-				$value = $record[$name] ?? ($this->isCollectionBranch($branch) ? [] : null);
-
-				if ($branch->getSelection()->isVisible()) {
-					$item[$name] = $this->projectVisibleBranch($branch, $value);
-
-					continue;
-				}
-
-				$this->mergePromotions(
-					$item,
-					$this->projectHiddenBranch($branch, $value),
-					'root',
-				);
-			}
-
-			$cleaned[] = $item;
-		}
-
-		return $cleaned;
-	}
-
-	private function projectVisibleBranch(LoadBranch $branch, mixed $value): mixed
-	{
-		if ($this->isCollectionBranch($branch)) {
-			$projected = [];
-
-			foreach (is_array($value) ? $value : [] as $item) {
-				$record = $this->payloadRecord($branch, is_array($item) ? $item : []);
-
-				if ($record === null) {
-					continue;
-				}
-
-				$projected[] = $this->projectVisibleRecord($branch, $record);
-			}
-
-			return $projected;
-		}
-
-		if ($value === null) {
-			return null;
-		}
-
-		$record = $this->payloadRecord($branch, is_array($value) ? $value : []);
-
-		return $record === null
-			? null
-			: $this->projectVisibleRecord($branch, $record);
-	}
-
-	/**
-	 * @param array<string, mixed> $record
-	 * @return array<string, mixed>
-	 */
-	private function projectVisibleRecord(LoadBranch $branch, array $record): array
-	{
-		$item = [];
-
-		if ($branch->getSelection()->isLoaded()) {
-			foreach ($branch->getPublicFields() as $fieldName) {
-				if (array_key_exists($fieldName, $record)) {
-					$item[$fieldName] = $record[$fieldName];
-				}
-			}
-		}
-
-		foreach ($branch->getChildren() as $child) {
-			$name = $child->getRelation()->getName();
-			$value = $record[$name] ?? ($this->isCollectionBranch($child) ? [] : null);
-
-			if ($child->getSelection()->isVisible()) {
-				$item[$name] = $this->projectVisibleBranch($child, $value);
-
-				continue;
-			}
-
-			$this->mergePromotions(
-				$item,
-				$this->projectHiddenBranch($child, $value),
-				implode('.', $branch->getRelation()->getPath()),
-			);
-		}
-
-		return $item;
-	}
-
-	/**
-	 * @return array<string, array{branch: LoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}>
-	 */
-	private function projectHiddenBranch(LoadBranch $branch, mixed $value): array
-	{
-		if ($this->isCollectionBranch($branch)) {
-			$promoted = $this->defaultHiddenPromotions($branch, true);
-
-			foreach (is_array($value) ? $value : [] as $item) {
-				$this->mergeHiddenCollectionPromotions(
-					$promoted,
-					$this->projectHiddenRecord($branch, is_array($item) ? $item : []),
-				);
-			}
-
-			return $promoted;
-		}
-
-		if ($value === null) {
-			return $this->defaultHiddenPromotions($branch);
-		}
-
-		return $this->projectHiddenRecord($branch, is_array($value) ? $value : []);
-	}
-
-	/**
-	 * @param array<string, mixed> $record
-	 * @return array<string, array{branch: LoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}>
-	 */
-	private function projectHiddenRecord(LoadBranch $branch, array $record): array
-	{
-		$promoted = [];
-		$payload = $this->payloadRecord($branch, $record) ?? [];
-
-		foreach ($branch->getChildren() as $child) {
-			$name = $child->getRelation()->getName();
-			$value = $payload[$name] ?? ($this->isCollectionBranch($child) ? [] : null);
-
-			if ($child->getSelection()->isVisible()) {
-				$items = $this->projectPromotionItems($child, $value);
-				$promoted[$name] = [
-					'branch' => $child,
-					'collection' => $this->isCollectionBranch($child),
-					'value' => $this->isCollectionBranch($child)
-						? array_column($items, 'value')
-						: ($items[0]['value'] ?? null),
-					'items' => $items,
-				];
-
-				continue;
-			}
-
-			$this->mergeHiddenNameMaps($promoted, $this->projectHiddenBranch($child, $value), $branch);
-		}
-
-		return $promoted;
-	}
-
-	/**
-	 * @param array<string, mixed> $item
-	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}> $promotions
-	 */
-	private function mergePromotions(array &$item, array $promotions, string $parentPath): void
-	{
-		foreach ($promotions as $name => $entry) {
-			if (array_key_exists($name, $item)) {
-				throw RelationSelectionException::ambiguousPromotion($parentPath, $name);
-			}
-
-			$item[$name] = $entry['value'];
-		}
-	}
-
-	/**
-	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}> $target
-	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}> $incoming
-	 */
-	private function mergeHiddenNameMaps(array &$target, array $incoming, LoadBranch $hiddenBranch): void
-	{
-		foreach ($incoming as $name => $entry) {
-			if (isset($target[$name]) && $target[$name]['branch'] !== $entry['branch']) {
-				throw RelationSelectionException::ambiguousPromotion(implode('.', $hiddenBranch->getRelation()->getPath()), $name);
-			}
-
-			$target[$name] = $entry;
-		}
-	}
-
-	/**
-	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}> $target
-	 * @param array<string, array{branch: LoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}> $incoming
-	 */
-	private function mergeHiddenCollectionPromotions(array &$target, array $incoming): void
-	{
-		foreach ($incoming as $name => $entry) {
-			$branch = $entry['branch'];
-
-			if (! isset($target[$name])) {
-				$target[$name] = [
-					'branch' => $branch,
-					'collection' => true,
-					'value' => [],
-					'items' => [],
-				];
-			} elseif ($target[$name]['branch'] !== $branch) {
-				throw RelationSelectionException::ambiguousPromotion(implode('.', $branch->getRelation()->getPath()), $name);
-			}
-
-			foreach ($entry['items'] as $item) {
-				if (! $this->containsPromotionItem($target[$name]['items'], $item['identity'])) {
-					$target[$name]['items'][] = $item;
-					$target[$name]['value'][] = $item['value'];
-				}
-			}
-		}
-	}
-
-	/**
-	 * @return array<string, array{branch: LoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}>
-	 */
-	private function defaultHiddenPromotions(LoadBranch $branch, bool $forceCollection = false): array
-	{
-		$promoted = [];
-
-		foreach ($branch->getChildren() as $child) {
-			$name = $child->getRelation()->getName();
-
-			if ($child->getSelection()->isVisible()) {
-				$collection = $forceCollection || $this->isCollectionBranch($child);
-				$promoted[$name] = [
-					'branch' => $child,
-					'collection' => $collection,
-					'value' => $collection ? [] : null,
-					'items' => [],
-				];
-
-				continue;
-			}
-
-			foreach ($this->defaultHiddenPromotions($child, $forceCollection || $this->isCollectionBranch($child)) as $childName => $entry) {
-				if (isset($promoted[$childName]) && $promoted[$childName]['branch'] !== $entry['branch']) {
-					throw RelationSelectionException::ambiguousPromotion(implode('.', $branch->getRelation()->getPath()), $childName);
-				}
-
-				$promoted[$childName] = $entry;
-			}
-		}
-
-		return $promoted;
-	}
-
-	/**
-	 * @return list<array{identity: string, value: mixed}>
-	 */
-	private function projectPromotionItems(LoadBranch $branch, mixed $value): array
-	{
-		if ($this->isCollectionBranch($branch)) {
-			$items = [];
-
-			foreach (is_array($value) ? $value : [] as $record) {
-				if (! is_array($record)) {
-					continue;
-				}
-
-				$items[] = [
-					'identity' => $this->recordIdentity($record, $branch),
-					'value' => $this->projectVisibleRecord($branch, $record),
-				];
-			}
-
-			return $items;
-		}
-
-		if (! is_array($value)) {
-			return [];
-		}
-
-		return [[
-			'identity' => $this->recordIdentity($value, $branch),
-			'value' => $this->projectVisibleRecord($branch, $value),
-		]];
-	}
-
-	/**
-	 * @param list<array{identity: string, value: mixed}> $existing
-	 */
-	private function containsPromotionItem(array $existing, string $candidateIdentity): bool
-	{
-		foreach ($existing as $item) {
-			if ($item['identity'] === $candidateIdentity) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	private function recordIdentity(array $value, LoadBranch $branch): string
-	{
-		$identity = [];
-
-		foreach ($branch->getRelation()->getCollection()->getPrimaryKey() as $fieldName) {
-			$identity[$fieldName] = $value[$fieldName] ?? null;
-		}
-
-		return json_encode($identity, JSON_THROW_ON_ERROR);
-	}
-
-	/**
 	 * @return list<string>
 	 */
 	private function collectionFieldNames(CollectionInterface $collection): array
@@ -874,11 +559,6 @@ final class LoadRuntime
 		return json_encode($path, JSON_THROW_ON_ERROR);
 	}
 
-	private function isCollectionBranch(LoadBranch $branch): bool
-	{
-		return $branch->getNode()->isCollectionLike();
-	}
-
 	private function ensureBranchFieldSelection(
 		SelectQuery $query,
 		QuerySourceInterface $source,
@@ -953,23 +633,6 @@ final class LoadRuntime
 	private function branchAliasTraversal(LoadBranch $branch): array
 	{
 		return $branch->getNode()->getValueAliasTraversal();
-	}
-
-	/**
-	 * @param array<string, mixed> $record
-	 * @return array<string, mixed>|null
-	 */
-	private function payloadRecord(LoadBranch $branch, array $record): ?array
-	{
-		$container = $branch->getPublicPayloadChild();
-
-		if ($container === null) {
-			return $record;
-		}
-
-		$payload = $record[$container] ?? null;
-
-		return is_array($payload) ? $payload : null;
 	}
 
 	private function assertSchedulableMethod(string $method): void
