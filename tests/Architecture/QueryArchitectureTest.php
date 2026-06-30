@@ -164,9 +164,11 @@ final class QueryArchitectureTest extends TestCase
 		self::assertSame('ON\Data\Query\Relation\RelationSelection', $this->methodReturnType(RelationLoadBranch::class, 'getSelection'));
 		self::assertSame(LoaderInterface::class, $this->methodReturnType(RelationLoadBranch::class, 'getLoader'));
 		self::assertSame('ON\Data\Query\Relation\RelationRef', $this->methodReturnType(RelationLoadBranch::class, 'getRelationRef'));
+		self::assertSame('ON\Data\Query\Relation\RelationRef', $this->methodReturnType('ON\Data\Query\Relation\RelationSelection', 'getRelationRef'));
 		self::assertSame('bool', $this->methodReturnType(RelationLoadBranch::class, 'returnsMany'));
 		self::assertFalse(method_exists(RelationLoadBranch::class, 'getRelation'));
 		self::assertFalse(method_exists(RelationLoadBranch::class, 'nodeIsCollectionLike'));
+		self::assertFalse(method_exists('ON\Data\Query\Relation\RelationSelection', 'getRelation'));
 	}
 
 	public function testRootAndRelationBranchesKeepSeparateResponsibilities(): void

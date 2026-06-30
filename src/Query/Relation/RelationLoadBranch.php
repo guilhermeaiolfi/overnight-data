@@ -55,7 +55,7 @@ final class RelationLoadBranch extends LoadBranch
 
 	public function getRelationRef(): RelationRef
 	{
-		return $this->selection->getRelation();
+		return $this->selection->getRelationRef();
 	}
 
 	public function getParent(): LoadBranch

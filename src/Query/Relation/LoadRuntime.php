@@ -224,9 +224,9 @@ final class LoadRuntime
 			$key = $this->branchKey($selection->getPath());
 			$parent = $selection->getParentPathKey() === null
 				? $this->rootBranch
-				: $this->branches[$selection->getParentPathKey()] ?? throw LoadRuntimeException::parentBranchMissing($selection->getRelation());
+				: $this->branches[$selection->getParentPathKey()] ?? throw LoadRuntimeException::parentBranchMissing($selection->getRelationRef());
 
-			$this->branches[$key] = new RelationLoadBranch($selection, $parent, $selection->getRelation()->getLoader(), $this->publicFieldsForSelection($selection));
+			$this->branches[$key] = new RelationLoadBranch($selection, $parent, $selection->getRelationRef()->getLoader(), $this->publicFieldsForSelection($selection));
 		}
 	}
 
@@ -424,7 +424,7 @@ final class LoadRuntime
 			return $selection->getFields();
 		}
 
-		return $selection->getRelation()->getCollection()->getVisibleFields();
+		return $selection->getRelationRef()->getCollection()->getVisibleFields();
 	}
 
 	/**

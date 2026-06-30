@@ -7,21 +7,21 @@ namespace ON\Data\Query\Relation;
 final class RelationSelection
 {
 	public function __construct(
-		private readonly RelationRef $relation,
+		private readonly RelationRef $relationRef,
 		private readonly bool $load,
 		private readonly bool $visible,
 		private readonly ?array $fields,
 	) {
 	}
 
-	public function getRelation(): RelationRef
+	public function getRelationRef(): RelationRef
 	{
-		return $this->relation;
+		return $this->relationRef;
 	}
 
 	public function getName(): string
 	{
-		return $this->relation->getName();
+		return $this->relationRef->getName();
 	}
 
 	/**
@@ -29,7 +29,7 @@ final class RelationSelection
 	 */
 	public function getPath(): array
 	{
-		return $this->relation->getPath();
+		return $this->relationRef->getPath();
 	}
 
 	public function getParentPathKey(): ?string
@@ -70,7 +70,7 @@ final class RelationSelection
 			return $this;
 		}
 
-		return new self($this->relation, $load, $visible, $fields);
+		return new self($this->relationRef, $load, $visible, $fields);
 	}
 
 	private function mergeFields(self $incoming): ?array
