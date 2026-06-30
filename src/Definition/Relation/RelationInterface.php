@@ -48,7 +48,7 @@ interface RelationInterface
 
 	public function getInnerKey(): string|array;
 
-	public function innerKeys(): array;
+	public function getInnerKeys(): array;
 
 	public function getInnerField(): FieldInterface;
 
@@ -56,7 +56,7 @@ interface RelationInterface
 
 	public function getOuterKey(): string|array;
 
-	public function outerKeys(): array;
+	public function getOuterKeys(): array;
 
 	public function getOuterField(): FieldInterface;
 

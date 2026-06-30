@@ -146,15 +146,15 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 
 	public function getInnerKey(): string|array
 	{
-		$keys = $this->innerKeys();
+		$keys = $this->getInnerKeys();
 		if (count($keys) !== 1) {
-			throw new LogicException('getInnerKey() is only available for single-key relations. Use innerKeys() instead.');
+			throw new LogicException('getInnerKey() is only available for single-key relations. Use getInnerKeys() instead.');
 		}
 
 		return $keys[0];
 	}
 
-	public function innerKeys(): array
+	public function getInnerKeys(): array
 	{
 		$keys = $this->get('inner_keys');
 		if (! is_array($keys) || $keys === []) {
@@ -166,9 +166,9 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 
 	public function getInnerField(): FieldInterface
 	{
-		$keys = $this->innerKeys();
+		$keys = $this->getInnerKeys();
 		if (count($keys) !== 1) {
-			throw new LogicException('getInnerField() is only available for single-key relations. Use innerKeys() instead.');
+			throw new LogicException('getInnerField() is only available for single-key relations. Use getInnerKeys() instead.');
 		}
 
 		return $this->getParent()->getFields()->get($keys[0]);
@@ -184,15 +184,15 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 
 	public function getOuterKey(): string|array
 	{
-		$keys = $this->outerKeys();
+		$keys = $this->getOuterKeys();
 		if (count($keys) !== 1) {
-			throw new LogicException('getOuterKey() is only available for single-key relations. Use outerKeys() instead.');
+			throw new LogicException('getOuterKey() is only available for single-key relations. Use getOuterKeys() instead.');
 		}
 
 		return $keys[0];
 	}
 
-	public function outerKeys(): array
+	public function getOuterKeys(): array
 	{
 		$keys = $this->get('outer_keys');
 		if (! is_array($keys) || $keys === []) {
@@ -204,9 +204,9 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 
 	public function getOuterField(): FieldInterface
 	{
-		$keys = $this->outerKeys();
+		$keys = $this->getOuterKeys();
 		if (count($keys) !== 1) {
-			throw new LogicException('getOuterField() is only available for single-key relations. Use outerKeys() instead.');
+			throw new LogicException('getOuterField() is only available for single-key relations. Use getOuterKeys() instead.');
 		}
 
 		return $this->getCollection()->getFields()->get($keys[0]);

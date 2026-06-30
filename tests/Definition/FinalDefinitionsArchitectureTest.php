@@ -146,8 +146,8 @@ final class FinalDefinitionsArchitectureTest extends TestCase
 		self::assertInstanceOf(M2MRelation::class, $restoredRelation);
 		self::assertInstanceOf(M2MThrough::class, $restoredRelation->through);
 		self::assertSame('article_tag', $restoredRelation->through->getCollectionName());
-		self::assertSame(['article_id'], $restoredRelation->through->throughInnerKeys());
-		self::assertSame(['tag_id'], $restoredRelation->through->throughOuterKeys());
+		self::assertSame(['article_id'], $restoredRelation->through->getInnerKeys());
+		self::assertSame(['tag_id'], $restoredRelation->through->getOuterKeys());
 		self::assertSame($before, $restored->all());
 	}
 

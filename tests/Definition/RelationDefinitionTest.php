@@ -38,8 +38,8 @@ final class RelationDefinitionTest extends TestCase
 			->belongsTo('author', 'user')->innerKey('user_id')->outerKey('id')->end()
 			->relations->get('author');
 
-		self::assertSame(['user_id'], $relation->innerKeys());
-		self::assertSame(['id'], $relation->outerKeys());
+		self::assertSame(['user_id'], $relation->getInnerKeys());
+		self::assertSame(['id'], $relation->getOuterKeys());
 		self::assertSame('user_id', $relation->getInnerField()->getName());
 		self::assertSame('id', $relation->getOuterField()->getName());
 		self::assertSame('single', $relation->getCardinality());
@@ -64,8 +64,8 @@ final class RelationDefinitionTest extends TestCase
 			->end()
 			->relations->get('page');
 
-		self::assertSame(['tenant_id', 'page_slug'], $relation->innerKeys());
-		self::assertSame(['tenant_id', 'slug'], $relation->outerKeys());
+		self::assertSame(['tenant_id', 'page_slug'], $relation->getInnerKeys());
+		self::assertSame(['tenant_id', 'slug'], $relation->getOuterKeys());
 
 		$this->expectException(LogicException::class);
 		$this->expectExceptionMessage('getInnerField() is only available for single-key relations');
@@ -123,10 +123,10 @@ final class RelationDefinitionTest extends TestCase
 				->end();
 
 		self::assertNotNull($relation);
-		self::assertSame(['tenant_id', 'slug'], $relation->innerKeys());
-		self::assertSame(['tenant_id', 'slug'], $relation->outerKeys());
-		self::assertSame(['article_tenant_id', 'article_slug'], $relation->through->throughInnerKeys());
-		self::assertSame(['tag_tenant_id', 'tag_slug'], $relation->through->throughOuterKeys());
+		self::assertSame(['tenant_id', 'slug'], $relation->getInnerKeys());
+		self::assertSame(['tenant_id', 'slug'], $relation->getOuterKeys());
+		self::assertSame(['article_tenant_id', 'article_slug'], $relation->through->getInnerKeys());
+		self::assertSame(['tag_tenant_id', 'tag_slug'], $relation->through->getOuterKeys());
 		self::assertSame('many', $relation->getCardinality());
 		self::assertTrue($relation->isJunction());
 	}

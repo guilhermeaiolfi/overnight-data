@@ -624,9 +624,13 @@ abstract class LifecycleTestLoader extends AbstractLoader
 {
 	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
-		$identity = $runtime->requireBranchFields($relation->getCollection()->getPrimaryKey());
-		$child = $runtime->requireBranchFields($this->relationKeys($relation, 'outer'));
-		$parent = $runtime->requireParentFields($this->relationKeys($relation, 'inner'));
+		$definition = $relation->getRelation();
+		$current = $runtime->getCurrentBranch();
+		$parentBranch = $runtime->getParentBranch();
+		$identity = $current->requireFields($relation->getCollection()->getPrimaryKey());
+		$child = $current->requireFields($definition->getOuterKeys());
+		$parent = $parentBranch?->requireFields($definition->getInnerKeys())
+			?? $runtime->requireRootFields($definition->getInnerKeys());
 
 		$node = new CollectionNode(
 			$runtime->getNodeColumns(),
@@ -714,9 +718,11 @@ class NestedPostsLoader extends AbstractLoader
 {
 	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
-		$identity = $runtime->requireBranchFields(['id']);
-		$child = $runtime->requireBranchFields(['userId']);
-		$parent = $runtime->requireParentFields(['id']);
+		$current = $runtime->getCurrentBranch();
+		$parentBranch = $runtime->getParentBranch();
+		$identity = $current->requireFields(['id']);
+		$child = $current->requireFields(['userId']);
+		$parent = $parentBranch?->requireFields(['id']) ?? $runtime->requireRootFields(['id']);
 		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
 		LifecycleEvents::$registerColumns['posts'] = $runtime->getNodeColumns();
@@ -747,9 +753,11 @@ final class NestedAuthorLoader extends AbstractLoader
 
 	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
-		$identity = $runtime->requireBranchFields(['id']);
-		$child = $runtime->requireBranchFields(['id']);
-		$parent = $runtime->requireParentFields(['authorId']);
+		$current = $runtime->getCurrentBranch();
+		$parentBranch = $runtime->getParentBranch();
+		$identity = $current->requireFields(['id']);
+		$child = $current->requireFields(['id']);
+		$parent = $parentBranch?->requireFields(['authorId']) ?? $runtime->requireRootFields(['authorId']);
 		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
 		LifecycleEvents::$registerColumns['author'] = $runtime->getNodeColumns();
@@ -769,7 +777,7 @@ final class RootFieldRequirementLoader extends LifecycleTestLoader
 {
 	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
-		$runtime->requireParentFields(['name']);
+		$runtime->getParentBranch()?->requireFields(['name']) ?? $runtime->requireRootFields(['name']);
 		LifecycleEvents::$registerColumns['root-parent'] = ['name'];
 
 		return parent::initNode($relation, $runtime);
@@ -790,9 +798,11 @@ final class JoinedProfileLoader extends AbstractLoader
 
 	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
-		$identity = $runtime->requireBranchFields(['id']);
-		$child = $runtime->requireBranchFields(['userId']);
-		$parent = $runtime->requireParentFields(['id']);
+		$current = $runtime->getCurrentBranch();
+		$parentBranch = $runtime->getParentBranch();
+		$identity = $current->requireFields(['id']);
+		$child = $current->requireFields(['userId']);
+		$parent = $parentBranch?->requireFields(['id']) ?? $runtime->requireRootFields(['id']);
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
 
 		return new SingularNode($runtime->getNodeColumns(), $identity, $child, $parent);

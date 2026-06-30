@@ -19,9 +19,13 @@ final class BelongsToLoader extends AbstractLoader
 
 	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
-		$identity = $runtime->requireBranchFields($relation->getCollection()->getPrimaryKey());
-		$child = $runtime->requireBranchFields($this->relationKeys($relation, 'outer'));
-		$parent = $runtime->requireParentFields($this->relationKeys($relation, 'inner'));
+		$definition = $relation->getRelation();
+		$current = $runtime->getCurrentBranch();
+		$parentBranch = $runtime->getParentBranch();
+		$identity = $current->requireFields($relation->getCollection()->getPrimaryKey());
+		$child = $current->requireFields($definition->getOuterKeys());
+		$parent = $parentBranch?->requireFields($definition->getInnerKeys())
+			?? $runtime->requireRootFields($definition->getInnerKeys());
 
 		return new SingularNode(
 			$runtime->getNodeColumns(),

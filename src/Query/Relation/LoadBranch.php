@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation;
 
 use LogicException;
-use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
@@ -52,11 +51,6 @@ final class LoadBranch
 	private ?string $publicPayloadChild = null;
 
 	/**
-	 * @var array<string, OwnedBranchPlan>
-	 */
-	private array $ownedPlans = [];
-
-	/**
 	 * @param list<string> $publicFields
 	 */
 	public function __construct(
@@ -88,11 +82,6 @@ final class LoadBranch
 		return $this->loader;
 	}
 
-	public function getCollection(): CollectionInterface
-	{
-		return $this->getRelation()->getCollection();
-	}
-
 	public function requireFields(array $fieldNames): array
 	{
 		$added = [];
@@ -110,11 +99,6 @@ final class LoadBranch
 		}
 
 		return $added;
-	}
-
-	public function addFields(array $fieldNames): array
-	{
-		return $this->requireFields($fieldNames);
 	}
 
 	public function addPublicFields(array $fieldNames): array
@@ -212,19 +196,6 @@ final class LoadBranch
 	public function getPublicPayloadChild(): ?string
 	{
 		return $this->publicPayloadChild;
-	}
-
-	public function ownedPlan(string $name, CollectionInterface $collection, array $path): OwnedBranchPlan
-	{
-		return $this->ownedPlans[$name] ??= new OwnedBranchPlan($path, $collection);
-	}
-
-	/**
-	 * @return array<string, OwnedBranchPlan>
-	 */
-	public function getOwnedPlans(): array
-	{
-		return $this->ownedPlans;
 	}
 
 	public function schedule(string $method, SelectQuery $boundaryQuery): void

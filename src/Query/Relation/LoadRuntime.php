@@ -97,32 +97,6 @@ final class LoadRuntime
 		return $this->cleanupRootRecords($this->requireRootNode()->getResult())[0] ?? null;
 	}
 
-	/**
-	 * @param non-empty-list<string> $fieldNames
-	 * @return non-empty-list<string>
-	 */
-	public function requireBranchFields(array $fieldNames): array
-	{
-		return $this->getCurrentBranch()->requireFields($fieldNames);
-	}
-
-	/**
-	 * @param non-empty-list<string> $fieldNames
-	 * @return non-empty-list<string>
-	 */
-	public function requireParentFields(array $fieldNames): array
-	{
-		$parent = $this->getParentBranch();
-		$collection = $parent?->getCollection() ?? $this->rootQuery->getCollection();
-		$normalized = $this->normalizeFieldNames($collection, $fieldNames);
-
-		if ($parent === null) {
-			return array_map($this->ensureRootFieldParserName(...), $normalized);
-		}
-
-		return $parent->requireFields($normalized);
-	}
-
 	public function getCurrentBranch(): LoadBranch
 	{
 		return $this->requireActiveBranch();
@@ -131,6 +105,17 @@ final class LoadRuntime
 	public function getParentBranch(): ?LoadBranch
 	{
 		return $this->requireActiveBranch()->getParent();
+	}
+
+	/**
+	 * @param non-empty-list<string> $fieldNames
+	 * @return non-empty-list<string>
+	 */
+	public function requireRootFields(array $fieldNames): array
+	{
+		$normalized = $this->normalizeFieldNames($this->rootQuery->getCollection(), $fieldNames);
+
+		return array_map($this->ensureRootFieldParserName(...), $normalized);
 	}
 
 	/**
@@ -384,21 +369,6 @@ final class LoadRuntime
 			}
 
 			$branch->getPublicNode()->setValueAliases($aliases);
-
-			foreach ($branch->getOwnedPlans() as $plan) {
-				$ownedAliases = [];
-
-				foreach ($plan->getNodeColumns() as $fieldName) {
-					$ownedAliases[] = $this->ensureBranchFieldSelection(
-						$branch->getQuery(),
-						$plan->getSource(),
-						$plan->getPath(),
-						$fieldName,
-					);
-				}
-
-				$plan->getNode()->setValueAliases($ownedAliases);
-			}
 		}
 	}
 

@@ -8,11 +8,13 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\BelongsToRelation;
 use ON\Data\Definition\Relation\HasManyRelation;
 use ON\Data\Definition\Relation\HasOneRelation;
+use ON\Data\Query\Relation\LoadBranch;
 use ON\Data\Query\Relation\Loader\AbstractLoader;
 use ON\Data\Query\Relation\Loader\BelongsToLoader;
 use ON\Data\Query\Relation\Loader\HasManyLoader;
 use ON\Data\Query\Relation\Loader\HasOneLoader;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
+use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
@@ -126,6 +128,15 @@ final class QueryArchitectureTest extends TestCase
 		self::assertFalse(method_exists(LoaderInterface::class, 'collectFields'));
 	}
 
+	public function testOwnedBranchPlanAndRelatedRuntimeApisDoNotExist(): void
+	{
+		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Query/Relation/OwnedBranchPlan.php');
+		self::assertFalse(method_exists(LoadBranch::class, 'ownedPlan'));
+		self::assertFalse(method_exists(LoadBranch::class, 'getOwnedPlans'));
+		self::assertFalse(method_exists(LoadRuntime::class, 'requireBranchSourceFields'));
+		self::assertFalse(method_exists(LoadRuntime::class, 'createInternalBranch'));
+	}
+
 	public function testRuntimeAndBuiltInLoadersDoNotContainCollectFieldsLifecycle(): void
 	{
 		foreach ([
@@ -137,6 +148,9 @@ final class QueryArchitectureTest extends TestCase
 		] as $path) {
 			self::assertStringNotContainsString('collectFields', (string) file_get_contents($path), $path);
 			self::assertStringNotContainsString('collectBranchFields', (string) file_get_contents($path), $path);
+			self::assertStringNotContainsString('OwnedBranchPlan', (string) file_get_contents($path), $path);
+			self::assertStringNotContainsString('ownedPlan(', (string) file_get_contents($path), $path);
+			self::assertStringNotContainsString('getOwnedPlans(', (string) file_get_contents($path), $path);
 		}
 	}
 
@@ -189,13 +203,13 @@ final class QueryArchitectureTest extends TestCase
 				'FirstOfManyLoader',
 				'->getCardinality(',
 				'->isJunction(',
-				'->innerKeys(',
-				'->outerKeys(',
+				'->getInnerKeys(',
+				'->getOuterKeys(',
 				'->getWhere(',
 				'->getOrderBy(',
 				'->getThrough(',
-				'->throughInnerKeys(',
-				'->throughOuterKeys(',
+				'->getInnerKeys(',
+				'->getOuterKeys(',
 			],
 			'Query/backend infrastructure leaked relation-specific coupling "%s" into %s',
 		);
@@ -215,13 +229,13 @@ final class QueryArchitectureTest extends TestCase
 			[
 				'->getCardinality(',
 				'->isJunction(',
-				'->innerKeys(',
-				'->outerKeys(',
+				'->getInnerKeys(',
+				'->getOuterKeys(',
 				'->getWhere(',
 				'->getOrderBy(',
 				'->getThrough(',
-				'->throughInnerKeys(',
-				'->throughOuterKeys(',
+				'->getInnerKeys(',
+				'->getOuterKeys(',
 			],
 			'Neutral definition infrastructure leaked relation execution semantics "%s" into %s',
 		);

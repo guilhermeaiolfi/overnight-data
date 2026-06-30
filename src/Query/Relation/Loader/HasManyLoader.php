@@ -15,9 +15,13 @@ final class HasManyLoader extends AbstractLoader
 {
 	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
-		$identity = $runtime->requireBranchFields($relation->getCollection()->getPrimaryKey());
-		$child = $runtime->requireBranchFields($this->relationKeys($relation, 'outer'));
-		$parent = $runtime->requireParentFields($this->relationKeys($relation, 'inner'));
+		$definition = $relation->getRelation();
+		$current = $runtime->getCurrentBranch();
+		$parentBranch = $runtime->getParentBranch();
+		$identity = $current->requireFields($relation->getCollection()->getPrimaryKey());
+		$child = $current->requireFields($definition->getOuterKeys());
+		$parent = $parentBranch?->requireFields($definition->getInnerKeys())
+			?? $runtime->requireRootFields($definition->getInnerKeys());
 
 		return new CollectionNode(
 			$runtime->getNodeColumns(),
@@ -56,7 +60,7 @@ final class HasManyLoader extends AbstractLoader
 		}
 
 		$query = $runtime->getQuery();
-		$childFields = $this->relationKeys($relation, 'outer');
+		$childFields = $relation->getRelation()->getOuterKeys();
 
 		if (count($childFields) === 1) {
 			$query->where(

@@ -25,8 +25,18 @@ abstract class AbstractLoader implements LoaderInterface
 
 		$definition = $relation->getRelation();
 		$source = $relation->getParentSource();
-		$innerKeys = $this->relationKeys($relation, 'inner');
-		$outerKeys = $this->relationKeys($relation, 'outer');
+
+		try {
+			$innerKeys = $definition->getInnerKeys();
+			$outerKeys = $definition->getOuterKeys();
+		} catch (LogicException) {
+			throw RelationLoaderException::relationKeysIncomplete($relation);
+		}
+
+		if ($innerKeys === [] || $outerKeys === []) {
+			throw RelationLoaderException::relationKeysIncomplete($relation);
+		}
+
 		$join = $relation->getQuery()->join(
 			$definition->getCollection(),
 			$definition->isNullable() ? JoinType::LEFT : JoinType::INNER,
@@ -113,25 +123,5 @@ abstract class AbstractLoader implements LoaderInterface
 				x()->eq($source->field($sourceKey), $join->field($targetKeys[$index])),
 			);
 		}
-	}
-
-	/**
-	 * @return non-empty-list<string>
-	 */
-	protected function relationKeys(RelationRef $relation, string $side): array
-	{
-		try {
-			$keys = $side === 'inner'
-				? $relation->getRelation()->innerKeys()
-				: $relation->getRelation()->outerKeys();
-		} catch (LogicException) {
-			throw RelationLoaderException::relationKeysIncomplete($relation);
-		}
-
-		if ($keys === []) {
-			throw RelationLoaderException::relationKeysIncomplete($relation);
-		}
-
-		return $keys;
 	}
 }

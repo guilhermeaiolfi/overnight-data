@@ -11,9 +11,7 @@ use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
-use ON\Data\Query\Relation\LoadBranch;
 use ON\Data\Query\Relation\LoadRuntime;
-use ON\Data\Query\Relation\OwnedBranchPlan;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
@@ -23,6 +21,10 @@ final class M2MLoader extends AbstractLoader
 {
 	private const THROUGH_CONTAINER = '__target';
 
+	private ?QuerySourceInterface $throughSource = null;
+
+	private ?M2MThroughNode $throughNode = null;
+
 	protected function initNode(RelationRef $relation, LoadRuntime $runtime): AbstractNode
 	{
 		$definition = $relation->getRelation();
@@ -31,40 +33,43 @@ final class M2MLoader extends AbstractLoader
 			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');
 		}
 
-		$throughDefinition = $this->throughDefinition($relation, $definition);
-		$branch = $runtime->getCurrentBranch();
-		$throughPlan = $this->throughPlan($branch, $throughDefinition);
-		$targetIdentity = $branch->requireFields($relation->getCollection()->getPrimaryKey());
-		$branch->requireFields($branch->getPublicFields());
-		$targetOuterKeys = $branch->requireFields($this->relationKeys($relation, 'outer'));
-		$throughOuterKeys = $throughPlan->requireFields($this->throughKeys($relation, $throughDefinition, 'outer'));
-		$throughInnerKeys = $throughPlan->requireFields($this->throughKeys($relation, $throughDefinition, 'inner'));
-		$parentInnerKeys = $runtime->requireParentFields($this->relationKeys($relation, 'inner'));
-		$throughIdentity = $throughPlan->requireFields(array_values(array_unique([
+		$through = $this->through($relation, $definition);
+		$relationInnerKeys = $definition->getInnerKeys();
+		$relationOuterKeys = $definition->getOuterKeys();
+		$throughInnerKeys = $through->getInnerKeys();
+		$throughOuterKeys = $through->getOuterKeys();
+		$current = $runtime->getCurrentBranch();
+		$parent = $runtime->getParentBranch();
+		$targetIdentity = $current->requireFields($relation->getCollection()->getPrimaryKey());
+		$current->requireFields($current->getPublicFields());
+		$targetOuterKeyColumns = $current->requireFields($relationOuterKeys);
+		$parentInnerKeyColumns = $parent?->requireFields($relationInnerKeys)
+			?? $runtime->requireRootFields($relationInnerKeys);
+		$throughColumns = array_values(array_unique([
 			...$throughInnerKeys,
 			...$throughOuterKeys,
-		])));
+		]));
 
 		$targetNode = new SingularNode(
-			$branch->getNodeColumns(),
+			$runtime->getNodeColumns(),
 			$targetIdentity,
-			$targetOuterKeys,
+			$targetOuterKeyColumns,
 			$throughOuterKeys,
 		);
-		$branch->setPublicNode($targetNode);
-		$branch->setPublicPayloadChild(self::THROUGH_CONTAINER);
+		$current->setPublicNode($targetNode);
+		$current->setPublicPayloadChild(self::THROUGH_CONTAINER);
 
-		$throughNode = new M2MThroughNode(
-			$throughPlan->getNodeColumns(),
-			$throughIdentity,
+		$this->throughNode = new M2MThroughNode(
+			$throughColumns,
+			$throughColumns,
 			$throughInnerKeys,
-			$parentInnerKeys,
+			$parentInnerKeyColumns,
 			self::THROUGH_CONTAINER,
 			$targetNode,
 		);
-		$throughPlan->setNode($throughNode);
+		$this->selectThroughFields($relation, $runtime, $this->throughNode);
 
-		return $throughNode;
+		return $this->throughNode;
 	}
 
 	public function load(RelationRef $relation, LoadRuntime $runtime): void
@@ -78,29 +83,31 @@ final class M2MLoader extends AbstractLoader
 			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');
 		}
 
-		$throughDefinition = $this->throughDefinition($relation, $definition);
+		$through = $this->through($relation, $definition);
 
-		if ($throughDefinition->getWhere() !== []) {
+		if ($through->getWhere() !== []) {
 			throw RelationLoaderException::throughWhereNotSupported($relation);
 		}
 
+		$relationOuterKeys = $definition->getOuterKeys();
+		$throughOuterKeys = $through->getOuterKeys();
 		$query = $runtime->createQuery($relation->getCollection());
-		$through = $query->join(
-			$throughDefinition->getCollection(),
+		$throughSource = $query->join(
+			$through->getCollection(),
 			$definition->isNullable() ? JoinType::LEFT : JoinType::INNER,
 			implode('.', $relation->getPath()) . '@through',
 		);
 
 		$this->addM2MConditions(
-			$through,
+			$throughSource,
 			$query,
-			$this->relationKeys($relation, 'outer'),
-			$this->throughKeys($relation, $throughDefinition, 'outer'),
+			$relationOuterKeys,
+			$throughOuterKeys,
 		);
 
 		$runtime->setJoinedAttachment(false);
 		$runtime->setQueryContext($query, $query);
-		$this->throughPlan($runtime->getCurrentBranch(), $throughDefinition)->setSource($through);
+		$this->throughSource = $throughSource;
 		$runtime->nextPass('loadData');
 	}
 
@@ -118,15 +125,15 @@ final class M2MLoader extends AbstractLoader
 			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');
 		}
 
-		$throughDefinition = $this->throughDefinition($relation, $definition);
-		$through = $this->throughPlan($runtime->getCurrentBranch(), $throughDefinition)->getSource();
-		$throughInnerKeys = $this->throughKeys($relation, $throughDefinition, 'inner');
+		$through = $this->through($relation, $definition);
+		$throughSource = $this->throughSource ?? throw RelationLoaderException::loadingNotImplemented($relation);
+		$throughInnerKeys = $through->getInnerKeys();
 		$query = $runtime->getQuery();
 
 		if (count($throughInnerKeys) === 1) {
 			$query->where(
 				x()->in(
-					$through->field($throughInnerKeys[0]),
+					$throughSource->field($throughInnerKeys[0]),
 					array_map(static fn (array $values) => array_values($values)[0], $references),
 				),
 			);
@@ -142,7 +149,7 @@ final class M2MLoader extends AbstractLoader
 			$comparisons = [];
 
 			foreach ($throughInnerKeys as $index => $fieldName) {
-				$comparisons[] = x()->eq($through->field($fieldName), array_values($values)[$index]);
+				$comparisons[] = x()->eq($throughSource->field($fieldName), array_values($values)[$index]);
 			}
 
 			$predicates[] = x()->and(...$comparisons);
@@ -163,29 +170,29 @@ final class M2MLoader extends AbstractLoader
 			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');
 		}
 
-		$throughDefinition = $this->throughDefinition($relation, $definition);
+		$through = $this->through($relation, $definition);
 
-		if ($throughDefinition->getWhere() !== []) {
+		if ($through->getWhere() !== []) {
 			throw RelationLoaderException::throughWhereNotSupported($relation);
 		}
 
 		$source = $relation->getParentSource();
 		$type = $definition->isNullable() ? JoinType::LEFT : JoinType::INNER;
 		$query = $relation->getQuery();
-		$relationInnerKeys = $this->relationKeys($relation, 'inner');
-		$relationOuterKeys = $this->relationKeys($relation, 'outer');
-		$throughInnerKeys = $this->throughKeys($relation, $throughDefinition, 'inner');
-		$throughOuterKeys = $this->throughKeys($relation, $throughDefinition, 'outer');
+		$relationInnerKeys = $definition->getInnerKeys();
+		$relationOuterKeys = $definition->getOuterKeys();
+		$throughInnerKeys = $through->getInnerKeys();
+		$throughOuterKeys = $through->getOuterKeys();
 
-		$through = $query->join(
-			$throughDefinition->getCollection(),
+		$throughSource = $query->join(
+			$through->getCollection(),
 			$type,
 			implode('.', $relation->getPath()) . '@through',
 			$source,
 		);
 
 		$this->addM2MConditions(
-			$through,
+			$throughSource,
 			$source,
 			$relationInnerKeys,
 			$throughInnerKeys,
@@ -195,12 +202,12 @@ final class M2MLoader extends AbstractLoader
 			$definition->getCollection(),
 			$type,
 			implode('.', $relation->getPath()),
-			$through,
+			$throughSource,
 		);
 
 		$this->addM2MConditions(
 			$target,
-			$through,
+			$throughSource,
 			$throughOuterKeys,
 			$relationOuterKeys,
 		);
@@ -225,7 +232,7 @@ final class M2MLoader extends AbstractLoader
 		}
 	}
 
-	private function throughDefinition(RelationRef $relation, M2MRelation $definition): M2MThrough
+	private function through(RelationRef $relation, M2MRelation $definition): M2MThrough
 	{
 		try {
 			return $definition->getThrough();
@@ -234,32 +241,45 @@ final class M2MLoader extends AbstractLoader
 		}
 	}
 
-	private function throughPlan(LoadBranch $branch, M2MThrough $throughDefinition): OwnedBranchPlan
+	private function selectThroughFields(RelationRef $relation, LoadRuntime $runtime, M2MThroughNode $throughNode): void
 	{
-		return $branch->ownedPlan(
-			'through',
-			$throughDefinition->getCollection(),
-			[...$branch->getRelation()->getPath(), '__through'],
-		);
+		$query = $runtime->getQuery();
+		$source = $this->throughSource ?? throw RelationLoaderException::loadingNotImplemented($relation);
+		$aliases = [];
+
+		foreach ($this->throughColumns($relation) as $fieldName) {
+			$alias = sprintf(
+				'__on_data_%s_%s',
+				strtolower(preg_replace('/[^a-z0-9_]+/i', '_', implode('_', [...$relation->getPath(), '__through', $fieldName])) ?? 'field'),
+				count($aliases),
+			);
+
+			if (! $query->getSelections()->hasNamedExpression($alias)) {
+				$query->select($source->field($fieldName)->as($alias));
+			}
+
+			$aliases[] = $alias;
+		}
+
+		$throughNode->setValueAliases($aliases);
 	}
 
 	/**
-	 * @return non-empty-list<string>
+	 * @return list<string>
 	 */
-	private function throughKeys(RelationRef $relation, M2MThrough $throughDefinition, string $side): array
+	private function throughColumns(RelationRef $relation): array
 	{
-		try {
-			$keys = $side === 'inner'
-				? $throughDefinition->throughInnerKeys()
-				: $throughDefinition->throughOuterKeys();
-		} catch (LogicException) {
-			throw RelationLoaderException::relationKeysIncomplete($relation);
+		$definition = $relation->getRelation();
+
+		if (! $definition instanceof M2MRelation) {
+			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');
 		}
 
-		if ($keys === []) {
-			throw RelationLoaderException::relationKeysIncomplete($relation);
-		}
+		$through = $this->through($relation, $definition);
 
-		return $keys;
+		return array_values(array_unique([
+			...$through->getInnerKeys(),
+			...$through->getOuterKeys(),
+		]));
 	}
 }

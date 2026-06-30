@@ -119,12 +119,12 @@ final class CustomOwnedRelation extends DefinitionNode implements RelationInterf
 
 	public function getInnerKey(): string|array
 	{
-		$keys = $this->innerKeys();
+		$keys = $this->getInnerKeys();
 
 		return count($keys) === 1 ? $keys[0] : $keys;
 	}
 
-	public function innerKeys(): array
+	public function getInnerKeys(): array
 	{
 		$keys = $this->get('inner_keys');
 
@@ -145,12 +145,12 @@ final class CustomOwnedRelation extends DefinitionNode implements RelationInterf
 
 	public function getOuterKey(): string|array
 	{
-		$keys = $this->outerKeys();
+		$keys = $this->getOuterKeys();
 
 		return count($keys) === 1 ? $keys[0] : $keys;
 	}
 
-	public function outerKeys(): array
+	public function getOuterKeys(): array
 	{
 		$keys = $this->get('outer_keys');
 

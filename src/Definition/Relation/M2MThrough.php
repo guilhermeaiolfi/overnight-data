@@ -55,9 +55,9 @@ class M2MThrough extends DefinitionNode
 
 	public function getInnerKey(): string|array
 	{
-		$keys = $this->throughInnerKeys();
+		$keys = $this->getInnerKeys();
 		if (count($keys) !== 1) {
-			throw new LogicException('getInnerKey() is only available for single-key through relations. Use throughInnerKeys() instead.');
+			throw new LogicException('getInnerKey() is only available for single-key through relations. Use getInnerKeys() instead.');
 		}
 
 		return $keys[0];
@@ -65,9 +65,9 @@ class M2MThrough extends DefinitionNode
 
 	public function getInnerField(): FieldInterface
 	{
-		$keys = $this->throughInnerKeys();
+		$keys = $this->getInnerKeys();
 		if (count($keys) !== 1) {
-			throw new LogicException('getInnerField() is only available for single-key through relations. Use throughInnerKeys() instead.');
+			throw new LogicException('getInnerField() is only available for single-key through relations. Use getInnerKeys() instead.');
 		}
 
 		return $this->getCollection()->getFields()->get($keys[0]);
@@ -83,9 +83,9 @@ class M2MThrough extends DefinitionNode
 
 	public function getOuterKey(): string|array
 	{
-		$keys = $this->throughOuterKeys();
+		$keys = $this->getOuterKeys();
 		if (count($keys) !== 1) {
-			throw new LogicException('getOuterKey() is only available for single-key through relations. Use throughOuterKeys() instead.');
+			throw new LogicException('getOuterKey() is only available for single-key through relations. Use getOuterKeys() instead.');
 		}
 
 		return $keys[0];
@@ -93,15 +93,15 @@ class M2MThrough extends DefinitionNode
 
 	public function getOuterField(): FieldInterface
 	{
-		$keys = $this->throughOuterKeys();
+		$keys = $this->getOuterKeys();
 		if (count($keys) !== 1) {
-			throw new LogicException('getOuterField() is only available for single-key through relations. Use throughOuterKeys() instead.');
+			throw new LogicException('getOuterField() is only available for single-key through relations. Use getOuterKeys() instead.');
 		}
 
 		return $this->getCollection()->getFields()->get($keys[0]);
 	}
 
-	public function throughInnerKeys(): array
+	public function getInnerKeys(): array
 	{
 		$keys = $this->get('inner_keys');
 		if (! is_array($keys) || $keys === []) {
@@ -111,7 +111,7 @@ class M2MThrough extends DefinitionNode
 		return $keys;
 	}
 
-	public function throughOuterKeys(): array
+	public function getOuterKeys(): array
 	{
 		$keys = $this->get('outer_keys');
 		if (! is_array($keys) || $keys === []) {
@@ -186,11 +186,11 @@ class M2MThrough extends DefinitionNode
 		}
 
 		try {
-			$relationInnerKeys = $this->relation()->innerKeys();
+			$relationInnerKeys = $this->relation()->getInnerKeys();
 			if ($innerKeys !== [] && count($innerKeys) !== count($relationInnerKeys)) {
 				throw new InvalidArgumentException(
 					sprintf(
-						'Many-to-many through inner key count mismatch: relation innerKeys has %d entries and throughInnerKeys has %d.',
+						'Many-to-many through inner key count mismatch: relation getInnerKeys() has %d entries and through getInnerKeys() has %d.',
 						count($relationInnerKeys),
 						count($innerKeys)
 					)
@@ -200,11 +200,11 @@ class M2MThrough extends DefinitionNode
 		}
 
 		try {
-			$relationOuterKeys = $this->relation()->outerKeys();
+			$relationOuterKeys = $this->relation()->getOuterKeys();
 			if ($outerKeys !== [] && count($outerKeys) !== count($relationOuterKeys)) {
 				throw new InvalidArgumentException(
 					sprintf(
-						'Many-to-many through outer key count mismatch: relation outerKeys has %d entries and throughOuterKeys has %d.',
+						'Many-to-many through outer key count mismatch: relation getOuterKeys() has %d entries and through getOuterKeys() has %d.',
 						count($relationOuterKeys),
 						count($outerKeys)
 					)
