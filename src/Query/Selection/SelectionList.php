@@ -18,6 +18,16 @@ use Traversable;
 final class SelectionList implements IteratorAggregate, Countable
 {
 	/**
+	 * @var list<string>
+	 */
+	private const PARSER_REASONS = [
+		SelectionReason::PUBLIC,
+		SelectionReason::REQUIRED,
+		SelectionReason::RELATION,
+		SelectionReason::IDENTITY,
+	];
+
+	/**
 	 * @var list<SelectionItem>
 	 */
 	private array $entries = [];
@@ -26,6 +36,11 @@ final class SelectionList implements IteratorAggregate, Countable
 	 * @var array<string, ValueExpressionInterface>
 	 */
 	private array $namedExpressions = [];
+
+	/**
+	 * @var array<string, list<int>>
+	 */
+	private array $reasonEntryIndexes = [];
 
 	/**
 	 * @param list<ValueExpressionInterface|AliasedExpression> $expressions
@@ -100,6 +115,10 @@ final class SelectionList implements IteratorAggregate, Countable
 				continue;
 			}
 
+			$newReasons = array_values(array_filter(
+				$normalizedReasons,
+				static fn (string $reason): bool => ! $entry->hasReason($reason),
+			));
 			$updated = $entry->withReasons($normalizedReasons);
 
 			if ($explicit) {
@@ -107,6 +126,7 @@ final class SelectionList implements IteratorAggregate, Countable
 			}
 
 			$this->entries[$index] = $updated;
+			$this->registerReasonIndexes($index, $newReasons);
 
 			return $updated;
 		}
@@ -116,7 +136,7 @@ final class SelectionList implements IteratorAggregate, Countable
 		}
 
 		$item = new SelectionItem($expression, $explicit, $normalizedReasons);
-		$this->appendItem($item);
+		$this->appendItem($item, $normalizedReasons);
 
 		return $item;
 	}
@@ -184,13 +204,25 @@ final class SelectionList implements IteratorAggregate, Countable
 	public function filter(callable $predicate): self
 	{
 		$filtered = new self();
+		$indexMap = [];
 
-		foreach ($this->entries as $entry) {
+		foreach ($this->entries as $index => $entry) {
 			if (! $predicate($entry)) {
 				continue;
 			}
 
+			$indexMap[$index] = count($filtered->entries);
 			$filtered->appendItem($entry);
+		}
+
+		foreach ($this->reasonEntryIndexes as $reason => $indexes) {
+			foreach ($indexes as $index) {
+				if (! isset($indexMap[$index])) {
+					continue;
+				}
+
+				$filtered->registerReasonIndex($reason, $indexMap[$index]);
+			}
 		}
 
 		return $filtered;
@@ -201,7 +233,15 @@ final class SelectionList implements IteratorAggregate, Countable
 	 */
 	public function getParserItems(): array
 	{
-		return $this->entries;
+		return $this->filter(static function (SelectionItem $selection): bool {
+			foreach (self::PARSER_REASONS as $reason) {
+				if ($selection->hasReason($reason)) {
+					return true;
+				}
+			}
+
+			return false;
+		})->getAll();
 	}
 
 	/**
@@ -209,9 +249,7 @@ final class SelectionList implements IteratorAggregate, Countable
 	 */
 	public function getPublicItems(): array
 	{
-		return $this->filter(
-			static fn (SelectionItem $selection): bool => $selection->hasReason(SelectionReason::PUBLIC),
-		)->getAll();
+		return $this->getItemsInReasonOrder(SelectionReason::PUBLIC);
 	}
 
 	/**
@@ -219,9 +257,7 @@ final class SelectionList implements IteratorAggregate, Countable
 	 */
 	public function getIdentityItems(): array
 	{
-		return $this->filter(
-			static fn (SelectionItem $selection): bool => $selection->hasReason(SelectionReason::IDENTITY),
-		)->getAll();
+		return $this->getItemsInReasonOrder(SelectionReason::IDENTITY);
 	}
 
 	public function getNamedExpression(string $name): ValueExpressionInterface
@@ -247,14 +283,22 @@ final class SelectionList implements IteratorAggregate, Countable
 		return new ArrayIterator($this->entries);
 	}
 
-	private function appendItem(SelectionItem $item): void
+	/**
+	 * @param list<string> $reasons
+	 */
+	private function appendItem(SelectionItem $item, array $reasons = []): void
 	{
 		$this->entries[] = $item;
+		$index = array_key_last($this->entries);
 
 		$expression = $item->getExpression();
 
 		if ($expression instanceof AliasedExpression) {
 			$this->namedExpressions[$expression->getAlias()] = $expression->getExpression();
+		}
+
+		if (is_int($index)) {
+			$this->registerReasonIndexes($index, $reasons);
 		}
 	}
 
@@ -280,5 +324,46 @@ final class SelectionList implements IteratorAggregate, Countable
 		}
 
 		return null;
+	}
+
+	/**
+	 * @param list<string> $reasons
+	 */
+	private function registerReasonIndexes(int $index, array $reasons): void
+	{
+		foreach ($reasons as $reason) {
+			$this->registerReasonIndex($reason, $index);
+		}
+	}
+
+	private function registerReasonIndex(string $reason, int $index): void
+	{
+		$this->reasonEntryIndexes[$reason] ??= [];
+
+		if (in_array($index, $this->reasonEntryIndexes[$reason], true)) {
+			return;
+		}
+
+		$this->reasonEntryIndexes[$reason][] = $index;
+	}
+
+	/**
+	 * @return list<SelectionItem>
+	 */
+	private function getItemsInReasonOrder(string $reason): array
+	{
+		$items = [];
+
+		foreach ($this->reasonEntryIndexes[$reason] ?? [] as $index) {
+			$item = $this->entries[$index] ?? null;
+
+			if (! $item instanceof SelectionItem) {
+				continue;
+			}
+
+			$items[] = $item;
+		}
+
+		return $items;
 	}
 }

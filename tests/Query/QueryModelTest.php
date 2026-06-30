@@ -1127,6 +1127,107 @@ final class QueryModelTest extends TestCase
 		self::assertSame($second, $list->getAll()[0]);
 	}
 
+	public function testSelectionListParserItemsExcludeExplicitOnlyEntries(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$list = new SelectionList();
+
+		$list->add($query->id, SelectionReason::EXPLICIT);
+		$list->add($query->name, SelectionReason::PUBLIC);
+
+		self::assertSame([$query->name], array_map(
+			static fn (SelectionItem $selection): mixed => $selection->getExpression(),
+			$list->getParserItems(),
+		));
+	}
+
+	public function testSelectionListParserItemsIncludePublicRequiredRelationAndIdentityEntries(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$list = new SelectionList();
+
+		$list->add($query->name, SelectionReason::PUBLIC);
+		$list->add($query->email, SelectionReason::REQUIRED);
+		$list->add($query->id, SelectionReason::RELATION);
+		$list->add($query->title, SelectionReason::IDENTITY);
+		$list->add($query->active, SelectionReason::INTERNAL);
+
+		self::assertSame(
+			[$query->name, $query->email, $query->id, $query->title],
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getParserItems()),
+		);
+	}
+
+	public function testSelectionListPublicItemsFollowPublicReasonInsertionOrder(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$list = new SelectionList();
+
+		$list->add($query->id, SelectionReason::REQUIRED);
+		$list->add($query->name, SelectionReason::PUBLIC);
+		$list->add($query->id, SelectionReason::PUBLIC);
+
+		self::assertSame(
+			[$query->name, $query->id],
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getPublicItems()),
+		);
+	}
+
+	public function testSelectionListIdentityItemsFollowIdentityReasonInsertionOrder(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$list = new SelectionList();
+
+		$list->add($query->name, SelectionReason::REQUIRED);
+		$list->add($query->id, SelectionReason::IDENTITY);
+		$list->add($query->title, SelectionReason::IDENTITY);
+
+		self::assertSame(
+			[$query->id, $query->title],
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getIdentityItems()),
+		);
+	}
+
+	public function testSelectionListFilterPreservesReasonDerivedViews(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$list = new SelectionList();
+
+		$list->add($query->id, SelectionReason::REQUIRED);
+		$list->add($query->name, SelectionReason::PUBLIC);
+		$list->add($query->id, SelectionReason::PUBLIC);
+		$list->add($query->title, SelectionReason::IDENTITY);
+
+		$filtered = $list->filter(static fn (SelectionItem $selection): bool => $selection->getExpression() !== $query->name);
+
+		self::assertSame(
+			[$query->id],
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $filtered->getPublicItems()),
+		);
+		self::assertSame(
+			[$query->id, $query->title],
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $filtered->getParserItems()),
+		);
+		self::assertSame(
+			[$query->title],
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $filtered->getIdentityItems()),
+		);
+	}
+
+	public function testSelectionListAddDoesNotDuplicateReasonOrderEntries(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$list = new SelectionList();
+
+		$list->add($query->id, SelectionReason::PUBLIC);
+		$list->add($query->id, SelectionReason::PUBLIC);
+
+		self::assertSame(
+			[$query->id],
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getPublicItems()),
+		);
+	}
+
 	public function testSelectionItemDoesNotExposeRoleSpecificApis(): void
 	{
 		foreach (['asPublic', 'asIdentity', 'parse', 'includeInParser', 'asParserKey', 'asRowAlias'] as $method) {
