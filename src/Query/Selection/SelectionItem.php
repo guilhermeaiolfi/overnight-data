@@ -8,7 +8,7 @@ use InvalidArgumentException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 
-final class Selection
+final class SelectionItem
 {
 	/**
 	 * @param list<string> $reasons
@@ -73,6 +73,20 @@ final class Selection
 		}
 
 		return new self($this->expression, $this->explicit, [...$this->reasons, $reason]);
+	}
+
+	/**
+	 * @param list<string> $reasons
+	 */
+	public function withReasons(array $reasons): self
+	{
+		$updated = $this;
+
+		foreach ($reasons as $reason) {
+			$updated = $updated->withReason($reason);
+		}
+
+		return $updated;
 	}
 
 	private function normalizeReason(string $reason): string

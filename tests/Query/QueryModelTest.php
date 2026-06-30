@@ -36,8 +36,9 @@ use ON\Data\Query\ExpressionFactory;
 use function ON\Data\Query\query;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
-use ON\Data\Query\Selection\Selection;
+use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionList;
+use ON\Data\Query\Selection\SelectionReason;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
 use ON\Data\Query\Sort\SortDirection;
@@ -134,7 +135,7 @@ final class QueryModelTest extends TestCase
 
 		self::assertSame($query, $returned);
 		self::assertCount(1, $selections);
-		self::assertInstanceOf(Selection::class, $selections[0]);
+		self::assertInstanceOf(SelectionItem::class, $selections[0]);
 		self::assertSame($field, $selections[0]->getExpression());
 		self::assertTrue($selections[0]->isExplicit());
 		self::assertSame([], $selections[0]->getReasons());
@@ -143,7 +144,7 @@ final class QueryModelTest extends TestCase
 	public function testSelectionConstructorNormalizesAndDeduplicatesReasons(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
-		$selection = new Selection($query->id, false, [' relation-key ', 'relation-key', ' result-grouping-key ']);
+		$selection = new SelectionItem($query->id, false, [' relation-key ', 'relation-key', ' result-grouping-key ']);
 
 		self::assertSame(['relation-key', 'result-grouping-key'], $selection->getReasons());
 		self::assertTrue($selection->hasReason('relation-key'));
@@ -1058,7 +1059,7 @@ final class QueryModelTest extends TestCase
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$query
 			->select($query->name, $query->email->as('mail'))
-			->require($query->id, 'relation-key')
+			->require($query->id, SelectionReason::RELATION)
 			->require($query->id, 'result-grouping-key');
 
 		$selections = $query->getSelections();
@@ -1066,8 +1067,71 @@ final class QueryModelTest extends TestCase
 		self::assertInstanceOf(SelectionList::class, $selections);
 		self::assertCount(2, $selections->getExplicit());
 		self::assertCount(1, $selections->getImplicit());
-		self::assertCount(1, $selections->getByReason('relation-key'));
-		self::assertCount(1, $selections->getFiltered(static fn (Selection $selection): bool => $selection->hasReason('result-grouping-key')));
+		self::assertCount(1, $selections->getByReason(SelectionReason::RELATION));
+		self::assertCount(1, $selections->filter(static fn (SelectionItem $selection): bool => $selection->hasReason('result-grouping-key'))->getAll());
+	}
+
+	public function testSelectionListFilterReturnsANewListAndPreservesOrder(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$query
+			->select($query->name, $query->email->as('mail'))
+			->require($query->id, SelectionReason::RELATION);
+
+		$filtered = $query->getSelections()->filter(
+			static fn (SelectionItem $selection): bool => $selection->isExplicit(),
+		);
+
+		self::assertNotSame($query->getSelections(), $filtered);
+		self::assertSame(
+			[$query->name, $query->email->as('mail')->getExpression()],
+			array_map(
+				static fn (SelectionItem $selection): mixed => $selection->getExpression() instanceof AliasedExpression
+					? $selection->getExpression()->getExpression()
+					: $selection->getExpression(),
+				$filtered->getAll(),
+			),
+		);
+		self::assertCount(3, $query->getSelections()->getAll());
+	}
+
+	public function testSelectionListFilterSupportsOrLogicThroughCallbacks(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$query
+			->select($query->name)
+			->require($query->id, SelectionReason::RELATION)
+			->require($query->title, SelectionReason::INTERNAL);
+
+		$filtered = $query->getSelections()->filter(
+			static fn (SelectionItem $selection): bool => $selection->hasReason(SelectionReason::RELATION)
+				|| $selection->hasReason(SelectionReason::INTERNAL),
+		);
+
+		self::assertSame([$query->id, $query->title], array_map(
+			static fn (SelectionItem $selection): mixed => $selection->getExpression(),
+			$filtered->getAll(),
+		));
+	}
+
+	public function testSelectionListAddMergesReasonsAndReturnsTheUpdatedItem(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$list = new SelectionList();
+
+		$first = $list->add($query->id, SelectionReason::RELATION);
+		$second = $list->add($query->id, [SelectionReason::INTERNAL, SelectionReason::RELATION]);
+
+		self::assertNotSame($first, $second);
+		self::assertSame([SelectionReason::RELATION, SelectionReason::INTERNAL], $second->getReasons());
+		self::assertSame($second, $list->getAll()[0]);
+	}
+
+	public function testSelectionItemDoesNotExposeRoleSpecificApis(): void
+	{
+		foreach (['asPublic', 'asIdentity', 'parse', 'includeInParser', 'asParserKey', 'asRowAlias'] as $method) {
+			self::assertFalse(method_exists(SelectionItem::class, $method), $method);
+		}
 	}
 
 	public function testRequireCreatesAnImplicitSelectionAndAccumulatesUniqueReasons(): void

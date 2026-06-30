@@ -13,12 +13,12 @@ use ON\Data\Query\Expression\ValueExpressionInterface;
 use Traversable;
 
 /**
- * @implements IteratorAggregate<int, Selection>
+ * @implements IteratorAggregate<int, SelectionItem>
  */
 final class SelectionList implements IteratorAggregate, Countable
 {
 	/**
-	 * @var list<Selection>
+	 * @var list<SelectionItem>
 	 */
 	private array $entries = [];
 
@@ -37,17 +37,25 @@ final class SelectionList implements IteratorAggregate, Countable
 		$pendingEntries = $this->entries;
 
 		foreach ($expressions as $expression) {
-			if ($expression instanceof AliasedExpression) {
-				$alias = $expression->getAlias();
-
-				if (isset($this->namedExpressions[$alias]) || isset($incomingExpressions[$alias])) {
-					throw new InvalidArgumentException(sprintf("Query expression alias '%s' is already selected.", $alias));
-				}
-
-				$incomingAliases[] = $alias;
-				$incomingExpressions[$alias] = $expression->getExpression();
+			if (! $expression instanceof AliasedExpression) {
+				continue;
 			}
 
+			$alias = $expression->getAlias();
+			$matchingEntry = $this->findMatchingEntry($expression);
+
+			if (
+				(isset($this->namedExpressions[$alias]) && $matchingEntry === null)
+				|| isset($incomingAliases[$alias])
+			) {
+				throw new InvalidArgumentException(sprintf("Query expression alias '%s' is already selected.", $alias));
+			}
+
+			$incomingAliases[$alias] = true;
+			$incomingExpressions[$alias] = $expression->getExpression();
+		}
+
+		foreach ($expressions as $expression) {
 			$promoted = false;
 
 			foreach ($pendingEntries as $index => $entry) {
@@ -66,34 +74,56 @@ final class SelectionList implements IteratorAggregate, Countable
 			}
 
 			if (! $promoted) {
-				$pendingEntries[] = new Selection($expression, true);
+				$pendingEntries[] = new SelectionItem($expression, true);
 			}
 		}
 
 		$this->entries = $pendingEntries;
 
-		foreach ($incomingAliases as $alias) {
-			$this->namedExpressions[$alias] = $incomingExpressions[$alias];
+		foreach ($incomingExpressions as $alias => $expression) {
+			$this->namedExpressions[$alias] = $expression;
 		}
 	}
 
-	public function require(ValueExpressionInterface|AliasedExpression $expression, string $reason): void
-	{
+	/**
+	 * @param string|list<string> $reasons
+	 */
+	public function add(
+		ValueExpressionInterface|AliasedExpression $expression,
+		string|array $reasons = [],
+		bool $explicit = false,
+	): SelectionItem {
+		$normalizedReasons = $this->normalizeReasons($reasons);
+
 		foreach ($this->entries as $index => $entry) {
 			if (! $this->expressionsMatch($entry->getExpression(), $expression)) {
 				continue;
 			}
 
-			$this->entries[$index] = $entry->withReason($reason);
+			$updated = $entry->withReasons($normalizedReasons);
 
-			return;
+			if ($explicit) {
+				$updated = $updated->withExplicit();
+			}
+
+			$this->entries[$index] = $updated;
+
+			return $updated;
 		}
 
 		if ($expression instanceof AliasedExpression && isset($this->namedExpressions[$expression->getAlias()])) {
 			throw new InvalidArgumentException(sprintf("Query expression alias '%s' is already selected.", $expression->getAlias()));
 		}
 
-		$this->entries[] = (new Selection($expression))->withReason($reason);
+		$item = new SelectionItem($expression, $explicit, $normalizedReasons);
+		$this->appendItem($item);
+
+		return $item;
+	}
+
+	public function require(ValueExpressionInterface|AliasedExpression $expression, string $reason): void
+	{
+		$this->add($expression, $reason);
 	}
 
 	private function expressionsMatch(
@@ -111,7 +141,7 @@ final class SelectionList implements IteratorAggregate, Countable
 	}
 
 	/**
-	 * @return list<Selection>
+	 * @return list<SelectionItem>
 	 */
 	public function getAll(): array
 	{
@@ -119,23 +149,23 @@ final class SelectionList implements IteratorAggregate, Countable
 	}
 
 	/**
-	 * @return list<Selection>
+	 * @return list<SelectionItem>
 	 */
 	public function getExplicit(): array
 	{
-		return $this->getFiltered(static fn (Selection $selection): bool => $selection->isExplicit());
+		return $this->filter(static fn (SelectionItem $selection): bool => $selection->isExplicit())->getAll();
 	}
 
 	/**
-	 * @return list<Selection>
+	 * @return list<SelectionItem>
 	 */
 	public function getImplicit(): array
 	{
-		return $this->getFiltered(static fn (Selection $selection): bool => $selection->isImplicit());
+		return $this->filter(static fn (SelectionItem $selection): bool => $selection->isImplicit())->getAll();
 	}
 
 	/**
-	 * @return list<Selection>
+	 * @return list<SelectionItem>
 	 */
 	public function getByReason(string $reason): array
 	{
@@ -145,16 +175,53 @@ final class SelectionList implements IteratorAggregate, Countable
 			throw new InvalidArgumentException('Selection reason lookups require a non-empty string.');
 		}
 
-		return $this->getFiltered(static fn (Selection $selection): bool => $selection->hasReason($reason));
+		return $this->filter(static fn (SelectionItem $selection): bool => $selection->hasReason($reason))->getAll();
 	}
 
 	/**
-	 * @param callable(Selection): bool $predicate
-	 * @return list<Selection>
+	 * @param callable(SelectionItem): bool $predicate
 	 */
-	public function getFiltered(callable $predicate): array
+	public function filter(callable $predicate): self
 	{
-		return array_values(array_filter($this->entries, $predicate));
+		$filtered = new self();
+
+		foreach ($this->entries as $entry) {
+			if (! $predicate($entry)) {
+				continue;
+			}
+
+			$filtered->appendItem($entry);
+		}
+
+		return $filtered;
+	}
+
+	/**
+	 * @return list<SelectionItem>
+	 */
+	public function getParserItems(): array
+	{
+		return $this->entries;
+	}
+
+	/**
+	 * @return list<SelectionItem>
+	 */
+	public function getPublicItems(): array
+	{
+		return $this->filter(
+			static fn (SelectionItem $selection): bool => $selection->hasReason(SelectionReason::PUBLIC),
+		)->getAll();
+	}
+
+	/**
+	 * @return list<SelectionItem>
+	 */
+	public function getIdentityItems(): array
+	{
+		return $this->filter(
+			static fn (SelectionItem $selection): bool => $selection->hasReason(SelectionReason::IDENTITY),
+		)->getAll();
 	}
 
 	public function getNamedExpression(string $name): ValueExpressionInterface
@@ -173,10 +240,45 @@ final class SelectionList implements IteratorAggregate, Countable
 	}
 
 	/**
-	 * @return Traversable<int, Selection>
+	 * @return Traversable<int, SelectionItem>
 	 */
 	public function getIterator(): Traversable
 	{
 		return new ArrayIterator($this->entries);
+	}
+
+	private function appendItem(SelectionItem $item): void
+	{
+		$this->entries[] = $item;
+
+		$expression = $item->getExpression();
+
+		if ($expression instanceof AliasedExpression) {
+			$this->namedExpressions[$expression->getAlias()] = $expression->getExpression();
+		}
+	}
+
+	/**
+	 * @param string|list<string> $reasons
+	 * @return list<string>
+	 */
+	private function normalizeReasons(string|array $reasons): array
+	{
+		if (is_string($reasons)) {
+			return $reasons === '' ? [] : [$reasons];
+		}
+
+		return array_values($reasons);
+	}
+
+	private function findMatchingEntry(ValueExpressionInterface|AliasedExpression $expression): ?SelectionItem
+	{
+		foreach ($this->entries as $entry) {
+			if ($this->expressionsMatch($entry->getExpression(), $expression)) {
+				return $entry;
+			}
+		}
+
+		return null;
 	}
 }

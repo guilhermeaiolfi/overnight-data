@@ -6,29 +6,13 @@ namespace ON\Data\Query\Relation;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
+use ON\Data\Query\Selection\SelectionList;
+use ON\Data\Query\Selection\SelectionReason;
 use ON\Data\Query\SelectQuery;
 
 final class RelationLoadBranch extends LoadBranch
 {
-	/**
-	 * @var array<string, true>
-	 */
-	private array $parserFieldMap = [];
-
-	/**
-	 * @var array<string, true>
-	 */
-	private array $publicFieldMap = [];
-
-	/**
-	 * @var list<string>
-	 */
-	private array $parserFields = [];
-
-	/**
-	 * @var list<string>
-	 */
-	private array $publicFieldOrder = [];
+	private readonly SelectionList $selections;
 
 	private ?string $continuationMethod = null;
 
@@ -45,6 +29,7 @@ final class RelationLoadBranch extends LoadBranch
 		private readonly LoaderInterface $loader,
 		array $publicFields,
 	) {
+		$this->selections = new SelectionList();
 		$this->parent->addChild($this);
 		$this->addPublicFields($publicFields);
 	}
@@ -83,15 +68,9 @@ final class RelationLoadBranch extends LoadBranch
 		$added = [];
 
 		foreach ($fieldNames as $fieldName) {
-			if (isset($this->parserFieldMap[$fieldName])) {
-				$added[] = $fieldName;
-
-				continue;
-			}
-
-			$this->parserFieldMap[$fieldName] = true;
-			$this->parserFields[] = $fieldName;
-			$added[] = $fieldName;
+			$canonical = $this->fieldSelectionName($fieldName);
+			$this->selections->add($this->getRelationRef()->field($canonical), SelectionReason::REQUIRED);
+			$added[] = $canonical;
 		}
 
 		return $added;
@@ -106,12 +85,9 @@ final class RelationLoadBranch extends LoadBranch
 		$added = [];
 
 		foreach ($fieldNames as $fieldName) {
-			if (! isset($this->publicFieldMap[$fieldName])) {
-				$this->publicFieldMap[$fieldName] = true;
-				$this->publicFieldOrder[] = $fieldName;
-			}
-
-			$added[] = $fieldName;
+			$canonical = $this->fieldSelectionName($fieldName);
+			$this->selections->add($this->getRelationRef()->field($canonical), SelectionReason::PUBLIC);
+			$added[] = $canonical;
 		}
 
 		$this->requireFields($fieldNames);
@@ -124,7 +100,7 @@ final class RelationLoadBranch extends LoadBranch
 	 */
 	public function getParserFields(): array
 	{
-		return $this->parserFields;
+		return array_map($this->selectionFieldName(...), $this->selections->getParserItems());
 	}
 
 	/**
@@ -132,7 +108,7 @@ final class RelationLoadBranch extends LoadBranch
 	 */
 	public function getPublicFields(): array
 	{
-		return $this->publicFieldOrder;
+		return array_map($this->selectionFieldName(...), $this->selections->getPublicItems());
 	}
 
 	/**
@@ -243,7 +219,7 @@ final class RelationLoadBranch extends LoadBranch
 		$item = [];
 
 		if ($this->selection->isLoaded()) {
-			foreach ($this->publicFieldOrder as $fieldName) {
+			foreach ($this->getPublicFields() as $fieldName) {
 				if (array_key_exists($fieldName, $record)) {
 					$item[$fieldName] = $record[$fieldName];
 				}
@@ -383,5 +359,17 @@ final class RelationLoadBranch extends LoadBranch
 	private function promotionPath(): string
 	{
 		return implode('.', $this->getRelationRef()->getPath());
+	}
+
+	private function fieldSelectionName(string $fieldName): string
+	{
+		return $this->getRelationRef()->field($fieldName)->getField()->getName();
+	}
+
+	private function selectionFieldName(\ON\Data\Query\Selection\SelectionItem $selection): string
+	{
+		$expression = $selection->getExpression();
+
+		return $expression->getField()->getName();
 	}
 }

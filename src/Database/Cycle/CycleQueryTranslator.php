@@ -42,7 +42,7 @@ use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\RelationRef;
-use ON\Data\Query\Selection\Selection;
+use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\SortDirection;
 
@@ -194,7 +194,7 @@ final class CycleQueryTranslator
 
 	private function resolveRootResultName(
 		SelectQuery $query,
-		Selection $selection,
+		SelectionItem $selection,
 		ValueExpressionInterface $expression,
 	): string {
 		$selectionExpression = $selection->getExpression();

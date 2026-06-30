@@ -24,6 +24,7 @@ use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelectionTree;
 use ON\Data\Query\Selection\SelectionList;
+use ON\Data\Query\Selection\SelectionReason;
 use ON\Data\Query\Sort\Sort;
 
 final class SelectQuery implements QuerySourceInterface
@@ -200,7 +201,7 @@ final class SelectQuery implements QuerySourceInterface
 			? new SubqueryExpression($field)
 			: $field;
 
-		$this->selections->require($expression, $reason);
+		$this->selections->add($expression, $reason);
 
 		return $this;
 	}

@@ -124,6 +124,15 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		self::assertSame(['title', 'id', 'userId'], $branch->getParserFields());
 	}
 
+	public function testRelationLoadBranchNoLongerKeepsLegacySelectionStateProperties(): void
+	{
+		$reflection = new \ReflectionClass(RelationLoadBranch::class);
+
+		foreach (['parserFieldMap', 'publicFieldMap', 'parserFields', 'publicFieldOrder'] as $property) {
+			self::assertFalse($reflection->hasProperty($property), $property);
+		}
+	}
+
 	public function testTopLevelRelationBranchesUseTheRootBranchAsParent(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
