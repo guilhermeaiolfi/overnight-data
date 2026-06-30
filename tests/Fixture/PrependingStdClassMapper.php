@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Fixture;
 
 use ON\Data\Mapper\Mapper\MapperInterface;
-use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingBranch;
 use ON\Data\Mapper\MappingOptions;
 use stdClass;
 
@@ -25,7 +25,7 @@ final class PrependingStdClassMapper implements MapperInterface
 		return $source instanceof stdClass;
 	}
 
-	public function map(MappingContext $context): mixed
+	public function map(MappingBranch $context): mixed
 	{
 		ComponentTestState::recordRuntime(self::class, $context->getNode()->getPath());
 		$context->write(name: 'specialized', value: 'Mapper');

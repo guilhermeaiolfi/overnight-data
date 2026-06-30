@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Mapper;
 
+use LogicException;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\FieldTypeInterface;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Mapper\MapperInterface;
-use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingBranch;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\MappingRuntime;
@@ -18,7 +19,9 @@ use ON\Data\Mapper\Resolution\BranchNodeResolutionInterface;
 use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
+use ON\Data\Mapper\Writer\ArrayWriterState;
 use ON\Data\Mapper\Writer\WriterInterface;
+use ON\Data\Mapper\Writer\WriterStateInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
@@ -241,22 +244,30 @@ final class RuntimeReuseSpyWriter implements WriterInterface
 		return is_array($target);
 	}
 
-	public function createTarget(MappingNode $node): array
+	public function createState(MappingNode $node): WriterStateInterface
 	{
 		self::$createTargetCalls++;
 
-		return [];
+		return new ArrayWriterState();
 	}
 
 	public function write(
-		mixed $target,
+		WriterStateInterface $state,
 		string|int $name,
 		mixed $value,
 		MappingNode $node,
-	): array {
-		$target[$name] = $value;
+	): void {
+		$state instanceof ArrayWriterState || throw new LogicException();
+		$state->items[$name] = $value;
+	}
 
-		return $target;
+	public function getResult(
+		WriterStateInterface $state,
+		MappingNode $node,
+	): array {
+		$state instanceof ArrayWriterState || throw new LogicException();
+
+		return $state->items;
 	}
 }
 
@@ -478,7 +489,7 @@ final class RuntimeReuseArrayMapper implements MapperInterface
 		return is_array($source);
 	}
 
-	public function map(MappingContext $context): mixed
+	public function map(MappingBranch $context): mixed
 	{
 		self::$mapCalls++;
 
@@ -507,7 +518,7 @@ final class RuntimeReuseObjectMapper implements MapperInterface
 		return is_object($source);
 	}
 
-	public function map(MappingContext $context): mixed
+	public function map(MappingBranch $context): mixed
 	{
 		self::$mapCalls++;
 

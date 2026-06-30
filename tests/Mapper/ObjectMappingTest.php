@@ -14,7 +14,7 @@ use ON\Data\Mapper\Exception\NoMapperFoundException;
 use ON\Data\Mapper\Exception\NoWriterFoundException;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Mapper\ObjectMapper;
-use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingBranch;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\MappingRuntime;
@@ -471,11 +471,11 @@ final class ObjectMappingTest extends TestCase
 		new MapTo('');
 	}
 
-	private function contextFor(ConversionGateway $gateway, object $source): MappingContext
+	private function contextFor(ConversionGateway $gateway, object $source): MappingBranch
 	{
 		$runtime = new MappingRuntime($gateway->getMapperManager());
 
-		return new MappingContext(
+		return new MappingBranch(
 			runtime: $runtime,
 			node: MappingNode::root($source, [], new MappingOptions($gateway)),
 			writer: new ArrayWriter(),

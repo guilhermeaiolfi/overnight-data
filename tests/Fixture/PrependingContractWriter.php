@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Fixture;
 
+use LogicException;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
+use ON\Data\Mapper\Writer\ObjectWriterState;
 use ON\Data\Mapper\Writer\WriterInterface;
+use ON\Data\Mapper\Writer\WriterStateInterface;
 
 final class PrependingContractWriter implements WriterInterface
 {
@@ -24,21 +27,33 @@ final class PrependingContractWriter implements WriterInterface
 		ComponentTestState::recordConstruction(self::class);
 	}
 
-	public function createTarget(MappingNode $node): ContractDto
+	public function createState(MappingNode $node): WriterStateInterface
 	{
 		ComponentTestState::recordRuntime(self::class);
+		$state = new ObjectWriterState();
+		$state->target = new ContractDto();
 
-		return new ContractDto();
+		return $state;
 	}
 
 	public function write(
-		mixed $target,
+		WriterStateInterface $state,
 		string|int $name,
 		mixed $value,
 		MappingNode $node,
-	): ContractDto {
-		$target->{$name} = $value;
+	): void {
+		$state instanceof ObjectWriterState || throw new LogicException();
+		$state->target instanceof ContractDto || throw new LogicException();
+		$state->target->{$name} = $value;
+	}
 
-		return $target;
+	public function getResult(
+		WriterStateInterface $state,
+		MappingNode $node,
+	): ContractDto {
+		$state instanceof ObjectWriterState || throw new LogicException();
+		$state->target instanceof ContractDto || throw new LogicException();
+
+		return $state->target;
 	}
 }

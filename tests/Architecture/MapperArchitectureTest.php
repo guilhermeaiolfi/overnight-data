@@ -83,7 +83,8 @@ final class MapperArchitectureTest extends TestCase
 		$requiredFiles = [
 			'/MapperManager.php',
 			'/MapBuilder.php',
-			'/MappingContext.php',
+			'/MappingBranch.php',
+			'/Writer/WriterStateInterface.php',
 			'/functions.php',
 			'/FieldConversionCoordinator.php',
 			'/Mapper/MapperInterface.php',
@@ -120,5 +121,43 @@ final class MapperArchitectureTest extends TestCase
 		) {
 			self::assertFileDoesNotExist($root . $suffix);
 		}
+	}
+
+	public function testMappingBranchKeepsMapperAndWriterBoundaries(): void
+	{
+		$contents = $this->requireFileContents(dirname(__DIR__, 2) . '/src/Mapper/MappingBranch.php');
+
+		foreach (
+			[
+				'ObjectWriter',
+				'ArrayMapper',
+				'ObjectMapper',
+				'ArrayMapperOptions',
+				'ArrayPathExpander',
+				'Hidden',
+				'ReflectionObject',
+				'ReflectionProperty',
+				'stdClass',
+			] as $forbidden
+		) {
+			self::assertStringNotContainsString($forbidden, $contents);
+		}
+	}
+
+	public function testMappingRuntimeDoesNotUseMapperTypeChecksForConstructorHydration(): void
+	{
+		$contents = $this->requireFileContents(dirname(__DIR__, 2) . '/src/Mapper/MappingRuntime.php');
+
+		self::assertStringNotContainsString('ArrayMapper', $contents);
+		self::assertStringNotContainsString('ObjectMapper', $contents);
+		self::assertStringNotContainsString('instanceof', $contents);
+	}
+
+	private function requireFileContents(string $path): string
+	{
+		$contents = file_get_contents($path);
+		self::assertIsString($contents);
+
+		return $contents;
 	}
 }

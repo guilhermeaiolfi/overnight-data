@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper\Writer;
 
+use LogicException;
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
@@ -58,108 +59,35 @@ final class ObjectWriter implements WriterInterface
 		return self::supportsReflectionTarget($reflection);
 	}
 
-	public function shouldUseConstructorHydration(MappingNode $node): bool
-	{
-		$target = $node->getTarget();
-		if (! is_string($target) || ! class_exists($target) || $target === stdClass::class) {
-			return false;
-		}
-
-		$reflection = $this->getReflection($target);
-		$constructor = $reflection->getConstructor();
-		if (! $constructor instanceof ReflectionMethod) {
-			return false;
-		}
-
-		return $constructor->getNumberOfParameters() > 0
-			|| $this->isReadonlyTarget($reflection);
-	}
-
-	/**
-	 * @param list<array{sourceName: string|int, name: string, value: mixed}> $resolvedEntries
-	 *
-	 * @return array{target: object, consumed: array<string, true>}
-	 */
-	public function createTargetUsingConstructor(
+	public function createState(
 		MappingNode $node,
-		array $resolvedEntries,
-	): array {
-		$target = $node->getTarget();
-		if (! is_string($target) || $target === stdClass::class) {
-			return [
-				'target' => $this->createTarget($node),
-				'consumed' => [],
-			];
-		}
-
-		$reflection = $this->getReflection($target);
-		$this->assertSupportedTargetOnce($reflection);
-		$constructor = $reflection->getConstructor();
-		if (! $constructor instanceof ReflectionMethod) {
-			return [
-				'target' => $this->createTarget($node),
-				'consumed' => [],
-			];
-		}
-
-		$valuesByName = [];
-		foreach ($resolvedEntries as $entry) {
-			$valuesByName[$entry['name']] = $entry['value'];
-		}
-
-		$arguments = [];
-		$consumed = [];
-
-		foreach ($constructor->getParameters() as $parameter) {
-			$name = $parameter->getName();
-			if (array_key_exists($name, $valuesByName)) {
-				$arguments[] = $valuesByName[$name];
-				$consumed[$name] = true;
-
-				continue;
-			}
-
-			if ($parameter->isDefaultValueAvailable()) {
-				$arguments[] = $parameter->getDefaultValue();
-
-				continue;
-			}
-
-			throw $this->missingConstructorParameter($reflection, $parameter);
-		}
-
-		try {
-			return [
-				'target' => $reflection->newInstanceArgs($arguments),
-				'consumed' => $consumed,
-			];
-		} catch (Throwable $exception) {
-			throw new MappingException(
-				sprintf("Unable to instantiate '%s' using constructor hydration.", $reflection->getName()),
-				0,
-				$exception,
-			);
-		}
-	}
-
-	public function createTarget(
-		MappingNode $node,
-	): object {
+	): WriterStateInterface {
+		$state = new ObjectWriterState();
 		$target = $node->getTarget();
 
 		if ($target instanceof stdClass) {
-			return clone $target;
+			$state->target = clone $target;
+
+			return $state;
 		}
 
 		if ($target === stdClass::class) {
-			return new stdClass();
+			$state->target = new stdClass();
+
+			return $state;
 		}
 
 		$reflection = $this->getReflection($target);
 		$this->assertSupportedTargetOnce($reflection);
 
+		if ($this->shouldDelayTargetCreation($reflection)) {
+			return $state;
+		}
+
 		try {
-			return $reflection->newInstanceWithoutConstructor();
+			$state->target = $reflection->newInstanceWithoutConstructor();
+
+			return $state;
 		} catch (Throwable $exception) {
 			throw new MappingException(
 				sprintf("Unable to instantiate '%s' without calling its constructor.", $reflection->getName()),
@@ -170,35 +98,65 @@ final class ObjectWriter implements WriterInterface
 	}
 
 	public function write(
-		mixed $target,
+		WriterStateInterface $state,
 		string|int $name,
 		mixed $value,
 		MappingNode $node,
-	): object {
-		if ($target instanceof stdClass) {
-			$target->{(string) $name} = $value;
+	): void {
+		$objectState = $this->requireState($state);
+		$objectState->values[$name] = $value;
+		$objectState->writes[] = [
+			'name' => $name,
+			'value' => $value,
+			'node' => $node,
+		];
 
-			return $target;
+		if ($objectState->target === null) {
+			return;
+		}
+
+		$this->applyWrite(
+			target: $objectState->target,
+			name: $name,
+			value: $value,
+			node: $node,
+		);
+	}
+
+	public function getResult(
+		WriterStateInterface $state,
+		MappingNode $node,
+	): object {
+		$objectState = $this->requireState($state);
+		if ($objectState->target !== null) {
+			return $objectState->target;
+		}
+
+		$target = $node->getTarget();
+		if (! is_string($target) || $target === stdClass::class) {
+			throw new MappingException('Unable to resolve object result for the requested target.');
 		}
 
 		$reflection = $this->getReflection($target);
-		$property = $this->getPropertyMatcher($target)->match($name);
-		if ($property === null) {
-			return $target;
-		}
+		$this->assertSupportedTargetOnce($reflection);
+		[$object, $consumed] = $this->instantiateUsingResolvedValues($reflection, $objectState->values);
 
-		try {
-			$property->setValue($target, $value);
-		} catch (Throwable $exception) {
-			throw $this->wrapPropertyFailure(
-				$reflection,
-				$property,
-				$node->getPath(),
-				$exception,
+		foreach ($objectState->writes as $write) {
+			if (isset($consumed[(string) $write['name']])) {
+				continue;
+			}
+
+			$this->applyWrite(
+				target: $object,
+				name: $write['name'],
+				value: $write['value'],
+				node: $write['node'],
 			);
 		}
 
-		return $target;
+		$objectState->target = $object;
+
+		return $object;
 	}
 
 	/**
@@ -233,15 +191,17 @@ final class ObjectWriter implements WriterInterface
 		$this->validatedTargets[$class] = true;
 	}
 
-	private function getPropertyMatcher(
-		object $target,
-	): ObjectPropertyMatcher {
+	private function getPropertyMatcher(object $target): ObjectPropertyMatcher
+	{
 		$class = $target::class;
 
 		return $this->propertyMatchers[$class]
 			??= new ObjectPropertyMatcher($this->getReflection($target));
 	}
 
+	/**
+	 * @param ReflectionClass<object> $reflection
+	 */
 	private function assertSupportedTarget(ReflectionClass $reflection): void
 	{
 		$class = $reflection->getName();
@@ -267,6 +227,15 @@ final class ObjectWriter implements WriterInterface
 		}
 	}
 
+	private function requireState(WriterStateInterface $state): ObjectWriterState
+	{
+		if ($state instanceof ObjectWriterState) {
+			return $state;
+		}
+
+		throw new LogicException('ObjectWriter requires ObjectWriterState.');
+	}
+
 	private static function supportsReflectionTarget(ReflectionClass $reflection): bool
 	{
 		$class = $reflection->getName();
@@ -285,6 +254,20 @@ final class ObjectWriter implements WriterInterface
 	/**
 	 * @param ReflectionClass<object> $reflection
 	 */
+	private function shouldDelayTargetCreation(ReflectionClass $reflection): bool
+	{
+		$constructor = $reflection->getConstructor();
+		if (! $constructor instanceof ReflectionMethod) {
+			return false;
+		}
+
+		return $constructor->getNumberOfParameters() > 0
+			|| $this->isReadonlyTarget($reflection);
+	}
+
+	/**
+	 * @param ReflectionClass<object> $reflection
+	 */
 	private function isReadonlyTarget(ReflectionClass $reflection): bool
 	{
 		if (method_exists($reflection, 'isReadOnly') && $reflection->isReadOnly()) {
@@ -298,6 +281,90 @@ final class ObjectWriter implements WriterInterface
 		}
 
 		return false;
+	}
+
+	/**
+	 * @param array<string|int, mixed> $valuesByName
+	 *
+	 * @return array{0: object, 1: array<string, true>}
+	 */
+	private function instantiateUsingResolvedValues(
+		ReflectionClass $reflection,
+		array $valuesByName,
+	): array {
+		$constructor = $reflection->getConstructor();
+		if (! $constructor instanceof ReflectionMethod) {
+			try {
+				return [$reflection->newInstanceWithoutConstructor(), []];
+			} catch (Throwable $exception) {
+				throw new MappingException(
+					sprintf("Unable to instantiate '%s' without calling its constructor.", $reflection->getName()),
+					0,
+					$exception,
+				);
+			}
+		}
+
+		$arguments = [];
+		$consumed = [];
+
+		foreach ($constructor->getParameters() as $parameter) {
+			$name = $parameter->getName();
+			if (array_key_exists($name, $valuesByName)) {
+				$arguments[] = $valuesByName[$name];
+				$consumed[$name] = true;
+
+				continue;
+			}
+
+			if ($parameter->isDefaultValueAvailable()) {
+				$arguments[] = $parameter->getDefaultValue();
+
+				continue;
+			}
+
+			throw $this->missingConstructorParameter($reflection, $parameter);
+		}
+
+		try {
+			return [$reflection->newInstanceArgs($arguments), $consumed];
+		} catch (Throwable $exception) {
+			throw new MappingException(
+				sprintf("Unable to instantiate '%s' using constructor hydration.", $reflection->getName()),
+				0,
+				$exception,
+			);
+		}
+	}
+
+	private function applyWrite(
+		object $target,
+		string|int $name,
+		mixed $value,
+		MappingNode $node,
+	): void {
+		if ($target instanceof stdClass) {
+			$target->{(string) $name} = $value;
+
+			return;
+		}
+
+		$reflection = $this->getReflection($target);
+		$property = $this->getPropertyMatcher($target)->match($name);
+		if ($property === null) {
+			return;
+		}
+
+		try {
+			$property->setValue($target, $value);
+		} catch (Throwable $exception) {
+			throw $this->wrapPropertyFailure(
+				$reflection,
+				$property,
+				$node->getPath(),
+				$exception,
+			);
+		}
 	}
 
 	/**

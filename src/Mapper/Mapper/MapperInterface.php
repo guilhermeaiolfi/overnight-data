@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper\Mapper;
 
-use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingBranch;
 use ON\Data\Mapper\MappingOptions;
 
 interface MapperInterface
@@ -14,5 +14,5 @@ interface MapperInterface
 		MappingOptions $options,
 	): bool;
 
-	public function map(MappingContext $context): mixed;
+	public function map(MappingBranch $context): mixed;
 }

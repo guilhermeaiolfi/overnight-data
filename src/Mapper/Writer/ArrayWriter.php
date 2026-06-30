@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper\Writer;
 
+use LogicException;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
 
@@ -16,22 +17,37 @@ final class ArrayWriter implements WriterInterface
 		return is_array($target);
 	}
 
-	public function createTarget(
+	public function createState(
 		MappingNode $node,
-	): array {
+	): WriterStateInterface {
+		$state = new ArrayWriterState();
 		$target = $node->getTarget();
+		$state->items = is_array($target) ? $target : [];
 
-		return is_array($target) ? $target : [];
+		return $state;
 	}
 
 	public function write(
-		mixed $target,
+		WriterStateInterface $state,
 		string|int $name,
 		mixed $value,
 		MappingNode $node,
-	): array {
-		$target[$name] = $value;
+	): void {
+		if (! $state instanceof ArrayWriterState) {
+			throw new LogicException('ArrayWriter requires ArrayWriterState.');
+		}
 
-		return $target;
+		$state->items[$name] = $value;
+	}
+
+	public function getResult(
+		WriterStateInterface $state,
+		MappingNode $node,
+	): array {
+		if (! $state instanceof ArrayWriterState) {
+			throw new LogicException('ArrayWriter requires ArrayWriterState.');
+		}
+
+		return $state->items;
 	}
 }

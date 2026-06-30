@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Mapper;
 
+use LogicException;
 use ON\Data\Mapper\Attribute\Hidden;
 use ON\Data\Mapper\Attribute\MapTo;
 use ON\Data\Mapper\ConversionGateway;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
+use ON\Data\Mapper\Writer\ArrayWriterState;
 use ON\Data\Mapper\Writer\WriterInterface;
+use ON\Data\Mapper\Writer\WriterStateInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
@@ -41,9 +44,9 @@ final class ConcreteMapperLoopTest extends TestCase
 		self::assertSame(['id' => 10, 'child' => ['name' => 'Ada']], $result);
 		self::assertSame(
 			[
-				['event' => 'createTarget'],
+				['event' => 'createState'],
 				['event' => 'write', 'path' => 'id'],
-				['event' => 'createTarget'],
+				['event' => 'createState'],
 				['event' => 'write', 'path' => 'child.name'],
 				['event' => 'write', 'path' => 'child'],
 			],
@@ -72,9 +75,9 @@ final class ConcreteMapperLoopTest extends TestCase
 		);
 		self::assertSame(
 			[
-				['event' => 'createTarget'],
+				['event' => 'createState'],
 				['event' => 'write', 'path' => 'name'],
-				['event' => 'createTarget'],
+				['event' => 'createState'],
 				['event' => 'write', 'path' => 'child.role'],
 				['event' => 'write', 'path' => 'child'],
 			],
@@ -102,29 +105,37 @@ final class RecordingWriter implements WriterInterface
 		return is_array($target);
 	}
 
-	public function createTarget(MappingNode $node): array
+	public function createState(MappingNode $node): WriterStateInterface
 	{
 		self::$events[] = [
-			'event' => 'createTarget',
+			'event' => 'createState',
 		];
 
-		return [];
+		return new ArrayWriterState();
 	}
 
 	public function write(
-		mixed $target,
+		WriterStateInterface $state,
 		string|int $name,
 		mixed $value,
 		MappingNode $node,
-	): array {
+	): void {
+		$state instanceof ArrayWriterState || throw new LogicException();
 		self::$events[] = [
 			'event' => 'write',
 			'path' => $node->getPath(),
 		];
 
-		$target[$name] = $value;
+		$state->items[$name] = $value;
+	}
 
-		return $target;
+	public function getResult(
+		WriterStateInterface $state,
+		MappingNode $node,
+	): array {
+		$state instanceof ArrayWriterState || throw new LogicException();
+
+		return $state->items;
 	}
 }
 

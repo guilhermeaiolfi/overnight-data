@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\Mapper;
 
 use ON\Data\Mapper\Exception\MappingException;
-use ON\Data\Mapper\Mapper\ArrayMapper;
-use ON\Data\Mapper\Mapper\ObjectMapper;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
 use ON\Data\Mapper\Writer\WriterInterface;
@@ -147,7 +145,7 @@ final class MappingRuntime
 			options: $options,
 		);
 
-		$context = new MappingContext(
+		$context = new MappingBranch(
 			runtime: $this,
 			node: $node,
 			writer: $writer ?? $this->mapperManager->resolveWriter(
@@ -157,7 +155,6 @@ final class MappingRuntime
 			resolvers: $resolvers ?? $this->getResolverChain($options),
 			conversionEnabled: $conversionEnabled ?? $this->isConversionEnabled($options),
 			resolutionCache: $resolutionCache,
-			enableConstructorHydration: $mapper instanceof ArrayMapper || $mapper instanceof ObjectMapper,
 		);
 
 		return $mapper->map($context);

@@ -15,7 +15,7 @@ use Tests\ON\Data\Fixture\SpyResolver;
 
 final class MappingContextTest extends TestCase
 {
-	public function testMappingContextStoresOnlyMappingWideConfiguration(): void
+	public function testMappingOptionsStoreOnlyMappingWideConfiguration(): void
 	{
 		$gateway = ConversionGateway::createDefault();
 		$context = (new MappingOptions($gateway))

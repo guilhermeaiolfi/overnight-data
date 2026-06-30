@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Mapper;
 
+use LogicException;
 use ON\Data\Definition\Registry;
 use ON\Data\Mapper\FieldMap;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Mapper\MapperInterface;
-use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingBranch;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\MappingRuntime;
@@ -18,7 +19,9 @@ use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 use ON\Data\Mapper\Resolution\ResolutionNodeInterface;
 use ON\Data\Mapper\Resolver\CacheableNodeResolverInterface;
+use ON\Data\Mapper\Writer\ObjectWriterState;
 use ON\Data\Mapper\Writer\WriterInterface;
+use ON\Data\Mapper\Writer\WriterStateInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
@@ -486,28 +489,41 @@ final class CacheTrackingWriter implements WriterInterface
 		return $target === stdClass::class || $target instanceof stdClass;
 	}
 
-	public function createTarget(MappingNode $node): stdClass
+	public function createState(MappingNode $node): WriterStateInterface
 	{
-		return new stdClass();
+		$state = new ObjectWriterState();
+		$state->target = new stdClass();
+
+		return $state;
 	}
 
 	public function write(
-		mixed $target,
+		WriterStateInterface $state,
 		string|int $name,
 		mixed $value,
 		MappingNode $node,
-	): stdClass {
+	): void {
+		$state instanceof ObjectWriterState || throw new LogicException();
+		$state->target instanceof stdClass || throw new LogicException();
 		self::$paths[] = $node->getPath();
 		self::$values[] = $value;
-		$target->{$name} = $value;
+		$state->target->{$name} = $value;
+	}
 
-		return $target;
+	public function getResult(
+		WriterStateInterface $state,
+		MappingNode $node,
+	): stdClass {
+		$state instanceof ObjectWriterState || throw new LogicException();
+		$state->target instanceof stdClass || throw new LogicException();
+
+		return $state->target;
 	}
 }
 
 final class CacheDualFieldMapper implements MapperInterface
 {
-	public function map(MappingContext $context): mixed
+	public function map(MappingBranch $context): mixed
 	{
 		$context->write(1, 'int-value');
 		$context->write('1', 'string-value');

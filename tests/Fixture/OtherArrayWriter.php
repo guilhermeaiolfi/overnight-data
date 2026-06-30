@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Fixture;
 
+use LogicException;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
+use ON\Data\Mapper\Writer\ArrayWriterState;
 use ON\Data\Mapper\Writer\WriterInterface;
+use ON\Data\Mapper\Writer\WriterStateInterface;
 
 final class OtherArrayWriter implements WriterInterface
 {
@@ -17,19 +20,27 @@ final class OtherArrayWriter implements WriterInterface
 		return is_array($target);
 	}
 
-	public function createTarget(MappingNode $node): array
+	public function createState(MappingNode $node): WriterStateInterface
 	{
-		return [];
+		return new ArrayWriterState();
 	}
 
 	public function write(
-		mixed $target,
+		WriterStateInterface $state,
 		string|int $name,
 		mixed $value,
 		MappingNode $node,
-	): array {
-		$target[$name] = $value;
+	): void {
+		$state instanceof ArrayWriterState || throw new LogicException();
+		$state->items[$name] = $value;
+	}
 
-		return $target;
+	public function getResult(
+		WriterStateInterface $state,
+		MappingNode $node,
+	): array {
+		$state instanceof ArrayWriterState || throw new LogicException();
+
+		return $state->items;
 	}
 }

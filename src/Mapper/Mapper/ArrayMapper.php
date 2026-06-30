@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Mapper\Mapper;
 
 use ON\Data\Mapper\Exception\MappingException;
-use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingBranch;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\Support\ArrayPathExpander;
@@ -24,7 +24,7 @@ final class ArrayMapper implements MapperInterface
 		return is_array($source);
 	}
 
-	public function map(MappingContext $context): mixed
+	public function map(MappingBranch $context): mixed
 	{
 		$source = $context->getSource();
 		if (! is_array($source)) {

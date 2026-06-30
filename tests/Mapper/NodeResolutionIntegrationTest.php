@@ -8,7 +8,7 @@ use ON\Data\Definition\Registry;
 use ON\Data\Mapper\FieldMap;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Mapper\MapperInterface;
-use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingBranch;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\MappingRuntime;
@@ -106,7 +106,7 @@ final class RecordingRootArrayMapper implements MapperInterface
 		self::$paths = [];
 	}
 
-	public function map(MappingContext $context): mixed
+	public function map(MappingBranch $context): mixed
 	{
 		$node = $context->getNode();
 		self::$paths[] = $node->getPath();

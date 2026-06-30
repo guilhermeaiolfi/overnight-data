@@ -124,8 +124,9 @@ final class ObjectWriterCachingTest extends TestCase
 		$writer = new ObjectWriter();
 		$node = MappingNode::root(['id' => 10], stdClass::class, new MappingOptions(ConversionGateway::createDefault()));
 
-		$target = $writer->createTarget($node);
-		$written = $writer->write($target, 'id', 10, $node->createChildNode('id', 10));
+		$state = $writer->createState($node);
+		$writer->write($state, 'id', 10, $node->createChildNode('id', 10));
+		$written = $writer->getResult($state, $node);
 
 		self::assertInstanceOf(stdClass::class, $written);
 		self::assertSame(10, $written->id);
@@ -139,7 +140,7 @@ final class ObjectWriterCachingTest extends TestCase
 		$writer = new ObjectWriter();
 
 		try {
-			$writer->createTarget($this->rootNode(UserContract::class));
+			$writer->createState($this->rootNode(UserContract::class));
 			self::fail('Expected invalid interface target exception was not thrown.');
 		} catch (MappingException $exception) {
 			self::assertSame(
@@ -148,8 +149,10 @@ final class ObjectWriterCachingTest extends TestCase
 			);
 		}
 
-		$valid = $writer->createTarget($this->rootNode(UserInputDto::class));
-		$written = $writer->write($valid, 'id', 10, $this->rootNode(UserInputDto::class)->createChildNode('id', 10));
+		$node = $this->rootNode(UserInputDto::class);
+		$valid = $writer->createState($node);
+		$writer->write($valid, 'id', 10, $node->createChildNode('id', 10));
+		$written = $writer->getResult($valid, $node);
 
 		self::assertInstanceOf(UserInputDto::class, $written);
 		self::assertSame(10, $written->id);
@@ -158,14 +161,16 @@ final class ObjectWriterCachingTest extends TestCase
 	public function testRepeatedWritesRetainOneMatcherPerConcreteClass(): void
 	{
 		$writer = new ObjectWriter();
-		$parent = new ParentCacheTarget();
-		$child = new ChildCacheTarget();
-		$node = $this->rootNode(ParentCacheTarget::class);
-
-		$writer->write($parent, 'parent_name', 'Ada', $node->createChildNode('parent_name', 'Ada'));
-		$writer->write($parent, 'parent_name', 'Grace', $node->createChildNode('parent_name', 'Grace'));
-		$writer->write($child, 'parent_name', 'Linus', $node->createChildNode('parent_name', 'Linus'));
-		$writer->write($child, 'child_name', 'Editor', $node->createChildNode('child_name', 'Editor'));
+		$parentNode = $this->rootNode(ParentCacheTarget::class);
+		$childNode = $this->rootNode(ChildCacheTarget::class);
+		$parent = $writer->createState($parentNode);
+		$child = $writer->createState($childNode);
+		$writer->write($parent, 'parent_name', 'Ada', $parentNode->createChildNode('parent_name', 'Ada'));
+		$writer->write($parent, 'parent_name', 'Grace', $parentNode->createChildNode('parent_name', 'Grace'));
+		$writer->write($child, 'parent_name', 'Linus', $childNode->createChildNode('parent_name', 'Linus'));
+		$writer->write($child, 'child_name', 'Editor', $childNode->createChildNode('child_name', 'Editor'));
+		$writer->getResult($parent, $parentNode);
+		$writer->getResult($child, $childNode);
 
 		$matchers = $this->privatePropertyValue($writer, 'propertyMatchers');
 		$reflections = $this->privatePropertyValue($writer, 'reflections');
@@ -186,7 +191,7 @@ final class ObjectWriterCachingTest extends TestCase
 		$this->expectException(MappingException::class);
 		$this->expectExceptionMessage($message);
 
-		$writer->createTarget($this->rootNode($target));
+		$writer->createState($this->rootNode($target));
 	}
 
 	/**

@@ -6,7 +6,9 @@ namespace Tests\ON\Data\Fixture;
 
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
+use ON\Data\Mapper\Writer\ArrayWriterState;
 use ON\Data\Mapper\Writer\WriterInterface;
+use ON\Data\Mapper\Writer\WriterStateInterface;
 
 final class NeverWriter implements WriterInterface
 {
@@ -24,19 +26,25 @@ final class NeverWriter implements WriterInterface
 		return false;
 	}
 
-	public function createTarget(MappingNode $node): mixed
+	public function createState(MappingNode $node): WriterStateInterface
 	{
 		ComponentTestState::recordRuntime(self::class);
 
-		return $node->getTarget();
+		return new ArrayWriterState();
 	}
 
 	public function write(
-		mixed $target,
+		WriterStateInterface $state,
 		string|int $name,
 		mixed $value,
 		MappingNode $node,
+	): void {
+	}
+
+	public function getResult(
+		WriterStateInterface $state,
+		MappingNode $node,
 	): mixed {
-		return $target;
+		return null;
 	}
 }

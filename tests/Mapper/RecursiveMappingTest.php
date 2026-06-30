@@ -247,17 +247,17 @@ final class RecursiveMappingTest extends TestCase
 		self::assertSame([
 			[
 				'path' => 'author.id',
-				'target' => [],
+				'state' => [],
 				'parentTarget' => [],
 			],
 			[
 				'path' => 'author.name',
-				'target' => ['id' => 2],
+				'state' => ['id' => 2],
 				'parentTarget' => [],
 			],
 			[
 				'path' => 'author',
-				'target' => [],
+				'state' => [],
 				'parentTarget' => [],
 			],
 		], RuntimeInvariantWriter::$writes);
@@ -278,18 +278,18 @@ final class RecursiveMappingTest extends TestCase
 		self::assertSame([
 			[
 				'path' => 'author.id',
-				'target' => [],
-				'parentTarget' => [],
+				'state' => [],
+				'parentTarget' => 'stdClass',
 			],
 			[
 				'path' => 'author.name',
-				'target' => ['id' => 2],
-				'parentTarget' => ['id' => 2],
+				'state' => ['id' => 2],
+				'parentTarget' => 'stdClass',
 			],
 			[
 				'path' => 'author',
-				'target' => [],
-				'parentTarget' => [],
+				'state' => [],
+				'parentTarget' => 'stdClass',
 			],
 		], RuntimeInvariantWriter::$writes);
 	}

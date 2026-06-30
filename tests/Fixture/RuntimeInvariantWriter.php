@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Fixture;
 
+use LogicException;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
+use ON\Data\Mapper\Writer\ArrayWriterState;
+use ON\Data\Mapper\Writer\ObjectWriterState;
 use ON\Data\Mapper\Writer\WriterInterface;
+use ON\Data\Mapper\Writer\WriterStateInterface;
 use stdClass;
 
 final class RuntimeInvariantWriter implements WriterInterface
@@ -14,7 +18,7 @@ final class RuntimeInvariantWriter implements WriterInterface
 	/**
 	 * @var list<array{
 	 *     path: string,
-	 *     target: mixed,
+	 *     state: mixed,
 	 *     parentTarget: mixed,
 	 * }>
 	 */
@@ -32,38 +36,67 @@ final class RuntimeInvariantWriter implements WriterInterface
 		return is_array($target) || $target instanceof stdClass || $target === stdClass::class;
 	}
 
-	public function createTarget(MappingNode $node): array|stdClass
+	public function createState(MappingNode $node): WriterStateInterface
 	{
 		$target = $node->getTarget();
-
 		if (is_array($target)) {
-			return $target;
+			$state = new ArrayWriterState();
+			$state->items = $target;
+
+			return $state;
 		}
 
-		return $target instanceof stdClass ? clone $target : new stdClass();
+		$state = new ObjectWriterState();
+		$state->target = $target instanceof stdClass ? clone $target : new stdClass();
+
+		return $state;
 	}
 
 	public function write(
-		mixed $target,
+		WriterStateInterface $state,
 		string|int $name,
 		mixed $value,
 		MappingNode $node,
-	): array|stdClass {
+	): void {
 		self::$writes[] = [
 			'path' => $node->getPath(),
-			'target' => $this->normalize($target),
+			'state' => $this->normalizeState($state),
 			'parentTarget' => $this->normalize($node->getParentTarget()),
 		];
 
-		if (is_array($target)) {
-			$target[$name] = $value;
+		if ($state instanceof ArrayWriterState) {
+			$state->items[$name] = $value;
 
-			return $target;
+			return;
 		}
 
-		$target->{(string) $name} = $value;
+		if ($state instanceof ObjectWriterState && $state->target instanceof stdClass) {
+			$state->target->{(string) $name} = $value;
 
-		return $target;
+			return;
+		}
+
+		throw new LogicException();
+	}
+
+	public function getResult(
+		WriterStateInterface $state,
+		MappingNode $node,
+	): array|stdClass {
+		return match (true) {
+			$state instanceof ArrayWriterState => $state->items,
+			$state instanceof ObjectWriterState && $state->target instanceof stdClass => $state->target,
+			default => throw new LogicException(),
+		};
+	}
+
+	private function normalizeState(WriterStateInterface $state): mixed
+	{
+		return match (true) {
+			$state instanceof ArrayWriterState => $this->normalize($state->items),
+			$state instanceof ObjectWriterState => $this->normalize($state->target),
+			default => null,
+		};
 	}
 
 	private function normalize(mixed $value): mixed

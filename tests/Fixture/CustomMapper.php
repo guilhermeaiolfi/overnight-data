@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Fixture;
 
 use ON\Data\Mapper\Mapper\MapperInterface;
-use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingBranch;
 use ON\Data\Mapper\MappingOptions;
 
 final class CustomMapper implements MapperInterface
@@ -17,7 +17,7 @@ final class CustomMapper implements MapperInterface
 		return is_array($source);
 	}
 
-	public function map(MappingContext $context): mixed
+	public function map(MappingBranch $context): mixed
 	{
 		foreach ((array) $context->getSource() as $name => $value) {
 			$context->write(

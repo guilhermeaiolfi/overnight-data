@@ -8,7 +8,9 @@ use ON\Data\Mapper\ConversionGateway;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
+use ON\Data\Mapper\Writer\ArrayWriterState;
 use ON\Data\Mapper\Writer\WriterInterface;
+use ON\Data\Mapper\Writer\WriterStateInterface;
 use PHPUnit\Framework\TestCase;
 
 final class ArrayMapperTest extends TestCase
@@ -81,23 +83,26 @@ final class ArrayMapperNodeRecordingWriter implements WriterInterface
 		return is_array($target);
 	}
 
-	public function createTarget(MappingNode $node): array
+	public function createState(MappingNode $node): WriterStateInterface
 	{
-		return [];
+		return new ArrayWriterState();
 	}
 
 	public function write(
-		mixed $target,
+		WriterStateInterface $state,
 		string|int $name,
 		mixed $value,
 		MappingNode $node,
-	): array {
+	): void {
 		self::$writes[] = [
 			'name' => $node->getName(),
 		];
+	}
 
-		$target[$name] = $value;
-
-		return $target;
+	public function getResult(
+		WriterStateInterface $state,
+		MappingNode $node,
+	): array {
+		return [];
 	}
 }

@@ -14,14 +14,19 @@ interface WriterInterface
 		MappingOptions $options,
 	): bool;
 
-	public function createTarget(
+	public function createState(
 		MappingNode $node,
-	): mixed;
+	): WriterStateInterface;
 
 	public function write(
-		mixed $target,
+		WriterStateInterface $state,
 		string|int $name,
 		mixed $value,
+		MappingNode $node,
+	): void;
+
+	public function getResult(
+		WriterStateInterface $state,
 		MappingNode $node,
 	): mixed;
 }

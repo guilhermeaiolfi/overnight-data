@@ -8,7 +8,7 @@ use BackedEnum;
 use DateTimeInterface;
 use ON\Data\Mapper\Attribute\Hidden;
 use ON\Data\Mapper\Exception\MappingException;
-use ON\Data\Mapper\MappingContext;
+use ON\Data\Mapper\MappingBranch;
 use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ReflectionObject;
@@ -33,7 +33,7 @@ final class ObjectMapper implements MapperInterface
 			&& ! $source instanceof RepresentationInterface;
 	}
 
-	public function map(MappingContext $context): mixed
+	public function map(MappingBranch $context): mixed
 	{
 		$source = $context->getSource();
 		if (! is_object($source)) {
