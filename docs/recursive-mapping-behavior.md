@@ -38,9 +38,8 @@ Definition metadata describes structure, but runtime collection behavior still c
 - Dotted input keys can be expanded before traversal so flat payloads can map into nested arrays or objects.
 - Cycle checks are applied at recursive dispatch boundaries.
 - Field conversion still routes through the `ConversionGateway`, even when the branch structure changes recursively.
+- `ObjectWriter` may delay target creation for constructor and readonly targets, buffer resolved values in writer state, instantiate from resolved constructor arguments, skip re-writing constructor-consumed values, and then apply any leftover writable values through the normal property path.
 
 ## Current limits
 
-- No constructor hydration.
-- No readonly-target hydration.
 - PHPDoc list inference is intentionally limited to the forms covered by the current tests.

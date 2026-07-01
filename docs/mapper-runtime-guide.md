@@ -264,6 +264,19 @@ A mapper processes one source branch level at a time. It owns writer preparation
 
 When a child resolves as a branch, recursive dispatch flows through `MapperManager::mapNode()`. Mapper selection therefore happens from the branch's runtime source value, which allows hybrid trees such as array root -> object child -> array grandchild.
 
+## Object writer behavior
+
+`ObjectWriter` supports eager and delayed object creation.
+
+- `stdClass` targets and writable DTO targets without constructor requirements are created eagerly.
+- Targets with constructor parameters, readonly public properties, or readonly classes are created lazily.
+- While creation is delayed, resolved child values are buffered in `ObjectWriterState`.
+- Constructor parameters are matched by resolved field or property name after resolver and attribute normalization.
+- Values consumed by the constructor are not written again after instantiation.
+- Remaining values are applied through the normal public-property write path.
+- Missing required constructor parameters throw `MappingException`.
+- Readonly targets force constructor-style creation when delayed instantiation is required.
+
 ## Definition-aware resolution
 
 When one direct `DefinitionInterface` is supplied through `->args($definition)`, the default `DefinitionNodeResolver` can derive `LeafNodeResolution` values for fields and `BranchNodeResolution` values for relations. Definition collections describe metadata; runtime collection cardinality comes from relation cardinality, PHPDoc list metadata, or explicit root collection mapping.
@@ -326,8 +339,6 @@ Definition metadata therefore still wins over reflection, while `FieldMap` wins 
 
 ## Current limitations
 
-- no constructor hydration
-- no readonly-target hydration
 - no ORM or framework integration
 - no complete PHPDoc parsing beyond the currently supported DTO list forms
 - no decimal arithmetic, scale or precision policy, or bigint arithmetic helpers

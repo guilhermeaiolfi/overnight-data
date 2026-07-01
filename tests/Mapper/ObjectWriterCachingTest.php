@@ -12,6 +12,7 @@ use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Writer\ObjectWriter;
+use ON\Data\Mapper\Writer\ObjectWriterState;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
@@ -23,6 +24,11 @@ use Tests\ON\Data\Fixture\UserInputDto;
 
 final class ObjectWriterCachingTest extends TestCase
 {
+	protected function setUp(): void
+	{
+		BufferedConstructorTarget::$constructorCalls = 0;
+	}
+
 	public function testMultipleMappingsToSameDtoClassProduceDistinctInstances(): void
 	{
 		$gateway = ConversionGateway::createDefault();
@@ -135,6 +141,31 @@ final class ObjectWriterCachingTest extends TestCase
 		self::assertSame([], $this->privatePropertyValue($writer, 'validatedTargets'));
 	}
 
+	public function testDelayedObjectCreationBuffersValuesUntilConstructorHydrationRuns(): void
+	{
+		$writer = new ObjectWriter();
+		$node = $this->rootNode(BufferedConstructorTarget::class);
+
+		$state = $writer->createState($node);
+		self::assertInstanceOf(ObjectWriterState::class, $state);
+		self::assertNull($state->target);
+
+		$writer->write($state, 'id', 10, $node->createChildNode('id', 10));
+		$writer->write($state, 'name', 'Ada', $node->createChildNode('name', 'Ada'));
+		$writer->write($state, 'nickname', 'Ace', $node->createChildNode('nickname', 'Ace'));
+
+		self::assertSame(['id' => 10, 'name' => 'Ada', 'nickname' => 'Ace'], $state->values);
+		self::assertCount(3, $state->writes);
+		self::assertSame(0, BufferedConstructorTarget::$constructorCalls);
+
+		$result = $writer->getResult($state, $node);
+
+		self::assertSame(1, BufferedConstructorTarget::$constructorCalls);
+		self::assertSame(10, $result->id);
+		self::assertSame('ctor:Ada', $result->name);
+		self::assertSame('Ace', $result->nickname);
+	}
+
 	public function testFailedValidationDoesNotBlockLaterValidTargetMapping(): void
 	{
 		$writer = new ObjectWriter();
@@ -227,6 +258,24 @@ final class ObjectWriterCachingTest extends TestCase
 		$reflection = new ReflectionProperty($object, $property);
 
 		return $reflection->getValue($object);
+	}
+}
+
+final class BufferedConstructorTarget
+{
+	public static int $constructorCalls = 0;
+
+	public int $id;
+
+	public string $name;
+
+	public string $nickname = '';
+
+	public function __construct(int $id, string $name)
+	{
+		self::$constructorCalls++;
+		$this->id = $id;
+		$this->name = 'ctor:' . $name;
 	}
 }
 
