@@ -30,4 +30,9 @@ final class AliasedExpression
 	{
 		return $this->alias;
 	}
+
+	public function getSelectionKey(): string
+	{
+		return $this->alias;
+	}
 }

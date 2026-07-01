@@ -359,6 +359,24 @@ final class QueryArchitectureTest extends TestCase
 			self::assertStringNotContainsString('$runtime->getReferenceValues(', $contents, $path);
 			self::assertStringNotContainsString('$runtime->registerChildBranches(', $contents, $path);
 			self::assertStringNotContainsString('$runtime->getChildBranches(', $contents, $path);
+			self::assertStringNotContainsString('getExpression()->getField()->getName()', $contents, $path);
+		}
+	}
+
+	public function testRelationLoadingUsesSelectionKeysInsteadOfInspectingFieldBackedExpressions(): void
+	{
+		foreach ([
+			dirname(__DIR__, 2) . '/src/Query/Relation/LoadRuntime.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/RelationOutputProcessor.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/BelongsToLoader.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasOneLoader.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasManyLoader.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/M2MLoader.php',
+		] as $path) {
+			$contents = (string) file_get_contents($path);
+
+			self::assertStringContainsString('getSelectionKey()', $contents, $path);
+			self::assertStringNotContainsString('getExpression()->getField()->getName()', $contents, $path);
 		}
 	}
 

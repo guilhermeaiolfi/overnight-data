@@ -36,6 +36,11 @@ final class FieldRef extends AbstractAggregateableExpression
 		return $this->field->getName();
 	}
 
+	public function getSelectionKey(): string
+	{
+		return $this->getName();
+	}
+
 	/**
 	 * @return list<string>
 	 */

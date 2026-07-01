@@ -7,6 +7,7 @@ namespace Tests\ON\Data\Query;
 use DateTimeImmutable;
 use Error;
 use InvalidArgumentException;
+use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Query\Condition\ComparisonCondition;
@@ -149,6 +150,26 @@ final class QueryModelTest extends TestCase
 		self::assertSame(['relation-key', 'result-grouping-key'], $selection->getReasons());
 		self::assertTrue($selection->hasReason('relation-key'));
 		self::assertTrue($selection->hasReason(' result-grouping-key '));
+	}
+
+	public function testSelectableExpressionsOwnSelectionKeys(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$aliased = $query->name->upper()->as('display_name');
+		$selection = new SelectionItem($aliased);
+
+		self::assertSame('name', $query->name->getSelectionKey());
+		self::assertSame('display_name', $aliased->getSelectionKey());
+		self::assertSame('display_name', $selection->getSelectionKey());
+	}
+
+	public function testUnaliasedComputedSelectionsRequireStableExpressionKeys(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+
+		$this->expectException(LogicException::class);
+		$this->expectExceptionMessage('does not expose a stable selection key');
+		$query->name->upper()->getSelectionKey();
 	}
 
 	public function testSelectAppendsExpressionsPreservesOrderAndExposesAliases(): void
@@ -899,6 +920,17 @@ final class QueryModelTest extends TestCase
 		self::assertSame($posts, $aliased->getExpression()->getQuery());
 		self::assertCount(1, $selections[1]->getExpression()->getQuery()->getSelections());
 		self::assertFalse(is_a($posts, ValueExpressionInterface::class));
+	}
+
+	public function testRootSelectionKeysPreserveExistingFieldAndAliasConventions(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$query->select($query->name, $query->email->as('mail'));
+
+		self::assertSame(['name', 'mail'], array_map(
+			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
+			$query->getSelections()->getExplicit(),
+		));
 	}
 
 	public function testExplicitJoinRejectsSourceFromAnotherQuery(): void

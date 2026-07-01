@@ -251,7 +251,7 @@ final class M2MLoader extends AbstractLoader
 	private function parserFieldNames(RelationLoadBranch $branch): array
 	{
 		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
 			$branch->getSelections()->getParserItems(),
 		);
 	}
@@ -262,7 +262,7 @@ final class M2MLoader extends AbstractLoader
 	private function publicFieldNames(RelationLoadBranch $branch): array
 	{
 		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
 			$branch->getSelections()->getPublicItems(),
 		);
 	}

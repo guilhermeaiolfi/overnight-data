@@ -120,7 +120,7 @@ final class RelationOutputProcessor
 
 		if ($branch->getSelection()->isLoaded()) {
 			foreach ($branch->getSelections()->getPublicItems() as $selection) {
-				$fieldName = $this->relationSelectionFieldName($selection);
+				$fieldName = $selection->getSelectionKey();
 
 				if (array_key_exists($fieldName, $record)) {
 					$item[$fieldName] = $record[$fieldName];
@@ -360,11 +360,6 @@ final class RelationOutputProcessor
 		return implode('.', $branch->getRelationRef()->getPath());
 	}
 
-	private function relationSelectionFieldName(SelectionItem $selection): string
-	{
-		return $selection->getExpression()->getField()->getName();
-	}
-
 	/**
 	 * @param list<SelectionItem> $selections
 	 * @return list<string>
@@ -376,10 +371,6 @@ final class RelationOutputProcessor
 
 	private function rootSelectionKey(SelectionItem $selection): string
 	{
-		$expression = $selection->getExpression();
-
-		return $expression instanceof AliasedExpression
-			? $expression->getAlias()
-			: implode('.', $expression->getPath());
+		return $selection->getSelectionKey();
 	}
 }

@@ -62,7 +62,7 @@ final class BelongsToLoader extends AbstractLoader
 	private function parserFieldNames(RelationLoadBranch $branch): array
 	{
 		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
 			$branch->getSelections()->getParserItems(),
 		);
 	}

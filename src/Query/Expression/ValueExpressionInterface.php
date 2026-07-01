@@ -6,4 +6,5 @@ namespace ON\Data\Query\Expression;
 
 interface ValueExpressionInterface
 {
+	public function getSelectionKey(): string;
 }

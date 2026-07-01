@@ -576,9 +576,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$rootBranch = $this->readProperty($runtime, 'rootBranch');
 		$selections = $this->readProperty($rootBranch, 'selections');
 		$identityAliases = array_map(
-			static fn (object $selection): string => $selection->getExpression() instanceof \ON\Data\Query\Expression\AliasedExpression
-				? $selection->getExpression()->getAlias()
-				: implode('.', $selection->getExpression()->getPath()),
+			static fn (object $selection): string => $selection->getSelectionKey(),
 			$selections->getIdentityItems(),
 		);
 		$rootIdentityFields = $this->readProperty($rootBranch->getRootNode(), 'identityFields');
@@ -597,9 +595,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 
 		self::assertInstanceOf(SelectionList::class, $selections);
 		self::assertSame(['id'], array_map(
-			static fn (object $selection): string => $selection->getExpression() instanceof \ON\Data\Query\Expression\AliasedExpression
-				? $selection->getExpression()->getAlias()
-				: implode('.', $selection->getExpression()->getPath()),
+			static fn (object $selection): string => $selection->getSelectionKey(),
 			$selections->getIdentityItems(),
 		));
 		self::assertTrue($selections->getIdentityItems()[0]->hasReason(SelectionReason::REQUIRED));
@@ -633,7 +629,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	private function parserFieldNames(RelationLoadBranch $branch): array
 	{
 		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
 			$branch->getSelections()->getParserItems(),
 		);
 	}
@@ -644,7 +640,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	private function publicFieldNames(RelationLoadBranch $branch): array
 	{
 		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
 			$branch->getSelections()->getPublicItems(),
 		);
 	}
@@ -1014,7 +1010,7 @@ abstract class LifecycleTestLoader extends AbstractLoader
 	private function parserFieldNames(RelationLoadBranch $branch): array
 	{
 		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
 			$branch->getSelections()->getParserItems(),
 		);
 	}
@@ -1130,7 +1126,7 @@ class NestedPostsLoader extends AbstractLoader
 	protected function parserFieldNames(RelationLoadBranch $branch): array
 	{
 		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
 			$branch->getSelections()->getParserItems(),
 		);
 	}
@@ -1170,7 +1166,7 @@ final class NestedAuthorLoader extends AbstractLoader
 	private function parserFieldNames(RelationLoadBranch $branch): array
 	{
 		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
 			$branch->getSelections()->getParserItems(),
 		);
 	}
@@ -1228,7 +1224,7 @@ final class JoinedProfileLoader extends AbstractLoader
 	private function parserFieldNames(RelationLoadBranch $branch): array
 	{
 		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
 			$branch->getSelections()->getParserItems(),
 		);
 	}

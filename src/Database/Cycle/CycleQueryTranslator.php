@@ -200,14 +200,14 @@ final class CycleQueryTranslator
 		$selectionExpression = $selection->getExpression();
 
 		if ($selectionExpression instanceof AliasedExpression) {
-			return $selectionExpression->getAlias();
+			return $selection->getSelectionKey();
 		}
 
 		if ($expression instanceof FieldRef) {
 			$path = $expression->getPath();
 
 			return count($path) === 1
-				? $expression->getField()->getName()
+				? $selection->getSelectionKey()
 				: implode('.', $path);
 		}
 

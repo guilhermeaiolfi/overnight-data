@@ -30,6 +30,11 @@ final class SelectionItem
 		return $this->expression;
 	}
 
+	public function getSelectionKey(): string
+	{
+		return $this->expression->getSelectionKey();
+	}
+
 	public function isExplicit(): bool
 	{
 		return $this->explicit;

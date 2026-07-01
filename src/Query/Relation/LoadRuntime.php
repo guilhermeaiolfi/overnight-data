@@ -9,7 +9,6 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
-use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\SelectQuery;
 use ReflectionMethod;
 
@@ -222,7 +221,7 @@ final class LoadRuntime
 					$branch->getQuery(),
 					$branch->getSource(),
 					$branch->getRelationRef()->getPath(),
-					$this->relationSelectionFieldName($selection),
+					$selection->getSelectionKey(),
 				);
 			}
 
@@ -411,11 +410,6 @@ final class LoadRuntime
 	private function branchAliasTraversal(RelationLoadBranch $branch): array
 	{
 		return $branch->getNode()->getValueAliasTraversal();
-	}
-
-	private function relationSelectionFieldName(SelectionItem $selection): string
-	{
-		return $selection->getExpression()->getField()->getName();
 	}
 
 	private function assertContinuableMethod(RelationLoadBranch $branch, string $method): void

@@ -215,11 +215,7 @@ final class RootLoadBranch extends LoadBranch
 
 	private function selectionKey(SelectionItem $selection): string
 	{
-		$expression = $selection->getExpression();
-
-		return $expression instanceof AliasedExpression
-			? $expression->getAlias()
-			: implode('.', $expression->getPath());
+		return $selection->getSelectionKey();
 	}
 
 	/**
