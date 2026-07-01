@@ -6,6 +6,7 @@ namespace ON\Data\Query\Expression;
 
 use LogicException;
 use ON\Data\Query\ExpressionFactory;
+use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Sort\Sort;
 use function ON\Data\Query\x;
 
@@ -17,6 +18,11 @@ abstract class AbstractValueExpression implements ValueExpressionInterface
 			'Expression %s cannot provide a selection key without an alias.',
 			static::class,
 		));
+	}
+
+	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
+	{
+		return $this;
 	}
 
 	final public function as(string $alias): AliasedExpression

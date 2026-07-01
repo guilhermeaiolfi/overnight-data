@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation;
 
 use ON\Data\Query\Condition\ConditionInterface;
-use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Sort\Sort;
 
 final class RelationSelection
@@ -134,18 +133,6 @@ final class RelationSelection
 
 	private function mergeStrategy(self $incoming): ?LoadStrategy
 	{
-		if ($this->strategy === null) {
-			return $incoming->strategy;
-		}
-
-		if ($incoming->strategy === null || $incoming->strategy === $this->strategy) {
-			return $this->strategy;
-		}
-
-		throw RelationSelectionException::conflictingRelationStrategies(
-			$this->getPath(),
-			$this->strategy,
-			$incoming->strategy,
-		);
+		return $incoming->strategy ?? $this->strategy;
 	}
 }

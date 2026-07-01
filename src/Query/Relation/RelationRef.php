@@ -40,16 +40,31 @@ final class RelationRef implements QuerySourceInterface
 
 	private ?QuerySourceInterface $joinedSource = null;
 
+	private bool $selected = false;
+
+	private bool $visible = true;
+
+	/**
+	 * @var ?list<string>
+	 */
+	private ?array $fields = null;
+
+	/**
+	 * @var list<ConditionInterface>
+	 */
+	private array $conditions = [];
+
+	/**
+	 * @var list<Sort>
+	 */
+	private array $sorts = [];
+
+	private ?LoadStrategy $strategy = null;
+
 	public function __construct(
 		private readonly SelectQuery $query,
 		private readonly RelationInterface $relation,
 		private readonly ?self $parentRelation = null,
-		private readonly bool $load = false,
-		private readonly bool $visible = true,
-		private readonly ?array $fields = null,
-		private readonly array $conditions = [],
-		private readonly array $sorts = [],
-		private readonly ?LoadStrategy $strategy = null,
 	) {
 	}
 
@@ -70,7 +85,12 @@ final class RelationRef implements QuerySourceInterface
 
 	public function isLoaded(): bool
 	{
-		return $this->load;
+		return $this->selected;
+	}
+
+	public function isSelected(): bool
+	{
+		return $this->selected;
 	}
 
 	public function isVisible(): bool
@@ -171,26 +191,36 @@ final class RelationRef implements QuerySourceInterface
 		return $this->relationRefs[$name] = new self($this->query, $relation, $this);
 	}
 
+	/**
+	 * @return list<self>
+	 */
+	public function getRelationRefs(): array
+	{
+		return array_values($this->relationRefs);
+	}
+
 	public function fields(string|FieldRef|array ...$fields): self
 	{
-		return $this
-			->load()
-			->withFields($this->normalizeFieldArguments($fields));
+		$this->fields = $this->normalizeSelectionFields($this->normalizeFieldArguments($fields));
+		$this->selected = true;
+
+		return $this;
 	}
 
 	public function visible(bool $visible = true): self
 	{
-		return $this->withSelectionOptions(null, $visible);
+		if ($this->selected && ! $visible) {
+			throw RelationSelectionException::hiddenLoadedRelation($this->getPath());
+		}
+
+		$this->visible = $visible;
+
+		return $this;
 	}
 
 	public function hidden(): self
 	{
 		return $this->visible(false);
-	}
-
-	public function load(bool $load = true): self
-	{
-		return $this->withSelectionOptions($load, null);
 	}
 
 	public function where(ConditionInterface ...$conditions): self
@@ -199,7 +229,10 @@ final class RelationRef implements QuerySourceInterface
 			throw new InvalidArgumentException('RelationRef::where() requires at least one condition.');
 		}
 
-		return $this->withConditions($conditions);
+		array_push($this->conditions, ...$conditions);
+		$this->selected = true;
+
+		return $this;
 	}
 
 	public function orderBy(Sort ...$sorts): self
@@ -208,26 +241,18 @@ final class RelationRef implements QuerySourceInterface
 			throw new InvalidArgumentException('RelationRef::orderBy() requires at least one sort.');
 		}
 
-		return $this->withSorts($sorts);
+		array_push($this->sorts, ...$sorts);
+		$this->selected = true;
+
+		return $this;
 	}
 
 	public function strategy(?LoadStrategy $strategy): self
 	{
-		if ($strategy === $this->strategy) {
-			return $this;
-		}
+		$this->strategy = $strategy;
+		$this->selected = true;
 
-		return new self(
-			$this->query,
-			$this->relation,
-			$this->parentRelation,
-			$this->load,
-			$this->visible,
-			$this->fields,
-			$this->conditions,
-			$this->sorts,
-			$strategy,
-		);
+		return $this;
 	}
 
 	public function join(): self
@@ -253,93 +278,6 @@ final class RelationRef implements QuerySourceInterface
 		}
 
 		throw UnknownQueryMemberException::forDefinition($name, $collection->getName());
-	}
-
-	private function withSelectionOptions(?bool $load = null, ?bool $visible = null): self
-	{
-		$load ??= $this->load;
-		$visible ??= $this->visible;
-
-		if ($load && ! $visible) {
-			throw RelationSelectionException::hiddenLoadedRelation($this->getPath());
-		}
-
-		if ($load === $this->load && $visible === $this->visible) {
-			return $this;
-		}
-
-		return new self(
-			$this->query,
-			$this->relation,
-			$this->parentRelation,
-			$load,
-			$visible,
-			$this->fields,
-			$this->conditions,
-			$this->sorts,
-			$this->strategy,
-		);
-	}
-
-	private function withFields(array $fields): self
-	{
-		if (! array_is_list($fields)) {
-			throw RelationSelectionException::invalidRelationFieldsType($this->getPath());
-		}
-
-		$fields = $this->normalizeSelectionFields($fields);
-
-		if ($fields === $this->fields) {
-			return $this;
-		}
-
-		return new self(
-			$this->query,
-			$this->relation,
-			$this->parentRelation,
-			$this->load,
-			$this->visible,
-			$fields,
-			$this->conditions,
-			$this->sorts,
-			$this->strategy,
-		);
-	}
-
-	/**
-	 * @param list<ConditionInterface> $conditions
-	 */
-	private function withConditions(array $conditions): self
-	{
-		return new self(
-			$this->query,
-			$this->relation,
-			$this->parentRelation,
-			$this->load,
-			$this->visible,
-			$this->fields,
-			[...$this->conditions, ...$conditions],
-			$this->sorts,
-			$this->strategy,
-		);
-	}
-
-	/**
-	 * @param list<Sort> $sorts
-	 */
-	private function withSorts(array $sorts): self
-	{
-		return new self(
-			$this->query,
-			$this->relation,
-			$this->parentRelation,
-			$this->load,
-			$this->visible,
-			$this->fields,
-			$this->conditions,
-			[...$this->sorts, ...$sorts],
-			$this->strategy,
-		);
 	}
 
 	/**

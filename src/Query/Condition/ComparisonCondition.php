@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Condition;
 
 use ON\Data\Query\Expression\ValueExpressionInterface;
+use ON\Data\Query\QuerySourceInterface;
 
 final class ComparisonCondition implements ConditionInterface
 {
@@ -28,5 +29,17 @@ final class ComparisonCondition implements ConditionInterface
 	public function getRight(): ValueExpressionInterface
 	{
 		return $this->right;
+	}
+
+	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
+	{
+		$left = $this->left->rebaseFields($from, $to);
+		$right = $this->right->rebaseFields($from, $to);
+
+		if ($left === $this->left && $right === $this->right) {
+			return $this;
+		}
+
+		return new self($left, $this->operator, $right);
 	}
 }

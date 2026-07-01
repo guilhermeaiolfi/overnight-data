@@ -47,8 +47,6 @@ final class SelectQuery implements QuerySourceInterface
 
 	private readonly SelectionList $selections;
 
-	private readonly RelationSelectionTree $relationSelections;
-
 	/**
 	 * @var list<ConditionInterface>
 	 */
@@ -78,7 +76,6 @@ final class SelectQuery implements QuerySourceInterface
 		private ?QueryExecutorInterface $executor = null,
 	) {
 		$this->selections = new SelectionList();
-		$this->relationSelections = new RelationSelectionTree();
 	}
 
 	public function getQuery(): SelectQuery
@@ -161,7 +158,7 @@ final class SelectQuery implements QuerySourceInterface
 		return (new SubqueryExpression($this))->as($alias);
 	}
 
-	public function select(ValueExpressionInterface|AliasedExpression|SelectQuery|RelationRef ...$expressions): self
+	public function select(ValueExpressionInterface|AliasedExpression|SelectQuery ...$expressions): self
 	{
 		if ($expressions === []) {
 			throw new InvalidArgumentException('SelectQuery::select() requires at least one expression.');
@@ -170,35 +167,12 @@ final class SelectQuery implements QuerySourceInterface
 		$normalized = [];
 
 		foreach ($expressions as $expression) {
-			if ($expression instanceof RelationRef) {
-				$this->addRelationSelection($expression);
-
-				continue;
-			}
-
 			$normalized[] = $expression instanceof SelectQuery
 				? new SubqueryExpression($expression)
 				: $expression;
 		}
 
-		if ($normalized !== []) {
-			$this->selections->addExplicit($normalized);
-		}
-
-		$this->assertNoRelationSelectionCollisions();
-
-		return $this;
-	}
-
-	public function load(RelationRef ...$relations): self
-	{
-		if ($relations === []) {
-			throw new InvalidArgumentException('SelectQuery::load() requires at least one relation.');
-		}
-
-		foreach ($relations as $relation) {
-			$this->addRelationSelection($relation);
-		}
+		$this->selections->addExplicit($normalized);
 
 		$this->assertNoRelationSelectionCollisions();
 
@@ -260,6 +234,32 @@ final class SelectQuery implements QuerySourceInterface
 		return $this;
 	}
 
+	public function adoptConditions(QuerySourceInterface $from, ConditionInterface ...$conditions): self
+	{
+		if ($conditions === []) {
+			throw new InvalidArgumentException('SelectQuery::adoptConditions() requires at least one condition.');
+		}
+
+		foreach ($conditions as $condition) {
+			$this->where($condition->rebaseFields($from, $this));
+		}
+
+		return $this;
+	}
+
+	public function adoptSorts(QuerySourceInterface $from, Sort ...$sorts): self
+	{
+		if ($sorts === []) {
+			throw new InvalidArgumentException('SelectQuery::adoptSorts() requires at least one sort.');
+		}
+
+		foreach ($sorts as $sort) {
+			$this->orderBy($sort->rebaseFields($from, $this));
+		}
+
+		return $this;
+	}
+
 	public function limit(?int $limit): self
 	{
 		if ($limit !== null && $limit < 0) {
@@ -289,7 +289,13 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function getRelationSelections(): RelationSelectionTree
 	{
-		return $this->relationSelections;
+		$tree = new RelationSelectionTree();
+
+		foreach ($this->relationRefs as $relation) {
+			$this->collectRelationSelections($relation, $tree);
+		}
+
+		return $tree;
 	}
 
 	public function get(string $name): ValueExpressionInterface
@@ -397,7 +403,7 @@ final class SelectQuery implements QuerySourceInterface
 	{
 		$executor = $this->requireExecutor();
 
-		if ($this->relationSelections->isEmpty()) {
+		if ($this->getRelationSelections()->isEmpty()) {
 			return $executor->fetchAll($this);
 		}
 
@@ -411,7 +417,7 @@ final class SelectQuery implements QuerySourceInterface
 	{
 		$executor = $this->requireExecutor();
 
-		if ($this->relationSelections->isEmpty()) {
+		if ($this->getRelationSelections()->isEmpty()) {
 			return $executor->fetchOne($this);
 		}
 
@@ -423,7 +429,7 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	public function iterate(): iterable
 	{
-		if (! $this->relationSelections->isEmpty()) {
+		if (! $this->getRelationSelections()->isEmpty()) {
 			throw RelationSelectionException::iterateNotSupported();
 		}
 
@@ -442,15 +448,6 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		return $expression;
-	}
-
-	private function addRelationSelection(RelationRef $relation): void
-	{
-		if ($relation->getQuery() !== $this) {
-			throw RelationSelectionException::foreignQueryRelation($relation, $this);
-		}
-
-		$this->relationSelections->add($relation);
 	}
 
 	private function assertJoinNameAvailable(string $name): void
@@ -485,13 +482,15 @@ final class SelectQuery implements QuerySourceInterface
 
 	private function assertNoRelationSelectionCollisions(): void
 	{
-		if ($this->relationSelections->isEmpty()) {
+		$relationSelections = $this->getRelationSelections();
+
+		if ($relationSelections->isEmpty()) {
 			return;
 		}
 
 		$rootRelationNames = [];
 
-		foreach ($this->relationSelections->getAll() as $relation) {
+		foreach ($relationSelections->getAll() as $relation) {
 			if ($relation->getParentPathKey() !== null) {
 				continue;
 			}
@@ -509,6 +508,17 @@ final class SelectQuery implements QuerySourceInterface
 			if (isset($rootRelationNames[$expression->getAlias()])) {
 				throw RelationSelectionException::rootAliasCollision($expression->getAlias());
 			}
+		}
+	}
+
+	private function collectRelationSelections(RelationRef $relation, RelationSelectionTree $tree): void
+	{
+		if ($relation->isSelected()) {
+			$tree->add($relation);
+		}
+
+		foreach ($relation->getRelationRefs() as $child) {
+			$this->collectRelationSelections($child, $tree);
 		}
 	}
 }

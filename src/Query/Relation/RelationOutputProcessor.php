@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation;
 
 use ON\Data\Query\Exception\RelationSelectionException;
-use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Selection\SelectionItem;
 
 final class RelationOutputProcessor

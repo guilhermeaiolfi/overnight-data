@@ -45,7 +45,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testNamedContinuationRunsAfterParentRowsAreParsed(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
-		$users->select($users->posts);
+		$users->posts->separate();
 
 		$users->fetchAll();
 
@@ -56,7 +56,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testDefaultContinuationRepeatsLoadOnTheSameBranch(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(RepeatLoadLifecycleLoader::class)->getCollection('users'), new LifecycleExecutor());
-		$users->select($users->posts);
+		$users->posts->separate();
 
 		$users->fetchAll();
 
@@ -66,7 +66,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testInvalidScheduledMethodsAreRejected(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(InvalidScheduledMethodLoader::class)->getCollection('users'), new LifecycleExecutor());
-		$users->select($users->posts);
+		$users->posts->separate();
 
 		$this->expectException(LoadRuntimeException::class);
 		$users->fetchAll();
@@ -75,7 +75,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testContinuationFromRegisterIsRejected(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(RegisterSchedulingLoader::class)->getCollection('users'), new LifecycleExecutor());
-		$users->select($users->posts);
+		$users->posts->separate();
 
 		$this->expectException(LoadRuntimeException::class);
 		$users->fetchAll();
@@ -84,7 +84,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testRegisterRunsOnceAndReturnsTheNodeStoredOnTheBranch(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
-		$users->select($users->posts);
+		$users->posts->separate();
 
 		$users->fetchAll();
 
@@ -96,7 +96,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testAbstractLoaderRegisterRecursivelyRegistersChildBranchesBeforeParentNodeConstruction(): void
 	{
 		$users = new SelectQuery($this->makeNestedRegistry()->getCollection('users'), new NestedLifecycleExecutor());
-		$users->select($users->posts->author);
+		$users->posts->author->separate();
 
 		$this->prepareRuntime($users);
 
@@ -109,7 +109,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testDescendantRequiredFieldsArePresentInParentParserNodeColumns(): void
 	{
 		$users = new SelectQuery($this->makeNestedRegistry()->getCollection('users'), new NestedLifecycleExecutor());
-		$users->select($users->posts->author);
+		$users->posts->author->separate();
 		$this->prepareRuntime($users);
 
 		$columns = LifecycleEvents::$registerColumns['posts'];
@@ -121,7 +121,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testRequestedPublicFieldsRemainSeparateFromInternallyRequiredNodeColumns(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
-		$users->select($users->posts->fields('title'));
+		$users->posts->fields('title');
 		$runtime = $this->prepareRuntime($users);
 		$branches = $this->readProperty($runtime, 'branches');
 		$branch = array_values($branches)[0];
@@ -142,7 +142,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testBranchesExposeSelectionListsDirectly(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
-		$users->select($users->posts->fields('title'));
+		$users->posts->fields('title');
 		$runtime = $this->prepareRuntime($users);
 		$rootBranch = $this->readProperty($runtime, 'rootBranch');
 		$branch = array_values($this->readProperty($runtime, 'branches'))[0];
@@ -170,7 +170,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testTopLevelRelationBranchesUseTheRootBranchAsParent(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
-		$users->select($users->posts);
+		$users->posts->separate();
 		$runtime = $this->prepareRuntime($users);
 		$branches = $this->readProperty($runtime, 'branches');
 		$rootBranch = $this->readProperty($runtime, 'rootBranch');
@@ -185,7 +185,8 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testCompositePrimaryKeyDeduplicationStillWorksWhenPublicKeyFieldsAreOmitted(): void
 	{
 		$employees = new SelectQuery($this->makeCompositeDedupRegistry()->getCollection('employees'), new CompositeDedupExecutor());
-		$employees->select($employees->tenantId, $employees->name, $employees->badges->fields('label'));
+		$employees->badges->fields('label');
+		$employees->select($employees->tenantId, $employees->name);
 
 		self::assertSame([
 			[
@@ -208,7 +209,8 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testRootFieldsRequiredDuringPlanningArePresentBeforeRootNodeConstruction(): void
 	{
 		$users = new SelectQuery($this->makeRootRequirementRegistry()->getCollection('users'), new LifecycleExecutor());
-		$users->select($users->name, $users->posts);
+		$users->posts->separate();
+		$users->select($users->name);
 		$runtime = $this->prepareRuntime($users);
 		$rootBranch = $this->readProperty($runtime, 'rootBranch');
 		$rootNode = $rootBranch->getNode();
@@ -221,7 +223,8 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testExplicitRootFieldRemainsPublicWhilePrimaryKeyStaysInternal(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(ExecutingLifecycleLoader::class)->getCollection('users'), new ExplicitRootSelectionExecutor());
-		$users->select($users->name, $users->posts);
+		$users->posts->separate();
+		$users->select($users->name);
 
 		self::assertSame([[
 			'name' => 'Ada',
@@ -234,7 +237,8 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testExplicitRootAliasedFieldIsPublicUnderItsAlias(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(ExecutingLifecycleLoader::class)->getCollection('users'), new AliasedRootSelectionExecutor());
-		$users->select($users->name->as('title'), $users->posts);
+		$users->posts->separate();
+		$users->select($users->name->as('title'));
 
 		self::assertSame([[
 			'title' => 'Ada',
@@ -247,7 +251,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testDefaultVisibleRootFieldsRemainPublicWhenNoExplicitRootFieldsAreSelected(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(ExecutingLifecycleLoader::class)->getCollection('users'), new LifecycleExecutor());
-		$users->select($users->posts);
+		$users->posts->separate();
 
 		self::assertSame([[
 			'id' => 1,
@@ -261,7 +265,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testInternalRootRequiredFieldsAreSelectedButDoNotLeakIntoPublicOutput(): void
 	{
 		$users = new SelectQuery($this->makeHiddenRootRequirementRegistry()->getCollection('users'), new HiddenRootRequirementExecutor());
-		$users->select($users->posts);
+		$users->posts->separate();
 		$runtime = $this->prepareRuntime($users);
 		$rootBranch = $this->readProperty($runtime, 'rootBranch');
 		$columns = $this->readProperty($rootBranch->getNode(), 'columns');
@@ -277,7 +281,8 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testRootFieldRequirementsReuseAnExistingPublicAlias(): void
 	{
 		$users = new SelectQuery($this->makeRootRequirementRegistry()->getCollection('users'), new AliasedRootSelectionExecutor());
-		$users->select($users->name->as('title'), $users->posts);
+		$users->posts->separate();
+		$users->select($users->name->as('title'));
 		$runtime = $this->prepareRuntime($users);
 		$rootBranch = $this->readProperty($runtime, 'rootBranch');
 		$columns = $this->readProperty($rootBranch->getNode(), 'columns');
@@ -297,7 +302,8 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testJoinedAndLinkedAttachmentModesAreRecordedDuringLoadAndAppliedDuringRegistration(): void
 	{
 		$users = new SelectQuery($this->makeMixedAttachmentRegistry()->getCollection('users'), new MixedAttachmentExecutor());
-		$users->select($users->profile, $users->posts);
+		$users->profile->separate();
+		$users->posts->separate();
 		$runtime = $this->prepareRuntime($users);
 		$rootNode = $this->readProperty($runtime, 'rootBranch')->getNode();
 		$profileNode = $rootNode->getNode('profile');
@@ -314,7 +320,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testExplicitStrategyOverridesLoaderDefaultDuringRuntimePlanning(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(HasManyLoader::class)->getCollection('users'), new LifecycleExecutor());
-		$users->select($users->posts->join());
+		$users->posts->join();
 		$runtime = $this->prepareRuntime($users);
 		$branch = array_values($this->readProperty($runtime, 'branches'))[0];
 
@@ -324,7 +330,8 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testNestedCustomLoadersAttachJoinedAndLinkedChildrenWithoutCustomRegisterOverrides(): void
 	{
 		$users = new SelectQuery($this->makeNestedAttachmentRegistry()->getCollection('users'), new NestedAttachmentExecutor());
-		$users->select($users->posts->author, $users->posts->comments);
+		$users->posts->author->separate();
+		$users->posts->comments->separate();
 		$runtime = $this->prepareRuntime($users);
 		$rootNode = $this->readProperty($runtime, 'rootBranch')->getNode();
 		$postsNode = $rootNode->getNode('posts');
@@ -344,7 +351,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testExecuteKeepsParentInvocationContextUntilItSchedulesItsContinuation(): void
 	{
 		$users = new SelectQuery($this->makeMultiPassBoundaryRegistry()->getCollection('users'), new MultiPassBoundaryExecutor());
-		$users->select($users->posts->comments);
+		$users->posts->comments->separate();
 
 		$users->fetchAll();
 
@@ -363,7 +370,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testTopLevelRelationRegisterCanAccessTheRootParentNode(): void
 	{
 		$users = new SelectQuery($this->makeTopLevelParentNodeRegistry()->getCollection('users'), new LifecycleExecutor());
-		$users->select($users->posts);
+		$users->posts->separate();
 
 		$this->prepareRuntime($users);
 
@@ -583,7 +590,8 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testRootBranchOwnsIdentityAliasesForRootPrimaryKey(): void
 	{
 		$users = new SelectQuery($this->makeCompositeDedupRegistry()->getCollection('employees'), new CompositeDedupExecutor());
-		$users->select($users->tenantId, $users->name, $users->badges->fields('label'));
+		$users->badges->fields('label');
+		$users->select($users->tenantId, $users->name);
 		$runtime = $this->prepareRuntime($users);
 		$rootBranch = $this->readProperty($runtime, 'rootBranch');
 		$selections = $this->readProperty($rootBranch, 'selections');
@@ -600,7 +608,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testRootPrimaryKeySelectionsAreTrackedAsIdentityItems(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
-		$users->select($users->posts);
+		$users->posts->separate();
 		$runtime = $this->prepareRuntime($users);
 		$rootBranch = $this->readProperty($runtime, 'rootBranch');
 		$selections = $this->readProperty($rootBranch, 'selections');
@@ -616,7 +624,8 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testInternalExplicitRootSelectionsDoNotBecomePublicOutput(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(ExecutingLifecycleLoader::class)->getCollection('users'), new InternalExplicitRootExecutor());
-		$users->select($users->name->as('__on_data_manual_name'), $users->posts);
+		$users->posts->separate();
+		$users->select($users->name->as('__on_data_manual_name'));
 
 		self::assertSame([[
 			'id' => 1,

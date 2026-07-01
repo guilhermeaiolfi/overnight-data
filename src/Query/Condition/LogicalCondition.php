@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Condition;
 
 use InvalidArgumentException;
+use ON\Data\Query\QuerySourceInterface;
 
 final class LogicalCondition implements ConditionInterface
 {
@@ -31,5 +32,23 @@ final class LogicalCondition implements ConditionInterface
 	public function getConditions(): array
 	{
 		return $this->conditions;
+	}
+
+	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
+	{
+		$changed = false;
+		$conditions = [];
+
+		foreach ($this->conditions as $condition) {
+			$rebased = $condition->rebaseFields($from, $to);
+			$changed = $changed || $rebased !== $condition;
+			$conditions[] = $rebased;
+		}
+
+		if (! $changed) {
+			return $this;
+		}
+
+		return new self($this->operator, $conditions);
 	}
 }

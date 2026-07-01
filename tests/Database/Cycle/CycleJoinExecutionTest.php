@@ -273,9 +273,10 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testItLoadsStructuredBelongsToRelations(): void
 	{
 		$posts = $this->database->query($this->registry->getCollection('posts'));
+		$posts->author->separate();
 
 		$rows = $posts
-			->select($posts->id, $posts->title, $posts->author)
+			->select($posts->id, $posts->title)
 			->orderBy($posts->id->asc())
 			->fetchAll();
 
@@ -289,9 +290,10 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testFieldsRestrictBelongsToProjectionWithoutExposingJoinKeys(): void
 	{
 		$posts = $this->database->query($this->registry->getCollection('posts'));
+		$posts->author->fields('name');
 
 		$rows = $posts
-			->select($posts->id, $posts->author->fields('name'))
+			->select($posts->id)
 			->orderBy($posts->id->asc())
 			->fetchAll();
 
@@ -305,9 +307,10 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testItLoadsStructuredHasManyRelations(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts->separate();
 
 		$rows = $users
-			->select($users->name, $users->posts)
+			->select($users->name)
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -332,18 +335,16 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testLoadApiAppliesSeparateRelationWhereAndOrderBy(): void
+	public function testDirectConfigAppliesSeparateRelationWhereAndOrderBy(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts
+			->fields('title')
+			->where(x()->eq($users->posts->published, true))
+			->orderBy($users->posts->title->desc());
 
 		$rows = $users
 			->select($users->name)
-			->load(
-				$users->posts
-					->fields('title')
-					->where(x()->eq($users->posts->published, true))
-					->orderBy($users->posts->title->desc()),
-			)
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -357,15 +358,13 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testSeparateBelongsToRelationWhereDoesNotFilterRootRows(): void
 	{
 		$posts = $this->database->query($this->registry->getCollection('posts'));
+		$posts->author
+			->separate()
+			->fields('name')
+			->where(x()->eq($posts->author->name, 'Ada'));
 
 		$rows = $posts
 			->select($posts->title)
-			->load(
-				$posts->author
-					->separate()
-					->fields('name')
-					->where(x()->eq($posts->author->name, 'Ada')),
-			)
 			->orderBy($posts->id->asc())
 			->fetchAll();
 
@@ -379,9 +378,10 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testFieldsLoadTheRelationAndRestrictPublicFields(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts->fields('title');
 
 		$rows = $users
-			->select($users->name, $users->posts->fields('title'))
+			->select($users->name)
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -411,9 +411,8 @@ final class CycleJoinExecutionTest extends TestCase
 		$users = $this->database->query($this->registry->getCollection('users'));
 
 		try {
-			$users
-				->load($users->posts->join()->where(x()->eq($users->posts->published, true)))
-				->fetchAll();
+			$users->posts->join()->where(x()->eq($users->posts->published, true));
+			$users->fetchAll();
 			self::fail('Expected joined relation where rejection.');
 		} catch (RelationLoaderException $exception) {
 			self::assertStringContainsString('conditions that are not supported', $exception->getMessage());
@@ -423,26 +422,26 @@ final class CycleJoinExecutionTest extends TestCase
 
 		$this->expectException(RelationLoaderException::class);
 		$this->expectExceptionMessage('ordering that is not supported');
-		$users->load($users->posts->join()->orderBy($users->posts->title->asc()))->fetchAll();
+		$users->posts->join()->orderBy($users->posts->title->asc());
+		$users->fetchAll();
 	}
 
-	public function testConflictingStructuredLoadStrategiesAreRejected(): void
+	public function testRepeatedStructuredLoadStrategiesUseLatestCall(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
-		$this->expectException(RelationSelectionException::class);
-		$users->load(
-			$users->posts->strategy(LoadStrategy::JOIN),
-			$users->posts->strategy(LoadStrategy::SEPARATE_QUERY),
-		);
+		$users->posts->strategy(LoadStrategy::JOIN)->strategy(LoadStrategy::SEPARATE_QUERY);
+
+		self::assertSame(LoadStrategy::SEPARATE_QUERY, $users->getRelationSelections()->getAll()[0]->getStrategy());
 	}
 
 	public function testItProjectsM2MTargetsWithoutExposingThroughRows(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->roles->separate();
 
 		$rows = $users
-			->select($users->name, $users->roles)
+			->select($users->name)
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -470,9 +469,10 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testM2MStructuredLoadingUsesThroughRowsToAttachSharedTargets(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->roles->fields('name');
 
 		$rows = $users
-			->select($users->name, $users->roles->fields('name'))
+			->select($users->name)
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -486,9 +486,10 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testItLoadsNestedRelationsBelowM2MTargetBranches(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->roles->permissions->separate();
 
 		$rows = $users
-			->select($users->name, $users->roles->permissions)
+			->select($users->name)
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -530,9 +531,10 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testM2MStructuredLoadingSupportsCompositeParentAndThroughKeys(): void
 	{
 		$articles = $this->database->query($this->registry->getCollection('composite_articles'));
+		$articles->tags->separate();
 
 		$rows = $articles
-			->select($articles->slug, $articles->tags)
+			->select($articles->slug)
 			->orderBy($articles->slug->asc())
 			->fetchAll();
 
@@ -562,9 +564,10 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testItKeepsIntermediateRelationsVisibleButStructuralByDefault(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts->author->separate();
 
 		$rows = $users
-			->select($users->name, $users->posts->author)
+			->select($users->name)
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -592,9 +595,10 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testNestedRelationBranchesCanUseIndependentFieldLists(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts->fields('title')->author->fields('name');
 
 		$rows = $users
-			->select($users->name, $users->posts->fields('title')->author->fields('name'))
+			->select($users->name)
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -622,13 +626,11 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testItMergesRepeatedRelationSelections(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts->fields('id');
+		$users->posts->fields('title');
 
 		$rows = $users
-			->select(
-				$users->name,
-				$users->posts->fields('id'),
-				$users->posts->fields('title'),
-			)
+			->select($users->name)
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -636,14 +638,14 @@ final class CycleJoinExecutionTest extends TestCase
 			[
 				'name' => 'Ada',
 				'posts' => [
-					['id' => 1, 'title' => 'Hello'],
-					['id' => 2, 'title' => 'World'],
+					['title' => 'Hello'],
+					['title' => 'World'],
 				],
 			],
 			[
 				'name' => 'Grace',
 				'posts' => [
-					['id' => 3, 'title' => 'Graph'],
+					['title' => 'Graph'],
 				],
 			],
 			[
@@ -653,16 +655,13 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testUnrestrictedFieldSelectionWinsWhenStructuredSelectionsMerge(): void
+	public function testStrategyConfigurationKeepsStructuredFieldSelection(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts->fields('title')->separate();
 
 		$rows = $users
-			->select(
-				$users->name,
-				$users->posts->fields('title'),
-				$users->posts,
-			)
+			->select($users->name)
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -670,14 +669,14 @@ final class CycleJoinExecutionTest extends TestCase
 			[
 				'name' => 'Ada',
 				'posts' => [
-					['id' => 1, 'userId' => 1, 'title' => 'Hello', 'published' => true],
-					['id' => 2, 'userId' => 1, 'title' => 'World', 'published' => false],
+					['title' => 'Hello'],
+					['title' => 'World'],
 				],
 			],
 			[
 				'name' => 'Grace',
 				'posts' => [
-					['id' => 3, 'userId' => 2, 'title' => 'Graph', 'published' => true],
+					['title' => 'Graph'],
 				],
 			],
 			[
@@ -690,9 +689,10 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testExplicitIntermediateLoadKeepsParentBranchVisible(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts->separate()->author->separate();
 
 		$rows = $users
-			->select($users->name, $users->posts->load()->author)
+			->select($users->name)
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -720,9 +720,10 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testHiddenIntermediateBranchesPromoteVisibleDescendants(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts->hidden()->author->separate();
 
 		$rows = $users
-			->select($users->name, $users->posts->hidden()->author)
+			->select($users->name)
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -749,13 +750,11 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testMergedSelectionsPromoteHiddenBranchesWithoutDuplicatingOutput(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts->hidden()->author->separate();
+		$users->posts->visible()->separate();
 
 		$rows = $users
-			->select(
-				$users->name,
-				$users->posts->hidden()->author,
-				$users->posts,
-			)
+			->select($users->name)
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -783,9 +782,10 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testHiddenIntermediatePluralBranchesPreserveDistinctPromotedRecords(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts->hidden()->comments->author->separate();
 
 		$rows = $users
-			->select($users->name, $users->posts->hidden()->comments->author)
+			->select($users->name)
 			->orderBy($users->id->asc())
 			->fetchAll();
 
@@ -852,10 +852,11 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testStructuredManyToManyStillRejectsUnsupportedThroughConstraints(): void
 	{
 		$articles = $this->database->query($this->registry->getCollection('articles_with_scoped_tags'));
+		$articles->tags->separate();
 
 		$this->expectException(RelationLoaderException::class);
 		$this->expectExceptionMessage('through conditions that are not supported');
-		$articles->select($articles->id, $articles->tags)->fetchAll();
+		$articles->select($articles->id)->fetchAll();
 	}
 
 	public function testMissingKeysAndMissingThroughMetadataBecomeUnsupportedQueryExceptions(): void

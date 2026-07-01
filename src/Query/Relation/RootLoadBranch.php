@@ -57,6 +57,7 @@ final class RootLoadBranch extends LoadBranch
 			if ($existing instanceof SelectionItem) {
 				$this->selections->add($existing->getExpression(), SelectionReason::REQUIRED);
 				$aliases[] = $this->selectionKey($existing);
+
 				continue;
 			}
 

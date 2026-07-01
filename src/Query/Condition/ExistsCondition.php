@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Condition;
 
+use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
 
 final class ExistsCondition implements ConditionInterface
@@ -22,5 +23,10 @@ final class ExistsCondition implements ConditionInterface
 	public function isNegated(): bool
 	{
 		return $this->negated;
+	}
+
+	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
+	{
+		return $this;
 	}
 }

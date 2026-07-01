@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
+use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Selection\SelectionReason;
@@ -137,7 +139,7 @@ final class RelationLoadBranch extends LoadBranch
 
 	public function isJoinedAttachment(): bool
 	{
-		return $this->joinedAttachment ?? throw new \LogicException('Load branch attachment mode is not configured.');
+		return $this->joinedAttachment ?? throw new LogicException('Load branch attachment mode is not configured.');
 	}
 
 	public function returnsMany(): bool
@@ -150,7 +152,7 @@ final class RelationLoadBranch extends LoadBranch
 		return $this->getRelationRef()->field($fieldName)->getField()->getName();
 	}
 
-	private function relationFieldSelection(string $fieldName): \ON\Data\Query\Expression\AliasedExpression
+	private function relationFieldSelection(string $fieldName): AliasedExpression
 	{
 		return $this->getRelationRef()->field($fieldName)->as($fieldName);
 	}

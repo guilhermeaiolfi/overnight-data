@@ -51,4 +51,29 @@ final class FieldRef extends AbstractAggregateableExpression
 			$this->getName(),
 		];
 	}
+
+	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
+	{
+		$fromPath = $from->getPath();
+		$fieldPath = $this->getPath();
+
+		if (array_slice($fieldPath, 0, count($fromPath)) !== $fromPath) {
+			return $this;
+		}
+
+		$relativePath = array_slice($fieldPath, count($fromPath));
+
+		if ($relativePath === []) {
+			return $this;
+		}
+
+		$fieldName = array_pop($relativePath);
+		$source = $to;
+
+		foreach ($relativePath as $relationName) {
+			$source = $source->relation($relationName);
+		}
+
+		return $source->field($fieldName);
+	}
 }

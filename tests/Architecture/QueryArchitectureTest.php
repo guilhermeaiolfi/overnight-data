@@ -15,13 +15,14 @@ use ON\Data\Query\Relation\Loader\HasManyLoader;
 use ON\Data\Query\Relation\Loader\HasOneLoader;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\Relation\LoadRuntime;
-use ON\Data\Query\Relation\RelationOutputProcessor;
 use ON\Data\Query\Relation\RelationLoadBranch;
+use ON\Data\Query\Relation\RelationOutputProcessor;
 use ON\Data\Query\Relation\RootLoadBranch;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use ReflectionClass;
 use ReflectionMethod;
 use ReflectionNamedType;
 use SplFileInfo;
@@ -289,7 +290,7 @@ final class QueryArchitectureTest extends TestCase
 
 	public function testRootLoadBranchUsesSelectionListInsteadOfLegacyParallelArrays(): void
 	{
-		$reflection = new \ReflectionClass(RootLoadBranch::class);
+		$reflection = new ReflectionClass(RootLoadBranch::class);
 		$contents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/RootLoadBranch.php');
 
 		self::assertTrue($reflection->hasProperty('selections'));

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Expression;
 
 use InvalidArgumentException;
+use ON\Data\Query\QuerySourceInterface;
 
 final class AggregateExpression extends AbstractValueExpression
 {
@@ -33,6 +34,21 @@ final class AggregateExpression extends AbstractValueExpression
 	public function getExpression(): ValueExpressionInterface|StarExpression
 	{
 		return $this->expression;
+	}
+
+	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
+	{
+		if ($this->expression instanceof StarExpression) {
+			return $this;
+		}
+
+		$expression = $this->expression->rebaseFields($from, $to);
+
+		if ($expression === $this->expression) {
+			return $this;
+		}
+
+		return new self($this->function, $expression);
 	}
 
 	private function containsAggregateAtCurrentLevel(ValueExpressionInterface|StarExpression $expression): bool

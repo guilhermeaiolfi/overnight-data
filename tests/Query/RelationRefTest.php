@@ -7,12 +7,16 @@ namespace Tests\ON\Data\Query;
 use Error;
 use InvalidArgumentException;
 use ON\Data\Definition\Registry;
+use ON\Data\Query\Condition\ComparisonCondition;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Exception\UnknownQueryMemberException;
 use ON\Data\Query\Exception\UnknownQueryRelationException;
+use ON\Data\Query\Expression\AggregateExpression;
 use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\LiteralExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
+use ON\Data\Query\Expression\ValueOperationExpression;
 use function ON\Data\Query\query;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationRef;
@@ -21,6 +25,7 @@ use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Fixture\CustomRelation;
+use TypeError;
 
 final class RelationRefTest extends TestCase
 {
@@ -91,29 +96,17 @@ final class RelationRefTest extends TestCase
 		self::assertSame($users->posts->author->name, $users->posts->author->field('name'));
 	}
 
-	public function testRelationConfigurationMethodsAreImmutableAndNormalizeRequestedFields(): void
+	public function testRelationConfigurationMethodsMutateCachedRefsAndNormalizeRequestedFields(): void
 	{
 		$users = $this->makeQuery('users');
 		$default = $users->posts;
-		$loaded = $users->posts->load();
-		$hidden = $users->posts->hidden();
-		$explicitHidden = $users->posts->visible(false);
-		$fields = $users->posts->fields('id', 'title', 'id');
+		$fields = $default->fields('id', 'title', 'id');
 
-		self::assertFalse($default->isLoaded());
+		self::assertTrue($default->isLoaded());
 		self::assertTrue($default->isVisible());
-		self::assertNull($default->getFields());
-		self::assertTrue($loaded->isLoaded());
-		self::assertTrue($loaded->isVisible());
-		self::assertFalse($hidden->isLoaded());
-		self::assertFalse($hidden->isVisible());
-		self::assertFalse($explicitHidden->isVisible());
 		self::assertSame(['id', 'title'], $fields->getFields());
-		self::assertEquals($hidden, $explicitHidden);
 		self::assertSame($default, $users->posts);
-		self::assertNotSame($default, $loaded);
-		self::assertNotSame($default, $hidden);
-		self::assertNotSame($default, $fields);
+		self::assertSame($default, $fields);
 	}
 
 	public function testFieldsAcceptListsAndSamePathFieldRefs(): void
@@ -122,9 +115,9 @@ final class RelationRefTest extends TestCase
 		$fromArray = $users->posts->fields(['title']);
 		$fromRefs = $users->posts->fields($users->posts->id, $users->posts->title);
 
-		self::assertSame(['title'], $fromArray->getFields());
+		self::assertSame(['id', 'title'], $fromArray->getFields());
 		self::assertSame(['id', 'title'], $fromRefs->getFields());
-		self::assertNull($users->posts->getFields());
+		self::assertSame(['id', 'title'], $users->posts->getFields());
 	}
 
 	public function testFieldsRejectInvalidSelectionInputs(): void
@@ -224,24 +217,26 @@ final class RelationRefTest extends TestCase
 		self::assertSame([], $users->getSorts());
 	}
 
-	public function testRelationRefIsSelectableWithoutBecomingAValueExpression(): void
+	public function testRelationRefIsNotAValueExpressionAndSelectRejectsIt(): void
 	{
 		$users = $this->makeQuery('users');
 
 		self::assertFalse(is_a($users->posts, ValueExpressionInterface::class));
-		$users->select($users->posts);
 
-		self::assertCount(0, $users->getSelections());
-		self::assertSame([
-			['posts', true, true, null],
-		], $this->selectionState($users));
+		$this->expectException(TypeError::class);
+		$users->select($users->posts);
 	}
 
-	public function testLoadRegistersRelationSelectionsThroughExplicitApi(): void
+	public function testSelectQueryLoadNoLongerExists(): void
+	{
+		self::assertFalse(method_exists(SelectQuery::class, 'load'));
+	}
+
+	public function testConfiguringRootRelationDirectlyRegistersSelection(): void
 	{
 		$users = $this->makeQuery('users');
 
-		$users->load($users->posts->fields('id', 'title'));
+		$users->posts->fields('id', 'title');
 
 		self::assertCount(0, $users->getSelections());
 		self::assertSame([
@@ -249,27 +244,27 @@ final class RelationRefTest extends TestCase
 		], $this->selectionState($users));
 	}
 
-	public function testLoadAndSelectRelationRefsShareSelectionBehavior(): void
+	public function testNestedConfiguredRelationIsCollectedWithParentBranch(): void
 	{
-		$loaded = $this->makeQuery('users');
-		$selected = $this->makeQuery('users');
+		$users = $this->makeQuery('users');
+		$users->posts->author->fields('name');
 
-		$loaded->load($loaded->posts->author->fields('name'));
-		$selected->select($selected->posts->author->fields('name'));
-
-		self::assertSame($this->selectionState($selected), $this->selectionState($loaded));
+		self::assertSame([
+			['posts', false, true, null],
+			['posts.author', true, true, ['name']],
+		], $this->selectionState($users));
 	}
 
-	public function testRelationWhereStoresConditionsImmutably(): void
+	public function testRelationWhereStoresConditionsOnCachedRef(): void
 	{
 		$users = $this->makeQuery('users');
 		$first = x()->eq($users->posts->published, true);
 		$second = x()->eq($users->posts->title, 'Hello');
 		$configured = $users->posts->where($first)->where($second);
 
-		self::assertSame([], $users->posts->getConditions());
+		self::assertSame($users->posts, $configured);
 		self::assertSame([$first, $second], $configured->getConditions());
-		self::assertNotSame($users->posts, $configured);
+		self::assertTrue($configured->isLoaded());
 	}
 
 	public function testRelationWhereRejectsEmptyConditionLists(): void
@@ -280,16 +275,16 @@ final class RelationRefTest extends TestCase
 		$users->posts->where();
 	}
 
-	public function testRelationOrderByStoresSortsImmutably(): void
+	public function testRelationOrderByStoresSortsOnCachedRef(): void
 	{
 		$users = $this->makeQuery('users');
 		$first = $users->posts->title->asc();
 		$second = $users->posts->id->desc();
 		$configured = $users->posts->orderBy($first)->orderBy($second);
 
-		self::assertSame([], $users->posts->getSorts());
+		self::assertSame($users->posts, $configured);
 		self::assertSame([$first, $second], $configured->getSorts());
-		self::assertNotSame($users->posts, $configured);
+		self::assertTrue($configured->isLoaded());
 	}
 
 	public function testRelationOrderByRejectsEmptySortLists(): void
@@ -300,28 +295,25 @@ final class RelationRefTest extends TestCase
 		$users->posts->orderBy();
 	}
 
-	public function testRelationStrategyHelpersStoreExplicitStrategyImmutably(): void
+	public function testRelationStrategyHelpersStoreExplicitStrategyOnCachedRef(): void
 	{
 		$users = $this->makeQuery('users');
-		$joined = $users->posts->strategy(LoadStrategy::JOIN);
-		$separate = $joined->separate();
-		$cleared = $separate->strategy(null);
 
+		self::assertSame($users->posts, $users->posts->strategy(LoadStrategy::JOIN));
+		self::assertSame(LoadStrategy::JOIN, $users->posts->getStrategy());
+		self::assertSame($users->posts, $users->posts->separate());
+		self::assertSame(LoadStrategy::SEPARATE_QUERY, $users->posts->getStrategy());
+		self::assertSame($users->posts, $users->posts->strategy(null));
 		self::assertNull($users->posts->getStrategy());
-		self::assertSame(LoadStrategy::JOIN, $joined->getStrategy());
-		self::assertSame(LoadStrategy::SEPARATE_QUERY, $separate->getStrategy());
-		self::assertNull($cleared->getStrategy());
 		self::assertSame(LoadStrategy::JOIN, $users->posts->join()->getStrategy());
-		self::assertNotSame($users->posts, $joined);
 	}
 
 	public function testItMergesRepeatedSelectionsOfTheSameLogicalRelationPath(): void
 	{
 		$users = $this->makeQuery('users');
 
-		$users
-			->select($users->posts->author)
-			->select($users->posts);
+		$users->posts->author->separate();
+		$users->posts->separate();
 
 		self::assertSame([
 			['posts', true, true, null],
@@ -332,7 +324,7 @@ final class RelationRefTest extends TestCase
 	public function testNestedSelectionsKeepIntermediateBranchesVisibleButStructuralByDefault(): void
 	{
 		$users = $this->makeQuery('users');
-		$users->select($users->posts->author);
+		$users->posts->author->separate();
 
 		self::assertSame([
 			['posts', false, true, null],
@@ -344,10 +336,8 @@ final class RelationRefTest extends TestCase
 	{
 		$users = $this->makeQuery('users');
 
-		$users->select(
-			$users->posts->hidden()->author,
-			$users->posts,
-		);
+		$users->posts->hidden()->author->separate();
+		$users->posts->visible()->separate();
 
 		self::assertSame([
 			['posts', true, true, null],
@@ -359,13 +349,11 @@ final class RelationRefTest extends TestCase
 	{
 		$users = $this->makeQuery('users');
 
-		$users->select(
-			$users->posts->fields('id'),
-			$users->posts->fields('title', 'id'),
-		);
+		$users->posts->fields('id');
+		$users->posts->fields('title', 'id');
 
 		self::assertSame([
-			['posts', true, true, ['id', 'title']],
+			['posts', true, true, ['title', 'id']],
 		], $this->selectionState($users));
 	}
 
@@ -377,37 +365,32 @@ final class RelationRefTest extends TestCase
 		$firstSort = $users->posts->title->asc();
 		$secondSort = $users->posts->id->desc();
 
-		$users->load(
-			$users->posts->fields('id')->where($firstCondition)->orderBy($firstSort),
-			$users->posts->fields('title')->where($secondCondition)->orderBy($secondSort),
-		);
+		$users->posts->fields('id')->where($firstCondition)->orderBy($firstSort);
+		$users->posts->fields('title')->where($secondCondition)->orderBy($secondSort);
 
 		$selection = $users->getRelationSelections()->getAll()[0];
-		self::assertSame(['id', 'title'], $selection->getFields());
+		self::assertSame(['title'], $selection->getFields());
 		self::assertSame([$firstCondition, $secondCondition], $selection->getConditions());
 		self::assertSame([$firstSort, $secondSort], $selection->getSorts());
 	}
 
-	public function testConflictingStrategiesForSameRelationPathAreRejected(): void
+	public function testRepeatedStrategyCallsUseLatestCall(): void
 	{
 		$users = $this->makeQuery('users');
 
-		$this->expectException(RelationSelectionException::class);
-		$this->expectExceptionMessage('conflicting load strategies');
-		$users->load($users->posts->join(), $users->posts->separate());
+		$users->posts->join()->separate();
+
+		self::assertSame(LoadStrategy::SEPARATE_QUERY, $users->getRelationSelections()->getAll()[0]->getStrategy());
 	}
 
-	public function testUnrestrictedFieldSelectionWinsWhenSelectionsMerge(): void
+	public function testStrategyConfigurationKeepsExistingFieldList(): void
 	{
 		$users = $this->makeQuery('users');
 
-		$users->select(
-			$users->posts->fields('title'),
-			$users->posts,
-		);
+		$users->posts->fields('title')->separate();
 
 		self::assertSame([
-			['posts', true, true, null],
+			['posts', true, true, ['title']],
 		], $this->selectionState($users));
 	}
 
@@ -416,15 +399,15 @@ final class RelationRefTest extends TestCase
 		$users = $this->makeQuery('users');
 
 		$this->expectException(RelationSelectionException::class);
-		$users->select($users->posts->hidden());
+		$users->posts->fields('id')->hidden();
 	}
 
-	public function testLoadAndHiddenCannotBeCombinedOnATerminalRelation(): void
+	public function testSelectedRelationCannotBeHidden(): void
 	{
 		$users = $this->makeQuery('users');
 
 		$this->expectException(RelationSelectionException::class);
-		$users->posts->load()->hidden();
+		$users->posts->separate()->hidden();
 	}
 
 	public function testConfiguredParentFieldsRemainIntactWhenSelectingNestedChildren(): void
@@ -436,8 +419,6 @@ final class RelationRefTest extends TestCase
 		self::assertSame(['id', 'title'], $configuredPosts->getFields());
 		self::assertSame(['posts', 'comments'], $comments->getPath());
 		self::assertSame(['id', 'body'], $comments->getFields());
-
-		$users->select($configuredPosts, $comments);
 
 		self::assertSame([
 			['posts', true, true, ['id', 'title']],
@@ -489,8 +470,85 @@ final class RelationRefTest extends TestCase
 		$users = $this->makeQuery('users', $registry);
 		$other = $this->makeQuery('users', $registry);
 
-		$this->expectException(RelationSelectionException::class);
+		$this->expectException(TypeError::class);
 		$users->select($other->posts);
+	}
+
+	public function testAdoptConditionsRebasesRelationFieldsToTargetQuery(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$posts = $this->makeQuery('posts', $registry);
+
+		$posts->adoptConditions($users->posts, x()->eq($users->posts->published, true));
+
+		$condition = $posts->getConditions()[0];
+		self::assertInstanceOf(ComparisonCondition::class, $condition);
+		self::assertInstanceOf(FieldRef::class, $condition->getLeft());
+		self::assertSame($posts, $condition->getLeft()->getSource());
+		self::assertSame(['published'], $condition->getLeft()->getPath());
+	}
+
+	public function testAdoptConditionsRebasesNestedRelationFieldsToTargetQuery(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$posts = $this->makeQuery('posts', $registry);
+
+		$posts->adoptConditions($users->posts, x()->eq($users->posts->author->name, 'Ada'));
+
+		$condition = $posts->getConditions()[0];
+		self::assertInstanceOf(ComparisonCondition::class, $condition);
+		self::assertInstanceOf(FieldRef::class, $condition->getLeft());
+		self::assertSame($posts->author, $condition->getLeft()->getSource());
+		self::assertSame(['author', 'name'], $condition->getLeft()->getPath());
+	}
+
+	public function testAdoptSortsRebasesSortExpressions(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$posts = $this->makeQuery('posts', $registry);
+
+		$posts->adoptSorts($users->posts, $users->posts->title->asc());
+
+		$expression = $posts->getSorts()[0]->getExpression();
+		self::assertInstanceOf(FieldRef::class, $expression);
+		self::assertSame($posts, $expression->getSource());
+		self::assertSame(['title'], $expression->getPath());
+	}
+
+	public function testCompositeExpressionsPreserveStructureWhileRebasingNestedFields(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$posts = $this->makeQuery('posts', $registry);
+
+		$posts->adoptConditions(
+			$users->posts,
+			x()->eq($users->posts->id->sum(), $users->posts->title->upper()),
+		);
+
+		$condition = $posts->getConditions()[0];
+		self::assertInstanceOf(ComparisonCondition::class, $condition);
+		self::assertInstanceOf(AggregateExpression::class, $condition->getLeft());
+		self::assertInstanceOf(FieldRef::class, $condition->getLeft()->getExpression());
+		self::assertSame(['id'], $condition->getLeft()->getExpression()->getPath());
+		self::assertInstanceOf(ValueOperationExpression::class, $condition->getRight());
+		self::assertInstanceOf(FieldRef::class, $condition->getRight()->getArguments()[0]);
+		self::assertSame(['title'], $condition->getRight()->getArguments()[0]->getPath());
+	}
+
+	public function testLeafExpressionsAndFieldsOutsideSourceAreNotRebased(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$posts = $this->makeQuery('posts', $registry);
+		$literal = x()->literal('Ada');
+
+		self::assertInstanceOf(LiteralExpression::class, $literal);
+		self::assertSame($literal, $literal->rebaseFields($users->posts, $posts));
+		self::assertSame($users->name, $users->name->rebaseFields($users->posts, $posts));
 	}
 
 	private function makeRegistry(): Registry

@@ -1,21 +1,29 @@
 # Relation Loading
 
-`SelectQuery::load()` is the explicit relation-loading API. `SelectQuery::select()` also accepts `RelationRef` for convenience so existing queries can describe both flat root selections and nested relation branches.
+Relation loading is configured through cached `RelationRef` branches. `SelectQuery::select()` is for root scalar/value expressions; relation branches are selected by configuring the relation ref directly.
 
-## Selecting relations
+## Selecting Relations
 
-Selecting a relation marks the terminal relation as loaded and visible:
+Any relation configuration that loads data marks that cached relation ref as selected:
 
 ```php
-$u->load($u->posts);
+$u->posts->separate();
 
-$u->select($u->posts);
+$u->posts
+    ->fields('id', 'title')
+    ->where(x()->eq($u->posts->published, true))
+    ->orderBy($u->posts->createdAt->desc())
+    ->separate();
+
+$u->profile
+    ->fields('avatar')
+    ->join();
 ```
 
 Nested traversal works through dynamic relation refs:
 
 ```php
-$u->select($u->posts->author);
+$u->posts->author->fields('id', 'name');
 ```
 
 That automatically registers missing ancestors. In this example:
@@ -23,11 +31,17 @@ That automatically registers missing ancestors. In this example:
 - `posts` becomes a visible structural container;
 - `author` becomes the loaded terminal relation.
 
-## Load options
+Root field selection remains separate:
 
-The current public API on `RelationRef` is:
+```php
+$u->posts->fields('title');
+$u->select($u->id, $u->name);
+```
 
-- `load(bool $load = true)`
+## Load Options
+
+The public configuration API on `RelationRef` is:
+
 - `visible(bool $visible = true)`
 - `hidden()`
 - `fields(string|FieldRef|array ...$fields)`
@@ -37,33 +51,15 @@ The current public API on `RelationRef` is:
 - `join()`
 - `separate()`
 
-Examples:
+`fields(...)`, `where(...)`, `orderBy(...)`, and strategy helpers select/load the relation. `visible(...)` and `hidden()` control result shape for configured paths and intermediate traversal.
 
-```php
-$u->select(
-    $u->posts->fields('id', 'title'),
-    $u->posts->comments->fields('id', 'body'),
-);
-
-$u->load(
-    $u->posts
-        ->fields('id', 'title')
-        ->where(x()->eq($u->posts->published, true))
-        ->orderBy($u->posts->createdAt->desc())
-        ->separate(),
-);
-
-$u->select($u->posts->load()->author);
-$u->select($u->posts->hidden()->author);
-```
-
-`fields(...)` loads the relation and restricts public relation fields to the listed field names.
+`fields(...)` restricts public relation fields to the listed field names.
 
 `where(...)` and `orderBy(...)` configure the relation query. Built-in loaders apply these options to separate-query relation loading. Joined relation loading rejects relation-level conditions and ordering for now because those options can change root row filtering or row order in surprising ways.
 
-`strategy(null)` clears an explicit strategy override and falls back to the loader default. `join()` and `separate()` are convenience wrappers for `strategy(LoadStrategy::JOIN)` and `strategy(LoadStrategy::SEPARATE_QUERY)`.
+`strategy(null)` clears an explicit strategy override and falls back to the loader default. `join()` and `separate()` are convenience wrappers for `strategy(LoadStrategy::JOIN)` and `strategy(LoadStrategy::SEPARATE_QUERY)`. Repeated strategy calls on the same cached ref use the latest call.
 
-## Visible and hidden branches
+## Visible and Hidden Branches
 
 Each selected path segment has two result-shape flags:
 
@@ -79,7 +75,7 @@ Hidden intermediate segments promote their visible descendants to the nearest vi
 
 A hidden terminal relation is rejected.
 
-## Field restriction rules
+## Field Restriction Rules
 
 `fields(...)` accepts:
 
@@ -96,15 +92,9 @@ The current rules are intentionally strict:
 - `FieldRef` values from another query or another path are rejected;
 - repeated field names are deduplicated in stable order.
 
-Repeated selections of the same logical relation path merge:
+Because relation refs are cached mutable branch proxies, repeated calls configure the same branch. Conditions and sorts append in call order; field lists are replaced by the latest `fields(...)` call; strategy uses the latest call.
 
-- `load` and `visible` keep the permissive existing behavior;
-- if any selection leaves fields unrestricted, the merged selection becomes unrestricted;
-- conditions and sorts append in stable order;
-- matching or single-sided strategy overrides are kept;
-- conflicting strategy overrides for the same path are rejected.
-
-## Result shapes
+## Result Shapes
 
 Built-in structured relation loading currently projects:
 
@@ -117,7 +107,7 @@ When a loaded relation does not specify `fields(...)`, the public projection use
 
 Built-in `M2M` loading uses a loader-owned through-table shape internally. The parser/runtime keeps the through row and target row distinct, then projects the target child as the public relation payload. Internal through fields are not exposed in the final array result.
 
-## Execution model
+## Execution Model
 
 Built-in loaders currently default to:
 
@@ -130,7 +120,7 @@ The acquisition strategy is loader-owned. A relation selection may override the 
 
 `fetchAll()` and `fetchOne()` support structured relation loading. `iterate()` does not.
 
-## Architecture guardrails
+## Architecture Guardrails
 
 - The registry must not know relation-specific loading behavior.
 - Generic query and runtime code may contain relation-aware plumbing, but not relation-specific join rules.
@@ -139,7 +129,7 @@ The acquisition strategy is loader-owned. A relation selection may override the 
 - SQL dialect differences should be delegated to Cycle Database or Doctrine DBAL rather than hand-coded in the data layer.
 - The data layer must remain useful without the optional ORM.
 
-## Current limits
+## Current Limits
 
 - Structured loading is not the same as arbitrary related-field projection in flat scalar selections.
 - Structured loading for built-in `FirstOfMany` is not implemented yet.

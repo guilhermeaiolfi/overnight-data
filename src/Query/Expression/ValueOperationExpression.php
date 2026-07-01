@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Expression;
 
 use InvalidArgumentException;
+use ON\Data\Query\QuerySourceInterface;
 
 final class ValueOperationExpression extends AbstractAggregateableExpression
 {
@@ -57,5 +58,23 @@ final class ValueOperationExpression extends AbstractAggregateableExpression
 	public function getArguments(): array
 	{
 		return $this->arguments;
+	}
+
+	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
+	{
+		$changed = false;
+		$arguments = [];
+
+		foreach ($this->arguments as $argument) {
+			$rebased = $argument->rebaseFields($from, $to);
+			$changed = $changed || $rebased !== $argument;
+			$arguments[] = $rebased;
+		}
+
+		if (! $changed) {
+			return $this;
+		}
+
+		return new self($this->operation, $arguments);
 	}
 }

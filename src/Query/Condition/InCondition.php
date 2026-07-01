@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use ON\Data\Query\Expression\AggregateExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
+use ON\Data\Query\QuerySourceInterface;
 
 final class InCondition implements ConditionInterface
 {
@@ -58,5 +59,30 @@ final class InCondition implements ConditionInterface
 	public function isNegated(): bool
 	{
 		return $this->negated;
+	}
+
+	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
+	{
+		$expression = $this->expression->rebaseFields($from, $to);
+		$set = $this->set;
+		$changed = $expression !== $this->expression;
+
+		if (is_array($set)) {
+			$rebasedSet = [];
+
+			foreach ($set as $item) {
+				$rebased = $item->rebaseFields($from, $to);
+				$changed = $changed || $rebased !== $item;
+				$rebasedSet[] = $rebased;
+			}
+
+			$set = $rebasedSet;
+		}
+
+		if (! $changed) {
+			return $this;
+		}
+
+		return new self($expression, $set, $this->negated);
 	}
 }

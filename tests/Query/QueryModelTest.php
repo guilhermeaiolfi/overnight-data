@@ -1001,7 +1001,7 @@ final class QueryModelTest extends TestCase
 	public function testIterateRejectsStructuredRelationSelections(): void
 	{
 		$users = query($this->makeRegistry()->getCollection('users'));
-		$users->select($users->posts);
+		$users->posts->separate();
 
 		$this->expectException(RelationSelectionException::class);
 		$this->expectExceptionMessage('iterate() is not supported');
