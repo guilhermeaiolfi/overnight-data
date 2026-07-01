@@ -155,10 +155,12 @@ final class QueryModelTest extends TestCase
 	public function testSelectableExpressionsOwnSelectionKeys(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
+		$nestedField = $query->posts->id;
 		$aliased = $query->name->upper()->as('display_name');
 		$selection = new SelectionItem($aliased);
 
 		self::assertSame('name', $query->name->getSelectionKey());
+		self::assertSame('posts.id', $nestedField->getSelectionKey());
 		self::assertSame('display_name', $aliased->getSelectionKey());
 		self::assertSame('display_name', $selection->getSelectionKey());
 	}
@@ -168,7 +170,7 @@ final class QueryModelTest extends TestCase
 		$query = query($this->makeRegistry()->getCollection('users'));
 
 		$this->expectException(LogicException::class);
-		$this->expectExceptionMessage('does not expose a stable selection key');
+		$this->expectExceptionMessage('cannot provide a selection key without an alias');
 		$query->name->upper()->getSelectionKey();
 	}
 

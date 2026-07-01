@@ -74,7 +74,7 @@ final class RelationLoadBranch extends LoadBranch
 
 		foreach ($fieldNames as $fieldName) {
 			$canonical = $this->fieldSelectionName($fieldName);
-			$this->selections->add($this->getRelationRef()->field($canonical), SelectionReason::REQUIRED);
+			$this->selections->add($this->relationFieldSelection($canonical), SelectionReason::REQUIRED);
 			$added[] = $canonical;
 		}
 
@@ -91,7 +91,7 @@ final class RelationLoadBranch extends LoadBranch
 
 		foreach ($fieldNames as $fieldName) {
 			$canonical = $this->fieldSelectionName($fieldName);
-			$this->selections->add($this->getRelationRef()->field($canonical), SelectionReason::PUBLIC);
+			$this->selections->add($this->relationFieldSelection($canonical), SelectionReason::PUBLIC);
 			$added[] = $canonical;
 		}
 
@@ -148,5 +148,10 @@ final class RelationLoadBranch extends LoadBranch
 	private function fieldSelectionName(string $fieldName): string
 	{
 		return $this->getRelationRef()->field($fieldName)->getField()->getName();
+	}
+
+	private function relationFieldSelection(string $fieldName): \ON\Data\Query\Expression\AliasedExpression
+	{
+		return $this->getRelationRef()->field($fieldName)->as($fieldName);
 	}
 }

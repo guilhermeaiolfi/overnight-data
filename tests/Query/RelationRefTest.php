@@ -63,6 +63,7 @@ final class RelationRefTest extends TestCase
 		self::assertSame($users->posts->getCollection()->getField('title'), $title->getField());
 		self::assertSame($users->posts, $title->getSource());
 		self::assertSame(['posts', 'title'], $title->getPath());
+		self::assertSame('posts.title', $title->getSelectionKey());
 		self::assertSame($title, $users->posts->title);
 	}
 
@@ -74,6 +75,7 @@ final class RelationRefTest extends TestCase
 
 		self::assertSame(['posts', 'author'], $author->getPath());
 		self::assertSame(['posts', 'author', 'name'], $name->getPath());
+		self::assertSame('posts.author.name', $name->getSelectionKey());
 		self::assertSame($users, $author->getQuery());
 		self::assertSame($users, $name->getQuery());
 	}

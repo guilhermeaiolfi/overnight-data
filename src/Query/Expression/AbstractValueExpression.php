@@ -13,17 +13,10 @@ abstract class AbstractValueExpression implements ValueExpressionInterface
 {
 	public function getSelectionKey(): string
 	{
-		if (! method_exists($this, 'getPath')) {
-			throw new LogicException(sprintf(
-				'Expression %s does not expose a stable selection key; alias it before selecting.',
-				static::class,
-			));
-		}
-
-		/** @var list<string> $path */
-		$path = $this->getPath();
-
-		return implode('.', $path);
+		throw new LogicException(sprintf(
+			'Expression %s cannot provide a selection key without an alias.',
+			static::class,
+		));
 	}
 
 	final public function as(string $alias): AliasedExpression

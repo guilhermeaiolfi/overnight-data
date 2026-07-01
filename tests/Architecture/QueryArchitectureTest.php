@@ -380,6 +380,14 @@ final class QueryArchitectureTest extends TestCase
 		}
 	}
 
+	public function testExpressionSelectionKeyCodeDoesNotUseDynamicPathGuessing(): void
+	{
+		$contents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Expression/AbstractValueExpression.php');
+
+		self::assertStringNotContainsString("method_exists(\$this, 'getPath')", $contents);
+		self::assertStringContainsString('cannot provide a selection key without an alias', $contents);
+	}
+
 	public function testBuiltInLoadersUseRelationKeyPairingsForPairedOperations(): void
 	{
 		$simpleLoaderPaths = [

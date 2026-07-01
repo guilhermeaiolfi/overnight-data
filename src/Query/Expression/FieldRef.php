@@ -38,7 +38,7 @@ final class FieldRef extends AbstractAggregateableExpression
 
 	public function getSelectionKey(): string
 	{
-		return $this->getName();
+		return implode('.', $this->getPath());
 	}
 
 	/**
