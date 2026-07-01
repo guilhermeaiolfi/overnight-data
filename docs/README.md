@@ -18,4 +18,4 @@ Start here for the current public documentation. The files linked below are the 
 - [`3-query/expressions-and-conditions.md`](./3-query/expressions-and-conditions.md): Expressions, aliases, aggregates, semantic operations, and condition construction.
 - [`3-query/grouping-ordering-pagination.md`](./3-query/grouping-ordering-pagination.md): Grouping, `HAVING`, sorting, and limit/offset pagination.
 - [`3-query/bound-execution.md`](./3-query/bound-execution.md): Bound execution, detachment, and the neutral database facade.
-- [`3-query/relation-loading.md`](./3-query/relation-loading.md): Structured relation selection, nested result shaping, loader lifecycle boundaries, and current restrictions.
+- [`3-query/relation-loading.md`](./3-query/relation-loading.md): Structured relation selection, nested result shaping, loader-owned execution decisions, and current execution limits.

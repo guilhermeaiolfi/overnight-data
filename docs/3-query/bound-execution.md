@@ -51,6 +51,8 @@ With relation selections:
 - `fetchAll()` and `fetchOne()` route through `LoadRuntime`;
 - `iterate()` is intentionally rejected because structured loading may need the full parent batch.
 
+Built-in relation loaders keep ownership of join versus separate-query execution decisions.
+
 ## Detaching
 
 `detach()` removes the executor binding in place and returns the same query object.

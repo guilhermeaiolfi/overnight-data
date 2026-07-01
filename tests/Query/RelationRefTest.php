@@ -88,7 +88,7 @@ final class RelationRefTest extends TestCase
 		self::assertSame($users->posts->author->name, $users->posts->author->field('name'));
 	}
 
-	public function testRelationConfigurationMethodsSupportImmutableSelectionOptions(): void
+	public function testRelationConfigurationMethodsAreImmutableAndNormalizeRequestedFields(): void
 	{
 		$users = $this->makeQuery('users');
 		$default = $users->posts;
@@ -113,7 +113,7 @@ final class RelationRefTest extends TestCase
 		self::assertNotSame($default, $fields);
 	}
 
-	public function testFieldsAcceptArrayAndFieldRefs(): void
+	public function testFieldsAcceptListsAndSamePathFieldRefs(): void
 	{
 		$users = $this->makeQuery('users');
 		$fromArray = $users->posts->fields(['title']);
@@ -124,7 +124,7 @@ final class RelationRefTest extends TestCase
 		self::assertNull($users->posts->getFields());
 	}
 
-	public function testInvalidRelationFieldSelectionsAreRejected(): void
+	public function testFieldsRejectInvalidSelectionInputs(): void
 	{
 		$users = $this->makeQuery('users');
 
@@ -234,7 +234,7 @@ final class RelationRefTest extends TestCase
 		], $this->selectionState($users));
 	}
 
-	public function testNestedRelationSelectionAddsAncestorsOnce(): void
+	public function testItMergesRepeatedSelectionsOfTheSameLogicalRelationPath(): void
 	{
 		$users = $this->makeQuery('users');
 
@@ -248,7 +248,7 @@ final class RelationRefTest extends TestCase
 		], $this->selectionState($users));
 	}
 
-	public function testNestedRelationSelectionDefaultsIntermediateSegmentsToVisibleStructuralTraversal(): void
+	public function testNestedSelectionsKeepIntermediateBranchesVisibleButStructuralByDefault(): void
 	{
 		$users = $this->makeQuery('users');
 		$users->select($users->posts->author);
@@ -259,7 +259,7 @@ final class RelationRefTest extends TestCase
 		], $this->selectionState($users));
 	}
 
-	public function testNestedRelationSelectionMergesToTheStrongestPathOptions(): void
+	public function testVisibleSelectionsOverrideHiddenTraversalOnTheSameRelationPath(): void
 	{
 		$users = $this->makeQuery('users');
 
@@ -274,7 +274,7 @@ final class RelationRefTest extends TestCase
 		], $this->selectionState($users));
 	}
 
-	public function testRepeatedRelationSelectionsUnionRequestedFieldsInStableOrder(): void
+	public function testRepeatedFieldSelectionsAreDeduplicatedInStableOrder(): void
 	{
 		$users = $this->makeQuery('users');
 
@@ -288,7 +288,7 @@ final class RelationRefTest extends TestCase
 		], $this->selectionState($users));
 	}
 
-	public function testUnrestrictedRepeatedRelationSelectionDominatesRestrictedFields(): void
+	public function testUnrestrictedFieldSelectionWinsWhenSelectionsMerge(): void
 	{
 		$users = $this->makeQuery('users');
 
@@ -302,7 +302,7 @@ final class RelationRefTest extends TestCase
 		], $this->selectionState($users));
 	}
 
-	public function testHiddenTerminalRelationSelectionIsRejected(): void
+	public function testItRejectsHiddenLoadedTerminalRelations(): void
 	{
 		$users = $this->makeQuery('users');
 
@@ -310,7 +310,15 @@ final class RelationRefTest extends TestCase
 		$users->select($users->posts->hidden());
 	}
 
-	public function testConfiguredParentKeepsItsSelectionStateWhenTraversingChildren(): void
+	public function testLoadAndHiddenCannotBeCombinedOnATerminalRelation(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$this->expectException(RelationSelectionException::class);
+		$users->posts->load()->hidden();
+	}
+
+	public function testConfiguredParentFieldsRemainIntactWhenSelectingNestedChildren(): void
 	{
 		$users = $this->makeQuery('users');
 		$configuredPosts = $users->posts->fields('id', 'title');

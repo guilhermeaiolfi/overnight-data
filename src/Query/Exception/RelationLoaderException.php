@@ -33,7 +33,7 @@ final class RelationLoaderException extends InvalidArgumentException
 	public static function nestedJoinNotSupported(RelationRef $relation): self
 	{
 		return new self(sprintf(
-			'Nested relation path "%s" is not supported in this phase.',
+			'Nested relation path "%s" is not supported by flat relation joins yet.',
 			implode('.', $relation->getPath()),
 		));
 	}

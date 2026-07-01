@@ -47,6 +47,8 @@ References are cached per query and per path. Two different queries over the sam
 
 Scalar expressions become flat selections. A direct `SelectQuery` is normalized to a `SubqueryExpression`.
 
+Selecting a `RelationRef` participates in structured relation loading. The current relation-loading surface is documented in [`relation-loading.md`](./relation-loading.md).
+
 ```php
 $u->select(
     $u->id,
@@ -99,4 +101,5 @@ Use getters to inspect the built query:
 
 - The query model is database-independent.
 - Query objects may be relation-aware, but relation-specific join rules stay inside relation loaders.
+- Built-in loaders own whether a relation branch uses joins or separate queries during structured loading.
 - SQL dialect handling should be delegated to backend adapters such as Cycle Database or Doctrine DBAL rather than hand-coded in the query model.

@@ -269,7 +269,7 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testStructuredBelongsToSelectionMountsJoinedSingularResults(): void
+	public function testItLoadsStructuredBelongsToRelations(): void
 	{
 		$posts = $this->database->query($this->registry->getCollection('posts'));
 
@@ -285,7 +285,7 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testStructuredBelongsToFieldsOptionHidesInternallyRequiredJoinKeys(): void
+	public function testFieldsRestrictBelongsToProjectionWithoutExposingJoinKeys(): void
 	{
 		$posts = $this->database->query($this->registry->getCollection('posts'));
 
@@ -301,7 +301,7 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testStructuredHasManySelectionLoadsRelatedRowsInOneSeparateQuery(): void
+	public function testItLoadsStructuredHasManyRelations(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
@@ -331,7 +331,7 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testStructuredRelationFieldsOptionReturnsOnlyRequestedScalarFields(): void
+	public function testFieldsLoadTheRelationAndRestrictPublicFields(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
@@ -361,7 +361,7 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testStructuredManyToManySelectionLoadsTargetsWithoutExposingThroughFields(): void
+	public function testItProjectsM2MTargetsWithoutExposingThroughRows(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
@@ -391,7 +391,7 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testStructuredManyToManyMountingUsesThroughRowsSoSharedTargetsAttachToMultipleParents(): void
+	public function testM2MStructuredLoadingUsesThroughRowsToAttachSharedTargets(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
@@ -407,7 +407,7 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testNestedStructuredRelationBelowManyToManyContinuesFromTheTargetBranch(): void
+	public function testItLoadsNestedRelationsBelowM2MTargetBranches(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
@@ -451,7 +451,7 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testStructuredManyToManySupportsCompositeParentAndThroughKeys(): void
+	public function testM2MStructuredLoadingSupportsCompositeParentAndThroughKeys(): void
 	{
 		$articles = $this->database->query($this->registry->getCollection('composite_articles'));
 
@@ -475,7 +475,7 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testStructuredRelationFieldsOptionRejectsExplicitEmptyLists(): void
+	public function testFieldsRejectExplicitEmptyLists(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
@@ -483,7 +483,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$users->posts->fields([]);
 	}
 
-	public function testNestedStructuredTraversalKeepsIntermediateRelationsVisibleButStructuralByDefault(): void
+	public function testItKeepsIntermediateRelationsVisibleButStructuralByDefault(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
@@ -513,7 +513,7 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testIntermediateStructuredRelationsCanUseIndependentFieldLists(): void
+	public function testNestedRelationBranchesCanUseIndependentFieldLists(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
@@ -543,7 +543,7 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testRepeatedStructuredRelationSelectionsUnionRequestedFields(): void
+	public function testItMergesRepeatedRelationSelections(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
@@ -577,7 +577,7 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testUnrestrictedStructuredRelationSelectionDominatesRestrictedSelections(): void
+	public function testUnrestrictedFieldSelectionWinsWhenStructuredSelectionsMerge(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
@@ -611,7 +611,7 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testIntermediateStructuredRelationsCanBeExplicitlyLoaded(): void
+	public function testExplicitIntermediateLoadKeepsParentBranchVisible(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
@@ -641,7 +641,7 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testHiddenIntermediatePluralRelationsPromoteVisibleDescendants(): void
+	public function testHiddenIntermediateBranchesPromoteVisibleDescendants(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
@@ -670,7 +670,7 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testStrongerSelectionsUpgradeHiddenTraversalBranchesInsteadOfDuplicatingOutput(): void
+	public function testMergedSelectionsPromoteHiddenBranchesWithoutDuplicatingOutput(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
@@ -704,7 +704,7 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testHiddenPluralPromotionKeepsDistinctStructuralRecordsWithoutExposingTheirKeys(): void
+	public function testHiddenIntermediatePluralBranchesPreserveDistinctPromotedRecords(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
@@ -734,7 +734,7 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testFirstOfManyJoinFailsExplicitly(): void
+	public function testFirstOfManyStructuredLoadingRemainsExplicitlyDeferred(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 

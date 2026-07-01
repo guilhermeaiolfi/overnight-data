@@ -113,10 +113,11 @@ The acquisition strategy is loader-owned. Relation selection controls result sha
 - SQL dialect differences should be delegated to Cycle Database or Doctrine DBAL rather than hand-coded in the data layer.
 - The data layer must remain useful without the optional ORM.
 
-## Current restrictions
+## Current limits
 
 - Structured loading is not the same as arbitrary related-field projection in flat scalar selections.
-- Public strategy overrides are not exposed.
-- `SelectQuery::load()` does not exist.
-- Structured loading for built-in `FirstOfMany` remains deferred.
-- Relation-level `where` and `orderBy` are not part of the current public API.
+- Public strategy overrides are not exposed yet.
+- `SelectQuery::load()` is not exposed.
+- Structured loading for built-in `FirstOfMany` is not implemented yet.
+- Relation-level `where` and `orderBy` are not exposed in the current public relation-selection API.
+- Future relation branch configuration should stay loader-owned and branch-local rather than moving relation-specific rules into the registry or generic runtime.

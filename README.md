@@ -11,14 +11,15 @@ It is independent from the Overnight framework. The package can be consumed on i
 - Mapper runtime: recursive mapping across arrays, `stdClass`, and public-property DTOs, with definition-aware resolution, `FieldMap` support, and reusable mapper/writer/resolver registration through `MapperManager`.
 - Query model: database-independent `SelectQuery`, field and relation refs, selections, aliases, semantic value operations, aggregates, subqueries, joins, conditions, grouping, ordering, and pagination.
 - Bound execution: optional execution binding through `ON\Data\Database\QueryExecutorInterface`, plus the neutral `Database` facade and `ConnectionConfig`.
-- Relation loading: structured relation selection for nested results, loader-owned join or separate-query execution, and parser-backed result assembly for built-in `BelongsTo`, `HasOne`, `HasMany`, and `M2M` loaders.
+- Relation loading: structured relation selection for nested results, loader-owned join or separate-query execution, and parser-backed result assembly for built-in `BelongsTo`, `HasOne`, `HasMany`, and `M2M` relations.
 
 ## Current Limitations
 
 - No persistence or write-side unit-of-work layer.
 - No ORM adapter layer.
 - No constructor hydration or readonly-target hydration in the mapper runtime.
-- Structured relation loading does not currently cover every relation type; `FirstOfMany` structured loading remains deferred.
+- Structured relation loading supports the built-in `BelongsTo`, `HasOne`, `HasMany`, and `M2M` relation types.
+- Built-in `FirstOfMany` structured loading is not implemented yet.
 
 ## Namespace
 
