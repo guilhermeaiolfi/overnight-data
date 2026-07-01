@@ -8,20 +8,22 @@ use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Relation\Loader\AbstractLoader;
+use ON\Data\Query\Relation\Loader\HasManyLoader;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
-use ON\Data\Query\Relation\RelationOutputProcessor;
 use ON\Data\Query\Relation\RelationLoadBranch;
+use ON\Data\Query\Relation\RelationOutputProcessor;
 use ON\Data\Query\Relation\RootLoadBranch;
-use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\CollectionNode;
 use ON\Data\Query\Result\Parser\RootNode;
 use ON\Data\Query\Result\Parser\SingularNode;
+use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Selection\SelectionReason;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
 
@@ -130,7 +132,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 
 	public function testRelationLoadBranchNoLongerKeepsLegacySelectionStateProperties(): void
 	{
-		$reflection = new \ReflectionClass(RelationLoadBranch::class);
+		$reflection = new ReflectionClass(RelationLoadBranch::class);
 
 		foreach (['parserFieldMap', 'publicFieldMap', 'parserFields', 'publicFieldOrder'] as $property) {
 			self::assertFalse($reflection->hasProperty($property), $property);
@@ -307,6 +309,16 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		], LifecycleEvents::$attachmentModes);
 		self::assertTrue($this->readProperty($profileNode, 'joined'));
 		self::assertFalse($this->readProperty($postsNode, 'joined'));
+	}
+
+	public function testExplicitStrategyOverridesLoaderDefaultDuringRuntimePlanning(): void
+	{
+		$users = new SelectQuery($this->makeBasicRegistry(HasManyLoader::class)->getCollection('users'), new LifecycleExecutor());
+		$users->select($users->posts->join());
+		$runtime = $this->prepareRuntime($users);
+		$branch = array_values($this->readProperty($runtime, 'branches'))[0];
+
+		self::assertTrue($branch->isJoinedAttachment());
 	}
 
 	public function testNestedCustomLoadersAttachJoinedAndLinkedChildrenWithoutCustomRegisterOverrides(): void

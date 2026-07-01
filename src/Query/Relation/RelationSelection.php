@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
+use ON\Data\Query\Condition\ConditionInterface;
+use ON\Data\Query\Exception\RelationSelectionException;
+use ON\Data\Query\Sort\Sort;
+
 final class RelationSelection
 {
 	public function __construct(
@@ -11,6 +15,9 @@ final class RelationSelection
 		private readonly bool $load,
 		private readonly bool $visible,
 		private readonly ?array $fields,
+		private readonly array $conditions = [],
+		private readonly array $sorts = [],
+		private readonly ?LoadStrategy $strategy = null,
 	) {
 	}
 
@@ -60,17 +67,48 @@ final class RelationSelection
 		return $this->fields;
 	}
 
+	/**
+	 * @return list<ConditionInterface>
+	 */
+	public function getConditions(): array
+	{
+		return $this->conditions;
+	}
+
+	/**
+	 * @return list<Sort>
+	 */
+	public function getSorts(): array
+	{
+		return $this->sorts;
+	}
+
+	public function getStrategy(): ?LoadStrategy
+	{
+		return $this->strategy;
+	}
+
 	public function merge(self $incoming): self
 	{
 		$load = $this->load || $incoming->load;
 		$visible = $this->visible || $incoming->visible || $load;
 		$fields = $this->mergeFields($incoming);
+		$conditions = [...$this->conditions, ...$incoming->conditions];
+		$sorts = [...$this->sorts, ...$incoming->sorts];
+		$strategy = $this->mergeStrategy($incoming);
 
-		if ($load === $this->load && $visible === $this->visible && $fields === $this->fields) {
+		if (
+			$load === $this->load
+			&& $visible === $this->visible
+			&& $fields === $this->fields
+			&& $conditions === $this->conditions
+			&& $sorts === $this->sorts
+			&& $strategy === $this->strategy
+		) {
 			return $this;
 		}
 
-		return new self($this->relationRef, $load, $visible, $fields);
+		return new self($this->relationRef, $load, $visible, $fields, $conditions, $sorts, $strategy);
 	}
 
 	private function mergeFields(self $incoming): ?array
@@ -92,5 +130,22 @@ final class RelationSelection
 		}
 
 		return $merged;
+	}
+
+	private function mergeStrategy(self $incoming): ?LoadStrategy
+	{
+		if ($this->strategy === null) {
+			return $incoming->strategy;
+		}
+
+		if ($incoming->strategy === null || $incoming->strategy === $this->strategy) {
+			return $this->strategy;
+		}
+
+		throw RelationSelectionException::conflictingRelationStrategies(
+			$this->getPath(),
+			$this->strategy,
+			$incoming->strategy,
+		);
 	}
 }

@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation\Loader;
 
 use ON\Data\Query\Relation\LoadRuntime;
-use ON\Data\Query\Relation\RelationKeyQuery;
 use ON\Data\Query\Relation\LoadStrategy;
+use ON\Data\Query\Relation\RelationKeyQuery;
 use ON\Data\Query\Relation\RelationLoadBranch;
-use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\CollectionNode;
+use ON\Data\Query\Selection\SelectionItem;
 
 final class HasManyLoader extends AbstractLoader
 {
@@ -42,10 +42,11 @@ final class HasManyLoader extends AbstractLoader
 		$branch->requireFields($parentToChild->getRightFields());
 		$parentBranch->requireFields($parentToChild->getLeftFields());
 
-		$strategy = $runtime->getLoadStrategy($this->getDefaultLoadStrategy());
+		$strategy = $runtime->getLoadStrategy($branch);
 		$branch->setJoinedAttachment($strategy === LoadStrategy::JOIN);
 
 		if ($strategy === LoadStrategy::JOIN) {
+			$this->assertNoJoinedSelectionOptions($branch);
 			$queryRelation = $runtime->getQueryRelation($branch);
 			$source = $this->join($queryRelation);
 
@@ -75,6 +76,7 @@ final class HasManyLoader extends AbstractLoader
 			$query,
 			$references,
 		);
+		$this->applySeparateQueryOptions($branch);
 		$runtime->execute($branch, $query);
 	}
 

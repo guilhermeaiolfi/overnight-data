@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Exception;
 
 use InvalidArgumentException;
+use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\SelectQuery;
 
@@ -111,6 +112,19 @@ final class RelationSelectionException extends InvalidArgumentException
 			'Relation "%s" selection option "fields" cannot use field reference "%s" from a different relation path.',
 			implode('.', $path),
 			$name,
+		));
+	}
+
+	/**
+	 * @param list<string> $path
+	 */
+	public static function conflictingRelationStrategies(array $path, LoadStrategy $left, LoadStrategy $right): self
+	{
+		return new self(sprintf(
+			'Relation "%s" cannot be selected with conflicting load strategies "%s" and "%s".',
+			implode('.', $path),
+			$left->name,
+			$right->name,
 		));
 	}
 

@@ -1,12 +1,14 @@
 # Relation Loading
 
-`SelectQuery::select()` accepts `RelationRef` so one query can describe both flat root selections and nested relation branches.
+`SelectQuery::load()` is the explicit relation-loading API. `SelectQuery::select()` also accepts `RelationRef` for convenience so existing queries can describe both flat root selections and nested relation branches.
 
 ## Selecting relations
 
 Selecting a relation marks the terminal relation as loaded and visible:
 
 ```php
+$u->load($u->posts);
+
 $u->select($u->posts);
 ```
 
@@ -21,7 +23,7 @@ That automatically registers missing ancestors. In this example:
 - `posts` becomes a visible structural container;
 - `author` becomes the loaded terminal relation.
 
-## Selection options
+## Load options
 
 The current public API on `RelationRef` is:
 
@@ -29,6 +31,11 @@ The current public API on `RelationRef` is:
 - `visible(bool $visible = true)`
 - `hidden()`
 - `fields(string|FieldRef|array ...$fields)`
+- `where(ConditionInterface ...$conditions)`
+- `orderBy(Sort ...$sorts)`
+- `strategy(?LoadStrategy $strategy)`
+- `join()`
+- `separate()`
 
 Examples:
 
@@ -38,11 +45,23 @@ $u->select(
     $u->posts->comments->fields('id', 'body'),
 );
 
+$u->load(
+    $u->posts
+        ->fields('id', 'title')
+        ->where(x()->eq($u->posts->published, true))
+        ->orderBy($u->posts->createdAt->desc())
+        ->separate(),
+);
+
 $u->select($u->posts->load()->author);
 $u->select($u->posts->hidden()->author);
 ```
 
-`fields(...)` currently loads the relation and restricts public relation fields to the listed field names. There is no separate shorthand relation-field selector method in the current public API.
+`fields(...)` loads the relation and restricts public relation fields to the listed field names.
+
+`where(...)` and `orderBy(...)` configure the relation query. Built-in loaders apply these options to separate-query relation loading. Joined relation loading rejects relation-level conditions and ordering for now because those options can change root row filtering or row order in surprising ways.
+
+`strategy(null)` clears an explicit strategy override and falls back to the loader default. `join()` and `separate()` are convenience wrappers for `strategy(LoadStrategy::JOIN)` and `strategy(LoadStrategy::SEPARATE_QUERY)`.
 
 ## Visible and hidden branches
 
@@ -77,7 +96,13 @@ The current rules are intentionally strict:
 - `FieldRef` values from another query or another path are rejected;
 - repeated field names are deduplicated in stable order.
 
-Repeated selections of the same logical relation path merge. If any selection leaves fields unrestricted, the merged selection becomes unrestricted.
+Repeated selections of the same logical relation path merge:
+
+- `load` and `visible` keep the permissive existing behavior;
+- if any selection leaves fields unrestricted, the merged selection becomes unrestricted;
+- conditions and sorts append in stable order;
+- matching or single-sided strategy overrides are kept;
+- conflicting strategy overrides for the same path are rejected.
 
 ## Result shapes
 
@@ -99,8 +124,9 @@ Built-in loaders currently default to:
 - `BelongsToLoader`: `JOIN`
 - `HasOneLoader`: `JOIN`
 - `HasManyLoader`: `SEPARATE_QUERY`
+- `M2MLoader`: `SEPARATE_QUERY`
 
-The acquisition strategy is loader-owned. Relation selection controls result shape, not SQL shape.
+The acquisition strategy is loader-owned. A relation selection may override the strategy, but relation selection still controls result shape while strategy changes SQL acquisition. Unsupported strategy/option combinations are rejected by the loader.
 
 `fetchAll()` and `fetchOne()` support structured relation loading. `iterate()` does not.
 
@@ -116,8 +142,7 @@ The acquisition strategy is loader-owned. Relation selection controls result sha
 ## Current limits
 
 - Structured loading is not the same as arbitrary related-field projection in flat scalar selections.
-- Public strategy overrides are not exposed yet.
-- `SelectQuery::load()` is not exposed.
 - Structured loading for built-in `FirstOfMany` is not implemented yet.
-- Relation-level `where` and `orderBy` are not exposed in the current public relation-selection API.
+- Joined structured loading for built-in `M2M` is not implemented yet.
+- Relation-level `where` and `orderBy` are supported for separate-query loading first; joined relation conditions and ordering are rejected by built-in loaders.
 - Future relation branch configuration should stay loader-owned and branch-local rather than moving relation-specific rules into the registry or generic runtime.

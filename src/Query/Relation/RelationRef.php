@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation;
 
 use ArgumentCountError;
+use InvalidArgumentException;
 use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
+use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
@@ -18,6 +20,7 @@ use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Query\Sort\Sort;
 use ReflectionClass;
 use ReflectionException;
 
@@ -44,6 +47,9 @@ final class RelationRef implements QuerySourceInterface
 		private readonly bool $load = false,
 		private readonly bool $visible = true,
 		private readonly ?array $fields = null,
+		private readonly array $conditions = [],
+		private readonly array $sorts = [],
+		private readonly ?LoadStrategy $strategy = null,
 	) {
 	}
 
@@ -75,6 +81,27 @@ final class RelationRef implements QuerySourceInterface
 	public function getFields(): ?array
 	{
 		return $this->fields;
+	}
+
+	/**
+	 * @return list<ConditionInterface>
+	 */
+	public function getConditions(): array
+	{
+		return $this->conditions;
+	}
+
+	/**
+	 * @return list<Sort>
+	 */
+	public function getSorts(): array
+	{
+		return $this->sorts;
+	}
+
+	public function getStrategy(): ?LoadStrategy
+	{
+		return $this->strategy;
 	}
 
 	public function getParentSource(): QuerySourceInterface
@@ -166,6 +193,53 @@ final class RelationRef implements QuerySourceInterface
 		return $this->withSelectionOptions($load, null);
 	}
 
+	public function where(ConditionInterface ...$conditions): self
+	{
+		if ($conditions === []) {
+			throw new InvalidArgumentException('RelationRef::where() requires at least one condition.');
+		}
+
+		return $this->withConditions($conditions);
+	}
+
+	public function orderBy(Sort ...$sorts): self
+	{
+		if ($sorts === []) {
+			throw new InvalidArgumentException('RelationRef::orderBy() requires at least one sort.');
+		}
+
+		return $this->withSorts($sorts);
+	}
+
+	public function strategy(?LoadStrategy $strategy): self
+	{
+		if ($strategy === $this->strategy) {
+			return $this;
+		}
+
+		return new self(
+			$this->query,
+			$this->relation,
+			$this->parentRelation,
+			$this->load,
+			$this->visible,
+			$this->fields,
+			$this->conditions,
+			$this->sorts,
+			$strategy,
+		);
+	}
+
+	public function join(): self
+	{
+		return $this->strategy(LoadStrategy::JOIN);
+	}
+
+	public function separate(): self
+	{
+		return $this->strategy(LoadStrategy::SEPARATE_QUERY);
+	}
+
 	public function __get(string $name): FieldRef|self
 	{
 		$collection = $this->getCollection();
@@ -201,6 +275,9 @@ final class RelationRef implements QuerySourceInterface
 			$load,
 			$visible,
 			$this->fields,
+			$this->conditions,
+			$this->sorts,
+			$this->strategy,
 		);
 	}
 
@@ -223,6 +300,45 @@ final class RelationRef implements QuerySourceInterface
 			$this->load,
 			$this->visible,
 			$fields,
+			$this->conditions,
+			$this->sorts,
+			$this->strategy,
+		);
+	}
+
+	/**
+	 * @param list<ConditionInterface> $conditions
+	 */
+	private function withConditions(array $conditions): self
+	{
+		return new self(
+			$this->query,
+			$this->relation,
+			$this->parentRelation,
+			$this->load,
+			$this->visible,
+			$this->fields,
+			[...$this->conditions, ...$conditions],
+			$this->sorts,
+			$this->strategy,
+		);
+	}
+
+	/**
+	 * @param list<Sort> $sorts
+	 */
+	private function withSorts(array $sorts): self
+	{
+		return new self(
+			$this->query,
+			$this->relation,
+			$this->parentRelation,
+			$this->load,
+			$this->visible,
+			$this->fields,
+			$this->conditions,
+			[...$this->sorts, ...$sorts],
+			$this->strategy,
 		);
 	}
 

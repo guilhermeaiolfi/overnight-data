@@ -70,6 +70,14 @@ final class RelationLoaderException extends InvalidArgumentException
 		));
 	}
 
+	public static function joinedLoadingNotImplemented(RelationRef $relation): self
+	{
+		return new self(sprintf(
+			'Joined relation loading is not implemented for relation "%s".',
+			implode('.', $relation->getPath()),
+		));
+	}
+
 	public static function firstOfManyJoinNotImplemented(RelationRef $relation): self
 	{
 		return new self(sprintf(

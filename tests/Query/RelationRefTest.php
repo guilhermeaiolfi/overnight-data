@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Query;
 
 use Error;
+use InvalidArgumentException;
 use ON\Data\Definition\Registry;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
@@ -13,8 +14,10 @@ use ON\Data\Query\Exception\UnknownQueryRelationException;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use function ON\Data\Query\query;
+use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\SelectQuery;
+use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Fixture\CustomRelation;
@@ -234,6 +237,84 @@ final class RelationRefTest extends TestCase
 		], $this->selectionState($users));
 	}
 
+	public function testLoadRegistersRelationSelectionsThroughExplicitApi(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$users->load($users->posts->fields('id', 'title'));
+
+		self::assertCount(0, $users->getSelections());
+		self::assertSame([
+			['posts', true, true, ['id', 'title']],
+		], $this->selectionState($users));
+	}
+
+	public function testLoadAndSelectRelationRefsShareSelectionBehavior(): void
+	{
+		$loaded = $this->makeQuery('users');
+		$selected = $this->makeQuery('users');
+
+		$loaded->load($loaded->posts->author->fields('name'));
+		$selected->select($selected->posts->author->fields('name'));
+
+		self::assertSame($this->selectionState($selected), $this->selectionState($loaded));
+	}
+
+	public function testRelationWhereStoresConditionsImmutably(): void
+	{
+		$users = $this->makeQuery('users');
+		$first = x()->eq($users->posts->published, true);
+		$second = x()->eq($users->posts->title, 'Hello');
+		$configured = $users->posts->where($first)->where($second);
+
+		self::assertSame([], $users->posts->getConditions());
+		self::assertSame([$first, $second], $configured->getConditions());
+		self::assertNotSame($users->posts, $configured);
+	}
+
+	public function testRelationWhereRejectsEmptyConditionLists(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$this->expectException(InvalidArgumentException::class);
+		$users->posts->where();
+	}
+
+	public function testRelationOrderByStoresSortsImmutably(): void
+	{
+		$users = $this->makeQuery('users');
+		$first = $users->posts->title->asc();
+		$second = $users->posts->id->desc();
+		$configured = $users->posts->orderBy($first)->orderBy($second);
+
+		self::assertSame([], $users->posts->getSorts());
+		self::assertSame([$first, $second], $configured->getSorts());
+		self::assertNotSame($users->posts, $configured);
+	}
+
+	public function testRelationOrderByRejectsEmptySortLists(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$this->expectException(InvalidArgumentException::class);
+		$users->posts->orderBy();
+	}
+
+	public function testRelationStrategyHelpersStoreExplicitStrategyImmutably(): void
+	{
+		$users = $this->makeQuery('users');
+		$joined = $users->posts->strategy(LoadStrategy::JOIN);
+		$separate = $joined->separate();
+		$cleared = $separate->strategy(null);
+
+		self::assertNull($users->posts->getStrategy());
+		self::assertSame(LoadStrategy::JOIN, $joined->getStrategy());
+		self::assertSame(LoadStrategy::SEPARATE_QUERY, $separate->getStrategy());
+		self::assertNull($cleared->getStrategy());
+		self::assertSame(LoadStrategy::JOIN, $users->posts->join()->getStrategy());
+		self::assertNotSame($users->posts, $joined);
+	}
+
 	public function testItMergesRepeatedSelectionsOfTheSameLogicalRelationPath(): void
 	{
 		$users = $this->makeQuery('users');
@@ -286,6 +367,34 @@ final class RelationRefTest extends TestCase
 		self::assertSame([
 			['posts', true, true, ['id', 'title']],
 		], $this->selectionState($users));
+	}
+
+	public function testRepeatedSelectionsAppendConditionsAndSortsInStableOrder(): void
+	{
+		$users = $this->makeQuery('users');
+		$firstCondition = x()->eq($users->posts->published, true);
+		$secondCondition = x()->eq($users->posts->title, 'Hello');
+		$firstSort = $users->posts->title->asc();
+		$secondSort = $users->posts->id->desc();
+
+		$users->load(
+			$users->posts->fields('id')->where($firstCondition)->orderBy($firstSort),
+			$users->posts->fields('title')->where($secondCondition)->orderBy($secondSort),
+		);
+
+		$selection = $users->getRelationSelections()->getAll()[0];
+		self::assertSame(['id', 'title'], $selection->getFields());
+		self::assertSame([$firstCondition, $secondCondition], $selection->getConditions());
+		self::assertSame([$firstSort, $secondSort], $selection->getSorts());
+	}
+
+	public function testConflictingStrategiesForSameRelationPathAreRejected(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$this->expectException(RelationSelectionException::class);
+		$this->expectExceptionMessage('conflicting load strategies');
+		$users->load($users->posts->join(), $users->posts->separate());
 	}
 
 	public function testUnrestrictedFieldSelectionWinsWhenSelectionsMerge(): void

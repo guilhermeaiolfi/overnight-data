@@ -136,9 +136,10 @@ final class LoadRuntime
 		$this->pendingContinuationQueries[spl_object_id($query)] = $query;
 	}
 
-	public function getLoadStrategy(LoadStrategy $default): LoadStrategy
+	public function getLoadStrategy(RelationLoadBranch $branch): LoadStrategy
 	{
-		return $default;
+		return $branch->getSelection()->getStrategy()
+			?? $branch->getLoader()->getDefaultLoadStrategy();
 	}
 
 	private function prepare(): void

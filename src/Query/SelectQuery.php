@@ -24,7 +24,6 @@ use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelectionTree;
 use ON\Data\Query\Selection\SelectionList;
-use ON\Data\Query\Selection\SelectionReason;
 use ON\Data\Query\Sort\Sort;
 
 final class SelectQuery implements QuerySourceInterface
@@ -172,11 +171,7 @@ final class SelectQuery implements QuerySourceInterface
 
 		foreach ($expressions as $expression) {
 			if ($expression instanceof RelationRef) {
-				if ($expression->getQuery() !== $this) {
-					throw RelationSelectionException::foreignQueryRelation($expression, $this);
-				}
-
-				$this->relationSelections->add($expression);
+				$this->addRelationSelection($expression);
 
 				continue;
 			}
@@ -188,6 +183,21 @@ final class SelectQuery implements QuerySourceInterface
 
 		if ($normalized !== []) {
 			$this->selections->addExplicit($normalized);
+		}
+
+		$this->assertNoRelationSelectionCollisions();
+
+		return $this;
+	}
+
+	public function load(RelationRef ...$relations): self
+	{
+		if ($relations === []) {
+			throw new InvalidArgumentException('SelectQuery::load() requires at least one relation.');
+		}
+
+		foreach ($relations as $relation) {
+			$this->addRelationSelection($relation);
 		}
 
 		$this->assertNoRelationSelectionCollisions();
@@ -432,6 +442,15 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		return $expression;
+	}
+
+	private function addRelationSelection(RelationRef $relation): void
+	{
+		if ($relation->getQuery() !== $this) {
+			throw RelationSelectionException::foreignQueryRelation($relation, $this);
+		}
+
+		$this->relationSelections->add($relation);
 	}
 
 	private function assertJoinNameAvailable(string $name): void

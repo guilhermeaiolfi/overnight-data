@@ -11,6 +11,7 @@ use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
+use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationKeyQuery;
 use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
@@ -75,6 +76,10 @@ final class M2MLoader extends AbstractLoader
 		$this->assertSupportedRelationPath($relation);
 		$this->assertSupportedRelationConstraints($relation);
 
+		if ($runtime->getLoadStrategy($branch) === LoadStrategy::JOIN) {
+			throw RelationLoaderException::joinedLoadingNotImplemented($relation);
+		}
+
 		$definition = $relation->getDefinition();
 
 		if (! $definition instanceof M2MRelation) {
@@ -128,6 +133,7 @@ final class M2MLoader extends AbstractLoader
 		$query = $branch->getQuery();
 		$throughSource = $this->throughSource($relation, $query);
 		RelationKeyQuery::filterRightByLeftReferences($parentToThrough, $query, $throughSource, $references);
+		$this->applySeparateQueryOptions($branch);
 		$runtime->execute($branch, $query);
 	}
 

@@ -17,6 +17,7 @@ use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\Relation\LoadRuntime;
+use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Relation\RootLoadBranch;
@@ -331,6 +332,50 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testLoadApiAppliesSeparateRelationWhereAndOrderBy(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name)
+			->load(
+				$users->posts
+					->fields('title')
+					->where(x()->eq($users->posts->published, true))
+					->orderBy($users->posts->title->desc()),
+			)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'posts' => [['title' => 'Hello']]],
+			['name' => 'Grace', 'posts' => [['title' => 'Graph']]],
+			['name' => 'Linus', 'posts' => []],
+		], $rows);
+	}
+
+	public function testSeparateBelongsToRelationWhereDoesNotFilterRootRows(): void
+	{
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+
+		$rows = $posts
+			->select($posts->title)
+			->load(
+				$posts->author
+					->separate()
+					->fields('name')
+					->where(x()->eq($posts->author->name, 'Ada')),
+			)
+			->orderBy($posts->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['title' => 'Hello', 'author' => ['name' => 'Ada']],
+			['title' => 'World', 'author' => ['name' => 'Ada']],
+			['title' => 'Graph', 'author' => null],
+		], $rows);
+	}
+
 	public function testFieldsLoadTheRelationAndRestrictPublicFields(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
@@ -359,6 +404,37 @@ final class CycleJoinExecutionTest extends TestCase
 				'posts' => [],
 			],
 		], $rows);
+	}
+
+	public function testJoinedRelationWhereAndOrderByAreRejectedForStructuredLoading(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		try {
+			$users
+				->load($users->posts->join()->where(x()->eq($users->posts->published, true)))
+				->fetchAll();
+			self::fail('Expected joined relation where rejection.');
+		} catch (RelationLoaderException $exception) {
+			self::assertStringContainsString('conditions that are not supported', $exception->getMessage());
+		}
+
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$this->expectException(RelationLoaderException::class);
+		$this->expectExceptionMessage('ordering that is not supported');
+		$users->load($users->posts->join()->orderBy($users->posts->title->asc()))->fetchAll();
+	}
+
+	public function testConflictingStructuredLoadStrategiesAreRejected(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$this->expectException(RelationSelectionException::class);
+		$users->load(
+			$users->posts->strategy(LoadStrategy::JOIN),
+			$users->posts->strategy(LoadStrategy::SEPARATE_QUERY),
+		);
 	}
 
 	public function testItProjectsM2MTargetsWithoutExposingThroughRows(): void
