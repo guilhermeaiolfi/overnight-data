@@ -59,6 +59,11 @@ final class RelationLoadBranch extends LoadBranch
 		return $this->getRelationRef()->getCollection();
 	}
 
+	public function getSelections(): SelectionList
+	{
+		return $this->selections;
+	}
+
 	/**
 	 * @param list<string> $fieldNames
 	 * @return list<string>
@@ -93,22 +98,6 @@ final class RelationLoadBranch extends LoadBranch
 		$this->requireFields($fieldNames);
 
 		return $added;
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	public function getParserFields(): array
-	{
-		return array_map($this->selectionFieldName(...), $this->selections->getParserItems());
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	public function getPublicFields(): array
-	{
-		return array_map($this->selectionFieldName(...), $this->selections->getPublicItems());
 	}
 
 	/**
@@ -156,220 +145,8 @@ final class RelationLoadBranch extends LoadBranch
 		return $this->getRelationRef()->getDefinition()->getCardinality() === 'many';
 	}
 
-	public function buildVisibleOutput(mixed $value): mixed
-	{
-		if ($this->returnsMany()) {
-			$projected = [];
-
-			foreach (is_array($value) ? $value : [] as $item) {
-				$record = $this->payloadRecord(is_array($item) ? $item : []);
-
-				if ($record === null) {
-					continue;
-				}
-
-				$projected[] = $this->buildVisibleRecord($record);
-			}
-
-			return $projected;
-		}
-
-		if ($value === null) {
-			return null;
-		}
-
-		$record = $this->payloadRecord(is_array($value) ? $value : []);
-
-		return $record === null
-			? null
-			: $this->buildVisibleRecord($record);
-	}
-
-	/**
-	 * @return array<string, array{branch: self, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}>
-	 */
-	public function collectHiddenOutput(mixed $value): array
-	{
-		if ($this->returnsMany()) {
-			$promoted = $this->defaultHiddenPromotions(true);
-
-			foreach (is_array($value) ? $value : [] as $item) {
-				$this->mergeHiddenCollectionPromotions(
-					$promoted,
-					$this->collectHiddenRecordOutput(is_array($item) ? $item : []),
-				);
-			}
-
-			return $promoted;
-		}
-
-		if ($value === null) {
-			return $this->defaultHiddenPromotions();
-		}
-
-		return $this->collectHiddenRecordOutput(is_array($value) ? $value : []);
-	}
-
-	/**
-	 * @param array<string, mixed> $record
-	 * @return array<string, mixed>
-	 */
-	private function buildVisibleRecord(array $record): array
-	{
-		$item = [];
-
-		if ($this->selection->isLoaded()) {
-			foreach ($this->getPublicFields() as $fieldName) {
-				if (array_key_exists($fieldName, $record)) {
-					$item[$fieldName] = $record[$fieldName];
-				}
-			}
-		}
-
-		foreach ($this->getChildren() as $child) {
-			$name = $child->getRelationRef()->getName();
-			$value = $record[$name] ?? ($child->returnsMany() ? [] : null);
-
-			if ($child->getSelection()->isVisible()) {
-				$item[$name] = $child->buildVisibleOutput($value);
-
-				continue;
-			}
-
-			$this->mergePromotions(
-				$item,
-				$child->collectHiddenOutput($value),
-				$this->promotionPath(),
-			);
-		}
-
-		return $item;
-	}
-
-	/**
-	 * @param array<string, mixed> $record
-	 * @return array<string, array{branch: self, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}>
-	 */
-	private function collectHiddenRecordOutput(array $record): array
-	{
-		$promoted = [];
-		$payload = $this->payloadRecord($record) ?? [];
-
-		foreach ($this->getChildren() as $child) {
-			$name = $child->getRelationRef()->getName();
-			$value = $payload[$name] ?? ($child->returnsMany() ? [] : null);
-
-			if ($child->getSelection()->isVisible()) {
-				$items = $child->projectPromotionItems($value);
-				$promoted[$name] = [
-					'branch' => $child,
-					'collection' => $child->returnsMany(),
-					'value' => $child->returnsMany()
-						? array_column($items, 'value')
-						: ($items[0]['value'] ?? null),
-					'items' => $items,
-				];
-
-				continue;
-			}
-
-			$this->mergeHiddenNameMaps($promoted, $child->collectHiddenOutput($value), $this->promotionPath());
-		}
-
-		return $promoted;
-	}
-
-	/**
-	 * @return array<string, array{branch: self, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}>
-	 */
-	private function defaultHiddenPromotions(bool $forceCollection = false): array
-	{
-		$promoted = [];
-
-		foreach ($this->getChildren() as $child) {
-			$name = $child->getRelationRef()->getName();
-
-			if ($child->getSelection()->isVisible()) {
-				$collection = $forceCollection || $child->returnsMany();
-				$promoted[$name] = [
-					'branch' => $child,
-					'collection' => $collection,
-					'value' => $collection ? [] : null,
-					'items' => [],
-				];
-
-				continue;
-			}
-
-			foreach ($child->defaultHiddenPromotions($forceCollection || $child->returnsMany()) as $childName => $entry) {
-				if (isset($promoted[$childName]) && $promoted[$childName]['branch'] !== $entry['branch']) {
-					throw \ON\Data\Query\Exception\RelationSelectionException::ambiguousPromotion($this->promotionPath(), $childName);
-				}
-
-				$promoted[$childName] = $entry;
-			}
-		}
-
-		return $promoted;
-	}
-
-	/**
-	 * @return list<array{identity: string, value: mixed}>
-	 */
-	private function projectPromotionItems(mixed $value): array
-	{
-		if ($this->returnsMany()) {
-			$items = [];
-
-			foreach (is_array($value) ? $value : [] as $record) {
-				if (! is_array($record)) {
-					continue;
-				}
-
-				$items[] = [
-					'identity' => $this->recordIdentity($record),
-					'value' => $this->buildVisibleRecord($record),
-				];
-			}
-
-			return $items;
-		}
-
-		if (! is_array($value)) {
-			return [];
-		}
-
-		return [[
-			'identity' => $this->recordIdentity($value),
-			'value' => $this->buildVisibleRecord($value),
-		]];
-	}
-
-	private function recordIdentity(array $value): string
-	{
-		$identity = [];
-
-		foreach ($this->getRelationRef()->getCollection()->getPrimaryKey() as $fieldName) {
-			$identity[$fieldName] = $value[$fieldName] ?? null;
-		}
-
-		return json_encode($identity, JSON_THROW_ON_ERROR);
-	}
-
-	private function promotionPath(): string
-	{
-		return implode('.', $this->getRelationRef()->getPath());
-	}
-
 	private function fieldSelectionName(string $fieldName): string
 	{
 		return $this->getRelationRef()->field($fieldName)->getField()->getName();
-	}
-
-	private function selectionFieldName(\ON\Data\Query\Selection\SelectionItem $selection): string
-	{
-		$expression = $selection->getExpression();
-
-		return $expression->getField()->getName();
 	}
 }

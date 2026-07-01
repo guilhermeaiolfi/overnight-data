@@ -10,8 +10,10 @@ use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Relation\Loader\AbstractLoader;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
+use ON\Data\Query\Relation\RelationOutputProcessor;
 use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RootLoadBranch;
+use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\CollectionNode;
 use ON\Data\Query\Result\Parser\RootNode;
@@ -122,8 +124,8 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$branches = $this->readProperty($runtime, 'branches');
 		$branch = array_values($branches)[0];
 
-		self::assertSame(['title'], $branch->getPublicFields());
-		self::assertSame(['title', 'id', 'userId'], $branch->getParserFields());
+		self::assertSame(['title'], $this->publicFieldNames($branch));
+		self::assertSame(['title', 'id', 'userId'], $this->parserFieldNames($branch));
 	}
 
 	public function testRelationLoadBranchNoLongerKeepsLegacySelectionStateProperties(): void
@@ -133,6 +135,34 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		foreach (['parserFieldMap', 'publicFieldMap', 'parserFields', 'publicFieldOrder'] as $property) {
 			self::assertFalse($reflection->hasProperty($property), $property);
 		}
+	}
+
+	public function testBranchesExposeSelectionListsDirectly(): void
+	{
+		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
+		$users->select($users->posts->fields('title'));
+		$runtime = $this->prepareRuntime($users);
+		$rootBranch = $this->readProperty($runtime, 'rootBranch');
+		$branch = array_values($this->readProperty($runtime, 'branches'))[0];
+
+		self::assertInstanceOf(SelectionList::class, $rootBranch->getSelections());
+		self::assertInstanceOf(SelectionList::class, $branch->getSelections());
+	}
+
+	public function testRelationLoadBranchNoLongerExposesParserAndPublicFieldProxyMethods(): void
+	{
+		self::assertFalse(method_exists(RelationLoadBranch::class, 'getParserFields'));
+		self::assertFalse(method_exists(RelationLoadBranch::class, 'getPublicFields'));
+	}
+
+	public function testLoadRuntimeOwnsOutputProcessor(): void
+	{
+		$runtime = new LoadRuntime(
+			new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor()),
+			new LifecycleExecutor(),
+		);
+
+		self::assertInstanceOf(RelationOutputProcessor::class, $this->readProperty($runtime, 'outputProcessor'));
 	}
 
 	public function testTopLevelRelationBranchesUseTheRootBranchAsParent(): void
@@ -596,6 +626,28 @@ final class LoadRuntimeLifecycleTest extends TestCase
 
 		return $property->getValue($object);
 	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function parserFieldNames(RelationLoadBranch $branch): array
+	{
+		return array_map(
+			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			$branch->getSelections()->getParserItems(),
+		);
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function publicFieldNames(RelationLoadBranch $branch): array
+	{
+		return array_map(
+			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			$branch->getSelections()->getPublicItems(),
+		);
+	}
 }
 
 final class LifecycleEvents
@@ -933,7 +985,7 @@ abstract class LifecycleTestLoader extends AbstractLoader
 		$parent = $parentBranch->requireFields($definition->getInnerKeys());
 
 		$node = new CollectionNode(
-			$branch->getParserFields(),
+			$this->parserFieldNames($branch),
 			$identity,
 			$child,
 			$parent,
@@ -942,7 +994,7 @@ abstract class LifecycleTestLoader extends AbstractLoader
 		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
 		LifecycleEvents::$returnedNodes[] = $node;
-		LifecycleEvents::$registerColumns[$relation->getName()] = $branch->getParserFields();
+		LifecycleEvents::$registerColumns[$relation->getName()] = $this->parserFieldNames($branch);
 
 		return $node;
 	}
@@ -954,6 +1006,17 @@ abstract class LifecycleTestLoader extends AbstractLoader
 		$branch->setJoinedAttachment(false);
 		LifecycleEvents::$attachmentModes[$relation->getName()] = false;
 		$runtime->setQueryContext($branch, $query, $query);
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function parserFieldNames(RelationLoadBranch $branch): array
+	{
+		return array_map(
+			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			$branch->getSelections()->getParserItems(),
+		);
 	}
 }
 
@@ -1042,9 +1105,9 @@ class NestedPostsLoader extends AbstractLoader
 		$parent = $parentBranch->requireFields(['id']);
 		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
-		LifecycleEvents::$registerColumns['posts'] = $branch->getParserFields();
+		LifecycleEvents::$registerColumns['posts'] = $this->parserFieldNames($branch);
 
-		return new CollectionNode($branch->getParserFields(), $identity, $child, $parent);
+		return new CollectionNode($this->parserFieldNames($branch), $identity, $child, $parent);
 	}
 
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
@@ -1059,6 +1122,17 @@ class NestedPostsLoader extends AbstractLoader
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 		$runtime->execute($branch, $branch->getQuery());
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	protected function parserFieldNames(RelationLoadBranch $branch): array
+	{
+		return array_map(
+			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			$branch->getSelections()->getParserItems(),
+		);
 	}
 }
 
@@ -1078,9 +1152,9 @@ final class NestedAuthorLoader extends AbstractLoader
 		$parent = $parentBranch->requireFields(['authorId']);
 		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
-		LifecycleEvents::$registerColumns['author'] = $branch->getParserFields();
+		LifecycleEvents::$registerColumns['author'] = $this->parserFieldNames($branch);
 
-		return new SingularNode($branch->getParserFields(), $identity, $child, $parent);
+		return new SingularNode($this->parserFieldNames($branch), $identity, $child, $parent);
 	}
 
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
@@ -1088,6 +1162,17 @@ final class NestedAuthorLoader extends AbstractLoader
 		$queryRelation = $runtime->getQueryRelation($branch);
 		$branch->setJoinedAttachment(true);
 		$runtime->setQueryContext($branch, $queryRelation->getQuery(), $this->join($queryRelation), $queryRelation);
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function parserFieldNames(RelationLoadBranch $branch): array
+	{
+		return array_map(
+			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			$branch->getSelections()->getParserItems(),
+		);
 	}
 }
 
@@ -1125,7 +1210,7 @@ final class JoinedProfileLoader extends AbstractLoader
 		$parent = $parentBranch->requireFields(['id']);
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
 
-		return new SingularNode($branch->getParserFields(), $identity, $child, $parent);
+		return new SingularNode($this->parserFieldNames($branch), $identity, $child, $parent);
 	}
 
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
@@ -1135,6 +1220,17 @@ final class JoinedProfileLoader extends AbstractLoader
 		$branch->setJoinedAttachment(true);
 		LifecycleEvents::$attachmentModes[$relation->getName()] = true;
 		$runtime->setQueryContext($branch, $queryRelation->getQuery(), $this->join($queryRelation), $queryRelation);
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function parserFieldNames(RelationLoadBranch $branch): array
+	{
+		return array_map(
+			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			$branch->getSelections()->getParserItems(),
+		);
 	}
 }
 

@@ -7,6 +7,7 @@ namespace ON\Data\Query\Relation\Loader;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationLoadBranch;
+use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
 
@@ -28,7 +29,7 @@ final class BelongsToLoader extends AbstractLoader
 		$parent = $parentBranch->requireFields($ownerToTarget->getLeftFields());
 
 		return new SingularNode(
-			$branch->getParserFields(),
+			$this->parserFieldNames($branch),
 			$identity,
 			$child,
 			$parent,
@@ -53,5 +54,16 @@ final class BelongsToLoader extends AbstractLoader
 		$source = $this->join($queryRelation);
 
 		$runtime->setQueryContext($branch, $queryRelation->getQuery(), $source, $queryRelation);
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function parserFieldNames(RelationLoadBranch $branch): array
+	{
+		return array_map(
+			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			$branch->getSelections()->getParserItems(),
+		);
 	}
 }

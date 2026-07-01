@@ -15,6 +15,7 @@ use ON\Data\Query\Relation\Loader\HasManyLoader;
 use ON\Data\Query\Relation\Loader\HasOneLoader;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\Relation\LoadRuntime;
+use ON\Data\Query\Relation\RelationOutputProcessor;
 use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RootLoadBranch;
 use ON\Data\Query\Result\Parser\AbstractNode;
@@ -168,10 +169,13 @@ final class QueryArchitectureTest extends TestCase
 		self::assertSame('bool', $this->methodReturnType(RelationLoadBranch::class, 'returnsMany'));
 		self::assertTrue(method_exists(RelationLoadBranch::class, 'setContinuation'));
 		self::assertTrue(method_exists(RelationLoadBranch::class, 'clearContinuation'));
+		self::assertTrue(method_exists(RelationLoadBranch::class, 'getSelections'));
 		self::assertFalse(method_exists(RelationLoadBranch::class, 'schedule'));
 		self::assertFalse(method_exists(RelationLoadBranch::class, 'clearSchedule'));
 		self::assertFalse(method_exists(RelationLoadBranch::class, 'getRelation'));
 		self::assertFalse(method_exists(RelationLoadBranch::class, 'nodeIsCollectionLike'));
+		self::assertFalse(method_exists(RelationLoadBranch::class, 'getParserFields'));
+		self::assertFalse(method_exists(RelationLoadBranch::class, 'getPublicFields'));
 		self::assertFalse(method_exists('ON\Data\Query\Relation\RelationSelection', 'getRelation'));
 	}
 
@@ -252,6 +256,35 @@ final class QueryArchitectureTest extends TestCase
 	{
 		self::assertTrue(method_exists(LoadBranch::class, 'requirePrimaryKey'));
 		self::assertTrue(method_exists(RootLoadBranch::class, 'createNode'));
+		self::assertTrue(method_exists(RootLoadBranch::class, 'getSelections'));
+	}
+
+	public function testRelationOutputProcessorOwnsOutputShaping(): void
+	{
+		self::assertTrue(class_exists(RelationOutputProcessor::class));
+		self::assertTrue(method_exists(RelationOutputProcessor::class, 'processRoot'));
+
+		foreach ([
+			'buildVisibleOutput',
+			'collectHiddenOutput',
+			'defaultHiddenPromotions',
+			'projectPromotionItems',
+			'recordIdentity',
+			'promotionPath',
+		] as $method) {
+			self::assertFalse(method_exists(RelationLoadBranch::class, $method), $method);
+		}
+
+		self::assertFalse(method_exists(RootLoadBranch::class, 'buildOutputRecords'));
+	}
+
+	public function testNoPromotionModelClassesAreIntroduced(): void
+	{
+		$root = dirname(__DIR__, 2) . '/src/Query/Relation';
+
+		self::assertFileDoesNotExist($root . '/PromotionMap.php');
+		self::assertFileDoesNotExist($root . '/PromotionEntry.php');
+		self::assertFileDoesNotExist($root . '/PromotionItem.php');
 	}
 
 	public function testRootLoadBranchUsesSelectionListInsteadOfLegacyParallelArrays(): void

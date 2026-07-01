@@ -16,6 +16,7 @@ use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
+use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\SelectQuery;
 
 final class M2MLoader extends AbstractLoader
@@ -38,7 +39,7 @@ final class M2MLoader extends AbstractLoader
 		$throughOuterKeys = $through->getOuterKeys();
 		$parent = $branch->getParent();
 		$targetIdentity = $branch->requireFields($relation->getCollection()->getPrimaryKey());
-		$branch->requireFields($branch->getPublicFields());
+		$branch->requireFields($this->publicFieldNames($branch));
 		$targetOuterKeyColumns = $branch->requireFields($throughToTarget->getRightFields());
 		$parentInnerKeyColumns = $parent->requireFields($parentToThrough->getLeftFields());
 		$throughColumns = array_values(array_unique([
@@ -47,7 +48,7 @@ final class M2MLoader extends AbstractLoader
 		]));
 
 		$targetNode = new SingularNode(
-			$branch->getParserFields(),
+			$this->parserFieldNames($branch),
 			$targetIdentity,
 			$targetOuterKeyColumns,
 			$throughOuterKeys,
@@ -85,7 +86,7 @@ final class M2MLoader extends AbstractLoader
 		$throughToTarget = $through->getKeyPairing();
 		$parent = $branch->getParent();
 		$branch->requireFields($relation->getCollection()->getPrimaryKey());
-		$branch->requireFields($branch->getPublicFields());
+		$branch->requireFields($this->publicFieldNames($branch));
 		$branch->requireFields($throughToTarget->getRightFields());
 		$parent->requireFields($parentToThrough->getLeftFields());
 
@@ -242,5 +243,27 @@ final class M2MLoader extends AbstractLoader
 			...$through->getInnerKeys(),
 			...$through->getOuterKeys(),
 		]));
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function parserFieldNames(RelationLoadBranch $branch): array
+	{
+		return array_map(
+			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			$branch->getSelections()->getParserItems(),
+		);
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function publicFieldNames(RelationLoadBranch $branch): array
+	{
+		return array_map(
+			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			$branch->getSelections()->getPublicItems(),
+		);
 	}
 }

@@ -9,6 +9,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
+use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\SelectQuery;
 use ReflectionMethod;
 
@@ -40,6 +41,8 @@ final class LoadRuntime
 
 	private RootLoadBranch $rootBranch;
 
+	private RelationOutputProcessor $outputProcessor;
+
 	public function __construct(
 		private readonly SelectQuery $rootQuery,
 		private readonly QueryExecutorInterface $executor,
@@ -48,6 +51,7 @@ final class LoadRuntime
 			$rootQuery,
 			fn (string $fieldName): string => $this->allocateAlias(['root', 'required'], $fieldName),
 		);
+		$this->outputProcessor = new RelationOutputProcessor();
 	}
 
 	public function fetchAll(): array
@@ -56,7 +60,7 @@ final class LoadRuntime
 		$this->rootBranch->parseRows($this->executor->fetchAll($this->rootQuery));
 		$this->runContinuationsFor($this->rootQuery);
 
-		return $this->rootBranch->buildOutputRecords();
+		return $this->outputProcessor->processRoot($this->rootBranch);
 	}
 
 	public function fetchOne(): ?array
@@ -71,7 +75,7 @@ final class LoadRuntime
 		$this->rootBranch->parseRows([$row]);
 		$this->runContinuationsFor($this->rootQuery);
 
-		return $this->rootBranch->buildOutputRecords()[0] ?? null;
+		return $this->outputProcessor->processRoot($this->rootBranch)[0] ?? null;
 	}
 
 	public function getQueryRelation(RelationLoadBranch $branch): RelationRef
@@ -213,12 +217,12 @@ final class LoadRuntime
 		foreach ($branches as $branch) {
 			$aliases = [];
 
-			foreach ($branch->getParserFields() as $fieldName) {
+			foreach ($branch->getSelections()->getParserItems() as $selection) {
 				$aliases[] = $this->ensureBranchFieldSelection(
 					$branch->getQuery(),
 					$branch->getSource(),
 					$branch->getRelationRef()->getPath(),
-					$fieldName,
+					$this->relationSelectionFieldName($selection),
 				);
 			}
 
@@ -407,6 +411,11 @@ final class LoadRuntime
 	private function branchAliasTraversal(RelationLoadBranch $branch): array
 	{
 		return $branch->getNode()->getValueAliasTraversal();
+	}
+
+	private function relationSelectionFieldName(SelectionItem $selection): string
+	{
+		return $selection->getExpression()->getField()->getName();
 	}
 
 	private function assertContinuableMethod(RelationLoadBranch $branch, string $method): void

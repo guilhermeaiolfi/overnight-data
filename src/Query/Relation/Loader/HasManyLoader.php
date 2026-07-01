@@ -8,6 +8,7 @@ use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\RelationKeyQuery;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationLoadBranch;
+use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\CollectionNode;
 
@@ -24,7 +25,7 @@ final class HasManyLoader extends AbstractLoader
 		$parent = $parentBranch->requireFields($parentToChild->getLeftFields());
 
 		return new CollectionNode(
-			$branch->getParserFields(),
+			$this->parserFieldNames($branch),
 			$identity,
 			$child,
 			$parent,
@@ -75,5 +76,16 @@ final class HasManyLoader extends AbstractLoader
 			$references,
 		);
 		$runtime->execute($branch, $query);
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function parserFieldNames(RelationLoadBranch $branch): array
+	{
+		return array_map(
+			static fn (SelectionItem $selection): string => $selection->getExpression()->getField()->getName(),
+			$branch->getSelections()->getParserItems(),
+		);
 	}
 }

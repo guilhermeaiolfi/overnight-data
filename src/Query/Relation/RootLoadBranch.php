@@ -32,6 +32,11 @@ final class RootLoadBranch extends LoadBranch
 		return $this->query->getCollection();
 	}
 
+	public function getSelections(): SelectionList
+	{
+		return $this->selections;
+	}
+
 	/**
 	 * @param list<string> $fieldNames
 	 * @return list<string>
@@ -135,42 +140,6 @@ final class RootLoadBranch extends LoadBranch
 		foreach ($rows as $row) {
 			$node->parseRow(0, $this->orderedValues($row, $aliases));
 		}
-	}
-
-	/**
-	 * @return list<array<string, mixed>>
-	 */
-	public function buildOutputRecords(): array
-	{
-		$cleaned = [];
-		$publicColumns = array_fill_keys($this->selectionKeys($this->selections->getPublicItems()), true);
-
-		foreach ($this->getRootNode()->getResult() as $record) {
-			$item = [];
-
-			foreach ($record as $key => $value) {
-				if (isset($publicColumns[$key])) {
-					$item[$key] = $value;
-				}
-			}
-
-			foreach ($this->getChildren() as $child) {
-				$name = $child->getRelationRef()->getName();
-				$value = $record[$name] ?? ($child->returnsMany() ? [] : null);
-
-				if ($child->getSelection()->isVisible()) {
-					$item[$name] = $child->buildVisibleOutput($value);
-
-					continue;
-				}
-
-				$this->mergePromotions($item, $child->collectHiddenOutput($value), 'root');
-			}
-
-			$cleaned[] = $item;
-		}
-
-		return $cleaned;
 	}
 
 	public function registerPublicSelections(): void
