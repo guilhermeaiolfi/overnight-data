@@ -340,14 +340,46 @@ final class QueryArchitectureTest extends TestCase
 		foreach ($simpleLoaderPaths as $path) {
 			$contents = (string) file_get_contents($path);
 			self::assertStringContainsString('getKeyPairing()', $contents, $path);
-			self::assertStringContainsString('requireRight(', $contents, $path);
-			self::assertStringContainsString('requireLeft(', $contents, $path);
+			self::assertStringContainsString('getRightFields()', $contents, $path);
+			self::assertStringContainsString('getLeftFields()', $contents, $path);
 		}
+
+		$abstractLoaderContents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/Loader/AbstractLoader.php');
+		self::assertStringContainsString('RelationKeyQuery::addJoinConditions(', $abstractLoaderContents);
 
 		$m2mContents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/Loader/M2MLoader.php');
 		self::assertStringContainsString('$definition->getKeyPairing()', $m2mContents);
 		self::assertStringContainsString('$through->getKeyPairing()', $m2mContents);
 		self::assertStringNotContainsString('addM2MConditions(', $m2mContents);
+		self::assertStringContainsString('RelationKeyQuery::addJoinConditions(', $m2mContents);
+		self::assertStringContainsString('RelationKeyQuery::filterRightByLeftReferences(', $m2mContents);
+		self::assertStringNotContainsString('count($throughInnerKeys) === 1', $m2mContents);
+		self::assertStringNotContainsString('count($childFields) === 1', (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasManyLoader.php'));
+	}
+
+	public function testRelationKeyPairingStaysPureDefinitionMetadata(): void
+	{
+		$contents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Definition/Relation/RelationKeyPairing.php');
+
+		foreach ([
+			'LoadBranch',
+			'Join',
+			'SelectQuery',
+			'QuerySourceInterface',
+			'namespace ON\Data\Query',
+			'ON\Data\Query\\',
+			'requireLeft(',
+			'requireRight(',
+			'addJoinConditions(',
+			'filterRightByLeftReferences(',
+		] as $forbidden) {
+			self::assertStringNotContainsString($forbidden, $contents, $forbidden);
+		}
+
+		$queryHelperContents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/RelationKeyQuery.php');
+		self::assertStringContainsString('RelationKeyPairing', $queryHelperContents);
+		self::assertStringContainsString('addJoinConditions', $queryHelperContents);
+		self::assertStringContainsString('filterRightByLeftReferences', $queryHelperContents);
 	}
 
 	public function testBranchOutputShapingUsesRelationCardinalityInsteadOfParserCollectionChecks(): void

@@ -10,10 +10,12 @@ use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
+use ON\Data\Query\Relation\RelationKeyQuery;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
+
 abstract class AbstractLoader implements LoaderInterface
 {
 	public function join(RelationRef $relation): QuerySourceInterface
@@ -37,7 +39,7 @@ abstract class AbstractLoader implements LoaderInterface
 			$source,
 		);
 
-		$keyPairing->addJoinConditions($join, $source);
+		RelationKeyQuery::addJoinConditions($keyPairing, $join, $source);
 
 		return $join;
 	}

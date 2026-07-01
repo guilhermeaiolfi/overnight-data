@@ -5,11 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\Definition\Relation;
 
 use InvalidArgumentException;
-use ON\Data\Query\Join;
-use ON\Data\Query\QuerySourceInterface;
-use ON\Data\Query\Relation\LoadBranch;
-use ON\Data\Query\SelectQuery;
-use function ON\Data\Query\x;
 
 final class RelationKeyPairing
 {
@@ -107,94 +102,5 @@ final class RelationKeyPairing
 		$reversed->reversed = $this;
 
 		return $this->reversed = $reversed;
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	public function requireLeft(LoadBranch $branch): array
-	{
-		return $branch->requireFields($this->leftFields);
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	public function requireRight(LoadBranch $branch): array
-	{
-		return $branch->requireFields($this->rightFields);
-	}
-
-	public function addJoinConditions(Join $join, QuerySourceInterface $leftSource): void
-	{
-		foreach ($this->pairs as $pair) {
-			$join->on(
-				x()->eq($leftSource->field($pair['left']), $join->field($pair['right'])),
-			);
-		}
-	}
-
-	/**
-	 * @param list<array<string, mixed>> $references
-	 */
-	public function filterRightByLeftReferences(
-		SelectQuery $query,
-		QuerySourceInterface $rightSource,
-		array $references,
-	): void {
-		if ($references === []) {
-			return;
-		}
-
-		if (! $this->isComposite()) {
-			$query->where(
-				x()->in(
-					$rightSource->field($this->rightFields[0]),
-					array_map(
-						fn (array $values): mixed => $this->referenceValue($values, 0),
-						$references,
-					),
-				),
-			);
-
-			return;
-		}
-
-		$predicates = [];
-
-		foreach ($references as $values) {
-			$comparisons = [];
-
-			foreach ($this->pairs as $index => $pair) {
-				$comparisons[] = x()->eq($rightSource->field($pair['right']), $this->referenceValue($values, $index));
-			}
-
-			$predicates[] = x()->and(...$comparisons);
-		}
-
-		$query->where(x()->or(...$predicates));
-	}
-
-	/**
-	 * @param array<string, mixed> $values
-	 */
-	private function referenceValue(array $values, int $index): mixed
-	{
-		$leftField = $this->leftFields[$index];
-
-		if (array_key_exists($leftField, $values)) {
-			return $values[$leftField];
-		}
-
-		$orderedValues = array_values($values);
-
-		if (array_key_exists($index, $orderedValues)) {
-			return $orderedValues[$index];
-		}
-
-		throw new InvalidArgumentException(sprintf(
-			'Reference row is missing left field "%s".',
-			$leftField,
-		));
 	}
 }

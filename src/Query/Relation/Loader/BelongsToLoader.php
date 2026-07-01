@@ -21,11 +21,11 @@ final class BelongsToLoader extends AbstractLoader
 	{
 		$relationRef = $branch->getRelationRef();
 		$definition = $relationRef->getDefinition();
-		$keyPairing = $definition->getKeyPairing();
+		$ownerToTarget = $definition->getKeyPairing();
 		$parentBranch = $branch->getParent();
 		$identity = $branch->requireFields($relationRef->getCollection()->getPrimaryKey());
-		$child = $keyPairing->requireRight($branch);
-		$parent = $keyPairing->requireLeft($parentBranch);
+		$child = $branch->requireFields($ownerToTarget->getRightFields());
+		$parent = $parentBranch->requireFields($ownerToTarget->getLeftFields());
 
 		return new SingularNode(
 			$branch->getParserFields(),
@@ -39,11 +39,11 @@ final class BelongsToLoader extends AbstractLoader
 	{
 		$relationRef = $branch->getRelationRef();
 		$definition = $relationRef->getDefinition();
-		$keyPairing = $definition->getKeyPairing();
+		$ownerToTarget = $definition->getKeyPairing();
 		$parentBranch = $branch->getParent();
 		$branch->requireFields($relationRef->getCollection()->getPrimaryKey());
-		$keyPairing->requireRight($branch);
-		$keyPairing->requireLeft($parentBranch);
+		$branch->requireFields($ownerToTarget->getRightFields());
+		$parentBranch->requireFields($ownerToTarget->getLeftFields());
 
 		$branch->setJoinedAttachment(
 			$runtime->getLoadStrategy($this->getDefaultLoadStrategy()) === LoadStrategy::JOIN,

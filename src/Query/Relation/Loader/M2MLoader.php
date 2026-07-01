@@ -11,6 +11,7 @@ use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
+use ON\Data\Query\Relation\RelationKeyQuery;
 use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
@@ -38,8 +39,8 @@ final class M2MLoader extends AbstractLoader
 		$parent = $branch->getParent();
 		$targetIdentity = $branch->requireFields($relation->getCollection()->getPrimaryKey());
 		$branch->requireFields($branch->getPublicFields());
-		$targetOuterKeyColumns = $throughToTarget->requireRight($branch);
-		$parentInnerKeyColumns = $parentToThrough->requireLeft($parent);
+		$targetOuterKeyColumns = $branch->requireFields($throughToTarget->getRightFields());
+		$parentInnerKeyColumns = $parent->requireFields($parentToThrough->getLeftFields());
 		$throughColumns = array_values(array_unique([
 			...$throughInnerKeys,
 			...$throughOuterKeys,
@@ -85,8 +86,8 @@ final class M2MLoader extends AbstractLoader
 		$parent = $branch->getParent();
 		$branch->requireFields($relation->getCollection()->getPrimaryKey());
 		$branch->requireFields($branch->getPublicFields());
-		$throughToTarget->requireRight($branch);
-		$parentToThrough->requireLeft($parent);
+		$branch->requireFields($throughToTarget->getRightFields());
+		$parent->requireFields($parentToThrough->getLeftFields());
 
 		if ($through->getWhere() !== []) {
 			throw RelationLoaderException::throughWhereNotSupported($relation);
@@ -99,7 +100,7 @@ final class M2MLoader extends AbstractLoader
 			implode('.', $relation->getPath()) . '@through',
 		);
 
-		$throughToTarget->reverse()->addJoinConditions($throughSource, $query);
+		RelationKeyQuery::addJoinConditions($throughToTarget->reverse(), $throughSource, $query);
 
 		$branch->setJoinedAttachment(false);
 		$runtime->setQueryContext($branch, $query, $query);
@@ -125,7 +126,7 @@ final class M2MLoader extends AbstractLoader
 		$parentToThrough = $definition->getKeyPairing();
 		$query = $branch->getQuery();
 		$throughSource = $this->throughSource($relation, $query);
-		$parentToThrough->filterRightByLeftReferences($query, $throughSource, $references);
+		RelationKeyQuery::filterRightByLeftReferences($parentToThrough, $query, $throughSource, $references);
 		$runtime->execute($branch, $query);
 	}
 
@@ -159,7 +160,7 @@ final class M2MLoader extends AbstractLoader
 			$source,
 		);
 
-		$parentToThrough->addJoinConditions($throughSource, $source);
+		RelationKeyQuery::addJoinConditions($parentToThrough, $throughSource, $source);
 
 		$target = $query->join(
 			$definition->getCollection(),
@@ -168,7 +169,7 @@ final class M2MLoader extends AbstractLoader
 			$throughSource,
 		);
 
-		$throughToTarget->addJoinConditions($target, $throughSource);
+		RelationKeyQuery::addJoinConditions($throughToTarget, $target, $throughSource);
 
 		return $target;
 	}

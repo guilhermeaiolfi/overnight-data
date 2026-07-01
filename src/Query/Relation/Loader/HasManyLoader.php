@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation\Loader;
 
 use ON\Data\Query\Relation\LoadRuntime;
+use ON\Data\Query\Relation\RelationKeyQuery;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Result\Parser\AbstractNode;
@@ -16,11 +17,11 @@ final class HasManyLoader extends AbstractLoader
 	{
 		$relationRef = $branch->getRelationRef();
 		$definition = $relationRef->getDefinition();
-		$keyPairing = $definition->getKeyPairing();
+		$parentToChild = $definition->getKeyPairing();
 		$parentBranch = $branch->getParent();
 		$identity = $branch->requireFields($relationRef->getCollection()->getPrimaryKey());
-		$child = $keyPairing->requireRight($branch);
-		$parent = $keyPairing->requireLeft($parentBranch);
+		$child = $branch->requireFields($parentToChild->getRightFields());
+		$parent = $parentBranch->requireFields($parentToChild->getLeftFields());
 
 		return new CollectionNode(
 			$branch->getParserFields(),
@@ -34,11 +35,11 @@ final class HasManyLoader extends AbstractLoader
 	{
 		$relationRef = $branch->getRelationRef();
 		$definition = $relationRef->getDefinition();
-		$keyPairing = $definition->getKeyPairing();
+		$parentToChild = $definition->getKeyPairing();
 		$parentBranch = $branch->getParent();
 		$branch->requireFields($relationRef->getCollection()->getPrimaryKey());
-		$keyPairing->requireRight($branch);
-		$keyPairing->requireLeft($parentBranch);
+		$branch->requireFields($parentToChild->getRightFields());
+		$parentBranch->requireFields($parentToChild->getLeftFields());
 
 		$strategy = $runtime->getLoadStrategy($this->getDefaultLoadStrategy());
 		$branch->setJoinedAttachment($strategy === LoadStrategy::JOIN);
@@ -67,7 +68,8 @@ final class HasManyLoader extends AbstractLoader
 		}
 
 		$query = $branch->getQuery();
-		$branch->getRelationRef()->getDefinition()->getKeyPairing()->filterRightByLeftReferences(
+		RelationKeyQuery::filterRightByLeftReferences(
+			$branch->getRelationRef()->getDefinition()->getKeyPairing(),
 			$query,
 			$query,
 			$references,
