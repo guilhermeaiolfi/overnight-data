@@ -60,6 +60,8 @@ interface RelationInterface
 
 	public function getOuterField(): FieldInterface;
 
+	public function getKeyPairing(): RelationKeyPairing;
+
 	public function loader(string $loader): self;
 
 	/**

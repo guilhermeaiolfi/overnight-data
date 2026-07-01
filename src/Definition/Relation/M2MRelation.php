@@ -35,9 +35,25 @@ class M2MRelation extends AbstractRelation
 		return 'many';
 	}
 
+	public function getKeyPairing(): RelationKeyPairing
+	{
+		return $this->keyPairing ??= RelationKeyPairing::from(
+			$this->getInnerKeys(),
+			$this->getThrough()->getInnerKeys(),
+		);
+	}
+
 	public function isJunction(): bool
 	{
 		return true;
+	}
+
+	public function outerKey(string|array $fieldName): self
+	{
+		parent::outerKey($fieldName);
+		$this->through?->resetKeyPairing();
+
+		return $this;
 	}
 
 	public function through(string $collection): M2MThrough

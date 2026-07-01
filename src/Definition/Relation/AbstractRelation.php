@@ -22,6 +22,8 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 	use InterfaceTrait;
 	use MetadataTrait;
 
+	protected ?RelationKeyPairing $keyPairing = null;
+
 	protected static function definitionDefaults(): array
 	{
 		return [
@@ -140,6 +142,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 	{
 		$this->set('inner_keys', $this->normalizeKeys($fieldName, 'innerKey'));
 		$this->validateRelationKeys();
+		$this->resetKeyPairing();
 
 		return $this;
 	}
@@ -178,6 +181,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 	{
 		$this->set('outer_keys', $this->normalizeKeys($fieldName, 'outerKey'));
 		$this->validateRelationKeys();
+		$this->resetKeyPairing();
 
 		return $this;
 	}
@@ -210,6 +214,14 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 		}
 
 		return $this->getCollection()->getFields()->get($keys[0]);
+	}
+
+	public function getKeyPairing(): RelationKeyPairing
+	{
+		return $this->keyPairing ??= RelationKeyPairing::from(
+			$this->getInnerKeys(),
+			$this->getOuterKeys(),
+		);
 	}
 
 	public function loader(string $loader): self
@@ -341,5 +353,11 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 		$this->display = null;
 		$this->interface = null;
 		$this->metadataMap = null;
+		$this->keyPairing = null;
+	}
+
+	public function resetKeyPairing(): void
+	{
+		$this->keyPairing = null;
 	}
 }

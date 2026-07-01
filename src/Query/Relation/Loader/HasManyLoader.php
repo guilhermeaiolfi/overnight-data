@@ -9,7 +9,6 @@ use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\CollectionNode;
-use function ON\Data\Query\x;
 
 final class HasManyLoader extends AbstractLoader
 {
@@ -17,10 +16,11 @@ final class HasManyLoader extends AbstractLoader
 	{
 		$relationRef = $branch->getRelationRef();
 		$definition = $relationRef->getDefinition();
+		$keyPairing = $definition->getKeyPairing();
 		$parentBranch = $branch->getParent();
 		$identity = $branch->requireFields($relationRef->getCollection()->getPrimaryKey());
-		$child = $branch->requireFields($definition->getOuterKeys());
-		$parent = $parentBranch->requireFields($definition->getInnerKeys());
+		$child = $keyPairing->requireRight($branch);
+		$parent = $keyPairing->requireLeft($parentBranch);
 
 		return new CollectionNode(
 			$branch->getParserFields(),
@@ -34,10 +34,11 @@ final class HasManyLoader extends AbstractLoader
 	{
 		$relationRef = $branch->getRelationRef();
 		$definition = $relationRef->getDefinition();
+		$keyPairing = $definition->getKeyPairing();
 		$parentBranch = $branch->getParent();
 		$branch->requireFields($relationRef->getCollection()->getPrimaryKey());
-		$branch->requireFields($definition->getOuterKeys());
-		$parentBranch->requireFields($definition->getInnerKeys());
+		$keyPairing->requireRight($branch);
+		$keyPairing->requireLeft($parentBranch);
 
 		$strategy = $runtime->getLoadStrategy($this->getDefaultLoadStrategy());
 		$branch->setJoinedAttachment($strategy === LoadStrategy::JOIN);
@@ -66,34 +67,11 @@ final class HasManyLoader extends AbstractLoader
 		}
 
 		$query = $branch->getQuery();
-		$childFields = $branch->getRelationRef()->getDefinition()->getOuterKeys();
-
-		if (count($childFields) === 1) {
-			$query->where(
-				x()->in(
-					$query->field($childFields[0]),
-					array_map(static fn (array $values) => array_values($values)[0], $references),
-				),
-			);
-
-			$runtime->execute($branch, $query);
-
-			return;
-		}
-
-		$predicates = [];
-
-		foreach ($references as $values) {
-			$comparisons = [];
-
-			foreach ($childFields as $index => $fieldName) {
-				$comparisons[] = x()->eq($query->field($fieldName), array_values($values)[$index]);
-			}
-
-			$predicates[] = x()->and(...$comparisons);
-		}
-
-		$query->where(x()->or(...$predicates));
+		$branch->getRelationRef()->getDefinition()->getKeyPairing()->filterRightByLeftReferences(
+			$query,
+			$query,
+			$references,
+		);
 		$runtime->execute($branch, $query);
 	}
 }

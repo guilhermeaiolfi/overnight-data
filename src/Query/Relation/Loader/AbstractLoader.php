@@ -7,7 +7,6 @@ namespace ON\Data\Query\Relation\Loader;
 use LogicException;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationLoaderException;
-use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
@@ -15,8 +14,6 @@ use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
-use function ON\Data\Query\x;
-
 abstract class AbstractLoader implements LoaderInterface
 {
 	public function join(RelationRef $relation): QuerySourceInterface
@@ -28,13 +25,8 @@ abstract class AbstractLoader implements LoaderInterface
 		$source = $relation->getParentSource();
 
 		try {
-			$innerKeys = $definition->getInnerKeys();
-			$outerKeys = $definition->getOuterKeys();
+			$keyPairing = $definition->getKeyPairing();
 		} catch (LogicException) {
-			throw RelationLoaderException::relationKeysIncomplete($relation);
-		}
-
-		if ($innerKeys === [] || $outerKeys === []) {
 			throw RelationLoaderException::relationKeysIncomplete($relation);
 		}
 
@@ -45,12 +37,7 @@ abstract class AbstractLoader implements LoaderInterface
 			$source,
 		);
 
-		$this->addKeyConditions(
-			$join,
-			$source,
-			$innerKeys,
-			$outerKeys,
-		);
+		$keyPairing->addJoinConditions($join, $source);
 
 		return $join;
 	}
@@ -109,23 +96,6 @@ abstract class AbstractLoader implements LoaderInterface
 
 		if ($definition->getOrderBy() !== []) {
 			throw RelationLoaderException::relationOrderByNotSupported($relation);
-		}
-	}
-
-	/**
-	 * @param non-empty-list<string> $sourceKeys
-	 * @param non-empty-list<string> $targetKeys
-	 */
-	protected function addKeyConditions(
-		Join $join,
-		QuerySourceInterface $source,
-		array $sourceKeys,
-		array $targetKeys,
-	): void {
-		foreach ($sourceKeys as $index => $sourceKey) {
-			$join->on(
-				x()->eq($source->field($sourceKey), $join->field($targetKeys[$index])),
-			);
 		}
 	}
 }

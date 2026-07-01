@@ -329,6 +329,27 @@ final class QueryArchitectureTest extends TestCase
 		}
 	}
 
+	public function testBuiltInLoadersUseRelationKeyPairingsForPairedOperations(): void
+	{
+		$simpleLoaderPaths = [
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/BelongsToLoader.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasOneLoader.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasManyLoader.php',
+		];
+
+		foreach ($simpleLoaderPaths as $path) {
+			$contents = (string) file_get_contents($path);
+			self::assertStringContainsString('getKeyPairing()', $contents, $path);
+			self::assertStringContainsString('requireRight(', $contents, $path);
+			self::assertStringContainsString('requireLeft(', $contents, $path);
+		}
+
+		$m2mContents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/Loader/M2MLoader.php');
+		self::assertStringContainsString('$definition->getKeyPairing()', $m2mContents);
+		self::assertStringContainsString('$through->getKeyPairing()', $m2mContents);
+		self::assertStringNotContainsString('addM2MConditions(', $m2mContents);
+	}
+
 	public function testBranchOutputShapingUsesRelationCardinalityInsteadOfParserCollectionChecks(): void
 	{
 		$relationBranchContents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/RelationLoadBranch.php');

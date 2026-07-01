@@ -12,6 +12,8 @@ use ON\Data\Support\DefinitionNode;
 
 class M2MThrough extends DefinitionNode
 {
+	private ?RelationKeyPairing $keyPairing = null;
+
 	protected static function definitionDefaults(): array
 	{
 		return [
@@ -49,6 +51,7 @@ class M2MThrough extends DefinitionNode
 	{
 		$this->set('inner_keys', $this->normalizeKeys($fieldName, 'throughInnerKey'));
 		$this->validateKeyCounts();
+		$this->relation()->resetKeyPairing();
 
 		return $this;
 	}
@@ -77,6 +80,7 @@ class M2MThrough extends DefinitionNode
 	{
 		$this->set('outer_keys', $this->normalizeKeys($fieldName, 'throughOuterKey'));
 		$this->validateKeyCounts();
+		$this->resetKeyPairing();
 
 		return $this;
 	}
@@ -135,9 +139,27 @@ class M2MThrough extends DefinitionNode
 		return is_array($where) ? $where : [];
 	}
 
+	public function getKeyPairing(): RelationKeyPairing
+	{
+		return $this->keyPairing ??= RelationKeyPairing::from(
+			$this->getOuterKeys(),
+			$this->relation()->getOuterKeys(),
+		);
+	}
+
 	public function end(): M2MRelation
 	{
 		return $this->relation();
+	}
+
+	protected function initializeRuntimeState(): void
+	{
+		$this->keyPairing = null;
+	}
+
+	public function resetKeyPairing(): void
+	{
+		$this->keyPairing = null;
 	}
 
 	private function relation(): M2MRelation

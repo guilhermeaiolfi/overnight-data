@@ -12,6 +12,7 @@ use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Interface\InterfaceTrait;
 use ON\Data\Definition\Internal\DefinitionFactory;
 use ON\Data\Definition\MetadataTrait;
+use ON\Data\Definition\Relation\RelationKeyPairing;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Query\Relation\Loader\HasManyLoader;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
@@ -160,6 +161,11 @@ final class CustomOwnedRelation extends DefinitionNode implements RelationInterf
 	public function getOuterField(): FieldInterface
 	{
 		return $this->getCollection()->getField((string) $this->getOuterKey()) ?? throw new LogicException('Outer field is not defined.');
+	}
+
+	public function getKeyPairing(): RelationKeyPairing
+	{
+		return RelationKeyPairing::from($this->getInnerKeys(), $this->getOuterKeys());
 	}
 
 	public function loader(string $loader): self

@@ -12,6 +12,7 @@ use ON\Data\Definition\Relation\FirstOfManyRelation;
 use ON\Data\Definition\Relation\HasManyRelation;
 use ON\Data\Definition\Relation\HasOneRelation;
 use ON\Data\Definition\Relation\M2MRelation;
+use ON\Data\Definition\Relation\M2MThrough;
 use ON\Data\Query\Relation\Loader\BelongsToLoader;
 use ON\Data\Query\Relation\Loader\FirstOfManyLoader;
 use ON\Data\Query\Relation\Loader\HasManyLoader;
@@ -131,6 +132,74 @@ final class RelationDefinitionTest extends TestCase
 		self::assertTrue($relation->isJunction());
 	}
 
+	public function testAbstractRelationKeyPairingIsCachedAndInvalidatedByKeyChanges(): void
+	{
+		$registry = new Registry();
+		$registry->collection('users')->primaryKey('id')->field('id', 'int')->end()->field('tenantId', 'int')->end()->end();
+		$registry->collection('posts')->primaryKey('id')->field('id', 'int')->end()->field('userId', 'int')->end()->field('accountId', 'int')->end()->end();
+
+		$relation = $registry->getCollection('users')
+			?->hasMany('posts', 'posts')
+			->innerKey('id')
+			->outerKey('userId');
+
+		self::assertNotNull($relation);
+
+		$first = $relation->getKeyPairing();
+		self::assertSame($first, $relation->getKeyPairing());
+		self::assertSame(['id'], $first->getLeftFields());
+		self::assertSame(['userId'], $first->getRightFields());
+
+		$relation->innerKey('tenantId');
+		$afterInnerChange = $relation->getKeyPairing();
+		self::assertNotSame($first, $afterInnerChange);
+		self::assertSame(['tenantId'], $afterInnerChange->getLeftFields());
+		self::assertSame(['userId'], $afterInnerChange->getRightFields());
+
+		$relation->outerKey('accountId');
+		$afterOuterChange = $relation->getKeyPairing();
+		self::assertNotSame($afterInnerChange, $afterOuterChange);
+		self::assertSame(['tenantId'], $afterOuterChange->getLeftFields());
+		self::assertSame(['accountId'], $afterOuterChange->getRightFields());
+	}
+
+	public function testM2MRelationKeyPairingUsesRelationInnerToThroughInnerAndInvalidatesWhenThroughInnerChanges(): void
+	{
+		$relation = $this->makeM2MRelation();
+		$through = $relation->getThrough();
+
+		$first = $relation->getKeyPairing();
+		self::assertSame(['tenant_id', 'slug'], $first->getLeftFields());
+		self::assertSame(['article_tenant_id', 'article_slug'], $first->getRightFields());
+		self::assertSame($first, $relation->getKeyPairing());
+
+		$through->innerKey(['article_tenant_fk', 'article_slug_fk']);
+		$afterChange = $relation->getKeyPairing();
+		self::assertNotSame($first, $afterChange);
+		self::assertSame(['article_tenant_fk', 'article_slug_fk'], $afterChange->getRightFields());
+	}
+
+	public function testM2MThroughKeyPairingUsesThroughOuterToRelationOuterAndInvalidatesOnOuterChanges(): void
+	{
+		$relation = $this->makeM2MRelation();
+		$through = $relation->getThrough();
+
+		$first = $through->getKeyPairing();
+		self::assertSame(['tag_tenant_id', 'tag_slug'], $first->getLeftFields());
+		self::assertSame(['tenant_id', 'slug'], $first->getRightFields());
+		self::assertSame($first, $through->getKeyPairing());
+
+		$through->outerKey(['tag_tenant_fk', 'tag_slug_fk']);
+		$afterThroughOuterChange = $through->getKeyPairing();
+		self::assertNotSame($first, $afterThroughOuterChange);
+		self::assertSame(['tag_tenant_fk', 'tag_slug_fk'], $afterThroughOuterChange->getLeftFields());
+
+		$relation->outerKey(['tenant_key', 'slug_key']);
+		$afterRelationOuterChange = $through->getKeyPairing();
+		self::assertNotSame($afterThroughOuterChange, $afterRelationOuterChange);
+		self::assertSame(['tenant_key', 'slug_key'], $afterRelationOuterChange->getRightFields());
+	}
+
 	public function testConvenienceRelationsAndMapsWorkWithCustomSubclass(): void
 	{
 		$registry = new Registry();
@@ -204,5 +273,47 @@ final class RelationDefinitionTest extends TestCase
 		$this->expectExceptionMessage('loader must implement');
 
 		$relation->loader(stdClass::class);
+	}
+
+	private function makeM2MRelation(): M2MRelation
+	{
+		$registry = new Registry();
+		$registry->collection('article')
+			->primaryKey('tenant_id', 'slug')
+			->field('tenant_id', 'int')->end()
+			->field('slug', 'string')->end()
+			->end();
+		$registry->collection('tag')
+			->primaryKey('tenant_id', 'slug')
+			->field('tenant_id', 'int')->end()
+			->field('slug', 'string')->end()
+			->field('tenant_key', 'int')->end()
+			->field('slug_key', 'string')->end()
+			->end();
+		$registry->collection('article_tag')
+			->field('article_tenant_id', 'int')->end()
+			->field('article_slug', 'string')->end()
+			->field('article_tenant_fk', 'int')->end()
+			->field('article_slug_fk', 'string')->end()
+			->field('tag_tenant_id', 'int')->end()
+			->field('tag_slug', 'string')->end()
+			->field('tag_tenant_fk', 'int')->end()
+			->field('tag_slug_fk', 'string')->end()
+			->end();
+
+		$relation = $registry->getCollection('article')
+			?->relation('tags', M2MRelation::class)
+			->collection('tag')
+			->innerKey(['tenant_id', 'slug'])
+			->outerKey(['tenant_id', 'slug'])
+			->through('article_tag')
+				->innerKey(['article_tenant_id', 'article_slug'])
+				->outerKey(['tag_tenant_id', 'tag_slug'])
+				->end();
+
+		self::assertInstanceOf(M2MRelation::class, $relation);
+		self::assertInstanceOf(M2MThrough::class, $relation->getThrough());
+
+		return $relation;
 	}
 }
