@@ -201,8 +201,9 @@ final class RelationRef implements QuerySourceInterface
 
 	public function fields(string|FieldRef|array ...$fields): self
 	{
+		$this->assertSelectable();
 		$this->fields = $this->normalizeSelectionFields($this->normalizeFieldArguments($fields));
-		$this->selected = true;
+		$this->markSelected();
 
 		return $this;
 	}
@@ -230,7 +231,7 @@ final class RelationRef implements QuerySourceInterface
 		}
 
 		array_push($this->conditions, ...$conditions);
-		$this->selected = true;
+		$this->markSelected();
 
 		return $this;
 	}
@@ -242,7 +243,7 @@ final class RelationRef implements QuerySourceInterface
 		}
 
 		array_push($this->sorts, ...$sorts);
-		$this->selected = true;
+		$this->markSelected();
 
 		return $this;
 	}
@@ -250,7 +251,10 @@ final class RelationRef implements QuerySourceInterface
 	public function strategy(?LoadStrategy $strategy): self
 	{
 		$this->strategy = $strategy;
-		$this->selected = true;
+
+		if ($strategy !== null) {
+			$this->markSelected();
+		}
 
 		return $this;
 	}
@@ -278,6 +282,19 @@ final class RelationRef implements QuerySourceInterface
 		}
 
 		throw UnknownQueryMemberException::forDefinition($name, $collection->getName());
+	}
+
+	private function markSelected(): void
+	{
+		$this->assertSelectable();
+		$this->selected = true;
+	}
+
+	private function assertSelectable(): void
+	{
+		if (! $this->visible) {
+			throw RelationSelectionException::hiddenLoadedRelation($this->getPath());
+		}
 	}
 
 	/**

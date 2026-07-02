@@ -89,11 +89,12 @@ final class RelationSelection
 
 	public function merge(self $incoming): self
 	{
+		$sameRelationRef = $this->relationRef === $incoming->relationRef;
 		$load = $this->load || $incoming->load;
 		$visible = $this->visible || $incoming->visible || $load;
 		$fields = $this->mergeFields($incoming);
-		$conditions = [...$this->conditions, ...$incoming->conditions];
-		$sorts = [...$this->sorts, ...$incoming->sorts];
+		$conditions = $sameRelationRef ? $incoming->conditions : [...$this->conditions, ...$incoming->conditions];
+		$sorts = $sameRelationRef ? $incoming->sorts : [...$this->sorts, ...$incoming->sorts];
 		$strategy = $this->mergeStrategy($incoming);
 
 		if (

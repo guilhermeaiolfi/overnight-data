@@ -244,6 +244,16 @@ final class RelationRefTest extends TestCase
 		], $this->selectionState($users));
 	}
 
+	public function testRootAliasCollisionIsRejectedWhenRelationIsConfiguredAfterScalarSelection(): void
+	{
+		$users = $this->makeQuery('users');
+		$users->select($users->name->as('posts'));
+		$users->posts->fields('id', 'title');
+
+		$this->expectException(RelationSelectionException::class);
+		$users->getRelationSelections();
+	}
+
 	public function testNestedConfiguredRelationIsCollectedWithParentBranch(): void
 	{
 		$users = $this->makeQuery('users');
@@ -374,6 +384,30 @@ final class RelationRefTest extends TestCase
 		self::assertSame([$firstSort, $secondSort], $selection->getSorts());
 	}
 
+	public function testParentConditionsAreNotDuplicatedWhenSelectedParentAndChildAreCollected(): void
+	{
+		$users = $this->makeQuery('users');
+		$condition = x()->eq($users->posts->published, true);
+
+		$users->posts->where($condition)->comments->fields('id');
+
+		$selection = $users->getRelationSelections()->getAll()[0];
+		self::assertSame(['posts'], $selection->getPath());
+		self::assertSame([$condition], $selection->getConditions());
+	}
+
+	public function testParentSortsAreNotDuplicatedWhenSelectedParentAndChildAreCollected(): void
+	{
+		$users = $this->makeQuery('users');
+		$sort = $users->posts->title->asc();
+
+		$users->posts->orderBy($sort)->comments->fields('id');
+
+		$selection = $users->getRelationSelections()->getAll()[0];
+		self::assertSame(['posts'], $selection->getPath());
+		self::assertSame([$sort], $selection->getSorts());
+	}
+
 	public function testRepeatedStrategyCallsUseLatestCall(): void
 	{
 		$users = $this->makeQuery('users');
@@ -408,6 +442,68 @@ final class RelationRefTest extends TestCase
 
 		$this->expectException(RelationSelectionException::class);
 		$users->posts->separate()->hidden();
+	}
+
+	public function testHiddenRelationCannotBeSelectedByFields(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$this->expectException(RelationSelectionException::class);
+		$users->posts->hidden()->fields('id');
+	}
+
+	public function testHiddenRelationCannotBeSelectedByWhere(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$this->expectException(RelationSelectionException::class);
+		$users->posts->hidden()->where(x()->eq($users->posts->published, true));
+	}
+
+	public function testHiddenRelationCannotBeSelectedByOrderBy(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$this->expectException(RelationSelectionException::class);
+		$users->posts->hidden()->orderBy($users->posts->title->asc());
+	}
+
+	public function testHiddenRelationCannotBeSelectedByJoinOrSeparate(): void
+	{
+		$joined = $this->makeQuery('users');
+
+		try {
+			$joined->posts->hidden()->join();
+			self::fail('Expected hidden join to throw.');
+		} catch (RelationSelectionException) {
+			self::assertFalse($joined->posts->isLoaded());
+		}
+
+		$separate = $this->makeQuery('users');
+
+		$this->expectException(RelationSelectionException::class);
+		$separate->posts->hidden()->separate();
+	}
+
+	public function testStrategyNullOnUnselectedRelationDoesNotSelectIt(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$users->posts->strategy(null);
+
+		self::assertFalse($users->posts->isLoaded());
+		self::assertSame([], $users->getRelationSelections()->getAll());
+	}
+
+	public function testStrategyNullAfterSeparateKeepsRelationSelectedAndClearsExplicitStrategy(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$users->posts->separate()->strategy(null);
+
+		self::assertTrue($users->posts->isLoaded());
+		self::assertNull($users->posts->getStrategy());
+		self::assertCount(1, $users->getRelationSelections()->getAll());
 	}
 
 	public function testConfiguredParentFieldsRemainIntactWhenSelectingNestedChildren(): void

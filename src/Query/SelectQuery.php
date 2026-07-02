@@ -289,11 +289,8 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function getRelationSelections(): RelationSelectionTree
 	{
-		$tree = new RelationSelectionTree();
-
-		foreach ($this->relationRefs as $relation) {
-			$this->collectRelationSelections($relation, $tree);
-		}
+		$tree = $this->buildRelationSelections();
+		$this->assertNoRelationSelectionCollisions($tree);
 
 		return $tree;
 	}
@@ -402,8 +399,9 @@ final class SelectQuery implements QuerySourceInterface
 	public function fetchAll(): array
 	{
 		$executor = $this->requireExecutor();
+		$relationSelections = $this->getRelationSelections();
 
-		if ($this->getRelationSelections()->isEmpty()) {
+		if ($relationSelections->isEmpty()) {
 			return $executor->fetchAll($this);
 		}
 
@@ -416,8 +414,9 @@ final class SelectQuery implements QuerySourceInterface
 	public function fetchOne(): ?array
 	{
 		$executor = $this->requireExecutor();
+		$relationSelections = $this->getRelationSelections();
 
-		if ($this->getRelationSelections()->isEmpty()) {
+		if ($relationSelections->isEmpty()) {
 			return $executor->fetchOne($this);
 		}
 
@@ -480,10 +479,20 @@ final class SelectQuery implements QuerySourceInterface
 			: implode('.', $path);
 	}
 
-	private function assertNoRelationSelectionCollisions(): void
+	private function buildRelationSelections(): RelationSelectionTree
 	{
-		$relationSelections = $this->getRelationSelections();
+		$tree = new RelationSelectionTree();
 
+		foreach ($this->relationRefs as $relation) {
+			$this->collectRelationSelections($relation, $tree);
+		}
+
+		return $tree;
+	}
+
+	private function assertNoRelationSelectionCollisions(?RelationSelectionTree $relationSelections = null): void
+	{
+		$relationSelections ??= $this->buildRelationSelections();
 		if ($relationSelections->isEmpty()) {
 			return;
 		}
