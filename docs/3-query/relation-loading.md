@@ -7,7 +7,13 @@ Relation loading is configured through cached `RelationRef` branches. `SelectQue
 Any relation configuration that loads data marks that cached relation ref as selected:
 
 ```php
-$u->posts->separate();
+$users->posts->load();
+
+$users->posts->fields('id', 'title');
+
+$users->posts->where(x()->eq($users->posts->published, true));
+
+$users->posts->separate();
 
 $u->posts
     ->fields('id', 'title')
@@ -42,6 +48,7 @@ $u->select($u->id, $u->name);
 
 The public configuration API on `RelationRef` is:
 
+- `load()`
 - `visible(bool $visible = true)`
 - `hidden()`
 - `fields(string|FieldRef|array ...$fields)`
@@ -51,7 +58,9 @@ The public configuration API on `RelationRef` is:
 - `join()`
 - `separate()`
 
-`fields(...)`, `where(...)`, `orderBy(...)`, and strategy helpers select/load the relation. `visible(...)` and `hidden()` control result shape for configured paths and intermediate traversal.
+`load()`, `fields(...)`, `where(...)`, `orderBy(...)`, and strategy helpers select/load the relation. `visible(...)` and `hidden()` control result shape for configured paths and intermediate traversal.
+
+`load()` selects the relation with default public fields and the loader's default strategy. It does not change fields, conditions, sorts, strategy, or visibility.
 
 `fields(...)` restricts public relation fields to the listed field names.
 

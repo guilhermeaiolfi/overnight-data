@@ -208,6 +208,13 @@ final class RelationRef implements QuerySourceInterface
 		return $this;
 	}
 
+	public function load(): self
+	{
+		$this->markSelected();
+
+		return $this;
+	}
+
 	public function visible(bool $visible = true): self
 	{
 		if ($this->selected && ! $visible) {

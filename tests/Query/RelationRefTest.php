@@ -244,6 +244,50 @@ final class RelationRefTest extends TestCase
 		], $this->selectionState($users));
 	}
 
+	public function testRelationLoadMarksRootRelationSelected(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$users->posts->load();
+
+		self::assertTrue($users->posts->isLoaded());
+		self::assertSame([
+			['posts', true, true, null],
+		], $this->selectionState($users));
+	}
+
+	public function testRelationLoadReturnsSameCachedRef(): void
+	{
+		$users = $this->makeQuery('users');
+
+		self::assertSame($users->posts, $users->posts->load());
+		self::assertSame($users->posts, $users->relation('posts'));
+	}
+
+	public function testRelationLoadDoesNotAlterOptionsOrVisibility(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$users->posts->load();
+
+		self::assertNull($users->posts->getFields());
+		self::assertSame([], $users->posts->getConditions());
+		self::assertSame([], $users->posts->getSorts());
+		self::assertNull($users->posts->getStrategy());
+		self::assertTrue($users->posts->isVisible());
+	}
+
+	public function testRelationLoadIsIdempotent(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$users->posts->load()->load();
+
+		self::assertSame([
+			['posts', true, true, null],
+		], $this->selectionState($users));
+	}
+
 	public function testRootAliasCollisionIsRejectedWhenRelationIsConfiguredAfterScalarSelection(): void
 	{
 		$users = $this->makeQuery('users');
@@ -262,6 +306,17 @@ final class RelationRefTest extends TestCase
 		self::assertSame([
 			['posts', false, true, null],
 			['posts.author', true, true, ['name']],
+		], $this->selectionState($users));
+	}
+
+	public function testNestedRelationLoadIsCollectedWithParentBranch(): void
+	{
+		$users = $this->makeQuery('users');
+		$users->posts->author->load();
+
+		self::assertSame([
+			['posts', false, true, null],
+			['posts.author', true, true, null],
 		], $this->selectionState($users));
 	}
 
@@ -450,6 +505,19 @@ final class RelationRefTest extends TestCase
 
 		$this->expectException(RelationSelectionException::class);
 		$users->posts->hidden()->fields('id');
+	}
+
+	public function testHiddenRelationCannotBeLoaded(): void
+	{
+		$users = $this->makeQuery('users');
+
+		try {
+			$users->posts->hidden()->load();
+			self::fail('Expected hidden load to throw.');
+		} catch (RelationSelectionException) {
+			self::assertFalse($users->posts->isLoaded());
+			self::assertSame([], $users->getRelationSelections()->getAll());
+		}
 	}
 
 	public function testHiddenRelationCannotBeSelectedByWhere(): void
