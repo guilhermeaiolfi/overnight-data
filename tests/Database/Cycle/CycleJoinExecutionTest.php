@@ -381,6 +381,24 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testHasManySeparateLimitPreservesCollectionOrderWithinEachParent(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts
+			->fields('title')
+			->orderBy($users->posts->title->desc())
+			->limit(2);
+
+		$rows = $users
+			->select($users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame(['World', 'Hello'], array_column($rows[0]['posts'], 'title'));
+		self::assertSame(['Graph'], array_column($rows[1]['posts'], 'title'));
+		self::assertSame([], $rows[2]['posts']);
+	}
+
 	public function testHasManySeparateOffsetAndLimitApplyPerParent(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
@@ -521,7 +539,9 @@ final class CycleJoinExecutionTest extends TestCase
 		self::assertStringContainsString('"q1"."user_id"', $sql);
 		self::assertStringContainsString('WHERE "__ondata_limited_has_many"."__ondata_rank" > ?', $sql);
 		self::assertStringContainsString('"__ondata_limited_has_many"."__ondata_rank" <= ?', $sql);
+		self::assertStringContainsString('ORDER BY "__ondata_limited_has_many"."userId" ASC, "__ondata_limited_has_many"."__ondata_rank" ASC', $sql);
 		self::assertStringContainsString('"__ondata_limited_has_many"."title" AS "title"', $sql);
+		self::assertStringContainsString('"__ondata_limited_has_many"."userId" AS "userId"', $sql);
 		self::assertStringNotContainsString('"__ondata_limited_has_many"."user_id"', $sql);
 	}
 

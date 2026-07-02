@@ -145,13 +145,25 @@ final class HasManyLoader extends AbstractLoader
 		$partitionBy = [];
 		$inner = query($childQuery->getCollection());
 		$selections = $childQuery->getSelections()->getExplicit();
+		$relationKeyFields = $branch->getRelationRef()->getDefinition()->getKeyPairing()->getRightFields();
+		$projectedKeys = [];
 
-		foreach ($branch->getRelationRef()->getDefinition()->getKeyPairing()->getRightFields() as $fieldName) {
+		foreach ($relationKeyFields as $fieldName) {
 			$partitionBy[] = $inner->field($fieldName);
 		}
 
 		foreach ($selections as $selectionItem) {
+			$projectedKeys[$selectionItem->getSelectionKey()] = true;
 			$inner->select($selectionItem->getProjectedExpression($childQuery, $inner));
+		}
+
+		foreach ($relationKeyFields as $fieldName) {
+			if (isset($projectedKeys[$fieldName])) {
+				continue;
+			}
+
+			$projectedKeys[$fieldName] = true;
+			$inner->select($inner->field($fieldName)->as($fieldName));
 		}
 
 		if ($childQuery->getConditions() !== []) {
@@ -170,6 +182,7 @@ final class HasManyLoader extends AbstractLoader
 
 		$ranked = $inner->as(self::DERIVED_ALIAS);
 		$outer = query($ranked);
+		$outerSelectedKeys = [];
 
 		foreach ($selections as $selectionItem) {
 			$key = $selectionItem->getSelectionKey();
@@ -178,7 +191,16 @@ final class HasManyLoader extends AbstractLoader
 				continue;
 			}
 
+			$outerSelectedKeys[$key] = true;
 			$outer->select($ranked->field($key)->as($key));
+		}
+
+		foreach ($relationKeyFields as $fieldName) {
+			if (! isset($projectedKeys[$fieldName]) || isset($outerSelectedKeys[$fieldName])) {
+				continue;
+			}
+
+			$outer->select($ranked->field($fieldName)->as($fieldName));
 		}
 
 		$offset = $selection->getOffset();
@@ -191,6 +213,12 @@ final class HasManyLoader extends AbstractLoader
 		if ($limit !== null) {
 			$outer->where($ranked->field(self::RANK_ALIAS)->lte($offset + $limit));
 		}
+
+		foreach ($relationKeyFields as $fieldName) {
+			$outer->orderBy($ranked->field($fieldName)->asc());
+		}
+
+		$outer->orderBy($ranked->field(self::RANK_ALIAS)->asc());
 
 		return $outer;
 	}
