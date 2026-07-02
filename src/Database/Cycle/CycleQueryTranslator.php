@@ -27,6 +27,7 @@ use ON\Data\Query\Condition\LogicalOperator;
 use ON\Data\Query\Condition\NotCondition;
 use ON\Data\Query\Condition\NullCondition;
 use ON\Data\Query\Condition\NullOperator;
+use ON\Data\Query\DerivedQuerySource;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Expression\AggregateExpression;
 use ON\Data\Query\Expression\AggregateFunction;
@@ -34,11 +35,13 @@ use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\LiteralExpression;
 use ON\Data\Query\Expression\RawSqlExpression;
+use ON\Data\Query\Expression\SourceFieldExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Expression\ValueOperation;
 use ON\Data\Query\Expression\ValueOperationExpression;
+use ON\Data\Query\Expression\WindowFunctionExpression;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
@@ -122,16 +125,23 @@ final class CycleQueryTranslator
 				$expression = $selectionExpression instanceof AliasedExpression
 					? $selectionExpression->getExpression()
 					: $selectionExpression;
-				$logicalName = $this->resolveRootResultName($query, $selection, $expression);
+				$logicalNames = $expression instanceof StarExpression
+					? array_map(
+						static fn (CycleResultColumn $column): string => $column->logicalName(),
+						$this->starResultColumns($expression),
+					)
+					: [$this->resolveRootResultName($query, $selection, $expression)];
 
-				if (isset($usedNames[$logicalName])) {
-					throw UnsupportedQueryException::forQuery($query, sprintf(
-						"duplicate root result name '%s' is not supported",
-						$logicalName,
-					));
+				foreach ($logicalNames as $logicalName) {
+					if (isset($usedNames[$logicalName])) {
+						throw UnsupportedQueryException::forQuery($query, sprintf(
+							"duplicate root result name '%s' is not supported",
+							$logicalName,
+						));
+					}
+
+					$usedNames[$logicalName] = true;
 				}
-
-				$usedNames[$logicalName] = true;
 			}
 		}
 
@@ -143,6 +153,18 @@ final class CycleQueryTranslator
 			$backendName = null;
 			$field = $expression instanceof FieldRef ? $expression->getField() : null;
 			$visible = ! $root || $selection->isExplicit();
+
+			if ($expression instanceof StarExpression) {
+				$columns[] = $this->translateStar($expression, $context)->toCycleFragment();
+
+				if ($root) {
+					foreach ($this->starResultColumns($expression) as $resultColumn) {
+						$resultColumns[] = $resultColumn;
+					}
+				}
+
+				continue;
+			}
 
 			if ($root && $selection->isExplicit()) {
 				$logicalName = $this->resolveRootResultName($query, $selection, $expression);
@@ -210,6 +232,10 @@ final class CycleQueryTranslator
 			return count($path) === 1
 				? $selection->getSelectionKey()
 				: implode('.', $path);
+		}
+
+		if ($expression instanceof SourceFieldExpression) {
+			return $expression->getName();
 		}
 
 		throw UnsupportedQueryException::forQuery(
@@ -366,13 +392,85 @@ final class CycleQueryTranslator
 	): SqlFragment {
 		return match (true) {
 			$expression instanceof FieldRef => $this->translateFieldRef($expression, $context, $joinContext),
+			$expression instanceof SourceFieldExpression => $this->translateSourceField($expression, $context),
 			$expression instanceof LiteralExpression => $this->translateLiteral($expression, $literalFieldContext),
 			$expression instanceof RawSqlExpression => $this->translateRawSql($expression),
 			$expression instanceof AggregateExpression => $this->translateAggregate($expression, $context, $joinContext),
 			$expression instanceof ValueOperationExpression => $this->translateValueOperation($expression, $context, $joinContext),
+			$expression instanceof WindowFunctionExpression => $this->translateWindowFunction($expression, $context, $joinContext),
 			$expression instanceof SubqueryExpression => $this->compileNestedQuery($expression->getQuery(), $context, QueryUsage::SCALAR_SUBQUERY),
 			default => throw UnsupportedQueryException::forQuery($context->root(), 'unknown value expression type'),
 		};
+	}
+
+	private function translateStar(StarExpression $expression, CycleTranslationContext $context): SqlFragment
+	{
+		return SqlFragment::raw($this->quote($context->aliasFor($expression->getSource())) . '.*');
+	}
+
+	/**
+	 * @return list<CycleResultColumn>
+	 */
+	private function starResultColumns(StarExpression $expression): array
+	{
+		$source = $expression->getSource();
+
+		if ($source instanceof SelectQuery) {
+			$columns = [];
+
+			foreach ($source->getCollection()->getVisibleFields() as $fieldName) {
+				$field = $source->getCollection()->getField($fieldName);
+				$columns[] = new CycleResultColumn($field->getColumn(), $field->getName(), true, $field);
+			}
+
+			return $columns;
+		}
+
+		if ($source instanceof DerivedQuerySource) {
+			return array_map(
+				static fn (string $name): CycleResultColumn => new CycleResultColumn($name, $name, true),
+				$this->derivedSelectionNames($source),
+			);
+		}
+
+		return [];
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function derivedSelectionNames(DerivedQuerySource $source): array
+	{
+		$names = [];
+
+		foreach ($source->getQuery()->getSelections()->getExplicit() as $selection) {
+			$expression = $selection->getExpression();
+			if ($expression instanceof AliasedExpression) {
+				$names[] = $expression->getAlias();
+
+				continue;
+			}
+
+			if ($expression instanceof FieldRef) {
+				$names[] = $expression->getField()->getColumn();
+
+				continue;
+			}
+
+			if ($expression instanceof SourceFieldExpression) {
+				$names[] = $expression->getName();
+
+				continue;
+			}
+
+			if ($expression instanceof StarExpression && $expression->getSource() instanceof SelectQuery) {
+				foreach ($expression->getSource()->getCollection()->getVisibleFields() as $fieldName) {
+					$names[] = $expression->getSource()->getCollection()->getField($fieldName)->getColumn();
+				}
+			}
+		}
+
+		return array_values(array_unique($names));
 	}
 
 	private function translateRawSql(RawSqlExpression $expression): SqlFragment
@@ -406,6 +504,17 @@ final class CycleQueryTranslator
 
 		return SqlFragment::raw($this->quote(
 			$context->aliasFor($source) . '.' . $field->getField()->getColumn()
+		));
+	}
+
+	private function translateSourceField(
+		SourceFieldExpression $field,
+		CycleTranslationContext $context,
+	): SqlFragment {
+		$context->assertSourceAccessible($field->getSource());
+
+		return SqlFragment::raw($this->quote(
+			$context->aliasFor($field->getSource()) . '.' . $field->getName()
 		));
 	}
 
@@ -468,6 +577,44 @@ final class CycleQueryTranslator
 		};
 
 		return SqlFragment::withParameters($sql, $parameters);
+	}
+
+	private function translateWindowFunction(
+		WindowFunctionExpression $expression,
+		CycleTranslationContext $context,
+		?Join $joinContext = null,
+	): SqlFragment {
+		$window = $expression->getWindow();
+		$parts = [];
+		$parameters = [];
+
+		if ($window !== null && $window->getPartitionBy() !== []) {
+			$partition = array_map(
+				fn (ValueExpressionInterface $partition): SqlFragment => $this->translateExpression($partition, $context, null, $joinContext),
+				$window->getPartitionBy(),
+			);
+			$parts[] = 'PARTITION BY ' . implode(', ', array_map(static fn (SqlFragment $fragment): string => $fragment->sql(), $partition));
+			array_push($parameters, ...$this->mergeParameters($partition));
+		}
+
+		if ($window !== null && $window->getOrderings() !== []) {
+			$order = array_map(
+				fn ($sort): SqlFragment => SqlFragment::withParameters(
+					$this->translateExpression($sort->getExpression(), $context, null, $joinContext)->sql()
+						. ' '
+						. ($sort->getDirection() === SortDirection::ASC ? 'ASC' : 'DESC'),
+					$this->translateExpression($sort->getExpression(), $context, null, $joinContext)->parameters(),
+				),
+				$window->getOrderings(),
+			);
+			$parts[] = 'ORDER BY ' . implode(', ', array_map(static fn (SqlFragment $fragment): string => $fragment->sql(), $order));
+			array_push($parameters, ...$this->mergeParameters($order));
+		}
+
+		return SqlFragment::withParameters(
+			$expression->getFunction()->value . '() OVER (' . implode(' ', $parts) . ')',
+			$parameters,
+		);
 	}
 
 	private function concatSql(array $arguments): string
@@ -549,6 +696,16 @@ final class CycleQueryTranslator
 
 	private function fromSource(SelectQuery $query, CycleTranslationContext $context): FragmentInterface
 	{
+		if ($query->getFrom() instanceof DerivedQuerySource) {
+			$derived = $query->getFrom();
+			$inner = $this->compileNestedQuery($derived->getQuery(), $context, QueryUsage::EXISTS_SUBQUERY);
+
+			return SqlFragment::withParameters(
+				$inner->sql() . ' AS ' . $this->quote($context->aliasFor($derived)),
+				$inner->parameters(),
+			)->toCycleFragment();
+		}
+
 		$source = $this->database->getPrefix() . $this->resolvePhysicalSource($query->getCollection());
 
 		return SqlFragment::raw(

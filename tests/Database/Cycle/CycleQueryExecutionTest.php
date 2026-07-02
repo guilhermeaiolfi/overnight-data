@@ -10,6 +10,7 @@ use ON\Data\Database\Database;
 use ON\Data\Database\Exception\QueryExecutionException;
 use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\Definition\Registry;
+use ON\Data\Query\Expression\SubqueryExpression;
 use function ON\Data\Query\query;
 use ON\Data\Query\SelectQuery;
 use function ON\Data\Query\x;
@@ -214,11 +215,11 @@ final class CycleQueryExecutionTest extends TestCase
 		$rows = $users
 			->select(
 				$users->name,
-				query($postsDefinition, function (SelectQuery $query) use ($users): void {
+				(new SubqueryExpression(query($postsDefinition, function (SelectQuery $query) use ($users): void {
 					$query
 						->select($query->id->count())
 						->where(x()->eq($query->userId, $users->id));
-				})->as('post_count'),
+				})))->as('post_count'),
 			)
 			->where(x()->exists($posts))
 			->orderBy($users->id->asc())
@@ -316,6 +317,81 @@ final class CycleQueryExecutionTest extends TestCase
 		self::assertSame('Ada <ada@example.test>', $userRows[0]['label']);
 		self::assertSame('n/a', $userRows[2]['nickname_value']);
 		self::assertSame(11, $userRows[0]['score_plus_one']);
+	}
+
+	public function testWindowRowNumberCanBeFilteredThroughDerivedSource(): void
+	{
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+		$position = x()->fn()
+			->rowNumber()
+			->over(
+				partitionBy: $posts->userId,
+				orderBy: [
+					$posts->id->desc(),
+				],
+			)
+			->as('__rank');
+
+		$inner = $posts->select($posts->all(), $position);
+		$ranked = $inner->as('ranked_posts');
+
+		$rows = $this->database->query($ranked)
+			->select($ranked->all())
+			->where($ranked->field('__rank')->eq(1))
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'id' => 2,
+				'user_id' => 1,
+				'title' => 'World',
+				'amount' => 15.5,
+				'published' => 0,
+				'__rank' => 1,
+			],
+			[
+				'id' => 3,
+				'user_id' => 2,
+				'title' => 'Graph',
+				'amount' => 7.5,
+				'published' => 1,
+				'__rank' => 1,
+			],
+		], $rows);
+	}
+
+	public function testRankDenseRankCompositePartitionAndAutomaticDerivedAliasExecute(): void
+	{
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+		$rank = x()->fn()
+			->rank()
+			->over(
+				partitionBy: [$posts->userId, $posts->published],
+				orderBy: $posts->amount->desc(),
+			)
+			->as('rank_value');
+		$denseRank = x()->fn()
+			->denseRank()
+			->over(orderBy: [$posts->amount->desc(), $posts->id->asc()])
+			->as('dense_value');
+
+		$inner = $posts->select($posts->id, $rank, $denseRank);
+		$ranked = $inner->as();
+
+		$rows = $this->database->query($ranked)
+			->select(
+				$ranked->field('id'),
+				$ranked->field('rank_value'),
+				$ranked->field('dense_value'),
+			)
+			->orderBy($ranked->field('id')->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['id' => 1, 'rank_value' => 1, 'dense_value' => 2],
+			['id' => 2, 'rank_value' => 1, 'dense_value' => 1],
+			['id' => 3, 'rank_value' => 1, 'dense_value' => 3],
+		], $rows);
 	}
 
 	public function testRootExecutionRequiresSelections(): void
@@ -476,7 +552,7 @@ final class CycleQueryExecutionTest extends TestCase
 	public function testCyclicQueryGraphsAreRejected(): void
 	{
 		$cyclic = query($this->registry->getCollection('users'));
-		$cyclic->select($cyclic->id, $cyclic->as('self_cycle'));
+		$cyclic->select($cyclic->id, (new SubqueryExpression($cyclic))->as('self_cycle'));
 
 		$users = $this->database->query($this->registry->getCollection('users'));
 
@@ -484,7 +560,7 @@ final class CycleQueryExecutionTest extends TestCase
 		$this->expectExceptionMessage('Cyclic query references are not supported.');
 
 		$users
-			->select($users->id, $cyclic->as('outer_cycle'))
+			->select($users->id, (new SubqueryExpression($cyclic))->as('outer_cycle'))
 			->fetchAll();
 	}
 

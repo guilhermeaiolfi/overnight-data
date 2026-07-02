@@ -14,6 +14,7 @@ use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Exception\RelationSelectionException;
+use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\Relation\LoadRuntime;
@@ -252,13 +253,13 @@ final class CycleJoinExecutionTest extends TestCase
 		$rows = $users
 			->select(
 				$users->name,
-				\ON\Data\Query\query($posts, function (SelectQuery $query) use ($users): void {
+				(new SubqueryExpression(\ON\Data\Query\query($posts, function (SelectQuery $query) use ($users): void {
 					$query
 						->select($query->author->name->upper())
 						->where(x()->eq($query->userId, $users->id))
 						->orderBy($query->id->asc())
 						->limit(1);
-				})->as('first_author'),
+				})))->as('first_author'),
 			)
 			->orderBy($users->id->asc())
 			->fetchAll();

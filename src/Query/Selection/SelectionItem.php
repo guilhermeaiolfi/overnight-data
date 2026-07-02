@@ -6,6 +6,7 @@ namespace ON\Data\Query\Selection;
 
 use InvalidArgumentException;
 use ON\Data\Query\Expression\AliasedExpression;
+use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 
 final class SelectionItem
@@ -16,7 +17,7 @@ final class SelectionItem
 	private readonly array $reasons;
 
 	public function __construct(
-		private readonly ValueExpressionInterface|AliasedExpression $expression,
+		private readonly ValueExpressionInterface|AliasedExpression|StarExpression $expression,
 		private readonly bool $explicit = false,
 		array $reasons = [],
 	) {
@@ -25,7 +26,7 @@ final class SelectionItem
 		));
 	}
 
-	public function getExpression(): ValueExpressionInterface|AliasedExpression
+	public function getExpression(): ValueExpressionInterface|AliasedExpression|StarExpression
 	{
 		return $this->expression;
 	}

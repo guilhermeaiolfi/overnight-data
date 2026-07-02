@@ -14,7 +14,7 @@ final class QueryExecutionException extends RuntimeException
 	{
 		return new self(sprintf(
 			"Failed to execute query for definition '%s'.",
-			$query->getCollection()->getName(),
+			$query->getSourceName(),
 		), 0, $previous);
 	}
 }

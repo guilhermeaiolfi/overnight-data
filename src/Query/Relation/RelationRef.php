@@ -17,6 +17,7 @@ use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Exception\UnknownQueryMemberException;
 use ON\Data\Query\Exception\UnknownQueryRelationException;
 use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\SelectQuery;
@@ -189,6 +190,16 @@ final class RelationRef implements QuerySourceInterface
 		}
 
 		return $this->relationRefs[$name] = new self($this->query, $relation, $this);
+	}
+
+	public function all(): StarExpression
+	{
+		return $this->star();
+	}
+
+	public function star(): StarExpression
+	{
+		return new StarExpression($this);
 	}
 
 	/**

@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace ON\Data\Query;
 
-use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\StarExpression;
+use ON\Data\Query\Expression\ValueExpressionInterface;
 
 interface QuerySourceInterface
 {
 	public function getQuery(): SelectQuery;
-
-	public function getCollection(): CollectionInterface;
 
 	/**
 	 * @return list<string>
 	 */
 	public function getPath(): array;
 
-	public function field(string $name): FieldRef;
+	public function field(string $name): ValueExpressionInterface;
+
+	public function all(): StarExpression;
 }

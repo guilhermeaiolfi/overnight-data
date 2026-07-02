@@ -9,9 +9,11 @@ use ON\Data\Definition\Collection\CollectionInterface;
 /**
  * @param null|callable(SelectQuery): mixed $build
  */
-function query(CollectionInterface $source, ?callable $build = null): SelectQuery
+function query(CollectionInterface|DerivedQuerySource|SelectQuery $source, ?callable $build = null): SelectQuery
 {
-	$query = new SelectQuery($source);
+	$query = $source instanceof SelectQuery
+		? $source
+		: new SelectQuery($source);
 
 	if ($build !== null) {
 		$build($query);

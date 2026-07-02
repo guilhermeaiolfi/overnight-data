@@ -12,6 +12,7 @@ The main scalar expression sources are:
 - `SubqueryExpression`
 - `ValueOperationExpression`
 - `AggregateExpression`
+- `WindowFunctionExpression`
 
 `AliasedExpression` is selection-only. It wraps another value expression for `select()`, but it is not a general operand type.
 
@@ -53,7 +54,7 @@ These operations are semantic. They do not encode SQL function names.
 
 ```php
 $u->select(
-    x()->rawSql('ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at DESC)')->as('row_number'),
+    x()->rawSql('LOWER(name)')->as('lower_name'),
 );
 ```
 
@@ -64,7 +65,49 @@ $u->where(x()->eq(x()->rawSql('LOWER(name)'), 'ada'));
 $u->where(x()->eq(x()->rawSql('name || ?', [' Lovelace']), 'Ada Lovelace'));
 ```
 
-Do not concatenate user input into the SQL string. Parameters are for values only; identifiers inside the SQL fragment are not portable or automatically quoted. Prefer modeled expressions when they exist. Window functions are currently possible through `rawSql()`, and a typed window-expression API may be added later if usage proves worth modeling.
+Do not concatenate user input into the SQL string. Parameters are for values only; identifiers inside the SQL fragment are not portable or automatically quoted. Prefer modeled expressions when they exist.
+
+## Window functions
+
+SQL functions that need richer modeling live under `x()->fn()`:
+
+```php
+$rank = x()->fn()
+    ->rowNumber()
+    ->over(
+        partitionBy: $posts->userId,
+        orderBy: $posts->createdAt->desc(),
+    )
+    ->as('rank');
+```
+
+Supported ranking functions:
+
+- `rowNumber()` gives exactly one ordered position per row.
+- `rank()` keeps ties with gaps.
+- `denseRank()` keeps ties without gaps.
+
+`over()` accepts a single expression or a list for `partitionBy`, and a single `Sort` or a list for `orderBy`:
+
+```php
+x()->fn()->rowNumber()->over(
+    partitionBy: [$posts->tenantId, $posts->userId],
+    orderBy: [$posts->createdAt->desc(), $posts->id->asc()],
+);
+```
+
+Filtering by a window output requires a derived query source:
+
+```php
+$inner = query($posts)
+    ->select($posts->all(), $rank);
+
+$ranked = $inner->as('ranked_posts');
+
+$topPerGroup = query($ranked)
+    ->select($ranked->all())
+    ->where($ranked->field('rank')->eq(1));
+```
 
 ## Aggregates and subqueries
 
@@ -79,7 +122,7 @@ Examples:
 ```php
 $u->id->count();
 $u->amount->sum();
-$postCount = $posts->as('post_count');
+$postCount = (new SubqueryExpression($posts))->as('post_count');
 ```
 
 Direct nested queries are normalized to `SubqueryExpression` where the API accepts them, including `select()`, comparisons, grouping, and sorting.
@@ -114,7 +157,7 @@ Top-level repeated `where()` calls append conditions that are interpreted togeth
 - `neq(..., null)` normalizes to `isNotNull(...)`.
 - Ordered comparisons reject `null`.
 - `AliasedExpression`, `StarExpression`, and `ConditionInterface` are rejected where a value operand is required.
-- `StarExpression` is special-purpose and currently only supports row counting.
+- `StarExpression` is special-purpose: use `all()` for source-wide selection and `count()` for row counting.
 
 ## Deferred semantics
 

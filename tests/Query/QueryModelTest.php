@@ -19,6 +19,7 @@ use ON\Data\Query\Condition\LogicalOperator;
 use ON\Data\Query\Condition\NotCondition;
 use ON\Data\Query\Condition\NullCondition;
 use ON\Data\Query\Condition\NullOperator;
+use ON\Data\Query\DerivedQuerySource;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Exception\UnknownQueryExpressionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
@@ -33,6 +34,8 @@ use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Expression\ValueOperation;
 use ON\Data\Query\Expression\ValueOperationExpression;
+use ON\Data\Query\Expression\WindowFunction;
+use ON\Data\Query\Expression\WindowFunctionExpression;
 use ON\Data\Query\ExpressionFactory;
 use function ON\Data\Query\query;
 use ON\Data\Query\Relation\LoadRuntime;
@@ -83,6 +86,11 @@ final class QueryModelTest extends TestCase
 		self::assertCount(1, $voidResult->getConditions());
 		self::assertSame($collection, $arrowResult->getCollection());
 		self::assertCount(1, $arrowResult->getSelections());
+
+		$sameQuery = query($collectionQuery, fn (SelectQuery $query) => $query->where($query->active->eq(true)));
+
+		self::assertSame($collectionQuery, $sameQuery);
+		self::assertCount(1, $sameQuery->getConditions());
 	}
 
 	public function testFieldReferencesAreQueryScopedCachedAndBackedByDefinitionFields(): void
@@ -518,16 +526,14 @@ final class QueryModelTest extends TestCase
 		self::assertSame($userStar, $factoryCount->getExpression());
 	}
 
-	public function testStarIsNotSelectableAndOnlySupportsCount(): void
+	public function testAllIsThePreferredSelectableStarAliasAndCountStillWorks(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
 
-		try {
-			$query->select($query->star());
-			self::fail('Expected star selection to fail by type.');
-		} catch (TypeError) {
-			self::assertTrue(true);
-		}
+		$query->select($query->all());
+
+		self::assertSame($query->star(), $query->all());
+		self::assertSame($query->star(), $query->getSelections()->getAll()[0]->getExpression());
 
 		try {
 			x()->countDistinct($query->star());
@@ -902,7 +908,7 @@ final class QueryModelTest extends TestCase
 		self::assertSame($posts, $posts->get('pair_key')->getArguments()[0]->getQuery());
 	}
 
-	public function testDirectSubquerySelectionAndQueryAliasingNormalizeToSubqueryExpressions(): void
+	public function testDirectSubquerySelectionNormalizesToSubqueryExpressionAndAsCreatesDerivedSource(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = query($registry->getCollection('users'));
@@ -917,11 +923,56 @@ final class QueryModelTest extends TestCase
 		self::assertCount(2, $selections);
 		self::assertInstanceOf(SubqueryExpression::class, $selections[1]->getExpression());
 		self::assertSame($posts, $selections[1]->getExpression()->getQuery());
-		self::assertInstanceOf(AliasedExpression::class, $aliased);
-		self::assertInstanceOf(SubqueryExpression::class, $aliased->getExpression());
-		self::assertSame($posts, $aliased->getExpression()->getQuery());
+		self::assertInstanceOf(DerivedQuerySource::class, $aliased);
+		self::assertSame($posts, $aliased->getQuery());
+		self::assertSame('post_count', $aliased->getAlias());
 		self::assertCount(1, $selections[1]->getExpression()->getQuery()->getSelections());
 		self::assertFalse(is_a($posts, ValueExpressionInterface::class));
+	}
+
+	public function testWindowFunctionNamespaceAndOverNormalization(): void
+	{
+		$posts = query($this->makeRegistry()->getCollection('posts'));
+
+		$single = x()->fn()->rowNumber()->over(
+			partitionBy: $posts->userId,
+			orderBy: $posts->id->desc(),
+		);
+		$composite = x()->fn()->rank()->over(
+			partitionBy: [$posts->userId, $posts->published],
+			orderBy: [$posts->id->asc()],
+		);
+		$dense = x()->fn()->denseRank()->over();
+
+		self::assertInstanceOf(WindowFunctionExpression::class, $single);
+		self::assertSame(WindowFunction::ROW_NUMBER, $single->getFunction());
+		self::assertSame([$posts->userId], $single->getWindow()->getPartitionBy());
+		self::assertSame(SortDirection::DESC, $single->getWindow()->getOrderings()[0]->getDirection());
+		self::assertSame(WindowFunction::RANK, $composite->getFunction());
+		self::assertSame([$posts->userId, $posts->published], $composite->getWindow()->getPartitionBy());
+		self::assertSame(WindowFunction::DENSE_RANK, $dense->getFunction());
+		self::assertSame([], $dense->getWindow()->getPartitionBy());
+		self::assertSame([], $dense->getWindow()->getOrderings());
+	}
+
+	public function testDerivedSourceExposesFieldsAndAllSelectionWithoutCollectionFields(): void
+	{
+		$posts = query($this->makeRegistry()->getCollection('posts'));
+		$rank = x()->fn()->rowNumber()->over(
+			partitionBy: $posts->userId,
+			orderBy: $posts->id->asc(),
+		)->as('__rank');
+		$inner = $posts->select($posts->all(), $rank);
+
+		$ranked = $inner->as('ranked_posts');
+		$outer = query($ranked)
+			->select($ranked->all())
+			->where($ranked->field('__rank')->eq(1));
+
+		self::assertSame($inner, $ranked->getQuery());
+		self::assertSame('ranked_posts', $ranked->getAlias());
+		self::assertSame($ranked->all(), $outer->getSelections()->getAll()[0]->getExpression());
+		self::assertSame('__rank', $ranked->field('__rank')->getName());
 	}
 
 	public function testRootSelectionKeysPreserveExistingFieldAndAliasConventions(): void

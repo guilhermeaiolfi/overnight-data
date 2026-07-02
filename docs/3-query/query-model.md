@@ -43,6 +43,7 @@ References are cached per query and per path. Two different queries over the sam
 - `ValueExpressionInterface`
 - `AliasedExpression`
 - `SelectQuery`
+- `StarExpression`
 - `RelationRef`
 
 Scalar expressions become flat selections. A direct `SelectQuery` is normalized to a `SubqueryExpression`.
@@ -56,6 +57,14 @@ $u->select(
     $postCountQuery,
 );
 ```
+
+Use `all()` for a source-wide selection:
+
+```php
+$posts->select($posts->all());
+```
+
+`star()` remains as the backward-compatible alias for the same selection expression.
 
 `require()` records an implicit selection with a reason and is used by internal query assembly when fields must be present without becoming caller-facing API.
 
@@ -81,6 +90,20 @@ $company->on(x()->eq($u->companyId, $company->id));
 ```
 
 `FieldRef` always belongs to a `QuerySourceInterface`, so root fields, joined fields, and relation-owned fields all expose their real source.
+
+## Derived sources
+
+`SelectQuery::as()` turns a query into a derived source for use in another query:
+
+```php
+$ranked = $inner->as('ranked_posts');
+
+$query = query($ranked)
+    ->select($ranked->all())
+    ->where($ranked->field('__rank')->eq(1));
+```
+
+Omitting the alias is allowed; the backend assigns a stable internal alias. Derived sources expose `field()` and `all()`, but they do not expose relation loading.
 
 ## Inspecting the model
 

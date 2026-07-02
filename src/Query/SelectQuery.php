@@ -18,6 +18,7 @@ use ON\Data\Query\Exception\UnknownQueryMemberException;
 use ON\Data\Query\Exception\UnknownQueryRelationException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\SourceFieldExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
@@ -72,7 +73,7 @@ final class SelectQuery implements QuerySourceInterface
 	private ?int $offset = null;
 
 	public function __construct(
-		private readonly CollectionInterface $collection,
+		private readonly CollectionInterface|DerivedQuerySource $source,
 		private ?QueryExecutorInterface $executor = null,
 	) {
 		$this->selections = new SelectionList();
@@ -85,7 +86,25 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function getCollection(): CollectionInterface
 	{
-		return $this->collection;
+		if (! $this->source instanceof CollectionInterface) {
+			throw new InvalidArgumentException('Derived query sources do not expose collection metadata.');
+		}
+
+		return $this->source;
+	}
+
+	public function getFrom(): CollectionInterface|DerivedQuerySource
+	{
+		return $this->source;
+	}
+
+	public function getSourceName(): string
+	{
+		if ($this->source instanceof CollectionInterface) {
+			return $this->source->getName();
+		}
+
+		return $this->source->getAlias() ?? 'derived query';
 	}
 
 	public function getPath(): array
@@ -105,16 +124,20 @@ final class SelectQuery implements QuerySourceInterface
 		return $this;
 	}
 
-	public function field(string $name): FieldRef
+	public function field(string $name): FieldRef|SourceFieldExpression
 	{
+		if ($this->source instanceof DerivedQuerySource) {
+			return $this->source->field($name);
+		}
+
 		if (isset($this->fieldRefs[$name])) {
 			return $this->fieldRefs[$name];
 		}
 
-		$field = $this->collection->getField($name);
+		$field = $this->source->getField($name);
 
 		if (! $field instanceof FieldInterface) {
-			throw UnknownQueryFieldException::forDefinition($name, $this->collection->getName());
+			throw UnknownQueryFieldException::forDefinition($name, $this->source->getName());
 		}
 
 		return $this->fieldRefs[$name] = new FieldRef($this, $field);
@@ -122,14 +145,18 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function relation(string $name): RelationRef
 	{
+		if (! $this->source instanceof CollectionInterface) {
+			throw new InvalidArgumentException('Derived query sources do not support relation loading.');
+		}
+
 		if (isset($this->relationRefs[$name])) {
 			return $this->relationRefs[$name];
 		}
 
-		$relation = $this->collection->getRelation($name);
+		$relation = $this->source->getRelation($name);
 
 		if (! $relation instanceof RelationInterface) {
-			throw UnknownQueryRelationException::forDefinition($name, $this->collection->getName());
+			throw UnknownQueryRelationException::forDefinition($name, $this->source->getName());
 		}
 
 		return $this->relationRefs[$name] = new RelationRef($this, $relation);
@@ -137,15 +164,19 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function __get(string $name): FieldRef|RelationRef
 	{
-		if ($this->collection->hasField($name)) {
+		if (! $this->source instanceof CollectionInterface) {
 			return $this->field($name);
 		}
 
-		if ($this->collection->hasRelation($name)) {
+		if ($this->source->hasField($name)) {
+			return $this->field($name);
+		}
+
+		if ($this->source->hasRelation($name)) {
 			return $this->relation($name);
 		}
 
-		throw UnknownQueryMemberException::forDefinition($name, $this->collection->getName());
+		throw UnknownQueryMemberException::forDefinition($name, $this->source->getName());
 	}
 
 	public function star(): StarExpression
@@ -153,12 +184,17 @@ final class SelectQuery implements QuerySourceInterface
 		return $this->star ??= new StarExpression($this);
 	}
 
-	public function as(string $alias): AliasedExpression
+	public function all(): StarExpression
 	{
-		return (new SubqueryExpression($this))->as($alias);
+		return $this->star();
 	}
 
-	public function select(ValueExpressionInterface|AliasedExpression|SelectQuery ...$expressions): self
+	public function as(?string $alias = null): DerivedQuerySource
+	{
+		return new DerivedQuerySource($this, $alias);
+	}
+
+	public function select(ValueExpressionInterface|AliasedExpression|StarExpression|SelectQuery ...$expressions): self
 	{
 		if ($expressions === []) {
 			throw new InvalidArgumentException('SelectQuery::select() requires at least one expression.');
@@ -304,7 +340,7 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		if (! $this->selections->hasNamedExpression($name)) {
-			throw UnknownQueryExpressionException::forQuery($name, $this->collection->getName());
+			throw UnknownQueryExpressionException::forQuery($name, $this->getCollection()->getName());
 		}
 
 		return $this->selections->getNamedExpression($name);
@@ -475,7 +511,7 @@ final class SelectQuery implements QuerySourceInterface
 		$path = $source->getPath();
 
 		return $path === []
-			? $source->getCollection()->getName()
+			? $this->getCollection()->getName()
 			: implode('.', $path);
 	}
 

@@ -6,6 +6,7 @@ namespace ON\Data\Database\Cycle;
 
 use Cycle\Database\Driver\CompilerInterface;
 use ON\Data\Database\Exception\UnsupportedQueryException;
+use ON\Data\Query\DerivedQuerySource;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
@@ -28,7 +29,7 @@ final class CycleTranslationContext
 	private int $nextQueryAlias = 0;
 
 	/**
-	 * @var list<int>
+	 * @var list<SelectQuery>
 	 */
 	private array $stack = [];
 
@@ -60,6 +61,14 @@ final class CycleTranslationContext
 			return $this->aliases[$id] = 'q' . $this->nextQueryAlias++;
 		}
 
+		if ($source instanceof DerivedQuerySource && $source->getAlias() !== null) {
+			return $this->aliases[$id] = $source->getAlias();
+		}
+
+		if ($source instanceof DerivedQuerySource) {
+			return $this->aliases[$id] = 'd' . $this->nextQueryAlias++;
+		}
+
 		$queryId = spl_object_id($source->getQuery());
 		$next = $this->nextJoinAlias[$queryId] ?? 0;
 		$this->nextJoinAlias[$queryId] = $next + 1;
@@ -82,7 +91,7 @@ final class CycleTranslationContext
 		}
 
 		$id = spl_object_id($query);
-		$this->stack[] = $id;
+		$this->stack[] = $query;
 		$this->aliases[$id] ??= 'q' . $this->nextQueryAlias++;
 		$this->nextJoinAlias[$id] ??= 0;
 
@@ -95,8 +104,7 @@ final class CycleTranslationContext
 
 	public function assertAccessible(FieldRef $field): void
 	{
-		$id = spl_object_id($field->getQuery());
-		if (! in_array($id, $this->stack, true)) {
+		if (! in_array($field->getQuery(), $this->stack, true)) {
 			throw UnsupportedQueryException::forQuery(
 				$this->root,
 				sprintf(
@@ -107,22 +115,32 @@ final class CycleTranslationContext
 		}
 	}
 
+	public function assertSourceAccessible(QuerySourceInterface $source): void
+	{
+		foreach ($this->stack as $query) {
+			if ($query === $source || $query->getFrom() === $source) {
+				return;
+			}
+		}
+
+		throw UnsupportedQueryException::forQuery(
+			$this->root,
+			"Source field is referenced outside the active query scope.",
+		);
+	}
+
 	public function contains(SelectQuery $query): bool
 	{
-		return in_array(spl_object_id($query), $this->stack, true);
+		return in_array($query, $this->stack, true);
 	}
 
 	public function isAncestor(SelectQuery $query): bool
 	{
-		$id = spl_object_id($query);
-
-		return $this->stack !== [] && in_array($id, array_slice($this->stack, 0, -1), true);
+		return $this->stack !== [] && in_array($query, array_slice($this->stack, 0, -1), true);
 	}
 
 	public function isCurrent(SelectQuery $query): bool
 	{
-		$id = spl_object_id($query);
-
-		return $this->stack !== [] && $id === $this->stack[array_key_last($this->stack)];
+		return $this->stack !== [] && $query === $this->stack[array_key_last($this->stack)];
 	}
 }

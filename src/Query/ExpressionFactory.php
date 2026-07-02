@@ -30,6 +30,13 @@ use ON\Data\Query\Sort\SortDirection;
 
 final class ExpressionFactory
 {
+	private ?ExpressionFunctionFactory $functions = null;
+
+	public function fn(): ExpressionFunctionFactory
+	{
+		return $this->functions ??= new ExpressionFunctionFactory();
+	}
+
 	public function literal(mixed $value): LiteralExpression
 	{
 		return new LiteralExpression($value);

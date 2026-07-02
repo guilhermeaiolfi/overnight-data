@@ -11,6 +11,7 @@ use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Exception\UnknownQueryMemberException;
 use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\StarExpression;
 
 final class Join implements QuerySourceInterface
 {
@@ -104,5 +105,15 @@ final class Join implements QuerySourceInterface
 		}
 
 		throw UnknownQueryMemberException::forDefinition($name, $this->collection->getName());
+	}
+
+	public function all(): StarExpression
+	{
+		return $this->star();
+	}
+
+	public function star(): StarExpression
+	{
+		return new StarExpression($this);
 	}
 }

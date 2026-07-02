@@ -9,6 +9,7 @@ use Countable;
 use InvalidArgumentException;
 use IteratorAggregate;
 use ON\Data\Query\Expression\AliasedExpression;
+use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use Traversable;
 
@@ -43,7 +44,7 @@ final class SelectionList implements IteratorAggregate, Countable
 	private array $reasonEntryIndexes = [];
 
 	/**
-	 * @param list<ValueExpressionInterface|AliasedExpression> $expressions
+	 * @param list<ValueExpressionInterface|AliasedExpression|StarExpression> $expressions
 	 */
 	public function addExplicit(array $expressions): void
 	{
@@ -104,7 +105,7 @@ final class SelectionList implements IteratorAggregate, Countable
 	 * @param string|list<string> $reasons
 	 */
 	public function add(
-		ValueExpressionInterface|AliasedExpression $expression,
+		ValueExpressionInterface|AliasedExpression|StarExpression $expression,
 		string|array $reasons = [],
 		bool $explicit = false,
 	): SelectionItem {
@@ -141,14 +142,14 @@ final class SelectionList implements IteratorAggregate, Countable
 		return $item;
 	}
 
-	public function require(ValueExpressionInterface|AliasedExpression $expression, string $reason): void
+	public function require(ValueExpressionInterface|AliasedExpression|StarExpression $expression, string $reason): void
 	{
 		$this->add($expression, $reason);
 	}
 
 	private function expressionsMatch(
-		ValueExpressionInterface|AliasedExpression $left,
-		ValueExpressionInterface|AliasedExpression $right,
+		ValueExpressionInterface|AliasedExpression|StarExpression $left,
+		ValueExpressionInterface|AliasedExpression|StarExpression $right,
 	): bool {
 		if ($left instanceof AliasedExpression || $right instanceof AliasedExpression) {
 			return $left instanceof AliasedExpression
@@ -315,7 +316,7 @@ final class SelectionList implements IteratorAggregate, Countable
 		return array_values($reasons);
 	}
 
-	private function findMatchingEntry(ValueExpressionInterface|AliasedExpression $expression): ?SelectionItem
+	private function findMatchingEntry(ValueExpressionInterface|AliasedExpression|StarExpression $expression): ?SelectionItem
 	{
 		foreach ($this->entries as $entry) {
 			if ($this->expressionsMatch($entry->getExpression(), $expression)) {
