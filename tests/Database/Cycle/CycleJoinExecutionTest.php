@@ -944,6 +944,63 @@ final class CycleJoinExecutionTest extends TestCase
 		self::assertStringContainsString('ROW_NUMBER() OVER', $sql);
 	}
 
+	public function testFirstOfManyNestedJoinLoadingPreservesChosenChildAuthorState(): void
+	{
+		$executor = $this->executorFromDatabase($this->database);
+		$recording = new RecordingQueryExecutor(
+			$executor,
+			fn (SelectQuery $query): string => $this->compileSqlWithExecutor($executor, $query),
+		);
+		$database = new Database($recording);
+		$users = $database->query($this->registry->getCollection('users'));
+		$users->latestPost->fields('id', 'title', 'authorId')->author->fields('id', 'name');
+
+		$rows = $users
+			->select($users->id, $users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'id' => 1,
+				'name' => 'Ada',
+				'latestPost' => [
+					'id' => 11,
+					'title' => 'Alpha',
+					'authorId' => 2,
+					'author' => ['id' => 2, 'name' => 'Grace'],
+				],
+			],
+			[
+				'id' => 2,
+				'name' => 'Grace',
+				'latestPost' => [
+					'id' => 20,
+					'title' => 'Beta',
+					'authorId' => 2,
+					'author' => ['id' => 2, 'name' => 'Grace'],
+				],
+			],
+			[
+				'id' => 3,
+				'name' => 'Linus',
+				'latestPost' => null,
+			],
+		], $rows);
+
+		self::assertSame($rows[0]['latestPost']['authorId'], $rows[0]['latestPost']['author']['id']);
+		self::assertSame(2, $rows[0]['latestPost']['author']['id']);
+
+		$sql = $recording->derivedSql()[0] ?? '';
+
+		self::assertStringContainsString('JOIN "users" AS', $sql);
+		self::assertStringContainsString('ROW_NUMBER() OVER', $sql);
+		self::assertStringContainsString('WHERE "__ondata_first_of_many"."__ondata_rank" = ?', $sql);
+		self::assertStringContainsString('"j0"."id" AS "__on_data_latestpost_author_id_0"', $sql);
+		self::assertStringContainsString('"__ondata_first_of_many"."__on_data_latestpost_author_id_0" AS "__on_data_latestpost_author_id_0"', $sql);
+		self::assertStringNotContainsString('"__ondata_first_of_many"."author_id"', $sql);
+	}
+
 	public function testFirstOfManyRequiresDefinitionOrderMetadata(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
