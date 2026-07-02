@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Database\Cycle;
 
+use Closure;
+use Cycle\Database\Query\QueryParameters;
 use ON\Data\Database\ConnectionConfig;
 use ON\Data\Database\Database;
 use ON\Data\Database\Exception\UnsupportedQueryException;
@@ -11,6 +13,7 @@ use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\FirstOfManyRelation;
 use ON\Data\Definition\Relation\M2MRelation;
+use ON\Data\Query\DerivedQuerySource;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Exception\RelationSelectionException;
@@ -27,6 +30,7 @@ use function ON\Data\Query\x;
 use PDO;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 
 #[RequiresPhpExtension('pdo_sqlite')]
 final class CycleJoinExecutionTest extends TestCase
@@ -828,21 +832,43 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testFirstOfManyKeepsOrderedSeparateQueryBehaviorWithGenericExecutor(): void
+	public function testFirstOfManySeparateLoadingUsesWindowedDerivedQuery(): void
+	{
+		$executor = $this->executorFromDatabase($this->database);
+		$recording = new RecordingQueryExecutor(
+			$executor,
+			fn (SelectQuery $query): string => $this->compileSqlWithExecutor($executor, $query),
+		);
+		$database = new Database($recording);
+		$users = $database->query($this->registry->getCollection('users'));
+		$users->latestPost->fields('id', 'title');
+
+		$users
+			->select($users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		$sql = $recording->derivedSql()[0] ?? '';
+
+		self::assertStringContainsString('ROW_NUMBER() OVER', $sql);
+		self::assertStringContainsString('PARTITION BY', $sql);
+		self::assertStringContainsString('ORDER BY', $sql);
+		self::assertStringContainsString('__ondata_rank', $sql);
+		self::assertStringContainsString('WHERE "__ondata_first_of_many"."__ondata_rank" = ?', $sql);
+	}
+
+	public function testFirstOfManyRequiresExecutorSupportForDerivedWindowedQuery(): void
 	{
 		$database = new Database(new FirstOfManyFallbackExecutor());
 		$users = $database->query($this->registry->getCollection('users'));
 		$users->latestPost->fields('id', 'title');
 
-		$rows = $users
+		$this->expectException(UnsupportedQueryException::class);
+		$this->expectExceptionMessage('derived-source and window-expression support');
+
+		$users
 			->select($users->name)
 			->fetchAll();
-
-		self::assertSame([
-			['name' => 'Ada', 'latestPost' => ['id' => 11, 'title' => 'Alpha']],
-			['name' => 'Grace', 'latestPost' => ['id' => 20, 'title' => 'Beta']],
-			['name' => 'Linus', 'latestPost' => null],
-		], $rows);
 	}
 
 	public function testFirstOfManyWindowedLoadingKeepsInternalFieldsOutOfPublicOutput(): void
@@ -1421,12 +1447,82 @@ final class CycleJoinExecutionTest extends TestCase
 		$pdo->exec("INSERT INTO composite_article_tag (article_tenant_id, article_slug, tag_tenant_id, tag_slug) VALUES (1, 'joins', 1, 'php'), (1, 'joins', 1, 'orm')");
 		$pdo->exec("INSERT INTO departments (id, company_id, name) VALUES (1, 1, 'Engineering'), (2, 2, 'Archive')");
 	}
+
+	private function executorFromDatabase(Database $database): QueryExecutorInterface
+	{
+		$reflection = new ReflectionClass($database);
+		$property = $reflection->getProperty('executor');
+
+		return $property->getValue($database);
+	}
+
+	private function compileSqlWithExecutor(QueryExecutorInterface $executor, SelectQuery $query): string
+	{
+		$reflection = new ReflectionClass($executor);
+		$property = $reflection->getProperty('translator');
+		$translator = $property->getValue($executor);
+		$translated = $translator->translate($query);
+		$parameters = new QueryParameters();
+
+		return $translated->query()->sqlStatement($parameters);
+	}
+}
+
+final class RecordingQueryExecutor implements QueryExecutorInterface
+{
+	/**
+	 * @var list<string>
+	 */
+	private array $derivedSql = [];
+
+	/**
+	 * @param callable(SelectQuery): string $compileSql
+	 */
+	public function __construct(
+		private readonly QueryExecutorInterface $inner,
+		private readonly Closure $compileSql,
+	) {
+	}
+
+	public function fetchAll(SelectQuery $query): array
+	{
+		if ($query->getFrom() instanceof DerivedQuerySource) {
+			$this->derivedSql[] = ($this->compileSql)($query);
+		}
+
+		return $this->inner->fetchAll($query);
+	}
+
+	public function fetchOne(SelectQuery $query): ?array
+	{
+		return $this->inner->fetchOne($query);
+	}
+
+	public function iterate(SelectQuery $query): iterable
+	{
+		return $this->inner->iterate($query);
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	public function derivedSql(): array
+	{
+		return $this->derivedSql;
+	}
 }
 
 final class FirstOfManyFallbackExecutor implements QueryExecutorInterface
 {
 	public function fetchAll(SelectQuery $query): array
 	{
+		if ($query->getFrom() instanceof DerivedQuerySource) {
+			throw UnsupportedQueryException::forQuery(
+				$query,
+				'FirstOfMany windowed loading requires derived-source and window-expression support from the query executor',
+			);
+		}
+
 		return match ($query->getCollection()->getName()) {
 			'users' => [
 				['id' => 1, '__on_data_root_required_id_0' => 1, 'name' => 'Ada'],

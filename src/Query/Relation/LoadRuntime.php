@@ -126,14 +126,13 @@ final class LoadRuntime
 	{
 		$rows = $this->executor->fetchAll($query);
 
-		if ($query === $branch->getQuery()) {
-			foreach ($rows as $row) {
-				$branch->getNode()->parseRow(0, $this->orderedValues($row, $this->branchAliasTraversal($branch)));
-			}
+		foreach ($rows as $row) {
+			$branch->getNode()->parseRow(0, $this->orderedValues($row, $this->branchAliasTraversal($branch)));
 		}
 
-		$this->currentContinuationQuery = $query;
-		$this->pendingContinuationQueries[spl_object_id($query)] = $query;
+		$continuationQuery = $branch->getQuery();
+		$this->currentContinuationQuery = $continuationQuery;
+		$this->pendingContinuationQueries[spl_object_id($continuationQuery)] = $continuationQuery;
 	}
 
 	public function getLoadStrategy(RelationLoadBranch $branch): LoadStrategy

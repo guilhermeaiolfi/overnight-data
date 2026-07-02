@@ -8,6 +8,7 @@ use Cycle\Database\DatabaseInterface;
 use Cycle\Database\Injection\FragmentInterface;
 use Cycle\Database\Injection\Parameter;
 use Cycle\Database\Injection\ParameterInterface;
+use Cycle\Database\Injection\SubQuery;
 use Cycle\Database\Query\QueryParameters;
 use Cycle\Database\Query\SelectQuery as CycleSelectQuery;
 use ON\Data\Database\Exception\UnsupportedQueryException;
@@ -700,12 +701,12 @@ final class CycleQueryTranslator
 	{
 		if ($query->getFrom() instanceof DerivedQuerySource) {
 			$derived = $query->getFrom();
-			$inner = $this->compileNestedQuery($derived->getQuery(), $context, QueryUsage::DERIVED_TABLE);
+			$inner = $context->within(
+				$derived->getQuery(),
+				fn (): CycleSelectQuery => $this->compileCycleSelect($derived->getQuery(), $context, false)[0],
+			);
 
-			return SqlFragment::withParameters(
-				$inner->sql() . ' AS ' . $this->quote($context->aliasFor($derived)),
-				$inner->parameters(),
-			)->toCycleFragment();
+			return new SubQuery($inner, $context->aliasFor($derived));
 		}
 
 		$source = $this->database->getPrefix() . $this->resolvePhysicalSource($query->getCollection());

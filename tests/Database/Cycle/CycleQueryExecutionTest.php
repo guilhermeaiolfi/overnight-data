@@ -383,7 +383,7 @@ final class CycleQueryExecutionTest extends TestCase
 
 		$sql = $this->compileSql($query);
 
-		self::assertStringContainsString('FROM (SELECT', $sql);
+		self::assertMatchesRegularExpression('/FROM\s+\(\s*SELECT/', $sql);
 		self::assertStringContainsString('AS "ranked_posts"', $sql);
 		self::assertStringContainsString('"ranked_posts".*', $sql);
 		self::assertStringContainsString('"ranked_posts"."__rank"', $sql);

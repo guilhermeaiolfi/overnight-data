@@ -18,7 +18,7 @@ It is independent from the Overnight framework. The package can be consumed on i
 - No persistence or write-side unit-of-work layer.
 - No ORM adapter layer.
 - Structured relation loading supports the built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relation types.
-- Built-in `FirstOfMany` loading is separate-query-only and requires deterministic relation-level `orderBy` metadata; JOIN loading is intentionally unsupported.
+- Built-in `FirstOfMany` loading is separate-query-only, uses windowed ranking on supported SQL backends, and requires deterministic relation-level `orderBy` metadata; JOIN loading is intentionally unsupported.
 
 ## Namespace
 

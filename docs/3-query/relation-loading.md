@@ -110,9 +110,12 @@ Built-in structured relation loading currently projects:
 - `BelongsTo`: nested record or `null`
 - `HasOne`: nested record or `null`
 - `HasMany`: list of nested records or `[]`
+- `FirstOfMany`: nested record or `null`
 - `M2M`: list of target records or `[]`
 
 When a loaded relation does not specify `fields(...)`, the public projection uses that relation collection's visible fields.
+
+Built-in `FirstOfMany` loading is separate-query-only. JOIN loading is intentionally unsupported because the loader must choose one ordered child per parent without changing root row shape. The relation definition must provide deterministic `orderBy` metadata; the loader appends any missing target primary-key fields as stable tie breakers. SQL backends with the modeled window-expression and derived-source APIs load it by ranking children with `ROW_NUMBER() OVER (PARTITION BY child relation keys ORDER BY definition order, primary key tie breakers)` and filtering the derived source to rank `1`.
 
 Built-in `M2M` loading uses a loader-owned through-table shape internally. The parser/runtime keeps the through row and target row distinct, then projects the target child as the public relation payload. Internal through fields are not exposed in the final array result.
 
@@ -142,8 +145,7 @@ The acquisition strategy is loader-owned. A relation selection may override the 
 ## Current Limits
 
 - Structured loading is not the same as arbitrary related-field projection in flat scalar selections.
-- Structured loading for built-in `FirstOfMany` is implemented as separate-query loading. JOIN loading is intentionally unsupported because the loader must choose one ordered child per parent.
-- Built-in `FirstOfMany` requires deterministic relation-level `orderBy` metadata. The loader appends missing target primary-key fields as stable tie breakers.
+- Structured loading for built-in `FirstOfMany` is implemented as separate-query loading. JOIN loading is intentionally unsupported, deterministic relation-level `orderBy` metadata is required, and supported SQL backends use windowed ranking internally.
 - Joined structured loading for built-in `M2M` is not implemented yet.
 - Relation-level `where` and `orderBy` are supported for separate-query loading first; joined relation conditions and ordering are rejected by built-in loaders.
 - Future relation branch configuration should stay loader-owned and branch-local rather than moving relation-specific rules into the registry or generic runtime.

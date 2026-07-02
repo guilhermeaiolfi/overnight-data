@@ -109,6 +109,8 @@ $topPerGroup = query($ranked)
     ->where($ranked->field('rank')->eq(1));
 ```
 
+Built-in `FirstOfMany` relation loading uses this same row-number-over-derived-query pattern internally: it partitions by the child-side relation keys, orders by the relation definition order plus primary-key tie breakers, and filters the derived source to rank `1`.
+
 ## Aggregates and subqueries
 
 Supported aggregate builders are:

@@ -5,6 +5,12 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation\Loader;
 
 use ON\Data\Query\Exception\RelationLoaderException;
+use ON\Data\Query\Expression\AliasedExpression;
+use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\SourceFieldExpression;
+use ON\Data\Query\Expression\StarExpression;
+use ON\Data\Query\Expression\ValueExpressionInterface;
+use function ON\Data\Query\query;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
@@ -14,10 +20,16 @@ use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
 use ON\Data\Query\Selection\SelectionItem;
+use ON\Data\Query\SelectQuery;
+use ON\Data\Query\Sort\Sort;
 use ON\Data\Query\Sort\SortDirection;
+use function ON\Data\Query\x;
 
 final class FirstOfManyLoader extends AbstractLoader
 {
+	private const RANK_ALIAS = '__ondata_rank';
+	private const DERIVED_ALIAS = '__ondata_first_of_many';
+
 	public function getDefaultLoadStrategy(): LoadStrategy
 	{
 		return LoadStrategy::SEPARATE_QUERY;
@@ -85,8 +97,8 @@ final class FirstOfManyLoader extends AbstractLoader
 			$references,
 		);
 		$this->applySeparateQueryConditions($branch);
-		$this->applyDeterministicOrder($branch);
-		$runtime->execute($branch, $query);
+		$orderBy = $this->deterministicOrder($branch);
+		$runtime->execute($branch, $this->rankedQuery($branch, $query, $orderBy));
 	}
 
 	public function join(RelationRef $relation): QuerySourceInterface
@@ -108,7 +120,43 @@ final class FirstOfManyLoader extends AbstractLoader
 		);
 	}
 
-	private function applyDeterministicOrder(RelationLoadBranch $branch): void
+	/**
+	 * @param list<Sort> $orderBy
+	 */
+	private function rankedQuery(RelationLoadBranch $branch, SelectQuery $childQuery, array $orderBy): SelectQuery
+	{
+		$partitionBy = [];
+
+		foreach ($branch->getRelationRef()->getDefinition()->getKeyPairing()->getRightFields() as $fieldName) {
+			$partitionBy[] = $childQuery->field($fieldName);
+		}
+
+		$childQuery->select(
+			x()->fn()->rowNumber()->over(
+				partitionBy: $partitionBy,
+				orderBy: $orderBy,
+			)->as(self::RANK_ALIAS),
+		);
+
+		$ranked = $childQuery->as(self::DERIVED_ALIAS);
+		$outer = query($ranked);
+
+		foreach ($childQuery->getSelections()->getExplicit() as $selection) {
+			$expression = $selection->getExpression();
+
+			if ($expression instanceof AliasedExpression && $expression->getAlias() === self::RANK_ALIAS) {
+				continue;
+			}
+
+			$outer->select(
+				$ranked->field($this->derivedFieldName($expression))->as($selection->getSelectionKey()),
+			);
+		}
+
+		return $outer->where($ranked->field(self::RANK_ALIAS)->eq(1));
+	}
+
+	private function deterministicOrder(RelationLoadBranch $branch): array
 	{
 		$relationRef = $branch->getRelationRef();
 		$definition = $relationRef->getDefinition();
@@ -120,6 +168,7 @@ final class FirstOfManyLoader extends AbstractLoader
 
 		$query = $branch->getQuery();
 		$orderedFields = [];
+		$sorts = [];
 
 		foreach ($orderBy as $fieldName => $direction) {
 			if (is_int($fieldName)) {
@@ -130,9 +179,9 @@ final class FirstOfManyLoader extends AbstractLoader
 			$fieldName = (string) $fieldName;
 			$direction = strtolower((string) $direction);
 			$orderedFields[$fieldName] = true;
-			$query->orderBy($direction === SortDirection::DESC->value
+			$sorts[] = $direction === SortDirection::DESC->value
 				? $query->field($fieldName)->desc()
-				: $query->field($fieldName)->asc());
+				: $query->field($fieldName)->asc();
 		}
 
 		foreach ($relationRef->getCollection()->getPrimaryKey() as $fieldName) {
@@ -140,8 +189,28 @@ final class FirstOfManyLoader extends AbstractLoader
 				continue;
 			}
 
-			$query->orderBy($query->field($fieldName)->asc());
+			$sorts[] = $query->field($fieldName)->asc();
 		}
+
+		return $sorts;
+	}
+
+	private function derivedFieldName(
+		ValueExpressionInterface|AliasedExpression|StarExpression $expression,
+	): string {
+		if ($expression instanceof AliasedExpression) {
+			return $expression->getAlias();
+		}
+
+		if ($expression instanceof FieldRef) {
+			return $expression->getField()->getColumn();
+		}
+
+		if ($expression instanceof SourceFieldExpression) {
+			return $expression->getName();
+		}
+
+		return $expression->getSelectionKey();
 	}
 
 	/**
