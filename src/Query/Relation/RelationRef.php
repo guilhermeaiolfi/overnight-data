@@ -230,8 +230,10 @@ final class RelationRef implements QuerySourceInterface
 			throw new InvalidArgumentException('RelationRef::where() requires at least one condition.');
 		}
 
+		$this->assertSelectable();
+
 		array_push($this->conditions, ...$conditions);
-		$this->markSelected();
+		$this->selected = true;
 
 		return $this;
 	}
@@ -242,19 +244,22 @@ final class RelationRef implements QuerySourceInterface
 			throw new InvalidArgumentException('RelationRef::orderBy() requires at least one sort.');
 		}
 
+		$this->assertSelectable();
+
 		array_push($this->sorts, ...$sorts);
-		$this->markSelected();
+		$this->selected = true;
 
 		return $this;
 	}
 
 	public function strategy(?LoadStrategy $strategy): self
 	{
-		$this->strategy = $strategy;
-
 		if ($strategy !== null) {
-			$this->markSelected();
+			$this->assertSelectable();
+			$this->selected = true;
 		}
+
+		$this->strategy = $strategy;
 
 		return $this;
 	}

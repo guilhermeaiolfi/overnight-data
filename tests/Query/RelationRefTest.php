@@ -455,17 +455,29 @@ final class RelationRefTest extends TestCase
 	public function testHiddenRelationCannotBeSelectedByWhere(): void
 	{
 		$users = $this->makeQuery('users');
+		$condition = x()->eq($users->posts->published, true);
 
-		$this->expectException(RelationSelectionException::class);
-		$users->posts->hidden()->where(x()->eq($users->posts->published, true));
+		try {
+			$users->posts->hidden()->where($condition);
+			self::fail('Expected hidden where to throw.');
+		} catch (RelationSelectionException) {
+			self::assertSame([], $users->posts->getConditions());
+			self::assertFalse($users->posts->isLoaded());
+		}
 	}
 
 	public function testHiddenRelationCannotBeSelectedByOrderBy(): void
 	{
 		$users = $this->makeQuery('users');
+		$sort = $users->posts->title->asc();
 
-		$this->expectException(RelationSelectionException::class);
-		$users->posts->hidden()->orderBy($users->posts->title->asc());
+		try {
+			$users->posts->hidden()->orderBy($sort);
+			self::fail('Expected hidden orderBy to throw.');
+		} catch (RelationSelectionException) {
+			self::assertSame([], $users->posts->getSorts());
+			self::assertFalse($users->posts->isLoaded());
+		}
 	}
 
 	public function testHiddenRelationCannotBeSelectedByJoinOrSeparate(): void
@@ -476,13 +488,61 @@ final class RelationRefTest extends TestCase
 			$joined->posts->hidden()->join();
 			self::fail('Expected hidden join to throw.');
 		} catch (RelationSelectionException) {
+			self::assertNull($joined->posts->getStrategy());
 			self::assertFalse($joined->posts->isLoaded());
 		}
 
 		$separate = $this->makeQuery('users');
 
-		$this->expectException(RelationSelectionException::class);
-		$separate->posts->hidden()->separate();
+		try {
+			$separate->posts->hidden()->separate();
+			self::fail('Expected hidden separate to throw.');
+		} catch (RelationSelectionException) {
+			self::assertNull($separate->posts->getStrategy());
+			self::assertFalse($separate->posts->isLoaded());
+		}
+	}
+
+	public function testFailedHiddenStrategyLeavesStrategyNull(): void
+	{
+		$users = $this->makeQuery('users');
+
+		try {
+			$users->posts->hidden()->strategy(LoadStrategy::JOIN);
+			self::fail('Expected hidden strategy to throw.');
+		} catch (RelationSelectionException) {
+			self::assertNull($users->posts->getStrategy());
+			self::assertFalse($users->posts->isLoaded());
+		}
+	}
+
+	public function testFailedHiddenOptionsDoNotLeakAfterRelationIsMadeVisibleAndSelected(): void
+	{
+		$users = $this->makeQuery('users');
+		$failedCondition = x()->eq($users->posts->published, true);
+		$failedSort = $users->posts->title->asc();
+
+		foreach ([
+			static fn () => $users->posts->where($failedCondition),
+			static fn () => $users->posts->orderBy($failedSort),
+			static fn () => $users->posts->strategy(LoadStrategy::JOIN),
+		] as $attempt) {
+			try {
+				$users->posts->hidden();
+				$attempt();
+				self::fail('Expected hidden selection attempt to throw.');
+			} catch (RelationSelectionException) {
+				$users->posts->visible();
+			}
+		}
+
+		$users->posts->fields('id');
+
+		$selection = $users->getRelationSelections()->getAll()[0];
+		self::assertSame(['id'], $selection->getFields());
+		self::assertSame([], $selection->getConditions());
+		self::assertSame([], $selection->getSorts());
+		self::assertNull($selection->getStrategy());
 	}
 
 	public function testStrategyNullOnUnselectedRelationDoesNotSelectIt(): void
@@ -492,6 +552,17 @@ final class RelationRefTest extends TestCase
 		$users->posts->strategy(null);
 
 		self::assertFalse($users->posts->isLoaded());
+		self::assertSame([], $users->getRelationSelections()->getAll());
+	}
+
+	public function testStrategyNullOnHiddenUnselectedRelationDoesNotSelectIt(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$users->posts->hidden()->strategy(null);
+
+		self::assertFalse($users->posts->isLoaded());
+		self::assertNull($users->posts->getStrategy());
 		self::assertSame([], $users->getRelationSelections()->getAll());
 	}
 
