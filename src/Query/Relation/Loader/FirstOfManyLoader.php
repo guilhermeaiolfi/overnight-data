@@ -57,6 +57,10 @@ final class FirstOfManyLoader extends AbstractLoader
 			throw RelationLoaderException::firstOfManyJoinNotSupported($relationRef);
 		}
 
+		if ($branch->getSelection()->getSorts() !== []) {
+			throw RelationLoaderException::firstOfManySelectionOrderByNotSupported($relationRef);
+		}
+
 		$branch->setJoinedAttachment(false);
 
 		$query = $runtime->createQuery($relationRef->getCollection());

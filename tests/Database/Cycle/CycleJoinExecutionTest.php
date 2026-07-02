@@ -857,10 +857,41 @@ final class CycleJoinExecutionTest extends TestCase
 			->fetchAll();
 	}
 
+	public function testFirstOfManySupportsSelectionConditionsButRejectsSelectionOrderBy(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->latestPost
+			->fields('title')
+			->where(x()->eq($users->latestPost->title, 'Zulu'));
+
+		$rows = $users
+			->select($users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'latestPost' => ['title' => 'Zulu']],
+			['name' => 'Grace', 'latestPost' => null],
+			['name' => 'Linus', 'latestPost' => null],
+		], $rows);
+
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->latestPost
+			->fields('title')
+			->orderBy($users->latestPost->title->desc());
+
+		$this->expectException(RelationLoaderException::class);
+		$this->expectExceptionMessage('FirstOfMany ordering comes from deterministic definition-level orderBy metadata and selection-level orderBy is unsupported');
+
+		$users
+			->select($users->name)
+			->fetchAll();
+	}
+
 	public function testFirstOfManySupportsCompositeRelationKeysAndCompositePrimaryKeys(): void
 	{
 		$employees = $this->database->query($this->registry->getCollection('employees'));
-		$employees->latestBadge->fields('label');
+		$employees->latestBadge->fields('badgeId', 'label');
 
 		$rows = $employees
 			->select($employees->name)
@@ -868,9 +899,9 @@ final class CycleJoinExecutionTest extends TestCase
 			->fetchAll();
 
 		self::assertSame([
-			['name' => 'Ada', 'latestBadge' => ['label' => 'Core']],
-			['name' => 'Grace', 'latestBadge' => ['label' => 'Compiler']],
-			['name' => 'Linus', 'latestBadge' => ['label' => 'Kernel']],
+			['name' => 'Ada', 'latestBadge' => ['badgeId' => 1, 'label' => 'Core']],
+			['name' => 'Grace', 'latestBadge' => ['badgeId' => 1, 'label' => 'Compiler']],
+			['name' => 'Linus', 'latestBadge' => ['badgeId' => 1, 'label' => 'Kernel']],
 		], $rows);
 	}
 
@@ -1265,8 +1296,9 @@ final class CycleJoinExecutionTest extends TestCase
 		$employeeBadges->table('employee_badges');
 		$employeeBadges->field('tenantId', 'int')->column('tenant_id');
 		$employeeBadges->field('employeeName', 'string')->column('employee_name');
+		$employeeBadges->field('badgeId', 'int')->column('badge_id');
 		$employeeBadges->field('label', 'string');
-		$employeeBadges->primaryKey('tenantId', 'employeeName');
+		$employeeBadges->primaryKey('tenantId', 'employeeName', 'badgeId');
 
 		$compositeArticles = $registry->collection('composite_articles');
 		$compositeArticles->table('composite_articles');
@@ -1329,7 +1361,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$pdo->exec('CREATE TABLE article_tag (article_id INTEGER, tag_id INTEGER)');
 		$pdo->exec('CREATE TABLE accounts (tenant_id INTEGER, id INTEGER, name TEXT, PRIMARY KEY (tenant_id, id))');
 		$pdo->exec('CREATE TABLE employees (tenant_id INTEGER, account_id INTEGER, name TEXT, PRIMARY KEY (tenant_id, name))');
-		$pdo->exec('CREATE TABLE employee_badges (tenant_id INTEGER, employee_name TEXT, label TEXT, PRIMARY KEY (tenant_id, employee_name))');
+		$pdo->exec('CREATE TABLE employee_badges (tenant_id INTEGER, employee_name TEXT, badge_id INTEGER, label TEXT, PRIMARY KEY (tenant_id, employee_name, badge_id))');
 		$pdo->exec('CREATE TABLE composite_articles (tenant_id INTEGER, slug TEXT, title TEXT, PRIMARY KEY (tenant_id, slug))');
 		$pdo->exec('CREATE TABLE composite_tags (tenant_id INTEGER, slug TEXT, name TEXT, PRIMARY KEY (tenant_id, slug))');
 		$pdo->exec('CREATE TABLE composite_article_tag (article_tenant_id INTEGER, article_slug TEXT, tag_tenant_id INTEGER, tag_slug TEXT)');
@@ -1351,7 +1383,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$pdo->exec('INSERT INTO article_tag (article_id, tag_id) VALUES (1, 1), (1, 2), (2, 3)');
 		$pdo->exec("INSERT INTO accounts (tenant_id, id, name) VALUES (1, 10, 'Platform'), (2, 20, 'Infra')");
 		$pdo->exec("INSERT INTO employees (tenant_id, account_id, name) VALUES (1, 10, 'Ada'), (1, 10, 'Grace'), (2, 20, 'Linus')");
-		$pdo->exec("INSERT INTO employee_badges (tenant_id, employee_name, label) VALUES (1, 'Ada', 'Core'), (1, 'Grace', 'Compiler'), (2, 'Linus', 'Kernel')");
+		$pdo->exec("INSERT INTO employee_badges (tenant_id, employee_name, badge_id, label) VALUES (1, 'Ada', 2, 'Core'), (1, 'Ada', 1, 'Core'), (1, 'Ada', 3, 'Archive'), (1, 'Grace', 1, 'Compiler'), (2, 'Linus', 1, 'Kernel')");
 		$pdo->exec("INSERT INTO composite_articles (tenant_id, slug, title) VALUES (1, 'joins', 'Joins'), (1, 'lonely', 'Lonely')");
 		$pdo->exec("INSERT INTO composite_tags (tenant_id, slug, name) VALUES (1, 'php', 'php'), (1, 'orm', 'orm')");
 		$pdo->exec("INSERT INTO composite_article_tag (article_tenant_id, article_slug, tag_tenant_id, tag_slug) VALUES (1, 'joins', 1, 'php'), (1, 'joins', 1, 'orm')");

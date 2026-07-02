@@ -94,6 +94,14 @@ final class RelationLoaderException extends InvalidArgumentException
 		));
 	}
 
+	public static function firstOfManySelectionOrderByNotSupported(RelationRef $relation): self
+	{
+		return new self(sprintf(
+			'Relation "%s" cannot use selection-level orderBy because FirstOfMany ordering comes from deterministic definition-level orderBy metadata and selection-level orderBy is unsupported.',
+			implode('.', $relation->getPath()),
+		));
+	}
+
 	public static function throughWhereNotSupported(RelationRef $relation): self
 	{
 		return new self(sprintf(
