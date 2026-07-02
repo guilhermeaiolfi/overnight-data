@@ -95,6 +95,11 @@ final class LoadRuntime
 		return $this->rootQuery->related($collection);
 	}
 
+	public function getExecutor(): QueryExecutorInterface
+	{
+		return $this->executor;
+	}
+
 	public function setQueryContext(
 		RelationLoadBranch $branch,
 		SelectQuery $query,

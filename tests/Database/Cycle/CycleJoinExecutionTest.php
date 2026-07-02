@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Database\Cycle;
 
+use Cycle\Database\Query\QueryParameters;
 use ON\Data\Database\ConnectionConfig;
+use ON\Data\Database\Cycle\CycleQueryExecutor;
+use ON\Data\Database\Cycle\CycleTranslatedQuery;
 use ON\Data\Database\Database;
 use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\Database\QueryExecutorInterface;
@@ -26,6 +29,7 @@ use function ON\Data\Query\x;
 use PDO;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
+use ReflectionProperty;
 
 #[RequiresPhpExtension('pdo_sqlite')]
 final class CycleJoinExecutionTest extends TestCase
@@ -827,6 +831,95 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testPartitionedLimitCompilerUsesRowNumberPartitionedByChildRelationKey(): void
+	{
+		$query = $this->database->query($this->registry->getCollection('first_posts'));
+		$query
+			->select($query->id, $query->title, $query->userId)
+			->orderBy($query->rank->asc(), $query->id->asc());
+
+		$executor = $this->cycleExecutor();
+		$executor->applyPartitionedLimit(
+			$query,
+			$query,
+			['userId'],
+			$query->getSorts(),
+			1,
+			0,
+			'__test_first_row',
+		);
+
+		$sql = $this->normalizedSql($this->translatedSql($executor, $query));
+
+		self::assertStringContainsString(
+			'ROW_NUMBER() OVER (PARTITION BY "q0"."user_id" ORDER BY "q0"."rank" ASC, "q0"."id" ASC) AS "__test_first_row"',
+			$sql,
+		);
+		self::assertStringContainsString('WHERE "__ondata_partitioned"."__test_first_row" > 0 AND "__ondata_partitioned"."__test_first_row" <= 1', $sql);
+	}
+
+	public function testPartitionedLimitCompilerSupportsCompositeRelationKeysAndPrimaryKeyTieBreakers(): void
+	{
+		$query = $this->database->query($this->registry->getCollection('employee_badges'));
+		$query
+			->select($query->tenantId, $query->employeeName, $query->badgeId, $query->label)
+			->orderBy(
+				$query->label->desc(),
+				$query->tenantId->asc(),
+				$query->employeeName->asc(),
+				$query->badgeId->asc(),
+			);
+
+		$executor = $this->cycleExecutor();
+		$executor->applyPartitionedLimit(
+			$query,
+			$query,
+			['tenantId', 'employeeName'],
+			$query->getSorts(),
+			1,
+			0,
+			'__test_first_row',
+		);
+
+		$sql = $this->normalizedSql($this->translatedSql($executor, $query));
+
+		self::assertStringContainsString(
+			'PARTITION BY "q0"."tenant_id", "q0"."employee_name" ORDER BY "q0"."label" DESC, "q0"."tenant_id" ASC, "q0"."employee_name" ASC, "q0"."badge_id" ASC',
+			$sql,
+		);
+	}
+
+	public function testFirstOfManyFallsBackWhenPartitionedLimitSupportIsUnavailable(): void
+	{
+		$database = new Database(new FirstOfManyFallbackExecutor());
+		$users = $database->query($this->registry->getCollection('users'));
+		$users->latestPost->fields('id', 'title');
+
+		$rows = $users
+			->select($users->name)
+			->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'latestPost' => ['id' => 11, 'title' => 'Alpha']],
+			['name' => 'Grace', 'latestPost' => ['id' => 20, 'title' => 'Beta']],
+			['name' => 'Linus', 'latestPost' => null],
+		], $rows);
+	}
+
+	public function testFirstOfManyWindowedLoadingKeepsInternalFieldsOutOfPublicOutput(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->latestPost->fields('title');
+
+		$rows = $users
+			->select($users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame(['title'], array_keys($rows[0]['latestPost']));
+		self::assertSame(['title'], array_keys($rows[1]['latestPost']));
+	}
+
 	public function testFirstOfManyNestedLoadingAttachesBelowSingleChild(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
@@ -938,6 +1031,34 @@ final class CycleJoinExecutionTest extends TestCase
 		$users
 			->select($users->name)
 			->fetchAll();
+	}
+
+	private function cycleExecutor(): CycleQueryExecutor
+	{
+		$property = new ReflectionProperty(Database::class, 'executor');
+		$executor = $property->getValue($this->database);
+
+		self::assertInstanceOf(CycleQueryExecutor::class, $executor);
+
+		return $executor;
+	}
+
+	private function translatedSql(CycleQueryExecutor $executor, SelectQuery $query): string
+	{
+		$property = new ReflectionProperty(CycleQueryExecutor::class, 'translator');
+		$translator = $property->getValue($executor);
+		$translated = $translator->translate($query);
+
+		self::assertInstanceOf(CycleTranslatedQuery::class, $translated);
+
+		$params = new QueryParameters();
+
+		return $translated->query()->sqlStatement($params);
+	}
+
+	private function normalizedSql(string $sql): string
+	{
+		return preg_replace('/\s+/', ' ', trim($sql)) ?? $sql;
 	}
 
 	public function testRelationWhereAndOrderByAreRejected(): void
@@ -1388,5 +1509,36 @@ final class CycleJoinExecutionTest extends TestCase
 		$pdo->exec("INSERT INTO composite_tags (tenant_id, slug, name) VALUES (1, 'php', 'php'), (1, 'orm', 'orm')");
 		$pdo->exec("INSERT INTO composite_article_tag (article_tenant_id, article_slug, tag_tenant_id, tag_slug) VALUES (1, 'joins', 1, 'php'), (1, 'joins', 1, 'orm')");
 		$pdo->exec("INSERT INTO departments (id, company_id, name) VALUES (1, 1, 'Engineering'), (2, 2, 'Archive')");
+	}
+}
+
+final class FirstOfManyFallbackExecutor implements QueryExecutorInterface
+{
+	public function fetchAll(SelectQuery $query): array
+	{
+		return match ($query->getCollection()->getName()) {
+			'users' => [
+				['id' => 1, '__on_data_root_required_id_0' => 1, 'name' => 'Ada'],
+				['id' => 2, '__on_data_root_required_id_0' => 2, 'name' => 'Grace'],
+				['id' => 3, '__on_data_root_required_id_0' => 3, 'name' => 'Linus'],
+			],
+			'first_posts' => [
+				['id' => 11, 'userId' => 1, 'title' => 'Alpha'],
+				['id' => 12, 'userId' => 1, 'title' => 'Alpha'],
+				['id' => 10, 'userId' => 1, 'title' => 'Zulu'],
+				['id' => 20, 'userId' => 2, 'title' => 'Beta'],
+			],
+			default => [],
+		};
+	}
+
+	public function fetchOne(SelectQuery $query): ?array
+	{
+		return $this->fetchAll($query)[0] ?? null;
+	}
+
+	public function iterate(SelectQuery $query): iterable
+	{
+		return $this->fetchAll($query);
 	}
 }

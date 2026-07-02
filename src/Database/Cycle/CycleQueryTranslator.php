@@ -8,6 +8,7 @@ use Cycle\Database\DatabaseInterface;
 use Cycle\Database\Injection\FragmentInterface;
 use Cycle\Database\Injection\Parameter;
 use Cycle\Database\Injection\ParameterInterface;
+use Cycle\Database\Injection\SubQuery;
 use Cycle\Database\Query\QueryParameters;
 use Cycle\Database\Query\SelectQuery as CycleSelectQuery;
 use ON\Data\Database\Exception\UnsupportedQueryException;
@@ -44,7 +45,9 @@ use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Query\Sort\Sort;
 use ON\Data\Query\Sort\SortDirection;
+use WeakMap;
 
 /**
  * @internal
@@ -54,10 +57,22 @@ final class CycleQueryTranslator
 	public function __construct(
 		private readonly DatabaseInterface $database,
 		private readonly ConversionGateway $gateway,
+		private readonly ?WeakMap $partitionedLimits = null,
 	) {
 	}
 
 	public function translate(SelectQuery $query): CycleTranslatedQuery
+	{
+		$partitionedLimit = $this->partitionedLimits[$query] ?? null;
+
+		if ($partitionedLimit instanceof CyclePartitionedLimit) {
+			return $this->translatePartitionedLimit($query, $partitionedLimit);
+		}
+
+		return $this->translateBase($query);
+	}
+
+	private function translateBase(SelectQuery $query): CycleTranslatedQuery
 	{
 		$context = new CycleTranslationContext($query, $this->database->getDriver()->getQueryCompiler());
 
@@ -94,6 +109,81 @@ final class CycleQueryTranslator
 
 			return new CycleTranslatedQuery($cycle, $resultColumns);
 		});
+	}
+
+	private function translatePartitionedLimit(SelectQuery $query, CyclePartitionedLimit $partitionedLimit): CycleTranslatedQuery
+	{
+		$context = new CycleTranslationContext($query, $this->database->getDriver()->getQueryCompiler());
+
+		return $context->within($query, function () use ($query, $partitionedLimit, $context): CycleTranslatedQuery {
+			$base = $this->translateBase($query);
+			$inner = clone $base->query();
+			$inner->columns([
+				...$inner->getColumns(),
+				$this->partitionRowNumberColumn($partitionedLimit, $context)->toCycleFragment(),
+			]);
+
+			$outerAlias = '__ondata_partitioned';
+			$rowNumberColumn = $this->quote($outerAlias . '.' . $partitionedLimit->rowNumberAlias());
+			$upperBound = $partitionedLimit->offset() + $partitionedLimit->limit();
+			$outer = $this->database->select();
+
+			$outer->from(new SubQuery($inner, $outerAlias));
+
+			$outer->columns(array_map(
+				fn (CycleResultColumn $column): FragmentInterface => SqlFragment::raw(sprintf(
+					'%s AS %s',
+					$this->quote($outerAlias . '.' . $column->backendName()),
+					$this->quoteResultAlias($column->backendName()),
+				))->toCycleFragment(),
+				$base->columns(),
+			));
+
+			$outer->where(SqlFragment::raw(sprintf(
+				'%s > %d AND %s <= %d',
+				$rowNumberColumn,
+				$partitionedLimit->offset(),
+				$rowNumberColumn,
+				$upperBound,
+			))->toCycleFragment());
+
+			return new CycleTranslatedQuery($outer, $base->columns());
+		});
+	}
+
+	private function partitionRowNumberColumn(
+		CyclePartitionedLimit $partitionedLimit,
+		CycleTranslationContext $context,
+	): SqlFragment {
+		$partitionBy = array_map(
+			fn (string $field): SqlFragment => $this->translateExpression(
+				$partitionedLimit->source()->field($field),
+				$context,
+			),
+			$partitionedLimit->partitionFields(),
+		);
+		$orderBy = array_map(function (Sort $sort) use ($context): SqlFragment {
+			$expression = $this->translateExpression($sort->getExpression(), $context);
+
+			return SqlFragment::withParameters(
+				sprintf(
+					'%s %s',
+					$expression->sql(),
+					$sort->getDirection() === SortDirection::ASC ? 'ASC' : 'DESC',
+				),
+				$expression->parameters(),
+			);
+		}, $partitionedLimit->orderBy());
+
+		return SqlFragment::withParameters(
+			sprintf(
+				'ROW_NUMBER() OVER (PARTITION BY %s ORDER BY %s) AS %s',
+				implode(', ', array_map(static fn (SqlFragment $fragment): string => $fragment->sql(), $partitionBy)),
+				implode(', ', array_map(static fn (SqlFragment $fragment): string => $fragment->sql(), $orderBy)),
+				$this->quoteResultAlias($partitionedLimit->rowNumberAlias()),
+			),
+			array_merge($this->mergeParameters($partitionBy), $this->mergeParameters($orderBy)),
+		);
 	}
 
 	/**

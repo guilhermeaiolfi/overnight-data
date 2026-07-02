@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation\Loader;
 
+use ON\Data\Database\QueryPartitionLimiter;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
@@ -85,8 +86,20 @@ final class FirstOfManyLoader extends AbstractLoader
 			$references,
 		);
 		$this->applySeparateQueryConditions($branch);
-		$this->applyDeterministicOrder($branch);
-		$runtime->execute($branch, $query);
+		$orderBy = $this->applyDeterministicOrder($branch);
+		$executable = $runtime->getExecutor() instanceof QueryPartitionLimiter
+			? $runtime->getExecutor()->applyPartitionedLimit(
+				$query,
+				$query,
+				$branch->getRelationRef()->getDefinition()->getKeyPairing()->getRightFields(),
+				$orderBy,
+				1,
+				0,
+				'__ondata_first_of_many_row_number',
+			)
+			: $query;
+
+		$runtime->execute($branch, $executable);
 	}
 
 	public function join(RelationRef $relation): QuerySourceInterface
@@ -108,7 +121,10 @@ final class FirstOfManyLoader extends AbstractLoader
 		);
 	}
 
-	private function applyDeterministicOrder(RelationLoadBranch $branch): void
+	/**
+	 * @return non-empty-list<\ON\Data\Query\Sort\Sort>
+	 */
+	private function applyDeterministicOrder(RelationLoadBranch $branch): array
 	{
 		$relationRef = $branch->getRelationRef();
 		$definition = $relationRef->getDefinition();
@@ -120,6 +136,7 @@ final class FirstOfManyLoader extends AbstractLoader
 
 		$query = $branch->getQuery();
 		$orderedFields = [];
+		$sorts = [];
 
 		foreach ($orderBy as $fieldName => $direction) {
 			if (is_int($fieldName)) {
@@ -130,9 +147,10 @@ final class FirstOfManyLoader extends AbstractLoader
 			$fieldName = (string) $fieldName;
 			$direction = strtolower((string) $direction);
 			$orderedFields[$fieldName] = true;
-			$query->orderBy($direction === SortDirection::DESC->value
+			$sorts[] = $direction === SortDirection::DESC->value
 				? $query->field($fieldName)->desc()
-				: $query->field($fieldName)->asc());
+				: $query->field($fieldName)->asc();
+			$query->orderBy($sorts[array_key_last($sorts)]);
 		}
 
 		foreach ($relationRef->getCollection()->getPrimaryKey() as $fieldName) {
@@ -140,8 +158,11 @@ final class FirstOfManyLoader extends AbstractLoader
 				continue;
 			}
 
-			$query->orderBy($query->field($fieldName)->asc());
+			$sorts[] = $query->field($fieldName)->asc();
+			$query->orderBy($sorts[array_key_last($sorts)]);
 		}
+
+		return $sorts;
 	}
 
 	/**

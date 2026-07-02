@@ -9,22 +9,57 @@ use Cycle\Database\StatementInterface;
 use ON\Data\Database\Exception\QueryExecutionException;
 use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\Database\QueryExecutorInterface;
+use ON\Data\Database\QueryPartitionLimiter;
 use ON\Data\Mapper\ConversionGateway;
+use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Query\Sort\Sort;
 use Throwable;
+use WeakMap;
 
-final class CycleQueryExecutor implements QueryExecutorInterface
+final class CycleQueryExecutor implements QueryExecutorInterface, QueryPartitionLimiter
 {
 	private readonly CycleQueryTranslator $translator;
 
 	private readonly CycleResultMapper $mapper;
 
+	/**
+	 * @var WeakMap<SelectQuery, CyclePartitionedLimit>
+	 */
+	private readonly WeakMap $partitionedLimits;
+
 	public function __construct(
 		private readonly DatabaseInterface $database,
 		ConversionGateway $gateway,
 	) {
-		$this->translator = new CycleQueryTranslator($this->database, $gateway);
+		$this->partitionedLimits = new WeakMap();
+		$this->translator = new CycleQueryTranslator($this->database, $gateway, $this->partitionedLimits);
 		$this->mapper = new CycleResultMapper($gateway);
+	}
+
+	/**
+	 * @param non-empty-list<string> $partitionFields
+	 * @param non-empty-list<Sort> $orderBy
+	 */
+	public function applyPartitionedLimit(
+		SelectQuery $query,
+		QuerySourceInterface $source,
+		array $partitionFields,
+		array $orderBy,
+		int $limit,
+		int $offset,
+		string $rowNumberAlias,
+	): SelectQuery {
+		$this->partitionedLimits[$query] = new CyclePartitionedLimit(
+			$source,
+			$partitionFields,
+			$orderBy,
+			$limit,
+			$offset,
+			$rowNumberAlias,
+		);
+
+		return $query;
 	}
 
 	public function fetchAll(SelectQuery $query): array
