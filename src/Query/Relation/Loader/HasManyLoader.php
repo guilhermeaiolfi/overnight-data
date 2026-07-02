@@ -16,6 +16,7 @@ use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\CollectionNode;
 use ON\Data\Query\Selection\SelectionItem;
+use ON\Data\Query\Selection\SelectionReason;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
 use function ON\Data\Query\x;
@@ -144,64 +145,45 @@ final class HasManyLoader extends AbstractLoader
 		$selection = $branch->getSelection();
 		$partitionBy = [];
 		$inner = query($childQuery->getCollection());
-		$selections = $childQuery->getSelections()->getExplicit();
 		$relationKeyFields = $branch->getRelationRef()->getDefinition()->getKeyPairing()->getRightFields();
-		$projectedKeys = [];
 
 		foreach ($relationKeyFields as $fieldName) {
 			$partitionBy[] = $inner->field($fieldName);
 		}
 
-		foreach ($selections as $selectionItem) {
-			$projectedKeys[$selectionItem->getSelectionKey()] = true;
-			$inner->select($selectionItem->getProjectedExpression($childQuery, $inner));
-		}
+		$inner->getSelections()->addProjectedFrom(
+			$childQuery->getSelections(),
+			from: $childQuery,
+			to: $inner,
+		);
 
 		foreach ($relationKeyFields as $fieldName) {
-			if (isset($projectedKeys[$fieldName])) {
-				continue;
-			}
-
-			$projectedKeys[$fieldName] = true;
-			$inner->select($inner->field($fieldName)->as($fieldName));
+			$inner->getSelections()->ensureInternalField($inner->field($fieldName));
 		}
 
 		if ($childQuery->getConditions() !== []) {
 			$inner->bindConditions($childQuery, ...$childQuery->getConditions());
 		}
 
-		$inner->select(
+		$inner->getSelections()->ensureInternalExpression(
 			x()->fn()->rowNumber()->over(
 				partitionBy: $partitionBy,
 				orderBy: array_map(
 					static fn (Sort $sort): Sort => $sort->bindTo($inner, from: $childQuery),
 					$orderBy,
 				),
-			)->as(self::RANK_ALIAS),
+			),
+			self::RANK_ALIAS,
 		);
 
 		$ranked = $inner->as(self::DERIVED_ALIAS);
 		$outer = query($ranked);
-		$outerSelectedKeys = [];
 
-		foreach ($selections as $selectionItem) {
-			$key = $selectionItem->getSelectionKey();
-
-			if ($key === self::RANK_ALIAS) {
-				continue;
-			}
-
-			$outerSelectedKeys[$key] = true;
-			$outer->select($ranked->field($key)->as($key));
-		}
-
-		foreach ($relationKeyFields as $fieldName) {
-			if (! isset($projectedKeys[$fieldName]) || isset($outerSelectedKeys[$fieldName])) {
-				continue;
-			}
-
-			$outer->select($ranked->field($fieldName)->as($fieldName));
-		}
+		$outer->getSelections()->addProjectedFrom(
+			$inner->getSelections(),
+			from: $ranked,
+			to: $outer,
+		);
 
 		$offset = $selection->getOffset();
 		$limit = $selection->getLimit();

@@ -41,16 +41,22 @@ final class SelectionItem
 		?QuerySourceInterface $from = null,
 		?QuerySourceInterface $to = null,
 	): ValueExpressionInterface|AliasedExpression|StarExpression {
-		if ($this->expression instanceof StarExpression) {
-			return $this->expression;
-		}
-
 		$expression = $this->expression instanceof AliasedExpression
 			? $this->expression->getExpression()
 			: $this->expression;
 
 		if ($from !== null && $to !== null) {
-			$expression = $expression->bindTo($to, from: $from);
+			if ($from instanceof \ON\Data\Query\SelectQuery && $from->actsAsSource()) {
+				$expression = $expression instanceof StarExpression
+					? $from->all()
+					: $from->field($this->getSelectionKey());
+			} else {
+				$expression = $expression->bindTo($to, from: $from);
+			}
+		}
+
+		if ($expression instanceof StarExpression) {
+			return $expression;
 		}
 
 		if ($this->expression instanceof AliasedExpression) {

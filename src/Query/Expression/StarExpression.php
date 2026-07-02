@@ -33,6 +33,10 @@ final class StarExpression
 
 	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
 	{
+		if ($from !== null && $this->source === $from) {
+			return $target->all();
+		}
+
 		return $this;
 	}
 

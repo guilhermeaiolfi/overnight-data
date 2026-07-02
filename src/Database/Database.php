@@ -6,7 +6,6 @@ namespace ON\Data\Database;
 
 use ON\Data\Database\Cycle\CycleDatabaseFactory;
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Query\DerivedQuerySource;
 use ON\Data\Query\SelectQuery;
 
 final class Database
@@ -21,7 +20,7 @@ final class Database
 		return (new CycleDatabaseFactory())->create($config);
 	}
 
-	public function query(CollectionInterface|DerivedQuerySource $source): SelectQuery
+	public function query(CollectionInterface|SelectQuery $source): SelectQuery
 	{
 		return new SelectQuery($source, $this->executor);
 	}

@@ -53,7 +53,7 @@ final class FieldRef extends AbstractAggregateableExpression
 		];
 	}
 
-	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self|SourceFieldExpression
 	{
 		if ($from === null) {
 			throw new InvalidArgumentException('FieldRef::bindTo() requires an explicit source.');

@@ -28,7 +28,6 @@ use ON\Data\Query\Condition\LogicalOperator;
 use ON\Data\Query\Condition\NotCondition;
 use ON\Data\Query\Condition\NullCondition;
 use ON\Data\Query\Condition\NullOperator;
-use ON\Data\Query\DerivedQuerySource;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Expression\AggregateExpression;
 use ON\Data\Query\Expression\AggregateFunction;
@@ -156,7 +155,13 @@ final class CycleQueryTranslator
 			$visible = ! $root || $selection->isExplicit();
 
 			if ($expression instanceof StarExpression) {
-				$columns[] = $this->translateStar($expression, $context)->toCycleFragment();
+				if (! $root && $query->actsAsSource()) {
+					foreach ($this->expandSourceStar($expression, $context) as $column) {
+						$columns[] = $column->toCycleFragment();
+					}
+				} else {
+					$columns[] = $this->translateStar($expression, $context)->toCycleFragment();
+				}
 
 				if ($root) {
 					foreach ($this->starResultColumns($expression) as $resultColumn) {
@@ -410,13 +415,32 @@ final class CycleQueryTranslator
 	}
 
 	/**
+	 * @return list<SqlFragment>
+	 */
+	private function expandSourceStar(StarExpression $expression, CycleTranslationContext $context): array
+	{
+		$alias = $context->aliasFor($expression->getSource());
+		$columns = [];
+
+		foreach ($this->starResultColumns($expression) as $column) {
+			$columns[] = SqlFragment::raw(
+				$this->quoteQualified($alias, $column->backendName())
+				. ' AS '
+				. $this->quoteResultAlias($column->logicalName()),
+			);
+		}
+
+		return $columns;
+	}
+
+	/**
 	 * @return list<CycleResultColumn>
 	 */
 	private function starResultColumns(StarExpression $expression): array
 	{
 		$source = $expression->getSource();
 
-		if ($source instanceof SelectQuery) {
+		if ($source instanceof SelectQuery && ! $source->isDerivedSource()) {
 			$columns = [];
 
 			foreach ($source->getCollection()->getVisibleFields() as $fieldName) {
@@ -427,7 +451,7 @@ final class CycleQueryTranslator
 			return $columns;
 		}
 
-		if ($source instanceof DerivedQuerySource) {
+		if ($source instanceof SelectQuery) {
 			return array_map(
 				static fn (string $name): CycleResultColumn => new CycleResultColumn($name, $name, true),
 				$this->derivedSelectionNames($source),
@@ -440,11 +464,11 @@ final class CycleQueryTranslator
 	/**
 	 * @return list<string>
 	 */
-	private function derivedSelectionNames(DerivedQuerySource $source): array
+	private function derivedSelectionNames(SelectQuery $source): array
 	{
 		$names = [];
 
-		foreach ($source->getQuery()->getSelections()->getExplicit() as $selection) {
+		foreach ($source->getSelections()->getExplicit() as $selection) {
 			$expression = $selection->getExpression();
 			if ($expression instanceof AliasedExpression) {
 				$names[] = $expression->getAlias();
@@ -465,8 +489,8 @@ final class CycleQueryTranslator
 			}
 
 			if ($expression instanceof StarExpression && $expression->getSource() instanceof SelectQuery) {
-				foreach ($expression->getSource()->getCollection()->getVisibleFields() as $fieldName) {
-					$names[] = $expression->getSource()->getCollection()->getField($fieldName)->getColumn();
+				foreach ($this->starResultColumns($expression) as $column) {
+					$names[] = $column->backendName();
 				}
 			}
 		}
@@ -699,14 +723,14 @@ final class CycleQueryTranslator
 
 	private function fromSource(SelectQuery $query, CycleTranslationContext $context): FragmentInterface
 	{
-		if ($query->getFrom() instanceof DerivedQuerySource) {
+		if ($query->getFrom() instanceof SelectQuery) {
 			$derived = $query->getFrom();
 			$inner = $context->within(
-				$derived->getQuery(),
-				fn (): CycleSelectQuery => $this->compileCycleSelect($derived->getQuery(), $context, false)[0],
+				$derived,
+				fn (): CycleSelectQuery => $this->compileCycleSelect($derived, $context, false)[0],
 			);
 
-			return new SubQuery($inner, $context->aliasFor($derived));
+			return new SubQuery($inner, $derived->requireAlias());
 		}
 
 		$source = $this->database->getPrefix() . $this->resolvePhysicalSource($query->getCollection());

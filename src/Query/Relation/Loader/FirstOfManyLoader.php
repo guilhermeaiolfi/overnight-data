@@ -15,6 +15,7 @@ use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
 use ON\Data\Query\Selection\SelectionItem;
+use ON\Data\Query\Selection\SelectionReason;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
 use ON\Data\Query\Sort\SortDirection;
@@ -122,42 +123,36 @@ final class FirstOfManyLoader extends AbstractLoader
 	{
 		$inner = query($childQuery->getCollection());
 		$partitionBy = [];
-		$selections = $childQuery->getSelections()->getExplicit();
 
 		foreach ($branch->getRelationRef()->getDefinition()->getKeyPairing()->getRightFields() as $fieldName) {
 			$partitionBy[] = $inner->field($fieldName);
 		}
 
-		foreach ($selections as $selection) {
-			$inner->select($selection->getProjectedExpression($childQuery, $inner));
-		}
+		$inner->getSelections()->addProjectedFrom($childQuery->getSelections(), from: $childQuery, to: $inner);
 
 		if ($childQuery->getConditions() !== []) {
 			$inner->bindConditions($childQuery, ...$childQuery->getConditions());
 		}
 
-		$inner->select(
+		$inner->getSelections()->ensureInternalExpression(
 			x()->fn()->rowNumber()->over(
 				partitionBy: $partitionBy,
 				orderBy: array_map(
 					static fn (Sort $sort): Sort => $sort->bindTo($inner, from: $childQuery),
 					$orderBy,
 				),
-			)->as(self::RANK_ALIAS),
+			),
+			self::RANK_ALIAS,
 		);
 
 		$ranked = $inner->as(self::DERIVED_ALIAS);
 		$outer = query($ranked);
 
-		foreach ($selections as $selection) {
-			$key = $selection->getSelectionKey();
-
-			if ($key === self::RANK_ALIAS) {
-				continue;
-			}
-
-			$outer->select($ranked->field($key)->as($key));
-		}
+		$outer->getSelections()->addProjectedFrom(
+			$inner->getSelections(),
+			from: $ranked,
+			to: $outer,
+		);
 
 		return $outer->where($ranked->field(self::RANK_ALIAS)->eq(1));
 	}

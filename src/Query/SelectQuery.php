@@ -29,6 +29,8 @@ use ON\Data\Query\Sort\Sort;
 
 final class SelectQuery implements QuerySourceInterface
 {
+	private const AUTO_ALIAS_PREFIX = 'd';
+
 	/**
 	 * @var array<string, FieldRef>
 	 */
@@ -72,8 +74,19 @@ final class SelectQuery implements QuerySourceInterface
 
 	private ?int $offset = null;
 
+	/**
+	 * @var array<string, SourceFieldExpression>
+	 */
+	private array $projectedFieldRefs = [];
+
+	private ?string $alias = null;
+
+	private ?StarExpression $sourceStar = null;
+
+	private bool $sourceView = false;
+
 	public function __construct(
-		private readonly CollectionInterface|DerivedQuerySource $source,
+		private readonly CollectionInterface|SelectQuery $source,
 		private ?QueryExecutorInterface $executor = null,
 	) {
 		$this->selections = new SelectionList();
@@ -93,7 +106,7 @@ final class SelectQuery implements QuerySourceInterface
 		return $this->source;
 	}
 
-	public function getFrom(): CollectionInterface|DerivedQuerySource
+	public function getFrom(): CollectionInterface|SelectQuery
 	{
 		return $this->source;
 	}
@@ -109,12 +122,32 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function getPath(): array
 	{
+		if ($this->actsAsSource()) {
+			return [$this->requireAlias()];
+		}
+
 		return [];
+	}
+
+	public function getAlias(): ?string
+	{
+		return $this->alias;
+	}
+
+	public function requireAlias(): string
+	{
+		if ($this->alias !== null) {
+			return $this->alias;
+		}
+
+		$this->alias = self::AUTO_ALIAS_PREFIX . spl_object_id($this);
+
+		return $this->alias;
 	}
 
 	public function isExecutable(): bool
 	{
-		return $this->executor instanceof QueryExecutorInterface;
+		return ! $this->actsAsSource() && $this->executor instanceof QueryExecutorInterface;
 	}
 
 	public function detach(): self
@@ -126,8 +159,25 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function field(string $name): FieldRef|SourceFieldExpression
 	{
-		if ($this->source instanceof DerivedQuerySource) {
-			return $this->source->field($name);
+		$name = trim($name);
+
+		if ($name === '') {
+			throw new InvalidArgumentException('SelectQuery::field() requires a non-empty field name.');
+		}
+
+		if ($this->actsAsSource()) {
+			if ($this->source instanceof SelectQuery && $this->source->exposesField($name)) {
+				return $this->projectedFieldRefs[$name] ??= new SourceFieldExpression($this, $name);
+			}
+
+			if (
+				$this->source instanceof CollectionInterface
+				&& ($this->selections->hasNamedExpression($name) || $this->exposesField($name))
+			) {
+				return $this->projectedFieldRefs[$name] ??= new SourceFieldExpression($this, $name);
+			}
+
+			throw UnknownQueryFieldException::forDefinition($name, $this->getSourceName());
 		}
 
 		if (isset($this->fieldRefs[$name])) {
@@ -145,7 +195,7 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function relation(string $name): RelationRef
 	{
-		if (! $this->source instanceof CollectionInterface) {
+		if (! $this->source instanceof CollectionInterface || $this->actsAsSource()) {
 			throw new InvalidArgumentException('Derived query sources do not support relation loading.');
 		}
 
@@ -164,7 +214,7 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function __get(string $name): FieldRef|RelationRef
 	{
-		if (! $this->source instanceof CollectionInterface) {
+		if (! $this->source instanceof CollectionInterface || $this->actsAsSource()) {
 			throw new InvalidArgumentException('Derived query sources do not support magic member access; use field() for selected fields.');
 		}
 
@@ -181,6 +231,10 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function star(): StarExpression
 	{
+		if ($this->actsAsSource()) {
+			return $this->sourceStar ??= new StarExpression($this);
+		}
+
 		return $this->star ??= new StarExpression($this);
 	}
 
@@ -189,9 +243,36 @@ final class SelectQuery implements QuerySourceInterface
 		return $this->star();
 	}
 
-	public function as(?string $alias = null): DerivedQuerySource
+	public function as(?string $alias = null): self
 	{
-		return new DerivedQuerySource($this, $alias);
+		if ($alias !== null && trim($alias) === '') {
+			throw new InvalidArgumentException('Derived query source aliases cannot be empty.');
+		}
+
+		$clone = new self($this->source);
+		$clone->alias = $alias === null ? null : trim($alias);
+		$clone->conditions = array_map(
+			fn (ConditionInterface $condition): ConditionInterface => $condition->bindTo($clone, from: $this),
+			$this->conditions,
+		);
+		$clone->groups = array_map(
+			fn (ValueExpressionInterface $group): ValueExpressionInterface => $group->bindTo($clone, from: $this),
+			$this->groups,
+		);
+		$clone->havingConditions = array_map(
+			fn (ConditionInterface $condition): ConditionInterface => $condition->bindTo($clone, from: $this),
+			$this->havingConditions,
+		);
+		$clone->sorts = array_map(
+			fn (Sort $sort): Sort => $sort->bindTo($clone, from: $this),
+			$this->sorts,
+		);
+		$clone->limit = $this->limit;
+		$clone->offset = $this->offset;
+		$clone->getSelections()->addProjectedFrom($this->selections, from: $this, to: $clone);
+		$clone->sourceView = true;
+
+		return $clone;
 	}
 
 	public function select(ValueExpressionInterface|AliasedExpression|StarExpression|SelectQuery ...$expressions): self
@@ -474,6 +555,27 @@ final class SelectQuery implements QuerySourceInterface
 	public function related(CollectionInterface $collection): self
 	{
 		return new self($collection, $this->executor);
+	}
+
+	public function exposesField(string $name): bool
+	{
+		foreach ($this->selections->getAll() as $selection) {
+			if ($selection->getSelectionKey() === $name) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public function isDerivedSource(): bool
+	{
+		return $this->source instanceof SelectQuery;
+	}
+
+	public function actsAsSource(): bool
+	{
+		return $this->sourceView || $this->isDerivedSource();
 	}
 
 	private function normalizeValueExpression(ValueExpressionInterface|SelectQuery $expression): ValueExpressionInterface

@@ -6,7 +6,6 @@ namespace ON\Data\Database\Cycle;
 
 use Cycle\Database\Driver\CompilerInterface;
 use ON\Data\Database\Exception\UnsupportedQueryException;
-use ON\Data\Query\DerivedQuerySource;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
@@ -54,19 +53,27 @@ final class CycleTranslationContext
 		$id = spl_object_id($source);
 
 		if (isset($this->aliases[$id])) {
+			if ($source instanceof SelectQuery && $source->actsAsSource() && ! $this->isCurrent($source)) {
+				return $source->requireAlias();
+			}
+
 			return $this->aliases[$id];
 		}
 
 		if ($source instanceof SelectQuery) {
+			if ($source->isDerivedSource()) {
+				return $this->aliases[$id] = $source->requireAlias();
+			}
+
+			if ($source->actsAsSource() && ! $this->isCurrent($source)) {
+				return $source->requireAlias();
+			}
+
+			if ($source->getAlias() !== null) {
+				return $this->aliases[$id] = $source->getAlias();
+			}
+
 			return $this->aliases[$id] = 'q' . $this->nextQueryAlias++;
-		}
-
-		if ($source instanceof DerivedQuerySource && $source->getAlias() !== null) {
-			return $this->aliases[$id] = $source->getAlias();
-		}
-
-		if ($source instanceof DerivedQuerySource) {
-			return $this->aliases[$id] = 'd' . $this->nextQueryAlias++;
 		}
 
 		$queryId = spl_object_id($source->getQuery());

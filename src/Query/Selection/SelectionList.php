@@ -9,8 +9,11 @@ use Countable;
 use InvalidArgumentException;
 use IteratorAggregate;
 use ON\Data\Query\Expression\AliasedExpression;
+use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\SourceFieldExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
+use ON\Data\Query\QuerySourceInterface;
 use Traversable;
 
 /**
@@ -145,6 +148,64 @@ final class SelectionList implements IteratorAggregate, Countable
 	public function require(ValueExpressionInterface|AliasedExpression|StarExpression $expression, string $reason): void
 	{
 		$this->add($expression, $reason);
+	}
+
+	public function merge(self $other): void
+	{
+		foreach ($other->getAll() as $selection) {
+			$this->add(
+				$selection->getExpression(),
+				$selection->getReasons(),
+				$selection->isExplicit(),
+			);
+		}
+	}
+
+	public function projectTo(QuerySourceInterface $from, QuerySourceInterface $to): self
+	{
+		$projected = new self();
+
+		foreach ($this->entries as $entry) {
+			$projected->add(
+				$entry->getProjectedExpression($from, $to),
+				$entry->getReasons(),
+				$entry->isExplicit(),
+			);
+		}
+
+		return $projected;
+	}
+
+	public function addProjectedFrom(self $other, QuerySourceInterface $from, QuerySourceInterface $to): void
+	{
+		$this->merge($other->projectTo($from, $to));
+	}
+
+	public function ensureField(FieldRef|SourceFieldExpression $field, string $reason): SelectionItem
+	{
+		return $this->add($field, $reason);
+	}
+
+	public function ensureInternalField(FieldRef|SourceFieldExpression $field): SelectionItem
+	{
+		foreach ($this->entries as $entry) {
+			if ($entry->getSelectionKey() !== $field->getSelectionKey()) {
+				continue;
+			}
+
+			if ($entry->isExplicit() || $entry->getExpression() instanceof AliasedExpression) {
+				return $this->add($entry->getExpression(), SelectionReason::INTERNAL, $entry->isExplicit());
+			}
+
+			break;
+		}
+
+		return $this->add($field->as($field->getSelectionKey()), SelectionReason::INTERNAL);
+	}
+
+	public function ensureInternalExpression(ValueExpressionInterface $expression, string $alias): SelectionItem
+	{
+		return $this->add($expression->as($alias), SelectionReason::INTERNAL);
 	}
 
 	private function expressionsMatch(
