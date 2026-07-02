@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation\Loader;
 
-use ON\Data\Database\QueryPartitionLimiter;
 use ON\Data\Query\Exception\RelationLoaderException;
+use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\RawSqlExpression;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
@@ -15,10 +16,15 @@ use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
 use ON\Data\Query\Selection\SelectionItem;
+use ON\Data\Query\SelectQuery;
+use ON\Data\Query\Sort\Sort;
 use ON\Data\Query\Sort\SortDirection;
+use function ON\Data\Query\x;
 
 final class FirstOfManyLoader extends AbstractLoader
 {
+	private const ROW_NUMBER_ALIAS = '__ondata_row_number';
+
 	public function getDefaultLoadStrategy(): LoadStrategy
 	{
 		return LoadStrategy::SEPARATE_QUERY;
@@ -87,17 +93,10 @@ final class FirstOfManyLoader extends AbstractLoader
 		);
 		$this->applySeparateQueryConditions($branch);
 		$orderBy = $this->applyDeterministicOrder($branch);
-		$executable = $runtime->getExecutor() instanceof QueryPartitionLimiter
-			? $runtime->getExecutor()->applyPartitionedLimit(
-				$query,
-				$query,
-				$branch->getRelationRef()->getDefinition()->getKeyPairing()->getRightFields(),
-				$orderBy,
-				1,
-				0,
-				'__ondata_first_of_many_row_number',
-			)
-			: $query;
+		$query->select($this->rowNumberExpression($branch, $orderBy)->as(self::ROW_NUMBER_ALIAS));
+		$executable = $this->rankedOuterQuery($branch, $runtime, $query);
+
+		$runtime->setQueryContext($branch, $executable, $executable);
 
 		$runtime->execute($branch, $executable);
 	}
@@ -163,6 +162,67 @@ final class FirstOfManyLoader extends AbstractLoader
 		}
 
 		return $sorts;
+	}
+
+	/**
+	 * @param non-empty-list<Sort> $orderBy
+	 */
+	private function rowNumberExpression(RelationLoadBranch $branch, array $orderBy): RawSqlExpression
+	{
+		$relationRef = $branch->getRelationRef();
+		$query = $branch->getQuery();
+		$partitionBy = array_map(
+			fn (string $field): string => $this->qualifiedColumn($query, $field),
+			$relationRef->getDefinition()->getKeyPairing()->getRightFields(),
+		);
+		$orderSql = array_map(
+			fn (Sort $sort): string => $this->sortSql($query, $sort),
+			$orderBy,
+		);
+
+		return x()->rawSql(sprintf(
+			'ROW_NUMBER() OVER (PARTITION BY %s ORDER BY %s)',
+			implode(', ', $partitionBy),
+			implode(', ', $orderSql),
+		));
+	}
+
+	private function rankedOuterQuery(
+		RelationLoadBranch $branch,
+		LoadRuntime $runtime,
+		SelectQuery $ranked,
+	): SelectQuery {
+		$outer = $runtime->createQuery($branch->getRelationRef()->getCollection())->from($ranked);
+
+		foreach ($ranked->getSelections()->getExplicit() as $selection) {
+			$key = $selection->getSelectionKey();
+
+			if ($key === self::ROW_NUMBER_ALIAS) {
+				continue;
+			}
+
+			$outer->select(x()->rawSql($key)->as($key));
+		}
+
+		$outer->where(x()->eq(x()->rawSql(self::ROW_NUMBER_ALIAS), 1));
+
+		return $outer;
+	}
+
+	private function sortSql(SelectQuery $query, Sort $sort): string
+	{
+		$expression = $sort->getExpression();
+
+		if (! $expression instanceof FieldRef) {
+			return $expression->getSelectionKey() . ' ' . strtoupper($sort->getDirection()->value);
+		}
+
+		return $this->qualifiedColumn($query, $expression->getName()) . ' ' . strtoupper($sort->getDirection()->value);
+	}
+
+	private function qualifiedColumn(SelectQuery $query, string $fieldName): string
+	{
+		return 'q0.' . $query->field($fieldName)->getField()->getColumn();
 	}
 
 	/**

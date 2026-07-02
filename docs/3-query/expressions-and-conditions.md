@@ -8,6 +8,7 @@ The main scalar expression sources are:
 
 - `FieldRef`
 - `LiteralExpression`
+- `RawSqlExpression`
 - `SubqueryExpression`
 - `ValueOperationExpression`
 - `AggregateExpression`
@@ -45,6 +46,25 @@ $u->email->lower();
 ```
 
 These operations are semantic. They do not encode SQL function names.
+
+## Raw SQL escape hatch
+
+`x()->rawSql()` creates an advanced escape-hatch expression for SQL features that are not modeled by the typed query API yet:
+
+```php
+$u->select(
+    x()->rawSql('ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at DESC)')->as('row_number'),
+);
+```
+
+Raw SQL bypasses the typed query model. Parameter bindings are supported for values:
+
+```php
+$u->where(x()->eq(x()->rawSql('LOWER(name)'), 'ada'));
+$u->where(x()->eq(x()->rawSql('name || ?', [' Lovelace']), 'Ada Lovelace'));
+```
+
+Do not concatenate user input into the SQL string. Parameters are for values only; identifiers inside the SQL fragment are not portable or automatically quoted. Prefer modeled expressions when they exist. Window functions are currently possible through `rawSql()`, and a typed window-expression API may be added later if usage proves worth modeling.
 
 ## Aggregates and subqueries
 

@@ -831,65 +831,46 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testPartitionedLimitCompilerUsesRowNumberPartitionedByChildRelationKey(): void
+	public function testFirstOfManyGeneratedSqlUsesRowNumberPartitionedByChildRelationKey(): void
 	{
-		$query = $this->database->query($this->registry->getCollection('first_posts'));
-		$query
-			->select($query->id, $query->title, $query->userId)
-			->orderBy($query->rank->asc(), $query->id->asc());
+		$executor = new FirstOfManyFallbackExecutor();
+		$database = new Database($executor);
+		$users = $database->query($this->registry->getCollection('users'));
+		$users->latestPost->fields('id', 'title');
 
-		$executor = $this->cycleExecutor();
-		$executor->applyPartitionedLimit(
-			$query,
-			$query,
-			['userId'],
-			$query->getSorts(),
-			1,
-			0,
-			'__test_first_row',
-		);
+		$users
+			->select($users->name)
+			->fetchAll();
 
-		$sql = $this->normalizedSql($this->translatedSql($executor, $query));
+		$sql = $this->normalizedSql($this->translatedSql($this->cycleExecutor(), $executor->lastQueryFor('first_posts')));
 
 		self::assertStringContainsString(
-			'ROW_NUMBER() OVER (PARTITION BY "q0"."user_id" ORDER BY "q0"."rank" ASC, "q0"."id" ASC) AS "__test_first_row"',
+			'ROW_NUMBER() OVER (PARTITION BY q0.user_id ORDER BY q0.rank ASC, q0.id ASC) AS "__ondata_row_number"',
 			$sql,
 		);
-		self::assertStringContainsString('WHERE "__ondata_partitioned"."__test_first_row" > 0 AND "__ondata_partitioned"."__test_first_row" <= 1', $sql);
+		self::assertStringContainsString('WHERE __ondata_row_number = ?', $sql);
 	}
 
-	public function testPartitionedLimitCompilerSupportsCompositeRelationKeysAndPrimaryKeyTieBreakers(): void
+	public function testFirstOfManyGeneratedSqlSupportsCompositeRelationKeysAndPrimaryKeyTieBreakers(): void
 	{
-		$query = $this->database->query($this->registry->getCollection('employee_badges'));
-		$query
-			->select($query->tenantId, $query->employeeName, $query->badgeId, $query->label)
-			->orderBy(
-				$query->label->desc(),
-				$query->tenantId->asc(),
-				$query->employeeName->asc(),
-				$query->badgeId->asc(),
-			);
+		$executor = new FirstOfManyFallbackExecutor();
+		$database = new Database($executor);
+		$employees = $database->query($this->registry->getCollection('employees'));
+		$employees->latestBadge->fields('badgeId', 'label');
 
-		$executor = $this->cycleExecutor();
-		$executor->applyPartitionedLimit(
-			$query,
-			$query,
-			['tenantId', 'employeeName'],
-			$query->getSorts(),
-			1,
-			0,
-			'__test_first_row',
-		);
+		$employees
+			->select($employees->name)
+			->fetchAll();
 
-		$sql = $this->normalizedSql($this->translatedSql($executor, $query));
+		$sql = $this->normalizedSql($this->translatedSql($this->cycleExecutor(), $executor->lastQueryFor('employee_badges')));
 
 		self::assertStringContainsString(
-			'PARTITION BY "q0"."tenant_id", "q0"."employee_name" ORDER BY "q0"."label" DESC, "q0"."tenant_id" ASC, "q0"."employee_name" ASC, "q0"."badge_id" ASC',
+			'PARTITION BY q0.tenant_id, q0.employee_name ORDER BY q0.label DESC, q0.tenant_id ASC, q0.employee_name ASC, q0.badge_id ASC',
 			$sql,
 		);
 	}
 
-	public function testFirstOfManyFallsBackWhenPartitionedLimitSupportIsUnavailable(): void
+	public function testFirstOfManyKeepsOrderedSeparateQueryBehaviorWithGenericExecutor(): void
 	{
 		$database = new Database(new FirstOfManyFallbackExecutor());
 		$users = $database->query($this->registry->getCollection('users'));
@@ -1514,13 +1495,25 @@ final class CycleJoinExecutionTest extends TestCase
 
 final class FirstOfManyFallbackExecutor implements QueryExecutorInterface
 {
+	/**
+	 * @var array<string, SelectQuery>
+	 */
+	private array $queries = [];
+
 	public function fetchAll(SelectQuery $query): array
 	{
+		$this->queries[$query->getCollection()->getName()] = $query;
+
 		return match ($query->getCollection()->getName()) {
 			'users' => [
 				['id' => 1, '__on_data_root_required_id_0' => 1, 'name' => 'Ada'],
 				['id' => 2, '__on_data_root_required_id_0' => 2, 'name' => 'Grace'],
 				['id' => 3, '__on_data_root_required_id_0' => 3, 'name' => 'Linus'],
+			],
+			'employees' => [
+				['tenantId' => 1, '__on_data_root_required_tenantid_0' => 1, 'name' => 'Ada', '__on_data_root_required_name_1' => 'Ada'],
+				['tenantId' => 1, '__on_data_root_required_tenantid_0' => 1, 'name' => 'Grace', '__on_data_root_required_name_1' => 'Grace'],
+				['tenantId' => 2, '__on_data_root_required_tenantid_0' => 2, 'name' => 'Linus', '__on_data_root_required_name_1' => 'Linus'],
 			],
 			'first_posts' => [
 				['id' => 11, 'userId' => 1, 'title' => 'Alpha'],
@@ -1528,8 +1521,19 @@ final class FirstOfManyFallbackExecutor implements QueryExecutorInterface
 				['id' => 10, 'userId' => 1, 'title' => 'Zulu'],
 				['id' => 20, 'userId' => 2, 'title' => 'Beta'],
 			],
+			'employee_badges' => [
+				['tenantId' => 1, 'employeeName' => 'Ada', 'badgeId' => 1, 'label' => 'Core'],
+				['tenantId' => 1, 'employeeName' => 'Ada', 'badgeId' => 2, 'label' => 'Core'],
+				['tenantId' => 1, 'employeeName' => 'Grace', 'badgeId' => 1, 'label' => 'Compiler'],
+				['tenantId' => 2, 'employeeName' => 'Linus', 'badgeId' => 1, 'label' => 'Kernel'],
+			],
 			default => [],
 		};
+	}
+
+	public function lastQueryFor(string $collection): SelectQuery
+	{
+		return $this->queries[$collection];
 	}
 
 	public function fetchOne(SelectQuery $query): ?array

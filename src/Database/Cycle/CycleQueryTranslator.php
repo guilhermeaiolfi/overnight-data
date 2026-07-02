@@ -34,6 +34,7 @@ use ON\Data\Query\Expression\AggregateFunction;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\LiteralExpression;
+use ON\Data\Query\Expression\RawSqlExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
@@ -45,9 +46,7 @@ use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\SelectQuery;
-use ON\Data\Query\Sort\Sort;
 use ON\Data\Query\Sort\SortDirection;
-use WeakMap;
 
 /**
  * @internal
@@ -57,28 +56,16 @@ final class CycleQueryTranslator
 	public function __construct(
 		private readonly DatabaseInterface $database,
 		private readonly ConversionGateway $gateway,
-		private readonly ?WeakMap $partitionedLimits = null,
 	) {
 	}
 
 	public function translate(SelectQuery $query): CycleTranslatedQuery
 	{
-		$partitionedLimit = $this->partitionedLimits[$query] ?? null;
-
-		if ($partitionedLimit instanceof CyclePartitionedLimit) {
-			return $this->translatePartitionedLimit($query, $partitionedLimit);
-		}
-
-		return $this->translateBase($query);
-	}
-
-	private function translateBase(SelectQuery $query): CycleTranslatedQuery
-	{
 		$context = new CycleTranslationContext($query, $this->database->getDriver()->getQueryCompiler());
 
 		return $context->within($query, function () use ($query, $context): CycleTranslatedQuery {
 			$cycle = $this->database->select();
-			$cycle->from($this->fromSource($query, $context)->toCycleFragment());
+			$cycle->from($this->fromSource($query, $context));
 
 			[$columns, $resultColumns] = $this->translateSelections($query, $context, true);
 			$cycle->columns($columns);
@@ -109,81 +96,6 @@ final class CycleQueryTranslator
 
 			return new CycleTranslatedQuery($cycle, $resultColumns);
 		});
-	}
-
-	private function translatePartitionedLimit(SelectQuery $query, CyclePartitionedLimit $partitionedLimit): CycleTranslatedQuery
-	{
-		$context = new CycleTranslationContext($query, $this->database->getDriver()->getQueryCompiler());
-
-		return $context->within($query, function () use ($query, $partitionedLimit, $context): CycleTranslatedQuery {
-			$base = $this->translateBase($query);
-			$inner = clone $base->query();
-			$inner->columns([
-				...$inner->getColumns(),
-				$this->partitionRowNumberColumn($partitionedLimit, $context)->toCycleFragment(),
-			]);
-
-			$outerAlias = '__ondata_partitioned';
-			$rowNumberColumn = $this->quote($outerAlias . '.' . $partitionedLimit->rowNumberAlias());
-			$upperBound = $partitionedLimit->offset() + $partitionedLimit->limit();
-			$outer = $this->database->select();
-
-			$outer->from(new SubQuery($inner, $outerAlias));
-
-			$outer->columns(array_map(
-				fn (CycleResultColumn $column): FragmentInterface => SqlFragment::raw(sprintf(
-					'%s AS %s',
-					$this->quote($outerAlias . '.' . $column->backendName()),
-					$this->quoteResultAlias($column->backendName()),
-				))->toCycleFragment(),
-				$base->columns(),
-			));
-
-			$outer->where(SqlFragment::raw(sprintf(
-				'%s > %d AND %s <= %d',
-				$rowNumberColumn,
-				$partitionedLimit->offset(),
-				$rowNumberColumn,
-				$upperBound,
-			))->toCycleFragment());
-
-			return new CycleTranslatedQuery($outer, $base->columns());
-		});
-	}
-
-	private function partitionRowNumberColumn(
-		CyclePartitionedLimit $partitionedLimit,
-		CycleTranslationContext $context,
-	): SqlFragment {
-		$partitionBy = array_map(
-			fn (string $field): SqlFragment => $this->translateExpression(
-				$partitionedLimit->source()->field($field),
-				$context,
-			),
-			$partitionedLimit->partitionFields(),
-		);
-		$orderBy = array_map(function (Sort $sort) use ($context): SqlFragment {
-			$expression = $this->translateExpression($sort->getExpression(), $context);
-
-			return SqlFragment::withParameters(
-				sprintf(
-					'%s %s',
-					$expression->sql(),
-					$sort->getDirection() === SortDirection::ASC ? 'ASC' : 'DESC',
-				),
-				$expression->parameters(),
-			);
-		}, $partitionedLimit->orderBy());
-
-		return SqlFragment::withParameters(
-			sprintf(
-				'ROW_NUMBER() OVER (PARTITION BY %s ORDER BY %s) AS %s',
-				implode(', ', array_map(static fn (SqlFragment $fragment): string => $fragment->sql(), $partitionBy)),
-				implode(', ', array_map(static fn (SqlFragment $fragment): string => $fragment->sql(), $orderBy)),
-				$this->quoteResultAlias($partitionedLimit->rowNumberAlias()),
-			),
-			array_merge($this->mergeParameters($partitionBy), $this->mergeParameters($orderBy)),
-		);
 	}
 
 	/**
@@ -456,11 +368,20 @@ final class CycleQueryTranslator
 		return match (true) {
 			$expression instanceof FieldRef => $this->translateFieldRef($expression, $context, $joinContext),
 			$expression instanceof LiteralExpression => $this->translateLiteral($expression, $literalFieldContext),
+			$expression instanceof RawSqlExpression => $this->translateRawSql($expression),
 			$expression instanceof AggregateExpression => $this->translateAggregate($expression, $context, $joinContext),
 			$expression instanceof ValueOperationExpression => $this->translateValueOperation($expression, $context, $joinContext),
 			$expression instanceof SubqueryExpression => $this->compileNestedQuery($expression->getQuery(), $context, QueryUsage::SCALAR_SUBQUERY),
 			default => throw UnsupportedQueryException::forQuery($context->root(), 'unknown value expression type'),
 		};
+	}
+
+	private function translateRawSql(RawSqlExpression $expression): SqlFragment
+	{
+		return SqlFragment::withParameters(
+			$expression->getSql(),
+			array_map(static fn (mixed $value): Parameter => new Parameter($value), $expression->getParameters()),
+		);
 	}
 
 	private function translateFieldRef(
@@ -569,10 +490,7 @@ final class CycleQueryTranslator
 		QueryUsage $usage,
 	): SqlFragment {
 		return $context->within($query, function () use ($query, $context, $usage): SqlFragment {
-			$cycle = $this->database->select();
-			$cycle->from($this->fromSource($query, $context)->toCycleFragment());
-
-			[$columns] = $this->translateSelections($query, $context, false);
+			[$cycle, $columns] = $this->compileCycleSelect($query, $context, false);
 
 			if ($usage === QueryUsage::SCALAR_SUBQUERY || $usage === QueryUsage::IN_SUBQUERY) {
 				if (count($columns) !== 1) {
@@ -585,32 +503,6 @@ final class CycleQueryTranslator
 				}
 			}
 
-			$cycle->columns($columns === [] ? [SqlFragment::raw('1')->toCycleFragment()] : $columns);
-
-			foreach ($query->getConditions() as $condition) {
-				$cycle->where($this->translateCondition($condition, $context)->toCycleFragment());
-			}
-
-			foreach ($query->getGroups() as $group) {
-				$cycle->groupBy($this->translateExpression($group, $context)->toCycleFragment());
-			}
-
-			foreach ($query->getHavingConditions() as $condition) {
-				$cycle->having($this->translateCondition($condition, $context)->toCycleFragment());
-			}
-
-			foreach ($query->getSorts() as $sort) {
-				$cycle->orderBy(
-					$this->translateExpression($sort->getExpression(), $context)->toCycleFragment(),
-					$sort->getDirection() === SortDirection::ASC ? CycleSelectQuery::SORT_ASC : CycleSelectQuery::SORT_DESC,
-				);
-			}
-
-			$this->translateJoins($query, $cycle, $context);
-
-			$cycle->limit($query->getLimit());
-			$cycle->offset($query->getOffset());
-
 			$params = new QueryParameters();
 			$sql = $cycle->sqlStatement($params);
 
@@ -618,13 +510,70 @@ final class CycleQueryTranslator
 		});
 	}
 
-	private function fromSource(SelectQuery $query, CycleTranslationContext $context): SqlFragment
+	/**
+	 * @return array{0: CycleSelectQuery, 1: list<string|FragmentInterface>, 2: list<CycleResultColumn>}
+	 */
+	private function compileCycleSelect(SelectQuery $query, CycleTranslationContext $context, bool $root): array
 	{
+		$cycle = $this->database->select();
+		$cycle->from($this->fromSource($query, $context));
+
+		[$columns, $resultColumns] = $this->translateSelections($query, $context, $root);
+		$cycle->columns($columns === [] ? [SqlFragment::raw('1')->toCycleFragment()] : $columns);
+
+		foreach ($query->getConditions() as $condition) {
+			$cycle->where($this->translateCondition($condition, $context)->toCycleFragment());
+		}
+
+		foreach ($query->getGroups() as $group) {
+			$cycle->groupBy($this->translateExpression($group, $context)->toCycleFragment());
+		}
+
+		foreach ($query->getHavingConditions() as $condition) {
+			$cycle->having($this->translateCondition($condition, $context)->toCycleFragment());
+		}
+
+		foreach ($query->getSorts() as $sort) {
+			$cycle->orderBy(
+				$this->translateExpression($sort->getExpression(), $context)->toCycleFragment(),
+				$sort->getDirection() === SortDirection::ASC ? CycleSelectQuery::SORT_ASC : CycleSelectQuery::SORT_DESC,
+			);
+		}
+
+		$this->translateJoins($query, $cycle, $context);
+
+		$cycle->limit($query->getLimit());
+		$cycle->offset($query->getOffset());
+
+		return [$cycle, $columns, $resultColumns];
+	}
+
+	private function fromSource(SelectQuery $query, CycleTranslationContext $context): string|FragmentInterface
+	{
+		$fromQuery = $query->getFromQuery();
+
+		if ($fromQuery instanceof SelectQuery) {
+			return $this->fromSubquery($fromQuery, $query, $context);
+		}
+
 		$source = $this->database->getPrefix() . $this->resolvePhysicalSource($query->getCollection());
 
 		return SqlFragment::raw(
 			$this->quote($source) . ' AS ' . $this->quote($context->aliasFor($query))
-		);
+		)->toCycleFragment();
+	}
+
+	private function fromSubquery(
+		SelectQuery $fromQuery,
+		SelectQuery $outerQuery,
+		CycleTranslationContext $context,
+	): SubQuery {
+		$innerContext = new CycleTranslationContext($fromQuery, $this->database->getDriver()->getQueryCompiler());
+		$inner = $innerContext->within($fromQuery, function () use ($fromQuery, $innerContext): CycleSelectQuery {
+			return $this->compileCycleSelect($fromQuery, $innerContext, true)[0];
+		});
+
+		return new SubQuery($inner, $context->aliasFor($outerQuery));
 	}
 
 	private function resolvePhysicalSource(CollectionInterface $collection): string

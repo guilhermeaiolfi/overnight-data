@@ -19,6 +19,7 @@ use ON\Data\Query\Expression\AggregateExpression;
 use ON\Data\Query\Expression\AggregateFunction;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\LiteralExpression;
+use ON\Data\Query\Expression\RawSqlExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
@@ -32,6 +33,14 @@ final class ExpressionFactory
 	public function literal(mixed $value): LiteralExpression
 	{
 		return new LiteralExpression($value);
+	}
+
+	/**
+	 * @param list<mixed> $parameters
+	 */
+	public function rawSql(string $sql, array $parameters = []): RawSqlExpression
+	{
+		return new RawSqlExpression($sql, array_values($parameters));
 	}
 
 	public function eq(ValueExpressionInterface|SelectQuery $left, mixed $right): ConditionInterface

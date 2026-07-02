@@ -103,6 +103,46 @@ final class CycleQueryExecutionTest extends TestCase
 		self::assertSame(0, $users->getLimit());
 	}
 
+	public function testRawSqlCanBeSelectedAndAliased(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select(x()->rawSql('UPPER(name)')->as('upper_name'))
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['upper_name' => 'ADA'],
+			['upper_name' => 'GRACE'],
+			['upper_name' => 'LINUS'],
+		], $rows);
+	}
+
+	public function testRawSqlCanBeUsedInComparisons(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name)
+			->where(x()->eq(x()->rawSql('LOWER(name)'), 'ada'))
+			->fetchAll();
+
+		self::assertSame([['name' => 'Ada']], $rows);
+	}
+
+	public function testRawSqlParametersAreBoundAsValues(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name)
+			->where(x()->eq(x()->rawSql('name || ?', [' Lovelace']), 'Ada Lovelace'))
+			->fetchAll();
+
+		self::assertSame([['name' => 'Ada']], $rows);
+	}
+
 	public function testIterateYieldsMappedRowsLazily(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
