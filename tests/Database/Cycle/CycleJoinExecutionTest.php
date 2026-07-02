@@ -810,15 +810,102 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testFirstOfManyStructuredLoadingRemainsExplicitlyDeferred(): void
+	public function testFirstOfManySeparateLoadingReturnsSingleOrderedChildPerParent(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->latestPost->fields('id', 'title');
+
+		$rows = $users
+			->select($users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'latestPost' => ['id' => 11, 'title' => 'Alpha']],
+			['name' => 'Grace', 'latestPost' => ['id' => 20, 'title' => 'Beta']],
+			['name' => 'Linus', 'latestPost' => null],
+		], $rows);
+	}
+
+	public function testFirstOfManyNestedLoadingAttachesBelowSingleChild(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->latestPost->fields('title')->author->fields('name');
+
+		$rows = $users
+			->select($users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'latestPost' => ['title' => 'Alpha', 'author' => ['name' => 'Grace']]],
+			['name' => 'Grace', 'latestPost' => ['title' => 'Beta', 'author' => ['name' => 'Grace']]],
+			['name' => 'Linus', 'latestPost' => null],
+		], $rows);
+	}
+
+	public function testFirstOfManyRequiresDefinitionOrderMetadata(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->latestPostMissingOrder->fields('title');
+
+		$this->expectException(RelationLoaderException::class);
+		$this->expectExceptionMessage('requires deterministic orderBy metadata');
+
+		$users
+			->select($users->name)
+			->fetchAll();
+	}
+
+	public function testFirstOfManySupportsCompositeRelationKeysAndCompositePrimaryKeys(): void
+	{
+		$employees = $this->database->query($this->registry->getCollection('employees'));
+		$employees->latestBadge->fields('label');
+
+		$rows = $employees
+			->select($employees->name)
+			->orderBy($employees->name->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'latestBadge' => ['label' => 'Core']],
+			['name' => 'Grace', 'latestBadge' => ['label' => 'Compiler']],
+			['name' => 'Linus', 'latestBadge' => ['label' => 'Kernel']],
+		], $rows);
+	}
+
+	public function testFirstOfManyJoinLoadingIsUnsupported(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
 		$this->expectException(UnsupportedQueryException::class);
-		$this->expectExceptionMessage('FirstOfMany join semantics');
+		$this->expectExceptionMessage('cannot use JOIN loading');
 
 		$users
 			->select($users->latestPost->title)
+			->fetchAll();
+	}
+
+	public function testFirstOfManyLoaderJoinIsUnsupported(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$this->expectException(RelationLoaderException::class);
+		$this->expectExceptionMessage('cannot use JOIN loading');
+
+		$users->latestPost->getLoader()->join($users->latestPost);
+	}
+
+	public function testFirstOfManyStructuredJoinStrategyIsUnsupported(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->latestPost->join();
+
+		$this->expectException(RelationLoaderException::class);
+		$this->expectExceptionMessage('cannot use JOIN loading');
+
+		$users
+			->select($users->name)
 			->fetchAll();
 	}
 
@@ -1006,7 +1093,12 @@ final class CycleJoinExecutionTest extends TestCase
 				->outerKey('role_id')
 				->end();
 		$users->relation('latestPost', FirstOfManyRelation::class)
-			->collection('posts')
+			->collection('first_posts')
+			->innerKey('id')
+			->outerKey('userId')
+			->orderBy(['rank' => 'asc']);
+		$users->relation('latestPostMissingOrder', FirstOfManyRelation::class)
+			->collection('first_posts')
 			->innerKey('id')
 			->outerKey('userId');
 		$users->primaryKey('id');
@@ -1041,6 +1133,16 @@ final class CycleJoinExecutionTest extends TestCase
 		$posts->belongsTo('author', 'users')->innerKey('userId')->outerKey('id')->end();
 		$posts->hasMany('comments', 'comments')->innerKey('id')->outerKey('postId')->end();
 		$posts->primaryKey('id');
+
+		$firstPosts = $registry->collection('first_posts');
+		$firstPosts->table('first_posts');
+		$firstPosts->field('id', 'int');
+		$firstPosts->field('userId', 'int')->column('user_id');
+		$firstPosts->field('authorId', 'int')->column('author_id');
+		$firstPosts->field('title', 'string');
+		$firstPosts->field('rank', 'int')->hidden(true);
+		$firstPosts->belongsTo('author', 'users')->innerKey('authorId')->outerKey('id')->end();
+		$firstPosts->primaryKey('id');
 
 		$comments = $registry->collection('comments');
 		$comments->table('comments');
@@ -1152,7 +1254,19 @@ final class CycleJoinExecutionTest extends TestCase
 			->outerKey(['tenantId', 'id'])
 			->nullable(false)
 			->end();
+		$employees->relation('latestBadge', FirstOfManyRelation::class)
+			->collection('employee_badges')
+			->innerKey(['tenantId', 'name'])
+			->outerKey(['tenantId', 'employeeName'])
+			->orderBy(['label' => 'desc']);
 		$employees->primaryKey('tenantId', 'name');
+
+		$employeeBadges = $registry->collection('employee_badges');
+		$employeeBadges->table('employee_badges');
+		$employeeBadges->field('tenantId', 'int')->column('tenant_id');
+		$employeeBadges->field('employeeName', 'string')->column('employee_name');
+		$employeeBadges->field('label', 'string');
+		$employeeBadges->primaryKey('tenantId', 'employeeName');
 
 		$compositeArticles = $registry->collection('composite_articles');
 		$compositeArticles->table('composite_articles');
@@ -1202,6 +1316,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$pdo->exec('CREATE TABLE companies (id INTEGER PRIMARY KEY, name TEXT, active INTEGER)');
 		$pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, company_id INTEGER NULL)');
 		$pdo->exec('CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER, title TEXT, published INTEGER)');
+		$pdo->exec('CREATE TABLE first_posts (id INTEGER PRIMARY KEY, user_id INTEGER, author_id INTEGER, title TEXT, rank INTEGER)');
 		$pdo->exec('CREATE TABLE comments (id INTEGER PRIMARY KEY, post_id INTEGER, author_id INTEGER, body TEXT)');
 		$pdo->exec('CREATE TABLE roles (id INTEGER PRIMARY KEY, name TEXT)');
 		$pdo->exec('CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER)');
@@ -1214,6 +1329,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$pdo->exec('CREATE TABLE article_tag (article_id INTEGER, tag_id INTEGER)');
 		$pdo->exec('CREATE TABLE accounts (tenant_id INTEGER, id INTEGER, name TEXT, PRIMARY KEY (tenant_id, id))');
 		$pdo->exec('CREATE TABLE employees (tenant_id INTEGER, account_id INTEGER, name TEXT, PRIMARY KEY (tenant_id, name))');
+		$pdo->exec('CREATE TABLE employee_badges (tenant_id INTEGER, employee_name TEXT, label TEXT, PRIMARY KEY (tenant_id, employee_name))');
 		$pdo->exec('CREATE TABLE composite_articles (tenant_id INTEGER, slug TEXT, title TEXT, PRIMARY KEY (tenant_id, slug))');
 		$pdo->exec('CREATE TABLE composite_tags (tenant_id INTEGER, slug TEXT, name TEXT, PRIMARY KEY (tenant_id, slug))');
 		$pdo->exec('CREATE TABLE composite_article_tag (article_tenant_id INTEGER, article_slug TEXT, tag_tenant_id INTEGER, tag_slug TEXT)');
@@ -1222,6 +1338,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$pdo->exec("INSERT INTO companies (id, name, active) VALUES (1, 'Acme', 1), (2, 'Dormant', 0)");
 		$pdo->exec("INSERT INTO users (id, name, company_id) VALUES (1, 'Ada', 1), (2, 'Grace', 1), (3, 'Linus', NULL)");
 		$pdo->exec("INSERT INTO posts (id, user_id, title, published) VALUES (1, 1, 'Hello', 1), (2, 1, 'World', 0), (3, 2, 'Graph', 1)");
+		$pdo->exec("INSERT INTO first_posts (id, user_id, author_id, title, rank) VALUES (10, 1, 1, 'Zulu', 2), (12, 1, 1, 'Alpha', 1), (11, 1, 2, 'Alpha', 1), (20, 2, 2, 'Beta', 1)");
 		$pdo->exec("INSERT INTO comments (id, post_id, author_id, body) VALUES (1, 1, 1, 'First'), (2, 2, 2, 'Second'), (3, 3, 1, 'Third')");
 		$pdo->exec("INSERT INTO roles (id, name) VALUES (10, 'Admin'), (11, 'Editor')");
 		$pdo->exec('INSERT INTO user_roles (user_id, role_id) VALUES (1, 10), (1, 11), (2, 10)');
@@ -1234,6 +1351,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$pdo->exec('INSERT INTO article_tag (article_id, tag_id) VALUES (1, 1), (1, 2), (2, 3)');
 		$pdo->exec("INSERT INTO accounts (tenant_id, id, name) VALUES (1, 10, 'Platform'), (2, 20, 'Infra')");
 		$pdo->exec("INSERT INTO employees (tenant_id, account_id, name) VALUES (1, 10, 'Ada'), (1, 10, 'Grace'), (2, 20, 'Linus')");
+		$pdo->exec("INSERT INTO employee_badges (tenant_id, employee_name, label) VALUES (1, 'Ada', 'Core'), (1, 'Grace', 'Compiler'), (2, 'Linus', 'Kernel')");
 		$pdo->exec("INSERT INTO composite_articles (tenant_id, slug, title) VALUES (1, 'joins', 'Joins'), (1, 'lonely', 'Lonely')");
 		$pdo->exec("INSERT INTO composite_tags (tenant_id, slug, name) VALUES (1, 'php', 'php'), (1, 'orm', 'orm')");
 		$pdo->exec("INSERT INTO composite_article_tag (article_tenant_id, article_slug, tag_tenant_id, tag_slug) VALUES (1, 'joins', 1, 'php'), (1, 'joins', 1, 'orm')");

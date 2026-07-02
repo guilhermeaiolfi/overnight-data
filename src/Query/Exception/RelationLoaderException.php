@@ -78,10 +78,18 @@ final class RelationLoaderException extends InvalidArgumentException
 		));
 	}
 
-	public static function firstOfManyJoinNotImplemented(RelationRef $relation): self
+	public static function firstOfManyJoinNotSupported(RelationRef $relation): self
 	{
 		return new self(sprintf(
-			'Relation "%s" requires FirstOfMany join semantics, which are not implemented.',
+			'Relation "%s" cannot use JOIN loading because FirstOfMany must choose one ordered child per parent. Use separate-query loading instead.',
+			implode('.', $relation->getPath()),
+		));
+	}
+
+	public static function firstOfManyOrderRequired(RelationRef $relation): self
+	{
+		return new self(sprintf(
+			'Relation "%s" cannot be loaded because FirstOfMany requires deterministic orderBy metadata.',
 			implode('.', $relation->getPath()),
 		));
 	}
