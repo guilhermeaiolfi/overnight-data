@@ -8,7 +8,6 @@ use Cycle\Database\DatabaseInterface;
 use Cycle\Database\Injection\FragmentInterface;
 use Cycle\Database\Injection\Parameter;
 use Cycle\Database\Injection\ParameterInterface;
-use Cycle\Database\Injection\SubQuery;
 use Cycle\Database\Query\QueryParameters;
 use Cycle\Database\Query\SelectQuery as CycleSelectQuery;
 use ON\Data\Database\Exception\UnsupportedQueryException;
@@ -548,32 +547,13 @@ final class CycleQueryTranslator
 		return [$cycle, $columns, $resultColumns];
 	}
 
-	private function fromSource(SelectQuery $query, CycleTranslationContext $context): string|FragmentInterface
+	private function fromSource(SelectQuery $query, CycleTranslationContext $context): FragmentInterface
 	{
-		$fromQuery = $query->getFromQuery();
-
-		if ($fromQuery instanceof SelectQuery) {
-			return $this->fromSubquery($fromQuery, $query, $context);
-		}
-
 		$source = $this->database->getPrefix() . $this->resolvePhysicalSource($query->getCollection());
 
 		return SqlFragment::raw(
 			$this->quote($source) . ' AS ' . $this->quote($context->aliasFor($query))
 		)->toCycleFragment();
-	}
-
-	private function fromSubquery(
-		SelectQuery $fromQuery,
-		SelectQuery $outerQuery,
-		CycleTranslationContext $context,
-	): SubQuery {
-		$innerContext = new CycleTranslationContext($fromQuery, $this->database->getDriver()->getQueryCompiler());
-		$inner = $innerContext->within($fromQuery, function () use ($fromQuery, $innerContext): CycleSelectQuery {
-			return $this->compileCycleSelect($fromQuery, $innerContext, true)[0];
-		});
-
-		return new SubQuery($inner, $context->aliasFor($outerQuery));
 	}
 
 	private function resolvePhysicalSource(CollectionInterface $collection): string

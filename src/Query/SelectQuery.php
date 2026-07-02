@@ -71,8 +71,6 @@ final class SelectQuery implements QuerySourceInterface
 
 	private ?int $offset = null;
 
-	private ?SelectQuery $fromQuery = null;
-
 	public function __construct(
 		private readonly CollectionInterface $collection,
 		private ?QueryExecutorInterface $executor = null,
@@ -282,22 +280,6 @@ final class SelectQuery implements QuerySourceInterface
 		$this->offset = $offset;
 
 		return $this;
-	}
-
-	public function from(SelectQuery $query): self
-	{
-		if ($query === $this) {
-			throw new InvalidArgumentException('SelectQuery::from() cannot use the query as its own source.');
-		}
-
-		$this->fromQuery = $query;
-
-		return $this;
-	}
-
-	public function getFromQuery(): ?SelectQuery
-	{
-		return $this->fromQuery;
 	}
 
 	public function getSelections(): SelectionList

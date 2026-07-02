@@ -143,7 +143,6 @@ The acquisition strategy is loader-owned. A relation selection may override the 
 
 - Structured loading is not the same as arbitrary related-field projection in flat scalar selections.
 - Structured loading for built-in `FirstOfMany` is implemented as separate-query loading. JOIN loading is intentionally unsupported because the loader must choose one ordered child per parent.
-- SQL backends may internally optimize `FirstOfMany` separate-query loading with a windowed per-parent limit built through the internal `rawSql()` escape hatch; this is not a public relation pagination feature.
 - Built-in `FirstOfMany` requires deterministic relation-level `orderBy` metadata. The loader appends missing target primary-key fields as stable tie breakers.
 - Joined structured loading for built-in `M2M` is not implemented yet.
 - Relation-level `where` and `orderBy` are supported for separate-query loading first; joined relation conditions and ordering are rejected by built-in loaders.
