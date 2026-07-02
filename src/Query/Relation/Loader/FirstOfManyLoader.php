@@ -127,7 +127,10 @@ final class FirstOfManyLoader extends AbstractLoader
 			$partitionBy[] = $inner->field($fieldName);
 		}
 
-		$inner->getSelections()->addProjectedFrom($childQuery->getSelections(), from: $childQuery, to: $inner);
+		$inner->getSelections()->merge(
+			$childQuery->getSelections()
+				->projectTo(from: $childQuery, to: $inner),
+		);
 
 		if ($childQuery->getConditions() !== []) {
 			$inner->bindConditions($childQuery, ...$childQuery->getConditions());
@@ -147,10 +150,10 @@ final class FirstOfManyLoader extends AbstractLoader
 		$ranked = $inner->as(self::DERIVED_ALIAS);
 		$outer = query($ranked);
 
-		$outer->getSelections()->addParserProjectedFrom(
-			$inner->getSelections(),
-			from: $ranked,
-			to: $outer,
+		$outer->getSelections()->merge(
+			$inner->getSelections()
+				->filterForParser()
+				->projectTo(from: $ranked, to: $outer),
 		);
 
 		return $outer->where($ranked->field(self::RANK_ALIAS)->eq(1));

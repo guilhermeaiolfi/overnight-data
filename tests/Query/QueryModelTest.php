@@ -1364,7 +1364,7 @@ final class QueryModelTest extends TestCase
 		);
 	}
 
-	public function testSelectionListAddParserProjectedFromPreservesReasonsWithoutForcingExplicit(): void
+	public function testSelectionListParserProjectionPreservesReasonsWithoutForcingExplicit(): void
 	{
 		$inner = query($this->makeRegistry()->getCollection('posts'));
 		$inner->getSelections()->add($inner->amount, SelectionReason::PUBLIC);
@@ -1373,10 +1373,10 @@ final class QueryModelTest extends TestCase
 		$ranked = $inner->as('ranked_posts');
 		$outer = query($ranked);
 
-		$outer->getSelections()->addParserProjectedFrom(
-			$inner->getSelections(),
-			from: $ranked,
-			to: $outer,
+		$outer->getSelections()->merge(
+			$inner->getSelections()
+				->filterForParser()
+				->projectTo(from: $ranked, to: $outer),
 		);
 
 		$parserItems = $outer->getSelections()->getParserItems();
@@ -1390,7 +1390,7 @@ final class QueryModelTest extends TestCase
 		self::assertTrue($parserItems[2]->hasReason(SelectionReason::RELATION));
 	}
 
-	public function testSelectionListAddParserProjectedFromExcludesInternalFields(): void
+	public function testSelectionListParserProjectionExcludesInternalFields(): void
 	{
 		$inner = query($this->makeRegistry()->getCollection('posts'));
 		$rank = x()->fn()->rowNumber()->over(
@@ -1402,10 +1402,10 @@ final class QueryModelTest extends TestCase
 		$ranked = $inner->as('ranked_posts');
 		$outer = query($ranked);
 
-		$outer->getSelections()->addParserProjectedFrom(
-			$inner->getSelections(),
-			from: $ranked,
-			to: $outer,
+		$outer->getSelections()->merge(
+			$inner->getSelections()
+				->filterForParser()
+				->projectTo(from: $ranked, to: $outer),
 		);
 
 		self::assertSame(

@@ -150,10 +150,9 @@ final class HasManyLoader extends AbstractLoader
 			$partitionBy[] = $inner->field($fieldName);
 		}
 
-		$inner->getSelections()->addProjectedFrom(
-			$childQuery->getSelections(),
-			from: $childQuery,
-			to: $inner,
+		$inner->getSelections()->merge(
+			$childQuery->getSelections()
+				->projectTo(from: $childQuery, to: $inner),
 		);
 
 		foreach ($relationKeyFields as $fieldName) {
@@ -178,10 +177,10 @@ final class HasManyLoader extends AbstractLoader
 		$ranked = $inner->as(self::DERIVED_ALIAS);
 		$outer = query($ranked);
 
-		$outer->getSelections()->addParserProjectedFrom(
-			$inner->getSelections(),
-			from: $ranked,
-			to: $outer,
+		$outer->getSelections()->merge(
+			$inner->getSelections()
+				->filterForParser()
+				->projectTo(from: $ranked, to: $outer),
 		);
 
 		$offset = $selection->getOffset();
