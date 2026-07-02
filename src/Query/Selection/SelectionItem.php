@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
+use ON\Data\Query\QuerySourceInterface;
 
 final class SelectionItem
 {
@@ -34,6 +35,31 @@ final class SelectionItem
 	public function getSelectionKey(): string
 	{
 		return $this->expression->getSelectionKey();
+	}
+
+	public function getProjectedExpression(
+		?QuerySourceInterface $from = null,
+		?QuerySourceInterface $to = null,
+	): ValueExpressionInterface|AliasedExpression|StarExpression {
+		if ($this->expression instanceof StarExpression) {
+			return $this->expression;
+		}
+
+		$expression = $this->expression instanceof AliasedExpression
+			? $this->expression->getExpression()
+			: $this->expression;
+
+		if ($from !== null && $to !== null) {
+			$expression = $expression->rebaseFields($from, $to);
+		}
+
+		if ($this->expression instanceof AliasedExpression) {
+			return $expression === $this->expression->getExpression()
+				? $this->expression
+				: $expression->as($this->getSelectionKey());
+		}
+
+		return $expression->as($this->getSelectionKey());
 	}
 
 	public function isExplicit(): bool

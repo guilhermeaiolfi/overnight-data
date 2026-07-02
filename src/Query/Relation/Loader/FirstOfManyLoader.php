@@ -5,11 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation\Loader;
 
 use ON\Data\Query\Exception\RelationLoaderException;
-use ON\Data\Query\Expression\AliasedExpression;
-use ON\Data\Query\Expression\FieldRef;
-use ON\Data\Query\Expression\SourceFieldExpression;
-use ON\Data\Query\Expression\StarExpression;
-use ON\Data\Query\Expression\ValueExpressionInterface;
 use function ON\Data\Query\query;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
@@ -125,32 +120,43 @@ final class FirstOfManyLoader extends AbstractLoader
 	 */
 	private function rankedQuery(RelationLoadBranch $branch, SelectQuery $childQuery, array $orderBy): SelectQuery
 	{
+		$inner = query($childQuery->getCollection());
 		$partitionBy = [];
+		$selections = $childQuery->getSelections()->getExplicit();
 
 		foreach ($branch->getRelationRef()->getDefinition()->getKeyPairing()->getRightFields() as $fieldName) {
-			$partitionBy[] = $childQuery->field($fieldName);
+			$partitionBy[] = $inner->field($fieldName);
 		}
 
-		$childQuery->select(
+		foreach ($selections as $selection) {
+			$inner->select($selection->getProjectedExpression($childQuery, $inner));
+		}
+
+		if ($childQuery->getConditions() !== []) {
+			$inner->adoptConditions($childQuery, ...$childQuery->getConditions());
+		}
+
+		$inner->select(
 			x()->fn()->rowNumber()->over(
 				partitionBy: $partitionBy,
-				orderBy: $orderBy,
+				orderBy: array_map(
+					static fn (Sort $sort): Sort => $sort->rebaseFields($childQuery, $inner),
+					$orderBy,
+				),
 			)->as(self::RANK_ALIAS),
 		);
 
-		$ranked = $childQuery->as(self::DERIVED_ALIAS);
+		$ranked = $inner->as(self::DERIVED_ALIAS);
 		$outer = query($ranked);
 
-		foreach ($childQuery->getSelections()->getExplicit() as $selection) {
-			$expression = $selection->getExpression();
+		foreach ($selections as $selection) {
+			$key = $selection->getSelectionKey();
 
-			if ($expression instanceof AliasedExpression && $expression->getAlias() === self::RANK_ALIAS) {
+			if ($key === self::RANK_ALIAS) {
 				continue;
 			}
 
-			$outer->select(
-				$ranked->field($this->derivedFieldName($expression))->as($selection->getSelectionKey()),
-			);
+			$outer->select($ranked->field($key)->as($key));
 		}
 
 		return $outer->where($ranked->field(self::RANK_ALIAS)->eq(1));
@@ -193,24 +199,6 @@ final class FirstOfManyLoader extends AbstractLoader
 		}
 
 		return $sorts;
-	}
-
-	private function derivedFieldName(
-		ValueExpressionInterface|AliasedExpression|StarExpression $expression,
-	): string {
-		if ($expression instanceof AliasedExpression) {
-			return $expression->getAlias();
-		}
-
-		if ($expression instanceof FieldRef) {
-			return $expression->getField()->getColumn();
-		}
-
-		if ($expression instanceof SourceFieldExpression) {
-			return $expression->getName();
-		}
-
-		return $expression->getSelectionKey();
 	}
 
 	/**

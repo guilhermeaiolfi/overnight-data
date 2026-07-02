@@ -20,6 +20,7 @@ use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
+use ON\Data\Query\Relation\Loader\FirstOfManyLoader;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationLoadBranch;
@@ -841,7 +842,7 @@ final class CycleJoinExecutionTest extends TestCase
 		);
 		$database = new Database($recording);
 		$users = $database->query($this->registry->getCollection('users'));
-		$users->latestPost->fields('id', 'title');
+		$users->latestPost->fields('id', 'title', 'createdAt');
 
 		$users
 			->select($users->name)
@@ -853,8 +854,21 @@ final class CycleJoinExecutionTest extends TestCase
 		self::assertStringContainsString('ROW_NUMBER() OVER', $sql);
 		self::assertStringContainsString('PARTITION BY', $sql);
 		self::assertStringContainsString('ORDER BY', $sql);
+		self::assertStringContainsString('"q1"."created_at" AS "createdAt"', $sql);
+		self::assertStringContainsString('"__ondata_first_of_many"."createdAt" AS "createdAt"', $sql);
+		self::assertStringNotContainsString('"__ondata_first_of_many"."created_at"', $sql);
 		self::assertStringContainsString('__ondata_rank', $sql);
 		self::assertStringContainsString('WHERE "__ondata_first_of_many"."__ondata_rank" = ?', $sql);
+	}
+
+	public function testFirstOfManyLoaderDoesNotGuessDerivedOutputNamesFromExpressionTypes(): void
+	{
+		$contents = (string) file_get_contents(dirname(__DIR__, 3) . '/src/Query/Relation/Loader/FirstOfManyLoader.php');
+
+		self::assertFalse(method_exists(FirstOfManyLoader::class, 'derivedFieldName'));
+		self::assertStringNotContainsString('AliasedExpression', $contents);
+		self::assertStringNotContainsString('FieldRef', $contents);
+		self::assertStringNotContainsString('SourceFieldExpression', $contents);
 	}
 
 	public function testFirstOfManyRequiresExecutorSupportForDerivedWindowedQuery(): void
@@ -1229,6 +1243,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$firstPosts->field('userId', 'int')->column('user_id');
 		$firstPosts->field('authorId', 'int')->column('author_id');
 		$firstPosts->field('title', 'string');
+		$firstPosts->field('createdAt', 'string')->column('created_at');
 		$firstPosts->field('rank', 'int')->hidden(true);
 		$firstPosts->belongsTo('author', 'users')->innerKey('authorId')->outerKey('id')->end();
 		$firstPosts->primaryKey('id');
@@ -1406,7 +1421,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$pdo->exec('CREATE TABLE companies (id INTEGER PRIMARY KEY, name TEXT, active INTEGER)');
 		$pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, company_id INTEGER NULL)');
 		$pdo->exec('CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER, title TEXT, published INTEGER)');
-		$pdo->exec('CREATE TABLE first_posts (id INTEGER PRIMARY KEY, user_id INTEGER, author_id INTEGER, title TEXT, rank INTEGER)');
+		$pdo->exec('CREATE TABLE first_posts (id INTEGER PRIMARY KEY, user_id INTEGER, author_id INTEGER, title TEXT, created_at TEXT, rank INTEGER)');
 		$pdo->exec('CREATE TABLE comments (id INTEGER PRIMARY KEY, post_id INTEGER, author_id INTEGER, body TEXT)');
 		$pdo->exec('CREATE TABLE roles (id INTEGER PRIMARY KEY, name TEXT)');
 		$pdo->exec('CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER)');
@@ -1428,7 +1443,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$pdo->exec("INSERT INTO companies (id, name, active) VALUES (1, 'Acme', 1), (2, 'Dormant', 0)");
 		$pdo->exec("INSERT INTO users (id, name, company_id) VALUES (1, 'Ada', 1), (2, 'Grace', 1), (3, 'Linus', NULL)");
 		$pdo->exec("INSERT INTO posts (id, user_id, title, published) VALUES (1, 1, 'Hello', 1), (2, 1, 'World', 0), (3, 2, 'Graph', 1)");
-		$pdo->exec("INSERT INTO first_posts (id, user_id, author_id, title, rank) VALUES (10, 1, 1, 'Zulu', 2), (12, 1, 1, 'Alpha', 1), (11, 1, 2, 'Alpha', 1), (20, 2, 2, 'Beta', 1)");
+		$pdo->exec("INSERT INTO first_posts (id, user_id, author_id, title, created_at, rank) VALUES (10, 1, 1, 'Zulu', '2026-06-24 10:00:00', 2), (12, 1, 1, 'Alpha', '2026-06-24 11:00:00', 1), (11, 1, 2, 'Alpha', '2026-06-24 12:00:00', 1), (20, 2, 2, 'Beta', '2026-06-24 13:00:00', 1)");
 		$pdo->exec("INSERT INTO comments (id, post_id, author_id, body) VALUES (1, 1, 1, 'First'), (2, 2, 2, 'Second'), (3, 3, 1, 'Third')");
 		$pdo->exec("INSERT INTO roles (id, name) VALUES (10, 'Admin'), (11, 'Editor')");
 		$pdo->exec('INSERT INTO user_roles (user_id, role_id) VALUES (1, 10), (1, 11), (2, 10)');
