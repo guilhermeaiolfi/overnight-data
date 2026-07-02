@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Database\Cycle;
 
+use Cycle\Database\Query\QueryParameters;
 use DateTimeImmutable;
 use ON\Data\Database\ConnectionConfig;
 use ON\Data\Database\Database;
@@ -17,6 +18,7 @@ use function ON\Data\Query\x;
 use PDO;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 use Tests\ON\Data\Fixture\CustomRelation;
 
 #[RequiresPhpExtension('pdo_sqlite')]
@@ -360,6 +362,60 @@ final class CycleQueryExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testDerivedSourceSqlQuotesFieldsAsQualifiedIdentifiers(): void
+	{
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+		$position = x()->fn()
+			->rowNumber()
+			->over(
+				partitionBy: $posts->userId,
+				orderBy: $posts->id->desc(),
+			)
+			->as('__rank');
+
+		$ranked = $posts
+			->select($posts->all(), $position)
+			->as('ranked_posts');
+
+		$query = $this->database->query($ranked)
+			->select($ranked->all())
+			->where($ranked->field('__rank')->eq(1));
+
+		$sql = $this->compileSql($query);
+
+		self::assertStringContainsString('FROM (SELECT', $sql);
+		self::assertStringContainsString('AS "ranked_posts"', $sql);
+		self::assertStringContainsString('"ranked_posts".*', $sql);
+		self::assertStringContainsString('"ranked_posts"."__rank"', $sql);
+		self::assertStringNotContainsString('"ranked_posts.__rank"', $sql);
+	}
+
+	public function testAutomaticDerivedSourceAliasIsStableInGeneratedSql(): void
+	{
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+		$position = x()->fn()
+			->rowNumber()
+			->over(
+				partitionBy: $posts->userId,
+				orderBy: $posts->id->desc(),
+			)
+			->as('__rank');
+
+		$ranked = $posts
+			->select($posts->all(), $position)
+			->as();
+
+		$query = $this->database->query($ranked)
+			->select($ranked->all())
+			->where($ranked->field('__rank')->eq(1));
+
+		$sql = $this->compileSql($query);
+
+		self::assertMatchesRegularExpression('/AS "d\d+"/', $sql);
+		self::assertMatchesRegularExpression('/"d\d+"\.\*/', $sql);
+		self::assertMatchesRegularExpression('/"d\d+"\."__rank" = \?/', $sql);
+	}
+
 	public function testRankDenseRankCompositePartitionAndAutomaticDerivedAliasExecute(): void
 	{
 		$posts = $this->database->query($this->registry->getCollection('posts'));
@@ -682,5 +738,21 @@ final class CycleQueryExecutionTest extends TestCase
 		$posts->execute([1, 1, 'Hello', 10.0, 1]);
 		$posts->execute([2, 1, 'World', 15.5, 0]);
 		$posts->execute([3, 2, 'Graph', 7.5, 1]);
+	}
+
+	private function compileSql(SelectQuery $query): string
+	{
+		$databaseReflection = new ReflectionClass($this->database);
+		$executorProperty = $databaseReflection->getProperty('executor');
+		$executor = $executorProperty->getValue($this->database);
+
+		$executorReflection = new ReflectionClass($executor);
+		$translatorProperty = $executorReflection->getProperty('translator');
+		$translator = $translatorProperty->getValue($executor);
+
+		$translated = $translator->translate($query);
+		$parameters = new QueryParameters();
+
+		return $translated->query()->sqlStatement($parameters);
 	}
 }

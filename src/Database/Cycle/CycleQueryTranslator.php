@@ -502,8 +502,9 @@ final class CycleQueryTranslator
 			throw UnsupportedQueryException::forQuery($context->root(), $exception->getMessage());
 		}
 
-		return SqlFragment::raw($this->quote(
-			$context->aliasFor($source) . '.' . $field->getField()->getColumn()
+		return SqlFragment::raw($this->quoteQualified(
+			$context->aliasFor($source),
+			$field->getField()->getColumn(),
 		));
 	}
 
@@ -513,8 +514,9 @@ final class CycleQueryTranslator
 	): SqlFragment {
 		$context->assertSourceAccessible($field->getSource());
 
-		return SqlFragment::raw($this->quote(
-			$context->aliasFor($field->getSource()) . '.' . $field->getName()
+		return SqlFragment::raw($this->quoteQualified(
+			$context->aliasFor($field->getSource()),
+			$field->getName(),
 		));
 	}
 
@@ -698,7 +700,7 @@ final class CycleQueryTranslator
 	{
 		if ($query->getFrom() instanceof DerivedQuerySource) {
 			$derived = $query->getFrom();
-			$inner = $this->compileNestedQuery($derived->getQuery(), $context, QueryUsage::EXISTS_SUBQUERY);
+			$inner = $this->compileNestedQuery($derived->getQuery(), $context, QueryUsage::DERIVED_TABLE);
 
 			return SqlFragment::withParameters(
 				$inner->sql() . ' AS ' . $this->quote($context->aliasFor($derived)),
@@ -823,6 +825,11 @@ final class CycleQueryTranslator
 	private function quote(string $identifier): string
 	{
 		return $this->database->getDriver()->getQueryCompiler()->quoteIdentifier($identifier);
+	}
+
+	private function quoteQualified(string ...$identifiers): string
+	{
+		return implode('.', array_map($this->quote(...), $identifiers));
 	}
 
 	private function quoteResultAlias(string $alias): string

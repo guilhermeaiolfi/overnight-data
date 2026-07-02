@@ -165,7 +165,7 @@ final class SelectQuery implements QuerySourceInterface
 	public function __get(string $name): FieldRef|RelationRef
 	{
 		if (! $this->source instanceof CollectionInterface) {
-			return $this->field($name);
+			throw new InvalidArgumentException('Derived query sources do not support magic member access; use field() for selected fields.');
 		}
 
 		if ($this->source->hasField($name)) {
@@ -340,7 +340,7 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		if (! $this->selections->hasNamedExpression($name)) {
-			throw UnknownQueryExpressionException::forQuery($name, $this->getCollection()->getName());
+			throw UnknownQueryExpressionException::forQuery($name, $this->getSourceName());
 		}
 
 		return $this->selections->getNamedExpression($name);

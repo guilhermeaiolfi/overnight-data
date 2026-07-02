@@ -12,4 +12,5 @@ enum QueryUsage
 	case SCALAR_SUBQUERY;
 	case IN_SUBQUERY;
 	case EXISTS_SUBQUERY;
+	case DERIVED_TABLE;
 }

@@ -975,6 +975,35 @@ final class QueryModelTest extends TestCase
 		self::assertSame('__rank', $ranked->field('__rank')->getName());
 	}
 
+	public function testDerivedSourceNamedExpressionLookupAndRelationsFailClearly(): void
+	{
+		$posts = query($this->makeRegistry()->getCollection('posts'));
+		$rank = x()->fn()->rowNumber()->over(orderBy: $posts->id->asc())->as('__rank');
+		$ranked = $posts->select($posts->all(), $rank)->as('ranked_posts');
+		$query = query($ranked);
+
+		try {
+			$query->get('missing');
+			self::fail('Expected missing named expression lookup to fail.');
+		} catch (UnknownQueryExpressionException $exception) {
+			self::assertSame("Unknown query expression 'missing' on definition 'ranked_posts'.", $exception->getMessage());
+		}
+
+		try {
+			$query->relation('posts');
+			self::fail('Expected relation lookup on a derived source to fail.');
+		} catch (InvalidArgumentException $exception) {
+			self::assertSame('Derived query sources do not support relation loading.', $exception->getMessage());
+		}
+
+		try {
+			$query->posts;
+			self::fail('Expected magic member access on a derived source to fail.');
+		} catch (InvalidArgumentException $exception) {
+			self::assertSame('Derived query sources do not support magic member access; use field() for selected fields.', $exception->getMessage());
+		}
+	}
+
 	public function testRootSelectionKeysPreserveExistingFieldAndAliasConventions(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
