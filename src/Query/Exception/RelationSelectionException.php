@@ -136,4 +136,28 @@ final class RelationSelectionException extends InvalidArgumentException
 			$parentPath,
 		));
 	}
+
+	/**
+	 * @param list<string> $path
+	 */
+	public static function invalidRelationLimit(array $path, int $limit): self
+	{
+		return new self(sprintf(
+			'Relation "%s" selection option "limit" must be >= 1; got %d.',
+			implode('.', $path),
+			$limit,
+		));
+	}
+
+	/**
+	 * @param list<string> $path
+	 */
+	public static function invalidRelationOffset(array $path, int $offset): self
+	{
+		return new self(sprintf(
+			'Relation "%s" selection option "offset" must be >= 0; got %d.',
+			implode('.', $path),
+			$offset,
+		));
+	}
 }

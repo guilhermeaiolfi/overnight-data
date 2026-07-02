@@ -126,4 +126,20 @@ final class RelationLoaderException extends InvalidArgumentException
 			$reason,
 		));
 	}
+
+	public static function hasManyLimitOffsetJoinNotSupported(RelationRef $relation): self
+	{
+		return new self(sprintf(
+			'Relation "%s" cannot use JOIN loading with relation-level limit/offset. HasMany per-parent limit/offset requires separate-query loading.',
+			implode('.', $relation->getPath()),
+		));
+	}
+
+	public static function hasManyLimitOffsetOrderRequired(RelationRef $relation): self
+	{
+		return new self(sprintf(
+			'Relation "%s" cannot use limit/offset without deterministic orderBy().',
+			implode('.', $relation->getPath()),
+		));
+	}
 }

@@ -16,6 +16,8 @@ final class RelationSelection
 		private readonly ?array $fields,
 		private readonly array $conditions = [],
 		private readonly array $sorts = [],
+		private readonly ?int $limit = null,
+		private readonly ?int $offset = null,
 		private readonly ?LoadStrategy $strategy = null,
 	) {
 	}
@@ -87,6 +89,21 @@ final class RelationSelection
 		return $this->strategy;
 	}
 
+	public function getLimit(): ?int
+	{
+		return $this->limit;
+	}
+
+	public function getOffset(): int
+	{
+		return $this->offset ?? 0;
+	}
+
+	public function hasOffset(): bool
+	{
+		return $this->offset !== null;
+	}
+
 	public function merge(self $incoming): self
 	{
 		$sameRelationRef = $this->relationRef === $incoming->relationRef;
@@ -95,6 +112,8 @@ final class RelationSelection
 		$fields = $this->mergeFields($incoming);
 		$conditions = $sameRelationRef ? $incoming->conditions : [...$this->conditions, ...$incoming->conditions];
 		$sorts = $sameRelationRef ? $incoming->sorts : [...$this->sorts, ...$incoming->sorts];
+		$limit = $this->mergeLimit($incoming, $sameRelationRef);
+		[$offset, $hasOffset] = $this->mergeOffset($incoming, $sameRelationRef);
 		$strategy = $this->mergeStrategy($incoming);
 
 		if (
@@ -103,12 +122,25 @@ final class RelationSelection
 			&& $fields === $this->fields
 			&& $conditions === $this->conditions
 			&& $sorts === $this->sorts
+			&& $limit === $this->limit
+			&& $hasOffset === $this->hasOffset()
+			&& $offset === $this->getOffset()
 			&& $strategy === $this->strategy
 		) {
 			return $this;
 		}
 
-		return new self($this->relationRef, $load, $visible, $fields, $conditions, $sorts, $strategy);
+		return new self(
+			$this->relationRef,
+			$load,
+			$visible,
+			$fields,
+			$conditions,
+			$sorts,
+			$limit,
+			$hasOffset ? $offset : null,
+			$strategy,
+		);
 	}
 
 	private function mergeFields(self $incoming): ?array
@@ -135,5 +167,30 @@ final class RelationSelection
 	private function mergeStrategy(self $incoming): ?LoadStrategy
 	{
 		return $incoming->strategy ?? $this->strategy;
+	}
+
+	private function mergeLimit(self $incoming, bool $sameRelationRef): ?int
+	{
+		if ($sameRelationRef) {
+			return $incoming->limit;
+		}
+
+		return $incoming->limit ?? $this->limit;
+	}
+
+	/**
+	 * @return array{0: int, 1: bool}
+	 */
+	private function mergeOffset(self $incoming, bool $sameRelationRef): array
+	{
+		if ($sameRelationRef) {
+			return [$incoming->getOffset(), $incoming->hasOffset()];
+		}
+
+		if ($incoming->hasOffset()) {
+			return [$incoming->getOffset(), true];
+		}
+
+		return [$this->getOffset(), $this->hasOffset()];
 	}
 }

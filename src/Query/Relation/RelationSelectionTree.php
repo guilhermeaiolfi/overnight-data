@@ -44,6 +44,8 @@ final class RelationSelectionTree implements IteratorAggregate, Countable
 				$segment->getFields(),
 				$segment->getConditions(),
 				$segment->getSorts(),
+				$segment->getLimit(),
+				$segment->hasOffset() ? $segment->getOffset() : null,
 				$segment->getStrategy(),
 			);
 

@@ -363,6 +363,40 @@ final class RelationRefTest extends TestCase
 		$users->posts->orderBy();
 	}
 
+	public function testRelationLimitAndOffsetStoreSelectionStateOnCachedRef(): void
+	{
+		$users = $this->makeQuery('users');
+
+		self::assertSame($users->posts, $users->posts->limit(3)->offset(2));
+		self::assertSame(3, $users->posts->getLimit());
+		self::assertSame(2, $users->posts->getOffset());
+		self::assertTrue($users->posts->hasOffset());
+		self::assertTrue($users->posts->isLoaded());
+
+		$selection = $users->getRelationSelections()->getAll()[0];
+		self::assertSame(3, $selection->getLimit());
+		self::assertSame(2, $selection->getOffset());
+		self::assertTrue($selection->hasOffset());
+	}
+
+	public function testRelationLimitAndOffsetValidationRejectInvalidValues(): void
+	{
+		$users = $this->makeQuery('users');
+
+		foreach ([
+			static fn () => $users->posts->limit(0),
+			static fn () => $users->posts->limit(-1),
+			static fn () => $users->posts->offset(-1),
+		] as $call) {
+			try {
+				$call();
+				self::fail('Expected invalid relation pagination option to throw.');
+			} catch (RelationSelectionException) {
+				self::assertTrue(true);
+			}
+		}
+	}
+
 	public function testRelationStrategyHelpersStoreExplicitStrategyOnCachedRef(): void
 	{
 		$users = $this->makeQuery('users');
@@ -475,6 +509,19 @@ final class RelationRefTest extends TestCase
 		self::assertSame(LoadStrategy::SEPARATE_QUERY, $users->getRelationSelections()->getAll()[0]->getStrategy());
 	}
 
+	public function testRepeatedSelectionsUseLatestLimitAndOffsetValues(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$users->posts->limit(2)->offset(5);
+		$users->posts->limit(4)->offset(0);
+
+		$selection = $users->getRelationSelections()->getAll()[0];
+		self::assertSame(4, $selection->getLimit());
+		self::assertSame(0, $selection->getOffset());
+		self::assertTrue($selection->hasOffset());
+	}
+
 	public function testStrategyConfigurationKeepsExistingFieldList(): void
 	{
 		$users = $this->makeQuery('users');
@@ -551,6 +598,28 @@ final class RelationRefTest extends TestCase
 		}
 	}
 
+	public function testHiddenRelationCannotBeSelectedByLimitOrOffset(): void
+	{
+		$users = $this->makeQuery('users');
+
+		try {
+			$users->posts->hidden()->limit(2);
+			self::fail('Expected hidden limit to throw.');
+		} catch (RelationSelectionException) {
+			self::assertNull($users->posts->getLimit());
+			self::assertFalse($users->posts->isLoaded());
+		}
+
+		try {
+			$users->posts->hidden()->offset(1);
+			self::fail('Expected hidden offset to throw.');
+		} catch (RelationSelectionException) {
+			self::assertSame(0, $users->posts->getOffset());
+			self::assertFalse($users->posts->hasOffset());
+			self::assertFalse($users->posts->isLoaded());
+		}
+	}
+
 	public function testHiddenRelationCannotBeSelectedByJoinOrSeparate(): void
 	{
 		$joined = $this->makeQuery('users');
@@ -596,6 +665,8 @@ final class RelationRefTest extends TestCase
 		foreach ([
 			static fn () => $users->posts->where($failedCondition),
 			static fn () => $users->posts->orderBy($failedSort),
+			static fn () => $users->posts->limit(1),
+			static fn () => $users->posts->offset(1),
 			static fn () => $users->posts->strategy(LoadStrategy::JOIN),
 		] as $attempt) {
 			try {
@@ -613,6 +684,9 @@ final class RelationRefTest extends TestCase
 		self::assertSame(['id'], $selection->getFields());
 		self::assertSame([], $selection->getConditions());
 		self::assertSame([], $selection->getSorts());
+		self::assertNull($selection->getLimit());
+		self::assertSame(0, $selection->getOffset());
+		self::assertFalse($selection->hasOffset());
 		self::assertNull($selection->getStrategy());
 	}
 

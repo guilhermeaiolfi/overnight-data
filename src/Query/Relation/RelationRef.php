@@ -60,6 +60,10 @@ final class RelationRef implements QuerySourceInterface
 	 */
 	private array $sorts = [];
 
+	private ?int $limit = null;
+
+	private ?int $offset = null;
+
 	private ?LoadStrategy $strategy = null;
 
 	public function __construct(
@@ -123,6 +127,21 @@ final class RelationRef implements QuerySourceInterface
 	public function getStrategy(): ?LoadStrategy
 	{
 		return $this->strategy;
+	}
+
+	public function getLimit(): ?int
+	{
+		return $this->limit;
+	}
+
+	public function getOffset(): int
+	{
+		return $this->offset ?? 0;
+	}
+
+	public function hasOffset(): bool
+	{
+		return $this->offset !== null;
 	}
 
 	public function getParentSource(): QuerySourceInterface
@@ -290,6 +309,34 @@ final class RelationRef implements QuerySourceInterface
 	public function separate(): self
 	{
 		return $this->strategy(LoadStrategy::SEPARATE_QUERY);
+	}
+
+	public function limit(int $limit): self
+	{
+		$this->assertSelectable();
+
+		if ($limit < 1) {
+			throw RelationSelectionException::invalidRelationLimit($this->getPath(), $limit);
+		}
+
+		$this->limit = $limit;
+		$this->markSelected();
+
+		return $this;
+	}
+
+	public function offset(int $offset): self
+	{
+		$this->assertSelectable();
+
+		if ($offset < 0) {
+			throw RelationSelectionException::invalidRelationOffset($this->getPath(), $offset);
+		}
+
+		$this->offset = $offset;
+		$this->markSelected();
+
+		return $this;
 	}
 
 	public function __get(string $name): FieldRef|self

@@ -361,6 +361,190 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testHasManySeparateLimitReturnsTopNPerParent(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts
+			->fields('title')
+			->orderBy($users->posts->title->desc())
+			->limit(1);
+
+		$rows = $users
+			->select($users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'posts' => [['title' => 'World']]],
+			['name' => 'Grace', 'posts' => [['title' => 'Graph']]],
+			['name' => 'Linus', 'posts' => []],
+		], $rows);
+	}
+
+	public function testHasManySeparateOffsetAndLimitApplyPerParent(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts
+			->fields('title')
+			->orderBy($users->posts->title->desc())
+			->offset(1)
+			->limit(1);
+
+		$rows = $users
+			->select($users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'posts' => [['title' => 'Hello']]],
+			['name' => 'Grace', 'posts' => []],
+			['name' => 'Linus', 'posts' => []],
+		], $rows);
+	}
+
+	public function testHasManySeparateOffsetWithoutLimitIsSupportedPerParent(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts
+			->fields('title')
+			->orderBy($users->posts->title->desc())
+			->offset(1);
+
+		$rows = $users
+			->select($users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'posts' => [['title' => 'Hello']]],
+			['name' => 'Grace', 'posts' => []],
+			['name' => 'Linus', 'posts' => []],
+		], $rows);
+	}
+
+	public function testHasManySeparateLimitRequiresSelectionOrderBy(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts->fields('title')->limit(1);
+
+		$this->expectException(RelationLoaderException::class);
+		$this->expectExceptionMessage('cannot use limit/offset without deterministic orderBy()');
+
+		$users
+			->select($users->name)
+			->fetchAll();
+	}
+
+	public function testHasManyLimitJoinStrategyIsUnsupported(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts
+			->join()
+			->orderBy($users->posts->title->asc())
+			->limit(1);
+
+		$this->expectException(RelationLoaderException::class);
+		$this->expectExceptionMessage('per-parent limit/offset requires separate-query loading');
+
+		$users
+			->select($users->name)
+			->fetchAll();
+	}
+
+	public function testHasManySeparateWhereFiltersEligibleChildrenBeforeRanking(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts
+			->fields('title')
+			->where(x()->eq($users->posts->published, true))
+			->orderBy($users->posts->id->desc())
+			->limit(1);
+
+		$rows = $users
+			->select($users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'posts' => [['title' => 'Hello']]],
+			['name' => 'Grace', 'posts' => [['title' => 'Graph']]],
+			['name' => 'Linus', 'posts' => []],
+		], $rows);
+	}
+
+	public function testHasManyLimitedLoadingKeepsRestrictedFieldsAndNestedJoinedRelations(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts
+			->fields('title')
+			->orderBy($users->posts->id->desc())
+			->limit(1)
+			->author->fields('name');
+
+		$rows = $users
+			->select($users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'posts' => [['title' => 'World', 'author' => ['name' => 'Ada']]]],
+			['name' => 'Grace', 'posts' => [['title' => 'Graph', 'author' => ['name' => 'Grace']]]],
+			['name' => 'Linus', 'posts' => []],
+		], $rows);
+		self::assertSame(['title', 'author'], array_keys($rows[0]['posts'][0]));
+	}
+
+	public function testHasManyLimitedLoadingUsesWindowedDerivedQuery(): void
+	{
+		$executor = $this->executorFromDatabase($this->database);
+		$recording = new RecordingQueryExecutor(
+			$executor,
+			fn (SelectQuery $query): string => $this->compileSqlWithExecutor($executor, $query),
+		);
+		$database = new Database($recording);
+		$users = $database->query($this->registry->getCollection('users'));
+		$users->posts
+			->fields('id', 'title')
+			->orderBy($users->posts->title->desc())
+			->offset(1)
+			->limit(1);
+
+		$users
+			->select($users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		$sql = $recording->derivedSql()[0] ?? '';
+
+		self::assertStringContainsString('ROW_NUMBER() OVER', $sql);
+		self::assertStringContainsString('PARTITION BY', $sql);
+		self::assertStringContainsString('"q1"."user_id"', $sql);
+		self::assertStringContainsString('WHERE "__ondata_limited_has_many"."__ondata_rank" > ?', $sql);
+		self::assertStringContainsString('"__ondata_limited_has_many"."__ondata_rank" <= ?', $sql);
+		self::assertStringContainsString('"__ondata_limited_has_many"."title" AS "title"', $sql);
+		self::assertStringNotContainsString('"__ondata_limited_has_many"."user_id"', $sql);
+	}
+
+	public function testHasManyLimitSupportsCompositeRelationKeysAndCompositeTargetPrimaryKeyTieBreakers(): void
+	{
+		$employees = $this->database->query($this->registry->getCollection('employees'));
+		$employees->badges
+			->fields('badgeId', 'label')
+			->orderBy($employees->badges->label->desc())
+			->limit(2);
+
+		$rows = $employees
+			->select($employees->name)
+			->orderBy($employees->name->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'badges' => [['badgeId' => 1, 'label' => 'Core'], ['badgeId' => 2, 'label' => 'Core']]],
+			['name' => 'Grace', 'badges' => [['badgeId' => 1, 'label' => 'Compiler']]],
+			['name' => 'Linus', 'badges' => [['badgeId' => 1, 'label' => 'Kernel']]],
+		], $rows);
+	}
+
 	public function testSeparateBelongsToRelationWhereDoesNotFilterRootRows(): void
 	{
 		$posts = $this->database->query($this->registry->getCollection('posts'));
@@ -1442,6 +1626,10 @@ final class CycleJoinExecutionTest extends TestCase
 			->innerKey(['tenantId', 'accountId'])
 			->outerKey(['tenantId', 'id'])
 			->nullable(false)
+			->end();
+		$employees->hasMany('badges', 'employee_badges')
+			->innerKey(['tenantId', 'name'])
+			->outerKey(['tenantId', 'employeeName'])
 			->end();
 		$employees->relation('latestBadge', FirstOfManyRelation::class)
 			->collection('employee_badges')
