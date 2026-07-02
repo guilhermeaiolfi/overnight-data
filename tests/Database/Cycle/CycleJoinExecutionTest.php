@@ -916,6 +916,34 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testFirstOfManyNestedDefaultJoinLoadingAttachesAuthor(): void
+	{
+		$executor = $this->executorFromDatabase($this->database);
+		$recording = new RecordingQueryExecutor(
+			$executor,
+			fn (SelectQuery $query): string => $this->compileSqlWithExecutor($executor, $query),
+		);
+		$database = new Database($recording);
+		$users = $database->query($this->registry->getCollection('users'));
+		$users->latestPost->author->fields('id', 'name');
+
+		$rows = $users
+			->select($users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'latestPost' => ['author' => ['id' => 2, 'name' => 'Grace']]],
+			['name' => 'Grace', 'latestPost' => ['author' => ['id' => 2, 'name' => 'Grace']]],
+			['name' => 'Linus', 'latestPost' => null],
+		], $rows);
+
+		$sql = $recording->derivedSql()[0] ?? '';
+
+		self::assertStringContainsString('JOIN "users" AS', $sql);
+		self::assertStringContainsString('ROW_NUMBER() OVER', $sql);
+	}
+
 	public function testFirstOfManyRequiresDefinitionOrderMetadata(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
