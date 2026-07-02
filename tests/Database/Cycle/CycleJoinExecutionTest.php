@@ -13,7 +13,6 @@ use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\FirstOfManyRelation;
 use ON\Data\Definition\Relation\M2MRelation;
-use ON\Data\Query\DerivedQuerySource;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Exception\RelationSelectionException;
@@ -1082,7 +1081,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$users->latestPost->fields('id', 'title');
 
 		$this->expectException(UnsupportedQueryException::class);
-		$this->expectExceptionMessage('derived-source and window-expression support');
+		$this->expectExceptionMessage('subquery-source and window-expression support');
 
 		$users
 			->select($users->name)
@@ -1794,7 +1793,7 @@ final class RecordingQueryExecutor implements QueryExecutorInterface
 
 	public function fetchAll(SelectQuery $query): array
 	{
-		if ($query->getFrom() instanceof DerivedQuerySource) {
+		if ($query->getFrom() instanceof SelectQuery) {
 			$this->derivedSql[] = ($this->compileSql)($query);
 		}
 
@@ -1824,10 +1823,10 @@ final class FirstOfManyFallbackExecutor implements QueryExecutorInterface
 {
 	public function fetchAll(SelectQuery $query): array
 	{
-		if ($query->getFrom() instanceof DerivedQuerySource) {
+		if ($query->getFrom() instanceof SelectQuery) {
 			throw UnsupportedQueryException::forQuery(
 				$query,
-				'FirstOfMany windowed loading requires derived-source and window-expression support from the query executor',
+				'FirstOfMany windowed loading requires subquery-source and window-expression support from the query executor',
 			);
 		}
 

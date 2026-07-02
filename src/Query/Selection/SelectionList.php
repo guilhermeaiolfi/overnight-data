@@ -150,13 +150,13 @@ final class SelectionList implements IteratorAggregate, Countable
 		$this->add($expression, $reason);
 	}
 
-	public function merge(self $other): void
+	public function merge(self $other, ?bool $explicit = null): void
 	{
 		foreach ($other->getAll() as $selection) {
 			$this->add(
 				$selection->getExpression(),
 				$selection->getReasons(),
-				$selection->isExplicit(),
+				$explicit ?? $selection->isExplicit(),
 			);
 		}
 	}
@@ -176,9 +176,14 @@ final class SelectionList implements IteratorAggregate, Countable
 		return $projected;
 	}
 
-	public function addProjectedFrom(self $other, QuerySourceInterface $from, QuerySourceInterface $to): void
+	public function addProjectedFrom(
+		self $other,
+		QuerySourceInterface $from,
+		QuerySourceInterface $to,
+		?bool $explicit = null,
+	): void
 	{
-		$this->merge($other->projectTo($from, $to));
+		$this->merge($other->projectTo($from, $to), $explicit);
 	}
 
 	public function ensureField(FieldRef|SourceFieldExpression $field, string $reason): SelectionItem
@@ -295,15 +300,12 @@ final class SelectionList implements IteratorAggregate, Countable
 	 */
 	public function getParserItems(): array
 	{
-		return $this->filter(static function (SelectionItem $selection): bool {
-			foreach (self::PARSER_REASONS as $reason) {
-				if ($selection->hasReason($reason)) {
-					return true;
-				}
-			}
+		return $this->filterForParser()->getAll();
+	}
 
-			return false;
-		})->getAll();
+	public function filterForParser(): self
+	{
+		return $this->filter(static fn (SelectionItem $selection): bool => $selection->isParserVisible());
 	}
 
 	/**
@@ -330,6 +332,17 @@ final class SelectionList implements IteratorAggregate, Countable
 	public function hasNamedExpression(string $name): bool
 	{
 		return isset($this->namedExpressions[$name]);
+	}
+
+	public function hasSelectionKey(string $name): bool
+	{
+		foreach ($this->entries as $entry) {
+			if ($entry->getSelectionKey() === $name) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	public function count(): int

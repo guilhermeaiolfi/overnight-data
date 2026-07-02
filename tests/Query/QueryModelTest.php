@@ -19,7 +19,6 @@ use ON\Data\Query\Condition\LogicalOperator;
 use ON\Data\Query\Condition\NotCondition;
 use ON\Data\Query\Condition\NullCondition;
 use ON\Data\Query\Condition\NullOperator;
-use ON\Data\Query\DerivedQuerySource;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Exception\UnknownQueryExpressionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
@@ -908,26 +907,49 @@ final class QueryModelTest extends TestCase
 		self::assertSame($posts, $posts->get('pair_key')->getArguments()[0]->getQuery());
 	}
 
-	public function testDirectSubquerySelectionNormalizesToSubqueryExpressionAndAsCreatesDerivedSource(): void
+	public function testDirectSubquerySelectionNormalizesToSubqueryExpressionAndAsMutatesQueryAlias(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = query($registry->getCollection('users'));
 		$posts = query($registry->getCollection('posts'));
 
+		$posts->select($posts->id->count());
 		$users->select($users->id, $posts);
 		$aliased = $posts->as('post_count');
-		$posts->select($posts->id->count());
 
 		$selections = $users->getSelections()->getAll();
 
 		self::assertCount(2, $selections);
 		self::assertInstanceOf(SubqueryExpression::class, $selections[1]->getExpression());
 		self::assertSame($posts, $selections[1]->getExpression()->getQuery());
-		self::assertInstanceOf(DerivedQuerySource::class, $aliased);
-		self::assertSame($posts, $aliased->getQuery());
+		self::assertSame($posts, $aliased);
 		self::assertSame('post_count', $aliased->getAlias());
 		self::assertCount(1, $selections[1]->getExpression()->getQuery()->getSelections());
 		self::assertFalse(is_a($posts, ValueExpressionInterface::class));
+	}
+
+	public function testCopyPreservesSelectionsConditionsSortsAndAliasIndependently(): void
+	{
+		$posts = query($this->makeRegistry()->getCollection('posts'));
+		$posts
+			->select($posts->userId)
+			->where($posts->id->gt(0))
+			->orderBy($posts->id->desc())
+			->limit(2)
+			->offset(1);
+
+		$posts->as('source_posts');
+
+		$copy = $posts->copy()->as('ranked_posts');
+
+		self::assertNotSame($posts, $copy);
+		self::assertSame('source_posts', $posts->getAlias());
+		self::assertSame('ranked_posts', $copy->getAlias());
+		self::assertCount(count($posts->getSelections()->getAll()), $copy->getSelections()->getAll());
+		self::assertCount(count($posts->getConditions()), $copy->getConditions());
+		self::assertCount(count($posts->getSorts()), $copy->getSorts());
+		self::assertSame($posts->getLimit(), $copy->getLimit());
+		self::assertSame($posts->getOffset(), $copy->getOffset());
 	}
 
 	public function testWindowFunctionNamespaceAndOverNormalization(): void

@@ -29,7 +29,7 @@ use ON\Data\Query\Sort\Sort;
 
 final class SelectQuery implements QuerySourceInterface
 {
-	private const AUTO_ALIAS_PREFIX = 'd';
+	private static int $nextAutoAlias = 0;
 
 	/**
 	 * @var array<string, FieldRef>
@@ -83,12 +83,14 @@ final class SelectQuery implements QuerySourceInterface
 
 	private ?StarExpression $sourceStar = null;
 
-	private bool $sourceView = false;
-
 	public function __construct(
 		private readonly CollectionInterface|SelectQuery $source,
 		private ?QueryExecutorInterface $executor = null,
 	) {
+		if ($source instanceof self && ! $source->hasAlias()) {
+			throw new InvalidArgumentException('SelectQuery sources must be aliased with as() before they are used in FROM.');
+		}
+
 		$this->selections = new SelectionList();
 	}
 
@@ -99,11 +101,15 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function getCollection(): CollectionInterface
 	{
-		if (! $this->source instanceof CollectionInterface) {
+		if ($this->hasAlias()) {
 			throw new InvalidArgumentException('Derived query sources do not expose collection metadata.');
 		}
 
-		return $this->source;
+		if ($this->source instanceof CollectionInterface) {
+			return $this->source;
+		}
+
+		return $this->source->getCollection();
 	}
 
 	public function getFrom(): CollectionInterface|SelectQuery
@@ -113,6 +119,10 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function getSourceName(): string
 	{
+		if ($this->hasAlias()) {
+			return $this->alias;
+		}
+
 		if ($this->source instanceof CollectionInterface) {
 			return $this->source->getName();
 		}
@@ -122,8 +132,8 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function getPath(): array
 	{
-		if ($this->actsAsSource()) {
-			return [$this->requireAlias()];
+		if ($this->hasAlias()) {
+			return [$this->alias];
 		}
 
 		return [];
@@ -136,18 +146,21 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function requireAlias(): string
 	{
-		if ($this->alias !== null) {
-			return $this->alias;
+		if ($this->alias === null) {
+			throw new InvalidArgumentException('SelectQuery does not have an alias.');
 		}
-
-		$this->alias = self::AUTO_ALIAS_PREFIX . spl_object_id($this);
 
 		return $this->alias;
 	}
 
+	public function hasAlias(): bool
+	{
+		return $this->alias !== null;
+	}
+
 	public function isExecutable(): bool
 	{
-		return ! $this->actsAsSource() && $this->executor instanceof QueryExecutorInterface;
+		return ! $this->hasAlias() && $this->source instanceof CollectionInterface && $this->executor instanceof QueryExecutorInterface;
 	}
 
 	public function detach(): self
@@ -165,19 +178,16 @@ final class SelectQuery implements QuerySourceInterface
 			throw new InvalidArgumentException('SelectQuery::field() requires a non-empty field name.');
 		}
 
-		if ($this->actsAsSource()) {
-			if ($this->source instanceof SelectQuery && $this->source->exposesField($name)) {
-				return $this->projectedFieldRefs[$name] ??= new SourceFieldExpression($this, $name);
-			}
-
-			if (
-				$this->source instanceof CollectionInterface
-				&& ($this->selections->hasNamedExpression($name) || $this->exposesField($name))
-			) {
+		if ($this->hasAlias()) {
+			if ($this->selections->hasSelectionKey($name)) {
 				return $this->projectedFieldRefs[$name] ??= new SourceFieldExpression($this, $name);
 			}
 
 			throw UnknownQueryFieldException::forDefinition($name, $this->getSourceName());
+		}
+
+		if ($this->source instanceof SelectQuery) {
+			return $this->source->field($name);
 		}
 
 		if (isset($this->fieldRefs[$name])) {
@@ -195,7 +205,7 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function relation(string $name): RelationRef
 	{
-		if (! $this->source instanceof CollectionInterface || $this->actsAsSource()) {
+		if (! $this->canLoadRelations()) {
 			throw new InvalidArgumentException('Derived query sources do not support relation loading.');
 		}
 
@@ -214,7 +224,7 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function __get(string $name): FieldRef|RelationRef
 	{
-		if (! $this->source instanceof CollectionInterface || $this->actsAsSource()) {
+		if (! $this->canLoadRelations()) {
 			throw new InvalidArgumentException('Derived query sources do not support magic member access; use field() for selected fields.');
 		}
 
@@ -231,7 +241,7 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function star(): StarExpression
 	{
-		if ($this->actsAsSource()) {
+		if ($this->hasAlias()) {
 			return $this->sourceStar ??= new StarExpression($this);
 		}
 
@@ -249,30 +259,66 @@ final class SelectQuery implements QuerySourceInterface
 			throw new InvalidArgumentException('Derived query source aliases cannot be empty.');
 		}
 
-		$clone = new self($this->source);
-		$clone->alias = $alias === null ? null : trim($alias);
-		$clone->conditions = array_map(
-			fn (ConditionInterface $condition): ConditionInterface => $condition->bindTo($clone, from: $this),
+		$this->alias = $alias === null ? $this->generateAutoAlias() : trim($alias);
+
+		return $this;
+	}
+
+	public function copy(): self
+	{
+		$copy = new self($this->source, $this->executor);
+
+		foreach ($this->selections->getAll() as $selection) {
+			$copy->selections->add(
+				$this->copySelectionExpression($selection->getExpression(), $copy),
+				$selection->getReasons(),
+				$selection->isExplicit(),
+			);
+		}
+
+		$copy->conditions = array_map(
+			fn (ConditionInterface $condition): ConditionInterface => $condition->bindTo($copy, from: $this),
 			$this->conditions,
 		);
-		$clone->groups = array_map(
-			fn (ValueExpressionInterface $group): ValueExpressionInterface => $group->bindTo($clone, from: $this),
+		$copy->groups = array_map(
+			fn (ValueExpressionInterface $group): ValueExpressionInterface => $group->bindTo($copy, from: $this),
 			$this->groups,
 		);
-		$clone->havingConditions = array_map(
-			fn (ConditionInterface $condition): ConditionInterface => $condition->bindTo($clone, from: $this),
+		$copy->havingConditions = array_map(
+			fn (ConditionInterface $condition): ConditionInterface => $condition->bindTo($copy, from: $this),
 			$this->havingConditions,
 		);
-		$clone->sorts = array_map(
-			fn (Sort $sort): Sort => $sort->bindTo($clone, from: $this),
+		$copy->sorts = array_map(
+			fn (Sort $sort): Sort => $sort->bindTo($copy, from: $this),
 			$this->sorts,
 		);
-		$clone->limit = $this->limit;
-		$clone->offset = $this->offset;
-		$clone->getSelections()->addProjectedFrom($this->selections, from: $this, to: $clone);
-		$clone->sourceView = true;
+		$copy->limit = $this->limit;
+		$copy->offset = $this->offset;
 
-		return $clone;
+		$joinMap = [spl_object_id($this) => $copy];
+
+		foreach ($this->joins as $join) {
+			$source = $join->getSource();
+			$copiedSource = $source instanceof Join
+				? $joinMap[spl_object_id($source)] ?? $copy
+				: $copy;
+			$copiedJoin = new Join($copy, $copiedSource, $join->getCollection(), $join->getType(), $join->getName());
+
+			foreach ($join->getConditions() as $condition) {
+				$copiedJoin->on(...$this->rebindConditions($condition, $copy, $joinMap, $join));
+			}
+
+			$copy->joins[] = $copiedJoin;
+			$joinMap[spl_object_id($join)] = $copiedJoin;
+		}
+
+		foreach ($this->relationRefs as $name => $relationRef) {
+			$copy->relationRefs[$name] = $this->copyRelationRef($relationRef, $copy, null, $joinMap);
+		}
+
+		$copy->alias = $this->alias;
+
+		return $copy;
 	}
 
 	public function select(ValueExpressionInterface|AliasedExpression|StarExpression|SelectQuery ...$expressions): self
@@ -559,13 +605,7 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function exposesField(string $name): bool
 	{
-		foreach ($this->selections->getAll() as $selection) {
-			if ($selection->getSelectionKey() === $name) {
-				return true;
-			}
-		}
-
-		return false;
+		return $this->selections->hasSelectionKey($name);
 	}
 
 	public function isDerivedSource(): bool
@@ -573,9 +613,9 @@ final class SelectQuery implements QuerySourceInterface
 		return $this->source instanceof SelectQuery;
 	}
 
-	public function actsAsSource(): bool
+	public function canLoadRelations(): bool
 	{
-		return $this->sourceView || $this->isDerivedSource();
+		return $this->source instanceof CollectionInterface && ! $this->hasAlias();
 	}
 
 	private function normalizeValueExpression(ValueExpressionInterface|SelectQuery $expression): ValueExpressionInterface
@@ -667,5 +707,132 @@ final class SelectQuery implements QuerySourceInterface
 		foreach ($relation->getRelationRefs() as $child) {
 			$this->collectRelationSelections($child, $tree);
 		}
+	}
+
+	private function generateAutoAlias(): string
+	{
+		return 'd' . self::$nextAutoAlias++;
+	}
+
+	private function copySelectionExpression(
+		ValueExpressionInterface|AliasedExpression|StarExpression $expression,
+		self $copy,
+	): ValueExpressionInterface|AliasedExpression|StarExpression {
+		if ($expression instanceof AliasedExpression) {
+			$inner = $expression->getExpression();
+
+			if ($inner instanceof StarExpression) {
+				return $inner->bindTo($copy, from: $this);
+			}
+
+			return $inner->bindTo($copy, from: $this)->as($expression->getAlias());
+		}
+
+		return $expression->bindTo($copy, from: $this);
+	}
+
+	private function copyRelationRef(
+		RelationRef $relationRef,
+		self $copy,
+		?RelationRef $parent,
+		array $joinMap,
+	): RelationRef {
+		$copied = new RelationRef($copy, $relationRef->getDefinition(), $parent);
+
+		if ($relationRef->getFields() !== null) {
+			$copied->fields($relationRef->getFields());
+		} elseif ($relationRef->isSelected()) {
+			$copied->load();
+		}
+
+		$copied->visible($relationRef->isVisible());
+
+		if ($relationRef->getConditions() !== []) {
+			$copied->where(...array_map(
+				fn (ConditionInterface $condition): ConditionInterface => $this->rebindCondition($condition, $copy, $joinMap),
+				$relationRef->getConditions(),
+			));
+		}
+
+		if ($relationRef->getSorts() !== []) {
+			$copied->orderBy(...array_map(
+				fn (Sort $sort): Sort => $this->rebindSort($sort, $copy, $joinMap),
+				$relationRef->getSorts(),
+			));
+		}
+
+		if ($relationRef->getStrategy() !== null) {
+			$copied->strategy($relationRef->getStrategy());
+		}
+
+		if ($relationRef->getLimit() !== null) {
+			$copied->limit($relationRef->getLimit());
+		}
+
+		if ($relationRef->hasOffset()) {
+			$copied->offset($relationRef->getOffset());
+		}
+
+		foreach ($relationRef->getRelationRefs() as $child) {
+			$copied->relation($child->getName());
+			$copy->relationRefs[$relationRef->getName()] = $copied;
+			$this->copyRelationRef($child, $copy, $copied, $joinMap);
+		}
+
+		return $copied;
+	}
+
+	/**
+	 * @return list<ConditionInterface>
+	 */
+	private function rebindConditions(
+		ConditionInterface $condition,
+		self $copy,
+		array $joinMap,
+		Join $join,
+	): array {
+		return [$this->rebindCondition($condition, $copy, [spl_object_id($this) => $copy, spl_object_id($join) => $joinMap[spl_object_id($join)] ?? $copy] + $joinMap)];
+	}
+
+	private function rebindCondition(ConditionInterface $condition, self $copy, array $sourceMap): ConditionInterface
+	{
+		$rebound = $condition->bindTo($copy, from: $this);
+
+		foreach ($sourceMap as $sourceId => $target) {
+			if ($sourceId === spl_object_id($this) || ! $target instanceof QuerySourceInterface) {
+				continue;
+			}
+
+			foreach ($this->joins as $join) {
+				if (spl_object_id($join) !== $sourceId) {
+					continue;
+				}
+
+				$rebound = $rebound->bindTo($target, from: $join);
+			}
+		}
+
+		return $rebound;
+	}
+
+	private function rebindSort(Sort $sort, self $copy, array $sourceMap): Sort
+	{
+		$rebound = $sort->bindTo($copy, from: $this);
+
+		foreach ($sourceMap as $sourceId => $target) {
+			if ($sourceId === spl_object_id($this) || ! $target instanceof QuerySourceInterface) {
+				continue;
+			}
+
+			foreach ($this->joins as $join) {
+				if (spl_object_id($join) !== $sourceId) {
+					continue;
+				}
+
+				$rebound = $rebound->bindTo($target, from: $join);
+			}
+		}
+
+		return $rebound;
 	}
 }

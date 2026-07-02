@@ -53,23 +53,15 @@ final class CycleTranslationContext
 		$id = spl_object_id($source);
 
 		if (isset($this->aliases[$id])) {
-			if ($source instanceof SelectQuery && $source->actsAsSource() && ! $this->isCurrent($source)) {
-				return $source->requireAlias();
+			if ($source instanceof SelectQuery && $source->hasAlias() && ! $this->isCurrent($source)) {
+				return $source->getAlias();
 			}
 
 			return $this->aliases[$id];
 		}
 
 		if ($source instanceof SelectQuery) {
-			if ($source->isDerivedSource()) {
-				return $this->aliases[$id] = $source->requireAlias();
-			}
-
-			if ($source->actsAsSource() && ! $this->isCurrent($source)) {
-				return $source->requireAlias();
-			}
-
-			if ($source->getAlias() !== null) {
+			if ($source->hasAlias() && ! $this->isCurrent($source)) {
 				return $this->aliases[$id] = $source->getAlias();
 			}
 

@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace ON\Data\Query\Selection;
 
 use InvalidArgumentException;
+use LogicException;
+use ON\Data\Query\Expression\SourceFieldExpression;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\SelectQuery;
 
 final class SelectionItem
 {
@@ -17,11 +20,18 @@ final class SelectionItem
 	 */
 	private readonly array $reasons;
 
+	private readonly ?string $selectionKey;
+
 	public function __construct(
 		private readonly ValueExpressionInterface|AliasedExpression|StarExpression $expression,
 		private readonly bool $explicit = false,
 		array $reasons = [],
 	) {
+		try {
+			$this->selectionKey = $expression->getSelectionKey();
+		} catch (LogicException) {
+			$this->selectionKey = null;
+		}
 		$this->reasons = array_values(array_unique(
 			array_map($this->normalizeReason(...), $reasons),
 		));
@@ -34,7 +44,7 @@ final class SelectionItem
 
 	public function getSelectionKey(): string
 	{
-		return $this->expression->getSelectionKey();
+		return $this->selectionKey ?? $this->expression->getSelectionKey();
 	}
 
 	public function getProjectedExpression(
@@ -46,7 +56,7 @@ final class SelectionItem
 			: $this->expression;
 
 		if ($from !== null && $to !== null) {
-			if ($from instanceof \ON\Data\Query\SelectQuery && $from->actsAsSource()) {
+			if ($from instanceof SelectQuery && $from->hasAlias()) {
 				$expression = $expression instanceof StarExpression
 					? $from->all()
 					: $from->field($this->getSelectionKey());
@@ -91,6 +101,26 @@ final class SelectionItem
 		$reason = $this->normalizeReason($reason);
 
 		return in_array($reason, $this->reasons, true);
+	}
+
+	public function isParserVisible(): bool
+	{
+		if ($this->isExplicit()) {
+			return true;
+		}
+
+		foreach ([
+			SelectionReason::PUBLIC,
+			SelectionReason::REQUIRED,
+			SelectionReason::RELATION,
+			SelectionReason::IDENTITY,
+		] as $reason) {
+			if ($this->hasReason($reason)) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	public function withExplicit(): self

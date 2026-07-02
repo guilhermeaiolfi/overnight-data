@@ -155,8 +155,14 @@ final class CycleQueryTranslator
 			$visible = ! $root || $selection->isExplicit();
 
 			if ($expression instanceof StarExpression) {
-				if (! $root && $query->actsAsSource()) {
-					foreach ($this->expandSourceStar($expression, $context) as $column) {
+				if (! $root && $query->hasAlias()) {
+					$columnsToExpand = $expression->getSource() === $query
+						&& $query->getFrom() instanceof CollectionInterface
+						&& ! $query->isDerivedSource()
+						? $this->expandCollectionStar($query, $context)
+						: $this->expandSourceStar($expression, $context);
+
+					foreach ($columnsToExpand as $column) {
 						$columns[] = $column->toCycleFragment();
 					}
 				} else {
@@ -434,13 +440,39 @@ final class CycleQueryTranslator
 	}
 
 	/**
+	 * @return list<SqlFragment>
+	 */
+	private function expandCollectionStar(SelectQuery $query, CycleTranslationContext $context): array
+	{
+		$from = $query->getFrom();
+
+		if (! $from instanceof CollectionInterface) {
+			return [];
+		}
+
+		$alias = $context->aliasFor($query);
+		$columns = [];
+
+		foreach ($from->getVisibleFields() as $fieldName) {
+			$field = $from->getField($fieldName);
+			$columns[] = SqlFragment::raw(
+				$this->quoteQualified($alias, $field->getColumn())
+				. ' AS '
+				. $this->quoteResultAlias($field->getName()),
+			);
+		}
+
+		return $columns;
+	}
+
+	/**
 	 * @return list<CycleResultColumn>
 	 */
 	private function starResultColumns(StarExpression $expression): array
 	{
 		$source = $expression->getSource();
 
-		if ($source instanceof SelectQuery && ! $source->isDerivedSource()) {
+		if ($source instanceof SelectQuery && ! $source->hasAlias() && ! $source->isDerivedSource()) {
 			$columns = [];
 
 			foreach ($source->getCollection()->getVisibleFields() as $fieldName) {
@@ -477,7 +509,7 @@ final class CycleQueryTranslator
 			}
 
 			if ($expression instanceof FieldRef) {
-				$names[] = $expression->getField()->getColumn();
+				$names[] = $selection->getSelectionKey();
 
 				continue;
 			}
@@ -488,9 +520,22 @@ final class CycleQueryTranslator
 				continue;
 			}
 
+			if (
+				$expression instanceof StarExpression
+				&& $expression->getSource() === $source
+				&& $source->getFrom() instanceof CollectionInterface
+				&& ! $source->isDerivedSource()
+			) {
+				foreach ($source->getFrom()->getVisibleFields() as $fieldName) {
+					$names[] = $source->getFrom()->getField($fieldName)->getName();
+				}
+
+				continue;
+			}
+
 			if ($expression instanceof StarExpression && $expression->getSource() instanceof SelectQuery) {
 				foreach ($this->starResultColumns($expression) as $column) {
-					$names[] = $column->backendName();
+					$names[] = $column->logicalName();
 				}
 			}
 		}
@@ -539,8 +584,22 @@ final class CycleQueryTranslator
 	): SqlFragment {
 		$context->assertSourceAccessible($field->getSource());
 
+		$source = $field->getSource();
+
+		if (
+			$source instanceof SelectQuery
+			&& $context->isCurrent($source)
+			&& $source->getFrom() instanceof CollectionInterface
+			&& $source->getFrom()->hasField($field->getName())
+		) {
+			return SqlFragment::raw($this->quoteQualified(
+				$context->aliasFor($source),
+				$source->getFrom()->getField($field->getName())->getColumn(),
+			));
+		}
+
 		return SqlFragment::raw($this->quoteQualified(
-			$context->aliasFor($field->getSource()),
+			$context->aliasFor($source),
 			$field->getName(),
 		));
 	}
@@ -733,7 +792,13 @@ final class CycleQueryTranslator
 			return new SubQuery($inner, $derived->requireAlias());
 		}
 
-		$source = $this->database->getPrefix() . $this->resolvePhysicalSource($query->getCollection());
+		$from = $query->getFrom();
+
+		if (! $from instanceof CollectionInterface) {
+			throw UnsupportedQueryException::forQuery($query, 'query source must be a collection or aliased subquery');
+		}
+
+		$source = $this->database->getPrefix() . $this->resolvePhysicalSource($from);
 
 		return SqlFragment::raw(
 			$this->quote($source) . ' AS ' . $this->quote($context->aliasFor($query))

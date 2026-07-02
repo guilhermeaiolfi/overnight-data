@@ -15,7 +15,6 @@ use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
 use ON\Data\Query\Selection\SelectionItem;
-use ON\Data\Query\Selection\SelectionReason;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
 use ON\Data\Query\Sort\SortDirection;
@@ -145,13 +144,14 @@ final class FirstOfManyLoader extends AbstractLoader
 			self::RANK_ALIAS,
 		);
 
-		$ranked = $inner->as(self::DERIVED_ALIAS);
+		$ranked = $inner->copy()->as(self::DERIVED_ALIAS);
 		$outer = query($ranked);
 
 		$outer->getSelections()->addProjectedFrom(
-			$inner->getSelections(),
+			$inner->getSelections()->filterForParser(),
 			from: $ranked,
 			to: $outer,
+			explicit: true,
 		);
 
 		return $outer->where($ranked->field(self::RANK_ALIAS)->eq(1));

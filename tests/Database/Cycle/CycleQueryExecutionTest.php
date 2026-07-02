@@ -345,7 +345,7 @@ final class CycleQueryExecutionTest extends TestCase
 		self::assertSame([
 			[
 				'id' => 2,
-				'user_id' => 1,
+				'userId' => 1,
 				'title' => 'World',
 				'amount' => 15.5,
 				'published' => 0,
@@ -353,7 +353,7 @@ final class CycleQueryExecutionTest extends TestCase
 			],
 			[
 				'id' => 3,
-				'user_id' => 2,
+				'userId' => 2,
 				'title' => 'Graph',
 				'amount' => 7.5,
 				'published' => 1,
