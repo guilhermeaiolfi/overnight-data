@@ -140,7 +140,7 @@ final class FirstOfManyLoader extends AbstractLoader
 			x()->fn()->rowNumber()->over(
 				partitionBy: $partitionBy,
 				orderBy: array_map(
-					static fn (Sort $sort): Sort => $sort->rebaseFields($childQuery, $inner),
+					static fn (Sort $sort): Sort => $sort->bindTo($inner, from: $childQuery),
 					$orderBy,
 				),
 			)->as(self::RANK_ALIAS),

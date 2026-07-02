@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Expression;
 
+use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Sort\Sort;
 
 final class WindowSpec
@@ -32,5 +33,36 @@ final class WindowSpec
 	public function getOrderings(): array
 	{
 		return $this->orderBy;
+	}
+
+	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	{
+		$changed = false;
+		$partitionBy = [];
+
+		foreach ($this->partitionBy as $partition) {
+			$bound = $partition->bindTo($target, from: $from);
+			$changed = $changed || $bound !== $partition;
+			$partitionBy[] = $bound;
+		}
+
+		$orderBy = [];
+
+		foreach ($this->orderBy as $sort) {
+			$bound = $sort->bindTo($target, from: $from);
+			$changed = $changed || $bound !== $sort;
+			$orderBy[] = $bound;
+		}
+
+		if (! $changed) {
+			return $this;
+		}
+
+		return new self($partitionBy, $orderBy);
+	}
+
+	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
+	{
+		return $this->bindTo($to, from: $from);
 	}
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Expression;
 
+use InvalidArgumentException;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
@@ -54,6 +55,15 @@ final class FieldRef extends AbstractAggregateableExpression
 
 	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
 	{
+		return $this->bindTo($to, from: $from);
+	}
+
+	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	{
+		if ($from === null) {
+			throw new InvalidArgumentException('FieldRef::bindTo() requires an explicit source.');
+		}
+
 		$fromPath = $from->getPath();
 		$fieldPath = $this->getPath();
 
@@ -68,7 +78,7 @@ final class FieldRef extends AbstractAggregateableExpression
 		}
 
 		$fieldName = array_pop($relativePath);
-		$source = $to;
+		$source = $target;
 
 		foreach ($relativePath as $relationName) {
 			$source = $source->relation($relationName);

@@ -63,20 +63,25 @@ final class InCondition implements ConditionInterface
 
 	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
 	{
-		$expression = $this->expression->rebaseFields($from, $to);
+		return $this->bindTo($to, from: $from);
+	}
+
+	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	{
+		$expression = $this->expression->bindTo($target, from: $from);
 		$set = $this->set;
 		$changed = $expression !== $this->expression;
 
 		if (is_array($set)) {
-			$rebasedSet = [];
+			$boundSet = [];
 
 			foreach ($set as $item) {
-				$rebased = $item->rebaseFields($from, $to);
-				$changed = $changed || $rebased !== $item;
-				$rebasedSet[] = $rebased;
+				$bound = $item->bindTo($target, from: $from);
+				$changed = $changed || $bound !== $item;
+				$boundSet[] = $bound;
 			}
 
-			$set = $rebasedSet;
+			$set = $boundSet;
 		}
 
 		if (! $changed) {

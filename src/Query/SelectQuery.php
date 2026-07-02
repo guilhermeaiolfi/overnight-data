@@ -277,7 +277,7 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		foreach ($conditions as $condition) {
-			$this->where($condition->rebaseFields($from, $this));
+			$this->where($condition->bindTo($this, from: $from));
 		}
 
 		return $this;
@@ -290,7 +290,7 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		foreach ($sorts as $sort) {
-			$this->orderBy($sort->rebaseFields($from, $this));
+			$this->orderBy($sort->bindTo($this, from: $from));
 		}
 
 		return $this;

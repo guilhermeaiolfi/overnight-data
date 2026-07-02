@@ -50,7 +50,7 @@ final class SelectionItem
 			: $this->expression;
 
 		if ($from !== null && $to !== null) {
-			$expression = $expression->rebaseFields($from, $to);
+			$expression = $expression->bindTo($to, from: $from);
 		}
 
 		if ($this->expression instanceof AliasedExpression) {

@@ -27,7 +27,12 @@ final class Sort
 
 	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
 	{
-		$expression = $this->expression->rebaseFields($from, $to);
+		return $this->bindTo($to, from: $from);
+	}
+
+	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	{
+		$expression = $this->expression->bindTo($target, from: $from);
 
 		if ($expression === $this->expression) {
 			return $this;

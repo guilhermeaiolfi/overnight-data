@@ -62,13 +62,18 @@ final class ValueOperationExpression extends AbstractAggregateableExpression
 
 	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
 	{
+		return $this->bindTo($to, from: $from);
+	}
+
+	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	{
 		$changed = false;
 		$arguments = [];
 
 		foreach ($this->arguments as $argument) {
-			$rebased = $argument->rebaseFields($from, $to);
-			$changed = $changed || $rebased !== $argument;
-			$arguments[] = $rebased;
+			$bound = $argument->bindTo($target, from: $from);
+			$changed = $changed || $bound !== $argument;
+			$arguments[] = $bound;
 		}
 
 		if (! $changed) {

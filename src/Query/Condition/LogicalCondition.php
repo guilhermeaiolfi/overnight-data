@@ -36,13 +36,18 @@ final class LogicalCondition implements ConditionInterface
 
 	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
 	{
+		return $this->bindTo($to, from: $from);
+	}
+
+	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	{
 		$changed = false;
 		$conditions = [];
 
 		foreach ($this->conditions as $condition) {
-			$rebased = $condition->rebaseFields($from, $to);
-			$changed = $changed || $rebased !== $condition;
-			$conditions[] = $rebased;
+			$bound = $condition->bindTo($target, from: $from);
+			$changed = $changed || $bound !== $condition;
+			$conditions[] = $bound;
 		}
 
 		if (! $changed) {

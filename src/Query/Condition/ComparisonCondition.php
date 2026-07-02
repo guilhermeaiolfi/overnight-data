@@ -33,8 +33,13 @@ final class ComparisonCondition implements ConditionInterface
 
 	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
 	{
-		$left = $this->left->rebaseFields($from, $to);
-		$right = $this->right->rebaseFields($from, $to);
+		return $this->bindTo($to, from: $from);
+	}
+
+	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	{
+		$left = $this->left->bindTo($target, from: $from);
+		$right = $this->right->bindTo($target, from: $from);
 
 		if ($left === $this->left && $right === $this->right) {
 			return $this;

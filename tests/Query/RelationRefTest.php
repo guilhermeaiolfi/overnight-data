@@ -8,6 +8,7 @@ use Error;
 use InvalidArgumentException;
 use ON\Data\Definition\Registry;
 use ON\Data\Query\Condition\ComparisonCondition;
+use ON\Data\Query\Condition\LogicalCondition;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Exception\UnknownQueryMemberException;
@@ -709,6 +710,134 @@ final class RelationRefTest extends TestCase
 		$users->select($other->posts);
 	}
 
+	public function testConditionBindToCopiesFieldsWithoutMutatingOriginalCondition(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$otherUsers = $this->makeQuery('users', $registry);
+		$condition = $users->posts->title->eq('Hello');
+
+		$bound = $condition->bindTo($otherUsers, from: $users);
+
+		self::assertNotSame($condition, $bound);
+		self::assertInstanceOf(ComparisonCondition::class, $condition);
+		self::assertInstanceOf(ComparisonCondition::class, $bound);
+		self::assertInstanceOf(FieldRef::class, $condition->getLeft());
+		self::assertInstanceOf(FieldRef::class, $bound->getLeft());
+		self::assertSame($users->posts, $condition->getLeft()->getSource());
+		self::assertSame(['posts', 'title'], $condition->getLeft()->getPath());
+		self::assertSame($otherUsers->posts, $bound->getLeft()->getSource());
+		self::assertSame(['posts', 'title'], $bound->getLeft()->getPath());
+	}
+
+	public function testConditionBindToPreservesPathRelativeToRootSource(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$otherUsers = $this->makeQuery('users', $registry);
+		$condition = $users->posts->title->eq('Hello');
+
+		$bound = $condition->bindTo($otherUsers, from: $users);
+
+		self::assertInstanceOf(ComparisonCondition::class, $bound);
+		self::assertInstanceOf(FieldRef::class, $bound->getLeft());
+		self::assertSame($otherUsers->posts, $bound->getLeft()->getSource());
+		self::assertSame(['posts', 'title'], $bound->getLeft()->getPath());
+	}
+
+	public function testConditionBindToPreservesPathRelativeToRelationSource(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$posts = $this->makeQuery('posts', $registry);
+		$condition = $users->posts->title->eq('Hello');
+
+		$bound = $condition->bindTo($posts, from: $users->posts);
+
+		self::assertInstanceOf(ComparisonCondition::class, $bound);
+		self::assertInstanceOf(FieldRef::class, $bound->getLeft());
+		self::assertSame($posts, $bound->getLeft()->getSource());
+		self::assertSame(['title'], $bound->getLeft()->getPath());
+	}
+
+	public function testSortBindToPreservesPathRelativeToRelationSource(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$posts = $this->makeQuery('posts', $registry);
+		$sort = $users->posts->title->desc();
+
+		$bound = $sort->bindTo($posts, from: $users->posts);
+
+		self::assertNotSame($sort, $bound);
+		self::assertInstanceOf(FieldRef::class, $bound->getExpression());
+		self::assertSame($posts, $bound->getExpression()->getSource());
+		self::assertSame(['title'], $bound->getExpression()->getPath());
+		self::assertSame($users->posts, $sort->getExpression()->getSource());
+	}
+
+	public function testBindToRecursivelyCopiesNestedConditionsAndValueExpressions(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$posts = $this->makeQuery('posts', $registry);
+		$condition = x()->and(
+			$users->posts->title->upper()->eq('HELLO'),
+			x()->or(
+				$users->posts->id->sum()->gt(1),
+				$users->posts->published->eq(true),
+			),
+		);
+
+		$bound = $condition->bindTo($posts, from: $users->posts);
+
+		self::assertInstanceOf(LogicalCondition::class, $bound);
+		$first = $bound->getConditions()[0];
+		self::assertInstanceOf(ComparisonCondition::class, $first);
+		self::assertInstanceOf(ValueOperationExpression::class, $first->getLeft());
+		self::assertInstanceOf(FieldRef::class, $first->getLeft()->getArguments()[0]);
+		self::assertSame($posts, $first->getLeft()->getArguments()[0]->getSource());
+		self::assertSame(['title'], $first->getLeft()->getArguments()[0]->getPath());
+
+		$second = $bound->getConditions()[1];
+		self::assertInstanceOf(LogicalCondition::class, $second);
+		self::assertInstanceOf(ComparisonCondition::class, $second->getConditions()[0]);
+		$aggregate = $second->getConditions()[0]->getLeft();
+		self::assertInstanceOf(AggregateExpression::class, $aggregate);
+		self::assertInstanceOf(FieldRef::class, $aggregate->getExpression());
+		self::assertSame($posts, $aggregate->getExpression()->getSource());
+		self::assertSame(['id'], $aggregate->getExpression()->getPath());
+		self::assertInstanceOf(LogicalCondition::class, $condition);
+		self::assertInstanceOf(ComparisonCondition::class, $condition->getConditions()[0]);
+		self::assertInstanceOf(ValueOperationExpression::class, $condition->getConditions()[0]->getLeft());
+		self::assertInstanceOf(FieldRef::class, $condition->getConditions()[0]->getLeft()->getArguments()[0]);
+		self::assertSame($users->posts, $condition->getConditions()[0]->getLeft()->getArguments()[0]->getSource());
+	}
+
+	public function testWindowExpressionBindToRecursivelyBindsWindowSpec(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$posts = $this->makeQuery('posts', $registry);
+		$rank = x()->fn()->rowNumber()->over(
+			partitionBy: $users->posts->published,
+			orderBy: $users->posts->title->desc(),
+		);
+
+		$bound = $rank->bindTo($posts, from: $users->posts);
+
+		$partition = $bound->getWindow()->getPartitionBy()[0];
+		$order = $bound->getWindow()->getOrderings()[0]->getExpression();
+		self::assertInstanceOf(FieldRef::class, $partition);
+		self::assertInstanceOf(FieldRef::class, $order);
+		self::assertSame($posts, $partition->getSource());
+		self::assertSame(['published'], $partition->getPath());
+		self::assertSame($posts, $order->getSource());
+		self::assertSame(['title'], $order->getPath());
+		self::assertInstanceOf(FieldRef::class, $rank->getWindow()->getPartitionBy()[0]);
+		self::assertSame($users->posts, $rank->getWindow()->getPartitionBy()[0]->getSource());
+	}
+
 	public function testAdoptConditionsRebasesRelationFieldsToTargetQuery(): void
 	{
 		$registry = $this->makeRegistry();
@@ -783,7 +912,9 @@ final class RelationRefTest extends TestCase
 
 		self::assertInstanceOf(LiteralExpression::class, $literal);
 		self::assertSame($literal, $literal->rebaseFields($users->posts, $posts));
+		self::assertSame($literal, $literal->bindTo($posts, from: $users->posts));
 		self::assertSame($users->name, $users->name->rebaseFields($users->posts, $posts));
+		self::assertSame($users->name, $users->name->bindTo($posts, from: $users->posts));
 	}
 
 	private function makeRegistry(): Registry

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Expression;
 
+use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Sort\Sort;
 
 final class WindowFunctionExpression extends AbstractValueExpression
@@ -22,6 +23,17 @@ final class WindowFunctionExpression extends AbstractValueExpression
 	public function getWindow(): ?WindowSpec
 	{
 		return $this->window;
+	}
+
+	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	{
+		$window = $this->window?->bindTo($target, from: $from);
+
+		if ($window === $this->window) {
+			return $this;
+		}
+
+		return new self($this->function, $window);
 	}
 
 	/**

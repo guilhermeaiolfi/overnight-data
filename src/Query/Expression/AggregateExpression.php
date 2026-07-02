@@ -38,11 +38,16 @@ final class AggregateExpression extends AbstractValueExpression
 
 	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
 	{
+		return $this->bindTo($to, from: $from);
+	}
+
+	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	{
 		if ($this->expression instanceof StarExpression) {
 			return $this;
 		}
 
-		$expression = $this->expression->rebaseFields($from, $to);
+		$expression = $this->expression->bindTo($target, from: $from);
 
 		if ($expression === $this->expression) {
 			return $this;
