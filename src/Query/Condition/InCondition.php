@@ -61,11 +61,6 @@ final class InCondition implements ConditionInterface
 		return $this->negated;
 	}
 
-	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
-	{
-		return $this->bindTo($to, from: $from);
-	}
-
 	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
 	{
 		$expression = $this->expression->bindTo($target, from: $from);

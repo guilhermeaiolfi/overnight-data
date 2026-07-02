@@ -8,6 +8,9 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\BelongsToRelation;
 use ON\Data\Definition\Relation\HasManyRelation;
 use ON\Data\Definition\Relation\HasOneRelation;
+use ON\Data\Query\Condition\ConditionInterface;
+use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Relation\LoadBranch;
 use ON\Data\Query\Relation\Loader\AbstractLoader;
 use ON\Data\Query\Relation\Loader\BelongsToLoader;
@@ -19,6 +22,8 @@ use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationOutputProcessor;
 use ON\Data\Query\Relation\RootLoadBranch;
 use ON\Data\Query\Result\Parser\AbstractNode;
+use ON\Data\Query\SelectQuery;
+use ON\Data\Query\Sort\Sort;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -387,6 +392,39 @@ final class QueryArchitectureTest extends TestCase
 
 		self::assertStringNotContainsString("method_exists(\$this, 'getPath')", $contents);
 		self::assertStringContainsString('cannot provide a selection key without an alias', $contents);
+	}
+
+	public function testQueryBindingApiDoesNotExposeLegacyCompatibilityMethods(): void
+	{
+		$legacyFieldBindingMethod = implode('', array_map('chr', [114, 101, 98, 97, 115, 101, 70, 105, 101, 108, 100, 115]));
+
+		foreach ([ConditionInterface::class, ValueExpressionInterface::class, FieldRef::class, Sort::class] as $class) {
+			self::assertFalse(method_exists($class, $legacyFieldBindingMethod), $class);
+		}
+
+		self::assertFalse(method_exists(SelectQuery::class, 'adopt' . 'Conditions'));
+		self::assertFalse(method_exists(SelectQuery::class, 'adopt' . 'Sorts'));
+		self::assertTrue(method_exists(SelectQuery::class, 'bindConditions'));
+		self::assertTrue(method_exists(SelectQuery::class, 'bindSorts'));
+	}
+
+	public function testQuerySourceCodeUsesOnlyBindingTerminology(): void
+	{
+		$legacyFieldBindingMethod = implode('', array_map('chr', [114, 101, 98, 97, 115, 101, 70, 105, 101, 108, 100, 115]));
+
+		$this->assertForbiddenStringsAbsent(
+			[dirname(__DIR__, 2) . '/src/Query'],
+			[],
+			[
+				$legacyFieldBindingMethod,
+				'adopt' . 'Conditions',
+				'adopt' . 'Sorts',
+				implode('', array_map('chr', [114, 101, 98, 97, 115, 101])),
+				implode('', array_map('chr', [114, 101, 98, 97, 115, 105, 110, 103])),
+				implode('', array_map('chr', [114, 101, 98, 97, 115, 101, 100])),
+			],
+			'Legacy binding vocabulary "%s" found in %s',
+		);
 	}
 
 	public function testBuiltInLoadersUseRelationKeyPairingsForPairedOperations(): void

@@ -36,11 +36,6 @@ final class StarExpression
 		return $this;
 	}
 
-	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
-	{
-		return $this->bindTo($to, from: $from);
-	}
-
 	public function count(): AggregateExpression
 	{
 		return $this->factory()->count($this);

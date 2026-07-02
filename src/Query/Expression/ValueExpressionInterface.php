@@ -11,6 +11,4 @@ interface ValueExpressionInterface
 	public function getSelectionKey(): string;
 
 	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self;
-
-	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self;
 }

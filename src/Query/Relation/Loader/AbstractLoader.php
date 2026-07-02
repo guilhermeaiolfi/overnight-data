@@ -124,13 +124,13 @@ abstract class AbstractLoader implements LoaderInterface
 		$conditions = $selection->getConditions();
 
 		if ($conditions !== []) {
-			$query->adoptConditions($from, ...$conditions);
+			$query->bindConditions($from, ...$conditions);
 		}
 
 		$sorts = $selection->getSorts();
 
 		if ($sorts !== []) {
-			$query->adoptSorts($from, ...$sorts);
+			$query->bindSorts($from, ...$sorts);
 		}
 	}
 }

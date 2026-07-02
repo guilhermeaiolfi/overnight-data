@@ -9,6 +9,4 @@ use ON\Data\Query\QuerySourceInterface;
 interface ConditionInterface
 {
 	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self;
-
-	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self;
 }

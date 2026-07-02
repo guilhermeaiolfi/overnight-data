@@ -21,11 +21,6 @@ abstract class AbstractValueExpression implements ValueExpressionInterface
 		));
 	}
 
-	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
-	{
-		return $this->bindTo($to, from: $from);
-	}
-
 	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
 	{
 		return $this;

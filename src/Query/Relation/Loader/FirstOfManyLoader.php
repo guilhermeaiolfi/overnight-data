@@ -109,7 +109,7 @@ final class FirstOfManyLoader extends AbstractLoader
 			return;
 		}
 
-		$branch->getQuery()->adoptConditions(
+		$branch->getQuery()->bindConditions(
 			$branch->getRelationRef(),
 			...$conditions,
 		);
@@ -133,7 +133,7 @@ final class FirstOfManyLoader extends AbstractLoader
 		}
 
 		if ($childQuery->getConditions() !== []) {
-			$inner->adoptConditions($childQuery, ...$childQuery->getConditions());
+			$inner->bindConditions($childQuery, ...$childQuery->getConditions());
 		}
 
 		$inner->select(

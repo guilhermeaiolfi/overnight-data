@@ -18,11 +18,6 @@ final class NotCondition implements ConditionInterface
 		return $this->condition;
 	}
 
-	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
-	{
-		return $this->bindTo($to, from: $from);
-	}
-
 	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
 	{
 		$condition = $this->condition->bindTo($target, from: $from);

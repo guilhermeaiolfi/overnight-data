@@ -47,9 +47,4 @@ final class AliasedExpression
 
 		return new self($expression, $this->alias);
 	}
-
-	public function rebaseFields(QuerySourceInterface $from, QuerySourceInterface $to): self
-	{
-		return $this->bindTo($to, from: $from);
-	}
 }

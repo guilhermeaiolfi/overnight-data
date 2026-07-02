@@ -270,10 +270,10 @@ final class SelectQuery implements QuerySourceInterface
 		return $this;
 	}
 
-	public function adoptConditions(QuerySourceInterface $from, ConditionInterface ...$conditions): self
+	public function bindConditions(QuerySourceInterface $from, ConditionInterface ...$conditions): self
 	{
 		if ($conditions === []) {
-			throw new InvalidArgumentException('SelectQuery::adoptConditions() requires at least one condition.');
+			throw new InvalidArgumentException('SelectQuery::bindConditions() requires at least one condition.');
 		}
 
 		foreach ($conditions as $condition) {
@@ -283,10 +283,10 @@ final class SelectQuery implements QuerySourceInterface
 		return $this;
 	}
 
-	public function adoptSorts(QuerySourceInterface $from, Sort ...$sorts): self
+	public function bindSorts(QuerySourceInterface $from, Sort ...$sorts): self
 	{
 		if ($sorts === []) {
-			throw new InvalidArgumentException('SelectQuery::adoptSorts() requires at least one sort.');
+			throw new InvalidArgumentException('SelectQuery::bindSorts() requires at least one sort.');
 		}
 
 		foreach ($sorts as $sort) {
