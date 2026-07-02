@@ -144,14 +144,13 @@ final class FirstOfManyLoader extends AbstractLoader
 			self::RANK_ALIAS,
 		);
 
-		$ranked = $inner->copy()->as(self::DERIVED_ALIAS);
+		$ranked = $inner->as(self::DERIVED_ALIAS);
 		$outer = query($ranked);
 
-		$outer->getSelections()->addProjectedFrom(
-			$inner->getSelections()->filterForParser(),
+		$outer->getSelections()->addParserProjectedFrom(
+			$inner->getSelections(),
 			from: $ranked,
 			to: $outer,
-			explicit: true,
 		);
 
 		return $outer->where($ranked->field(self::RANK_ALIAS)->eq(1));

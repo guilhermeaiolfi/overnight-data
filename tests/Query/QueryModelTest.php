@@ -1364,6 +1364,69 @@ final class QueryModelTest extends TestCase
 		);
 	}
 
+	public function testSelectionListAddParserProjectedFromPreservesReasonsWithoutForcingExplicit(): void
+	{
+		$inner = query($this->makeRegistry()->getCollection('posts'));
+		$inner->getSelections()->add($inner->amount, SelectionReason::PUBLIC);
+		$inner->getSelections()->add($inner->userId, SelectionReason::REQUIRED);
+		$inner->getSelections()->add($inner->id, SelectionReason::RELATION);
+		$ranked = $inner->as('ranked_posts');
+		$outer = query($ranked);
+
+		$outer->getSelections()->addParserProjectedFrom(
+			$inner->getSelections(),
+			from: $ranked,
+			to: $outer,
+		);
+
+		$parserItems = $outer->getSelections()->getParserItems();
+
+		self::assertCount(3, $parserItems);
+		foreach ($parserItems as $item) {
+			self::assertFalse($item->isExplicit(), 'Parser-projected fields must stay implicit.');
+			self::assertTrue($item->isParserVisible());
+		}
+
+		self::assertTrue($parserItems[2]->hasReason(SelectionReason::RELATION));
+	}
+
+	public function testSelectionListAddParserProjectedFromExcludesInternalFields(): void
+	{
+		$inner = query($this->makeRegistry()->getCollection('posts'));
+		$rank = x()->fn()->rowNumber()->over(
+			partitionBy: $inner->userId,
+			orderBy: $inner->id->asc(),
+		);
+		$inner->getSelections()->add($inner->amount, SelectionReason::PUBLIC);
+		$inner->getSelections()->ensureInternalExpression($rank, '__ondata_rank');
+		$ranked = $inner->as('ranked_posts');
+		$outer = query($ranked);
+
+		$outer->getSelections()->addParserProjectedFrom(
+			$inner->getSelections(),
+			from: $ranked,
+			to: $outer,
+		);
+
+		self::assertSame(
+			['amount'],
+			array_map(
+				static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
+				$outer->getSelections()->getParserItems(),
+			),
+		);
+		self::assertFalse($outer->getSelections()->hasSelectionKey('__ondata_rank'));
+	}
+
+	public function testLocalDerivedSourceAliasingDoesNotRequireCopy(): void
+	{
+		$inner = query($this->makeRegistry()->getCollection('posts'));
+		$inner->getSelections()->add($inner->amount, SelectionReason::PUBLIC);
+		$ranked = $inner->as('ranked_posts');
+
+		self::assertSame($inner, $ranked);
+		self::assertSame('ranked_posts', $inner->getAlias());
+	}
 	public function testSelectionItemDoesNotExposeRoleSpecificApis(): void
 	{
 		foreach (['asPublic', 'asIdentity', 'parse', 'includeInParser', 'asParserKey', 'asRowAlias'] as $method) {

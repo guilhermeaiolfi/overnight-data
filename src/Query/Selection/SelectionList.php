@@ -180,10 +180,18 @@ final class SelectionList implements IteratorAggregate, Countable
 		self $other,
 		QuerySourceInterface $from,
 		QuerySourceInterface $to,
-		?bool $explicit = null,
 	): void
 	{
-		$this->merge($other->projectTo($from, $to), $explicit);
+		$this->merge($other->projectTo($from, $to));
+	}
+
+	public function addParserProjectedFrom(
+		self $other,
+		QuerySourceInterface $from,
+		QuerySourceInterface $to,
+	): void
+	{
+		$this->addProjectedFrom($other->filterForParser(), from: $from, to: $to);
 	}
 
 	public function ensureField(FieldRef|SourceFieldExpression $field, string $reason): SelectionItem
