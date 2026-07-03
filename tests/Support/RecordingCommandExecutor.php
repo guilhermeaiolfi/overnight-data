@@ -13,8 +13,12 @@ final class RecordingCommandExecutor implements CommandExecutorInterface
 	/** @var list<CommandInterface> */
 	private array $commands = [];
 
+	/**
+	 * @param list<CommandResult> $results
+	 */
 	public function __construct(
 		private CommandResult $result = new CommandResult(1),
+		private array $results = [],
 	) {
 	}
 
@@ -22,7 +26,7 @@ final class RecordingCommandExecutor implements CommandExecutorInterface
 	{
 		$this->commands[] = $command;
 
-		return $this->result;
+		return array_shift($this->results) ?? $this->result;
 	}
 
 	/**
