@@ -6,8 +6,8 @@ namespace ON\Data\Query\Selection;
 
 use InvalidArgumentException;
 use LogicException;
-use ON\Data\Query\Expression\SourceFieldExpression;
 use ON\Data\Query\Expression\AliasedExpression;
+use ON\Data\Query\Expression\SourceFieldExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;
@@ -103,26 +103,6 @@ final class SelectionItem
 		return in_array($reason, $this->reasons, true);
 	}
 
-	public function isParserVisible(): bool
-	{
-		if ($this->isExplicit()) {
-			return true;
-		}
-
-		foreach ([
-			SelectionReason::PUBLIC,
-			SelectionReason::REQUIRED,
-			SelectionReason::RELATION,
-			SelectionReason::IDENTITY,
-		] as $reason) {
-			if ($this->hasReason($reason)) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
 	public function withExplicit(): self
 	{
 		if ($this->explicit) {
@@ -155,6 +135,17 @@ final class SelectionItem
 		}
 
 		return $updated;
+	}
+
+	public function hasAnyReason(string ...$reasons): bool
+	{
+		foreach ($reasons as $reason) {
+			if ($this->hasReason($reason)) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private function normalizeReason(string $reason): string

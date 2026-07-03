@@ -22,16 +22,6 @@ use Traversable;
 final class SelectionList implements IteratorAggregate, Countable
 {
 	/**
-	 * @var list<string>
-	 */
-	private const PARSER_REASONS = [
-		SelectionReason::PUBLIC,
-		SelectionReason::REQUIRED,
-		SelectionReason::RELATION,
-		SelectionReason::IDENTITY,
-	];
-
-	/**
 	 * @var list<SelectionItem>
 	 */
 	private array $entries = [];
@@ -76,6 +66,7 @@ final class SelectionList implements IteratorAggregate, Countable
 
 		foreach ($expressions as $expression) {
 			$promoted = false;
+			$explicitReasons = $this->inferReasons($expression, [], true);
 
 			foreach ($pendingEntries as $index => $entry) {
 				if ($entry->isExplicit()) {
@@ -86,18 +77,21 @@ final class SelectionList implements IteratorAggregate, Countable
 					continue;
 				}
 
-				$pendingEntries[$index] = $entry->withExplicit();
+				$pendingEntries[$index] = $entry
+					->withReasons($explicitReasons)
+					->withExplicit();
 				$promoted = true;
 
 				break;
 			}
 
 			if (! $promoted) {
-				$pendingEntries[] = new SelectionItem($expression, true);
+				$pendingEntries[] = new SelectionItem($expression, true, $explicitReasons);
 			}
 		}
 
 		$this->entries = $pendingEntries;
+		$this->rebuildReasonIndexes();
 
 		foreach ($incomingExpressions as $alias => $expression) {
 			$this->namedExpressions[$alias] = $expression;
@@ -112,7 +106,7 @@ final class SelectionList implements IteratorAggregate, Countable
 		string|array $reasons = [],
 		bool $explicit = false,
 	): SelectionItem {
-		$normalizedReasons = $this->normalizeReasons($reasons);
+		$normalizedReasons = $this->inferReasons($expression, $this->normalizeReasons($reasons), $explicit);
 
 		foreach ($this->entries as $index => $entry) {
 			if (! $this->expressionsMatch($entry->getExpression(), $expression)) {
@@ -143,6 +137,38 @@ final class SelectionList implements IteratorAggregate, Countable
 		$this->appendItem($item, $normalizedReasons);
 
 		return $item;
+	}
+
+	/**
+	 * @param string|list<string> $reasons
+	 */
+	public function tag(
+		ValueExpressionInterface|AliasedExpression|StarExpression|string $selection,
+		string|array $reasons,
+	): SelectionItem {
+		$normalizedReasons = $this->normalizeReasons($reasons);
+
+		if ($normalizedReasons === []) {
+			throw new InvalidArgumentException('Selection tagging requires at least one non-empty reason.');
+		}
+
+		foreach ($this->entries as $index => $entry) {
+			if (! $this->selectionMatches($entry, $selection)) {
+				continue;
+			}
+
+			$newReasons = array_values(array_filter(
+				$normalizedReasons,
+				static fn (string $reason): bool => ! $entry->hasReason($reason),
+			));
+			$updated = $entry->withReasons($normalizedReasons);
+			$this->entries[$index] = $updated;
+			$this->registerReasonIndexes($index, $newReasons);
+
+			return $updated;
+		}
+
+		throw new InvalidArgumentException('Cannot tag a selection that is not present in the list.');
 	}
 
 	public function require(ValueExpressionInterface|AliasedExpression|StarExpression $expression, string $reason): void
@@ -200,7 +226,7 @@ final class SelectionList implements IteratorAggregate, Countable
 
 	public function ensureInternalExpression(ValueExpressionInterface $expression, string $alias): SelectionItem
 	{
-		return $this->add($expression->as($alias), SelectionReason::INTERNAL);
+		return $this->add($expression->as($alias), [SelectionReason::INTERNAL, SelectionReason::SQL_ONLY]);
 	}
 
 	private function expressionsMatch(
@@ -255,6 +281,11 @@ final class SelectionList implements IteratorAggregate, Countable
 		return $this->filter(static fn (SelectionItem $selection): bool => $selection->hasReason($reason))->getAll();
 	}
 
+	public function filterByReason(string $reason): self
+	{
+		return $this->filter(static fn (SelectionItem $selection): bool => $selection->hasReason($reason));
+	}
+
 	/**
 	 * @param callable(SelectionItem): bool $predicate
 	 */
@@ -290,12 +321,7 @@ final class SelectionList implements IteratorAggregate, Countable
 	 */
 	public function getParserItems(): array
 	{
-		return $this->filterForParser()->getAll();
-	}
-
-	public function filterForParser(): self
-	{
-		return $this->filter(static fn (SelectionItem $selection): bool => $selection->isParserVisible());
+		return $this->getByReason(SelectionReason::COLUMN);
 	}
 
 	/**
@@ -374,10 +400,15 @@ final class SelectionList implements IteratorAggregate, Countable
 	private function normalizeReasons(string|array $reasons): array
 	{
 		if (is_string($reasons)) {
+			$reasons = trim($reasons);
+
 			return $reasons === '' ? [] : [$reasons];
 		}
 
-		return array_values($reasons);
+		return array_values(array_filter(array_map(
+			static fn (string $reason): string => trim($reason),
+			$reasons,
+		), static fn (string $reason): bool => $reason !== ''));
 	}
 
 	private function findMatchingEntry(ValueExpressionInterface|AliasedExpression|StarExpression $expression): ?SelectionItem
@@ -389,6 +420,17 @@ final class SelectionList implements IteratorAggregate, Countable
 		}
 
 		return null;
+	}
+
+	private function selectionMatches(
+		SelectionItem $entry,
+		ValueExpressionInterface|AliasedExpression|StarExpression|string $selection,
+	): bool {
+		if (is_string($selection)) {
+			return $entry->getSelectionKey() === trim($selection);
+		}
+
+		return $this->expressionsMatch($entry->getExpression(), $selection);
 	}
 
 	/**
@@ -410,6 +452,47 @@ final class SelectionList implements IteratorAggregate, Countable
 		}
 
 		$this->reasonEntryIndexes[$reason][] = $index;
+	}
+
+	private function rebuildReasonIndexes(): void
+	{
+		$this->reasonEntryIndexes = [];
+
+		foreach ($this->entries as $index => $entry) {
+			$this->registerReasonIndexes($index, $entry->getReasons());
+		}
+	}
+
+	/**
+	 * @param list<string> $callerReasons
+	 * @return list<string>
+	 */
+	private function inferReasons(
+		ValueExpressionInterface|AliasedExpression|StarExpression $expression,
+		array $callerReasons,
+		bool $explicit,
+	): array {
+		$inferred = $callerReasons;
+
+		if ($explicit) {
+			$inferred[] = SelectionReason::COLUMN;
+			$inferred[] = SelectionReason::PUBLIC;
+		}
+
+		if ($this->isFieldLike($expression)) {
+			$inferred[] = SelectionReason::COLUMN;
+		}
+
+		return array_values(array_unique(array_map('trim', $inferred)));
+	}
+
+	private function isFieldLike(ValueExpressionInterface|AliasedExpression|StarExpression $expression): bool
+	{
+		if ($expression instanceof AliasedExpression) {
+			$expression = $expression->getExpression();
+		}
+
+		return $expression instanceof FieldRef || $expression instanceof SourceFieldExpression;
 	}
 
 	/**

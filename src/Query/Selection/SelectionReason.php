@@ -6,6 +6,8 @@ namespace ON\Data\Query\Selection;
 
 final class SelectionReason
 {
+	public const COLUMN = 'column';
+
 	public const PUBLIC = 'public';
 
 	public const IDENTITY = 'identity';
@@ -15,6 +17,8 @@ final class SelectionReason
 	public const REQUIRED = 'required';
 
 	public const INTERNAL = 'internal';
+
+	public const SQL_ONLY = 'sql-only';
 
 	public const EXPLICIT = 'explicit';
 }

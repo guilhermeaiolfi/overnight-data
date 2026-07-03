@@ -146,7 +146,7 @@ final class QueryModelTest extends TestCase
 		self::assertInstanceOf(SelectionItem::class, $selections[0]);
 		self::assertSame($field, $selections[0]->getExpression());
 		self::assertTrue($selections[0]->isExplicit());
-		self::assertSame([], $selections[0]->getReasons());
+		self::assertSame([SelectionReason::COLUMN, SelectionReason::PUBLIC], $selections[0]->getReasons());
 	}
 
 	public function testSelectionConstructorNormalizesAndDeduplicatesReasons(): void
@@ -1259,25 +1259,41 @@ final class QueryModelTest extends TestCase
 		$second = $list->add($query->id, [SelectionReason::INTERNAL, SelectionReason::RELATION]);
 
 		self::assertNotSame($first, $second);
-		self::assertSame([SelectionReason::RELATION, SelectionReason::INTERNAL], $second->getReasons());
+		self::assertSame([SelectionReason::RELATION, SelectionReason::COLUMN, SelectionReason::INTERNAL], $second->getReasons());
 		self::assertSame($second, $list->getAll()[0]);
 	}
 
-	public function testSelectionListParserItemsExcludeExplicitOnlyEntries(): void
+	public function testSelectionListExplicitFieldSelectionsGetColumnAndPublicTags(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$list = new SelectionList();
 
-		$list->add($query->id, SelectionReason::EXPLICIT);
-		$list->add($query->name, SelectionReason::PUBLIC);
+		$list->addExplicit([$query->title]);
 
-		self::assertSame([$query->name], array_map(
-			static fn (SelectionItem $selection): mixed => $selection->getExpression(),
-			$list->getParserItems(),
-		));
+		$selection = $list->getAll()[0];
+
+		self::assertTrue($selection->isExplicit());
+		self::assertTrue($selection->hasReason(SelectionReason::COLUMN));
+		self::assertTrue($selection->hasReason(SelectionReason::PUBLIC));
 	}
 
-	public function testSelectionListParserItemsIncludePublicRequiredRelationAndIdentityEntries(): void
+	public function testSelectionListPromotesImplicitFieldToExplicitAndPreservesTags(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$list = new SelectionList();
+
+		$list->add($query->title, SelectionReason::INTERNAL);
+		$list->addExplicit([$query->title]);
+
+		$selection = $list->getAll()[0];
+
+		self::assertTrue($selection->isExplicit());
+		self::assertTrue($selection->hasReason(SelectionReason::COLUMN));
+		self::assertTrue($selection->hasReason(SelectionReason::PUBLIC));
+		self::assertTrue($selection->hasReason(SelectionReason::INTERNAL));
+	}
+
+	public function testSelectionListParserItemsAreColumnSelections(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$list = new SelectionList();
@@ -1287,11 +1303,51 @@ final class QueryModelTest extends TestCase
 		$list->add($query->id, SelectionReason::RELATION);
 		$list->add($query->title, SelectionReason::IDENTITY);
 		$list->add($query->active, SelectionReason::INTERNAL);
+		$list->ensureInternalExpression($query->name->upper(), '__ondata_rank');
 
 		self::assertSame(
-			[$query->name, $query->email, $query->id, $query->title],
+			[$query->name, $query->email, $query->id, $query->title, $query->active],
 			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getParserItems()),
 		);
+	}
+
+	public function testEnsureInternalFieldMarksFieldAsInternalColumn(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('posts'));
+		$list = new SelectionList();
+
+		$selection = $list->ensureInternalField($query->userId);
+
+		self::assertTrue($selection->hasReason(SelectionReason::COLUMN));
+		self::assertTrue($selection->hasReason(SelectionReason::INTERNAL));
+		self::assertFalse($selection->hasReason(SelectionReason::PUBLIC));
+	}
+
+	public function testEnsureInternalExpressionMarksExpressionAsInternalSqlOnly(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$list = new SelectionList();
+
+		$selection = $list->ensureInternalExpression($query->name->upper(), '__ondata_rank');
+
+		self::assertTrue($selection->hasReason(SelectionReason::SQL_ONLY));
+		self::assertTrue($selection->hasReason(SelectionReason::INTERNAL));
+		self::assertFalse($selection->hasReason(SelectionReason::COLUMN));
+		self::assertFalse($selection->hasReason(SelectionReason::PUBLIC));
+	}
+
+	public function testSelectionListTagAddsReasonsToExistingSelectionsWithoutDuplicates(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$list = new SelectionList();
+
+		$list->add($query->id);
+		$list->tag($query->id, SelectionReason::IDENTITY);
+		$selection = $list->tag('id', SelectionReason::IDENTITY);
+
+		self::assertTrue($selection->hasReason(SelectionReason::COLUMN));
+		self::assertTrue($selection->hasReason(SelectionReason::IDENTITY));
+		self::assertSame([SelectionReason::COLUMN, SelectionReason::IDENTITY], $selection->getReasons());
 	}
 
 	public function testSelectionListPublicItemsFollowPublicReasonInsertionOrder(): void
@@ -1375,7 +1431,7 @@ final class QueryModelTest extends TestCase
 
 		$outer->getSelections()->merge(
 			$inner->getSelections()
-				->filterForParser()
+				->filterByReason(SelectionReason::COLUMN)
 				->projectTo(from: $ranked, to: $outer),
 		);
 
@@ -1384,13 +1440,13 @@ final class QueryModelTest extends TestCase
 		self::assertCount(3, $parserItems);
 		foreach ($parserItems as $item) {
 			self::assertFalse($item->isExplicit(), 'Parser-projected fields must stay implicit.');
-			self::assertTrue($item->isParserVisible());
+			self::assertTrue($item->hasReason(SelectionReason::COLUMN));
 		}
 
 		self::assertTrue($parserItems[2]->hasReason(SelectionReason::RELATION));
 	}
 
-	public function testSelectionListParserProjectionExcludesInternalFields(): void
+	public function testSelectionListParserProjectionExcludesSqlOnlyFields(): void
 	{
 		$inner = query($this->makeRegistry()->getCollection('posts'));
 		$rank = x()->fn()->rowNumber()->over(
@@ -1404,7 +1460,7 @@ final class QueryModelTest extends TestCase
 
 		$outer->getSelections()->merge(
 			$inner->getSelections()
-				->filterForParser()
+				->filterByReason(SelectionReason::COLUMN)
 				->projectTo(from: $ranked, to: $outer),
 		);
 
@@ -1416,6 +1472,29 @@ final class QueryModelTest extends TestCase
 			),
 		);
 		self::assertFalse($outer->getSelections()->hasSelectionKey('__ondata_rank'));
+	}
+
+	public function testSelectionListFilterByReasonReturnsMatchingSelections(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$list = new SelectionList();
+
+		$list->add($query->name, SelectionReason::PUBLIC);
+		$list->ensureInternalExpression($query->name->upper(), '__ondata_rank');
+
+		self::assertSame(
+			['__ondata_rank'],
+			array_map(
+				static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
+				$list->filterByReason(SelectionReason::SQL_ONLY)->getAll(),
+			),
+		);
+	}
+
+	public function testSelectionListDoesNotExposeLegacyParserVisibilityHelpers(): void
+	{
+		self::assertFalse(method_exists(SelectionItem::class, 'isParserVisible'));
+		self::assertFalse(method_exists(SelectionList::class, 'filterForParser'));
 	}
 
 	public function testLocalDerivedSourceAliasingDoesNotRequireCopy(): void
@@ -1446,7 +1525,7 @@ final class QueryModelTest extends TestCase
 
 		self::assertCount(1, $selections);
 		self::assertTrue($selections[0]->isImplicit());
-		self::assertSame(['relation-key', 'result-grouping-key'], $selections[0]->getReasons());
+		self::assertSame(['relation-key', SelectionReason::COLUMN, 'result-grouping-key'], $selections[0]->getReasons());
 	}
 
 	public function testRequireAfterSelectAnnotatesTheExistingExplicitEntry(): void
@@ -1469,7 +1548,7 @@ final class QueryModelTest extends TestCase
 		$selections = $query->getSelections()->getAll();
 		self::assertCount(1, $selections);
 		self::assertTrue($selections[0]->isExplicit());
-		self::assertSame(['relation-key'], $selections[0]->getReasons());
+		self::assertSame(['relation-key', SelectionReason::COLUMN, SelectionReason::PUBLIC], $selections[0]->getReasons());
 
 		$query->select($query->id);
 		$selections = $query->getSelections()->getAll();
