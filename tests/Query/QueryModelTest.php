@@ -1298,7 +1298,7 @@ final class QueryModelTest extends TestCase
 		self::assertTrue($selection->hasTag(SelectionTag::INTERNAL));
 	}
 
-	public function testSelectionListParserItemsAreColumnSelections(): void
+	public function testSelectionListColumnSelectionsAreRetrievableByTag(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$list = new SelectionList();
@@ -1312,7 +1312,7 @@ final class QueryModelTest extends TestCase
 
 		self::assertSame(
 			[$query->name, $query->email, $query->id, $query->title, $query->active],
-			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getParserItems()),
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getByTag(SelectionTag::COLUMN)),
 		);
 	}
 
@@ -1328,7 +1328,7 @@ final class QueryModelTest extends TestCase
 		self::assertFalse($selection->hasTag(SelectionTag::PUBLIC));
 	}
 
-	public function testSqlOnlyFieldSelectionsAreNotExposedToParser(): void
+	public function testSqlOnlyFieldSelectionsAreNotReturnedAsColumnSelections(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$list = new SelectionList();
@@ -1337,10 +1337,10 @@ final class QueryModelTest extends TestCase
 
 		self::assertTrue($selection->hasTag(SelectionTag::SQL_ONLY));
 		self::assertFalse($selection->hasTag(SelectionTag::COLUMN));
-		self::assertSame([], $list->getParserItems());
+		self::assertSame([], $list->getByTag(SelectionTag::COLUMN));
 	}
 
-	public function testEnsureInternalFieldIsExposedToParser(): void
+	public function testEnsureInternalFieldIsReturnedAsAColumnSelection(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('posts'));
 		$list = new SelectionList();
@@ -1349,7 +1349,7 @@ final class QueryModelTest extends TestCase
 
 		self::assertSame(
 			['userId'],
-			array_map(static fn (SelectionItem $selection): string => $selection->getSelectionKey(), $list->getParserItems()),
+			array_map(static fn (SelectionItem $selection): string => $selection->getSelectionKey(), $list->getByTag(SelectionTag::COLUMN)),
 		);
 	}
 
@@ -1366,14 +1366,14 @@ final class QueryModelTest extends TestCase
 		self::assertFalse($selection->hasTag(SelectionTag::PUBLIC));
 	}
 
-	public function testEnsureInternalExpressionIsNotExposedToParser(): void
+	public function testEnsureInternalExpressionIsNotReturnedAsAColumnSelection(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$list = new SelectionList();
 
 		$list->ensureInternalExpression($query->name->upper(), '__ondata_rank');
 
-		self::assertSame([], $list->getParserItems());
+		self::assertSame([], $list->getByTag(SelectionTag::COLUMN));
 	}
 
 	public function testSelectionListTagAddsTagsToExistingSelectionsWithoutDuplicates(): void
@@ -1390,7 +1390,7 @@ final class QueryModelTest extends TestCase
 		self::assertSame([SelectionTag::COLUMN, SelectionTag::IDENTITY], $selection->getTags());
 	}
 
-	public function testSelectionListPublicItemsFollowPublicTagInsertionOrder(): void
+	public function testSelectionListPublicSelectionsFollowPublicTagInsertionOrder(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$list = new SelectionList();
@@ -1401,11 +1401,11 @@ final class QueryModelTest extends TestCase
 
 		self::assertSame(
 			[$query->name, $query->id],
-			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getPublicItems()),
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getByTag(SelectionTag::PUBLIC)),
 		);
 	}
 
-	public function testSelectionListIdentityItemsFollowIdentityTagInsertionOrder(): void
+	public function testSelectionListIdentitySelectionsFollowIdentityTagInsertionOrder(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$list = new SelectionList();
@@ -1416,7 +1416,7 @@ final class QueryModelTest extends TestCase
 
 		self::assertSame(
 			[$query->id, $query->title],
-			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getIdentityItems()),
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getByTag(SelectionTag::IDENTITY)),
 		);
 	}
 
@@ -1434,15 +1434,15 @@ final class QueryModelTest extends TestCase
 
 		self::assertSame(
 			[$query->id],
-			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $filtered->getPublicItems()),
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $filtered->getByTag(SelectionTag::PUBLIC)),
 		);
 		self::assertSame(
 			[$query->id, $query->title],
-			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $filtered->getParserItems()),
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $filtered->getByTag(SelectionTag::COLUMN)),
 		);
 		self::assertSame(
 			[$query->title],
-			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $filtered->getIdentityItems()),
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $filtered->getByTag(SelectionTag::IDENTITY)),
 		);
 	}
 
@@ -1456,11 +1456,11 @@ final class QueryModelTest extends TestCase
 
 		self::assertSame(
 			[$query->id],
-			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getPublicItems()),
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getByTag(SelectionTag::PUBLIC)),
 		);
 	}
 
-	public function testSelectionListParserProjectionPreservesTagsWithoutForcingExplicit(): void
+	public function testSelectionListColumnProjectionPreservesTagsWithoutForcingExplicit(): void
 	{
 		$inner = query($this->makeRegistry()->getCollection('posts'));
 		$inner->getSelections()->add($inner->amount, SelectionTag::PUBLIC);
@@ -1475,18 +1475,18 @@ final class QueryModelTest extends TestCase
 				->projectTo(from: $ranked, to: $outer),
 		);
 
-		$parserItems = $outer->getSelections()->getParserItems();
+		$columnSelections = $outer->getSelections()->getByTag(SelectionTag::COLUMN);
 
-		self::assertCount(3, $parserItems);
-		foreach ($parserItems as $item) {
-			self::assertFalse($item->isExplicit(), 'Parser-projected fields must stay implicit.');
+		self::assertCount(3, $columnSelections);
+		foreach ($columnSelections as $item) {
+			self::assertFalse($item->isExplicit(), 'Projected column selections must stay implicit.');
 			self::assertTrue($item->hasTag(SelectionTag::COLUMN));
 		}
 
-		self::assertTrue($parserItems[2]->hasTag(SelectionTag::RELATION));
+		self::assertTrue($columnSelections[2]->hasTag(SelectionTag::RELATION));
 	}
 
-	public function testSelectionListParserProjectionExcludesSqlOnlyFields(): void
+	public function testSelectionListColumnProjectionExcludesSqlOnlyFields(): void
 	{
 		$inner = query($this->makeRegistry()->getCollection('posts'));
 		$rank = x()->fn()->rowNumber()->over(
@@ -1508,7 +1508,7 @@ final class QueryModelTest extends TestCase
 			['amount'],
 			array_map(
 				static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-				$outer->getSelections()->getParserItems(),
+				$outer->getSelections()->getByTag(SelectionTag::COLUMN),
 			),
 		);
 		self::assertFalse($outer->getSelections()->hasSelectionKey('__ondata_rank'));
@@ -1535,6 +1535,9 @@ final class QueryModelTest extends TestCase
 	{
 		self::assertFalse(method_exists(SelectionItem::class, 'isParserVisible'));
 		self::assertFalse(method_exists(SelectionList::class, 'filterForParser'));
+		self::assertFalse(method_exists(SelectionList::class, 'getParserItems'));
+		self::assertFalse(method_exists(SelectionList::class, 'getPublicItems'));
+		self::assertFalse(method_exists(SelectionList::class, 'getIdentityItems'));
 	}
 
 	public function testLocalDerivedSourceAliasingDoesNotRequireCopy(): void

@@ -37,7 +37,7 @@ final class HasManyLoader extends AbstractLoader
 		$parent = $parentBranch->requireFields($parentToChild->getLeftFields());
 
 		return new CollectionNode(
-			$this->parserFieldNames($branch),
+			$this->columnSelectionKeys($branch),
 			$identity,
 			$child,
 			$parent,
@@ -108,11 +108,11 @@ final class HasManyLoader extends AbstractLoader
 	/**
 	 * @return list<string>
 	 */
-	private function parserFieldNames(RelationLoadBranch $branch): array
+	private function columnSelectionKeys(RelationLoadBranch $branch): array
 	{
 		return array_map(
 			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getParserItems(),
+			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
 		);
 	}
 

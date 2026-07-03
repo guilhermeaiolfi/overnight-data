@@ -278,12 +278,18 @@ final class SelectionList implements IteratorAggregate, Countable
 			throw new InvalidArgumentException('Selection tag lookups require a non-empty string.');
 		}
 
-		return $this->filter(static fn (SelectionItem $selection): bool => $selection->hasTag($tag))->getAll();
+		return $this->getItemsInTagOrder($tag);
 	}
 
 	public function filterByTag(string $tag): self
 	{
-		return $this->filter(static fn (SelectionItem $selection): bool => $selection->hasTag($tag));
+		$filtered = new self();
+
+		foreach ($this->getByTag($tag) as $selection) {
+			$filtered->appendItem($selection, $selection->getTags());
+		}
+
+		return $filtered;
 	}
 
 	/**
@@ -314,30 +320,6 @@ final class SelectionList implements IteratorAggregate, Countable
 		}
 
 		return $filtered;
-	}
-
-	/**
-	 * @return list<SelectionItem>
-	 */
-	public function getParserItems(): array
-	{
-		return $this->getByTag(SelectionTag::COLUMN);
-	}
-
-	/**
-	 * @return list<SelectionItem>
-	 */
-	public function getPublicItems(): array
-	{
-		return $this->getItemsInTagOrder(SelectionTag::PUBLIC);
-	}
-
-	/**
-	 * @return list<SelectionItem>
-	 */
-	public function getIdentityItems(): array
-	{
-		return $this->getItemsInTagOrder(SelectionTag::IDENTITY);
 	}
 
 	public function getNamedExpression(string $name): ValueExpressionInterface

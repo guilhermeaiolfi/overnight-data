@@ -18,6 +18,7 @@ use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
 use ON\Data\Query\Selection\SelectionItem;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 
 final class M2MLoader extends AbstractLoader
@@ -258,7 +259,7 @@ final class M2MLoader extends AbstractLoader
 	{
 		return array_map(
 			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getParserItems(),
+			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
 		);
 	}
 
@@ -269,7 +270,7 @@ final class M2MLoader extends AbstractLoader
 	{
 		return array_map(
 			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getPublicItems(),
+			$branch->getSelections()->getByTag(SelectionTag::PUBLIC),
 		);
 	}
 }

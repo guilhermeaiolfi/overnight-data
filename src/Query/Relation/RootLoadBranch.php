@@ -109,8 +109,12 @@ final class RootLoadBranch extends LoadBranch
 
 	public function createNode(): RootNode
 	{
-		$columns = $this->selectionKeys($this->selections->getParserItems());
-		$identityAliases = $this->selectionKeys($this->selections->getIdentityItems());
+		$columns = $this->selectionKeys(
+			$this->selections->getByTag(SelectionTag::COLUMN),
+		);
+		$identityAliases = $this->selectionKeys(
+			$this->selections->getByTag(SelectionTag::IDENTITY),
+		);
 
 		$node = new RootNode($columns, $identityAliases);
 		$node->setValueAliases($columns);

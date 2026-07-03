@@ -66,7 +66,7 @@ $posts->select($posts->all());
 
 `star()` remains as the backward-compatible alias for the same selection expression.
 
-`require()` records an implicit selection with a reason and is used by internal query assembly when fields must be present without becoming caller-facing API.
+`require()` records an implicit selection with a tag and is used by internal query assembly when fields must be present without becoming caller-facing API.
 
 ## Named expressions
 

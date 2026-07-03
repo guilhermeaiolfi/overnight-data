@@ -287,7 +287,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$rootBranch = $this->readProperty($runtime, 'rootBranch');
 		$columns = $this->readProperty($rootBranch->getNode(), 'columns');
 		$selections = $this->readProperty($rootBranch, 'selections');
-		$titleSelection = $selections->getPublicItems()[0];
+		$titleSelection = $selections->getByTag(SelectionTag::PUBLIC)[0];
 
 		self::assertSame(['title', '__on_data_root_required_id_0'], $columns);
 		self::assertSame(['title'], LifecycleEvents::$plannedRootColumns);
@@ -597,7 +597,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$selections = $this->readProperty($rootBranch, 'selections');
 		$identityAliases = array_map(
 			static fn (object $selection): string => $selection->getSelectionKey(),
-			$selections->getIdentityItems(),
+			$selections->getByTag(SelectionTag::IDENTITY),
 		);
 		$rootIdentityFields = $this->readProperty($rootBranch->getRootNode(), 'identityFields');
 
@@ -616,9 +616,9 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		self::assertInstanceOf(SelectionList::class, $selections);
 		self::assertSame(['id'], array_map(
 			static fn (object $selection): string => $selection->getSelectionKey(),
-			$selections->getIdentityItems(),
+			$selections->getByTag(SelectionTag::IDENTITY),
 		));
-		self::assertTrue($selections->getIdentityItems()[0]->hasTag(SelectionTag::REQUIRED));
+		self::assertTrue($selections->getByTag(SelectionTag::IDENTITY)[0]->hasTag(SelectionTag::REQUIRED));
 	}
 
 	public function testInternalExplicitRootSelectionsDoNotBecomePublicOutput(): void
@@ -651,7 +651,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	{
 		return array_map(
 			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getParserItems(),
+			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
 		);
 	}
 
@@ -662,7 +662,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	{
 		return array_map(
 			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getPublicItems(),
+			$branch->getSelections()->getByTag(SelectionTag::PUBLIC),
 		);
 	}
 }
@@ -1032,7 +1032,7 @@ abstract class LifecycleTestLoader extends AbstractLoader
 	{
 		return array_map(
 			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getParserItems(),
+			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
 		);
 	}
 }
@@ -1148,7 +1148,7 @@ class NestedPostsLoader extends AbstractLoader
 	{
 		return array_map(
 			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getParserItems(),
+			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
 		);
 	}
 }
@@ -1188,7 +1188,7 @@ final class NestedAuthorLoader extends AbstractLoader
 	{
 		return array_map(
 			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getParserItems(),
+			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
 		);
 	}
 }
@@ -1246,7 +1246,7 @@ final class JoinedProfileLoader extends AbstractLoader
 	{
 		return array_map(
 			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getParserItems(),
+			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
 		);
 	}
 }

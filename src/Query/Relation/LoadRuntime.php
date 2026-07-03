@@ -9,6 +9,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use ReflectionMethod;
 
@@ -216,7 +217,7 @@ final class LoadRuntime
 		foreach ($branches as $branch) {
 			$aliases = [];
 
-			foreach ($branch->getSelections()->getParserItems() as $selection) {
+			foreach ($branch->getSelections()->getByTag(SelectionTag::COLUMN) as $selection) {
 				$aliases[] = $this->ensureBranchFieldSelection(
 					$branch->getQuery(),
 					$branch->getSource(),

@@ -11,6 +11,7 @@ use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
 use ON\Data\Query\Selection\SelectionItem;
+use ON\Data\Query\Selection\SelectionTag;
 
 final class BelongsToLoader extends AbstractLoader
 {
@@ -93,7 +94,7 @@ final class BelongsToLoader extends AbstractLoader
 	{
 		return array_map(
 			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getParserItems(),
+			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
 		);
 	}
 }

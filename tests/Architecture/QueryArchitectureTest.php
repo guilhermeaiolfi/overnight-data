@@ -314,6 +314,25 @@ final class QueryArchitectureTest extends TestCase
 		}
 	}
 
+	public function testProductionQueryCodeDoesNotUseRemovedSelectionConvenienceApis(): void
+	{
+		$this->assertForbiddenStringsAbsent(
+			[dirname(__DIR__, 2) . '/src'],
+			[],
+			[
+				'getParserItems(',
+				'getPublicItems(',
+				'getIdentityItems(',
+				'filterForParser(',
+				'isParserVisible(',
+				'SelectionReason',
+				'addParserProjectedFrom(',
+				'addProjectedFrom(',
+			],
+			'Removed selection vocabulary "%s" found in %s',
+		);
+	}
+
 	public function testRuntimeAndBuiltInLoadersDoNotContainCollectFieldsLifecycle(): void
 	{
 		foreach ([

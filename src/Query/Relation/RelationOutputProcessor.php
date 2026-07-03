@@ -6,6 +6,7 @@ namespace ON\Data\Query\Relation;
 
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Selection\SelectionItem;
+use ON\Data\Query\Selection\SelectionTag;
 
 final class RelationOutputProcessor
 {
@@ -15,7 +16,7 @@ final class RelationOutputProcessor
 	public function processRoot(RootLoadBranch $root): array
 	{
 		$records = [];
-		$publicColumns = array_fill_keys($this->rootSelectionKeys($root->getSelections()->getPublicItems()), true);
+		$publicColumns = array_fill_keys($this->rootSelectionKeys($root->getSelections()->getByTag(SelectionTag::PUBLIC)), true);
 
 		foreach ($root->getRootNode()->getResult() as $record) {
 			$records[] = $this->processRootRecord($root, $record, $publicColumns);
@@ -118,7 +119,7 @@ final class RelationOutputProcessor
 		$item = [];
 
 		if ($branch->getSelection()->isLoaded()) {
-			foreach ($branch->getSelections()->getPublicItems() as $selection) {
+			foreach ($branch->getSelections()->getByTag(SelectionTag::PUBLIC) as $selection) {
 				$fieldName = $selection->getSelectionKey();
 
 				if (array_key_exists($fieldName, $record)) {
