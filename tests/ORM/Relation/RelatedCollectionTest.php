@@ -191,7 +191,7 @@ final class RelatedCollectionTest extends TestCase
 		self::assertTrue($collection->isPartiallyLoaded());
 	}
 
-	public function testGetChangeSetExposesAddedAndRemovedObjects(): void
+	public function testHasChangesAndAccessorsExposeAddedAndRemovedObjects(): void
 	{
 		$added = new stdClass();
 		$removed = new stdClass();
@@ -199,16 +199,14 @@ final class RelatedCollectionTest extends TestCase
 		$collection->add($added);
 		$collection->remove($removed);
 
-		$changeSet = $collection->getChangeSet();
-
-		self::assertSame([$added], $changeSet->getAdded());
-		self::assertSame([$removed], $changeSet->getRemoved());
-		self::assertFalse($changeSet->isEmpty());
+		self::assertTrue($collection->hasChanges());
+		self::assertSame([$added], $collection->getAdded());
+		self::assertSame([$removed], $collection->getRemoved());
 	}
 
-	public function testEmptyChangeSetReportsEmpty(): void
+	public function testHasChangesIsFalseWhenNoAddedOrRemovedIntentExists(): void
 	{
-		self::assertTrue($this->relatedCollection()->getChangeSet()->isEmpty());
+		self::assertFalse($this->relatedCollection()->hasChanges());
 	}
 
 	public function testClearChangesClearsAddedAndRemovedButKeepsKnownItems(): void
@@ -224,6 +222,7 @@ final class RelatedCollectionTest extends TestCase
 		self::assertSame([$known], $collection->getItems());
 		self::assertSame([], $collection->getAdded());
 		self::assertSame([], $collection->getRemoved());
+		self::assertFalse($collection->hasChanges());
 	}
 
 	public function testIsEmptyKnownOnlyDescribesInMemoryItemsNotDatabaseEmptiness(): void

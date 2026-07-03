@@ -163,9 +163,9 @@ final class RelatedCollection
 		return array_values($this->removed);
 	}
 
-	public function getChangeSet(): RelationCollectionChangeSet
+	public function hasChanges(): bool
 	{
-		return new RelationCollectionChangeSet($this->getAdded(), $this->getRemoved());
+		return $this->added !== [] || $this->removed !== [];
 	}
 
 	public function clearChanges(): void
