@@ -499,6 +499,14 @@ The reader distinguishes a missing public property from a present `null` value, 
 
 It only reads current representation values. It does not sync values into `RecordState`, convert values, mutate representations, persist, flush, call getters/setters, inspect private properties, or write SQL. Future mapper/property-access integration can expand this beyond public properties and simple paths.
 
+## Phase 1G Sync Planning
+
+Phase 1G introduces `ON\Data\ORM\Sync\SyncPlanner`, `SyncPlan`, and `SyncFieldUpdate` as the planning layer between tracked representations and future sync application.
+
+`SyncPlanner` reads current representation values, detects conflicts, and produces a `SyncPlan` containing path-specific conflicts plus planned field updates. Read-only bindings are ignored for updates, conflicted paths are not planned as updates, and duplicate target updates with conflicting values are rejected instead of implying last-write-wins.
+
+Planning does not mutate `RecordState`, update tracked baseline revisions, convert values, persist, flush, or apply the updates. Applying a `SyncPlan` is future runtime work. This completes the Phase 1 state/sync foundation.
+
 ## Phase 0 Non-Goals
 
 Do not implement:
