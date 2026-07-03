@@ -10,6 +10,7 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
+use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\TrackedRepresentation;
@@ -143,6 +144,30 @@ final class SyncConflictDetectorTest extends TestCase
 			}
 		));
 		self::assertTrue($resolverCalled);
+	}
+
+	public function testDetectorCanResolveKeyedRefThroughRecordStateMap(): void
+	{
+		$users = $this->users();
+		$key = $users->getKey(10);
+		$field = RecordFieldRef::forKey($key, 'name');
+		$record = RecordState::clean($key, ['name' => 'A1']);
+		$rep1 = $this->tracked($field, 1);
+		$rep2 = $this->tracked($field, 1);
+		$stateMap = new RecordStateMap();
+		$stateMap->add($record);
+		$detector = new SyncConflictDetector();
+
+		self::assertSame([], $detector->detect($rep2, ['name' => 'A2'], $stateMap->requireForField(...)));
+
+		$record->setValue('name', 'A2');
+		$conflicts = $detector->detect($rep1, ['name' => 'A3'], $stateMap->requireForField(...));
+
+		self::assertCount(1, $conflicts);
+		self::assertSame('name', $conflicts[0]->getPath());
+		self::assertSame('A1', $conflicts[0]->getBaselineValue());
+		self::assertSame('A2', $conflicts[0]->getRecordValue());
+		self::assertSame('A3', $conflicts[0]->getRepresentationValue());
 	}
 
 	public function testA1A2A3CaseReturnsConflictForNewStateTargetedRecord(): void

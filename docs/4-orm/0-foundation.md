@@ -162,11 +162,19 @@ Default `sync()` remains safe.
 Avoid object-first identity-map terminology. The preferred model is:
 
 ```text
-ON\Data\Key -> RecordState
+ON\Data\Key / RecordState state hash -> RecordState
 Representation object id -> TrackedRepresentation
 ```
 
 Classic ORMs usually map identity to entity object. This ORM maps identity to record state, then allows many representations over that state.
+
+`RecordStateMap` is the record-state registry. It indexes each known state by its stable local state hash and, when available, by its database `ON\Data\Key` hash. A new record keeps its local state hash after it receives a generated database key through `RecordState::markClean($key)`; the state hash must not be rewritten to the key hash, because existing state-targeted bindings use that stable local handle.
+
+The map is responsible for aliasing both handles to the same `RecordState`. Future insert/flush logic should call `RecordStateMap::indexKey($state)` after assigning a generated key so keyed references can resolve the same state that was previously known only by local state hash.
+
+`RecordFieldRef` resolution should first use a direct state target, then fall back to key lookup through `RecordStateMap`. Template refs have no concrete record to resolve until a binding is applied to a state.
+
+`RecordStateMap` is not an object identity map. `TrackedRepresentationMap` remains separate and continues to track PHP representation object identity by object id.
 
 ## SelectQuery Integration
 
