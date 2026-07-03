@@ -16,7 +16,6 @@ use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\CollectionNode;
 use ON\Data\Query\Selection\SelectionTag;
-use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
 use function ON\Data\Query\x;
@@ -103,17 +102,6 @@ final class HasManyLoader extends AbstractLoader
 		$this->applySeparateQueryConditions($branch);
 		$orderBy = $this->deterministicOrder($branch);
 		$runtime->execute($branch, $this->rankedQuery($branch, $query, $orderBy));
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	private function columnSelectionKeys(RelationLoadBranch $branch): array
-	{
-		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
-		);
 	}
 
 	private function usesLimitOffset(RelationLoadBranch $branch): bool

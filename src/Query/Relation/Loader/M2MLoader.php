@@ -50,7 +50,7 @@ final class M2MLoader extends AbstractLoader
 		]));
 
 		$targetNode = new SingularNode(
-			$this->parserFieldNames($branch),
+			$this->columnSelectionKeys($branch),
 			$targetIdentity,
 			$targetOuterKeyColumns,
 			$throughOuterKeys,
@@ -250,17 +250,6 @@ final class M2MLoader extends AbstractLoader
 			...$through->getInnerKeys(),
 			...$through->getOuterKeys(),
 		]));
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	private function parserFieldNames(RelationLoadBranch $branch): array
-	{
-		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
-		);
 	}
 
 	/**

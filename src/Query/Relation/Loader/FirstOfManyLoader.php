@@ -15,7 +15,6 @@ use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
 use ON\Data\Query\Selection\SelectionTag;
-use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
 use ON\Data\Query\Sort\SortDirection;
@@ -199,15 +198,5 @@ final class FirstOfManyLoader extends AbstractLoader
 		return $sorts;
 	}
 
-	/**
-	 * @return list<string>
-	 */
-	private function columnSelectionKeys(RelationLoadBranch $branch): array
-	{
-		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
-		);
-	}
 }
 

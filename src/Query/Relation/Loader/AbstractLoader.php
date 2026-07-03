@@ -15,6 +15,8 @@ use ON\Data\Query\Relation\RelationKeyQuery;
 use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
+use ON\Data\Query\Selection\SelectionItem;
+use ON\Data\Query\Selection\SelectionTag;
 
 abstract class AbstractLoader implements LoaderInterface
 {
@@ -132,5 +134,16 @@ abstract class AbstractLoader implements LoaderInterface
 		if ($sorts !== []) {
 			$query->bindSorts($from, ...$sorts);
 		}
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	protected function columnSelectionKeys(RelationLoadBranch $branch): array
+	{
+		return array_map(
+			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
+			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
+		);
 	}
 }
