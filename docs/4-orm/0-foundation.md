@@ -483,6 +483,14 @@ Adding a child to an unloaded collection is allowed and makes the collection par
 
 Future ORM runtime will apply the child binding to child `RecordState` instances and register tracked child representations. Third-party collection libraries may later provide backing adapters, but they do not own ORM relation semantics.
 
+## Phase 1E Child Representation Adoption
+
+Phase 1E introduces `ON\Data\ORM\Sync\RepresentationAdopter` as the small bridge between reusable child binding templates and concrete ORM tracking.
+
+`RepresentationAdopter` applies a reusable `RepresentationBinding` template to a concrete child `RecordState`, registers that record in `RecordStateMap`, captures baseline record revisions from the applied binding, and registers the child object as a `TrackedRepresentation` in `TrackedRepresentationMap`. This is the adoption step future relation runtime can use around flows such as adding a post object to a user's `RelatedCollection`.
+
+`RelatedCollection` still owns relation add/remove intent. Adoption only tracks the child representation; it does not add the item to the relation collection, sync representation values, persist, flush, write SQL, or mutate the child binding template.
+
 ## Phase 0 Non-Goals
 
 Do not implement:
