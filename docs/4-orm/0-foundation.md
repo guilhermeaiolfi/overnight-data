@@ -473,6 +473,16 @@ Phase 1A introduces the first production ORM state primitives only:
 
 It does not introduce `EntityQuery`, `with()`, repositories, lazy loading, `sync()` runtime, `flush()` runtime, write planning, SQL commands, or a public `persist()` API.
 
+## Phase 1D Relation Collection Primitives
+
+Phase 1D introduces `ON\Data\ORM\Relation\RelatedCollection` as the ORM-owned relation collection primitive. Plain arrays remain valid read/projection values, but they are not writable relation persistence trackers because they cannot own loaded state or add/remove intent.
+
+`RelatedCollection` owns the owner `RecordState`, relation name, loaded state, known in-memory items, local added/removed child intent, and the reusable child `RepresentationBinding` template. It stores that child binding for future runtime work, but it does not apply the binding or register tracked child representations in this phase.
+
+Adding a child to an unloaded collection is allowed and makes the collection partially loaded because at least one item is now known, while the complete database set remains unknown. Removing one known object reference from an unloaded collection is also allowed and does not imply the relation is empty. Removing from a relation collection removes the relation link intent; it is not necessarily deletion of the child entity.
+
+Future ORM runtime will apply the child binding to child `RecordState` instances and register tracked child representations. Third-party collection libraries may later provide backing adapters, but they do not own ORM relation semantics.
+
 ## Phase 0 Non-Goals
 
 Do not implement:
