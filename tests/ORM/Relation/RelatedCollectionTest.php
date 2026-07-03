@@ -106,6 +106,30 @@ final class RelatedCollectionTest extends TestCase
 		self::assertSame([$item], $collection->getAdded());
 	}
 
+	public function testAddingObjectToPartiallyLoadedCollectionKeepsPartiallyLoadedState(): void
+	{
+		$item = new stdClass();
+		$collection = $this->relatedCollection(RelationCollectionState::PARTIALLY_LOADED);
+
+		$collection->add($item);
+
+		self::assertTrue($collection->isPartiallyLoaded());
+		self::assertSame([$item], $collection->getItems());
+		self::assertSame([$item], $collection->getAdded());
+	}
+
+	public function testAddingObjectToFullyLoadedCollectionKeepsFullyLoadedState(): void
+	{
+		$item = new stdClass();
+		$collection = $this->relatedCollection(RelationCollectionState::FULLY_LOADED);
+
+		$collection->add($item);
+
+		self::assertTrue($collection->isFullyLoaded());
+		self::assertSame([$item], $collection->getItems());
+		self::assertSame([$item], $collection->getAdded());
+	}
+
 	public function testAddingSameObjectTwiceIsNoOp(): void
 	{
 		$item = new stdClass();
@@ -141,6 +165,20 @@ final class RelatedCollectionTest extends TestCase
 		self::assertSame([], $collection->getItems());
 		self::assertSame([], $collection->getAdded());
 		self::assertSame([], $collection->getRemoved());
+	}
+
+	public function testAddingRemovedBaselineObjectCancelsRemovalAndDoesNotMarkAddition(): void
+	{
+		$item = new stdClass();
+		$collection = $this->relatedCollection(RelationCollectionState::FULLY_LOADED, [$item]);
+
+		$collection->remove($item);
+		$collection->add($item);
+
+		self::assertSame([$item], $collection->getItems());
+		self::assertSame([], $collection->getAdded());
+		self::assertSame([], $collection->getRemoved());
+		self::assertFalse($collection->hasChanges());
 	}
 
 	public function testRemovingUnknownObjectRecordsExplicitRemovalIntent(): void
@@ -191,7 +229,31 @@ final class RelatedCollectionTest extends TestCase
 		self::assertTrue($collection->isPartiallyLoaded());
 	}
 
-	public function testHasChangesAndAccessorsExposeAddedAndRemovedObjects(): void
+	public function testHasChangesIsTrueWhenAddedIntentExists(): void
+	{
+		$added = new stdClass();
+		$collection = $this->relatedCollection();
+
+		$collection->add($added);
+
+		self::assertTrue($collection->hasChanges());
+		self::assertSame([$added], $collection->getAdded());
+		self::assertSame([], $collection->getRemoved());
+	}
+
+	public function testHasChangesIsTrueWhenRemovedIntentExists(): void
+	{
+		$removed = new stdClass();
+		$collection = $this->relatedCollection();
+
+		$collection->remove($removed);
+
+		self::assertTrue($collection->hasChanges());
+		self::assertSame([], $collection->getAdded());
+		self::assertSame([$removed], $collection->getRemoved());
+	}
+
+	public function testAccessorsExposeAddedAndRemovedObjects(): void
 	{
 		$added = new stdClass();
 		$removed = new stdClass();

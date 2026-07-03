@@ -10,10 +10,15 @@ use ON\Data\ORM\State\RepresentationBinding;
 
 final class RelatedCollection
 {
+	/**
+	 * Known in-memory relation members. This may be only a partial view of the
+	 * database relation when the collection is unloaded or partially loaded.
+	 *
+	 * @var array<int, object>
+	 */
+	private array $knownItems = [];
 	/** @var array<int, object> */
-	private array $items = [];
-	/** @var array<int, object> */
-	private array $baselineItems = [];
+	private array $baselineKnownItems = [];
 	/** @var array<int, object> */
 	private array $added = [];
 	/** @var array<int, object> */
@@ -42,11 +47,11 @@ final class RelatedCollection
 				));
 			}
 
-			$this->items[spl_object_id($item)] = $item;
+			$this->knownItems[spl_object_id($item)] = $item;
 		}
 
-		$this->baselineItems = $this->items;
-		$this->state = $state === RelationCollectionState::UNLOADED && $this->items !== []
+		$this->baselineKnownItems = $this->knownItems;
+		$this->state = $state === RelationCollectionState::UNLOADED && $this->knownItems !== []
 			? RelationCollectionState::PARTIALLY_LOADED
 			: $state;
 	}
@@ -102,16 +107,16 @@ final class RelatedCollection
 
 		unset($this->removed[$id]);
 
-		if (array_key_exists($id, $this->items)) {
+		if (array_key_exists($id, $this->knownItems)) {
 			return;
 		}
 
-		$this->items[$id] = $item;
+		$this->knownItems[$id] = $item;
 		if ($this->state === RelationCollectionState::UNLOADED) {
 			$this->state = RelationCollectionState::PARTIALLY_LOADED;
 		}
 
-		if (! array_key_exists($id, $this->baselineItems)) {
+		if (! array_key_exists($id, $this->baselineKnownItems)) {
 			$this->added[$id] = $item;
 		}
 	}
@@ -119,10 +124,10 @@ final class RelatedCollection
 	public function remove(object $item): void
 	{
 		$id = spl_object_id($item);
-		$isKnown = array_key_exists($id, $this->items);
+		$isKnown = array_key_exists($id, $this->knownItems);
 
 		if ($isKnown) {
-			unset($this->items[$id]);
+			unset($this->knownItems[$id]);
 		}
 
 		if (array_key_exists($id, $this->added)) {
@@ -136,7 +141,7 @@ final class RelatedCollection
 
 	public function contains(object $item): bool
 	{
-		return array_key_exists(spl_object_id($item), $this->items);
+		return array_key_exists(spl_object_id($item), $this->knownItems);
 	}
 
 	/**
@@ -144,7 +149,7 @@ final class RelatedCollection
 	 */
 	public function getItems(): array
 	{
-		return array_values($this->items);
+		return array_values($this->knownItems);
 	}
 
 	/**
@@ -172,16 +177,16 @@ final class RelatedCollection
 	{
 		$this->added = [];
 		$this->removed = [];
-		$this->baselineItems = $this->items;
+		$this->baselineKnownItems = $this->knownItems;
 	}
 
 	public function countKnown(): int
 	{
-		return count($this->items);
+		return count($this->knownItems);
 	}
 
 	public function isEmptyKnown(): bool
 	{
-		return $this->items === [];
+		return $this->knownItems === [];
 	}
 }
