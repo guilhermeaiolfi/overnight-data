@@ -46,17 +46,20 @@ Representations are not automatically the source of truth. They can drift from t
 
 ## TrackedRepresentation
 
-A `TrackedRepresentation` binds a PHP representation to one or more record states.
+A `TrackedRepresentation` is concrete. It binds one PHP representation object/value to one or more record states through an applied `RepresentationBinding`.
 
 It stores:
 
 - the PHP representation object/value;
+- the applied representation binding;
 - baseline record revisions captured when it was created, attached, or last synced/refreshed;
 - field lineage from representation paths/properties to record field references;
 - writable/read-only flags per mapped slot;
 - relation collection loaded state later.
 
 It does not store baseline field values. When sync needs an old value, it asks the owning `RecordState` history for the value at the tracked baseline revision.
+
+Do not use `TrackedRepresentation` as a template. It is only for a concrete representation object/value after a binding has been applied and baseline record revisions are known.
 
 A single representation may map to multiple records and collections:
 
@@ -208,6 +211,35 @@ RepresentationBinding
 TrackedRepresentation
 ```
 
+`RepresentationBinding` is the reusable mapping shape. It is not limited to instance-level tracking and can represent:
+
+```text
+root representation binding
+child representation binding/template
+relation item binding/template
+```
+
+Use this same concept for child and relation item mapping until implementation proves a separate `ChildRepresentationTemplate` class is necessary.
+
+The distinction is:
+
+```text
+RepresentationBinding
+    reusable mapping shape
+
+TrackedRepresentation
+    concrete object + applied binding + baseline record revisions
+```
+
+An applied binding may need local record state that is more precise than `RecordFieldRef` with an optional `Key`. A keyed field reference works for persisted records, and a keyless reference is useful for template-like shapes, but it is ambiguous for multiple new child records:
+
+```text
+posts[no-key].title
+posts[no-key].title
+```
+
+Before relation collection writes are implemented, applied bindings may need to target an actual `RecordState` or local in-memory record handle, not only a persisted `Key`.
+
 Sources of binding information:
 
 1. Query selection lineage.
@@ -275,6 +307,57 @@ Rules:
 - removing one known child from an unloaded collection can be valid;
 - replacing an unloaded collection must be rejected or represented as an explicit full replacement;
 - an unloaded collection must never be treated as empty.
+
+Mutable relation collections must be ORM-owned. Plain arrays cannot safely represent writable relation mutations because they cannot notify the ORM and cannot distinguish:
+
+```text
+unloaded
+partially loaded
+fully loaded
+loaded empty
+full replacement
+local projection change
+```
+
+Plain arrays may still be read/projection values, but they are not writable relation trackers. Do not support this as a persistence operation:
+
+```php
+$user->posts[] = $post;
+```
+
+Writable relation add/remove must go through an ORM-owned relation collection:
+
+```php
+$user->posts->add($post);
+$user->posts->remove($post);
+```
+
+or a future explicit EntityManager API:
+
+```php
+$em->add($user, 'posts', $post);
+$em->removeFrom($user, 'posts', $post);
+```
+
+The intended object concept is `RelatedCollection` or, if the implementation prefers an internal name, `TrackedRelationCollection`.
+
+It should eventually own:
+
+```text
+owner record
+relation definition/ref
+loaded state
+added children
+removed children
+child RepresentationBinding
+backing collection
+```
+
+When a new child is added, the relation collection should apply the child `RepresentationBinding` for that relation item.
+
+Do not hard-depend on Doctrine Collections, Illuminate Collections, Loophp Collections, or any other collection package in the ORM foundation. Relation tracking is ORM-specific because the ORM needs owner record, relation definition, loaded state, child binding, added/removed children, cascade/orphan behavior, and future relation write planning. Generic collection libraries do not know those things.
+
+Later, allow backing collection adapters/factories, similar to Cycle's collection factory approach. A third-party collection can be backing storage or an exposed collection API, but it cannot own ORM relation semantics.
 
 ## Future Namespaces
 

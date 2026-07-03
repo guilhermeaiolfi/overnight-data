@@ -68,4 +68,11 @@ final class TrackedRepresentationMapTest extends TestCase
 
 		self::assertSame([], $map->getAll());
 	}
+
+	public function testMapDoesNotDiscoverGraphChanges(): void
+	{
+		self::markTestIncomplete(
+			'Phase 0 skeleton: TrackedRepresentationMap is an object identity registry only; graph changes must be reported through sync/relation tracking, not discovered by crawling representations.'
+		);
+	}
 }

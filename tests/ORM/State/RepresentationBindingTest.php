@@ -66,6 +66,21 @@ final class RepresentationBindingTest extends TestCase
 		self::assertSame([$name, $email], $binding->getAll());
 	}
 
+	public function testBindingIsReusableMappingShapeBeforeItIsAppliedToRepresentation(): void
+	{
+		$binding = new RepresentationBinding();
+		$name = $this->fieldBinding('name');
+		$binding->add($name);
+
+		$rootBinding = $binding;
+		$childTemplate = $binding;
+		$relationItemTemplate = $binding;
+
+		self::assertSame($name, $rootBinding->get('name'));
+		self::assertSame($rootBinding, $childTemplate);
+		self::assertSame($rootBinding, $relationItemTemplate);
+	}
+
 	private function fieldBinding(string $path, bool $writable = true): RepresentationFieldBinding
 	{
 		return new RepresentationFieldBinding($path, new RecordFieldRef($this->users(), $path), $writable);
