@@ -44,7 +44,7 @@ final class RepresentationValueReader
 		}
 
 		throw new SyncException(sprintf(
-			"Cannot read representation path '%s' because segment '%s' is not on an object.",
+			"Cannot read representation path '%s' because segment '%s' is not on an object or supported array path.",
 			$path,
 			$segment
 		));
