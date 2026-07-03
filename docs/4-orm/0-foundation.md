@@ -23,7 +23,7 @@ Public getters should use `getSomething()` naming. Keep code simple and readable
 
 ## RecordState
 
-A `RecordState` is the canonical in-memory state for one persistent record identity. It is the thing `flush()` writes.
+A `RecordState` is the canonical in-memory state for one persistent record identity. It owns the current values and in-memory revision history, and it is the thing `flush()` writes.
 
 It stores:
 
@@ -33,10 +33,10 @@ It stores:
 - current synchronized values;
 - dirty fields;
 - lifecycle state;
-- identity values, including composite keys;
+- identity values through `ON\Data\Key`, including composite keys;
 - relation state metadata later.
 
-Identity is first-class and includes the collection name, primary-key values in definition key order, composite-key support, and canonical PHP values.
+Identity is first-class through the existing `ON\Data\Key` type. It includes the collection name, primary-key values in definition key order, composite-key support, and canonical PHP values.
 
 ## Representation
 
@@ -44,17 +44,19 @@ A representation is a PHP value that exposes data to the user. It may be a class
 
 Representations are not automatically the source of truth. They can drift from the record state until explicitly synchronized.
 
-## RepresentationState
+## TrackedRepresentation
 
-A `RepresentationState` binds a PHP representation to one or more record states.
+A `TrackedRepresentation` binds a PHP representation to one or more record states.
 
 It stores:
 
 - the PHP representation object/value;
-- a representation baseline captured when it was created, attached, or last synced/refreshed;
-- field lineage from representation paths/properties to record field slots;
+- baseline record revisions captured when it was created, attached, or last synced/refreshed;
+- field lineage from representation paths/properties to record field references;
 - writable/read-only flags per mapped slot;
 - relation collection loaded state later.
+
+It does not store baseline field values. When sync needs an old value, it asks the owning `RecordState` history for the value at the tracked baseline revision.
 
 A single representation may map to multiple records and collections:
 
@@ -117,7 +119,7 @@ Field-level conflict rule:
 
 ```text
 If a representation changed field X,
-and the representation baseline for X is different from current RecordState value for X,
+and the record value at the representation baseline revision for X is different from current `RecordState` value for X,
 and the representation current value for X is different from current RecordState value for X,
 then sync must reject with a representation conflict.
 ```
@@ -155,8 +157,8 @@ Default `sync()` remains safe.
 Avoid object-first identity-map terminology. The preferred model is:
 
 ```text
-RecordIdentity -> RecordState
-Representation object id -> RepresentationState
+ON\Data\Key -> RecordState
+Representation object id -> TrackedRepresentation
 ```
 
 Classic ORMs usually map identity to entity object. This ORM maps identity to record state, then allows many representations over that state.
@@ -203,7 +205,7 @@ Use this terminology:
 ```text
 RepresentationMap
 RepresentationBinding
-RepresentationState
+TrackedRepresentation
 ```
 
 Sources of binding information:
@@ -281,7 +283,6 @@ Likely future production namespaces:
 ```text
 ON\Data\ORM
 ON\Data\ORM\State
-ON\Data\ORM\Identity
 ON\Data\ORM\Sync
 ON\Data\ORM\Persistence
 ON\Data\ORM\Relation
@@ -289,6 +290,24 @@ ON\Data\ORM\Exception
 ```
 
 Do not create them in Phase 0 unless a later test stub needs them.
+
+## Phase 1A State Primitives
+
+Phase 1A introduces the first production ORM state primitives only:
+
+- `RecordLifecycle`
+- `RecordHistory`
+- `RecordState`
+- `RecordStateMap`
+- `RecordFieldRef`
+- `RepresentationFieldBinding`
+- `RepresentationBinding`
+- `TrackedRepresentation`
+- `TrackedRepresentationMap`
+- `SyncConflict`
+- `SyncConflictDetector`
+
+It does not introduce `EntityQuery`, `with()`, repositories, lazy loading, `sync()` runtime, `flush()` runtime, write planning, SQL commands, or a public `persist()` API.
 
 ## Phase 0 Non-Goals
 
