@@ -505,7 +505,35 @@ Phase 1G introduces `ON\Data\ORM\Sync\SyncPlanner`, `SyncPlan`, and `SyncFieldUp
 
 `SyncPlanner` reads current representation values, detects conflicts, and produces a `SyncPlan` containing path-specific conflicts plus planned field updates. Read-only bindings are ignored for updates, conflicted paths are not planned as updates, and duplicate target updates with conflicting values are rejected instead of implying last-write-wins.
 
+Different fields on the same `RecordState` remain separate `SyncFieldUpdate` entries; future sync-apply and flush runtime will aggregate them through the dirty `RecordState`.
+
 Planning does not mutate `RecordState`, update tracked baseline revisions, convert values, persist, flush, or apply the updates. Applying a `SyncPlan` is future runtime work. This completes the Phase 1 state/sync foundation.
+
+## Phase 1 Completed Foundation
+
+Phase 1 introduced only in-memory state, representation tracking, relation intent tracking, value reading, conflict detection, and sync-planning primitives. It did not introduce public `sync()`, `flush()`, `EntityManager`, query hydration runtime, repositories, database writes, relation write planners, or lazy loading.
+
+`RecordState` is the canonical aggregation point for synchronized changes. `SyncPlanner` produces field-level `SyncFieldUpdate` objects in a `SyncPlan`; it does not mutate records, apply updates, group database commands, or clear conflicts. Multiple different fields on the same `RecordState` may appear as separate `SyncFieldUpdate` entries. `SyncPlanner` should only reject duplicate updates when the same concrete record target and same field receive conflicting values in the same plan.
+
+Future sync-apply logic will apply planned field updates to `RecordState`. Future flush/write planning will aggregate dirty values from `RecordState::getDirtyValues()` into database commands, such as one update per record when possible.
+
+```text
+rep1 changes users.name
+rep2 changes users.email
+rep3 changes users.status
+
+Each representation can produce separate sync updates.
+
+After future apply:
+    one RecordState has dirty values:
+        name
+        email
+        status
+
+Future flush can group those dirty values into one database update for the users record.
+```
+
+`RelatedCollection` tracks relation add/remove intent only. It does not persist, adopt, or write relations. `RepresentationAdopter` adopts tracking only; it does not sync values. `RepresentationValueReader` reads current values only; it does not convert, mutate, or sync. `SyncPlan` is a description of conflicts and possible field updates, not an apply operation.
 
 ## Phase 0 Non-Goals
 
