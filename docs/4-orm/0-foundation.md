@@ -491,6 +491,14 @@ Phase 1E introduces `ON\Data\ORM\Sync\RepresentationAdopter` as the small bridge
 
 `RelatedCollection` still owns relation add/remove intent. Adoption only tracks the child representation; it does not add the item to the relation collection, inspect relation loaded state, sync representation values, persist, flush, write SQL, or mutate the child binding template.
 
+## Phase 1F Representation Value Reading
+
+Phase 1F introduces `ON\Data\ORM\Sync\RepresentationValueReader` as the small service that reads current values from object and `stdClass` representations using `RepresentationBinding` paths.
+
+The reader distinguishes a missing public property from a present `null` value, preserves binding insertion order, and supports simple dot paths through public properties. Numeric path segments can read array offsets for straightforward cases such as `posts.0.title`.
+
+It only reads current representation values. It does not sync values into `RecordState`, convert values, mutate representations, persist, flush, call getters/setters, inspect private properties, or write SQL. Future mapper/property-access integration can expand this beyond public properties and simple paths.
+
 ## Phase 0 Non-Goals
 
 Do not implement:
