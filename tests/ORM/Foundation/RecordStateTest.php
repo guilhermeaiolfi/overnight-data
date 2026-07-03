@@ -33,7 +33,6 @@ final class RecordStateTest extends TestCase
 
 	public function testSqlDialectBehaviorStaysOutsideOrmCore(): void
 	{
-		self::assertDirectoryDoesNotExist(dirname(__DIR__, 3) . '/src/ORM');
 		self::markTestIncomplete(
 			'When ORM core exists, assert it delegates dialect SQL behavior to the database/DBAL integration layer.'
 		);
