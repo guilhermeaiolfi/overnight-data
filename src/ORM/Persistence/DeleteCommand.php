@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Persistence;
 
-use ON\Data\ORM\Exception\InvalidWriteCommandException;
+use ON\Data\ORM\Exception\InvalidCommandException;
 
-final class DeleteCommand implements WriteCommandInterface
+final class DeleteCommand implements CommandInterface
 {
 	/**
 	 * @param array<string, mixed> $identity
@@ -16,18 +16,13 @@ final class DeleteCommand implements WriteCommandInterface
 		private array $identity,
 	) {
 		if ($identity === []) {
-			throw new InvalidWriteCommandException('Delete command identity cannot be empty.');
+			throw new InvalidCommandException('Delete command identity cannot be empty.');
 		}
 	}
 
 	public function getCollectionName(): string
 	{
 		return $this->collectionName;
-	}
-
-	public function getKind(): WriteCommandKind
-	{
-		return WriteCommandKind::DELETE;
 	}
 
 	/**

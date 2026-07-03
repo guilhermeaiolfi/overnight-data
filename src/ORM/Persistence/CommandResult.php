@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Persistence;
 
-use ON\Data\ORM\Exception\InvalidWriteCommandException;
+use ON\Data\ORM\Exception\InvalidCommandException;
 
-final class WriteResult
+final class CommandResult
 {
 	/**
 	 * @param array<string, mixed> $generatedValues
@@ -16,7 +16,7 @@ final class WriteResult
 		private array $generatedValues = [],
 	) {
 		if ($affectedRows < 0) {
-			throw new InvalidWriteCommandException('Write result affected rows cannot be negative.');
+			throw new InvalidCommandException('Command result affected rows cannot be negative.');
 		}
 	}
 

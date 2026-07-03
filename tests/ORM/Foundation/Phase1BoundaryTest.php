@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Foundation;
 
+use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
-use ON\Data\ORM\Persistence\WriteCommandInterface;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -44,7 +44,7 @@ final class Phase1BoundaryTest extends TestCase
 		foreach ($commandClasses as $commandClass) {
 			$reflection = new ReflectionClass($commandClass);
 
-			self::assertTrue($reflection->implementsInterface(WriteCommandInterface::class));
+			self::assertTrue($reflection->implementsInterface(CommandInterface::class));
 			self::assertFalse($reflection->hasMethod('execute'));
 		}
 	}

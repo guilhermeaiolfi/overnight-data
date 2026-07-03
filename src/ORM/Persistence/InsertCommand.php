@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Persistence;
 
-final class InsertCommand implements WriteCommandInterface
+final class InsertCommand implements CommandInterface
 {
 	/**
 	 * @param array<string, mixed> $values
@@ -18,11 +18,6 @@ final class InsertCommand implements WriteCommandInterface
 	public function getCollectionName(): string
 	{
 		return $this->collectionName;
-	}
-
-	public function getKind(): WriteCommandKind
-	{
-		return WriteCommandKind::INSERT;
 	}
 
 	/**

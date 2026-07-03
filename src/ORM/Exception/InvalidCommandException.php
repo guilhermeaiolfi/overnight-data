@@ -4,6 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Exception;
 
-class InvalidWriteCommandException extends PersistenceException
+class InvalidCommandException extends PersistenceException
 {
 }
