@@ -1549,6 +1549,7 @@ final class QueryModelTest extends TestCase
 		self::assertSame($inner, $ranked);
 		self::assertSame('ranked_posts', $inner->getAlias());
 	}
+
 	public function testSelectionItemDoesNotExposeRoleSpecificApis(): void
 	{
 		foreach (['asPublic', 'asIdentity', 'parse', 'includeInParser', 'asParserKey', 'asRowAlias'] as $method) {
@@ -1789,4 +1790,3 @@ final class QueryModelTest extends TestCase
 		return $registry;
 	}
 }
-

@@ -179,6 +179,65 @@ $query->to(stdClass::class);
 $query->to([]);
 ```
 
+A `SelectQuery` with a target representation and no explicit `select()` uses the root collection's default scalar field selection. This is the normal root entity load:
+
+```php
+$users = query($users)
+    ->where(fn ($u) => $u->active->equals(true))
+    ->to(User::class)
+    ->fetchAll();
+```
+
+Conceptually, that means:
+
+```text
+select the root collection's default scalar fields
+map/hydrate each row to User
+track one root RecordState per row when ORM tracking is active
+```
+
+The first implementation can define root default fields as all normal root scalar fields. Later this may become smarter based on target representation requirements, but do not implement that in Phase 0.
+
+Default root selection is root-only. It must not auto-load relations; explicit relation loading still goes through the existing `RelationRef` / `select()` model:
+
+```php
+$u = query($users);
+
+$users = $u
+    ->select(
+        $u->posts->fields('id', 'title'),
+    )
+    ->to(User::class)
+    ->fetchAll();
+```
+
+Do not add `with()` for this.
+
+`stdClass` and array targets use the same omitted-selection rule:
+
+```php
+$rows = query($users)
+    ->to(stdClass::class)
+    ->fetchAll();
+
+$rows = query($users)
+    ->to([])
+    ->fetchAll();
+```
+
+Both produce root field representations. When ORM tracking is active, each `stdClass` object can be tracked as a root record representation.
+
+Any explicit `select(...)` disables the default root field selection:
+
+```php
+$rows = query($users)
+    ->select($u->id, $u->name)
+    ->to(UserSummary::class)
+    ->fetchAll();
+```
+
+That uses the explicit selection only, plus hidden required fields for identity/tracking if needed.
+
 Writable results require lineage. A selected direct field can be writable if identity data is available:
 
 ```php
@@ -194,6 +253,8 @@ $u->name->upper()->as('title');
 Expressions cannot safely reverse back into `users.name` without explicit support.
 
 If writable lineage requires primary-key fields that the user did not select publicly, the ORM/query pipeline may use existing implicit selection mechanisms instead of exposing those fields in the final result shape.
+
+Hidden required fields must not appear in the final mapped representation unless explicitly selected or mapped.
 
 Relation loading must keep using `RelationRef` and `select()` / relation branch configuration. Do not add `with()`.
 
@@ -264,6 +325,8 @@ Do not allow unsafe partial mutable managed entities.
 - partial `stdClass` can be writable only for fields with known lineage and identity;
 - missing fields are not overwritten;
 - expressions are read-only by default.
+
+Partial explicit selections must not overwrite missing fields during sync. A fully default-selected root representation can be treated as the normal writable root case. Partial class representations should be treated carefully as projection-like unless the ORM explicitly tracks selected fields field-by-field.
 
 ## Lazy Loading
 

@@ -68,6 +68,55 @@ $posts->select($posts->all());
 
 `require()` records an implicit selection with a tag and is used by internal query assembly when fields must be present without becoming caller-facing API.
 
+## Targeted results and default root fields
+
+For future ORM result targets, a `SelectQuery` with `to(...)` and no explicit `select()` means "select the root collection's default scalar fields." The default applies only to the root collection; it does not auto-load relations.
+
+Examples:
+
+```php
+$users = query($users)
+    ->where(fn ($u) => $u->active->equals(true))
+    ->to(User::class)
+    ->fetchAll();
+
+$rows = query($users)
+    ->to(stdClass::class)
+    ->fetchAll();
+
+$rows = query($users)
+    ->to([])
+    ->fetchAll();
+```
+
+The first implementation may define the root defaults as all normal root scalar fields. Later implementations may narrow this based on target representation requirements.
+
+Explicit `select(...)` disables default root field selection:
+
+```php
+$rows = query($users)
+    ->select($u->id, $u->name)
+    ->to(UserSummary::class)
+    ->fetchAll();
+```
+
+The runtime may still include hidden required fields for identity or tracking. Those fields are internal and must not appear in the final mapped representation unless explicitly selected or mapped.
+
+Relation loading remains explicit through `RelationRef` branch selection/configuration:
+
+```php
+$u = query($users);
+
+$users = $u
+    ->select(
+        $u->posts->fields('id', 'title'),
+    )
+    ->to(User::class)
+    ->fetchAll();
+```
+
+Do not introduce `with()` or `EntityQuery`.
+
 ## Named expressions
 
 Query-local aliases are registered only after an aliased expression is successfully selected.

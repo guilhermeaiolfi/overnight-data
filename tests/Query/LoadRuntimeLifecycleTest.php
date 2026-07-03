@@ -1350,4 +1350,3 @@ final class TopLevelParentNodeLoader extends LifecycleTestLoader
 		$this->prepareSeparateQuery($branch, $runtime);
 	}
 }
-

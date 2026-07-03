@@ -232,4 +232,3 @@ final class RootLoadBranch extends LoadBranch
 		return array_map($this->selectionKey(...), $selections);
 	}
 }
-

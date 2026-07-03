@@ -197,6 +197,4 @@ final class FirstOfManyLoader extends AbstractLoader
 
 		return $sorts;
 	}
-
 }
-

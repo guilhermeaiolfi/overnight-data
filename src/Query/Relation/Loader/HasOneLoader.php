@@ -84,5 +84,4 @@ final class HasOneLoader extends AbstractLoader
 		$this->applySeparateQueryOptions($branch);
 		$runtime->execute($branch, $query);
 	}
-
 }

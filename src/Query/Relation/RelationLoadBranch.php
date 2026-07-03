@@ -157,4 +157,3 @@ final class RelationLoadBranch extends LoadBranch
 		return $this->getRelationRef()->field($fieldName)->as($fieldName);
 	}
 }
-

@@ -7,7 +7,6 @@ namespace ON\Data\Query\Selection;
 use InvalidArgumentException;
 use LogicException;
 use ON\Data\Query\Expression\AliasedExpression;
-use ON\Data\Query\Expression\SourceFieldExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;

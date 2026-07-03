@@ -84,5 +84,4 @@ final class BelongsToLoader extends AbstractLoader
 		$this->applySeparateQueryOptions($branch);
 		$runtime->execute($branch, $query);
 	}
-
 }

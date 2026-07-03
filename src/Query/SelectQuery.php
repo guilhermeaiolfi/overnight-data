@@ -836,4 +836,3 @@ final class SelectQuery implements QuerySourceInterface
 		return $rebound;
 	}
 }
-

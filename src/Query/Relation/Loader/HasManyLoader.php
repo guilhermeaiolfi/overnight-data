@@ -242,4 +242,3 @@ final class HasManyLoader extends AbstractLoader
 		return parent::join($relation);
 	}
 }
-
