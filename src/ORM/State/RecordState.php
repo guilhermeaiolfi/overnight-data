@@ -12,6 +12,7 @@ final class RecordState
 {
 	private CollectionInterface $collection;
 	private ?Key $key;
+	private string $stateHash;
 	private RecordLifecycle $lifecycle;
 	private int $revision = 1;
 	private RecordHistory $history;
@@ -27,6 +28,9 @@ final class RecordState
 	{
 		$this->collection = $collection;
 		$this->key = $key;
+		$this->stateHash = $key instanceof Key
+			? $key->getHash()
+			: sprintf('%s#%d', $collection->getName(), spl_object_id($this));
 		$this->values = $values;
 		$this->originalValues = $values;
 		$this->lifecycle = $lifecycle;
@@ -68,6 +72,11 @@ final class RecordState
 	public function hasKey(): bool
 	{
 		return $this->key instanceof Key;
+	}
+
+	public function getStateHash(): string
+	{
+		return $this->stateHash;
 	}
 
 	public function getLifecycle(): RecordLifecycle

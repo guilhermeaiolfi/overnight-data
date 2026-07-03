@@ -38,6 +38,8 @@ It stores:
 
 Identity is first-class through the existing `ON\Data\Key` type. It includes the collection name, primary-key values in definition key order, composite-key support, and canonical PHP values.
 
+Each `RecordState` also has a stable ORM record target hash via `getStateHash()`. For clean persisted records this can be the `Key` hash. For new unsaved records it is a local in-memory tracking hash that stays stable if the record later receives a database key through `markClean($key)`. This hash is not database identity, persistence state, or optimistic locking; it exists so applied bindings can distinguish multiple unsaved records in the same PHP process/session.
+
 ## Representation
 
 A representation is a PHP value that exposes data to the user. It may be a class object, `stdClass`, array projection, DTO, or a future dynamic model.
@@ -299,7 +301,15 @@ posts[no-key].title
 posts[no-key].title
 ```
 
-Before relation collection writes are implemented, applied bindings may need to target an actual `RecordState` or local in-memory record handle, not only a persisted `Key`.
+`RecordFieldRef` therefore has three modes:
+
+- template: collection + field, with no concrete record yet;
+- keyed: collection + field + `Key`;
+- state-targeted: collection + field + `RecordState`.
+
+Template refs describe reusable mapping shapes. Keyed refs point to persisted records. State-targeted refs point to a concrete in-memory `RecordState`, including a new unsaved record before any database key exists. Their record hash is the `RecordState::getStateHash()` value; keyed refs use `Key::getHash()`.
+
+`RepresentationBinding::applyToRecordState($state)` turns a reusable same-collection template binding into a new applied binding whose fields target that concrete `RecordState`. It preserves paths and writable/read-only flags, and it does not mutate the reusable binding. Future relation collections will use this when adding new children, but relation collection runtime and write planning are not implemented yet.
 
 Sources of binding information:
 

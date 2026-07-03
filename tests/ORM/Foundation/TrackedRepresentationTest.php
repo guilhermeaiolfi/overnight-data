@@ -39,7 +39,7 @@ final class TrackedRepresentationTest extends TestCase
 	public function testAppliedBindingsMayNeedLocalRecordHandlesForNewChildren(): void
 	{
 		self::markTestIncomplete(
-			'Phase 0 skeleton: applied bindings for multiple new relation children may need RecordState or local in-memory record handles because repeated keyless refs such as posts[no-key].title are ambiguous.'
+			'Phase 0 skeleton: applied bindings for multiple new relation children use state-targeted RecordFieldRef instances because repeated template refs such as posts.title are ambiguous.'
 		);
 	}
 }

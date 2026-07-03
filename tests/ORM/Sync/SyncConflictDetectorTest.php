@@ -109,6 +109,72 @@ final class SyncConflictDetectorTest extends TestCase
 		(new SyncConflictDetector())->detect($tracked, ['name' => 'A2'], static fn () => $record);
 	}
 
+	public function testDetectorUsesStateTargetedRefWithoutCallingResolver(): void
+	{
+		$record = RecordState::new($this->users(), ['name' => 'A1']);
+		$field = RecordFieldRef::forState($record, 'name');
+		$tracked = $this->tracked($field, 1);
+
+		self::assertSame([], (new SyncConflictDetector())->detect(
+			$tracked,
+			['name' => 'A2'],
+			static function (): never {
+				self::fail('Resolver should not be called for state-targeted refs.');
+			}
+		));
+	}
+
+	public function testDetectorStillUsesResolverForKeyedRef(): void
+	{
+		$users = $this->users();
+		$key = $users->getKey(10);
+		$field = RecordFieldRef::forKey($key, 'name');
+		$record = RecordState::clean($key, ['name' => 'A1']);
+		$tracked = $this->tracked($field, 1);
+		$resolverCalled = false;
+
+		self::assertSame([], (new SyncConflictDetector())->detect(
+			$tracked,
+			['name' => 'A2'],
+			static function () use ($record, &$resolverCalled): RecordState {
+				$resolverCalled = true;
+
+				return $record;
+			}
+		));
+		self::assertTrue($resolverCalled);
+	}
+
+	public function testA1A2A3CaseReturnsConflictForNewStateTargetedRecord(): void
+	{
+		$record = RecordState::new($this->users(), ['name' => 'A1']);
+		$field = RecordFieldRef::forState($record, 'name');
+		$rep1 = $this->tracked($field, 1);
+		$rep2 = $this->tracked($field, 1);
+		$detector = new SyncConflictDetector();
+
+		self::assertSame([], $detector->detect($rep2, ['name' => 'A2'], static fn () => null));
+
+		$record->setValue('name', 'A2');
+		$conflicts = $detector->detect($rep1, ['name' => 'A3'], static fn () => null);
+
+		self::assertCount(1, $conflicts);
+		self::assertSame('name', $conflicts[0]->getPath());
+		self::assertSame('A1', $conflicts[0]->getBaselineValue());
+		self::assertSame('A2', $conflicts[0]->getRecordValue());
+		self::assertSame('A3', $conflicts[0]->getRepresentationValue());
+	}
+
+	public function testUnchangedStateTargetedPathHasNoConflict(): void
+	{
+		$record = RecordState::new($this->users(), ['name' => 'A1']);
+		$field = RecordFieldRef::forState($record, 'name');
+		$tracked = $this->tracked($field, 1);
+		$record->setValue('name', 'A2');
+
+		self::assertSame([], (new SyncConflictDetector())->detect($tracked, ['name' => 'A1'], static fn () => null));
+	}
+
 	/**
 	 * @return array{RecordState, TrackedRepresentation}
 	 */

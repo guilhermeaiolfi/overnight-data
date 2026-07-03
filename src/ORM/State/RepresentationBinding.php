@@ -64,4 +64,28 @@ final class RepresentationBinding
 			static fn (RepresentationFieldBinding $binding): bool => $binding->isReadOnly()
 		));
 	}
+
+	public function applyToRecordState(RecordState $state): self
+	{
+		$applied = new self();
+		foreach ($this->getAll() as $binding) {
+			$field = $binding->getField();
+			if (! $field->isTemplate()) {
+				throw new StateException(sprintf("Representation binding path '%s' already targets a concrete record.", $binding->getPath()));
+			}
+
+			if ($field->getCollectionName() !== $state->getCollectionName()) {
+				throw new StateException(sprintf(
+					"Representation binding path '%s' targets collection '%s', not '%s'.",
+					$binding->getPath(),
+					$field->getCollectionName(),
+					$state->getCollectionName()
+				));
+			}
+
+			$applied->add($binding->withField(RecordFieldRef::forState($state, $field->getFieldName())));
+		}
+
+		return $applied;
+	}
 }

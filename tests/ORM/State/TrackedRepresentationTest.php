@@ -8,6 +8,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordFieldRef;
+use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\TrackedRepresentation;
 use PHPUnit\Framework\TestCase;
@@ -44,6 +45,15 @@ final class TrackedRepresentationTest extends TestCase
 		self::assertSame(2, $tracked->getBaselineRevisionFor($field));
 	}
 
+	public function testStoresBaselineRevisionForStateTargetedNewRecordHash(): void
+	{
+		$field = RecordFieldRef::forState(RecordState::new($this->users(), ['name' => 'A1']), 'name');
+		$tracked = new TrackedRepresentation(new stdClass(), new RepresentationBinding(), [$field->getRecordHash() => 1]);
+
+		self::assertTrue($tracked->hasBaselineRevision($field->getRecordHash()));
+		self::assertSame(1, $tracked->getBaselineRevisionFor($field));
+	}
+
 	public function testMissingBaselineRevisionThrows(): void
 	{
 		$tracked = new TrackedRepresentation(new stdClass(), new RepresentationBinding(), []);
@@ -58,6 +68,15 @@ final class TrackedRepresentationTest extends TestCase
 
 		$this->expectException(StateException::class);
 		$tracked->getBaselineRevisionFor(new RecordFieldRef($this->users(), 'name'));
+	}
+
+	public function testMissingBaselineForStateTargetedRefThrows(): void
+	{
+		$field = RecordFieldRef::forState(RecordState::new($this->users(), ['name' => 'A1']), 'name');
+		$tracked = new TrackedRepresentation(new stdClass(), new RepresentationBinding(), []);
+
+		$this->expectException(StateException::class);
+		$tracked->getBaselineRevisionFor($field);
 	}
 
 	public function testReplacingBaselineRevisionsWorks(): void

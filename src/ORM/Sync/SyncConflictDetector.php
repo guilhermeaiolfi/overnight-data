@@ -29,7 +29,7 @@ final class SyncConflictDetector
 			}
 
 			$field = $binding->getField();
-			$recordState = $recordStateResolver($field);
+			$recordState = $field->hasState() ? $field->getState() : $recordStateResolver($field);
 			if (! $recordState instanceof RecordState) {
 				throw new SyncException(sprintf("Record state resolver did not return a RecordState for path '%s'.", $path));
 			}

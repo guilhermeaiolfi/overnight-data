@@ -28,6 +28,11 @@ final class RepresentationFieldBinding
 		return $this->field;
 	}
 
+	public function withField(RecordFieldRef $field): self
+	{
+		return new self($this->path, $field, $this->writable);
+	}
+
 	public function isWritable(): bool
 	{
 		return $this->writable;

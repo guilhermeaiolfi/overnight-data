@@ -30,6 +30,24 @@ final class RecordStateTest extends TestCase
 		self::assertSame(['name' => 'A1'], $state->getHistory()->getSnapshot(1));
 	}
 
+	public function testNewRecordHasNonEmptyStableStateHash(): void
+	{
+		$state = RecordState::new($this->users(), ['name' => 'A1']);
+		$hash = $state->getStateHash();
+
+		self::assertNotSame('', $hash);
+		self::assertSame($hash, $state->getStateHash());
+	}
+
+	public function testTwoNewRecordsFromSameCollectionHaveDifferentStateHashes(): void
+	{
+		$users = $this->users();
+		$first = RecordState::new($users, ['name' => 'A1']);
+		$second = RecordState::new($users, ['name' => 'A2']);
+
+		self::assertNotSame($first->getStateHash(), $second->getStateHash());
+	}
+
 	public function testCleanCreatesCleanStateWithExistingKey(): void
 	{
 		$key = $this->users()->getKey(10);
@@ -45,6 +63,15 @@ final class RecordStateTest extends TestCase
 		$state = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
 
 		self::assertSame(['id' => 10, 'name' => 'A1'], $state->getHistory()->getSnapshot(1));
+	}
+
+	public function testCleanRecordHasNonEmptyStateHash(): void
+	{
+		$key = $this->users()->getKey(10);
+		$state = RecordState::clean($key, ['id' => 10, 'name' => 'A1']);
+
+		self::assertSame($key->getHash(), $state->getStateHash());
+		self::assertNotSame('', $state->getStateHash());
 	}
 
 	public function testSettingSameValueDoesNotBumpRevision(): void
@@ -128,6 +155,17 @@ final class RecordStateTest extends TestCase
 
 		self::assertTrue($state->hasKey());
 		self::assertSame(['id' => 10], $state->getKey()?->getValues());
+	}
+
+	public function testMarkCleanAssigningKeyDoesNotChangeExistingStateHash(): void
+	{
+		$users = $this->users();
+		$state = RecordState::new($users, ['id' => 10, 'name' => 'A1']);
+		$hash = $state->getStateHash();
+
+		$state->markClean($users->getKey(10));
+
+		self::assertSame($hash, $state->getStateHash());
 	}
 
 	public function testMarkRemovedMarksRemoved(): void
