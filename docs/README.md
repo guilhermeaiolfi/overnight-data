@@ -19,3 +19,7 @@ Start here for the current public documentation. The files linked below are the 
 - [`3-query/grouping-ordering-pagination.md`](./3-query/grouping-ordering-pagination.md): Grouping, `HAVING`, sorting, and limit/offset pagination.
 - [`3-query/bound-execution.md`](./3-query/bound-execution.md): Bound execution, detachment, and the neutral database facade.
 - [`3-query/relation-loading.md`](./3-query/relation-loading.md): Structured relation selection, nested result shaping, loader-owned execution decisions, and current execution limits.
+
+## ORM
+
+- [`4-orm/0-foundation.md`](./4-orm/0-foundation.md): Phase 0 ORM foundation, record-state persistence model, representation lineage, sync conflicts, and guardrails for future runtime work.
