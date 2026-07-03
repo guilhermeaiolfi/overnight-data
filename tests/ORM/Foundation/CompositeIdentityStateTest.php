@@ -8,10 +8,10 @@ use PHPUnit\Framework\TestCase;
 
 final class CompositeIdentityStateTest extends TestCase
 {
-	public function testRecordIdentitySupportsCompositeKeysInDefinitionOrder(): void
+	public function testKeySupportsCompositeRecordIdentitiesInDefinitionOrder(): void
 	{
 		self::markTestIncomplete(
-			'Phase 0 skeleton: RecordIdentity includes collection name and canonical primary-key values in definition key order.'
+			'Phase 0 skeleton: ON\\Data\\Key includes collection name and canonical primary-key values in definition key order.'
 		);
 	}
 }

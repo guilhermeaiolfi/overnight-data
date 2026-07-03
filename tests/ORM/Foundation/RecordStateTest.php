@@ -25,7 +25,7 @@ final class RecordStateTest extends TestCase
 			'UnitOfWork',
 			'IdentityMap',
 			'LazyLoading',
-			'RepresentationState',
+			'TrackedRepresentation',
 		] as $forbidden) {
 			self::assertStringNotContainsString($forbidden, $contents, $forbidden);
 		}

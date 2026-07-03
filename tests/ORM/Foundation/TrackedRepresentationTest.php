@@ -6,7 +6,7 @@ namespace Tests\ON\Data\ORM\Foundation;
 
 use PHPUnit\Framework\TestCase;
 
-final class RepresentationStateTest extends TestCase
+final class TrackedRepresentationTest extends TestCase
 {
 	public function testRepresentationCanMapToMultipleRecordStates(): void
 	{
@@ -15,10 +15,10 @@ final class RepresentationStateTest extends TestCase
 		);
 	}
 
-	public function testRepresentationStateStoresBaselineLineageAndWritableFlags(): void
+	public function testTrackedRepresentationStoresBaselineRevisionsLineageAndWritableFlags(): void
 	{
 		self::markTestIncomplete(
-			'Phase 0 skeleton: RepresentationState must track baseline values, field lineage, and per-slot writable/read-only status.'
+			'Phase 0 skeleton: TrackedRepresentation must track baseline record revisions, field lineage, and per-field writable/read-only status.'
 		);
 	}
 }
