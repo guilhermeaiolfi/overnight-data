@@ -271,7 +271,7 @@ final class SelectQuery implements QuerySourceInterface
 		foreach ($this->selections->getAll() as $selection) {
 			$copy->selections->add(
 				$this->copySelectionExpression($selection->getExpression(), $copy),
-				$selection->getReasons(),
+				$selection->getTags(),
 				$selection->isExplicit(),
 			);
 		}
@@ -342,13 +342,13 @@ final class SelectQuery implements QuerySourceInterface
 		return $this;
 	}
 
-	public function require(FieldRef|ValueExpressionInterface|AliasedExpression|SelectQuery $field, string $reason): self
+	public function require(FieldRef|ValueExpressionInterface|AliasedExpression|SelectQuery $field, string $tag): self
 	{
 		$expression = $field instanceof SelectQuery
 			? new SubqueryExpression($field)
 			: $field;
 
-		$this->selections->add($expression, $reason);
+		$this->selections->add($expression, $tag);
 
 		return $this;
 	}
@@ -836,3 +836,4 @@ final class SelectQuery implements QuerySourceInterface
 		return $rebound;
 	}
 }
+

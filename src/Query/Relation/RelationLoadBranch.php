@@ -9,7 +9,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\Selection\SelectionList;
-use ON\Data\Query\Selection\SelectionReason;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 
 final class RelationLoadBranch extends LoadBranch
@@ -76,7 +76,7 @@ final class RelationLoadBranch extends LoadBranch
 
 		foreach ($fieldNames as $fieldName) {
 			$canonical = $this->fieldSelectionName($fieldName);
-			$this->selections->add($this->relationFieldSelection($canonical), SelectionReason::REQUIRED);
+			$this->selections->add($this->relationFieldSelection($canonical), SelectionTag::REQUIRED);
 			$added[] = $canonical;
 		}
 
@@ -93,7 +93,7 @@ final class RelationLoadBranch extends LoadBranch
 
 		foreach ($fieldNames as $fieldName) {
 			$canonical = $this->fieldSelectionName($fieldName);
-			$this->selections->add($this->relationFieldSelection($canonical), SelectionReason::PUBLIC);
+			$this->selections->add($this->relationFieldSelection($canonical), SelectionTag::PUBLIC);
 			$added[] = $canonical;
 		}
 
@@ -157,3 +157,4 @@ final class RelationLoadBranch extends LoadBranch
 		return $this->getRelationRef()->field($fieldName)->as($fieldName);
 	}
 }
+

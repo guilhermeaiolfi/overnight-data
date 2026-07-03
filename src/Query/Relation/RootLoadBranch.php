@@ -12,7 +12,7 @@ use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Result\Parser\RootNode;
 use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionList;
-use ON\Data\Query\Selection\SelectionReason;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 
 final class RootLoadBranch extends LoadBranch
@@ -55,7 +55,7 @@ final class RootLoadBranch extends LoadBranch
 			$existing = $this->findRootFieldSelection($normalized);
 
 			if ($existing instanceof SelectionItem) {
-				$this->selections->add($existing->getExpression(), SelectionReason::REQUIRED);
+				$this->selections->add($existing->getExpression(), SelectionTag::REQUIRED);
 				$aliases[] = $this->selectionKey($existing);
 
 				continue;
@@ -73,7 +73,7 @@ final class RootLoadBranch extends LoadBranch
 
 			$this->selections->add(
 				$this->query->field($normalized)->as($alias),
-				[SelectionReason::REQUIRED, SelectionReason::INTERNAL],
+				[SelectionTag::REQUIRED, SelectionTag::INTERNAL],
 			);
 			$aliases[] = $alias;
 		}
@@ -95,13 +95,13 @@ final class RootLoadBranch extends LoadBranch
 				continue;
 			}
 
-			$reasons = [SelectionReason::IDENTITY, SelectionReason::REQUIRED];
+			$tags = [SelectionTag::IDENTITY, SelectionTag::REQUIRED];
 
-			if (! $selection->hasReason(SelectionReason::PUBLIC)) {
-				$reasons[] = SelectionReason::INTERNAL;
+			if (! $selection->hasTag(SelectionTag::PUBLIC)) {
+				$tags[] = SelectionTag::INTERNAL;
 			}
 
-			$this->selections->add($selection->getExpression(), $reasons);
+			$this->selections->add($selection->getExpression(), $tags);
 		}
 
 		return $identityAliases;
@@ -156,7 +156,7 @@ final class RootLoadBranch extends LoadBranch
 		}
 
 		foreach ($publicSelections as $selection) {
-			$this->selections->add($selection->getExpression(), SelectionReason::PUBLIC, $selection->isExplicit());
+			$this->selections->add($selection->getExpression(), SelectionTag::PUBLIC, $selection->isExplicit());
 		}
 	}
 
@@ -228,3 +228,4 @@ final class RootLoadBranch extends LoadBranch
 		return array_map($this->selectionKey(...), $selections);
 	}
 }
+

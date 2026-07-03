@@ -492,7 +492,7 @@ final class CycleQueryExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testExplicitSelectionsMayAlsoCarryInternalRequirementReasonsAndRemainVisible(): void
+	public function testExplicitSelectionsMayAlsoCarryInternalRequirementTagsAndRemainVisible(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 

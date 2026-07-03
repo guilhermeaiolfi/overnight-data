@@ -34,7 +34,7 @@ final class SelectionList implements IteratorAggregate, Countable
 	/**
 	 * @var array<string, list<int>>
 	 */
-	private array $reasonEntryIndexes = [];
+	private array $tagEntryIndexes = [];
 
 	/**
 	 * @param list<ValueExpressionInterface|AliasedExpression|StarExpression> $expressions
@@ -66,7 +66,7 @@ final class SelectionList implements IteratorAggregate, Countable
 
 		foreach ($expressions as $expression) {
 			$promoted = false;
-			$explicitReasons = $this->inferReasons($expression, [], true);
+			$explicitTags = $this->inferTags($expression, [], true);
 
 			foreach ($pendingEntries as $index => $entry) {
 				if ($entry->isExplicit()) {
@@ -78,7 +78,7 @@ final class SelectionList implements IteratorAggregate, Countable
 				}
 
 				$pendingEntries[$index] = $entry
-					->withReasons($explicitReasons)
+					->withTags($explicitTags)
 					->withExplicit();
 				$promoted = true;
 
@@ -86,12 +86,12 @@ final class SelectionList implements IteratorAggregate, Countable
 			}
 
 			if (! $promoted) {
-				$pendingEntries[] = new SelectionItem($expression, true, $explicitReasons);
+				$pendingEntries[] = new SelectionItem($expression, true, $explicitTags);
 			}
 		}
 
 		$this->entries = $pendingEntries;
-		$this->rebuildReasonIndexes();
+		$this->rebuildTagIndexes();
 
 		foreach ($incomingExpressions as $alias => $expression) {
 			$this->namedExpressions[$alias] = $expression;
@@ -99,32 +99,32 @@ final class SelectionList implements IteratorAggregate, Countable
 	}
 
 	/**
-	 * @param string|list<string> $reasons
+	 * @param string|list<string> $tags
 	 */
 	public function add(
 		ValueExpressionInterface|AliasedExpression|StarExpression $expression,
-		string|array $reasons = [],
+		string|array $tags = [],
 		bool $explicit = false,
 	): SelectionItem {
-		$normalizedReasons = $this->inferReasons($expression, $this->normalizeReasons($reasons), $explicit);
+		$normalizedTags = $this->inferTags($expression, $this->normalizeTags($tags), $explicit);
 
 		foreach ($this->entries as $index => $entry) {
 			if (! $this->expressionsMatch($entry->getExpression(), $expression)) {
 				continue;
 			}
 
-			$newReasons = array_values(array_filter(
-				$normalizedReasons,
-				static fn (string $reason): bool => ! $entry->hasReason($reason),
+			$newTags = array_values(array_filter(
+				$normalizedTags,
+				static fn (string $tag): bool => ! $entry->hasTag($tag),
 			));
-			$updated = $entry->withReasons($normalizedReasons);
+			$updated = $entry->withTags($normalizedTags);
 
 			if ($explicit) {
 				$updated = $updated->withExplicit();
 			}
 
 			$this->entries[$index] = $updated;
-			$this->registerReasonIndexes($index, $newReasons);
+			$this->registerTagIndexes($index, $newTags);
 
 			return $updated;
 		}
@@ -133,23 +133,23 @@ final class SelectionList implements IteratorAggregate, Countable
 			throw new InvalidArgumentException(sprintf("Query expression alias '%s' is already selected.", $expression->getAlias()));
 		}
 
-		$item = new SelectionItem($expression, $explicit, $normalizedReasons);
-		$this->appendItem($item, $normalizedReasons);
+		$item = new SelectionItem($expression, $explicit, $normalizedTags);
+		$this->appendItem($item, $normalizedTags);
 
 		return $item;
 	}
 
 	/**
-	 * @param string|list<string> $reasons
+	 * @param string|list<string> $tags
 	 */
 	public function tag(
 		ValueExpressionInterface|AliasedExpression|StarExpression|string $selection,
-		string|array $reasons,
+		string|array $tags,
 	): SelectionItem {
-		$normalizedReasons = $this->normalizeReasons($reasons);
+		$normalizedTags = $this->normalizeTags($tags);
 
-		if ($normalizedReasons === []) {
-			throw new InvalidArgumentException('Selection tagging requires at least one non-empty reason.');
+		if ($normalizedTags === []) {
+			throw new InvalidArgumentException('Selection tagging requires at least one non-empty tag.');
 		}
 
 		foreach ($this->entries as $index => $entry) {
@@ -157,13 +157,13 @@ final class SelectionList implements IteratorAggregate, Countable
 				continue;
 			}
 
-			$newReasons = array_values(array_filter(
-				$normalizedReasons,
-				static fn (string $reason): bool => ! $entry->hasReason($reason),
+			$newTags = array_values(array_filter(
+				$normalizedTags,
+				static fn (string $tag): bool => ! $entry->hasTag($tag),
 			));
-			$updated = $entry->withReasons($normalizedReasons);
+			$updated = $entry->withTags($normalizedTags);
 			$this->entries[$index] = $updated;
-			$this->registerReasonIndexes($index, $newReasons);
+			$this->registerTagIndexes($index, $newTags);
 
 			return $updated;
 		}
@@ -171,9 +171,9 @@ final class SelectionList implements IteratorAggregate, Countable
 		throw new InvalidArgumentException('Cannot tag a selection that is not present in the list.');
 	}
 
-	public function require(ValueExpressionInterface|AliasedExpression|StarExpression $expression, string $reason): void
+	public function require(ValueExpressionInterface|AliasedExpression|StarExpression $expression, string $tag): void
 	{
-		$this->add($expression, $reason);
+		$this->add($expression, $tag);
 	}
 
 	public function merge(self $other, ?bool $explicit = null): void
@@ -181,7 +181,7 @@ final class SelectionList implements IteratorAggregate, Countable
 		foreach ($other->getAll() as $selection) {
 			$this->add(
 				$selection->getExpression(),
-				$selection->getReasons(),
+				$selection->getTags(),
 				$explicit ?? $selection->isExplicit(),
 			);
 		}
@@ -194,7 +194,7 @@ final class SelectionList implements IteratorAggregate, Countable
 		foreach ($this->entries as $entry) {
 			$projected->add(
 				$entry->getProjectedExpression($from, $to),
-				$entry->getReasons(),
+				$entry->getTags(),
 				$entry->isExplicit(),
 			);
 		}
@@ -202,9 +202,9 @@ final class SelectionList implements IteratorAggregate, Countable
 		return $projected;
 	}
 
-	public function ensureField(FieldRef|SourceFieldExpression $field, string $reason): SelectionItem
+	public function ensureField(FieldRef|SourceFieldExpression $field, string $tag): SelectionItem
 	{
-		return $this->add($field, $reason);
+		return $this->add($field, $tag);
 	}
 
 	public function ensureInternalField(FieldRef|SourceFieldExpression $field): SelectionItem
@@ -215,18 +215,18 @@ final class SelectionList implements IteratorAggregate, Countable
 			}
 
 			if ($entry->isExplicit() || $entry->getExpression() instanceof AliasedExpression) {
-				return $this->add($entry->getExpression(), SelectionReason::INTERNAL, $entry->isExplicit());
+				return $this->add($entry->getExpression(), SelectionTag::INTERNAL, $entry->isExplicit());
 			}
 
 			break;
 		}
 
-		return $this->add($field->as($field->getSelectionKey()), SelectionReason::INTERNAL);
+		return $this->add($field->as($field->getSelectionKey()), SelectionTag::INTERNAL);
 	}
 
 	public function ensureInternalExpression(ValueExpressionInterface $expression, string $alias): SelectionItem
 	{
-		return $this->add($expression->as($alias), [SelectionReason::INTERNAL, SelectionReason::SQL_ONLY]);
+		return $this->add($expression->as($alias), [SelectionTag::INTERNAL, SelectionTag::SQL_ONLY]);
 	}
 
 	private function expressionsMatch(
@@ -270,20 +270,20 @@ final class SelectionList implements IteratorAggregate, Countable
 	/**
 	 * @return list<SelectionItem>
 	 */
-	public function getByReason(string $reason): array
+	public function getByTag(string $tag): array
 	{
-		$reason = trim($reason);
+		$tag = trim($tag);
 
-		if ($reason === '') {
-			throw new InvalidArgumentException('Selection reason lookups require a non-empty string.');
+		if ($tag === '') {
+			throw new InvalidArgumentException('Selection tag lookups require a non-empty string.');
 		}
 
-		return $this->filter(static fn (SelectionItem $selection): bool => $selection->hasReason($reason))->getAll();
+		return $this->filter(static fn (SelectionItem $selection): bool => $selection->hasTag($tag))->getAll();
 	}
 
-	public function filterByReason(string $reason): self
+	public function filterByTag(string $tag): self
 	{
-		return $this->filter(static fn (SelectionItem $selection): bool => $selection->hasReason($reason));
+		return $this->filter(static fn (SelectionItem $selection): bool => $selection->hasTag($tag));
 	}
 
 	/**
@@ -303,13 +303,13 @@ final class SelectionList implements IteratorAggregate, Countable
 			$filtered->appendItem($entry);
 		}
 
-		foreach ($this->reasonEntryIndexes as $reason => $indexes) {
+		foreach ($this->tagEntryIndexes as $tag => $indexes) {
 			foreach ($indexes as $index) {
 				if (! isset($indexMap[$index])) {
 					continue;
 				}
 
-				$filtered->registerReasonIndex($reason, $indexMap[$index]);
+				$filtered->registerTagIndex($tag, $indexMap[$index]);
 			}
 		}
 
@@ -321,7 +321,7 @@ final class SelectionList implements IteratorAggregate, Countable
 	 */
 	public function getParserItems(): array
 	{
-		return $this->getByReason(SelectionReason::COLUMN);
+		return $this->getByTag(SelectionTag::COLUMN);
 	}
 
 	/**
@@ -329,7 +329,7 @@ final class SelectionList implements IteratorAggregate, Countable
 	 */
 	public function getPublicItems(): array
 	{
-		return $this->getItemsInReasonOrder(SelectionReason::PUBLIC);
+		return $this->getItemsInTagOrder(SelectionTag::PUBLIC);
 	}
 
 	/**
@@ -337,7 +337,7 @@ final class SelectionList implements IteratorAggregate, Countable
 	 */
 	public function getIdentityItems(): array
 	{
-		return $this->getItemsInReasonOrder(SelectionReason::IDENTITY);
+		return $this->getItemsInTagOrder(SelectionTag::IDENTITY);
 	}
 
 	public function getNamedExpression(string $name): ValueExpressionInterface
@@ -375,9 +375,9 @@ final class SelectionList implements IteratorAggregate, Countable
 	}
 
 	/**
-	 * @param list<string> $reasons
+	 * @param list<string> $tags
 	 */
-	private function appendItem(SelectionItem $item, array $reasons = []): void
+	private function appendItem(SelectionItem $item, array $tags = []): void
 	{
 		$this->entries[] = $item;
 		$index = array_key_last($this->entries);
@@ -389,26 +389,26 @@ final class SelectionList implements IteratorAggregate, Countable
 		}
 
 		if (is_int($index)) {
-			$this->registerReasonIndexes($index, $reasons);
+			$this->registerTagIndexes($index, $tags);
 		}
 	}
 
 	/**
-	 * @param string|list<string> $reasons
+	 * @param string|list<string> $tags
 	 * @return list<string>
 	 */
-	private function normalizeReasons(string|array $reasons): array
+	private function normalizeTags(string|array $tags): array
 	{
-		if (is_string($reasons)) {
-			$reasons = trim($reasons);
+		if (is_string($tags)) {
+			$tags = trim($tags);
 
-			return $reasons === '' ? [] : [$reasons];
+			return $tags === '' ? [] : [$tags];
 		}
 
 		return array_values(array_filter(array_map(
-			static fn (string $reason): string => trim($reason),
-			$reasons,
-		), static fn (string $reason): bool => $reason !== ''));
+			static fn (string $tag): string => trim($tag),
+			$tags,
+		), static fn (string $tag): bool => $tag !== ''));
 	}
 
 	private function findMatchingEntry(ValueExpressionInterface|AliasedExpression|StarExpression $expression): ?SelectionItem
@@ -434,53 +434,56 @@ final class SelectionList implements IteratorAggregate, Countable
 	}
 
 	/**
-	 * @param list<string> $reasons
+	 * @param list<string> $tags
 	 */
-	private function registerReasonIndexes(int $index, array $reasons): void
+	private function registerTagIndexes(int $index, array $tags): void
 	{
-		foreach ($reasons as $reason) {
-			$this->registerReasonIndex($reason, $index);
+		foreach ($tags as $tag) {
+			$this->registerTagIndex($tag, $index);
 		}
 	}
 
-	private function registerReasonIndex(string $reason, int $index): void
+	private function registerTagIndex(string $tag, int $index): void
 	{
-		$this->reasonEntryIndexes[$reason] ??= [];
+		$this->tagEntryIndexes[$tag] ??= [];
 
-		if (in_array($index, $this->reasonEntryIndexes[$reason], true)) {
+		if (in_array($index, $this->tagEntryIndexes[$tag], true)) {
 			return;
 		}
 
-		$this->reasonEntryIndexes[$reason][] = $index;
+		$this->tagEntryIndexes[$tag][] = $index;
 	}
 
-	private function rebuildReasonIndexes(): void
+	private function rebuildTagIndexes(): void
 	{
-		$this->reasonEntryIndexes = [];
+		$this->tagEntryIndexes = [];
 
 		foreach ($this->entries as $index => $entry) {
-			$this->registerReasonIndexes($index, $entry->getReasons());
+			$this->registerTagIndexes($index, $entry->getTags());
 		}
 	}
 
 	/**
-	 * @param list<string> $callerReasons
+	 * @param list<string> $callerTags
 	 * @return list<string>
 	 */
-	private function inferReasons(
+	private function inferTags(
 		ValueExpressionInterface|AliasedExpression|StarExpression $expression,
-		array $callerReasons,
+		array $callerTags,
 		bool $explicit,
 	): array {
-		$inferred = $callerReasons;
+		$inferred = $callerTags;
 
 		if ($explicit) {
-			$inferred[] = SelectionReason::COLUMN;
-			$inferred[] = SelectionReason::PUBLIC;
+			$inferred[] = SelectionTag::COLUMN;
+			$inferred[] = SelectionTag::PUBLIC;
 		}
 
-		if ($this->isFieldLike($expression)) {
-			$inferred[] = SelectionReason::COLUMN;
+		if (
+			$this->isFieldLike($expression)
+			&& ! in_array(SelectionTag::SQL_ONLY, $callerTags, true)
+		) {
+			$inferred[] = SelectionTag::COLUMN;
 		}
 
 		return array_values(array_unique(array_map('trim', $inferred)));
@@ -498,11 +501,11 @@ final class SelectionList implements IteratorAggregate, Countable
 	/**
 	 * @return list<SelectionItem>
 	 */
-	private function getItemsInReasonOrder(string $reason): array
+	private function getItemsInTagOrder(string $tag): array
 	{
 		$items = [];
 
-		foreach ($this->reasonEntryIndexes[$reason] ?? [] as $index) {
+		foreach ($this->tagEntryIndexes[$tag] ?? [] as $index) {
 			$item = $this->entries[$index] ?? null;
 
 			if (! $item instanceof SelectionItem) {

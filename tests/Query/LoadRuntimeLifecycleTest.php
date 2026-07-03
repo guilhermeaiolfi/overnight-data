@@ -20,7 +20,7 @@ use ON\Data\Query\Result\Parser\RootNode;
 use ON\Data\Query\Result\Parser\SingularNode;
 use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionList;
-use ON\Data\Query\Selection\SelectionReason;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -291,8 +291,8 @@ final class LoadRuntimeLifecycleTest extends TestCase
 
 		self::assertSame(['title', '__on_data_root_required_id_0'], $columns);
 		self::assertSame(['title'], LifecycleEvents::$plannedRootColumns);
-		self::assertTrue($titleSelection->hasReason(SelectionReason::PUBLIC));
-		self::assertTrue($titleSelection->hasReason(SelectionReason::REQUIRED));
+		self::assertTrue($titleSelection->hasTag(SelectionTag::PUBLIC));
+		self::assertTrue($titleSelection->hasTag(SelectionTag::REQUIRED));
 		self::assertSame([[
 			'title' => 'Ada',
 			'posts' => [],
@@ -618,7 +618,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 			static fn (object $selection): string => $selection->getSelectionKey(),
 			$selections->getIdentityItems(),
 		));
-		self::assertTrue($selections->getIdentityItems()[0]->hasReason(SelectionReason::REQUIRED));
+		self::assertTrue($selections->getIdentityItems()[0]->hasTag(SelectionTag::REQUIRED));
 	}
 
 	public function testInternalExplicitRootSelectionsDoNotBecomePublicOutput(): void
@@ -1350,3 +1350,4 @@ final class TopLevelParentNodeLoader extends LifecycleTestLoader
 		$this->prepareSeparateQuery($branch, $runtime);
 	}
 }
+

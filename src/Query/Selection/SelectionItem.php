@@ -16,24 +16,24 @@ use ON\Data\Query\SelectQuery;
 final class SelectionItem
 {
 	/**
-	 * @param list<string> $reasons
+	 * @param list<string> $tags
 	 */
-	private readonly array $reasons;
+	private readonly array $tags;
 
 	private readonly ?string $selectionKey;
 
 	public function __construct(
 		private readonly ValueExpressionInterface|AliasedExpression|StarExpression $expression,
 		private readonly bool $explicit = false,
-		array $reasons = [],
+		array $tags = [],
 	) {
 		try {
 			$this->selectionKey = $expression->getSelectionKey();
 		} catch (LogicException) {
 			$this->selectionKey = null;
 		}
-		$this->reasons = array_values(array_unique(
-			array_map($this->normalizeReason(...), $reasons),
+		$this->tags = array_values(array_unique(
+			array_map($this->normalizeTag(...), $tags),
 		));
 	}
 
@@ -91,16 +91,16 @@ final class SelectionItem
 	/**
 	 * @return list<string>
 	 */
-	public function getReasons(): array
+	public function getTags(): array
 	{
-		return $this->reasons;
+		return $this->tags;
 	}
 
-	public function hasReason(string $reason): bool
+	public function hasTag(string $tag): bool
 	{
-		$reason = $this->normalizeReason($reason);
+		$tag = $this->normalizeTag($tag);
 
-		return in_array($reason, $this->reasons, true);
+		return in_array($tag, $this->tags, true);
 	}
 
 	public function withExplicit(): self
@@ -109,38 +109,38 @@ final class SelectionItem
 			return $this;
 		}
 
-		return new self($this->expression, true, $this->reasons);
+		return new self($this->expression, true, $this->tags);
 	}
 
-	public function withReason(string $reason): self
+	public function withTag(string $tag): self
 	{
-		$reason = $this->normalizeReason($reason);
+		$tag = $this->normalizeTag($tag);
 
-		if (in_array($reason, $this->reasons, true)) {
+		if (in_array($tag, $this->tags, true)) {
 			return $this;
 		}
 
-		return new self($this->expression, $this->explicit, [...$this->reasons, $reason]);
+		return new self($this->expression, $this->explicit, [...$this->tags, $tag]);
 	}
 
 	/**
-	 * @param list<string> $reasons
+	 * @param list<string> $tags
 	 */
-	public function withReasons(array $reasons): self
+	public function withTags(array $tags): self
 	{
 		$updated = $this;
 
-		foreach ($reasons as $reason) {
-			$updated = $updated->withReason($reason);
+		foreach ($tags as $tag) {
+			$updated = $updated->withTag($tag);
 		}
 
 		return $updated;
 	}
 
-	public function hasAnyReason(string ...$reasons): bool
+	public function hasAnyTag(string ...$tags): bool
 	{
-		foreach ($reasons as $reason) {
-			if ($this->hasReason($reason)) {
+		foreach ($tags as $tag) {
+			if ($this->hasTag($tag)) {
 				return true;
 			}
 		}
@@ -148,14 +148,14 @@ final class SelectionItem
 		return false;
 	}
 
-	private function normalizeReason(string $reason): string
+	private function normalizeTag(string $tag): string
 	{
-		$reason = trim($reason);
+		$tag = trim($tag);
 
-		if ($reason === '') {
-			throw new InvalidArgumentException('Selection reasons must be non-empty strings.');
+		if ($tag === '') {
+			throw new InvalidArgumentException('Selection tags must be non-empty strings.');
 		}
 
-		return $reason;
+		return $tag;
 	}
 }

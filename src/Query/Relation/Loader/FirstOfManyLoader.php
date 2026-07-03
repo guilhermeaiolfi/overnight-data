@@ -14,7 +14,7 @@ use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
-use ON\Data\Query\Selection\SelectionReason;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
@@ -153,7 +153,7 @@ final class FirstOfManyLoader extends AbstractLoader
 
 		$outer->getSelections()->merge(
 			$inner->getSelections()
-				->filterByReason(SelectionReason::COLUMN)
+				->filterByTag(SelectionTag::COLUMN)
 				->projectTo(from: $ranked, to: $outer),
 		);
 
@@ -210,3 +210,4 @@ final class FirstOfManyLoader extends AbstractLoader
 		);
 	}
 }
+

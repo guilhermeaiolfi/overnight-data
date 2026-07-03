@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Selection;
 
-final class SelectionReason
+final class SelectionTag
 {
 	public const COLUMN = 'column';
 
@@ -19,6 +19,4 @@ final class SelectionReason
 	public const INTERNAL = 'internal';
 
 	public const SQL_ONLY = 'sql-only';
-
-	public const EXPLICIT = 'explicit';
 }
