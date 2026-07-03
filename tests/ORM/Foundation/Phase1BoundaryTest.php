@@ -4,7 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Foundation;
 
+use ON\Data\ORM\Persistence\DeleteCommand;
+use ON\Data\ORM\Persistence\InsertCommand;
+use ON\Data\ORM\Persistence\UpdateCommand;
+use ON\Data\ORM\Persistence\WriteCommandInterface;
 use PHPUnit\Framework\TestCase;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use ReflectionClass;
+use SplFileInfo;
 
 final class Phase1BoundaryTest extends TestCase
 {
@@ -25,9 +33,51 @@ final class Phase1BoundaryTest extends TestCase
 		self::assertFileDoesNotExist(dirname(__DIR__, 3) . '/src/ORM/Flush.php');
 	}
 
-	public function testPhase1HasNoDatabaseWriteCommands(): void
+	public function testPersistenceCommandsRemainNeutralDataObjects(): void
 	{
-		self::assertDirectoryDoesNotExist(dirname(__DIR__, 3) . '/src/ORM/Persistence');
+		$commandClasses = [
+			InsertCommand::class,
+			UpdateCommand::class,
+			DeleteCommand::class,
+		];
+
+		foreach ($commandClasses as $commandClass) {
+			$reflection = new ReflectionClass($commandClass);
+
+			self::assertTrue($reflection->implementsInterface(WriteCommandInterface::class));
+			self::assertFalse($reflection->hasMethod('execute'));
+		}
+	}
+
+	public function testPersistenceLayerDoesNotContainDatabaseSpecificCode(): void
+	{
+		$persistenceRoot = dirname(__DIR__, 3) . '/src/ORM/Persistence';
+		$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($persistenceRoot));
+		$forbiddenPatterns = [
+			'Cycle\\',
+			'Doctrine\\',
+			'PDO',
+			' SQL',
+			' sql',
+		];
+
+		foreach ($iterator as $file) {
+			/** @var SplFileInfo $file */
+			if (! $file->isFile() || $file->getExtension() !== 'php') {
+				continue;
+			}
+
+			$contents = file_get_contents($file->getPathname());
+			self::assertNotFalse($contents);
+
+			foreach ($forbiddenPatterns as $pattern) {
+				self::assertStringNotContainsString(
+					$pattern,
+					$contents,
+					sprintf('Database-specific persistence pattern "%s" found in %s', $pattern, $file->getPathname()),
+				);
+			}
+		}
 	}
 
 	public function testPhase1HasNoEntityQuery(): void
