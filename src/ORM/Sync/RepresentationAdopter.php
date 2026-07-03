@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\Relation\RelatedCollection;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -40,14 +39,6 @@ final class RepresentationAdopter
 		$this->representations->add($tracked);
 
 		return $tracked;
-	}
-
-	public function adoptRelationItem(
-		RelatedCollection $collection,
-		object $item,
-		RecordState $record,
-	): TrackedRepresentation {
-		return $this->adopt($item, $collection->getChildBinding(), $record);
 	}
 
 	/**

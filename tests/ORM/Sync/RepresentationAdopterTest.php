@@ -9,7 +9,6 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\RelatedCollection;
-use ON\Data\ORM\Relation\RelationCollectionState;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateMap;
@@ -152,43 +151,23 @@ final class RepresentationAdopterTest extends TestCase
 		$adopter->adopt($representation, $this->postBinding(), $record);
 	}
 
-	public function testAdoptRelationItemUsesRelatedCollectionsChildBinding(): void
-	{
-		$record = RecordState::new($this->posts(), ['title' => 'A1']);
-		$collection = new RelatedCollection(RecordState::new($this->users()), 'posts', $this->postBinding());
-
-		$tracked = $this->adopter()->adoptRelationItem($collection, new stdClass(), $record);
-
-		self::assertSame($record, $tracked->getBinding()->get('title')->getField()->getState());
-	}
-
-	public function testAdoptRelationItemDoesNotAddItemToCollection(): void
-	{
-		$item = new stdClass();
-		$collection = new RelatedCollection(
-			RecordState::new($this->users()),
-			'posts',
-			$this->postBinding(),
-			RelationCollectionState::UNLOADED
-		);
-
-		$this->adopter()->adoptRelationItem($collection, $item, RecordState::new($this->posts(), ['title' => 'A1']));
-
-		self::assertFalse($collection->contains($item));
-		self::assertSame([], $collection->getAdded());
-		self::assertFalse($collection->hasChanges());
-	}
-
-	public function testAdoptRelationItemRegistersItemAsTracked(): void
+	public function testRelationItemCanBeAdoptedThroughPlainAdoptWithChildBinding(): void
 	{
 		$representations = new TrackedRepresentationMap();
 		$item = new stdClass();
+		$record = RecordState::new($this->posts(), ['title' => 'A1']);
 		$collection = new RelatedCollection(RecordState::new($this->users()), 'posts', $this->postBinding());
 
-		$tracked = $this->adopter(representations: $representations)
-			->adoptRelationItem($collection, $item, RecordState::new($this->posts(), ['title' => 'A1']));
+		$collection->add($item);
+		$tracked = $this->adopter(representations: $representations)->adopt(
+			$item,
+			$collection->getChildBinding(),
+			$record
+		);
 
+		self::assertSame($record, $tracked->getBinding()->get('title')->getField()->getState());
 		self::assertSame($tracked, $representations->get($item));
+		self::assertSame([$item], $collection->getAdded());
 	}
 
 	private function adopter(
