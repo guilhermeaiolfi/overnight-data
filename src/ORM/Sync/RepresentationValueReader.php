@@ -23,7 +23,7 @@ final class RepresentationValueReader
 		return $values;
 	}
 
-	private function readPath(object $representation, string $path): mixed
+	public function readPath(object $representation, string $path): mixed
 	{
 		$current = $representation;
 		foreach (explode('.', $path) as $segment) {

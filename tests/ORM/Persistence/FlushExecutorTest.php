@@ -19,10 +19,13 @@ use ON\Data\ORM\Relation\RelatedCollection;
 use ON\Data\ORM\Relation\RelatedCollectionMap;
 use ON\Data\ORM\Relation\RelationCollectionState;
 use ON\Data\ORM\State\RecordFieldRef;
+use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationRelationBinding;
+use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\TrackedRepresentation;
 use ON\Data\ORM\State\TrackedRepresentationMap;
 use PHPUnit\Framework\TestCase;
@@ -195,6 +198,77 @@ final class FlushExecutorTest extends TestCase
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->trackedMap($tracked), $this->records($record), $relations);
 
 		self::assertSame(['after'], RecordingRelationPersistencePlanner::$observedOwnerValues);
+	}
+
+	public function testRelationGraphSyncRunsAfterScalarRepresentationSyncAndBeforeRelationPersistencePlanning(): void
+	{
+		$users = $this->usersWithPosts();
+		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'before']);
+		$item = new stdClass();
+		$tracked = $this->tracked($this->representation(['name' => 'after', 'posts' => [$item]]), $this->ownerBindingWithPosts($record));
+
+		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->trackedMap($tracked), $this->records($record), new RelatedCollectionMap());
+
+		self::assertSame(['after'], RecordingRelationPersistencePlanner::$observedOwnerValues);
+		self::assertCount(1, RecordingRelationPersistencePlanner::$collections);
+		self::assertSame([$item], RecordingRelationPersistencePlanner::$collections[0]->getAdded());
+	}
+
+	public function testRelationGraphSyncCanCreateRelatedCollectionThatIsPlannedByRelationPersistenceSynchronizer(): void
+	{
+		$users = $this->usersWithPosts();
+		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$item = new stdClass();
+		$relations = new RelatedCollectionMap();
+
+		(new FlushExecutor(new RecordingCommandExecutor()))->flush(
+			$this->trackedMap($this->tracked($this->representation(['name' => 'Owner', 'posts' => [$item]]), $this->ownerBindingWithPosts($record))),
+			$this->records($record),
+			$relations
+		);
+
+		$collection = $relations->get($record, 'posts');
+		self::assertInstanceOf(RelatedCollection::class, $collection);
+		self::assertSame([$collection], RecordingRelationPersistencePlanner::$collections);
+		self::assertFalse($collection->hasChanges());
+	}
+
+	public function testRelationGraphSyncExceptionPreventsScalarRecordFlush(): void
+	{
+		$users = $this->usersWithPosts();
+		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'before']);
+		$executor = new RecordingCommandExecutor();
+
+		$this->expectException(SyncException::class);
+
+		try {
+			(new FlushExecutor($executor))->flush(
+				$this->trackedMap($this->tracked($this->representation(['name' => 'after', 'posts' => 'bad']), $this->ownerBindingWithPosts($record))),
+				$this->records($record),
+				new RelatedCollectionMap()
+			);
+		} finally {
+			self::assertSame([], $executor->getCommands());
+			self::assertSame(0, RecordingRelationPersistencePlanner::$calls);
+		}
+	}
+
+	public function testRelationChangesInferredByGraphSyncAreClearedOnlyAfterSuccessfulFlush(): void
+	{
+		RecordingRelationPersistencePlanner::$addCommand = true;
+		$users = $this->usersWithPosts();
+		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$relations = new RelatedCollectionMap();
+
+		(new FlushExecutor(new RecordingCommandExecutor()))->flush(
+			$this->trackedMap($this->tracked($this->representation(['name' => 'Owner', 'posts' => [new stdClass()]]), $this->ownerBindingWithPosts($record))),
+			$this->records($record),
+			$relations
+		);
+
+		$collection = $relations->get($record, 'posts');
+		self::assertInstanceOf(RelatedCollection::class, $collection);
+		self::assertFalse($collection->hasChanges());
 	}
 
 	public function testRelationPersistencePlanningRunsBeforeRecordFlusher(): void
@@ -485,6 +559,20 @@ final class FlushExecutorTest extends TestCase
 	{
 		$binding = new RepresentationBinding();
 		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
+
+		return $binding;
+	}
+
+	private function ownerBindingWithPosts(RecordState $record): RepresentationBinding
+	{
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::forState($record, 'name')));
+		$binding->addRelation(new RepresentationRelationBinding(
+			'posts',
+			RecordRelationRef::forState($record, 'posts'),
+			RepresentationRelationCardinality::MANY,
+			$this->postBinding()
+		));
 
 		return $binding;
 	}

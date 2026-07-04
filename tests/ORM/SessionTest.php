@@ -12,11 +12,15 @@ use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\Relation\RelatedCollection;
+use ON\Data\ORM\Relation\RelationCollectionState;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RecordFieldRef;
+use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationRelationBinding;
+use ON\Data\ORM\State\RepresentationRelationCardinality;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Support\Relation\RecordingRelationPersistencePlanner;
@@ -247,6 +251,36 @@ final class SessionTest extends TestCase
 		self::assertFalse($collection->hasChanges());
 	}
 
+	public function testFlushInfersHasManyRelationAddFromTrackedRepresentationGraph(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$child = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
+		$session->adopt($postRepresentation, $this->postTemplateBindingFor($posts), $child);
+
+		$session->flush();
+
+		$collection = $session->getRelations()->get($owner, 'posts');
+		self::assertInstanceOf(RelatedCollection::class, $collection);
+		self::assertSame([$postRepresentation], $collection->getItems());
+		self::assertFalse($collection->hasChanges());
+		self::assertSame(10, $child->getValue('user_id'));
+		self::assertCount(1, $executor->getCommands());
+		$command = $executor->getCommands()[0];
+		if (! $command instanceof UpdateCommand) {
+			self::fail('Expected an update command.');
+		}
+
+		self::assertSame($posts, $command->getCollection());
+		self::assertSame(['id' => 5], $command->getIdentity());
+		self::assertSame(['user_id' => 10], $command->getChanges());
+	}
+
 	public function testSessionSourceDoesNotMentionDeferredOrmRuntimeConcepts(): void
 	{
 		$source = file_get_contents(__DIR__ . '/../../src/ORM/Session.php');
@@ -277,6 +311,31 @@ final class SessionTest extends TestCase
 	{
 		$binding = new RepresentationBinding();
 		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
+
+		return $binding;
+	}
+
+	private function ownerTemplateBindingWithPosts(CollectionInterface $users, CollectionInterface $posts): RepresentationBinding
+	{
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($users, 'name')));
+		$binding->addRelation(new RepresentationRelationBinding(
+			'posts',
+			RecordRelationRef::forCollection($users, 'posts'),
+			RepresentationRelationCardinality::MANY,
+			$this->postTemplateBindingFor($posts),
+			RelationCollectionState::UNLOADED
+		));
+
+		return $binding;
+	}
+
+	private function postTemplateBindingFor(CollectionInterface $posts): RepresentationBinding
+	{
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($posts, 'id')));
+		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($posts, 'title')));
+		$binding->addField(new RepresentationFieldBinding('user_id', RecordFieldRef::template($posts, 'user_id')));
 
 		return $binding;
 	}
@@ -368,6 +427,27 @@ final class SessionTest extends TestCase
 		self::assertInstanceOf(CollectionInterface::class, $through);
 
 		return [$users, $tags, $through];
+	}
+
+	/**
+	 * @return array{0: CollectionInterface, 1: CollectionInterface}
+	 */
+	private function usersWithDefaultHasManyPosts(): array
+	{
+		$registry = new Registry();
+		$posts = $registry->collection('posts')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('title', 'string')->end()
+			->field('user_id', 'int')->end()
+			->end();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('user_id');
+
+		return [$users, $posts];
 	}
 
 	private function posts(): CollectionInterface
