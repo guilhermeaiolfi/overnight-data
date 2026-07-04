@@ -78,6 +78,38 @@ Numeric integer strings are normalized to `int`. Generated values remain keyed b
 
 The executor does not support generated values for composite keys, non-auto-increment keys, generated non-primary fields, non-primary database defaults, explicit sequence names, or full row refresh.
 
+## Small Example
+
+```php
+use Cycle\Database\DatabaseInterface;
+use ON\Data\Database\Cycle\CycleCommandExecutor;
+use ON\Data\Definition\Registry;
+use ON\Data\ORM\Session;
+
+// Schema/table creation and Cycle Database bootstrap live outside ON\Data.
+/** @var DatabaseInterface $cycleDatabase */
+
+$registry = new Registry();
+$users = $registry
+    ->collection('users')
+    ->table('app_users')
+    ->primaryKey('id')
+    ->field('id', 'int')->column('user_id')->autoIncrement(true)->end()
+    ->field('name', 'string')->column('full_name')->end();
+
+$session = new Session(new CycleCommandExecutor($cycleDatabase));
+
+$record = $session->trackNew($users, [
+    'name' => 'Ada Lovelace',
+]);
+
+$session->flush();
+
+$generatedId = $record->getValue('id');
+```
+
+Generated ids are currently supported only for simple auto-increment primary keys. Relation writes are not planned by this scalar flush, and transactions are not orchestrated yet. Physical table and column mapping happens in `CycleCommandExecutor` using collection and field metadata.
+
 ## Public Runtime
 
 `FlushExecutor` is the low-level orchestration service for a flush cycle. It:
