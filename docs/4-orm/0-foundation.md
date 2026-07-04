@@ -1,6 +1,8 @@
 # ORM Foundation
 
-Phase 0 records the architecture for the future `ON\Data` ORM. It does not introduce runtime ORM behavior, production state classes, write planning, lazy loading, generated repositories, service containers, events, or proxy objects.
+This document records the foundation and historical phase notes for the `ON\Data` ORM. Some early sections describe the intended architecture before the runtime existed; current scalar persistence behavior is documented in [`2-persistence.md`](./2-persistence.md).
+
+The current implementation includes production record state, representation tracking, scalar sync, scalar command planning, flush orchestration, session orchestration, and Cycle-backed scalar command execution. It still does not include lazy loading, generated repositories, service containers, events, proxy objects, `EntityManager`, `UnitOfWork`, or relation write planning.
 
 The library remains standalone `ON\Data`. The Registry remains the owner of one plain-array definition tree, and definition objects remain wrappers over that array. ORM state, unit-of-work behavior, identity maps, lazy loading, relation write planning, and representation synchronization rules belong outside the Registry.
 
@@ -170,7 +172,7 @@ Classic ORMs usually map identity to entity object. This ORM maps identity to re
 
 `RecordStateMap` is the record-state registry. It indexes each known state by its stable local state hash and, when available, by its database `ON\Data\Key` hash. A new record keeps its local state hash after it receives a generated database key through `RecordState::markClean($key)`; the state hash must not be rewritten to the key hash, because existing state-targeted bindings use that stable local handle.
 
-The map is responsible for aliasing both handles to the same `RecordState`. Future insert/flush logic should call `RecordStateMap::indexKey($state)` after assigning a generated key so keyed references can resolve the same state that was previously known only by local state hash.
+The map is responsible for aliasing both handles to the same `RecordState`. Scalar insert/flush logic calls `RecordStateMap::indexKey($state)` after assigning a generated key so keyed references can resolve the same state that was previously known only by local state hash.
 
 `RecordFieldRef` resolution should first use a direct state target, then fall back to key lookup through `RecordStateMap`. Template refs have no concrete record to resolve until a binding is applied to a state.
 
@@ -471,13 +473,13 @@ Phase 1A introduces the first production ORM state primitives only:
 - `SyncConflict`
 - `SyncConflictDetector`
 
-It does not introduce `EntityQuery`, `with()`, repositories, lazy loading, `sync()` runtime, `flush()` runtime, write planning, SQL commands, or a public `persist()` API.
+Phase 1A did not introduce `EntityQuery`, `with()`, repositories, lazy loading, `sync()` runtime, `flush()` runtime, write planning, SQL commands, or a public `persist()` API. Later Phase 2 work added scalar sync, flush orchestration, and neutral scalar persistence commands; see [`2-persistence.md`](./2-persistence.md).
 
 ## Phase 1D Relation Collection Primitives
 
 Phase 1D introduces `ON\Data\ORM\Relation\RelatedCollection` as the ORM-owned relation collection primitive. Plain arrays remain valid read/projection values, but they are not writable relation persistence trackers because they cannot own loaded state or add/remove intent.
 
-`RelatedCollection` owns the owner `RecordState`, relation name, loaded state, known in-memory items, local added/removed child intent, and the reusable child `RepresentationBinding` template. Known items are only the in-memory view currently held by the collection; they are not necessarily the full database relation. `isEmptyKnown()` means no items are currently known in memory, not that the database relation is empty. The collection stores the child binding for future runtime work, but it does not mutate that reusable template, apply the binding, or register tracked child representations in this phase.
+`RelatedCollection` owns the owner `RecordState`, relation name, loaded state, known in-memory items, local added/removed child intent, and the reusable child `RepresentationBinding` template. Known items are only the in-memory view currently held by the collection; they are not necessarily the full database relation. `isEmptyKnown()` means no items are currently known in memory, not that the database relation is empty. The collection stores the child binding for later relation runtime work, but it does not mutate that reusable template, apply the binding, or register tracked child representations in this phase.
 
 Adding a child to an unloaded collection is allowed and makes the collection partially loaded because at least one item is now known, while the complete database set remains unknown. Removing one known object reference from an unloaded collection is also allowed and does not imply the relation is empty. Removing from a relation collection removes the relation link intent; it is not necessarily deletion of the child entity.
 
@@ -505,17 +507,17 @@ Phase 1G introduces `ON\Data\ORM\Sync\SyncPlanner`, `SyncPlan`, and `SyncFieldUp
 
 `SyncPlanner` reads current representation values, detects conflicts, and produces a `SyncPlan` containing path-specific conflicts plus planned field updates. Read-only bindings are ignored for updates, conflicted paths are not planned as updates, and duplicate target updates with conflicting values are rejected instead of implying last-write-wins.
 
-Different fields on the same `RecordState` remain separate `SyncFieldUpdate` entries; future sync-apply and flush runtime will aggregate them through the dirty `RecordState`.
+Different fields on the same `RecordState` remain separate `SyncFieldUpdate` entries. Later scalar sync and flush runtime aggregate them through the dirty `RecordState`; relation write planning remains future work.
 
-Planning does not mutate `RecordState`, update tracked baseline revisions, convert values, persist, flush, or apply the updates. Applying a `SyncPlan` is future runtime work. This completes the Phase 1 state/sync foundation.
+Planning does not mutate `RecordState`, update tracked baseline revisions, convert values, persist, flush, or apply the updates. Applying a `SyncPlan` is handled by the Phase 2 scalar synchronization runtime described in [`2-persistence.md`](./2-persistence.md). This completes the Phase 1 state/sync foundation.
 
 ## Phase 1 Completed Foundation
 
-Phase 1 introduced only in-memory state, representation tracking, relation intent tracking, value reading, conflict detection, and sync-planning primitives. It did not introduce public `sync()`, `flush()`, `EntityManager`, query hydration runtime, repositories, database writes, relation write planners, or lazy loading.
+Phase 1 introduced only in-memory state, representation tracking, relation intent tracking, value reading, conflict detection, and sync-planning primitives. It did not introduce public `sync()`, `flush()`, `EntityManager`, query hydration runtime, repositories, database writes, relation write planners, or lazy loading. Later Phase 2 work added scalar sync/flush services and scalar database writes without adding an `EntityManager`, `UnitOfWork`, repositories, lazy loading, or relation write planners.
 
 `RecordState` is the canonical aggregation point for synchronized changes. `SyncPlanner` produces field-level `SyncFieldUpdate` objects in a `SyncPlan`; it does not mutate records, apply updates, group database commands, or clear conflicts. Multiple different fields on the same `RecordState` may appear as separate `SyncFieldUpdate` entries. `SyncPlanner` should only reject duplicate updates when the same concrete record target and same field receive conflicting values in the same plan.
 
-Future sync-apply logic will apply planned field updates to `RecordState`. Future flush/write planning will aggregate dirty values from `RecordState::getDirtyValues()` into database commands, such as one update per record when possible.
+Scalar sync-apply logic applies planned field updates to `RecordState`. Scalar flush/write planning aggregates dirty values from `RecordState::getDirtyValues()` into database commands, such as one update per record when possible.
 
 ```text
 rep1 changes users.name
@@ -524,32 +526,30 @@ rep3 changes users.status
 
 Each representation can produce separate sync updates.
 
-After future apply:
+After scalar sync apply:
     one RecordState has dirty values:
         name
         email
         status
 
-Future flush can group those dirty values into one database update for the users record.
+Scalar flush can group those dirty values into one database update for the users record.
 ```
 
 `RelatedCollection` tracks relation add/remove intent only. It does not persist, adopt, or write relations. `RepresentationAdopter` adopts tracking only; it does not sync values. `RepresentationValueReader` reads current values only; it does not convert, mutate, or sync. `SyncPlan` is a description of conflicts and possible field updates, not an apply operation.
 
-## Phase 0 Non-Goals
+## Remaining Non-Goals
 
-Do not implement:
+Do not introduce as part of the current scalar persistence layer:
 
-- EntityManager runtime;
+- EntityManager;
 - UnitOfWork;
-- RecordState runtime;
-- sync logic;
-- flush logic;
-- write planner;
-- SQL write commands;
 - lazy loading;
 - relation write planners;
 - generated repositories;
 - entity metadata registry;
 - service container;
 - event system;
-- proxy objects.
+- proxy objects;
+- transaction orchestration;
+- stale-row detection;
+- full database-default refresh.

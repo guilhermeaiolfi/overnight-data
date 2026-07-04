@@ -22,4 +22,5 @@ Start here for the current public documentation. The files linked below are the 
 
 ## ORM
 
-- [`4-orm/0-foundation.md`](./4-orm/0-foundation.md): Phase 0 ORM foundation, record-state persistence model, representation lineage, sync conflicts, and guardrails for future runtime work.
+- [`4-orm/0-foundation.md`](./4-orm/0-foundation.md): ORM foundation concepts, record-state persistence model, representation lineage, sync conflicts, relation state, and historical phase guardrails.
+- [`4-orm/2-persistence.md`](./4-orm/2-persistence.md): Current scalar ORM persistence pipeline, command planning, Cycle command execution, generated primary-key merge, and write-side limits.
