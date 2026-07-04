@@ -8,7 +8,7 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 
-final class RelatedCollection
+final class RelatedCollection implements RelationChangeInterface
 {
 	/**
 	 * Known in-memory relation members. This may be only a partial view of the

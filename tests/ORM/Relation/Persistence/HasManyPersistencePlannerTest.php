@@ -14,6 +14,7 @@ use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\HasManyPersistencePlanner;
 use ON\Data\ORM\Relation\RelatedCollection;
 use ON\Data\ORM\Relation\RelatedCollectionMap;
+use ON\Data\ORM\Relation\RelatedReferenceMap;
 use ON\Data\ORM\Relation\RelationCollectionState;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
@@ -216,7 +217,13 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$this->expectExceptionMessage('must be a has-many relation');
 
 		(new HasManyPersistencePlanner())->plan(
-			new PersistenceContext(new RecordStateMap(), new TrackedRepresentationMap(), new RelatedCollectionMap(), new CommandBuffer()),
+			new PersistenceContext(
+				new RecordStateMap(),
+				new TrackedRepresentationMap(),
+				new RelatedCollectionMap(),
+				new RelatedReferenceMap(),
+				new CommandBuffer()
+			),
 			$relation,
 			$collection,
 		);
@@ -303,7 +310,13 @@ final class HasManyPersistencePlannerTest extends TestCase
 	): CommandBuffer {
 		$commands = new CommandBuffer();
 		(new HasManyPersistencePlanner())->plan(
-			new PersistenceContext($records, $representations, new RelatedCollectionMap(), $commands),
+			new PersistenceContext(
+				$records,
+				$representations,
+				new RelatedCollectionMap(),
+				new RelatedReferenceMap(),
+				$commands
+			),
 			$relation,
 			$collection,
 		);

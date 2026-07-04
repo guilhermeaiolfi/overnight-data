@@ -10,8 +10,9 @@ use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
-use ON\Data\ORM\Relation\RelatedCollection;
 use ON\Data\ORM\Relation\RelatedCollectionMap;
+use ON\Data\ORM\Relation\RelatedReferenceMap;
+use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\TrackedRepresentationMap;
 
@@ -19,28 +20,35 @@ final class RelationPersistenceSynchronizer
 {
 	public function sync(
 		RelatedCollectionMap $relations,
+		RelatedReferenceMap $references,
 		RecordStateMap $records,
 		TrackedRepresentationMap $representations,
 	): RelationPersistenceResult {
-		$changed = $relations->getChanged();
+		$changed = array_merge($relations->getChanged(), $references->getChanged());
 		$commands = new CommandBuffer();
-		$context = new PersistenceContext($records, $representations, $relations, $commands);
+		$context = new PersistenceContext(
+			$records,
+			$representations,
+			$relations,
+			$references,
+			$commands
+		);
 
-		foreach ($changed as $collection) {
-			$relation = $this->resolveRelation($collection);
+		foreach ($changed as $change) {
+			$relation = $this->resolveRelation($change);
 			try {
 				$plannerClass = $relation->getPersistencePlanner();
 			} catch (InvalidArgumentException $exception) {
 				throw new RelationPersistenceException(sprintf(
 					"Relation '%s' has an invalid persistence planner.",
-					$collection->getRelationName()
+					$change->getRelationName()
 				), 0, $exception);
 			}
 
 			if ($plannerClass === null) {
 				throw new RelationPersistenceException(sprintf(
-					"Changed relation collection '%s' has no configured persistence planner.",
-					$collection->getRelationName()
+					"Changed relation '%s' has no configured persistence planner.",
+					$change->getRelationName()
 				));
 			}
 
@@ -53,28 +61,28 @@ final class RelationPersistenceSynchronizer
 				));
 			}
 
-			$planner->plan($context, $relation, $collection);
+			$planner->plan($context, $relation, $change);
 		}
 
 		return new RelationPersistenceResult($changed, $commands->getAll());
 	}
 
-	private function resolveRelation(RelatedCollection $collection): RelationInterface
+	private function resolveRelation(RelationChangeInterface $change): RelationInterface
 	{
-		$relations = $collection->getOwner()->getCollection()->getRelations();
-		if (! $relations->has($collection->getRelationName())) {
+		$relations = $change->getOwner()->getCollection()->getRelations();
+		if (! $relations->has($change->getRelationName())) {
 			throw new RelationPersistenceException(sprintf(
-				"Changed relation collection '%s' has no relation definition.",
-				$collection->getRelationName()
+				"Changed relation '%s' has no relation definition.",
+				$change->getRelationName()
 			));
 		}
 
 		try {
-			return $relations->get($collection->getRelationName());
+			return $relations->get($change->getRelationName());
 		} catch (RelationException $exception) {
 			throw new RelationPersistenceException(sprintf(
-				"Changed relation collection '%s' has no relation definition.",
-				$collection->getRelationName()
+				"Changed relation '%s' has no relation definition.",
+				$change->getRelationName()
 			), 0, $exception);
 		}
 	}

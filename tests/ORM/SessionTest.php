@@ -12,6 +12,7 @@ use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\Relation\RelatedCollection;
+use ON\Data\ORM\Relation\RelatedReference;
 use ON\Data\ORM\Relation\RelationCollectionState;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RecordFieldRef;
@@ -41,6 +42,7 @@ final class SessionTest extends TestCase
 		self::assertSame([], $session->getRecords()->getAll());
 		self::assertSame([], $session->getRepresentations()->getAll());
 		self::assertSame([], $session->getRelations()->getAll());
+		self::assertSame([], $session->getReferences()->getAll());
 	}
 
 	public function testTrackRecordAddsExistingRecordAndReturnsSameInstance(): void
@@ -136,6 +138,13 @@ final class SessionTest extends TestCase
 		self::assertSame($session->getRelations(), $session->getRelations());
 	}
 
+	public function testGetReferencesReturnsOwnedMap(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+
+		self::assertSame($session->getReferences(), $session->getReferences());
+	}
+
 	public function testTrackRelationAddsAndReturnsSameCollection(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
@@ -145,6 +154,17 @@ final class SessionTest extends TestCase
 
 		self::assertSame($collection, $result);
 		self::assertSame([$collection], $session->getRelations()->getAll());
+	}
+
+	public function testTrackReferenceAddsAndReturnsSameReference(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$reference = $this->changedRelatedReference(RecordState::new($this->usersWithProfile()));
+
+		$result = $session->trackReference($reference);
+
+		self::assertSame($reference, $result);
+		self::assertSame([$reference], $session->getReferences()->getAll());
 	}
 
 	public function testFlushSynchronizesRepresentationChangesAndExecutesCommandsUsingOwnedMaps(): void
@@ -211,6 +231,20 @@ final class SessionTest extends TestCase
 		self::assertInstanceOf(TestCommand::class, $executor->getCommands()[0]);
 	}
 
+	public function testFlushPassesOwnedReferencesToFlushExecutor(): void
+	{
+		RecordingRelationPersistencePlanner::$addCommand = true;
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$record = $session->trackClean($this->usersWithProfile()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->trackReference($this->changedRelatedReference($record));
+
+		$session->flush();
+
+		self::assertCount(1, $executor->getCommands());
+		self::assertInstanceOf(TestCommand::class, $executor->getCommands()[0]);
+	}
+
 	public function testRelationChangesAreClearedAfterSuccessfulFlushThroughSession(): void
 	{
 		RecordingRelationPersistencePlanner::$addCommand = true;
@@ -221,6 +255,17 @@ final class SessionTest extends TestCase
 		$session->flush();
 
 		self::assertFalse($collection->hasChanges());
+	}
+
+	public function testReferenceChangesAreClearedAfterSuccessfulFlushThroughSession(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$record = $session->trackClean($this->usersWithProfile()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$reference = $session->trackReference($this->changedRelatedReference($record));
+
+		$session->flush();
+
+		self::assertFalse($reference->hasChanges());
 	}
 
 	public function testFlushPersistsM2MRelationAddThroughDefaultPlanner(): void
@@ -348,6 +393,14 @@ final class SessionTest extends TestCase
 		return $collection;
 	}
 
+	private function changedRelatedReference(RecordState $owner): RelatedReference
+	{
+		$reference = new RelatedReference($owner, 'profile', $this->postBinding());
+		$reference->set(new stdClass());
+
+		return $reference;
+	}
+
 	private function postBinding(): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
@@ -387,6 +440,22 @@ final class SessionTest extends TestCase
 		$users->hasMany('posts', 'posts')
 			->innerKey('id')
 			->outerKey('id')
+			->persistencePlanner(RecordingRelationPersistencePlanner::class);
+
+		return $users;
+	}
+
+	private function usersWithProfile(): CollectionInterface
+	{
+		$registry = new Registry();
+		$registry->collection('profiles')->primaryKey('id')->field('id', 'int')->end()->field('user_id', 'int')->end()->end();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+		$users->hasOne('profile', 'profiles')
+			->innerKey('id')
+			->outerKey('user_id')
 			->persistencePlanner(RecordingRelationPersistencePlanner::class);
 
 		return $users;

@@ -11,6 +11,8 @@ use ON\Data\ORM\Persistence\FlushExecutor;
 use ON\Data\ORM\Persistence\FlushResult;
 use ON\Data\ORM\Relation\RelatedCollection;
 use ON\Data\ORM\Relation\RelatedCollectionMap;
+use ON\Data\ORM\Relation\RelatedReference;
+use ON\Data\ORM\Relation\RelatedReferenceMap;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -23,6 +25,7 @@ final class Session
 	private RecordStateMap $records;
 	private TrackedRepresentationMap $representations;
 	private RelatedCollectionMap $relations;
+	private RelatedReferenceMap $references;
 	private RepresentationAdopter $adopter;
 	private FlushExecutor $flusher;
 
@@ -31,6 +34,7 @@ final class Session
 		$this->records = new RecordStateMap();
 		$this->representations = new TrackedRepresentationMap();
 		$this->relations = new RelatedCollectionMap();
+		$this->references = new RelatedReferenceMap();
 		$this->adopter = new RepresentationAdopter($this->records, $this->representations);
 		$this->flusher = $flusher ?? new FlushExecutor($executor);
 	}
@@ -48,6 +52,11 @@ final class Session
 	public function getRelations(): RelatedCollectionMap
 	{
 		return $this->relations;
+	}
+
+	public function getReferences(): RelatedReferenceMap
+	{
+		return $this->references;
 	}
 
 	public function trackRecord(RecordState $record): RecordState
@@ -94,8 +103,15 @@ final class Session
 		return $collection;
 	}
 
+	public function trackReference(RelatedReference $reference): RelatedReference
+	{
+		$this->references->add($reference);
+
+		return $reference;
+	}
+
 	public function flush(): FlushResult
 	{
-		return $this->flusher->flush($this->representations, $this->records, $this->relations);
+		return $this->flusher->flush($this->representations, $this->records, $this->relations, $this->references);
 	}
 }

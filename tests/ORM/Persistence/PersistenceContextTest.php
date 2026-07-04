@@ -7,6 +7,7 @@ namespace Tests\ON\Data\ORM\Persistence;
 use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\RelatedCollectionMap;
+use ON\Data\ORM\Relation\RelatedReferenceMap;
 use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\TrackedRepresentationMap;
 use PHPUnit\Framework\TestCase;
@@ -18,12 +19,14 @@ final class PersistenceContextTest extends TestCase
 		$records = new RecordStateMap();
 		$representations = new TrackedRepresentationMap();
 		$relations = new RelatedCollectionMap();
+		$references = new RelatedReferenceMap();
 		$commands = new CommandBuffer();
-		$context = new PersistenceContext($records, $representations, $relations, $commands);
+		$context = new PersistenceContext($records, $representations, $relations, $references, $commands);
 
 		self::assertSame($records, $context->getRecords());
 		self::assertSame($representations, $context->getRepresentations());
 		self::assertSame($relations, $context->getRelations());
+		self::assertSame($references, $context->getReferences());
 		self::assertSame($commands, $context->getCommands());
 	}
 

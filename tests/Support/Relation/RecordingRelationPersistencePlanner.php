@@ -8,6 +8,7 @@ use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\RelationPersistencePlannerInterface;
 use ON\Data\ORM\Relation\RelatedCollection;
+use ON\Data\ORM\Relation\RelationChangeInterface;
 
 final class RecordingRelationPersistencePlanner implements RelationPersistencePlannerInterface
 {
@@ -21,6 +22,9 @@ final class RecordingRelationPersistencePlanner implements RelationPersistencePl
 
 	/** @var list<RelatedCollection> */
 	public static array $collections = [];
+
+	/** @var list<RelationChangeInterface> */
+	public static array $changes = [];
 
 	public static bool $addCommand = false;
 
@@ -37,29 +41,34 @@ final class RecordingRelationPersistencePlanner implements RelationPersistencePl
 		self::$contexts = [];
 		self::$relations = [];
 		self::$collections = [];
+		self::$changes = [];
 		self::$addCommand = false;
 		self::$mutateOwnerField = null;
 		self::$mutateOwnerValue = null;
 		self::$observedOwnerValues = [];
 	}
 
-	public function plan(PersistenceContext $context, RelationInterface $relation, RelatedCollection $collection): void
+	public function plan(PersistenceContext $context, RelationInterface $relation, RelationChangeInterface $change): void
 	{
 		++self::$calls;
 		self::$contexts[] = $context;
 		self::$relations[] = $relation;
-		self::$collections[] = $collection;
+		self::$changes[] = $change;
 
-		if ($collection->getOwner()->hasValue('name')) {
-			self::$observedOwnerValues[] = $collection->getOwner()->getValue('name');
+		if ($change instanceof RelatedCollection) {
+			self::$collections[] = $change;
+		}
+
+		if ($change->getOwner()->hasValue('name')) {
+			self::$observedOwnerValues[] = $change->getOwner()->getValue('name');
 		}
 
 		if (self::$mutateOwnerField !== null) {
-			$collection->getOwner()->setValue(self::$mutateOwnerField, self::$mutateOwnerValue);
+			$change->getOwner()->setValue(self::$mutateOwnerField, self::$mutateOwnerValue);
 		}
 
 		if (self::$addCommand) {
-			$context->getCommands()->add(new TestCommand($collection->getOwner()->getCollection()));
+			$context->getCommands()->add(new TestCommand($change->getOwner()->getCollection()));
 		}
 	}
 }

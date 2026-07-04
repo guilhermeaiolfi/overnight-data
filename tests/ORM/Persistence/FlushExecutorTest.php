@@ -17,6 +17,8 @@ use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\Relation\RelatedCollection;
 use ON\Data\ORM\Relation\RelatedCollectionMap;
+use ON\Data\ORM\Relation\RelatedReference;
+use ON\Data\ORM\Relation\RelatedReferenceMap;
 use ON\Data\ORM\Relation\RelationCollectionState;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordRelationRef;
@@ -233,6 +235,27 @@ final class FlushExecutorTest extends TestCase
 		self::assertFalse($collection->hasChanges());
 	}
 
+	public function testReferencesArePassedThroughGraphSyncAndRelationPersistenceSync(): void
+	{
+		$users = $this->usersWithProfile();
+		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$target = new stdClass();
+		$references = new RelatedReferenceMap();
+
+		(new FlushExecutor(new RecordingCommandExecutor()))->flush(
+			$this->trackedMap($this->tracked($this->representation(['name' => 'Owner', 'profile' => $target]), $this->ownerBindingWithProfile($record))),
+			$this->records($record),
+			new RelatedCollectionMap(),
+			$references
+		);
+
+		$reference = $references->get($record, 'profile');
+		self::assertInstanceOf(RelatedReference::class, $reference);
+		self::assertSame($target, $reference->getTarget());
+		self::assertSame([$reference], RecordingRelationPersistencePlanner::$changes);
+		self::assertFalse($reference->hasChanges());
+	}
+
 	public function testRelationGraphSyncExceptionPreventsScalarRecordFlush(): void
 	{
 		$users = $this->usersWithPosts();
@@ -269,6 +292,22 @@ final class FlushExecutorTest extends TestCase
 		$collection = $relations->get($record, 'posts');
 		self::assertInstanceOf(RelatedCollection::class, $collection);
 		self::assertFalse($collection->hasChanges());
+	}
+
+	public function testPlannedRelatedReferenceChangesAreClearedOnlyAfterSuccessfulFlush(): void
+	{
+		$users = $this->usersWithProfile();
+		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$reference = $this->changedRelatedReference($record);
+
+		(new FlushExecutor(new RecordingCommandExecutor()))->flush(
+			new TrackedRepresentationMap(),
+			$this->records($record),
+			new RelatedCollectionMap(),
+			$this->references($reference)
+		);
+
+		self::assertFalse($reference->hasChanges());
 	}
 
 	public function testRelationPersistencePlanningRunsBeforeRecordFlusher(): void
@@ -346,6 +385,50 @@ final class FlushExecutorTest extends TestCase
 			);
 		} finally {
 			self::assertTrue($collection->hasChanges());
+			self::assertSame([], $executor->getCommands());
+		}
+	}
+
+	public function testReferenceChangesAreNotClearedIfGraphSyncThrows(): void
+	{
+		$users = $this->usersWithProfile();
+		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'before']);
+		$reference = $this->changedRelatedReference($record);
+		$executor = new RecordingCommandExecutor();
+
+		$this->expectException(SyncException::class);
+
+		try {
+			(new FlushExecutor($executor))->flush(
+				$this->trackedMap($this->tracked($this->representation(['name' => 'after', 'profile' => 'bad']), $this->ownerBindingWithProfile($record))),
+				$this->records($record),
+				new RelatedCollectionMap(),
+				$this->references($reference)
+			);
+		} finally {
+			self::assertTrue($reference->hasChanges());
+			self::assertSame([], $executor->getCommands());
+		}
+	}
+
+	public function testReferenceChangesAreNotClearedIfRelationPlanningThrows(): void
+	{
+		$users = $this->usersWithProfile(false);
+		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'before']);
+		$reference = $this->changedRelatedReference($record);
+		$executor = new RecordingCommandExecutor();
+
+		$this->expectException(\ON\Data\ORM\Exception\RelationPersistenceException::class);
+
+		try {
+			(new FlushExecutor($executor))->flush(
+				new TrackedRepresentationMap(),
+				$this->records($record),
+				new RelatedCollectionMap(),
+				$this->references($reference)
+			);
+		} finally {
+			self::assertTrue($reference->hasChanges());
 			self::assertSame([], $executor->getCommands());
 		}
 	}
@@ -434,6 +517,33 @@ final class FlushExecutorTest extends TestCase
 		}
 	}
 
+	public function testReferenceChangesAreNotClearedIfScalarRecordFlushThrows(): void
+	{
+		$record = RecordState::clean($this->usersWithProfile()->getKey(10), ['id' => 10, 'name' => 'before']);
+		$record->setValue('name', 'dirty');
+		$reference = $this->changedRelatedReference($record);
+		$executor = new class () implements CommandExecutorInterface {
+			public function execute(CommandInterface $command): CommandResult
+			{
+				throw new LogicException('scalar failed');
+			}
+		};
+
+		$this->expectException(LogicException::class);
+		$this->expectExceptionMessage('scalar failed');
+
+		try {
+			(new FlushExecutor($executor))->flush(
+				new TrackedRepresentationMap(),
+				$this->records($record),
+				new RelatedCollectionMap(),
+				$this->references($reference)
+			);
+		} finally {
+			self::assertTrue($reference->hasChanges());
+		}
+	}
+
 	public function testRelationChangesAreNotClearedIfRelationCommandExecutionThrows(): void
 	{
 		RecordingRelationPersistencePlanner::$addCommand = true;
@@ -457,6 +567,33 @@ final class FlushExecutorTest extends TestCase
 			);
 		} finally {
 			self::assertTrue($collection->hasChanges());
+		}
+	}
+
+	public function testReferenceChangesAreNotClearedIfRelationCommandExecutionThrows(): void
+	{
+		RecordingRelationPersistencePlanner::$addCommand = true;
+		$record = RecordState::clean($this->usersWithProfile()->getKey(10), ['id' => 10, 'name' => 'before']);
+		$reference = $this->changedRelatedReference($record);
+		$executor = new class () implements CommandExecutorInterface {
+			public function execute(CommandInterface $command): CommandResult
+			{
+				throw new LogicException('relation command failed');
+			}
+		};
+
+		$this->expectException(LogicException::class);
+		$this->expectExceptionMessage('relation command failed');
+
+		try {
+			(new FlushExecutor($executor))->flush(
+				new TrackedRepresentationMap(),
+				$this->records($record),
+				new RelatedCollectionMap(),
+				$this->references($reference)
+			);
+		} finally {
+			self::assertTrue($reference->hasChanges());
 		}
 	}
 
@@ -547,12 +684,30 @@ final class FlushExecutorTest extends TestCase
 		return $map;
 	}
 
+	private function references(RelatedReference ...$references): RelatedReferenceMap
+	{
+		$map = new RelatedReferenceMap();
+		foreach ($references as $reference) {
+			$map->add($reference);
+		}
+
+		return $map;
+	}
+
 	private function changedRelatedCollection(RecordState $owner): RelatedCollection
 	{
 		$collection = new RelatedCollection($owner, 'posts', $this->postBinding());
 		$collection->add(new stdClass());
 
 		return $collection;
+	}
+
+	private function changedRelatedReference(RecordState $owner): RelatedReference
+	{
+		$reference = new RelatedReference($owner, 'profile', $this->postBinding());
+		$reference->set(new stdClass());
+
+		return $reference;
 	}
 
 	private function postBinding(): RepresentationBinding
@@ -571,6 +726,20 @@ final class FlushExecutorTest extends TestCase
 			'posts',
 			RecordRelationRef::forState($record, 'posts'),
 			RepresentationRelationCardinality::MANY,
+			$this->postBinding()
+		));
+
+		return $binding;
+	}
+
+	private function ownerBindingWithProfile(RecordState $record): RepresentationBinding
+	{
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::forState($record, 'name')));
+		$binding->addRelation(new RepresentationRelationBinding(
+			'profile',
+			RecordRelationRef::forState($record, 'profile'),
+			RepresentationRelationCardinality::ONE,
 			$this->postBinding()
 		));
 
@@ -596,6 +765,25 @@ final class FlushExecutorTest extends TestCase
 			->field('name', 'string')->end();
 
 		$relation = $users->hasMany('posts', 'posts')->innerKey('id')->outerKey('id');
+		if ($withPlanner) {
+			$relation->persistencePlanner(RecordingRelationPersistencePlanner::class);
+		}
+
+		return $users;
+	}
+
+	private function usersWithProfile(bool $withPlanner = true): CollectionInterface
+	{
+		$registry = new Registry();
+		$registry->collection('profiles')->primaryKey('id')->field('id', 'int')->end()->field('user_id', 'int')->end()->end();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+
+		$relation = $users->hasOne('profile', 'profiles')
+			->innerKey('id')
+			->outerKey('user_id');
 		if ($withPlanner) {
 			$relation->persistencePlanner(RecordingRelationPersistencePlanner::class);
 		}

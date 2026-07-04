@@ -5,32 +5,32 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Relation\Persistence;
 
 use ON\Data\ORM\Persistence\CommandInterface;
-use ON\Data\ORM\Relation\RelatedCollection;
+use ON\Data\ORM\Relation\RelationChangeInterface;
 
 final class RelationPersistenceResult
 {
-	/** @var list<RelatedCollection> */
-	private array $collections;
+	/** @var list<RelationChangeInterface> */
+	private array $changes;
 
 	/** @var list<CommandInterface> */
 	private array $commands;
 
 	/**
-	 * @param list<RelatedCollection> $collections
+	 * @param list<RelationChangeInterface> $changes
 	 * @param list<CommandInterface> $commands
 	 */
-	public function __construct(array $collections, array $commands)
+	public function __construct(array $changes, array $commands)
 	{
-		$this->collections = array_values($collections);
+		$this->changes = array_values($changes);
 		$this->commands = array_values($commands);
 	}
 
 	/**
-	 * @return list<RelatedCollection>
+	 * @return list<RelationChangeInterface>
 	 */
-	public function getCollections(): array
+	public function getChanges(): array
 	{
-		return $this->collections;
+		return $this->changes;
 	}
 
 	/**

@@ -12,6 +12,8 @@ use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Relation\Persistence\RelationPersistenceSynchronizer;
 use ON\Data\ORM\Relation\RelatedCollection;
 use ON\Data\ORM\Relation\RelatedCollectionMap;
+use ON\Data\ORM\Relation\RelatedReference;
+use ON\Data\ORM\Relation\RelatedReferenceMap;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateMap;
@@ -36,11 +38,12 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 	{
 		$result = (new RelationPersistenceSynchronizer())->sync(
 			new RelatedCollectionMap(),
+			new RelatedReferenceMap(),
 			new RecordStateMap(),
 			new TrackedRepresentationMap()
 		);
 
-		self::assertSame([], $result->getCollections());
+		self::assertSame([], $result->getChanges());
 		self::assertSame([], $result->getCommands());
 	}
 
@@ -55,7 +58,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('no configured persistence planner');
 
-		(new RelationPersistenceSynchronizer())->sync($relations, new RecordStateMap(), new TrackedRepresentationMap());
+		(new RelationPersistenceSynchronizer())->sync($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
 	}
 
 	public function testChangedRelationWithMissingDefinitionThrows(): void
@@ -68,7 +71,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('no relation definition');
 
-		(new RelationPersistenceSynchronizer())->sync($relations, new RecordStateMap(), new TrackedRepresentationMap());
+		(new RelationPersistenceSynchronizer())->sync($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
 	}
 
 	public function testChangedRelationWithPlannerInvokesPlannerWithContextRelationAndCollection(): void
@@ -82,7 +85,9 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$records = new RecordStateMap();
 		$representations = new TrackedRepresentationMap();
 
-		$result = (new RelationPersistenceSynchronizer())->sync($relations, $records, $representations);
+		$references = new RelatedReferenceMap();
+
+		$result = (new RelationPersistenceSynchronizer())->sync($relations, $references, $records, $representations);
 
 		self::assertSame(1, RecordingRelationPersistencePlanner::$calls);
 		self::assertSame($collection, RecordingRelationPersistencePlanner::$collections[0]);
@@ -90,7 +95,8 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		self::assertSame($records, RecordingRelationPersistencePlanner::$contexts[0]->getRecords());
 		self::assertSame($representations, RecordingRelationPersistencePlanner::$contexts[0]->getRepresentations());
 		self::assertSame($relations, RecordingRelationPersistencePlanner::$contexts[0]->getRelations());
-		self::assertSame([$collection], $result->getCollections());
+		self::assertSame($references, RecordingRelationPersistencePlanner::$contexts[0]->getReferences());
+		self::assertSame([$collection], $result->getChanges());
 	}
 
 	public function testPlannerCanAddCommandsToResult(): void
@@ -102,10 +108,69 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$relations = new RelatedCollectionMap();
 		$relations->add($this->changedRelatedCollection(RecordState::new($users)));
 
-		$result = (new RelationPersistenceSynchronizer())->sync($relations, new RecordStateMap(), new TrackedRepresentationMap());
+		$result = (new RelationPersistenceSynchronizer())->sync($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
 
 		self::assertCount(1, $result->getCommands());
 		self::assertInstanceOf(TestCommand::class, $result->getCommands()[0]);
+	}
+
+	public function testChangedReferenceIsPlanned(): void
+	{
+		$registry = $this->registryWithOneRelation(RecordingRelationPersistencePlanner::class);
+		$users = $registry->getCollection('users');
+		self::assertInstanceOf(CollectionInterface::class, $users);
+		$reference = $this->changedRelatedReference(RecordState::new($users));
+		$references = new RelatedReferenceMap();
+		$references->add($reference);
+
+		$result = (new RelationPersistenceSynchronizer())->sync(
+			new RelatedCollectionMap(),
+			$references,
+			new RecordStateMap(),
+			new TrackedRepresentationMap()
+		);
+
+		self::assertSame(1, RecordingRelationPersistencePlanner::$calls);
+		self::assertSame($reference, RecordingRelationPersistencePlanner::$changes[0]);
+		self::assertSame([$reference], $result->getChanges());
+	}
+
+	public function testCollectionsArePlannedBeforeReferences(): void
+	{
+		$registry = $this->registryWithRelation(RecordingRelationPersistencePlanner::class);
+		$users = $registry->getCollection('users');
+		self::assertInstanceOf(CollectionInterface::class, $users);
+		$collection = $this->changedRelatedCollection(RecordState::new($users));
+		$relations = new RelatedCollectionMap();
+		$relations->add($collection);
+		$reference = $this->changedRelatedReference(RecordState::new($users), 'posts');
+		$references = new RelatedReferenceMap();
+		$references->add($reference);
+
+		$result = (new RelationPersistenceSynchronizer())->sync($relations, $references, new RecordStateMap(), new TrackedRepresentationMap());
+
+		self::assertSame([$collection, $reference], $result->getChanges());
+		self::assertSame([$collection, $reference], RecordingRelationPersistencePlanner::$changes);
+	}
+
+	public function testUnchangedReferencesAreSkipped(): void
+	{
+		$registry = $this->registryWithOneRelation(RecordingRelationPersistencePlanner::class);
+		$users = $registry->getCollection('users');
+		self::assertInstanceOf(CollectionInterface::class, $users);
+		$reference = new RelatedReference(RecordState::new($users), 'profile', $this->postBinding());
+		$references = new RelatedReferenceMap();
+		$references->add($reference);
+
+		$result = (new RelationPersistenceSynchronizer())->sync(
+			new RelatedCollectionMap(),
+			$references,
+			new RecordStateMap(),
+			new TrackedRepresentationMap()
+		);
+
+		self::assertSame(0, RecordingRelationPersistencePlanner::$calls);
+		self::assertSame([], $result->getChanges());
 	}
 
 	public function testChangedM2MRelationWithDefaultPlannerProducesThroughCommand(): void
@@ -121,6 +186,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 
 		$result = (new RelationPersistenceSynchronizer())->sync(
 			$relations,
+			new RelatedReferenceMap(),
 			$this->records($owner, $target),
 			$this->trackedMap($this->tracked($item, $target)),
 		);
@@ -148,6 +214,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 
 		$result = (new RelationPersistenceSynchronizer())->sync(
 			$relations,
+			new RelatedReferenceMap(),
 			$this->records($owner, $child),
 			$this->trackedMap($this->tracked($item, $child)),
 		);
@@ -167,7 +234,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$relations = new RelatedCollectionMap();
 		$relations->add($this->changedRelatedCollection($owner));
 
-		(new RelationPersistenceSynchronizer())->sync($relations, new RecordStateMap(), new TrackedRepresentationMap());
+		(new RelationPersistenceSynchronizer())->sync($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
 
 		self::assertSame('planned', $owner->getValue('name'));
 		self::assertTrue($owner->isDirty());
@@ -182,7 +249,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$relations = new RelatedCollectionMap();
 		$relations->add($collection);
 
-		(new RelationPersistenceSynchronizer())->sync($relations, new RecordStateMap(), new TrackedRepresentationMap());
+		(new RelationPersistenceSynchronizer())->sync($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
 
 		self::assertTrue($collection->hasChanges());
 	}
@@ -196,7 +263,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$relations = new RelatedCollectionMap();
 		$relations->add($this->changedRelatedCollection(RecordState::new($users)));
 
-		$result = (new RelationPersistenceSynchronizer())->sync($relations, new RecordStateMap(), new TrackedRepresentationMap());
+		$result = (new RelationPersistenceSynchronizer())->sync($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
 
 		self::assertCount(1, $result->getCommands());
 		self::assertSame(1, RecordingRelationPersistencePlanner::$calls);
@@ -234,6 +301,23 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		return $registry;
 	}
 
+	private function registryWithOneRelation(?string $planner = null): Registry
+	{
+		$registry = new Registry();
+		$registry->collection('profiles')->primaryKey('id')->field('id', 'int')->end()->field('user_id', 'int')->end()->end();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+
+		$relation = $users->hasOne('profile', 'profiles')->innerKey('id')->outerKey('user_id');
+		if ($planner !== null) {
+			$relation->persistencePlanner($planner);
+		}
+
+		return $registry;
+	}
+
 	/**
 	 * @return array{0: CollectionInterface, 1: CollectionInterface}
 	 */
@@ -259,6 +343,14 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$collection->add(new stdClass());
 
 		return $collection;
+	}
+
+	private function changedRelatedReference(RecordState $owner, string $relationName = 'profile'): RelatedReference
+	{
+		$reference = new RelatedReference($owner, $relationName, $this->postBinding());
+		$reference->set(new stdClass());
+
+		return $reference;
 	}
 
 	/**

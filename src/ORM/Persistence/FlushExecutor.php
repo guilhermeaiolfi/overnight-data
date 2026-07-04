@@ -6,6 +6,7 @@ namespace ON\Data\ORM\Persistence;
 
 use ON\Data\ORM\Relation\Persistence\RelationPersistenceSynchronizer;
 use ON\Data\ORM\Relation\RelatedCollectionMap;
+use ON\Data\ORM\Relation\RelatedReferenceMap;
 use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\TrackedRepresentationMap;
 use ON\Data\ORM\Sync\RelationGraphSynchronizer;
@@ -37,20 +38,22 @@ final class FlushExecutor
 		TrackedRepresentationMap $representations,
 		RecordStateMap $records,
 		?RelatedCollectionMap $relations = null,
+		?RelatedReferenceMap $references = null,
 	): FlushResult
 	{
 		$relations ??= new RelatedCollectionMap();
+		$references ??= new RelatedReferenceMap();
 		$syncPlans = $this->synchronizer->sync($representations, $records);
-		$this->relationGraphSynchronizer->sync($representations, $relations);
-		$relationResult = $this->relationSynchronizer->sync($relations, $records, $representations);
+		$this->relationGraphSynchronizer->sync($representations, $relations, $references);
+		$relationResult = $this->relationSynchronizer->sync($relations, $references, $records, $representations);
 		$commandResults = $this->flusher->flush($records);
 
 		foreach ($relationResult->getCommands() as $command) {
 			$commandResults[] = $this->executor->execute($command);
 		}
 
-		foreach ($relationResult->getCollections() as $collection) {
-			$collection->clearChanges();
+		foreach ($relationResult->getChanges() as $change) {
+			$change->clearChanges();
 		}
 
 		return new FlushResult($syncPlans, $commandResults);

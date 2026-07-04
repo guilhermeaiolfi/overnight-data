@@ -9,12 +9,22 @@ use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\RelatedCollection;
+use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\State\RecordState;
 
 final class HasManyPersistencePlanner implements RelationPersistencePlannerInterface
 {
-	public function plan(PersistenceContext $context, RelationInterface $relation, RelatedCollection $collection): void
+	public function plan(PersistenceContext $context, RelationInterface $relation, RelationChangeInterface $change): void
 	{
+		if (! $change instanceof RelatedCollection) {
+			throw new RelationPersistenceException(sprintf(
+				"Relation '%s' must be a related collection to use %s.",
+				$change->getRelationName(),
+				self::class,
+			));
+		}
+
+		$collection = $change;
 		if (! $relation instanceof HasManyRelation) {
 			throw new RelationPersistenceException(sprintf(
 				"Relation '%s' must be a has-many relation to use %s.",

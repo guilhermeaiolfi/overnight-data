@@ -17,6 +17,7 @@ use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\ManyToManyPersistencePlanner;
 use ON\Data\ORM\Relation\RelatedCollection;
 use ON\Data\ORM\Relation\RelatedCollectionMap;
+use ON\Data\ORM\Relation\RelatedReferenceMap;
 use ON\Data\ORM\Relation\RelationCollectionState;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
@@ -260,7 +261,13 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$this->expectExceptionMessage('must be a many-to-many relation');
 
 		(new ManyToManyPersistencePlanner())->plan(
-			new PersistenceContext(new RecordStateMap(), new TrackedRepresentationMap(), new RelatedCollectionMap(), new CommandBuffer()),
+			new PersistenceContext(
+				new RecordStateMap(),
+				new TrackedRepresentationMap(),
+				new RelatedCollectionMap(),
+				new RelatedReferenceMap(),
+				new CommandBuffer()
+			),
 			$relation,
 			$collection,
 		);
@@ -347,7 +354,13 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 	): array {
 		$commands = new CommandBuffer();
 		(new ManyToManyPersistencePlanner())->plan(
-			new PersistenceContext($records, $representations, new RelatedCollectionMap(), $commands),
+			new PersistenceContext(
+				$records,
+				$representations,
+				new RelatedCollectionMap(),
+				new RelatedReferenceMap(),
+				$commands
+			),
 			$relation,
 			$collection,
 		);
