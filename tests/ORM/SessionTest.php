@@ -6,8 +6,10 @@ namespace Tests\ON\Data\ORM;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
+use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Persistence\DeleteCommand;
+use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\Relation\RelatedCollection;
 use ON\Data\ORM\Session;
@@ -217,6 +219,34 @@ final class SessionTest extends TestCase
 		self::assertFalse($collection->hasChanges());
 	}
 
+	public function testFlushPersistsM2MRelationAddThroughDefaultPlanner(): void
+	{
+		[$users, $tags, $through] = $this->usersWithTags();
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Ada']);
+		$owner->setValue('name', 'Ada Lovelace');
+		$target = $session->trackClean($tags->getKey(3), ['id' => 3, 'label' => 'math']);
+		$item = new stdClass();
+		$session->adopt($item, $this->bindingFor($target), $target);
+		$collection = new RelatedCollection($owner, 'tags', $this->bindingFor($target));
+		$collection->add($item);
+		$session->trackRelation($collection);
+
+		$session->flush();
+
+		self::assertCount(2, $executor->getCommands());
+		self::assertInstanceOf(UpdateCommand::class, $executor->getCommands()[0]);
+		$relationCommand = $executor->getCommands()[1];
+		if (! $relationCommand instanceof InsertCommand) {
+			self::fail('Expected an insert command.');
+		}
+
+		self::assertSame($through, $relationCommand->getCollection());
+		self::assertSame(['user_id' => 10, 'tag_id' => 3], $relationCommand->getValues());
+		self::assertFalse($collection->hasChanges());
+	}
+
 	public function testSessionSourceDoesNotMentionDeferredOrmRuntimeConcepts(): void
 	{
 		$source = file_get_contents(__DIR__ . '/../../src/ORM/Session.php');
@@ -267,6 +297,17 @@ final class SessionTest extends TestCase
 		return $binding;
 	}
 
+	private function bindingFor(RecordState $record): RepresentationBinding
+	{
+		$binding = new RepresentationBinding();
+		foreach (array_keys($record->getValues()) as $field) {
+			$field = (string) $field;
+			$binding->add(new RepresentationFieldBinding($field, RecordFieldRef::forState($record, $field)));
+		}
+
+		return $binding;
+	}
+
 	private function users(): CollectionInterface
 	{
 		return (new Registry())
@@ -290,6 +331,43 @@ final class SessionTest extends TestCase
 			->persistencePlanner(RecordingRelationPersistencePlanner::class);
 
 		return $users;
+	}
+
+	/**
+	 * @return array{0: CollectionInterface, 1: CollectionInterface, 2: CollectionInterface}
+	 */
+	private function usersWithTags(): array
+	{
+		$registry = new Registry();
+		$registry->collection('tags')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('label', 'string')->end()
+			->end();
+		$registry->collection('user_tag')
+			->field('user_id', 'int')->end()
+			->field('tag_id', 'int')->end()
+			->end();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+		$relation = $users->relation('tags', M2MRelation::class)
+			->collection('tags')
+			->innerKey('id')
+			->outerKey('id')
+			->through('user_tag')
+				->innerKey('user_id')
+				->outerKey('tag_id')
+				->end();
+
+		self::assertInstanceOf(M2MRelation::class, $relation);
+		$tags = $registry->getCollection('tags');
+		$through = $registry->getCollection('user_tag');
+		self::assertInstanceOf(CollectionInterface::class, $tags);
+		self::assertInstanceOf(CollectionInterface::class, $through);
+
+		return [$users, $tags, $through];
 	}
 
 	private function posts(): CollectionInterface

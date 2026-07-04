@@ -13,6 +13,7 @@ use ON\Data\Definition\Relation\HasManyRelation;
 use ON\Data\Definition\Relation\HasOneRelation;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\Definition\Relation\M2MThrough;
+use ON\Data\ORM\Relation\Persistence\ManyToManyPersistencePlanner;
 use ON\Data\Query\Relation\Loader\BelongsToLoader;
 use ON\Data\Query\Relation\Loader\FirstOfManyLoader;
 use ON\Data\Query\Relation\Loader\HasManyLoader;
@@ -292,6 +293,31 @@ final class RelationDefinitionTest extends TestCase
 		$relation = (new Registry())->collection('users')->relation('posts', CustomRelation::class);
 
 		self::assertNull($relation->getPersistencePlanner());
+	}
+
+	public function testM2MRelationUsesManyToManyPersistencePlannerByDefault(): void
+	{
+		$relation = $this->makeM2MRelation();
+
+		self::assertSame(ManyToManyPersistencePlanner::class, $relation->getPersistencePlanner());
+	}
+
+	public function testNonM2MRelationsStillDefaultToNullPersistencePlanner(): void
+	{
+		$registry = new Registry();
+		$registry->collection('posts')->primaryKey('id')->field('id', 'int')->end()->end();
+		$users = $registry->collection('users')->primaryKey('id')->field('id', 'int')->end();
+
+		self::assertNull($users->hasMany('posts', 'posts')->getPersistencePlanner());
+	}
+
+	public function testExplicitPersistencePlannerOverridesM2MDefault(): void
+	{
+		$relation = $this->makeM2MRelation();
+
+		$relation->persistencePlanner(RecordingRelationPersistencePlanner::class);
+
+		self::assertSame(RecordingRelationPersistencePlanner::class, $relation->getPersistencePlanner());
 	}
 
 	public function testInvalidPersistencePlannerIsRejected(): void

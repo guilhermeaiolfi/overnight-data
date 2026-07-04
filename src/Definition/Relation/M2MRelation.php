@@ -6,6 +6,7 @@ namespace ON\Data\Definition\Relation;
 
 use LogicException;
 use ON\Data\Definition\Internal\DefinitionFactory;
+use ON\Data\ORM\Relation\Persistence\ManyToManyPersistencePlanner;
 use ON\Data\Query\Relation\Loader\M2MLoader;
 
 class M2MRelation extends AbstractRelation
@@ -18,6 +19,7 @@ class M2MRelation extends AbstractRelation
 			'collection_factory' => '',
 			'through' => null,
 			'loader' => M2MLoader::class,
+			'persistencePlanner' => ManyToManyPersistencePlanner::class,
 		]);
 	}
 

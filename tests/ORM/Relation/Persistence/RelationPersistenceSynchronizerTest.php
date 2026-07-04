@@ -6,7 +6,9 @@ namespace Tests\ON\Data\ORM\Relation\Persistence;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
+use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\ORM\Exception\RelationPersistenceException;
+use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Relation\Persistence\RelationPersistenceSynchronizer;
 use ON\Data\ORM\Relation\RelatedCollection;
 use ON\Data\ORM\Relation\RelatedCollectionMap;
@@ -15,6 +17,7 @@ use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\TrackedRepresentation;
 use ON\Data\ORM\State\TrackedRepresentationMap;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -104,6 +107,33 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		self::assertInstanceOf(TestCommand::class, $result->getCommands()[0]);
 	}
 
+	public function testChangedM2MRelationWithDefaultPlannerProducesThroughCommand(): void
+	{
+		[$users, $tags, $through] = $this->registryWithM2MRelation();
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
+		$target = RecordState::clean($tags->getKey(3), ['id' => 3]);
+		$item = new stdClass();
+		$collection = new RelatedCollection($owner, 'tags', $this->bindingFor($target));
+		$collection->add($item);
+		$relations = new RelatedCollectionMap();
+		$relations->add($collection);
+
+		$result = (new RelationPersistenceSynchronizer())->sync(
+			$relations,
+			$this->records($owner, $target),
+			$this->trackedMap($this->tracked($item, $target)),
+		);
+
+		self::assertCount(1, $result->getCommands());
+		$command = $result->getCommands()[0];
+		if (! $command instanceof InsertCommand) {
+			self::fail('Expected an insert command.');
+		}
+
+		self::assertSame($through, $command->getCollection());
+		self::assertSame(['user_id' => 10, 'tag_id' => 3], $command->getValues());
+	}
+
 	public function testPlannerCanMutateRecordState(): void
 	{
 		RecordingRelationPersistencePlanner::$mutateOwnerField = 'name';
@@ -150,6 +180,17 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		self::assertSame(1, RecordingRelationPersistencePlanner::$calls);
 	}
 
+	public function testSynchronizerSourceStaysRelationGeneric(): void
+	{
+		$source = file_get_contents(__DIR__ . '/../../../../src/ORM/Relation/Persistence/RelationPersistenceSynchronizer.php');
+
+		self::assertIsString($source);
+		self::assertStringNotContainsString('M2MRelation', $source);
+		self::assertStringNotContainsString('getThrough', $source);
+		self::assertStringNotContainsString('InsertCommand', $source);
+		self::assertStringNotContainsString('DeleteCommand', $source);
+	}
+
 	private function registryWithRelation(?string $planner = null): Registry
 	{
 		$registry = new Registry();
@@ -173,6 +214,76 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$collection->add(new stdClass());
 
 		return $collection;
+	}
+
+	/**
+	 * @return array{0: CollectionInterface, 1: CollectionInterface, 2: CollectionInterface}
+	 */
+	private function registryWithM2MRelation(): array
+	{
+		$registry = new Registry();
+		$registry->collection('tags')->primaryKey('id')->field('id', 'int')->end()->end();
+		$registry->collection('user_tag')
+			->field('user_id', 'int')->end()
+			->field('tag_id', 'int')->end()
+			->end();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end();
+		$relation = $users->relation('tags', M2MRelation::class)
+			->collection('tags')
+			->innerKey('id')
+			->outerKey('id')
+			->through('user_tag')
+				->innerKey('user_id')
+				->outerKey('tag_id')
+				->end();
+
+		self::assertInstanceOf(M2MRelation::class, $relation);
+		$tags = $registry->getCollection('tags');
+		$through = $registry->getCollection('user_tag');
+		self::assertInstanceOf(CollectionInterface::class, $tags);
+		self::assertInstanceOf(CollectionInterface::class, $through);
+
+		return [$users, $tags, $through];
+	}
+
+	private function records(RecordState ...$records): RecordStateMap
+	{
+		$map = new RecordStateMap();
+		foreach ($records as $record) {
+			$map->add($record);
+		}
+
+		return $map;
+	}
+
+	private function trackedMap(TrackedRepresentation ...$trackedRepresentations): TrackedRepresentationMap
+	{
+		$map = new TrackedRepresentationMap();
+		foreach ($trackedRepresentations as $tracked) {
+			$map->add($tracked);
+		}
+
+		return $map;
+	}
+
+	private function tracked(object $representation, RecordState $record): TrackedRepresentation
+	{
+		return new TrackedRepresentation($representation, $this->bindingFor($record), [
+			$record->getStateHash() => $record->getRevision(),
+		]);
+	}
+
+	private function bindingFor(RecordState $record): RepresentationBinding
+	{
+		$binding = new RepresentationBinding();
+		foreach (array_keys($record->getValues()) as $field) {
+			$field = (string) $field;
+			$binding->add(new RepresentationFieldBinding($field, RecordFieldRef::forState($record, $field)));
+		}
+
+		return $binding;
 	}
 
 	private function postBinding(): RepresentationBinding
