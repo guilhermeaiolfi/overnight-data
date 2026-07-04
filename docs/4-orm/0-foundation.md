@@ -1,6 +1,6 @@
 # ORM Foundation
 
-This document records the foundation and historical phase notes for the `ON\Data` ORM. Some early sections describe the intended architecture before the runtime existed; current scalar persistence behavior is documented in [`2-persistence.md`](./2-persistence.md).
+This document records the foundation and historical phase notes for the `ON\Data` ORM. Some early sections describe the intended architecture before the runtime existed; current scalar persistence behavior is documented in [`2-persistence.md`](./2-persistence.md), and the recursive representation binding model is documented in [`3-representation-binding.md`](./3-representation-binding.md).
 
 The current implementation includes production record state, representation tracking, scalar sync, scalar command planning, flush orchestration, session orchestration, and Cycle-backed scalar command execution. It still does not include lazy loading, generated repositories, service containers, events, proxy objects, `EntityManager`, `UnitOfWork`, or relation write planning.
 

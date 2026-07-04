@@ -11,6 +11,26 @@ use SplFileInfo;
 
 final class Phase34BindingModelTest extends TestCase
 {
+	public function testRepresentationBindingDocumentationNamesTheModelBoundaries(): void
+	{
+		$contents = file_get_contents(dirname(__DIR__, 3) . '/docs/4-orm/3-representation-binding.md');
+
+		self::assertIsString($contents);
+		self::assertStringContainsString('Definition Tree', $contents);
+		self::assertStringContainsString('Query Graph / Selection Graph', $contents);
+		self::assertStringContainsString('`map($source)->to(...)`', $contents);
+		self::assertStringContainsString('The mapper does not by itself know persistence provenance.', $contents);
+		self::assertStringContainsString('RepresentationBinding', $contents);
+		self::assertStringContainsString('TrackedRepresentation', $contents);
+		self::assertStringContainsString('RelatedCollection / Future RelatedReference', $contents);
+		self::assertStringContainsString('field bindings', $contents);
+		self::assertStringContainsString('expression bindings', $contents);
+		self::assertStringContainsString('relation bindings', $contents);
+		self::assertStringContainsString('getRelatedBinding()', $contents);
+		self::assertStringContainsString('Do not create one binding object per child instance.', $contents);
+		self::assertStringContainsString('Scalar sync uses field bindings only', $contents);
+	}
+
 	public function testNoSeparateBindingOrPersistenceGraphClassesWereIntroduced(): void
 	{
 		$forbidden = [
@@ -30,6 +50,34 @@ final class Phase34BindingModelTest extends TestCase
 				self::assertStringNotContainsString('interface ' . $name, $contents, $path);
 				self::assertStringNotContainsString('enum ' . $name, $contents, $path);
 			}
+		}
+	}
+
+	public function testRepresentationBindingIsNotCoupledToMapperHydrationApi(): void
+	{
+		foreach ($this->phpFiles(dirname(__DIR__, 3) . '/src/ORM/State') as $path) {
+			$contents = file_get_contents($path);
+			self::assertIsString($contents);
+			self::assertStringNotContainsString('ON\\Data\\Mapper', $contents, $path);
+			self::assertStringNotContainsString('map(', $contents, $path);
+		}
+	}
+
+	public function testScalarSyncStillUsesExplicitFieldBindingsOnly(): void
+	{
+		$sources = [
+			dirname(__DIR__, 3) . '/src/ORM/Sync/RepresentationValueReader.php' => 'getFields()',
+			dirname(__DIR__, 3) . '/src/ORM/Sync/SyncConflictDetector.php' => 'getWritableFieldBindings()',
+			dirname(__DIR__, 3) . '/src/ORM/Sync/SyncPlanner.php' => 'getWritableFieldBindings()',
+			dirname(__DIR__, 3) . '/src/ORM/State/RecordStateMap.php' => 'getFields()',
+		];
+
+		foreach ($sources as $path => $expectedCall) {
+			$contents = file_get_contents($path);
+			self::assertIsString($contents);
+			self::assertStringContainsString($expectedCall, $contents, $path);
+			self::assertStringNotContainsString('getRelations()', $contents, $path);
+			self::assertStringNotContainsString('getExpressions()', $contents, $path);
 		}
 	}
 
