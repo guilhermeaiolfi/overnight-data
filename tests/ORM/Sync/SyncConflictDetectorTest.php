@@ -84,7 +84,7 @@ final class SyncConflictDetectorTest extends TestCase
 		$users = $this->users();
 		$key = $users->getKey(10);
 		$binding = new RepresentationBinding();
-		$binding->add(new RepresentationFieldBinding('name', new RecordFieldRef($users, 'name', $key), false));
+		$binding->addField(new RepresentationFieldBinding('name', new RecordFieldRef($users, 'name', $key), false));
 		$tracked = new TrackedRepresentation(new stdClass(), $binding, [$key->getHash() => 1]);
 
 		self::assertSame([], (new SyncConflictDetector())->detect($tracked, [], static fn () => null));
@@ -217,7 +217,7 @@ final class SyncConflictDetectorTest extends TestCase
 	private function tracked(RecordFieldRef $field, int $revision): TrackedRepresentation
 	{
 		$binding = new RepresentationBinding();
-		$binding->add(new RepresentationFieldBinding('name', $field));
+		$binding->addField(new RepresentationFieldBinding('name', $field));
 
 		return new TrackedRepresentation(new stdClass(), $binding, [$field->getRecordHash() => $revision]);
 	}

@@ -41,6 +41,7 @@ final class RelatedCollectionTest extends TestCase
 		self::assertSame($owner, $collection->getOwner());
 		self::assertSame('posts', $collection->getRelationName());
 		self::assertSame($binding, $collection->getChildBinding());
+		self::assertSame($binding, $collection->getRelatedBinding());
 		self::assertTrue($collection->isFullyLoaded());
 	}
 
@@ -305,7 +306,8 @@ final class RelatedCollectionTest extends TestCase
 		$collection->remove($item);
 
 		self::assertSame($binding, $collection->getChildBinding());
-		self::assertTrue($binding->get('title')->getField()->isTemplate());
+		self::assertSame($binding, $collection->getRelatedBinding());
+		self::assertTrue($binding->getField('title')->getField()->isTemplate());
 	}
 
 	/**
@@ -321,7 +323,7 @@ final class RelatedCollectionTest extends TestCase
 	private function postBinding(): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->add(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
+		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
 
 		return $binding;
 	}

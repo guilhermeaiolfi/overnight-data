@@ -47,7 +47,7 @@ final class SyncPlannerTest extends TestCase
 		self::assertSame($record, $plan->getUpdates()[0]->getRecord());
 		self::assertSame('name', $plan->getUpdates()[0]->getField());
 		self::assertSame('A2', $plan->getUpdates()[0]->getValue());
-		self::assertSame($binding->get('name'), $plan->getUpdates()[0]->getBinding());
+		self::assertSame($binding->getField('name'), $plan->getUpdates()[0]->getBinding());
 	}
 
 	public function testPlannerDoesNotMutateRecordState(): void
@@ -67,7 +67,7 @@ final class SyncPlannerTest extends TestCase
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
 		$binding = new RepresentationBinding();
-		$binding->add(new RepresentationFieldBinding('name', RecordFieldRef::forState($record, 'name'), false));
+		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::forState($record, 'name'), false));
 		$tracked = $this->tracked($this->representation(['name' => 'A2']), $binding);
 
 		self::assertTrue($this->planner()->plan($tracked)->isEmpty());
@@ -141,7 +141,7 @@ final class SyncPlannerTest extends TestCase
 		$updates = $this->planner()->plan($tracked)->getUpdates();
 
 		self::assertCount(1, $updates);
-		self::assertSame($binding->get('name'), $updates[0]->getBinding());
+		self::assertSame($binding->getField('name'), $updates[0]->getBinding());
 	}
 
 	public function testDuplicateSameTargetAndDifferentValuesThrows(): void
@@ -285,7 +285,7 @@ final class SyncPlannerTest extends TestCase
 	{
 		$binding = new RepresentationBinding();
 		foreach ($fields as $path => $field) {
-			$binding->add(new RepresentationFieldBinding($path, $field));
+			$binding->addField(new RepresentationFieldBinding($path, $field));
 		}
 
 		return $binding;
@@ -309,7 +309,7 @@ final class SyncPlannerTest extends TestCase
 	private function baselineRevisions(RepresentationBinding $binding): array
 	{
 		$baselineRevisions = [];
-		foreach ($binding->getAll() as $fieldBinding) {
+		foreach ($binding->getFields() as $fieldBinding) {
 			$baselineRevisions[$fieldBinding->getField()->getRecordHash()] = 1;
 		}
 

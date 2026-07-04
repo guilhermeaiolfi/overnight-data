@@ -276,7 +276,7 @@ final class SessionTest extends TestCase
 	private function templateBinding(): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->add(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
+		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
 
 		return $binding;
 	}
@@ -292,7 +292,7 @@ final class SessionTest extends TestCase
 	private function postBinding(): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->add(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
+		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
 
 		return $binding;
 	}
@@ -302,7 +302,7 @@ final class SessionTest extends TestCase
 		$binding = new RepresentationBinding();
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
-			$binding->add(new RepresentationFieldBinding($field, RecordFieldRef::forState($record, $field)));
+			$binding->addField(new RepresentationFieldBinding($field, RecordFieldRef::forState($record, $field)));
 		}
 
 		return $binding;

@@ -104,7 +104,7 @@ final class RecordStateMap
 	public function getFromRepresentation(TrackedRepresentation $tracked): ?RecordState
 	{
 		$state = null;
-		foreach ($tracked->getBinding()->getAll() as $binding) {
+		foreach ($tracked->getBinding()->getFields() as $binding) {
 			$resolved = $this->getForField($binding->getField());
 			if (! $resolved instanceof RecordState) {
 				continue;

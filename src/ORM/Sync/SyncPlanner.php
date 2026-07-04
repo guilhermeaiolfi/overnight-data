@@ -47,7 +47,7 @@ final class SyncPlanner
 		$updates = [];
 		$updatesByTarget = [];
 
-		foreach ($tracked->getBinding()->getWritableBindings() as $binding) {
+		foreach ($tracked->getBinding()->getWritableFieldBindings() as $binding) {
 			$path = $binding->getPath();
 			if (isset($conflictPaths[$path])) {
 				continue;

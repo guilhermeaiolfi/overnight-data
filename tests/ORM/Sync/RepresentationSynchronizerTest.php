@@ -7,11 +7,15 @@ namespace Tests\ON\Data\ORM\Sync;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\SyncException;
+use ON\Data\ORM\Relation\RelationCollectionState;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationExpressionBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationRelationBinding;
+use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\TrackedRepresentation;
 use ON\Data\ORM\State\TrackedRepresentationMap;
 use ON\Data\ORM\Sync\RepresentationSynchronizer;
@@ -90,13 +94,34 @@ final class RepresentationSynchronizerTest extends TestCase
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
 		$binding = new RepresentationBinding();
-		$binding->add(new RepresentationFieldBinding('name', RecordFieldRef::forState($record, 'name'), false));
+		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::forState($record, 'name'), false));
 		$tracked = $this->tracked($this->representation(['name' => 'A2']), $binding);
 
 		$plans = $this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateMap());
 
 		self::assertTrue($plans[0]->isEmpty());
 		self::assertSame('A1', $record->getValue('name'));
+	}
+
+	public function testSynchronizerIgnoresExpressionAndRelationBindingsWhileSyncingScalarFields(): void
+	{
+		$record = RecordState::new($this->users(), ['name' => 'A1']);
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::forState($record, 'name')));
+		$binding->addExpression(new RepresentationExpressionBinding('postCount', 'post_count'));
+		$binding->addRelation(new RepresentationRelationBinding(
+			'posts',
+			'posts',
+			RepresentationRelationCardinality::MANY,
+			new RepresentationBinding(),
+			RelationCollectionState::FULLY_LOADED
+		));
+		$tracked = $this->tracked($this->representation(['name' => 'A2']), $binding);
+
+		$plans = $this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateMap());
+
+		self::assertCount(1, $plans[0]->getUpdates());
+		self::assertSame('A2', $record->getValue('name'));
 	}
 
 	public function testDuplicateWritablePathsTargetingSameFieldWithSameValueApplyOnlyOnce(): void
@@ -252,7 +277,7 @@ final class RepresentationSynchronizerTest extends TestCase
 	{
 		$binding = new RepresentationBinding();
 		foreach ($fields as $path => $field) {
-			$binding->add(new RepresentationFieldBinding($path, $field));
+			$binding->addField(new RepresentationFieldBinding($path, $field));
 		}
 
 		return $binding;
@@ -286,7 +311,7 @@ final class RepresentationSynchronizerTest extends TestCase
 	private function baselineRevisions(RepresentationBinding $binding): array
 	{
 		$baselineRevisions = [];
-		foreach ($binding->getAll() as $fieldBinding) {
+		foreach ($binding->getFields() as $fieldBinding) {
 			$baselineRevisions[$fieldBinding->getField()->getRecordHash()] = 1;
 		}
 

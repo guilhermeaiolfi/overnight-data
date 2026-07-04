@@ -194,7 +194,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$collection = new RelatedCollection($owner, 'tags', $this->bindingFor($target));
 		$collection->add($item);
 		$binding = new RepresentationBinding();
-		$binding->add(new RepresentationFieldBinding('id', RecordFieldRef::template($tags, 'id')));
+		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($tags, 'id')));
 		$tracked = new TrackedRepresentation($item, $binding, []);
 
 		$this->expectException(RelationPersistenceException::class);
@@ -367,7 +367,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$binding = new RepresentationBinding();
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
-			$binding->add(new RepresentationFieldBinding($field, RecordFieldRef::forState($record, $field)));
+			$binding->addField(new RepresentationFieldBinding($field, RecordFieldRef::forState($record, $field)));
 		}
 
 		return $binding;

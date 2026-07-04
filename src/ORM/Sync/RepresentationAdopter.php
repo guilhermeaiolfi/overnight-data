@@ -47,7 +47,7 @@ final class RepresentationAdopter
 	private function buildBaselineRevisions(RepresentationBinding $binding, RecordState $record): array
 	{
 		$baselineRevisions = [];
-		foreach ($binding->getAll() as $fieldBinding) {
+		foreach ($binding->getFields() as $fieldBinding) {
 			$recordHash = $fieldBinding->getField()->getRecordHash();
 			if (! array_key_exists($recordHash, $baselineRevisions)) {
 				$baselineRevisions[$recordHash] = $record->getRevision();

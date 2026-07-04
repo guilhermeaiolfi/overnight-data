@@ -71,6 +71,11 @@ final class RelatedCollection
 		return $this->childBinding;
 	}
 
+	public function getRelatedBinding(): RepresentationBinding
+	{
+		return $this->childBinding;
+	}
+
 	public function getState(): RelationCollectionState
 	{
 		return $this->state;

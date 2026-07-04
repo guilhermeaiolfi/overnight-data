@@ -22,7 +22,7 @@ final class SyncConflictDetector
 		callable $recordStateResolver,
 	): array {
 		$conflicts = [];
-		foreach ($tracked->getBinding()->getWritableBindings() as $binding) {
+		foreach ($tracked->getBinding()->getWritableFieldBindings() as $binding) {
 			$path = $binding->getPath();
 			if (! array_key_exists($path, $currentValues)) {
 				throw new SyncException(sprintf("Current representation values do not contain path '%s'.", $path));

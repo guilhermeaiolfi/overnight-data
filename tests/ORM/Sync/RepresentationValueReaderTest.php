@@ -94,8 +94,8 @@ final class RepresentationValueReaderTest extends TestCase
 		$row->name = 'Ada';
 		$row->upperName = 'ADA';
 		$binding = new RepresentationBinding();
-		$binding->add(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
-		$binding->add(new RepresentationFieldBinding('upperName', RecordFieldRef::template($this->users(), 'name'), false));
+		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
+		$binding->addField(new RepresentationFieldBinding('upperName', RecordFieldRef::template($this->users(), 'name'), false));
 
 		self::assertSame(
 			['name' => 'Ada', 'upperName' => 'ADA'],
@@ -109,8 +109,8 @@ final class RepresentationValueReaderTest extends TestCase
 		$row->email = 'ada@example.test';
 		$row->name = 'Ada';
 		$binding = new RepresentationBinding();
-		$binding->add(new RepresentationFieldBinding('email', RecordFieldRef::template($this->users(), 'email')));
-		$binding->add(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
+		$binding->addField(new RepresentationFieldBinding('email', RecordFieldRef::template($this->users(), 'email')));
+		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
 
 		self::assertSame(
 			['email' => 'ada@example.test', 'name' => 'Ada'],
@@ -145,7 +145,7 @@ final class RepresentationValueReaderTest extends TestCase
 	private function binding(string $path): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->add(new RepresentationFieldBinding($path, RecordFieldRef::template($this->users(), 'name')));
+		$binding->addField(new RepresentationFieldBinding($path, RecordFieldRef::template($this->users(), 'name')));
 
 		return $binding;
 	}

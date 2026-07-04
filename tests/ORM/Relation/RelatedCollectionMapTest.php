@@ -104,7 +104,7 @@ final class RelatedCollectionMapTest extends TestCase
 	private function postBinding(): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->add(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
+		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
 
 		return $binding;
 	}

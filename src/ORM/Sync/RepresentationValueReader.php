@@ -15,7 +15,7 @@ final class RepresentationValueReader
 	public function read(object $representation, RepresentationBinding $binding): array
 	{
 		$values = [];
-		foreach ($binding->getAll() as $fieldBinding) {
+		foreach ($binding->getFields() as $fieldBinding) {
 			$path = $fieldBinding->getPath();
 			$values[$path] = $this->readPath($representation, $path);
 		}

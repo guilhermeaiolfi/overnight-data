@@ -11,7 +11,10 @@ use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationExpressionBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationRelationBinding;
+use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\TrackedRepresentation;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
@@ -241,6 +244,24 @@ final class RecordStateMapTest extends TestCase
 		self::assertSame($state, $map->getFromRepresentation($tracked));
 	}
 
+	public function testGetFromRepresentationIgnoresExpressionAndRelationBindings(): void
+	{
+		$state = RecordState::new($this->users(), ['id' => 10, 'name' => 'A1']);
+		$binding = $this->binding([
+			'name' => RecordFieldRef::forState($state, 'name'),
+		]);
+		$binding->addExpression(new RepresentationExpressionBinding('postCount', 'post_count'));
+		$binding->addRelation(new RepresentationRelationBinding(
+			'posts',
+			'posts',
+			RepresentationRelationCardinality::MANY,
+			new RepresentationBinding()
+		));
+		$tracked = $this->tracked($binding);
+
+		self::assertSame($state, (new RecordStateMap())->getFromRepresentation($tracked));
+	}
+
 	public function testRemoveOnlyRemovesKeyAlias(): void
 	{
 		$users = $this->users();
@@ -306,7 +327,7 @@ final class RecordStateMapTest extends TestCase
 	{
 		$binding = new RepresentationBinding();
 		foreach ($fields as $path => $field) {
-			$binding->add(new RepresentationFieldBinding($path, $field));
+			$binding->addField(new RepresentationFieldBinding($path, $field));
 		}
 
 		return $binding;

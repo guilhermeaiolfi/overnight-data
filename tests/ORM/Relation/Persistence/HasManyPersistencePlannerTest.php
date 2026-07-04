@@ -119,7 +119,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$collection = new RelatedCollection($owner, 'posts', $this->bindingFor($child));
 		$collection->add($item);
 		$binding = new RepresentationBinding();
-		$binding->add(new RepresentationFieldBinding('id', RecordFieldRef::template($posts, 'id')));
+		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($posts, 'id')));
 		$tracked = new TrackedRepresentation($item, $binding, []);
 
 		$this->expectException(RelationPersistenceException::class);
@@ -323,7 +323,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$binding = new RepresentationBinding();
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
-			$binding->add(new RepresentationFieldBinding($field, RecordFieldRef::forState($record, $field)));
+			$binding->addField(new RepresentationFieldBinding($field, RecordFieldRef::forState($record, $field)));
 		}
 
 		return $binding;

@@ -27,7 +27,7 @@ final class RepresentationAdopterTest extends TestCase
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
 		$tracked = $this->adopter()->adopt(new stdClass(), $this->postBinding(), $record);
 
-		self::assertSame($record, $tracked->getBinding()->get('title')->getField()->getState());
+		self::assertSame($record, $tracked->getBinding()->getField('title')->getField()->getState());
 	}
 
 	public function testAdoptAddsRecordToRecordStateMap(): void
@@ -67,7 +67,7 @@ final class RepresentationAdopterTest extends TestCase
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
 		$tracked = $this->adopter()->adopt(new stdClass(), $this->postBinding(), $record);
 
-		$field = $tracked->getBinding()->get('title')->getField();
+		$field = $tracked->getBinding()->getField('title')->getField();
 
 		self::assertFalse($field->isTemplate());
 		self::assertSame($record->getStateHash(), $field->getRecordHash());
@@ -87,8 +87,8 @@ final class RepresentationAdopterTest extends TestCase
 	{
 		$record = RecordState::new($this->posts(), ['title' => 'A1', 'body' => 'Body']);
 		$binding = new RepresentationBinding();
-		$binding->add(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
-		$binding->add(new RepresentationFieldBinding('body', RecordFieldRef::template($this->posts(), 'body')));
+		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
+		$binding->addField(new RepresentationFieldBinding('body', RecordFieldRef::template($this->posts(), 'body')));
 
 		$tracked = $this->adopter()->adopt(new stdClass(), $binding, $record);
 
@@ -99,7 +99,7 @@ final class RepresentationAdopterTest extends TestCase
 	{
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
 		$binding = new RepresentationBinding();
-		$binding->add(new RepresentationFieldBinding('titleLabel', RecordFieldRef::template($this->posts(), 'title'), false));
+		$binding->addField(new RepresentationFieldBinding('titleLabel', RecordFieldRef::template($this->posts(), 'title'), false));
 
 		$tracked = $this->adopter()->adopt(new stdClass(), $binding, $record);
 
@@ -109,12 +109,12 @@ final class RepresentationAdopterTest extends TestCase
 	public function testInputTemplateBindingIsNotMutated(): void
 	{
 		$template = $this->postBinding();
-		$templateField = $template->get('title')->getField();
+		$templateField = $template->getField('title')->getField();
 
 		$this->adopter()->adopt(new stdClass(), $template, RecordState::new($this->posts(), ['title' => 'A1']));
 
-		self::assertSame($templateField, $template->get('title')->getField());
-		self::assertTrue($template->get('title')->getField()->isTemplate());
+		self::assertSame($templateField, $template->getField('title')->getField());
+		self::assertTrue($template->getField('title')->getField()->isTemplate());
 	}
 
 	public function testAdoptingBindingFromDifferentCollectionThrowsThroughStateValidation(): void
@@ -165,7 +165,7 @@ final class RepresentationAdopterTest extends TestCase
 			$record
 		);
 
-		self::assertSame($record, $tracked->getBinding()->get('title')->getField()->getState());
+		self::assertSame($record, $tracked->getBinding()->getField('title')->getField()->getState());
 		self::assertSame($tracked, $representations->get($item));
 		self::assertSame([$item], $collection->getAdded());
 	}
@@ -183,7 +183,7 @@ final class RepresentationAdopterTest extends TestCase
 	private function postBinding(): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->add(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
+		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
 
 		return $binding;
 	}
