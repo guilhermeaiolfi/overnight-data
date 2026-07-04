@@ -19,11 +19,11 @@ use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\TrackedRepresentation;
 use ON\Data\ORM\State\TrackedRepresentationMap;
-use ON\Data\ORM\Sync\RepresentationSynchronizer;
+use ON\Data\ORM\Sync\ScalarRepresentationSynchronizer;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
-final class RepresentationSynchronizerTest extends TestCase
+final class ScalarRepresentationSynchronizerTest extends TestCase
 {
 	public function testSyncReturnsEmptyListWhenThereAreNoTrackedRepresentations(): void
 	{
@@ -249,7 +249,7 @@ final class RepresentationSynchronizerTest extends TestCase
 
 	public function testSynchronizerDoesNotDependOnPersistenceClasses(): void
 	{
-		$source = file_get_contents(__DIR__ . '/../../../src/ORM/Sync/RepresentationSynchronizer.php');
+		$source = file_get_contents(__DIR__ . '/../../../src/ORM/Sync/ScalarRepresentationSynchronizer.php');
 
 		self::assertIsString($source);
 		self::assertStringNotContainsString('ON\\Data\\ORM\\Persistence', $source);
@@ -319,9 +319,9 @@ final class RepresentationSynchronizerTest extends TestCase
 		return $baselineRevisions;
 	}
 
-	private function synchronizer(): RepresentationSynchronizer
+	private function synchronizer(): ScalarRepresentationSynchronizer
 	{
-		return new RepresentationSynchronizer();
+		return new ScalarRepresentationSynchronizer();
 	}
 
 	private function users(): CollectionInterface

@@ -12,13 +12,13 @@ It is independent from the Overnight framework. The package can be consumed on i
 - Query model: database-independent `SelectQuery`, field and relation refs, selections, aliases, semantic value operations, aggregates, subqueries, joins, conditions, grouping, ordering, and pagination.
 - Bound execution: optional execution binding through `ON\Data\Database\QueryExecutorInterface`, plus the neutral `Database` facade and `ConnectionConfig`.
 - Relation loading: structured relation selection for nested results, loader-owned join or separate-query execution, and parser-backed result assembly for built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relations.
-- ORM scalar persistence: `RecordState`-backed scalar insert/update/delete planning, representation synchronization into records, `FlushExecutor` / `Session` orchestration, Cycle-backed command execution, and simple auto-increment primary-key merge after inserts.
+- ORM persistence: `RecordState`-backed scalar insert/update/delete planning, scalar and relation representation synchronization, configured relation persistence planning, `FlushExecutor` / `Session` orchestration, Cycle-backed command execution, and simple auto-increment primary-key merge after inserts.
 
 ## Current Limitations
 
 - Structured relation loading supports the built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relation types.
 - Built-in `FirstOfMany` loading is separate-query-only, uses windowed ranking on supported SQL backends, and requires deterministic relation-level `orderBy` metadata; JOIN loading is intentionally unsupported.
-- No relation write planning yet.
+- No automatic relation cascade writes yet.
 - No transaction orchestration yet.
 - No optimistic locking, stale-row detection, or affected-row conflict handling yet.
 - No lazy loading.
@@ -61,4 +61,4 @@ composer check
 - `docs/3-query/bound-execution.md` documents bound execution and the neutral database facade.
 - `docs/3-query/relation-loading.md` documents relation selection, nested loading, and loader ownership boundaries.
 - `docs/4-orm/0-foundation.md` records ORM foundation concepts, state primitives, representation lineage, sync conflicts, and relation guardrails.
-- `docs/4-orm/2-persistence.md` documents the current scalar ORM persistence pipeline, Cycle command executor boundary, generated-key support, and write-side limitations.
+- `docs/4-orm/2-persistence.md` documents the current ORM persistence pipeline, Cycle command executor boundary, generated-key support, relation persistence planning boundary, and write-side limitations.

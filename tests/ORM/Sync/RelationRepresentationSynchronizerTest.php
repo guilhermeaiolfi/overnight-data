@@ -22,11 +22,11 @@ use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\TrackedRepresentation;
 use ON\Data\ORM\State\TrackedRepresentationMap;
-use ON\Data\ORM\Sync\RelationGraphSynchronizer;
+use ON\Data\ORM\Sync\RelationRepresentationSynchronizer;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
-final class RelationGraphSynchronizerTest extends TestCase
+final class RelationRepresentationSynchronizerTest extends TestCase
 {
 	public function testReturnsEmptyListWhenNoTrackedRepresentationsExist(): void
 	{
@@ -369,7 +369,7 @@ final class RelationGraphSynchronizerTest extends TestCase
 		self::assertSame([$item], $touched[0]->getAdded());
 	}
 
-	public function testSynchronizerDoesNotAutoAdoptChildObjects(): void
+	public function testRelationSynchronizerDoesNotAutoAdoptChildObjects(): void
 	{
 		$item = new stdClass();
 		$representations = $this->trackedMap($this->trackedWithRelation(RecordState::new($this->users()), ['posts' => [$item]]));
@@ -380,15 +380,14 @@ final class RelationGraphSynchronizerTest extends TestCase
 		self::assertSame([$item], $touched[0]->getAdded());
 	}
 
-	public function testSynchronizerDoesNotExecuteCommandsOrCallRelationPersistencePlanners(): void
+	public function testRelationSynchronizerDoesNotExecuteCommandsOrCallRelationPersistencePlanners(): void
 	{
-		$source = file_get_contents(__DIR__ . '/../../../src/ORM/Sync/RelationGraphSynchronizer.php');
+		$source = file_get_contents(__DIR__ . '/../../../src/ORM/Sync/RelationRepresentationSynchronizer.php');
 
 		self::assertIsString($source);
 		self::assertStringNotContainsString('CommandExecutor', $source);
 		self::assertStringNotContainsString('CommandInterface', $source);
 		self::assertStringNotContainsString('RelationPersistencePlanner', $source);
-		self::assertStringNotContainsString('RelationPersistenceSynchronizer', $source);
 	}
 
 	/**
@@ -493,9 +492,9 @@ final class RelationGraphSynchronizerTest extends TestCase
 		return $representation;
 	}
 
-	private function synchronizer(): RelationGraphSynchronizer
+	private function synchronizer(): RelationRepresentationSynchronizer
 	{
-		return new RelationGraphSynchronizer();
+		return new RelationRepresentationSynchronizer();
 	}
 
 	/**

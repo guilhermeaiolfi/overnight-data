@@ -10,7 +10,7 @@ use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\TrackedRepresentation;
 use ON\Data\ORM\State\TrackedRepresentationMap;
 
-final class RepresentationSynchronizer
+final class ScalarRepresentationSynchronizer
 {
 	private RepresentationValueReader $reader;
 	private SyncConflictDetector $conflicts;

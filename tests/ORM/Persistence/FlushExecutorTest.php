@@ -202,7 +202,7 @@ final class FlushExecutorTest extends TestCase
 		self::assertSame(['after'], RecordingRelationPersistencePlanner::$observedOwnerValues);
 	}
 
-	public function testRelationGraphSyncRunsAfterScalarRepresentationSyncAndBeforeRelationPersistencePlanning(): void
+	public function testRelationRepresentationSyncRunsAfterScalarRepresentationSyncAndBeforeRelationPersistencePlanning(): void
 	{
 		$users = $this->usersWithPosts();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'before']);
@@ -216,7 +216,7 @@ final class FlushExecutorTest extends TestCase
 		self::assertSame([$item], RecordingRelationPersistencePlanner::$collections[0]->getAdded());
 	}
 
-	public function testRelationGraphSyncCanCreateRelatedCollectionThatIsPlannedByRelationPersistenceSynchronizer(): void
+	public function testRelationRepresentationSyncCanCreateRelatedCollectionThatIsPlannedByRelationPersistencePlanner(): void
 	{
 		$users = $this->usersWithPosts();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
@@ -235,7 +235,7 @@ final class FlushExecutorTest extends TestCase
 		self::assertFalse($collection->hasChanges());
 	}
 
-	public function testReferencesArePassedThroughGraphSyncAndRelationPersistenceSync(): void
+	public function testReferencesArePassedThroughRelationRepresentationSyncAndRelationPersistencePlanning(): void
 	{
 		$users = $this->usersWithProfile();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
@@ -256,7 +256,7 @@ final class FlushExecutorTest extends TestCase
 		self::assertFalse($reference->hasChanges());
 	}
 
-	public function testRelationGraphSyncExceptionPreventsScalarRecordFlush(): void
+	public function testRelationRepresentationSyncExceptionPreventsScalarRecordFlush(): void
 	{
 		$users = $this->usersWithPosts();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'before']);
@@ -276,7 +276,7 @@ final class FlushExecutorTest extends TestCase
 		}
 	}
 
-	public function testRelationChangesInferredByGraphSyncAreClearedOnlyAfterSuccessfulFlush(): void
+	public function testRelationChangesInferredByRelationRepresentationSyncAreClearedOnlyAfterSuccessfulFlush(): void
 	{
 		RecordingRelationPersistencePlanner::$addCommand = true;
 		$users = $this->usersWithPosts();
@@ -389,7 +389,7 @@ final class FlushExecutorTest extends TestCase
 		}
 	}
 
-	public function testReferenceChangesAreNotClearedIfGraphSyncThrows(): void
+	public function testReferenceChangesAreNotClearedIfRelationRepresentationSyncThrows(): void
 	{
 		$users = $this->usersWithProfile();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'before']);

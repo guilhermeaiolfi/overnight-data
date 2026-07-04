@@ -13,7 +13,7 @@ use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\TrackedRepresentationMap;
 
-final class RelationGraphSynchronizer
+final class RelationRepresentationSynchronizer
 {
 	private RepresentationValueReader $reader;
 

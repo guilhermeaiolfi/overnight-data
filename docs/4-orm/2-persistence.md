@@ -1,14 +1,16 @@
-# ORM Scalar Persistence
+# ORM Persistence
 
-The current ORM persistence layer writes scalar record fields. It is intentionally small: representations synchronize into `RecordState`, dirty/new/removed records become neutral commands, and an adapter executes those commands against a backend.
+The current ORM persistence layer writes scalar record fields and plans configured relation changes. It is intentionally small: representations synchronize into `RecordState` and relation state, dirty/new/removed records become neutral commands, configured relation planners can mutate scalar record state or add commands, and an adapter executes those commands against a backend.
 
-It is not a full entity manager, unit of work, relation write planner, or transaction coordinator.
+It is not a full entity manager, unit of work, automatic relation cascade writer, or transaction coordinator.
 
 ## Flow
 
 ```text
 representation object
-  -> RepresentationSynchronizer
+  -> ScalarRepresentationSynchronizer
+  -> RelationRepresentationSynchronizer
+  -> RelationPersistencePlanner
   -> RecordState
   -> CommandPlanner
   -> InsertCommand / UpdateCommand / DeleteCommand
@@ -17,15 +19,17 @@ representation object
   -> RecordFlusher syncs successful results back into RecordState
 ```
 
-`FlushExecutor` coordinates representation sync and record flushing. `Session` owns the in-memory `TrackedRepresentationMap` and `RecordStateMap` used by that flow.
+`FlushExecutor` coordinates the pipeline as scalar representation sync, relation representation sync, relation persistence planning, then record flushing. `Session` owns the in-memory `TrackedRepresentationMap` and `RecordStateMap` used by that flow.
 
 ## State And Sync
 
 `RecordState` is the persistence source of truth. It stores canonical PHP values keyed by collection field name, the original clean snapshot, lifecycle state, and identity through `ON\Data\Key`.
 
-Representations are user-facing objects or values. A tracked representation can drift from its record state until synchronization happens. `RepresentationSynchronizer` applies planned representation field updates into `RecordState` while preserving the conflict rules from the ORM foundation: a representation based on a stale record revision cannot silently overwrite a newer record value.
+Representations are user-facing objects or values. A tracked representation can drift from its record state until synchronization happens. `ScalarRepresentationSynchronizer` reads field bindings only and applies planned representation field updates into `RecordState` while preserving the conflict rules from the ORM foundation: a representation based on a stale record revision cannot silently overwrite a newer record value.
 
-The synchronizer only writes scalar field values into known record states. Relation collection mutations are tracked separately as intent and are not planned as database writes yet.
+`RelationRepresentationSynchronizer` reads relation bindings only. It projects current representation relation values into `RelatedCollection` and `RelatedReference` runtime state; it does not write scalar fields, execute commands, or adopt child objects.
+
+`RelationPersistencePlanner` consumes changed `RelatedCollection` and `RelatedReference` instances. It resolves each relation's configured `RelationPersistencePlannerInterface`, lets that planner mutate scalar `RecordState` values and/or add commands, and returns the planned relation changes plus commands for `FlushExecutor` to finish.
 
 ## Commands
 
@@ -108,13 +112,15 @@ $session->flush();
 $generatedId = $record->getValue('id');
 ```
 
-Generated ids are currently supported only for simple auto-increment primary keys. Relation writes are not planned by this scalar flush, and transactions are not orchestrated yet. Physical table and column mapping happens in `CycleCommandExecutor` using collection and field metadata.
+Generated ids are currently supported only for simple auto-increment primary keys. Relation persistence planning is limited to configured planners that produce scalar mutations and/or commands; transactions are not orchestrated yet. Physical table and column mapping happens in `CycleCommandExecutor` using collection and field metadata.
 
 ## Public Runtime
 
 `FlushExecutor` is the low-level orchestration service for a flush cycle. It:
 
-- synchronizes tracked representations into records
+- synchronizes scalar representation fields into records
+- synchronizes representation relation values into relation runtime state
+- plans configured relation persistence changes into scalar mutations and/or commands
 - flushes changed records through `RecordFlusher`
 - returns `FlushResult` with sync plans and command results
 
@@ -124,13 +130,12 @@ This is deliberately not an `EntityManager`. There is no repository API, object 
 
 ## Current Limits
 
-- Scalar insert/update/delete only.
-- No relation write planning.
+- Scalar insert/update/delete plus configured relation persistence planning only.
+- No automatic relation cascade writes.
 - No transaction orchestration.
 - No optimistic locking, stale-row detection, or affected-row conflict handling.
 - No lazy loading.
 - No repositories, `EntityManager`, `UnitOfWork`, lifecycle events, proxies, or generated model layer.
 - No full database-default refresh beyond simple auto-increment primary keys.
 - No batch command execution.
-- No automatic relation cascade writes.
 - No public SQL command API.

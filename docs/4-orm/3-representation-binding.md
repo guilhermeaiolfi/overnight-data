@@ -46,7 +46,7 @@ It is the persistence provenance graph for one representation shape. It can be u
 - expression bindings
 - relation bindings
 
-A path can exist in only one of those maps. Scalar sync currently reads only field bindings. Expression and relation bindings are modeled now so later work can reason about them without changing the shape of `RepresentationBinding`.
+A path can exist in only one of those maps. Scalar representation sync reads only field bindings. Relation representation sync reads only relation bindings. Expression bindings are modeled now so later work can reason about them without changing the shape of `RepresentationBinding`.
 
 ### TrackedRepresentation
 
@@ -60,11 +60,11 @@ It stores:
 
 It is not a binding template. Multiple object instances may share the same reusable representation binding shape, while each tracked representation stores instance-specific baseline revisions.
 
-### RelatedCollection / Future RelatedReference
+### RelatedCollection / RelatedReference
 
-`RelatedCollection` is runtime relation state for one owner object. It tracks known, added, and removed collection items plus the collection load state. A future `RelatedReference` should do the same kind of job for singular runtime relations.
+`RelatedCollection` is runtime relation state for one owner object. It tracks known, added, and removed collection items plus the collection load state. `RelatedReference` is the singular-relation runtime state and tracks the current target plus local change intent.
 
-Runtime relation state is not representation shape. A `RepresentationRelationBinding` says that a representation path is a relation and stores the reusable related binding branch. A `RelatedCollection` says what one owner currently knows and intends to add or remove at runtime.
+Runtime relation state is not representation shape. A `RepresentationRelationBinding` says that a representation path is a relation and stores the reusable related binding branch. A `RelatedCollection` or `RelatedReference` says what one owner currently knows and intends to add, remove, or set at runtime.
 
 ## Binding Kinds
 
@@ -144,9 +144,9 @@ Use `getRelatedBinding()` for both cardinalities. Do not introduce separate `get
 
 It does not recursively apply related bindings. It does not infer relations from objects. It does not adopt child objects. It does not plan relation persistence.
 
-## Current Scalar Sync Boundary
+## Current Sync Boundaries
 
-Scalar sync uses field bindings only:
+Scalar representation sync uses field bindings only:
 
 ```text
 RepresentationValueReader -> getFields()
@@ -154,13 +154,20 @@ SyncConflictDetector      -> getWritableFieldBindings()
 SyncPlanner               -> getWritableFieldBindings()
 ```
 
-Expression bindings and relation bindings are ignored by scalar sync for now. They should survive on the binding model as provenance for later tasks.
+Relation representation sync uses relation bindings only:
+
+```text
+RepresentationValueReader         -> getRelations()
+RelationRepresentationSynchronizer -> RelatedCollection / RelatedReference
+```
+
+Expression bindings are ignored by both synchronizers for now. They should survive on the binding model as provenance for later tasks.
 
 ## Non-Goals
 
 The recursive binding model does not implement:
 
-- relation graph sync
+- automatic relation graph inference
 - automatic child adoption
 - relation inference from developer objects
 - `BelongsTo` or `HasOne` persistence planners

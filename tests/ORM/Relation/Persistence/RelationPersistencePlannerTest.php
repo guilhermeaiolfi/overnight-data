@@ -9,7 +9,7 @@ use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\InsertCommand;
-use ON\Data\ORM\Relation\Persistence\RelationPersistenceSynchronizer;
+use ON\Data\ORM\Relation\Persistence\RelationPersistencePlanner;
 use ON\Data\ORM\Relation\RelatedCollection;
 use ON\Data\ORM\Relation\RelatedCollectionMap;
 use ON\Data\ORM\Relation\RelatedReference;
@@ -27,7 +27,7 @@ use Tests\ON\Data\Fixture\CustomRelation;
 use Tests\ON\Data\Support\Relation\RecordingRelationPersistencePlanner;
 use Tests\ON\Data\Support\Relation\TestCommand;
 
-final class RelationPersistenceSynchronizerTest extends TestCase
+final class RelationPersistencePlannerTest extends TestCase
 {
 	protected function setUp(): void
 	{
@@ -36,7 +36,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 
 	public function testNoChangedRelationsReturnsEmptyResult(): void
 	{
-		$result = (new RelationPersistenceSynchronizer())->sync(
+		$result = (new RelationPersistencePlanner())->plan(
 			new RelatedCollectionMap(),
 			new RelatedReferenceMap(),
 			new RecordStateMap(),
@@ -58,7 +58,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('no configured persistence planner');
 
-		(new RelationPersistenceSynchronizer())->sync($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
+		(new RelationPersistencePlanner())->plan($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
 	}
 
 	public function testChangedRelationWithMissingDefinitionThrows(): void
@@ -71,7 +71,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('no relation definition');
 
-		(new RelationPersistenceSynchronizer())->sync($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
+		(new RelationPersistencePlanner())->plan($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
 	}
 
 	public function testChangedRelationWithPlannerInvokesPlannerWithContextRelationAndCollection(): void
@@ -87,7 +87,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 
 		$references = new RelatedReferenceMap();
 
-		$result = (new RelationPersistenceSynchronizer())->sync($relations, $references, $records, $representations);
+		$result = (new RelationPersistencePlanner())->plan($relations, $references, $records, $representations);
 
 		self::assertSame(1, RecordingRelationPersistencePlanner::$calls);
 		self::assertSame($collection, RecordingRelationPersistencePlanner::$collections[0]);
@@ -108,7 +108,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$relations = new RelatedCollectionMap();
 		$relations->add($this->changedRelatedCollection(RecordState::new($users)));
 
-		$result = (new RelationPersistenceSynchronizer())->sync($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
+		$result = (new RelationPersistencePlanner())->plan($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
 
 		self::assertCount(1, $result->getCommands());
 		self::assertInstanceOf(TestCommand::class, $result->getCommands()[0]);
@@ -123,7 +123,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$references = new RelatedReferenceMap();
 		$references->add($reference);
 
-		$result = (new RelationPersistenceSynchronizer())->sync(
+		$result = (new RelationPersistencePlanner())->plan(
 			new RelatedCollectionMap(),
 			$references,
 			new RecordStateMap(),
@@ -147,7 +147,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$references = new RelatedReferenceMap();
 		$references->add($reference);
 
-		$result = (new RelationPersistenceSynchronizer())->sync($relations, $references, new RecordStateMap(), new TrackedRepresentationMap());
+		$result = (new RelationPersistencePlanner())->plan($relations, $references, new RecordStateMap(), new TrackedRepresentationMap());
 
 		self::assertSame([$collection, $reference], $result->getChanges());
 		self::assertSame([$collection, $reference], RecordingRelationPersistencePlanner::$changes);
@@ -162,7 +162,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$references = new RelatedReferenceMap();
 		$references->add($reference);
 
-		$result = (new RelationPersistenceSynchronizer())->sync(
+		$result = (new RelationPersistencePlanner())->plan(
 			new RelatedCollectionMap(),
 			$references,
 			new RecordStateMap(),
@@ -184,7 +184,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$relations = new RelatedCollectionMap();
 		$relations->add($collection);
 
-		$result = (new RelationPersistenceSynchronizer())->sync(
+		$result = (new RelationPersistencePlanner())->plan(
 			$relations,
 			new RelatedReferenceMap(),
 			$this->records($owner, $target),
@@ -212,7 +212,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$relations = new RelatedCollectionMap();
 		$relations->add($collection);
 
-		$result = (new RelationPersistenceSynchronizer())->sync(
+		$result = (new RelationPersistencePlanner())->plan(
 			$relations,
 			new RelatedReferenceMap(),
 			$this->records($owner, $child),
@@ -234,13 +234,13 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$relations = new RelatedCollectionMap();
 		$relations->add($this->changedRelatedCollection($owner));
 
-		(new RelationPersistenceSynchronizer())->sync($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
+		(new RelationPersistencePlanner())->plan($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
 
 		self::assertSame('planned', $owner->getValue('name'));
 		self::assertTrue($owner->isDirty());
 	}
 
-	public function testSynchronizerDoesNotClearRelatedCollectionChanges(): void
+	public function testPlannerDoesNotClearRelatedCollectionChanges(): void
 	{
 		$registry = $this->registryWithRelation(RecordingRelationPersistencePlanner::class);
 		$users = $registry->getCollection('users');
@@ -249,12 +249,12 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$relations = new RelatedCollectionMap();
 		$relations->add($collection);
 
-		(new RelationPersistenceSynchronizer())->sync($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
+		(new RelationPersistencePlanner())->plan($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
 
 		self::assertTrue($collection->hasChanges());
 	}
 
-	public function testSynchronizerDoesNotExecuteCommands(): void
+	public function testPlannerDoesNotExecuteCommands(): void
 	{
 		RecordingRelationPersistencePlanner::$addCommand = true;
 		$registry = $this->registryWithRelation(RecordingRelationPersistencePlanner::class);
@@ -263,15 +263,15 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		$relations = new RelatedCollectionMap();
 		$relations->add($this->changedRelatedCollection(RecordState::new($users)));
 
-		$result = (new RelationPersistenceSynchronizer())->sync($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
+		$result = (new RelationPersistencePlanner())->plan($relations, new RelatedReferenceMap(), new RecordStateMap(), new TrackedRepresentationMap());
 
 		self::assertCount(1, $result->getCommands());
 		self::assertSame(1, RecordingRelationPersistencePlanner::$calls);
 	}
 
-	public function testSynchronizerSourceStaysRelationGeneric(): void
+	public function testPlannerSourceStaysRelationGeneric(): void
 	{
-		$source = file_get_contents(__DIR__ . '/../../../../src/ORM/Relation/Persistence/RelationPersistenceSynchronizer.php');
+		$source = file_get_contents(__DIR__ . '/../../../../src/ORM/Relation/Persistence/RelationPersistencePlanner.php');
 
 		self::assertIsString($source);
 		self::assertStringNotContainsString('M2MRelation', $source);

@@ -16,9 +16,9 @@ use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\TrackedRepresentationMap;
 
-final class RelationPersistenceSynchronizer
+final class RelationPersistencePlanner
 {
-	public function sync(
+	public function plan(
 		RelatedCollectionMap $relations,
 		RelatedReferenceMap $references,
 		RecordStateMap $records,
