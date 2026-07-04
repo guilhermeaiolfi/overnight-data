@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Persistence;
 
+use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\DeleteCommand;
@@ -16,16 +18,20 @@ final class CommandTest extends TestCase
 {
 	public function testInsertCommandStoresCollectionNameAndValues(): void
 	{
-		$command = new InsertCommand('users', ['id' => 10, 'name' => 'Ada']);
+		$users = $this->users();
+		$command = new InsertCommand($users, ['id' => 10, 'name' => 'Ada']);
 
+		self::assertSame($users, $command->getCollection());
 		self::assertSame('users', $command->getCollectionName());
 		self::assertSame(['id' => 10, 'name' => 'Ada'], $command->getValues());
 	}
 
 	public function testUpdateCommandStoresCollectionNameIdentityAndChanges(): void
 	{
-		$command = new UpdateCommand('users', ['tenant_id' => 5, 'id' => 10], ['name' => 'Ada']);
+		$users = $this->users();
+		$command = new UpdateCommand($users, ['tenant_id' => 5, 'id' => 10], ['name' => 'Ada']);
 
+		self::assertSame($users, $command->getCollection());
 		self::assertSame('users', $command->getCollectionName());
 		self::assertSame(['tenant_id' => 5, 'id' => 10], $command->getIdentity());
 		self::assertSame(['name' => 'Ada'], $command->getChanges());
@@ -35,27 +41,29 @@ final class CommandTest extends TestCase
 	{
 		$this->expectException(InvalidCommandException::class);
 
-		new UpdateCommand('users', [], ['name' => 'Ada']);
+		new UpdateCommand($this->users(), [], ['name' => 'Ada']);
 	}
 
 	public function testUpdateCommandRejectsEmptyChanges(): void
 	{
 		$this->expectException(InvalidCommandException::class);
 
-		new UpdateCommand('users', ['id' => 10], []);
+		new UpdateCommand($this->users(), ['id' => 10], []);
 	}
 
 	public function testUpdateCommandRejectsChangesThatIncludeIdentityFields(): void
 	{
 		$this->expectException(InvalidCommandException::class);
 
-		new UpdateCommand('users', ['tenant_id' => 5, 'id' => 10], ['id' => 11, 'name' => 'Ada']);
+		new UpdateCommand($this->users(), ['tenant_id' => 5, 'id' => 10], ['id' => 11, 'name' => 'Ada']);
 	}
 
 	public function testDeleteCommandStoresCollectionNameAndIdentity(): void
 	{
-		$command = new DeleteCommand('users', ['tenant_id' => 5, 'id' => 10]);
+		$users = $this->users();
+		$command = new DeleteCommand($users, ['tenant_id' => 5, 'id' => 10]);
 
+		self::assertSame($users, $command->getCollection());
 		self::assertSame('users', $command->getCollectionName());
 		self::assertSame(['tenant_id' => 5, 'id' => 10], $command->getIdentity());
 	}
@@ -64,7 +72,7 @@ final class CommandTest extends TestCase
 	{
 		$this->expectException(InvalidCommandException::class);
 
-		new DeleteCommand('users', []);
+		new DeleteCommand($this->users(), []);
 	}
 
 	public function testCommandResultStoresAffectedRowsAndGeneratedValues(): void
@@ -84,8 +92,9 @@ final class CommandTest extends TestCase
 
 	public function testRecordingCommandExecutorRecordsCommandOrder(): void
 	{
-		$first = new InsertCommand('users', ['id' => 10]);
-		$second = new DeleteCommand('users', ['id' => 10]);
+		$users = $this->users();
+		$first = new InsertCommand($users, ['id' => 10]);
+		$second = new DeleteCommand($users, ['id' => 10]);
 		$result = new CommandResult(2, ['version' => 3]);
 		$executor = new RecordingCommandExecutor($result);
 
@@ -96,5 +105,15 @@ final class CommandTest extends TestCase
 		$executor->clear();
 
 		self::assertSame([], $executor->getCommands());
+	}
+
+	private function users(): CollectionInterface
+	{
+		return (new Registry())
+			->collection('users')
+			->primaryKey('id')
+			->field('tenant_id', 'int')->end()
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
 	}
 }

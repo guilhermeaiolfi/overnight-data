@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Persistence;
 
+use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\InvalidCommandException;
 
 final class UpdateCommand implements CommandInterface
@@ -13,7 +14,7 @@ final class UpdateCommand implements CommandInterface
 	 * @param array<string, mixed> $changes
 	 */
 	public function __construct(
-		private string $collectionName,
+		private CollectionInterface $collection,
 		private array $identity,
 		private array $changes,
 	) {
@@ -35,9 +36,14 @@ final class UpdateCommand implements CommandInterface
 		}
 	}
 
+	public function getCollection(): CollectionInterface
+	{
+		return $this->collection;
+	}
+
 	public function getCollectionName(): string
 	{
-		return $this->collectionName;
+		return $this->collection->getName();
 	}
 
 	/**

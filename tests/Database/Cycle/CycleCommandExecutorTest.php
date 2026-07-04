@@ -10,6 +10,8 @@ use Cycle\Database\Config\SQLiteDriverConfig;
 use Cycle\Database\DatabaseInterface;
 use Cycle\Database\DatabaseManager;
 use ON\Data\Database\Cycle\CycleCommandExecutor;
+use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
@@ -34,6 +36,10 @@ final class CycleCommandExecutorTest extends TestCase
 
 	private ?CycleCommandExecutor $executor = null;
 
+	private ?CollectionInterface $users = null;
+
+	private ?CollectionInterface $memberships = null;
+
 	protected function setUp(): void
 	{
 		$this->databasePath = tempnam(sys_get_temp_dir(), 'ondata-cycle-write-');
@@ -56,6 +62,8 @@ final class CycleCommandExecutorTest extends TestCase
 
 		$this->database = $manager->database('default');
 		$this->executor = new CycleCommandExecutor($this->database);
+		$this->users = $this->makeUsers();
+		$this->memberships = $this->makeMemberships();
 	}
 
 	protected function tearDown(): void
@@ -63,6 +71,8 @@ final class CycleCommandExecutorTest extends TestCase
 		$this->executor = null;
 		$this->database = null;
 		$this->pdo = null;
+		$this->users = null;
+		$this->memberships = null;
 		gc_collect_cycles();
 
 		if (is_file($this->databasePath)) {
@@ -70,9 +80,9 @@ final class CycleCommandExecutorTest extends TestCase
 		}
 	}
 
-	public function testInsertCommandInsertsRowAndReturnsEmptyGeneratedValues(): void
+	public function testInsertCommandUsesCollectionTableAndMapsFieldNamesToColumns(): void
 	{
-		$result = $this->executor->execute(new InsertCommand('users', [
+		$result = $this->executor->execute(new InsertCommand($this->users(), [
 			'id' => 3,
 			'name' => 'Linus',
 			'email' => 'linus@example.test',
@@ -87,22 +97,38 @@ final class CycleCommandExecutorTest extends TestCase
 		);
 	}
 
-	public function testUpdateCommandUpdatesRowBySingleColumnIdentity(): void
+	public function testUpdateCommandUsesCollectionTableAndMapsChangedFieldsToColumns(): void
 	{
-		$result = $this->executor->execute(new UpdateCommand('users', ['id' => 1], [
+		$result = $this->executor->execute(new UpdateCommand($this->users(), ['id' => 1], [
 			'name' => 'Ada Lovelace',
+			'email' => 'ada@lovelace.test',
 		]));
 
 		self::assertInstanceOf(CommandResult::class, $result);
 		self::assertSame(1, $result->getAffectedRows());
-		self::assertSame('Ada Lovelace', $this->fetchUser(1)['name']);
+		self::assertSame(
+			['name' => 'Ada Lovelace', 'email' => 'ada@lovelace.test'],
+			$this->fetchUser(1),
+		);
 	}
 
-	public function testUpdateCommandUpdatesRowByCompositeIdentity(): void
+	public function testUpdateCommandMapsSingleIdentityFieldToPrimaryKeyColumn(): void
 	{
-		$result = $this->executor->execute(new UpdateCommand('memberships', [
-			'tenant_id' => 1,
-			'user_id' => 10,
+		$result = $this->executor->execute(new UpdateCommand($this->users(), ['id' => 2], [
+			'name' => 'Grace Hopper',
+		]));
+
+		self::assertInstanceOf(CommandResult::class, $result);
+		self::assertSame(1, $result->getAffectedRows());
+		self::assertSame('Grace Hopper', $this->fetchUser(2)['name']);
+		self::assertSame('Ada', $this->fetchUser(1)['name']);
+	}
+
+	public function testUpdateCommandMapsCompositeIdentityFieldsToCustomPrimaryKeyColumns(): void
+	{
+		$result = $this->executor->execute(new UpdateCommand($this->memberships(), [
+			'tenantId' => 1,
+			'userId' => 10,
 		], [
 			'role' => 'owner',
 		]));
@@ -113,9 +139,9 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertSame('viewer', $this->fetchMembershipRole(2, 10));
 	}
 
-	public function testDeleteCommandDeletesRowBySingleColumnIdentity(): void
+	public function testDeleteCommandMapsSingleIdentityFieldToPrimaryKeyColumn(): void
 	{
-		$result = $this->executor->execute(new DeleteCommand('users', ['id' => 2]));
+		$result = $this->executor->execute(new DeleteCommand($this->users(), ['id' => 2]));
 
 		self::assertInstanceOf(CommandResult::class, $result);
 		self::assertSame(1, $result->getAffectedRows());
@@ -123,11 +149,11 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertNotNull($this->fetchUser(1));
 	}
 
-	public function testDeleteCommandDeletesRowByCompositeIdentity(): void
+	public function testDeleteCommandMapsCompositeIdentityFieldsToCustomPrimaryKeyColumns(): void
 	{
-		$result = $this->executor->execute(new DeleteCommand('memberships', [
-			'tenant_id' => 2,
-			'user_id' => 10,
+		$result = $this->executor->execute(new DeleteCommand($this->memberships(), [
+			'tenantId' => 2,
+			'userId' => 10,
 		]));
 
 		self::assertInstanceOf(CommandResult::class, $result);
@@ -136,12 +162,55 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertSame('admin', $this->fetchMembershipRole(1, 10));
 	}
 
+	public function testUnknownInsertFieldThrows(): void
+	{
+		$this->expectException(InvalidCommandException::class);
+		$this->expectExceptionMessage("collection 'users'");
+		$this->expectExceptionMessage("field 'unknown'");
+
+		$this->executor->execute(new InsertCommand($this->users(), [
+			'id' => 3,
+			'unknown' => 'value',
+		]));
+	}
+
+	public function testUnknownUpdateChangeFieldThrows(): void
+	{
+		$this->expectException(InvalidCommandException::class);
+		$this->expectExceptionMessage("collection 'users'");
+		$this->expectExceptionMessage("field 'unknown'");
+
+		$this->executor->execute(new UpdateCommand($this->users(), ['id' => 1], [
+			'unknown' => 'value',
+		]));
+	}
+
+	public function testUnknownIdentityFieldThrows(): void
+	{
+		$this->expectException(InvalidCommandException::class);
+		$this->expectExceptionMessage("collection 'users'");
+		$this->expectExceptionMessage("field 'unknown'");
+
+		$this->executor->execute(new DeleteCommand($this->users(), ['unknown' => 1]));
+	}
+
 	public function testUnsupportedCommandImplementationThrows(): void
 	{
-		$command = new class () implements CommandInterface {
+		$users = $this->users();
+		$command = new class ($users) implements CommandInterface {
+			public function __construct(
+				private readonly CollectionInterface $collection,
+			) {
+			}
+
+			public function getCollection(): CollectionInterface
+			{
+				return $this->collection;
+			}
+
 			public function getCollectionName(): string
 			{
-				return 'users';
+				return $this->collection->getName();
 			}
 		};
 
@@ -183,7 +252,7 @@ final class CycleCommandExecutorTest extends TestCase
 	 */
 	private function fetchUser(int $id): ?array
 	{
-		$statement = $this->pdo->prepare('SELECT name, email FROM users WHERE id = ?');
+		$statement = $this->pdo->prepare('SELECT full_name AS name, email_address AS email FROM app_users WHERE user_id = ?');
 		$statement->execute([$id]);
 		$row = $statement->fetch(PDO::FETCH_ASSOC);
 
@@ -192,7 +261,7 @@ final class CycleCommandExecutorTest extends TestCase
 
 	private function fetchMembershipRole(int $tenantId, int $userId): ?string
 	{
-		$statement = $this->pdo->prepare('SELECT role FROM memberships WHERE tenant_id = ? AND user_id = ?');
+		$statement = $this->pdo->prepare('SELECT role_name FROM app_memberships WHERE tenant_key = ? AND member_key = ?');
 		$statement->execute([$tenantId, $userId]);
 		$role = $statement->fetchColumn();
 
@@ -209,16 +278,52 @@ final class CycleCommandExecutorTest extends TestCase
 		return (string) file_get_contents($fileName);
 	}
 
+	private function users(): CollectionInterface
+	{
+		self::assertInstanceOf(CollectionInterface::class, $this->users);
+
+		return $this->users;
+	}
+
+	private function memberships(): CollectionInterface
+	{
+		self::assertInstanceOf(CollectionInterface::class, $this->memberships);
+
+		return $this->memberships;
+	}
+
+	private function makeUsers(): CollectionInterface
+	{
+		return (new Registry())
+			->collection('users')
+			->table('app_users')
+			->primaryKey('id')
+			->field('id', 'int')->column('user_id')->end()
+			->field('name', 'string')->column('full_name')->end()
+			->field('email', 'string')->column('email_address')->end();
+	}
+
+	private function makeMemberships(): CollectionInterface
+	{
+		return (new Registry())
+			->collection('memberships')
+			->table('app_memberships')
+			->primaryKey('tenantId', 'userId')
+			->field('tenantId', 'int')->column('tenant_key')->end()
+			->field('userId', 'int')->column('member_key')->end()
+			->field('role', 'string')->column('role_name')->end();
+	}
+
 	private function seedDatabase(PDO $pdo): void
 	{
-		$pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)');
-		$pdo->exec('CREATE TABLE memberships (tenant_id INTEGER, user_id INTEGER, role TEXT, PRIMARY KEY (tenant_id, user_id))');
+		$pdo->exec('CREATE TABLE app_users (user_id INTEGER PRIMARY KEY, full_name TEXT, email_address TEXT)');
+		$pdo->exec('CREATE TABLE app_memberships (tenant_key INTEGER, member_key INTEGER, role_name TEXT, PRIMARY KEY (tenant_key, member_key))');
 
-		$users = $pdo->prepare('INSERT INTO users (id, name, email) VALUES (?, ?, ?)');
+		$users = $pdo->prepare('INSERT INTO app_users (user_id, full_name, email_address) VALUES (?, ?, ?)');
 		$users->execute([1, 'Ada', 'ada@example.test']);
 		$users->execute([2, 'Grace', 'grace@example.test']);
 
-		$memberships = $pdo->prepare('INSERT INTO memberships (tenant_id, user_id, role) VALUES (?, ?, ?)');
+		$memberships = $pdo->prepare('INSERT INTO app_memberships (tenant_key, member_key, role_name) VALUES (?, ?, ?)');
 		$memberships->execute([1, 10, 'admin']);
 		$memberships->execute([2, 10, 'viewer']);
 	}

@@ -12,7 +12,7 @@ final class CommandPlanner
 	public function plan(RecordState $record): ?CommandInterface
 	{
 		if ($record->isNew()) {
-			return new InsertCommand($record->getCollectionName(), $record->getValues());
+			return new InsertCommand($record->getCollection(), $record->getValues());
 		}
 
 		if ($record->isClean()) {
@@ -28,7 +28,7 @@ final class CommandPlanner
 
 			return $key === null
 				? null
-				: new DeleteCommand($record->getCollectionName(), $key->getValues());
+				: new DeleteCommand($record->getCollection(), $key->getValues());
 		}
 
 		return null;
@@ -50,6 +50,6 @@ final class CommandPlanner
 			));
 		}
 
-		return new UpdateCommand($record->getCollectionName(), $key->getValues(), $changes);
+		return new UpdateCommand($record->getCollection(), $key->getValues(), $changes);
 	}
 }

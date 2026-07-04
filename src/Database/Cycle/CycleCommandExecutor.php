@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Database\Cycle;
 
 use Cycle\Database\DatabaseInterface;
+use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
@@ -36,8 +37,8 @@ final class CycleCommandExecutor implements CommandExecutorInterface
 	private function insert(InsertCommand $command): CommandResult
 	{
 		$this->database
-			->insert($command->getCollectionName())
-			->values($command->getValues())
+			->insert($this->getTable($command))
+			->values($this->mapFieldValuesToColumns($command->getCollection(), $command->getValues()))
 			->run();
 
 		return new CommandResult(1);
@@ -45,12 +46,13 @@ final class CycleCommandExecutor implements CommandExecutorInterface
 
 	private function update(UpdateCommand $command): CommandResult
 	{
+		$collection = $command->getCollection();
 		$query = $this->database
-			->update($command->getCollectionName())
-			->values($command->getChanges());
+			->update($this->getTable($command))
+			->values($this->mapFieldValuesToColumns($collection, $command->getChanges()));
 
-		foreach ($command->getIdentity() as $field => $value) {
-			$query->where($field, $value);
+		foreach ($this->mapFieldValuesToColumns($collection, $command->getIdentity()) as $column => $value) {
+			$query->where($column, $value);
 		}
 
 		return new CommandResult($this->affectedRows($query->run()));
@@ -58,13 +60,47 @@ final class CycleCommandExecutor implements CommandExecutorInterface
 
 	private function delete(DeleteCommand $command): CommandResult
 	{
-		$query = $this->database->delete($command->getCollectionName());
+		$collection = $command->getCollection();
+		$query = $this->database->delete($this->getTable($command));
 
-		foreach ($command->getIdentity() as $field => $value) {
-			$query->where($field, $value);
+		foreach ($this->mapFieldValuesToColumns($collection, $command->getIdentity()) as $column => $value) {
+			$query->where($column, $value);
 		}
 
 		return new CommandResult($this->affectedRows($query->run()));
+	}
+
+	private function getTable(CommandInterface $command): string
+	{
+		return $command->getCollection()->getTable();
+	}
+
+	/**
+	 * @param array<string, mixed> $values
+	 * @return array<string, mixed>
+	 */
+	private function mapFieldValuesToColumns(CollectionInterface $collection, array $values): array
+	{
+		$mapped = [];
+		foreach ($values as $fieldName => $value) {
+			$mapped[$this->getColumnName($collection, (string) $fieldName)] = $value;
+		}
+
+		return $mapped;
+	}
+
+	private function getColumnName(CollectionInterface $collection, string $fieldName): string
+	{
+		$field = $collection->getField($fieldName);
+		if ($field === null) {
+			throw new InvalidCommandException(sprintf(
+				"Persistence command for collection '%s' contains unknown field '%s'.",
+				$collection->getName(),
+				$fieldName,
+			));
+		}
+
+		return $field->getColumn();
 	}
 
 	private function affectedRows(mixed $result): int

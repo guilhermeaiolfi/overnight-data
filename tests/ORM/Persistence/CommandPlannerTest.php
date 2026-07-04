@@ -16,13 +16,15 @@ use PHPUnit\Framework\TestCase;
 
 final class CommandPlannerTest extends TestCase
 {
-	public function testNewRecordBecomesInsertCommandWithCollectionNameAndValues(): void
+	public function testNewRecordBecomesInsertCommandWithCollectionAndValues(): void
 	{
-		$record = RecordState::new($this->users(), ['name' => 'Ada', 'email' => 'ada@example.test']);
+		$users = $this->users();
+		$record = RecordState::new($users, ['name' => 'Ada', 'email' => 'ada@example.test']);
 
 		$command = (new CommandPlanner())->plan($record);
 
 		self::assertInstanceOf(InsertCommand::class, $command);
+		self::assertSame($users, $command->getCollection());
 		self::assertSame('users', $command->getCollectionName());
 		self::assertSame(['name' => 'Ada', 'email' => 'ada@example.test'], $command->getValues());
 	}
@@ -44,6 +46,7 @@ final class CommandPlannerTest extends TestCase
 		$command = (new CommandPlanner())->plan($record);
 
 		self::assertInstanceOf(UpdateCommand::class, $command);
+		self::assertSame($users, $command->getCollection());
 		self::assertSame('users', $command->getCollectionName());
 		self::assertSame(['id' => 10], $command->getIdentity());
 		self::assertSame(['name' => 'Grace'], $command->getChanges());
@@ -61,6 +64,7 @@ final class CommandPlannerTest extends TestCase
 		$command = (new CommandPlanner())->plan($record);
 
 		self::assertInstanceOf(UpdateCommand::class, $command);
+		self::assertSame($memberships, $command->getCollection());
 		self::assertSame('memberships', $command->getCollectionName());
 		self::assertSame(['team_id' => 20, 'user_id' => 10], $command->getIdentity());
 		self::assertSame(['role' => 'owner'], $command->getChanges());
@@ -98,6 +102,7 @@ final class CommandPlannerTest extends TestCase
 		$command = (new CommandPlanner())->plan($record);
 
 		self::assertInstanceOf(DeleteCommand::class, $command);
+		self::assertSame($users, $command->getCollection());
 		self::assertSame('users', $command->getCollectionName());
 		self::assertSame(['id' => 10], $command->getIdentity());
 	}
