@@ -101,6 +101,29 @@ final class RecordStateMap
 		return null;
 	}
 
+	public function getFromRepresentation(TrackedRepresentation $tracked): ?RecordState
+	{
+		$state = null;
+		foreach ($tracked->getBinding()->getAll() as $binding) {
+			$resolved = $this->getForField($binding->getField());
+			if (! $resolved instanceof RecordState) {
+				continue;
+			}
+
+			if ($state === null) {
+				$state = $resolved;
+
+				continue;
+			}
+
+			if ($state !== $resolved) {
+				throw new StateException('Tracked representation cannot be collapsed to one record.');
+			}
+		}
+
+		return $state;
+	}
+
 	public function requireForField(RecordFieldRef $field): RecordState
 	{
 		$state = $this->getForField($field);

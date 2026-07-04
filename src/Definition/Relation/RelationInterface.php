@@ -10,6 +10,7 @@ use ON\Data\Definition\Display\DisplayInterface;
 use ON\Data\Definition\Display\RawDisplay;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Interface\InterfaceInterface;
+use ON\Data\ORM\Relation\Persistence\RelationPersistencePlannerInterface;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 
 interface RelationInterface
@@ -68,6 +69,13 @@ interface RelationInterface
 	 * @return class-string<LoaderInterface>
 	 */
 	public function getLoader(): string;
+
+	public function persistencePlanner(string $planner): self;
+
+	/**
+	 * @return class-string<RelationPersistencePlannerInterface>|null
+	 */
+	public function getPersistencePlanner(): ?string;
 
 	public function where(array $where): self;
 

@@ -21,6 +21,8 @@ use ON\Data\Query\Relation\Loader\M2MLoader;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Fixture\CustomRelation;
+use Tests\ON\Data\Support\Relation\NotAPlanner;
+use Tests\ON\Data\Support\Relation\RecordingRelationPersistencePlanner;
 
 final class RelationDefinitionTest extends TestCase
 {
@@ -273,6 +275,44 @@ final class RelationDefinitionTest extends TestCase
 		$this->expectExceptionMessage('loader must implement');
 
 		$relation->loader(stdClass::class);
+	}
+
+	public function testPersistencePlannerStoresValidPlannerClass(): void
+	{
+		$relation = (new Registry())->collection('users')->relation('posts', CustomRelation::class);
+
+		$result = $relation->persistencePlanner(RecordingRelationPersistencePlanner::class);
+
+		self::assertSame($relation, $result);
+		self::assertSame(RecordingRelationPersistencePlanner::class, $relation->getPersistencePlanner());
+	}
+
+	public function testPersistencePlannerReturnsNullByDefault(): void
+	{
+		$relation = (new Registry())->collection('users')->relation('posts', CustomRelation::class);
+
+		self::assertNull($relation->getPersistencePlanner());
+	}
+
+	public function testInvalidPersistencePlannerIsRejected(): void
+	{
+		$relation = (new Registry())->collection('users')->relation('posts', CustomRelation::class);
+
+		$this->expectException(InvalidArgumentException::class);
+		$this->expectExceptionMessage('persistence planner must implement');
+
+		$relation->persistencePlanner(NotAPlanner::class);
+	}
+
+	public function testLoaderConfigurationRemainsIndependentFromPersistencePlannerConfiguration(): void
+	{
+		$relation = (new Registry())->collection('users')->relation('posts', CustomRelation::class);
+
+		$relation->loader(HasManyLoader::class);
+		$relation->persistencePlanner(RecordingRelationPersistencePlanner::class);
+
+		self::assertSame(HasManyLoader::class, $relation->getLoader());
+		self::assertSame(RecordingRelationPersistencePlanner::class, $relation->getPersistencePlanner());
 	}
 
 	private function makeM2MRelation(): M2MRelation

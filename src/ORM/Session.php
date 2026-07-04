@@ -9,6 +9,8 @@ use ON\Data\Key;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\FlushExecutor;
 use ON\Data\ORM\Persistence\FlushResult;
+use ON\Data\ORM\Relation\RelatedCollection;
+use ON\Data\ORM\Relation\RelatedCollectionMap;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -20,6 +22,7 @@ final class Session
 {
 	private RecordStateMap $records;
 	private TrackedRepresentationMap $representations;
+	private RelatedCollectionMap $relations;
 	private RepresentationAdopter $adopter;
 	private FlushExecutor $flusher;
 
@@ -27,6 +30,7 @@ final class Session
 	{
 		$this->records = new RecordStateMap();
 		$this->representations = new TrackedRepresentationMap();
+		$this->relations = new RelatedCollectionMap();
 		$this->adopter = new RepresentationAdopter($this->records, $this->representations);
 		$this->flusher = $flusher ?? new FlushExecutor($executor);
 	}
@@ -39,6 +43,11 @@ final class Session
 	public function getRepresentations(): TrackedRepresentationMap
 	{
 		return $this->representations;
+	}
+
+	public function getRelations(): RelatedCollectionMap
+	{
+		return $this->relations;
 	}
 
 	public function trackRecord(RecordState $record): RecordState
@@ -78,8 +87,15 @@ final class Session
 		$record->markRemoved();
 	}
 
+	public function trackRelation(RelatedCollection $collection): RelatedCollection
+	{
+		$this->relations->add($collection);
+
+		return $collection;
+	}
+
 	public function flush(): FlushResult
 	{
-		return $this->flusher->flush($this->representations, $this->records);
+		return $this->flusher->flush($this->representations, $this->records, $this->relations);
 	}
 }

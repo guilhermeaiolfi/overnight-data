@@ -13,6 +13,7 @@ use ON\Data\Definition\Exception\InvalidRelationParentException;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Interface\InterfaceTrait;
 use ON\Data\Definition\MetadataTrait;
+use ON\Data\ORM\Relation\Persistence\RelationPersistencePlannerInterface;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Support\DefinitionNode;
 
@@ -37,6 +38,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 			'where' => [],
 			'orderBy' => [],
 			'loader' => null,
+			'persistencePlanner' => null,
 			'metadata' => [],
 		];
 	}
@@ -252,6 +254,39 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 				'Relation "%s" loader must implement %s.',
 				$this->getName(),
 				LoaderInterface::class,
+			));
+		}
+
+		return $value;
+	}
+
+	public function persistencePlanner(string $planner): self
+	{
+		if (! is_a($planner, RelationPersistencePlannerInterface::class, true)) {
+			throw new InvalidArgumentException(sprintf(
+				'Relation "%s" persistence planner must implement %s.',
+				$this->getName(),
+				RelationPersistencePlannerInterface::class,
+			));
+		}
+
+		$this->set('persistencePlanner', $planner);
+
+		return $this;
+	}
+
+	public function getPersistencePlanner(): ?string
+	{
+		$value = $this->get('persistencePlanner');
+		if ($value === null) {
+			return null;
+		}
+
+		if (! is_string($value) || $value === '' || ! is_a($value, RelationPersistencePlannerInterface::class, true)) {
+			throw new InvalidArgumentException(sprintf(
+				'Relation "%s" persistence planner must implement %s.',
+				$this->getName(),
+				RelationPersistencePlannerInterface::class,
 			));
 		}
 
