@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Relation;
 
+use ON\Data\ORM\Relation\Persistence\HasManyPersistencePlanner;
 use ON\Data\Query\Relation\Loader\HasManyLoader;
 
 class HasManyRelation extends AbstractRelation
@@ -12,6 +13,7 @@ class HasManyRelation extends AbstractRelation
 	{
 		return array_replace(parent::definitionDefaults(), [
 			'loader' => HasManyLoader::class,
+			'persistencePlanner' => HasManyPersistencePlanner::class,
 		]);
 	}
 

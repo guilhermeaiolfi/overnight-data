@@ -21,6 +21,7 @@ use ON\Data\ORM\State\TrackedRepresentation;
 use ON\Data\ORM\State\TrackedRepresentationMap;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\Fixture\CustomRelation;
 use Tests\ON\Data\Support\Relation\RecordingRelationPersistencePlanner;
 use Tests\ON\Data\Support\Relation\TestCommand;
 
@@ -45,7 +46,7 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 
 	public function testChangedRelationWithNoPlannerThrows(): void
 	{
-		$users = $this->registryWithRelation()->getCollection('users');
+		$users = $this->registryWithRelation(useCustomRelation: true)->getCollection('users');
 		self::assertInstanceOf(CollectionInterface::class, $users);
 		$collection = $this->changedRelatedCollection(RecordState::new($users));
 		$relations = new RelatedCollectionMap();
@@ -134,6 +135,27 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 		self::assertSame(['user_id' => 10, 'tag_id' => 3], $command->getValues());
 	}
 
+	public function testChangedHasManyRelationWithDefaultPlannerMutatesChildRecordState(): void
+	{
+		[$users, $posts] = $this->registryWithHasManyRelation();
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
+		$child = RecordState::clean($posts->getKey(5), ['id' => 5, 'user_id' => null]);
+		$item = new stdClass();
+		$collection = new RelatedCollection($owner, 'posts', $this->bindingFor($child));
+		$collection->add($item);
+		$relations = new RelatedCollectionMap();
+		$relations->add($collection);
+
+		$result = (new RelationPersistenceSynchronizer())->sync(
+			$relations,
+			$this->records($owner, $child),
+			$this->trackedMap($this->tracked($item, $child)),
+		);
+
+		self::assertSame(10, $child->getValue('user_id'));
+		self::assertSame([], $result->getCommands());
+	}
+
 	public function testPlannerCanMutateRecordState(): void
 	{
 		RecordingRelationPersistencePlanner::$mutateOwnerField = 'name';
@@ -186,12 +208,14 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 
 		self::assertIsString($source);
 		self::assertStringNotContainsString('M2MRelation', $source);
+		self::assertStringNotContainsString('HasManyRelation', $source);
+		self::assertStringNotContainsString('HasManyPersistencePlanner', $source);
 		self::assertStringNotContainsString('getThrough', $source);
 		self::assertStringNotContainsString('InsertCommand', $source);
 		self::assertStringNotContainsString('DeleteCommand', $source);
 	}
 
-	private function registryWithRelation(?string $planner = null): Registry
+	private function registryWithRelation(?string $planner = null, bool $useCustomRelation = false): Registry
 	{
 		$registry = new Registry();
 		$registry->collection('posts')->primaryKey('id')->field('id', 'int')->end()->field('title', 'string')->end()->end();
@@ -200,12 +224,33 @@ final class RelationPersistenceSynchronizerTest extends TestCase
 			->field('id', 'int')->end()
 			->field('name', 'string')->end();
 
-		$relation = $users->hasMany('posts', 'posts')->innerKey('id')->outerKey('id');
+		$relation = $useCustomRelation
+			? $users->relation('posts', CustomRelation::class)->collection('posts')
+			: $users->hasMany('posts', 'posts')->innerKey('id')->outerKey('id');
 		if ($planner !== null) {
 			$relation->persistencePlanner($planner);
 		}
 
 		return $registry;
+	}
+
+	/**
+	 * @return array{0: CollectionInterface, 1: CollectionInterface}
+	 */
+	private function registryWithHasManyRelation(): array
+	{
+		$registry = new Registry();
+		$posts = $registry->collection('posts')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('user_id', 'int')->end()
+			->end();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end();
+		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('user_id');
+
+		return [$users, $posts];
 	}
 
 	private function changedRelatedCollection(RecordState $owner): RelatedCollection

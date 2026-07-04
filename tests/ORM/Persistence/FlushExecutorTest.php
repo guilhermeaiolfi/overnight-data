@@ -17,6 +17,7 @@ use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\Relation\RelatedCollection;
 use ON\Data\ORM\Relation\RelatedCollectionMap;
+use ON\Data\ORM\Relation\RelationCollectionState;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateMap;
@@ -275,6 +276,64 @@ final class FlushExecutorTest extends TestCase
 		}
 	}
 
+	public function testHasManyAddFlushMutatesChildForeignKeyBeforeScalarRecordFlush(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$child = RecordState::clean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$item = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$collection = new RelatedCollection($owner, 'posts', $this->bindingFor($child));
+		$collection->add($item);
+		$executor = new RecordingCommandExecutor();
+
+		(new FlushExecutor($executor))->flush(
+			$this->trackedMap($this->tracked($item, $this->bindingFor($child))),
+			$this->records($owner, $child),
+			$this->relations($collection)
+		);
+
+		self::assertSame(10, $child->getValue('user_id'));
+		self::assertFalse($collection->hasChanges());
+		self::assertCount(1, $executor->getCommands());
+		$command = $executor->getCommands()[0];
+		if (! $command instanceof UpdateCommand) {
+			self::fail('Expected an update command.');
+		}
+
+		self::assertSame($posts, $command->getCollection());
+		self::assertSame(['id' => 5], $command->getIdentity());
+		self::assertSame(['user_id' => 10], $command->getChanges());
+	}
+
+	public function testNullableHasManyRemoveFlushSetsChildForeignKeyToNullThroughScalarUpdate(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts(nullable: true);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$child = RecordState::clean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'user_id' => 10]);
+		$item = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => 10]);
+		$collection = new RelatedCollection($owner, 'posts', $this->bindingFor($child), RelationCollectionState::FULLY_LOADED, [$item]);
+		$collection->remove($item);
+		$executor = new RecordingCommandExecutor();
+
+		(new FlushExecutor($executor))->flush(
+			$this->trackedMap($this->tracked($item, $this->bindingFor($child))),
+			$this->records($owner, $child),
+			$this->relations($collection)
+		);
+
+		self::assertNull($child->getValue('user_id'));
+		self::assertFalse($collection->hasChanges());
+		self::assertCount(1, $executor->getCommands());
+		$command = $executor->getCommands()[0];
+		if (! $command instanceof UpdateCommand) {
+			self::fail('Expected an update command.');
+		}
+
+		self::assertSame($posts, $command->getCollection());
+		self::assertSame(['id' => 5], $command->getIdentity());
+		self::assertSame(['user_id' => null], $command->getChanges());
+	}
+
 	public function testRelationChangesAreNotClearedIfScalarRecordFlushThrows(): void
 	{
 		$record = RecordState::clean($this->usersWithPosts()->getKey(10), ['id' => 10, 'name' => 'before']);
@@ -454,6 +513,38 @@ final class FlushExecutorTest extends TestCase
 		}
 
 		return $users;
+	}
+
+	/**
+	 * @return array{0: CollectionInterface, 1: CollectionInterface}
+	 */
+	private function usersWithDefaultHasManyPosts(bool $nullable = false): array
+	{
+		$registry = new Registry();
+		$posts = $registry->collection('posts')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('title', 'string')->end()
+			->field('user_id', 'int')->end()
+			->end();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('user_id')->nullable($nullable);
+
+		return [$users, $posts];
+	}
+
+	private function bindingFor(RecordState $record): RepresentationBinding
+	{
+		$binding = new RepresentationBinding();
+		foreach (array_keys($record->getValues()) as $field) {
+			$field = (string) $field;
+			$binding->add(new RepresentationFieldBinding($field, RecordFieldRef::forState($record, $field)));
+		}
+
+		return $binding;
 	}
 
 	private function posts(): CollectionInterface
