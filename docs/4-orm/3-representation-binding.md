@@ -70,14 +70,14 @@ Runtime relation state is not representation shape. A `RepresentationRelationBin
 
 ### Field Binding
 
-A field binding maps a representation path to a record field reference.
+A field binding maps a representation path to a `RecordFieldRef`.
 
 ```text
 object.id   -> users.id
 object.name -> users.name
 ```
 
-Writable field bindings can be synchronized back into `RecordState`. Read-only field bindings remain scalar field provenance, but scalar sync ignores them for updates.
+`RecordFieldRef` can be a collection-template ref or a concrete `RecordState` ref. Writable field bindings can be synchronized back into `RecordState`. Read-only field bindings remain scalar field provenance, but scalar sync ignores them for updates.
 
 ### Expression Binding
 
@@ -91,14 +91,23 @@ Expression bindings can model aliases, aggregates, computed values, or query exp
 
 ### Relation Binding
 
-A relation binding maps one representation path to one reusable related binding.
+A relation binding maps one representation path to one owner-aware `RecordRelationRef` and one reusable related binding.
 
 ```text
-object.posts -> relation users.posts MANY
+object.posts -> RecordRelationRef(users.posts) MANY
     related binding:
         object.posts[].id    -> posts.id
         object.posts[].title -> posts.title
 ```
+
+A relation path such as `posts` does not merely mean a relation named `posts`. It means the specific relation carried by `RecordRelationRef`, including the owning collection or record state. This keeps aliases and mixed representations safe:
+
+```text
+object.name  -> RecordFieldRef(companies.name)
+object.posts -> RecordRelationRef(users.posts)
+```
+
+Like field refs, relation refs can start as collection-template refs and become concrete when a root binding is applied to a `RecordState`.
 
 For a `MANY` relation, `getRelatedBinding()` is the item shape. The same related binding is reused for every child object in that representation shape. Do not create one binding object per child instance.
 
@@ -123,13 +132,15 @@ Use `getRelatedBinding()` for both cardinalities. Do not introduce separate `get
 
 ## Applying Bindings
 
-`RepresentationBinding::applyToRecordState($state)` currently applies only field bindings:
+`RepresentationBinding::applyToRecordState($state)` applies root field and relation owner refs to the provided record state:
 
 - template field refs for the state's collection become concrete state-targeted refs
 - concrete field refs are rejected
 - mismatched template collections are rejected
 - expression bindings are copied unchanged
-- relation bindings are copied unchanged
+- template relation refs for the state's collection become concrete state-targeted refs
+- concrete relation refs are rejected
+- mismatched relation owner collections are rejected
 
 It does not recursively apply related bindings. It does not infer relations from objects. It does not adopt child objects. It does not plan relation persistence.
 

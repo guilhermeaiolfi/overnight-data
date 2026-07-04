@@ -171,7 +171,21 @@ final class RepresentationBinding
 		}
 
 		foreach ($this->getRelations() as $binding) {
-			$applied->addRelation($binding);
+			$relation = $binding->getRelation();
+			if (! $relation->isTemplate()) {
+				throw new StateException(sprintf("Representation binding path '%s' already targets a concrete record.", $binding->getPath()));
+			}
+
+			if ($relation->getCollectionName() !== $state->getCollectionName()) {
+				throw new StateException(sprintf(
+					"Representation binding path '%s' targets collection '%s', not '%s'.",
+					$binding->getPath(),
+					$relation->getCollectionName(),
+					$state->getCollectionName()
+				));
+			}
+
+			$applied->addRelation($binding->withRelation(RecordRelationRef::forState($state, $relation->getRelationName())));
 		}
 
 		return $applied;

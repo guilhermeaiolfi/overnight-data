@@ -9,6 +9,7 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\RelationCollectionState;
 use ON\Data\ORM\State\RecordFieldRef;
+use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -111,7 +112,7 @@ final class RepresentationSynchronizerTest extends TestCase
 		$binding->addExpression(new RepresentationExpressionBinding('postCount', 'post_count'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			'posts',
+			RecordRelationRef::forCollection($this->users(), 'posts'),
 			RepresentationRelationCardinality::MANY,
 			new RepresentationBinding(),
 			RelationCollectionState::FULLY_LOADED

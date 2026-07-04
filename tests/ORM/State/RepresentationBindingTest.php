@@ -9,6 +9,7 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Relation\RelationCollectionState;
 use ON\Data\ORM\State\RecordFieldRef;
+use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationExpressionBinding;
@@ -187,7 +188,7 @@ final class RepresentationBindingTest extends TestCase
 		self::assertTrue($applied->getField('upperName')->isReadOnly());
 	}
 
-	public function testApplyToRecordStatePreservesExpressionAndRelationBindingsUnchanged(): void
+	public function testApplyToRecordStatePreservesExpressionAndAppliesRelationOwnerRefs(): void
 	{
 		$users = $this->users();
 		$template = new RepresentationBinding();
@@ -198,12 +199,17 @@ final class RepresentationBindingTest extends TestCase
 		$template->addExpression($expression);
 		$template->addRelation($relation);
 
-		$applied = $template->applyToRecordState(RecordState::new($users, ['name' => 'A1']));
+		$state = RecordState::new($users, ['name' => 'A1']);
+		$applied = $template->applyToRecordState($state);
 
 		self::assertNotSame($template, $applied);
 		self::assertNotSame($field, $applied->getField('name'));
 		self::assertSame($expression, $applied->getExpression('postCount'));
-		self::assertSame($relation, $applied->getRelation('posts'));
+		self::assertNotSame($relation, $applied->getRelation('posts'));
+		self::assertSame($state, $applied->getRelation('posts')->getRelation()->getState());
+		self::assertSame('posts', $applied->getRelation('posts')->getRelationName());
+		self::assertSame($relation->getRelatedBinding(), $applied->getRelation('posts')->getRelatedBinding());
+		self::assertSame($relation->getCollectionState(), $applied->getRelation('posts')->getCollectionState());
 		self::assertSame(['name', 'postCount', 'posts'], $applied->getPaths());
 	}
 
@@ -236,6 +242,35 @@ final class RepresentationBindingTest extends TestCase
 		$template->applyToRecordState(RecordState::new($users));
 	}
 
+	public function testApplyToRecordStateWithRelationFromAnotherCollectionThrows(): void
+	{
+		$template = new RepresentationBinding();
+		$template->addRelation(new RepresentationRelationBinding(
+			'posts',
+			RecordRelationRef::forCollection($this->posts(), 'comments'),
+			RepresentationRelationCardinality::MANY,
+			new RepresentationBinding()
+		));
+
+		$this->expectException(StateException::class);
+		$template->applyToRecordState(RecordState::new($this->users()));
+	}
+
+	public function testApplyToRecordStateWithAlreadyStateTargetedRelationThrows(): void
+	{
+		$users = $this->users();
+		$template = new RepresentationBinding();
+		$template->addRelation(new RepresentationRelationBinding(
+			'posts',
+			RecordRelationRef::forState(RecordState::new($users), 'posts'),
+			RepresentationRelationCardinality::MANY,
+			new RepresentationBinding()
+		));
+
+		$this->expectException(StateException::class);
+		$template->applyToRecordState(RecordState::new($users));
+	}
+
 	public function testTwoApplicationsToTwoNewStatesProduceDifferentRecordHashes(): void
 	{
 		$users = $this->users();
@@ -260,7 +295,7 @@ final class RepresentationBindingTest extends TestCase
 	{
 		return new RepresentationRelationBinding(
 			$path,
-			$path,
+			RecordRelationRef::forCollection($this->users(), $path),
 			RepresentationRelationCardinality::MANY,
 			new RepresentationBinding(),
 			RelationCollectionState::PARTIALLY_LOADED

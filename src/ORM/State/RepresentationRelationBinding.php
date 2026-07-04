@@ -11,17 +11,13 @@ final class RepresentationRelationBinding
 {
 	public function __construct(
 		private string $path,
-		private string $relationName,
+		private RecordRelationRef $relation,
 		private RepresentationRelationCardinality $cardinality,
 		private RepresentationBinding $relatedBinding,
 		private RelationCollectionState $collectionState = RelationCollectionState::UNLOADED,
 	) {
 		if ($path === '') {
 			throw new StateException('Representation relation binding path cannot be empty.');
-		}
-
-		if ($relationName === '') {
-			throw new StateException('Representation relation binding relation name cannot be empty.');
 		}
 	}
 
@@ -30,9 +26,19 @@ final class RepresentationRelationBinding
 		return $this->path;
 	}
 
+	public function getRelation(): RecordRelationRef
+	{
+		return $this->relation;
+	}
+
+	public function withRelation(RecordRelationRef $relation): self
+	{
+		return new self($this->path, $relation, $this->cardinality, $this->relatedBinding, $this->collectionState);
+	}
+
 	public function getRelationName(): string
 	{
-		return $this->relationName;
+		return $this->relation->getRelationName();
 	}
 
 	public function getCardinality(): RepresentationRelationCardinality

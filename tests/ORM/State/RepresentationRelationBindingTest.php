@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\State;
 
+use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Relation\RelationCollectionState;
+use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
@@ -16,15 +18,17 @@ final class RepresentationRelationBindingTest extends TestCase
 	public function testStoresPathRelationNameCardinalityRelatedBindingAndCollectionState(): void
 	{
 		$relatedBinding = new RepresentationBinding();
+		$relation = RecordRelationRef::forCollection((new Registry())->collection('users'), 'posts');
 		$binding = new RepresentationRelationBinding(
 			'posts',
-			'posts',
+			$relation,
 			RepresentationRelationCardinality::MANY,
 			$relatedBinding,
 			RelationCollectionState::FULLY_LOADED
 		);
 
 		self::assertSame('posts', $binding->getPath());
+		self::assertSame($relation, $binding->getRelation());
 		self::assertSame('posts', $binding->getRelationName());
 		self::assertSame(RepresentationRelationCardinality::MANY, $binding->getCardinality());
 		self::assertSame($relatedBinding, $binding->getRelatedBinding());
@@ -36,15 +40,7 @@ final class RepresentationRelationBindingTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('path');
 
-		new RepresentationRelationBinding('', 'posts', RepresentationRelationCardinality::MANY, new RepresentationBinding());
-	}
-
-	public function testRejectsEmptyRelationName(): void
-	{
-		$this->expectException(StateException::class);
-		$this->expectExceptionMessage('relation name');
-
-		new RepresentationRelationBinding('posts', '', RepresentationRelationCardinality::MANY, new RepresentationBinding());
+		new RepresentationRelationBinding('', $this->relation('posts'), RepresentationRelationCardinality::MANY, new RepresentationBinding());
 	}
 
 	public function testManyCardinalityUsesRelatedBindingAsReusableItemShape(): void
@@ -52,7 +48,7 @@ final class RepresentationRelationBindingTest extends TestCase
 		$relatedBinding = new RepresentationBinding();
 		$binding = new RepresentationRelationBinding(
 			'posts',
-			'posts',
+			$this->relation('posts'),
 			RepresentationRelationCardinality::MANY,
 			$relatedBinding
 		);
@@ -67,7 +63,7 @@ final class RepresentationRelationBindingTest extends TestCase
 		$relatedBinding = new RepresentationBinding();
 		$binding = new RepresentationRelationBinding(
 			'author',
-			'author',
+			$this->relation('author'),
 			RepresentationRelationCardinality::ONE,
 			$relatedBinding
 		);
@@ -75,5 +71,31 @@ final class RepresentationRelationBindingTest extends TestCase
 		self::assertFalse($binding->isMany());
 		self::assertTrue($binding->isSingle());
 		self::assertSame($relatedBinding, $binding->getRelatedBinding());
+	}
+
+	public function testWithRelationReturnsCopyWithNewRelationRef(): void
+	{
+		$binding = new RepresentationRelationBinding(
+			'posts',
+			$this->relation('posts'),
+			RepresentationRelationCardinality::MANY,
+			new RepresentationBinding(),
+			RelationCollectionState::PARTIALLY_LOADED
+		);
+		$nextRelation = RecordRelationRef::forCollection((new Registry())->collection('companies'), 'posts');
+
+		$next = $binding->withRelation($nextRelation);
+
+		self::assertNotSame($binding, $next);
+		self::assertSame($nextRelation, $next->getRelation());
+		self::assertSame($binding->getPath(), $next->getPath());
+		self::assertSame($binding->getCardinality(), $next->getCardinality());
+		self::assertSame($binding->getRelatedBinding(), $next->getRelatedBinding());
+		self::assertSame($binding->getCollectionState(), $next->getCollectionState());
+	}
+
+	private function relation(string $relationName): RecordRelationRef
+	{
+		return RecordRelationRef::forCollection((new Registry())->collection('users'), $relationName);
 	}
 }

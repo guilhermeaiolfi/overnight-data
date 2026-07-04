@@ -8,6 +8,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordFieldRef;
+use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -253,7 +254,7 @@ final class RecordStateMapTest extends TestCase
 		$binding->addExpression(new RepresentationExpressionBinding('postCount', 'post_count'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			'posts',
+			RecordRelationRef::forCollection($this->users(), 'posts'),
 			RepresentationRelationCardinality::MANY,
 			new RepresentationBinding()
 		));
