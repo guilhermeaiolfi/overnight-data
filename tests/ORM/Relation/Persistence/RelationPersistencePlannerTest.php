@@ -245,6 +245,28 @@ final class RelationPersistencePlannerTest extends TestCase
 		self::assertSame([], $result->getCommands());
 	}
 
+	public function testChangedHasOneReferenceWithDefaultPlannerMutatesTargetRecordState(): void
+	{
+		[$users, $profiles] = $this->registryWithDefaultHasOneRelation();
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
+		$target = RecordState::clean($profiles->getKey(5), ['id' => 5, 'user_id' => null]);
+		$item = new stdClass();
+		$reference = new RelatedReference($owner, 'profile', $this->bindingFor($target));
+		$reference->set($item);
+		$references = new RelatedReferenceMap();
+		$references->add($reference);
+
+		$result = (new RelationPersistencePlanner())->plan(
+			new RelatedCollectionMap(),
+			$references,
+			$this->records($owner, $target),
+			$this->trackedMap($this->tracked($item, $target)),
+		);
+
+		self::assertSame(10, $target->getValue('user_id'));
+		self::assertSame([], $result->getCommands());
+	}
+
 	public function testPlannerCanMutateRecordState(): void
 	{
 		RecordingRelationPersistencePlanner::$mutateOwnerField = 'name';
@@ -298,8 +320,10 @@ final class RelationPersistencePlannerTest extends TestCase
 		self::assertIsString($source);
 		self::assertStringNotContainsString('M2MRelation', $source);
 		self::assertStringNotContainsString('HasManyRelation', $source);
+		self::assertStringNotContainsString('HasOneRelation', $source);
 		self::assertStringNotContainsString('BelongsToRelation', $source);
 		self::assertStringNotContainsString('HasManyPersistencePlanner', $source);
+		self::assertStringNotContainsString('HasOnePersistencePlanner', $source);
 		self::assertStringNotContainsString('BelongsToPersistencePlanner', $source);
 		self::assertStringNotContainsString('getThrough', $source);
 		self::assertStringNotContainsString('InsertCommand', $source);
@@ -378,6 +402,25 @@ final class RelationPersistencePlannerTest extends TestCase
 		$posts->belongsTo('author', 'users')->innerKey('author_id')->outerKey('id');
 
 		return [$posts, $users];
+	}
+
+	/**
+	 * @return array{0: CollectionInterface, 1: CollectionInterface}
+	 */
+	private function registryWithDefaultHasOneRelation(): array
+	{
+		$registry = new Registry();
+		$profiles = $registry->collection('profiles')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('user_id', 'int')->end()
+			->end();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end();
+		$users->hasOne('profile', 'profiles')->innerKey('id')->outerKey('user_id');
+
+		return [$users, $profiles];
 	}
 
 	private function changedRelatedCollection(RecordState $owner): RelatedCollection

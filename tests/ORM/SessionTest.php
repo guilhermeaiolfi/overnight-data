@@ -385,6 +385,36 @@ final class SessionTest extends TestCase
 		self::assertSame(['author_id' => null], $command->getChanges());
 	}
 
+	public function testFlushInfersHasOneReferenceSetFromTrackedRepresentationGraph(): void
+	{
+		[$users, $profiles] = $this->usersWithDefaultHasOneProfile();
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$target = $session->trackClean($profiles->getKey(5), ['id' => 5, 'label' => 'Profile', 'user_id' => null]);
+		$profileRepresentation = $this->representation(['id' => 5, 'label' => 'Profile', 'user_id' => null]);
+		$ownerRepresentation = $this->representation(['name' => 'Owner', 'profile' => $profileRepresentation]);
+		$session->adopt($profileRepresentation, $this->profileTemplateBindingFor($profiles), $target);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithProfile($users, $profiles), $owner);
+
+		$session->flush();
+
+		$reference = $session->getReferences()->get($owner, 'profile');
+		self::assertInstanceOf(RelatedReference::class, $reference);
+		self::assertSame($profileRepresentation, $reference->getTarget());
+		self::assertFalse($reference->hasChanges());
+		self::assertSame(10, $target->getValue('user_id'));
+		self::assertCount(1, $executor->getCommands());
+		$command = $executor->getCommands()[0];
+		if (! $command instanceof UpdateCommand) {
+			self::fail('Expected an update command.');
+		}
+
+		self::assertSame($profiles, $command->getCollection());
+		self::assertSame(['id' => 5], $command->getIdentity());
+		self::assertSame(['user_id' => 10], $command->getChanges());
+	}
+
 	public function testSessionSourceDoesNotMentionDeferredOrmRuntimeConcepts(): void
 	{
 		$source = file_get_contents(__DIR__ . '/../../src/ORM/Session.php');
@@ -434,6 +464,20 @@ final class SessionTest extends TestCase
 		return $binding;
 	}
 
+	private function ownerTemplateBindingWithProfile(CollectionInterface $users, CollectionInterface $profiles): RepresentationBinding
+	{
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($users, 'name')));
+		$binding->addRelation(new RepresentationRelationBinding(
+			'profile',
+			RecordRelationRef::forCollection($users, 'profile'),
+			RepresentationRelationCardinality::ONE,
+			$this->profileTemplateBindingFor($profiles)
+		));
+
+		return $binding;
+	}
+
 	private function postTemplateBindingWithAuthor(CollectionInterface $posts, CollectionInterface $users): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
@@ -463,6 +507,16 @@ final class SessionTest extends TestCase
 		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($posts, 'id')));
 		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($posts, 'title')));
 		$binding->addField(new RepresentationFieldBinding('user_id', RecordFieldRef::template($posts, 'user_id')));
+
+		return $binding;
+	}
+
+	private function profileTemplateBindingFor(CollectionInterface $profiles): RepresentationBinding
+	{
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($profiles, 'id')));
+		$binding->addField(new RepresentationFieldBinding('label', RecordFieldRef::template($profiles, 'label')));
+		$binding->addField(new RepresentationFieldBinding('user_id', RecordFieldRef::template($profiles, 'user_id')));
 
 		return $binding;
 	}
@@ -599,6 +653,27 @@ final class SessionTest extends TestCase
 		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('user_id');
 
 		return [$users, $posts];
+	}
+
+	/**
+	 * @return array{0: CollectionInterface, 1: CollectionInterface}
+	 */
+	private function usersWithDefaultHasOneProfile(): array
+	{
+		$registry = new Registry();
+		$profiles = $registry->collection('profiles')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('label', 'string')->end()
+			->field('user_id', 'int')->end()
+			->end();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+		$users->hasOne('profile', 'profiles')->innerKey('id')->outerKey('user_id');
+
+		return [$users, $profiles];
 	}
 
 	/**

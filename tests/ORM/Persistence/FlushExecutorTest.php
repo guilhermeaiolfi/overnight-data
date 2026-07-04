@@ -491,6 +491,37 @@ final class FlushExecutorTest extends TestCase
 		self::assertSame(['user_id' => null], $command->getChanges());
 	}
 
+	public function testHasOneSetFlushMutatesTargetForeignKeyThroughScalarUpdate(): void
+	{
+		[$users, $profiles] = $this->usersWithDefaultHasOneProfile();
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$target = RecordState::clean($profiles->getKey(5), ['id' => 5, 'label' => 'Profile', 'user_id' => null]);
+		$profileRepresentation = $this->representation(['id' => 5, 'label' => 'Profile', 'user_id' => null]);
+		$ownerRepresentation = $this->representation(['name' => 'Owner', 'profile' => $profileRepresentation]);
+		$executor = new RecordingCommandExecutor();
+
+		(new FlushExecutor($executor))->flush(
+			$this->trackedMap(
+				$this->tracked($profileRepresentation, $this->bindingFor($target)),
+				$this->tracked($ownerRepresentation, $this->ownerBindingWithProfile($owner))
+			),
+			$this->records($owner, $target),
+			new RelatedCollectionMap(),
+			new RelatedReferenceMap()
+		);
+
+		self::assertSame(10, $target->getValue('user_id'));
+		self::assertCount(1, $executor->getCommands());
+		$command = $executor->getCommands()[0];
+		if (! $command instanceof UpdateCommand) {
+			self::fail('Expected an update command.');
+		}
+
+		self::assertSame($profiles, $command->getCollection());
+		self::assertSame(['id' => 5], $command->getIdentity());
+		self::assertSame(['user_id' => 10], $command->getChanges());
+	}
+
 	public function testRelationChangesAreNotClearedIfScalarRecordFlushThrows(): void
 	{
 		$record = RecordState::clean($this->usersWithPosts()->getKey(10), ['id' => 10, 'name' => 'before']);
@@ -810,6 +841,27 @@ final class FlushExecutorTest extends TestCase
 		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('user_id')->nullable($nullable);
 
 		return [$users, $posts];
+	}
+
+	/**
+	 * @return array{0: CollectionInterface, 1: CollectionInterface}
+	 */
+	private function usersWithDefaultHasOneProfile(): array
+	{
+		$registry = new Registry();
+		$profiles = $registry->collection('profiles')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('label', 'string')->end()
+			->field('user_id', 'int')->end()
+			->end();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+		$users->hasOne('profile', 'profiles')->innerKey('id')->outerKey('user_id');
+
+		return [$users, $profiles];
 	}
 
 	private function bindingFor(RecordState $record): RepresentationBinding

@@ -6,6 +6,7 @@ namespace ON\Data\Definition\Relation;
 
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Field\FieldInterface;
+use ON\Data\ORM\Relation\Persistence\HasOnePersistencePlanner;
 use ON\Data\Query\Relation\Loader\HasOneLoader;
 
 class HasOneRelation extends AbstractRelation
@@ -15,6 +16,7 @@ class HasOneRelation extends AbstractRelation
 		return array_replace(parent::definitionDefaults(), [
 			'exclusive' => false,
 			'loader' => HasOneLoader::class,
+			'persistencePlanner' => HasOnePersistencePlanner::class,
 		]);
 	}
 

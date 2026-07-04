@@ -15,6 +15,7 @@ use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\Definition\Relation\M2MThrough;
 use ON\Data\ORM\Relation\Persistence\BelongsToPersistencePlanner;
 use ON\Data\ORM\Relation\Persistence\HasManyPersistencePlanner;
+use ON\Data\ORM\Relation\Persistence\HasOnePersistencePlanner;
 use ON\Data\ORM\Relation\Persistence\ManyToManyPersistencePlanner;
 use ON\Data\Query\Relation\Loader\BelongsToLoader;
 use ON\Data\Query\Relation\Loader\FirstOfManyLoader;
@@ -322,7 +323,7 @@ final class RelationDefinitionTest extends TestCase
 		self::assertSame(BelongsToPersistencePlanner::class, $users->belongsTo('profile', 'profiles')->getPersistencePlanner());
 	}
 
-	public function testHasOneAndCustomRelationsStillDefaultToNullPersistencePlanner(): void
+	public function testHasOneRelationUsesHasOnePersistencePlannerByDefault(): void
 	{
 		$registry = new Registry();
 		$registry->collection('profiles')->primaryKey('id')->field('id', 'int')->end()->end();
@@ -330,7 +331,17 @@ final class RelationDefinitionTest extends TestCase
 		$users = $registry->getCollection('users');
 		self::assertNotNull($users);
 
-		self::assertNull($users->hasOne('mainProfile', 'profiles')->getPersistencePlanner());
+		self::assertSame(HasOnePersistencePlanner::class, $users->hasOne('mainProfile', 'profiles')->getPersistencePlanner());
+	}
+
+	public function testCustomRelationsStillDefaultToNullPersistencePlanner(): void
+	{
+		$registry = new Registry();
+		$registry->collection('profiles')->primaryKey('id')->field('id', 'int')->end()->end();
+		$registry->collection('users')->primaryKey('id')->field('id', 'int')->end()->field('profile_id', 'int')->end()->end();
+		$users = $registry->getCollection('users');
+		self::assertNotNull($users);
+
 		self::assertNull($users->relation('custom', CustomRelation::class)->getPersistencePlanner());
 	}
 
@@ -361,6 +372,18 @@ final class RelationDefinitionTest extends TestCase
 		$registry->collection('profiles')->primaryKey('id')->field('id', 'int')->end()->end();
 		$users = $registry->collection('users')->primaryKey('id')->field('id', 'int')->end()->field('profile_id', 'int')->end();
 		$relation = $users->belongsTo('profile', 'profiles');
+
+		$relation->persistencePlanner(RecordingRelationPersistencePlanner::class);
+
+		self::assertSame(RecordingRelationPersistencePlanner::class, $relation->getPersistencePlanner());
+	}
+
+	public function testExplicitPersistencePlannerOverridesHasOneDefault(): void
+	{
+		$registry = new Registry();
+		$registry->collection('profiles')->primaryKey('id')->field('id', 'int')->end()->end();
+		$users = $registry->collection('users')->primaryKey('id')->field('id', 'int')->end();
+		$relation = $users->hasOne('profile', 'profiles');
 
 		$relation->persistencePlanner(RecordingRelationPersistencePlanner::class);
 
