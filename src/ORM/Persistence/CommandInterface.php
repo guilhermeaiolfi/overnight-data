@@ -9,6 +9,4 @@ use ON\Data\Definition\Collection\CollectionInterface;
 interface CommandInterface
 {
 	public function getCollection(): CollectionInterface;
-
-	public function getCollectionName(): string;
 }

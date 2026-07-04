@@ -22,11 +22,6 @@ final class InsertCommand implements CommandInterface
 		return $this->collection;
 	}
 
-	public function getCollectionName(): string
-	{
-		return $this->collection->getName();
-	}
-
 	/**
 	 * @return array<string, mixed>
 	 */

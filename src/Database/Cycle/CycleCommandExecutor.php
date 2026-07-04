@@ -6,6 +6,7 @@ namespace ON\Data\Database\Cycle;
 
 use Cycle\Database\DatabaseInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
@@ -41,7 +42,7 @@ final class CycleCommandExecutor implements CommandExecutorInterface
 			->values($this->mapFieldValuesToColumns($command->getCollection(), $command->getValues()))
 			->run();
 
-		return new CommandResult(1);
+		return new CommandResult(1, $this->getGeneratedValueAfterInsert($command));
 	}
 
 	private function update(UpdateCommand $command): CommandResult
@@ -101,6 +102,53 @@ final class CycleCommandExecutor implements CommandExecutorInterface
 		}
 
 		return $field->getColumn();
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function getGeneratedValueAfterInsert(InsertCommand $command): array
+	{
+		$field = $this->getGeneratedPrimaryKeyField($command->getCollection());
+		if ($field === null) {
+			return [];
+		}
+
+		$fieldName = $field->getName();
+		if (array_key_exists($fieldName, $command->getValues()) && $command->getValues()[$fieldName] !== null) {
+			return [];
+		}
+
+		$generatedId = $this->normalizeGeneratedId($this->database->getDriver()->lastInsertID());
+		if ($generatedId === null) {
+			return [];
+		}
+
+		return [$fieldName => $generatedId];
+	}
+
+	private function getGeneratedPrimaryKeyField(CollectionInterface $collection): ?FieldInterface
+	{
+		if (! $collection->hasPrimaryKey() || $collection->isCompositePrimaryKey()) {
+			return null;
+		}
+
+		$field = $collection->getPrimaryKeyFields()[0];
+
+		return $field->isAutoIncrement() ? $field : null;
+	}
+
+	private function normalizeGeneratedId(mixed $id): mixed
+	{
+		if ($id === false || $id === null || $id === '') {
+			return null;
+		}
+
+		if (is_string($id) && preg_match('/^[0-9]+$/', $id) === 1) {
+			return (int) $id;
+		}
+
+		return $id;
 	}
 
 	private function affectedRows(mixed $result): int

@@ -46,7 +46,7 @@ final class CommandPlanner
 		if ($key === null) {
 			throw new InvalidCommandException(sprintf(
 				"Dirty record for collection '%s' cannot be planned without a key.",
-				$record->getCollectionName(),
+				$record->getCollection()->getName(),
 			));
 		}
 

@@ -7,6 +7,7 @@ namespace Tests\ON\Data\ORM\Persistence;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\InvalidCommandException;
+use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
@@ -16,23 +17,26 @@ use Tests\ON\Data\Support\RecordingCommandExecutor;
 
 final class CommandTest extends TestCase
 {
-	public function testInsertCommandStoresCollectionNameAndValues(): void
+	public function testCommandInterfaceOnlyExposesCollection(): void
+	{
+		self::assertSame(['getCollection'], get_class_methods(CommandInterface::class));
+	}
+
+	public function testInsertCommandStoresCollectionAndValues(): void
 	{
 		$users = $this->users();
 		$command = new InsertCommand($users, ['id' => 10, 'name' => 'Ada']);
 
 		self::assertSame($users, $command->getCollection());
-		self::assertSame('users', $command->getCollectionName());
 		self::assertSame(['id' => 10, 'name' => 'Ada'], $command->getValues());
 	}
 
-	public function testUpdateCommandStoresCollectionNameIdentityAndChanges(): void
+	public function testUpdateCommandStoresCollectionIdentityAndChanges(): void
 	{
 		$users = $this->users();
 		$command = new UpdateCommand($users, ['tenant_id' => 5, 'id' => 10], ['name' => 'Ada']);
 
 		self::assertSame($users, $command->getCollection());
-		self::assertSame('users', $command->getCollectionName());
 		self::assertSame(['tenant_id' => 5, 'id' => 10], $command->getIdentity());
 		self::assertSame(['name' => 'Ada'], $command->getChanges());
 	}
@@ -58,13 +62,12 @@ final class CommandTest extends TestCase
 		new UpdateCommand($this->users(), ['tenant_id' => 5, 'id' => 10], ['id' => 11, 'name' => 'Ada']);
 	}
 
-	public function testDeleteCommandStoresCollectionNameAndIdentity(): void
+	public function testDeleteCommandStoresCollectionAndIdentity(): void
 	{
 		$users = $this->users();
 		$command = new DeleteCommand($users, ['tenant_id' => 5, 'id' => 10]);
 
 		self::assertSame($users, $command->getCollection());
-		self::assertSame('users', $command->getCollectionName());
 		self::assertSame(['tenant_id' => 5, 'id' => 10], $command->getIdentity());
 	}
 

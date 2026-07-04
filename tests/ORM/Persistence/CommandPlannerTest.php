@@ -25,7 +25,6 @@ final class CommandPlannerTest extends TestCase
 
 		self::assertInstanceOf(InsertCommand::class, $command);
 		self::assertSame($users, $command->getCollection());
-		self::assertSame('users', $command->getCollectionName());
 		self::assertSame(['name' => 'Ada', 'email' => 'ada@example.test'], $command->getValues());
 	}
 
@@ -47,7 +46,6 @@ final class CommandPlannerTest extends TestCase
 
 		self::assertInstanceOf(UpdateCommand::class, $command);
 		self::assertSame($users, $command->getCollection());
-		self::assertSame('users', $command->getCollectionName());
 		self::assertSame(['id' => 10], $command->getIdentity());
 		self::assertSame(['name' => 'Grace'], $command->getChanges());
 	}
@@ -65,7 +63,6 @@ final class CommandPlannerTest extends TestCase
 
 		self::assertInstanceOf(UpdateCommand::class, $command);
 		self::assertSame($memberships, $command->getCollection());
-		self::assertSame('memberships', $command->getCollectionName());
 		self::assertSame(['team_id' => 20, 'user_id' => 10], $command->getIdentity());
 		self::assertSame(['role' => 'owner'], $command->getChanges());
 	}
@@ -103,7 +100,6 @@ final class CommandPlannerTest extends TestCase
 
 		self::assertInstanceOf(DeleteCommand::class, $command);
 		self::assertSame($users, $command->getCollection());
-		self::assertSame('users', $command->getCollectionName());
 		self::assertSame(['id' => 10], $command->getIdentity());
 	}
 
