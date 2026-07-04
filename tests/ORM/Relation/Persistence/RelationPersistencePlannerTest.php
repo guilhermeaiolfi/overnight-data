@@ -223,6 +223,28 @@ final class RelationPersistencePlannerTest extends TestCase
 		self::assertSame([], $result->getCommands());
 	}
 
+	public function testChangedBelongsToReferenceWithDefaultPlannerMutatesOwnerRecordState(): void
+	{
+		[$posts, $users] = $this->registryWithBelongsToRelation();
+		$owner = RecordState::clean($posts->getKey(5), ['id' => 5, 'author_id' => null]);
+		$target = RecordState::clean($users->getKey(10), ['id' => 10]);
+		$item = new stdClass();
+		$reference = new RelatedReference($owner, 'author', $this->bindingFor($target));
+		$reference->set($item);
+		$references = new RelatedReferenceMap();
+		$references->add($reference);
+
+		$result = (new RelationPersistencePlanner())->plan(
+			new RelatedCollectionMap(),
+			$references,
+			$this->records($owner, $target),
+			$this->trackedMap($this->tracked($item, $target)),
+		);
+
+		self::assertSame(10, $owner->getValue('author_id'));
+		self::assertSame([], $result->getCommands());
+	}
+
 	public function testPlannerCanMutateRecordState(): void
 	{
 		RecordingRelationPersistencePlanner::$mutateOwnerField = 'name';
@@ -276,7 +298,9 @@ final class RelationPersistencePlannerTest extends TestCase
 		self::assertIsString($source);
 		self::assertStringNotContainsString('M2MRelation', $source);
 		self::assertStringNotContainsString('HasManyRelation', $source);
+		self::assertStringNotContainsString('BelongsToRelation', $source);
 		self::assertStringNotContainsString('HasManyPersistencePlanner', $source);
+		self::assertStringNotContainsString('BelongsToPersistencePlanner', $source);
 		self::assertStringNotContainsString('getThrough', $source);
 		self::assertStringNotContainsString('InsertCommand', $source);
 		self::assertStringNotContainsString('DeleteCommand', $source);
@@ -335,6 +359,25 @@ final class RelationPersistencePlannerTest extends TestCase
 		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('user_id');
 
 		return [$users, $posts];
+	}
+
+	/**
+	 * @return array{0: CollectionInterface, 1: CollectionInterface}
+	 */
+	private function registryWithBelongsToRelation(): array
+	{
+		$registry = new Registry();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->end();
+		$posts = $registry->collection('posts')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('author_id', 'int')->end();
+		$posts->belongsTo('author', 'users')->innerKey('author_id')->outerKey('id');
+
+		return [$posts, $users];
 	}
 
 	private function changedRelatedCollection(RecordState $owner): RelatedCollection

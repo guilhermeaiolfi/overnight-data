@@ -326,6 +326,65 @@ final class SessionTest extends TestCase
 		self::assertSame(['user_id' => 10], $command->getChanges());
 	}
 
+	public function testFlushInfersBelongsToReferenceSetFromTrackedRepresentationGraph(): void
+	{
+		[$posts, $users] = $this->postsWithDefaultBelongsToAuthor();
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$owner = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'author_id' => null]);
+		$target = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Ada']);
+		$authorRepresentation = $this->representation(['id' => 10, 'name' => 'Ada']);
+		$ownerRepresentation = $this->representation(['title' => 'Post', 'author' => $authorRepresentation]);
+		$session->adopt($authorRepresentation, $this->userTemplateBindingFor($users), $target);
+		$session->adopt($ownerRepresentation, $this->postTemplateBindingWithAuthor($posts, $users), $owner);
+
+		$session->flush();
+
+		$reference = $session->getReferences()->get($owner, 'author');
+		self::assertInstanceOf(RelatedReference::class, $reference);
+		self::assertSame($authorRepresentation, $reference->getTarget());
+		self::assertFalse($reference->hasChanges());
+		self::assertSame(10, $owner->getValue('author_id'));
+		self::assertCount(1, $executor->getCommands());
+		$command = $executor->getCommands()[0];
+		if (! $command instanceof UpdateCommand) {
+			self::fail('Expected an update command.');
+		}
+
+		self::assertSame($posts, $command->getCollection());
+		self::assertSame(['id' => 5], $command->getIdentity());
+		self::assertSame(['author_id' => 10], $command->getChanges());
+	}
+
+	public function testFlushInfersNullableBelongsToReferenceClearFromTrackedRepresentationGraph(): void
+	{
+		[$posts, $users] = $this->postsWithDefaultBelongsToAuthor();
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$owner = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'author_id' => 10]);
+		$baselineAuthor = new stdClass();
+		$ownerRepresentation = $this->representation(['title' => 'Post', 'author' => null]);
+		$session->adopt($ownerRepresentation, $this->postTemplateBindingWithAuthor($posts, $users), $owner);
+		$session->trackReference(new RelatedReference($owner, 'author', $this->userTemplateBindingFor($users), $baselineAuthor));
+
+		$session->flush();
+
+		$reference = $session->getReferences()->get($owner, 'author');
+		self::assertInstanceOf(RelatedReference::class, $reference);
+		self::assertNull($reference->getTarget());
+		self::assertFalse($reference->hasChanges());
+		self::assertNull($owner->getValue('author_id'));
+		self::assertCount(1, $executor->getCommands());
+		$command = $executor->getCommands()[0];
+		if (! $command instanceof UpdateCommand) {
+			self::fail('Expected an update command.');
+		}
+
+		self::assertSame($posts, $command->getCollection());
+		self::assertSame(['id' => 5], $command->getIdentity());
+		self::assertSame(['author_id' => null], $command->getChanges());
+	}
+
 	public function testSessionSourceDoesNotMentionDeferredOrmRuntimeConcepts(): void
 	{
 		$source = file_get_contents(__DIR__ . '/../../src/ORM/Session.php');
@@ -371,6 +430,29 @@ final class SessionTest extends TestCase
 			$this->postTemplateBindingFor($posts),
 			RelationCollectionState::UNLOADED
 		));
+
+		return $binding;
+	}
+
+	private function postTemplateBindingWithAuthor(CollectionInterface $posts, CollectionInterface $users): RepresentationBinding
+	{
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($posts, 'title')));
+		$binding->addRelation(new RepresentationRelationBinding(
+			'author',
+			RecordRelationRef::forCollection($posts, 'author'),
+			RepresentationRelationCardinality::ONE,
+			$this->userTemplateBindingFor($users)
+		));
+
+		return $binding;
+	}
+
+	private function userTemplateBindingFor(CollectionInterface $users): RepresentationBinding
+	{
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($users, 'id')));
+		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($users, 'name')));
 
 		return $binding;
 	}
@@ -517,6 +599,27 @@ final class SessionTest extends TestCase
 		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('user_id');
 
 		return [$users, $posts];
+	}
+
+	/**
+	 * @return array{0: CollectionInterface, 1: CollectionInterface}
+	 */
+	private function postsWithDefaultBelongsToAuthor(): array
+	{
+		$registry = new Registry();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end()
+			->end();
+		$posts = $registry->collection('posts')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('title', 'string')->end()
+			->field('author_id', 'int')->end();
+		$posts->belongsTo('author', 'users')->innerKey('author_id')->outerKey('id');
+
+		return [$posts, $users];
 	}
 
 	private function posts(): CollectionInterface
