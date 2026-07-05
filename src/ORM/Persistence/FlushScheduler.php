@@ -14,14 +14,17 @@ final class FlushScheduler
 {
 	private CommandPlanner $planner;
 	private CommandValueResolver $commandValueResolver;
+	private AffectedRowsValidator $affectedRows;
 
 	public function __construct(
 		private CommandExecutorInterface $executor,
 		?CommandPlanner $planner = null,
 		?CommandValueResolver $commandValueResolver = null,
+		?AffectedRowsValidator $affectedRows = null,
 	) {
 		$this->planner = $planner ?? new CommandPlanner();
 		$this->commandValueResolver = $commandValueResolver ?? new CommandValueResolver();
+		$this->affectedRows = $affectedRows ?? new AffectedRowsValidator();
 	}
 
 	/**
@@ -85,6 +88,7 @@ final class FlushScheduler
 				}
 
 				$result = $this->executor->execute($command);
+				$this->affectedRows->validate($command, $result);
 				$results[] = $result;
 
 				if ($command instanceof InsertCommand) {
@@ -129,6 +133,7 @@ final class FlushScheduler
 				}
 
 				$result = $this->executor->execute($command);
+				$this->affectedRows->validate($command, $result);
 				$results[] = $result;
 
 				unset($pendingCommands[$index]);

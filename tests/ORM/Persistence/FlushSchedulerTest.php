@@ -9,6 +9,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\ORM\Exception\InvalidCommandException;
+use ON\Data\ORM\Exception\UnexpectedAffectedRowsException;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
@@ -135,7 +136,7 @@ final class FlushSchedulerTest extends TestCase
 		$second = RecordState::clean($users->getKey(20), ['id' => 20, 'name' => 'Grace']);
 		$second->setValue('name', 'Katherine');
 		$firstResult = new CommandResult(1, ['id' => 10]);
-		$secondResult = new CommandResult(2);
+		$secondResult = new CommandResult(1);
 		$executor = new RecordingCommandExecutor(results: [$firstResult, $secondResult]);
 
 		$results = (new FlushScheduler($executor))->run($this->states($first, $second))->getCommandResults();
@@ -162,6 +163,74 @@ final class FlushSchedulerTest extends TestCase
 				$executor->getCommands(),
 			),
 		);
+	}
+
+	public function testInsertWithZeroAffectedRowsDoesNotMarkOrIndexRecordClean(): void
+	{
+		$users = $this->users();
+		$record = RecordState::new($users, ['id' => 10, 'name' => 'Ada']);
+		$states = $this->states($record);
+		$key = $users->getKey(10);
+		$executor = new RecordingCommandExecutor(new CommandResult(0));
+
+		$this->expectException(UnexpectedAffectedRowsException::class);
+
+		try {
+			(new FlushScheduler($executor))->run($states);
+		} finally {
+			self::assertTrue($record->isNew());
+			self::assertSame(['id' => 10, 'name' => 'Ada'], $record->getValues());
+			self::assertNull($states->getByKey($key));
+		}
+	}
+
+	public function testUpdateWithZeroAffectedRowsDoesNotMarkRecordClean(): void
+	{
+		$users = $this->users();
+		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Ada']);
+		$record->setValue('name', 'Grace');
+		$states = $this->states($record);
+		$executor = new RecordingCommandExecutor(new CommandResult(0));
+
+		$this->expectException(UnexpectedAffectedRowsException::class);
+
+		try {
+			(new FlushScheduler($executor))->run($states);
+		} finally {
+			self::assertTrue($record->isDirty());
+			self::assertSame('Grace', $record->getValue('name'));
+			self::assertSame($record, $states->getByKey($users->getKey(10)));
+		}
+	}
+
+	public function testDeleteWithZeroAffectedRowsDoesNotRemoveRecordState(): void
+	{
+		$users = $this->users();
+		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Ada']);
+		$record->markRemoved();
+		$states = $this->states($record);
+		$executor = new RecordingCommandExecutor(new CommandResult(0));
+
+		$this->expectException(UnexpectedAffectedRowsException::class);
+
+		try {
+			(new FlushScheduler($executor))->run($states);
+		} finally {
+			self::assertTrue($record->isRemoved());
+			self::assertSame($record, $states->getByKey($users->getKey(10)));
+		}
+	}
+
+	public function testBufferedRelationCommandWithZeroAffectedRowsThrows(): void
+	{
+		$through = $this->throughCollection();
+		$command = new InsertCommand($through, ['user_id' => 10, 'tag_id' => 3]);
+		$executor = new RecordingCommandExecutor(new CommandResult(0));
+
+		$this->expectException(UnexpectedAffectedRowsException::class);
+		$this->expectExceptionMessage("Insert command for collection 'user_tag' expected to affect 1 row, affected 0.");
+
+		(new FlushScheduler($executor))->run($this->states(), [$command]);
 	}
 
 	public function testExecutorExceptionBubblesAndFailedRecordIsNotMarkedClean(): void
