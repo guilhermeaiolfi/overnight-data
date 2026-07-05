@@ -10,6 +10,7 @@ use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RepresentationRelationBinding;
+use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
 
 final class RelationRepresentationSynchronizer
@@ -35,18 +36,18 @@ final class RelationRepresentationSynchronizer
 	): array {
 		$touched = [];
 		$touchedIds = [];
-		$resolver = new RepresentationStateResolver($states ?? $representations);
+		$states ??= $representations;
 
 		foreach ($representations->getAll() as $representation => $state) {
 			foreach ($state->getBinding()->getRelations() as $relationBinding) {
 				if ($relationBinding->isMany()) {
-					$this->syncMany($representation, $relationBinding, $toManyRelations, $resolver, $touched, $touchedIds);
+					$this->syncMany($representation, $relationBinding, $toManyRelations, $states, $touched, $touchedIds);
 
 					continue;
 				}
 
 				if ($relationBinding->isSingle()) {
-					$this->syncOne($representation, $relationBinding, $toOneRelations, $resolver, $touched, $touchedIds);
+					$this->syncOne($representation, $relationBinding, $toOneRelations, $states, $touched, $touchedIds);
 				}
 			}
 		}
@@ -63,7 +64,7 @@ final class RelationRepresentationSynchronizer
 		object $representation,
 		RepresentationRelationBinding $relationBinding,
 		RelationStateStore $toManyRelations,
-		RepresentationStateResolver $resolver,
+		RepresentationStore $states,
 		array &$touched,
 		array &$touchedIds,
 	): void {
@@ -79,7 +80,7 @@ final class RelationRepresentationSynchronizer
 		$relationName = $relationRef->getRelationName();
 		$items = $this->reader->readItems($representation, $relationBinding, $this->syncError(...));
 		foreach ($items as $item) {
-			$resolver->getRepresentationState($item, $relationBinding->getPath());
+			$this->requireTrackedRepresentation($states, $item, $relationBinding->getPath());
 		}
 
 		$relation = $toManyRelations->get($owner, $relationName);
@@ -103,7 +104,7 @@ final class RelationRepresentationSynchronizer
 		object $representation,
 		RepresentationRelationBinding $relationBinding,
 		RelationStateStore $toOneRelations,
-		RepresentationStateResolver $resolver,
+		RepresentationStore $states,
 		array &$touched,
 		array &$touchedIds,
 	): void {
@@ -119,7 +120,7 @@ final class RelationRepresentationSynchronizer
 		$relationName = $relationRef->getRelationName();
 		$target = $this->reader->readTarget($representation, $relationBinding, $this->syncError(...));
 		if ($target !== null) {
-			$resolver->getRepresentationState($target, $relationBinding->getPath());
+			$this->requireTrackedRepresentation($states, $target, $relationBinding->getPath());
 		}
 
 		$relation = $toOneRelations->get($owner, $relationName);
@@ -134,6 +135,22 @@ final class RelationRepresentationSynchronizer
 
 		$relation->set($target);
 		$this->touch($relation, $touched, $touchedIds);
+	}
+
+	private function requireTrackedRepresentation(
+		RepresentationStore $states,
+		object $object,
+		string $path,
+	): RepresentationState {
+		$tracked = $states->get($object);
+		if ($tracked instanceof RepresentationState) {
+			return $tracked;
+		}
+
+		throw new SyncException(sprintf(
+			"Representation relation path '%s' references an object that is not tracked; adopt or track the related object before synchronization.",
+			$path
+		));
 	}
 
 	/**

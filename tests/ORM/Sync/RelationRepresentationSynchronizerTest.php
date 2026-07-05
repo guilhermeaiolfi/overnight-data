@@ -385,6 +385,41 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$this->sync($representations, new RelationStateStore());
 	}
 
+	public function testUntrackedRelatedObjectExceptionMessageIncludesRelationPath(): void
+	{
+		$owner = RecordState::new($this->users());
+		$target = new stdClass();
+		$author = new stdClass();
+		$author->profile = $target;
+		$representation = new stdClass();
+		$representation->author = $author;
+		$binding = new RepresentationBinding();
+		$binding->addRelation(new RepresentationRelationBinding(
+			'author.profile',
+			RecordRelationRef::forState($owner, 'author'),
+			RepresentationRelationCardinality::ONE,
+			$this->profileBinding()
+		));
+
+		$this->expectException(SyncException::class);
+		$this->expectExceptionMessage('author.profile');
+
+		$this->sync($this->representations($this->tracked($representation, $binding)));
+	}
+
+	public function testUntrackedRelatedObjectDoesNotAutoAdoptRepresentationStates(): void
+	{
+		$target = new stdClass();
+		$representations = $this->representations($this->trackedWithOneRelation(RecordState::new($this->users()), ['posts' => $target]));
+
+		try {
+			$this->sync($representations);
+		} catch (SyncException) {
+		}
+
+		self::assertNull($representations->get($target));
+	}
+
 	public function testRelationSynchronizerDoesNotExecuteCommandsOrCallRelationPersistencePlanners(): void
 	{
 		$source = file_get_contents(__DIR__ . '/../../../src/ORM/Sync/RelationRepresentationSynchronizer.php');
