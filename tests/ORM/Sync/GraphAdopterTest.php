@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
@@ -27,7 +26,7 @@ final class GraphAdopterTest extends TestCase
 		$root = $this->representation(['name' => 'Root']);
 		$representations = $this->representations($this->tracked($root, $this->userBindingFor(RecordState::new($this->users()))));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelationStateStore(), new RelationStateStore());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
 
 		self::assertSame([], $result);
 	}
@@ -38,7 +37,7 @@ final class GraphAdopterTest extends TestCase
 		$records = new RecordStateStore();
 		$representations = new RepresentationStore();
 
-		$result = $this->adopter()->adopt($root, $representations, $records, new RelationStateStore(), new RelationStateStore(), $this->userBinding());
+		$result = $this->adopter()->adopt($root, $representations, $records, $this->userBinding());
 
 		self::assertSame([], $result);
 		$tracked = $representations->get($root);
@@ -53,7 +52,7 @@ final class GraphAdopterTest extends TestCase
 		$records = new RecordStateStore();
 		$representations = new RepresentationStore();
 
-		$this->adopter()->adopt($root, $representations, $records, new RelationStateStore(), new RelationStateStore(), $this->userBindingWithId());
+		$this->adopter()->adopt($root, $representations, $records, $this->userBindingWithId());
 
 		$tracked = $representations->get($root);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
@@ -70,7 +69,7 @@ final class GraphAdopterTest extends TestCase
 		$records = new RecordStateStore();
 		$representations = new RepresentationStore();
 
-		$this->adopter()->adopt($root, $representations, $records, new RelationStateStore(), new RelationStateStore(), $this->userBindingWithId());
+		$this->adopter()->adopt($root, $representations, $records, $this->userBindingWithId());
 
 		$tracked = $representations->get($root);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
@@ -84,7 +83,7 @@ final class GraphAdopterTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('root binding');
 
-		$this->adopter()->adopt(new stdClass(), new RepresentationStore(), new RecordStateStore(), new RelationStateStore(), new RelationStateStore());
+		$this->adopter()->adopt(new stdClass(), new RepresentationStore(), new RecordStateStore());
 	}
 
 	public function testManyRelationWithNullValueAdoptsNothing(): void
@@ -92,7 +91,7 @@ final class GraphAdopterTest extends TestCase
 		$root = $this->representation(['posts' => null]);
 		$representations = $this->representations($this->trackedRootWithPosts($root));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelationStateStore(), new RelationStateStore());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
 
 		self::assertSame([], $result);
 	}
@@ -104,7 +103,7 @@ final class GraphAdopterTest extends TestCase
 		$records = new RecordStateStore();
 		$representations = $this->representations($this->trackedRootWithPosts($root));
 
-		$result = $this->adopter()->adopt($root, $representations, $records, new RelationStateStore(), new RelationStateStore());
+		$result = $this->adopter()->adopt($root, $representations, $records);
 
 		self::assertCount(1, $result);
 		self::assertSame($representations->get($item), $result[0]);
@@ -119,7 +118,7 @@ final class GraphAdopterTest extends TestCase
 		$records = new RecordStateStore();
 		$representations = $this->representations($this->trackedRootWithPostsAndPostIds($root));
 
-		$result = $this->adopter()->adopt($root, $representations, $records, new RelationStateStore(), new RelationStateStore());
+		$result = $this->adopter()->adopt($root, $representations, $records);
 
 		self::assertCount(1, $result);
 		$record = $records->getFromRepresentation($result[0]);
@@ -135,7 +134,7 @@ final class GraphAdopterTest extends TestCase
 		$records = new RecordStateStore();
 		$representations = $this->representations($this->trackedRootWithPostsAndPostIds($root));
 
-		$result = $this->adopter()->adopt($root, $representations, $records, new RelationStateStore(), new RelationStateStore());
+		$result = $this->adopter()->adopt($root, $representations, $records);
 
 		self::assertCount(1, $result);
 		$record = $records->getFromRepresentation($result[0]);
@@ -152,7 +151,7 @@ final class GraphAdopterTest extends TestCase
 		$this->expectExceptionMessage('posts');
 		$this->expectExceptionMessage('iterable');
 
-		$this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelationStateStore(), new RelationStateStore());
+		$this->adopter()->adopt($root, $representations, new RecordStateStore());
 	}
 
 	public function testManyRelationWithNonObjectItemThrows(): void
@@ -164,7 +163,7 @@ final class GraphAdopterTest extends TestCase
 		$this->expectExceptionMessage('posts');
 		$this->expectExceptionMessage('only contain objects');
 
-		$this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelationStateStore(), new RelationStateStore());
+		$this->adopter()->adopt($root, $representations, new RecordStateStore());
 	}
 
 	public function testOneRelationWithNullValueAdoptsNothing(): void
@@ -172,7 +171,7 @@ final class GraphAdopterTest extends TestCase
 		$root = $this->representation(['profile' => null]);
 		$representations = $this->representations($this->trackedRootWithProfile($root));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelationStateStore(), new RelationStateStore());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
 
 		self::assertSame([], $result);
 	}
@@ -183,7 +182,7 @@ final class GraphAdopterTest extends TestCase
 		$root = $this->representation(['profile' => $target]);
 		$representations = $this->representations($this->trackedRootWithProfile($root));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelationStateStore(), new RelationStateStore());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
 
 		self::assertCount(1, $result);
 		self::assertSame($representations->get($target), $result[0]);
@@ -198,7 +197,7 @@ final class GraphAdopterTest extends TestCase
 		$this->expectExceptionMessage('profile');
 		$this->expectExceptionMessage('object value or null');
 
-		$this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelationStateStore(), new RelationStateStore());
+		$this->adopter()->adopt($root, $representations, new RecordStateStore());
 	}
 
 	public function testAlreadyTrackedRelatedObjectIsNotDuplicated(): void
@@ -210,7 +209,7 @@ final class GraphAdopterTest extends TestCase
 			$this->tracked($item, $this->postBindingFor(RecordState::new($this->posts())))
 		);
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelationStateStore(), new RelationStateStore());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
 
 		self::assertSame([], $result);
 		self::assertCount(2, $representations->getAll());
@@ -230,7 +229,7 @@ final class GraphAdopterTest extends TestCase
 		));
 		$representations = $this->representations($this->trackedRootWithPosts($root), $this->tracked($post, $postBinding));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelationStateStore(), new RelationStateStore());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
 
 		self::assertCount(1, $result);
 		self::assertSame($representations->get($comment), $result[0]);
@@ -257,7 +256,7 @@ final class GraphAdopterTest extends TestCase
 		));
 		$representations = $this->representations($this->tracked($root, $rootBinding));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelationStateStore(), new RelationStateStore());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
 
 		self::assertSame([$representations->get($post), $representations->get($comment)], $result);
 	}
@@ -282,7 +281,7 @@ final class GraphAdopterTest extends TestCase
 		));
 		$representations = $this->representations($this->tracked($root, $rootBinding));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelationStateStore(), new RelationStateStore());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
 
 		self::assertSame([$representations->get($profile), $representations->get($user)], $result);
 	}
@@ -309,7 +308,7 @@ final class GraphAdopterTest extends TestCase
 		));
 		$representations = $this->representations($this->tracked($root, $rootBinding));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelationStateStore(), new RelationStateStore());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
 
 		self::assertCount(1, $result);
 		self::assertSame($representations->get($item), $result[0]);
@@ -321,7 +320,7 @@ final class GraphAdopterTest extends TestCase
 		$root = $this->representation(['posts' => [$item]]);
 		$representations = $this->representations($this->trackedRootWithPosts($root));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelationStateStore(), new RelationStateStore());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
 
 		self::assertSame('posts', $result[0]->getBinding()->getField('title')->getField()->getCollectionName());
 	}

@@ -7,13 +7,9 @@ namespace ON\Data\ORM\Sync;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\Relation\RelationStateStore;
-use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
 
@@ -21,23 +17,23 @@ final class GraphAdopter
 {
 	private RepresentationValueReader $reader;
 
-	public function __construct(?RepresentationValueReader $reader = null)
-	{
+	private RepresentationRelationReader $relationReader;
+
+	public function __construct(
+		?RepresentationValueReader $reader = null,
+		?RepresentationRelationReader $relationReader = null,
+	) {
 		$this->reader = $reader ?? new RepresentationValueReader();
+		$this->relationReader = $relationReader ?? new RepresentationRelationReader($this->reader);
 	}
 
 	/**
 	 * @return list<RepresentationState>
-	 *
-	 * @param RelationStateStore<ToManyRelationState> $toManyRelations
-	 * @param RelationStateStore<ToOneRelationState> $toOneRelations
 	 */
 	public function adopt(
 		object $root,
 		RepresentationStore $representations,
 		RecordStateStore $records,
-		RelationStateStore $toManyRelations,
-		RelationStateStore $toOneRelations,
 		?RepresentationBinding $rootBinding = null,
 	): array {
 		if ($representations->get($root) === null) {
@@ -86,7 +82,7 @@ final class GraphAdopter
 		$visited[$id] = true;
 		foreach ($tracked->getBinding()->getRelations() as $relationBinding) {
 			if ($relationBinding->isMany()) {
-				foreach ($this->readItems($representation, $relationBinding) as $item) {
+				foreach ($this->relationReader->readItems($representation, $relationBinding, $this->adoptionError(...)) as $item) {
 					$this->adoptAndWalk($item, $relationBinding->getRelatedBinding(), $representations, $records, $adopter, $visited, $adopted);
 				}
 
@@ -94,7 +90,7 @@ final class GraphAdopter
 			}
 
 			if ($relationBinding->isSingle()) {
-				$target = $this->readTarget($representation, $relationBinding);
+				$target = $this->relationReader->readTarget($representation, $relationBinding, $this->adoptionError(...));
 				if ($target !== null) {
 					$this->adoptAndWalk($target, $relationBinding->getRelatedBinding(), $representations, $records, $adopter, $visited, $adopted);
 				}
@@ -127,48 +123,11 @@ final class GraphAdopter
 	}
 
 	/**
-	 * @return list<object>
+	 * @param non-empty-string $message
 	 */
-	private function readItems(object $representation, RepresentationRelationBinding $binding): array
+	private function adoptionError(string $message): StateException
 	{
-		$value = $this->reader->readPath($representation, $binding->getPath());
-		if ($value === null) {
-			return [];
-		}
-
-		if (! is_iterable($value)) {
-			throw new StateException(sprintf(
-				"Representation relation path '%s' must contain an iterable value or null during graph adoption.",
-				$binding->getPath()
-			));
-		}
-
-		$items = [];
-		foreach ($value as $item) {
-			if (! is_object($item)) {
-				throw new StateException(sprintf(
-					"Representation relation path '%s' can only contain objects during graph adoption.",
-					$binding->getPath()
-				));
-			}
-
-			$items[] = $item;
-		}
-
-		return $items;
-	}
-
-	private function readTarget(object $representation, RepresentationRelationBinding $binding): ?object
-	{
-		$value = $this->reader->readPath($representation, $binding->getPath());
-		if ($value === null || is_object($value)) {
-			return $value;
-		}
-
-		throw new StateException(sprintf(
-			"Representation relation path '%s' must contain an object value or null during graph adoption.",
-			$binding->getPath()
-		));
+		return new StateException(rtrim($message, '.') . ' during graph adoption.');
 	}
 
 	private function collectionFor(RepresentationBinding $binding, bool $isRoot): CollectionInterface

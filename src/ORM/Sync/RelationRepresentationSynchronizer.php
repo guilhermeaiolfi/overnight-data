@@ -14,11 +14,14 @@ use ON\Data\ORM\State\RepresentationStore;
 
 final class RelationRepresentationSynchronizer
 {
-	private RepresentationValueReader $reader;
+	private RepresentationRelationReader $relationReader;
 
-	public function __construct(?RepresentationValueReader $reader = null)
-	{
-		$this->reader = $reader ?? new RepresentationValueReader();
+	public function __construct(
+		?RepresentationValueReader $reader = null,
+		?RepresentationRelationReader $relationReader = null,
+	) {
+		$reader ??= new RepresentationValueReader();
+		$this->relationReader = $relationReader ?? new RepresentationRelationReader($reader);
 	}
 
 	/**
@@ -77,7 +80,7 @@ final class RelationRepresentationSynchronizer
 
 		$owner = $relationRef->getState();
 		$relationName = $relationRef->getRelationName();
-		$items = $this->readItems($representation, $relationBinding);
+		$items = $this->relationReader->readItems($representation, $relationBinding, $this->syncError(...));
 		foreach ($items as $item) {
 			$resolver->getRepresentationState($item, $relationBinding->getPath());
 		}
@@ -117,7 +120,7 @@ final class RelationRepresentationSynchronizer
 
 		$owner = $relationRef->getState();
 		$relationName = $relationRef->getRelationName();
-		$target = $this->readTarget($representation, $relationBinding);
+		$target = $this->relationReader->readTarget($representation, $relationBinding, $this->syncError(...));
 		if ($target !== null) {
 			$resolver->getRepresentationState($target, $relationBinding->getPath());
 		}
@@ -137,48 +140,11 @@ final class RelationRepresentationSynchronizer
 	}
 
 	/**
-	 * @return list<object>
+	 * @param non-empty-string $message
 	 */
-	private function readItems(object $representation, RepresentationRelationBinding $binding): array
+	private function syncError(string $message): SyncException
 	{
-		$value = $this->reader->readPath($representation, $binding->getPath());
-		if ($value === null) {
-			return [];
-		}
-
-		if (! is_iterable($value)) {
-			throw new SyncException(sprintf(
-				"Representation relation path '%s' must contain an iterable value or null.",
-				$binding->getPath()
-			));
-		}
-
-		$items = [];
-		foreach ($value as $item) {
-			if (! is_object($item)) {
-				throw new SyncException(sprintf(
-					"Representation relation path '%s' can only contain objects.",
-					$binding->getPath()
-				));
-			}
-
-			$items[] = $item;
-		}
-
-		return $items;
-	}
-
-	private function readTarget(object $representation, RepresentationRelationBinding $binding): ?object
-	{
-		$value = $this->reader->readPath($representation, $binding->getPath());
-		if ($value === null || is_object($value)) {
-			return $value;
-		}
-
-		throw new SyncException(sprintf(
-			"Representation relation path '%s' must contain an object value or null.",
-			$binding->getPath()
-		));
+		return new SyncException($message);
 	}
 
 	/**

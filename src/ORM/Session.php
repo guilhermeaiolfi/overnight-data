@@ -195,8 +195,6 @@ final class Session
 				$representation,
 				$this->context->getRepresentations(),
 				$this->context->getRecords(),
-				$this->context->getToManyRelations(),
-				$this->context->getToOneRelations(),
 				$binding
 			);
 
