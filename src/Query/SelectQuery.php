@@ -30,6 +30,7 @@ use ON\Data\Query\Relation\RelationSelectionTree;
 use ON\Data\Query\Result\ObjectExportClassValidator;
 use ON\Data\Query\Result\ObjectResultMaterializer;
 use ON\Data\Query\Selection\SelectionList;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\Sort\Sort;
 use stdClass;
 
@@ -625,13 +626,13 @@ final class SelectQuery implements QuerySourceInterface
 			$rows = (new Relation\LoadRuntime($this, $executor))->fetchAll();
 		}
 
-		$rows = $this->materializeRows($rows);
+		$materialized = $this->materializeRows($this->publicRows($rows));
 
 		if ($this->mutable) {
-			$this->trackMutableResults($rows);
+			$this->trackMutableResults($rows, $materialized);
 		}
 
-		return $rows;
+		return $materialized;
 	}
 
 	/**
@@ -652,13 +653,13 @@ final class SelectQuery implements QuerySourceInterface
 			return null;
 		}
 
-		$result = $this->materializeRow($row);
+		$materialized = $this->materializeRow($this->publicRow($row));
 
-		if ($this->mutable && is_object($result)) {
-			(new MutableQueryResultTracker())->trackOne($this, $this->requireMutableSession(), $result);
+		if ($this->mutable && is_object($materialized)) {
+			(new MutableQueryResultTracker())->trackOne($this, $this->requireMutableSession(), $materialized, $row);
 		}
 
-		return $result;
+		return $materialized;
 	}
 
 	/**
@@ -780,10 +781,54 @@ final class SelectQuery implements QuerySourceInterface
 
 	/**
 	 * @param list<object> $objects
+	 * @param list<array<string, mixed>> $sourceRows
 	 */
-	private function trackMutableResults(array $objects): void
+	private function trackMutableResults(array $sourceRows, array $objects): void
 	{
-		(new MutableQueryResultTracker())->trackAll($this, $this->requireMutableSession(), $objects);
+		(new MutableQueryResultTracker())->trackAll(
+			$this,
+			$this->requireMutableSession(),
+			$objects,
+			$sourceRows,
+		);
+	}
+
+	/**
+	 * @param array<string, mixed> $row
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function publicRow(array $row): array
+	{
+		$public = $row;
+
+		foreach ($this->selections->getByTag(SelectionTag::INTERNAL) as $selection) {
+			unset($public[$selection->getSelectionKey()]);
+		}
+
+		foreach (array_keys($public) as $key) {
+			if (str_starts_with($key, '__od.')) {
+				unset($public[$key]);
+			}
+		}
+
+		return $public;
+	}
+
+	/**
+	 * @param list<array<string, mixed>> $rows
+	 *
+	 * @return list<array<string, mixed>>
+	 */
+	private function publicRows(array $rows): array
+	{
+		$publicRows = [];
+
+		foreach ($rows as $row) {
+			$publicRows[] = $this->publicRow($row);
+		}
+
+		return $publicRows;
 	}
 
 	private function requireMutableSession(): Session

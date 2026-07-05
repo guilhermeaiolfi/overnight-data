@@ -76,7 +76,7 @@ In strict sync paths, related objects found at those representation paths must a
 
 Graph sync does not infer relations from collection definitions, object properties, mapper metadata, or query selections. It syncs scalar and relation runtime state, but does not plan relation persistence, flush records, execute commands, or clear relation changes. Calling `sync($object)` again refreshes state and can bring newly attached related plain objects into the session. Query/projection/mixed bindings remain valid provenance for already-tracked or query-created representations; they require existing tracked state rather than creating a new root record.
 
-Flat mutable projections, where one result object contains writable fields from multiple collections, require explicit projection adoption. That is a planned capability and should not be implemented through `GraphAdopter`; graph adoption is for object graphs, while projection adoption should be modeled separately.
+Flat mutable projections, where one result object contains writable fields from multiple collections, use explicit projection adoption through `ProjectionRepresentationAdopter`. Graph adoption through `GraphAdopter` remains for object graphs: one representation object resolves to nested related objects, each with its own binding branch. Projection adoption resolves one representation object to multiple `RecordState` objects when root field bindings reference more than one collection.
 
 Relation persistence planning then consumes changed `ToManyRelationState` and `ToOneRelationState` instances. Built-in planners cover many-to-many, has-many, belongs-to, and has-one relation definitions.
 

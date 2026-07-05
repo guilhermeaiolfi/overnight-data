@@ -13,6 +13,30 @@ It is independent from the Overnight framework. The package can be consumed on i
 - Bound execution: optional execution binding through `ON\Data\Database\QueryExecutorInterface`, plus the neutral `Database` facade and `ConnectionConfig`.
 - Relation loading: structured relation selection for nested results, loader-owned join or separate-query execution, and parser-backed result assembly for built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relations.
 - ORM persistence: `RecordState`-backed scalar insert/update/delete planning, scalar and relation representation synchronization, configured relation persistence planning, `FlushExecutor` / `Session` orchestration, Cycle-backed command execution, and simple auto-increment primary-key merge after inserts.
+- Mutable query export: flat and nested `stdClass` query results can be tracked in a `Session`, preserving field provenance from the original query selection.
+
+## Mutable Flat Query Projections
+
+Mutable object export preserves query provenance, so a flat object property can still point to the table/field it came from. The object shape is independent from the persistence source.
+
+```php
+$user = $users
+    ->query()
+    ->select(
+        $users->id,
+        $users->company->name->as('name'),
+    )
+    ->to(stdClass::class)
+    ->mutable($session)
+    ->fetchOne();
+
+$user->name = 'Dell';
+
+$session->sync($user);
+$session->flush();
+
+// Updates companies.name.
+```
 
 ## Current Limitations
 

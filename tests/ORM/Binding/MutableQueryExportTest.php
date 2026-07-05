@@ -112,7 +112,7 @@ final class MutableQueryExportTest extends TestCase
 		$user->posts = [$post];
 
 		$session = new Session(new RecordingCommandExecutor());
-		(new MutableQueryResultTracker())->trackOne($query, $session, $user);
+		(new MutableQueryResultTracker())->trackOne($query, $session, $user, ['id' => 1, 'name' => 'Ada']);
 
 		self::assertTrue($session->getRepresentations()->has($user));
 		self::assertTrue($session->getRepresentations()->has($post));
@@ -248,7 +248,10 @@ final class MutableQueryResultTrackerTest extends TestCase
 		$first = $this->userWithPosts(1, 'Ada', 10, 'Hello');
 		$second = $this->userWithPosts(2, 'Grace', 11, 'World');
 
-		$tracker->trackAll($query, $session, [$first, $second]);
+		$tracker->trackAll($query, $session, [$first, $second], [
+			['id' => 1, 'name' => 'Ada'],
+			['id' => 2, 'name' => 'Grace'],
+		]);
 
 		$firstState = $session->getRepresentations()->get($first);
 		$secondState = $session->getRepresentations()->get($second);
@@ -274,7 +277,10 @@ final class MutableQueryResultTrackerTest extends TestCase
 		$first = $this->userObject(1, 'Ada');
 		$second = $this->userObject(2, 'Grace');
 
-		$tracker->trackAll($query, $session, [$first, $second]);
+		$tracker->trackAll($query, $session, [$first, $second], [
+			['id' => 1, 'name' => 'Ada'],
+			['id' => 2, 'name' => 'Grace'],
+		]);
 
 		$firstState = $session->getRepresentations()->get($first);
 		$secondState = $session->getRepresentations()->get($second);
@@ -295,7 +301,7 @@ final class MutableQueryResultTrackerTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 		$user = $this->userObject(1, 'Ada');
 
-		$binding = $tracker->trackOne($query, $session, $user);
+		$binding = $tracker->trackOne($query, $session, $user, ['id' => 1, 'name' => 'Ada']);
 
 		self::assertSame($binding, $session->getRepresentations()->get($user)?->getBinding());
 	}

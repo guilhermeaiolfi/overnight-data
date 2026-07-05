@@ -14,8 +14,10 @@ use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Selection\SelectionItem;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 
 final class SelectQueryBindingCompiler
@@ -26,6 +28,7 @@ final class SelectQueryBindingCompiler
 		$binding = new RepresentationBinding();
 
 		$this->compileRootScalarFields($binding, $query, $collection);
+		$this->compileRelationSourcedFlatFields($binding, $query);
 		$this->compileRelationSelections($binding, $query);
 
 		return $binding;
@@ -146,6 +149,112 @@ final class SelectQueryBindingCompiler
 				),
 			);
 		}
+	}
+
+	private function compileRelationSourcedFlatFields(RepresentationBinding $binding, SelectQuery $query): void
+	{
+		/** @var array<string, RelationRef> $relationRefsByPath */
+		$relationRefsByPath = [];
+
+		foreach ($query->getSelections()->getExplicit() as $selection) {
+			$resolved = $this->resolveRelationSourcedFieldRef($query, $selection);
+
+			if ($resolved === null) {
+				continue;
+			}
+
+			$fieldRef = $resolved['fieldRef'];
+			$relationRef = $resolved['relationRef'];
+			$targetCollection = $resolved['targetCollection'];
+			$expression = $selection->getExpression();
+			$path = $selection->getSelectionKey();
+
+			if ($expression instanceof AliasedExpression) {
+				$path = $expression->getAlias();
+			}
+
+			$this->addFieldBinding(
+				$binding,
+				new RepresentationFieldBinding(
+					$path,
+					RecordFieldRef::template($targetCollection, $fieldRef->getName()),
+					writable: true,
+				),
+			);
+
+			$relationRefsByPath[json_encode($relationRef->getPath(), JSON_THROW_ON_ERROR)] = $relationRef;
+		}
+
+		foreach ($relationRefsByPath as $relationRef) {
+			$this->ensureRelatedIdentityBindings($binding, $query, $relationRef);
+		}
+	}
+
+	/**
+	 * @return array{fieldRef: FieldRef, relationRef: RelationRef, targetCollection: CollectionInterface}|null
+	 */
+	private function resolveRelationSourcedFieldRef(SelectQuery $query, SelectionItem $selection): ?array
+	{
+		$expression = $selection->getExpression();
+
+		if ($expression instanceof AliasedExpression) {
+			$expression = $expression->getExpression();
+		}
+
+		if (! $expression instanceof FieldRef) {
+			return null;
+		}
+
+		if ($this->resolveRootFieldRef($query, $selection) !== null) {
+			return null;
+		}
+
+		$source = $expression->getSource();
+
+		if (! $source instanceof RelationRef || $source->getQuery() !== $query) {
+			return null;
+		}
+
+		return [
+			'fieldRef' => $expression,
+			'relationRef' => $source,
+			'targetCollection' => $source->getCollection(),
+		];
+	}
+
+	private function ensureRelatedIdentityBindings(
+		RepresentationBinding $binding,
+		SelectQuery $query,
+		RelationRef $relationRef,
+	): void {
+		$targetCollection = $relationRef->getCollection();
+
+		foreach ($targetCollection->getPrimaryKey() as $fieldName) {
+			if ($this->hasFieldBindingFor($binding, $targetCollection, $fieldName)) {
+				continue;
+			}
+
+			$internalPath = $this->internalIdentityPath($relationRef->getPath(), $fieldName);
+			$fieldRef = $relationRef->field($fieldName);
+			$query->getSelections()->add($fieldRef->as($internalPath), SelectionTag::INTERNAL);
+
+			$this->addFieldBinding(
+				$binding,
+				new RepresentationFieldBinding(
+					$internalPath,
+					RecordFieldRef::template($targetCollection, $fieldName),
+					writable: false,
+				),
+			);
+		}
+	}
+
+	/**
+	 * @param list<string> $relationPath
+	 */
+	private function internalIdentityPath(array $relationPath, string $fieldName): string
+	{
+		return '__od.' . implode('.', [...$relationPath, $fieldName]);
 	}
 
 	private function compileRelationSelections(RepresentationBinding $rootBinding, SelectQuery $query): void

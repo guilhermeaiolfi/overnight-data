@@ -61,6 +61,14 @@ final class Session
 	}
 
 	/**
+	 * Internal extension point for ORM query result tracking.
+	 */
+	public function getContext(): SessionContext
+	{
+		return $this->context;
+	}
+
+	/**
 	 * @return RelationStateStore<ToManyRelationState>
 	 */
 	public function getToManyRelations(): RelationStateStore
