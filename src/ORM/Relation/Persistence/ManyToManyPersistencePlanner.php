@@ -8,6 +8,7 @@ use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\DeleteCommand;
+use ON\Data\ORM\Persistence\ExpectedAffectedRows;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\RelationChangeInterface;
@@ -60,6 +61,7 @@ final class ManyToManyPersistencePlanner implements RelationPersistencePlannerIn
 			$context->getCommands()->add(new DeleteCommand(
 				$throughCollection,
 				$this->buildThroughValues($relation, $owner, $target),
+				ExpectedAffectedRows::zeroOrOne(),
 			));
 		}
 	}

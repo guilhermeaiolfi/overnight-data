@@ -9,6 +9,8 @@ use ON\Data\ORM\Exception\InvalidCommandException;
 
 final class UpdateCommand implements CommandInterface
 {
+	private ExpectedAffectedRows $expectedAffectedRows;
+
 	/**
 	 * @param array<string, mixed> $identity
 	 * @param array<string, mixed> $changes
@@ -17,6 +19,7 @@ final class UpdateCommand implements CommandInterface
 		private CollectionInterface $collection,
 		private array $identity,
 		private array $changes,
+		?ExpectedAffectedRows $expectedAffectedRows = null,
 	) {
 		if ($identity === []) {
 			throw new InvalidCommandException('Update command identity cannot be empty.');
@@ -34,6 +37,8 @@ final class UpdateCommand implements CommandInterface
 				implode("', '", $changedIdentityFields),
 			));
 		}
+
+		$this->expectedAffectedRows = $expectedAffectedRows ?? ExpectedAffectedRows::exactly(1);
 	}
 
 	public function getCollection(): CollectionInterface
@@ -71,5 +76,10 @@ final class UpdateCommand implements CommandInterface
 	public function setChanges(array $changes): void
 	{
 		$this->changes = $changes;
+	}
+
+	public function getExpectedAffectedRows(): ExpectedAffectedRows
+	{
+		return $this->expectedAffectedRows;
 	}
 }

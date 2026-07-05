@@ -8,8 +8,6 @@ use ON\Data\ORM\Exception\UnexpectedAffectedRowsException;
 
 final class AffectedRowsValidator
 {
-	private const EXPECTED_AFFECTED_ROWS = 1;
-
 	public function validate(CommandInterface $command, CommandResult $result): void
 	{
 		if (! $command instanceof InsertCommand
@@ -19,40 +17,44 @@ final class AffectedRowsValidator
 			return;
 		}
 
+		$expected = $command->getExpectedAffectedRows();
 		$affectedRows = $result->getAffectedRows();
 
-		if ($affectedRows === self::EXPECTED_AFFECTED_ROWS) {
+		if ($expected->accepts($affectedRows)) {
 			return;
 		}
 
-		throw new UnexpectedAffectedRowsException($this->buildMessage($command, $affectedRows));
+		throw new UnexpectedAffectedRowsException($this->buildMessage($command, $expected, $affectedRows));
 	}
 
-	private function buildMessage(CommandInterface $command, int $affectedRows): string
+	private function buildMessage(CommandInterface $command, ExpectedAffectedRows $expected, int $affectedRows): string
 	{
 		$collection = $command->getCollection()->getName();
 
 		if ($command instanceof InsertCommand) {
 			return sprintf(
-				"Insert command for collection '%s' expected to affect 1 row, affected %d.",
+				"Insert command for collection '%s' expected to affect %s, affected %d.",
 				$collection,
+				$expected->describe(),
 				$affectedRows,
 			);
 		}
 
 		if ($command instanceof UpdateCommand) {
 			return sprintf(
-				"Update command for collection '%s' with identity %s expected to affect 1 row, affected %d.",
+				"Update command for collection '%s' with identity %s expected to affect %s, affected %d.",
 				$collection,
 				json_encode($command->getIdentity()),
+				$expected->describe(),
 				$affectedRows,
 			);
 		}
 
 		return sprintf(
-			"Delete command for collection '%s' with identity %s expected to affect 1 row, affected %d.",
+			"Delete command for collection '%s' with identity %s expected to affect %s, affected %d.",
 			$collection,
 			json_encode($command->getIdentity()),
+			$expected->describe(),
 			$affectedRows,
 		);
 	}

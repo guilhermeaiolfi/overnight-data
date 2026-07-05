@@ -13,6 +13,7 @@ use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandValueResolver;
 use ON\Data\ORM\Persistence\DeleteCommand;
+use ON\Data\ORM\Persistence\ExpectedAffectedRows;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\ManyToManyPersistencePlanner;
@@ -70,6 +71,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$command = $this->deleteCommand($commands[0]);
 		self::assertSame($through, $command->getCollection());
 		$this->assertDeleteResolvesTo($command, ['user_id' => 10, 'tag_id' => 3]);
+		self::assertSame(ExpectedAffectedRows::zeroOrOne()->describe(), $command->getExpectedAffectedRows()->describe());
 	}
 
 	public function testAddedAndRemovedCommandsPreserveInsertThenDeleteOrder(): void

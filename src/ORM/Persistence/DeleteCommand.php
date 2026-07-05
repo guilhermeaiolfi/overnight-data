@@ -9,16 +9,21 @@ use ON\Data\ORM\Exception\InvalidCommandException;
 
 final class DeleteCommand implements CommandInterface
 {
+	private ExpectedAffectedRows $expectedAffectedRows;
+
 	/**
 	 * @param array<string, mixed> $identity
 	 */
 	public function __construct(
 		private CollectionInterface $collection,
 		private array $identity,
+		?ExpectedAffectedRows $expectedAffectedRows = null,
 	) {
 		if ($identity === []) {
 			throw new InvalidCommandException('Delete command identity cannot be empty.');
 		}
+
+		$this->expectedAffectedRows = $expectedAffectedRows ?? ExpectedAffectedRows::exactly(1);
 	}
 
 	public function getCollection(): CollectionInterface
@@ -40,5 +45,10 @@ final class DeleteCommand implements CommandInterface
 	public function setIdentity(array $identity): void
 	{
 		$this->identity = $identity;
+	}
+
+	public function getExpectedAffectedRows(): ExpectedAffectedRows
+	{
+		return $this->expectedAffectedRows;
 	}
 }

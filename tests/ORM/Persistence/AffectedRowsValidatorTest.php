@@ -8,6 +8,7 @@ use ON\Data\ORM\Exception\UnexpectedAffectedRowsException;
 use ON\Data\ORM\Persistence\AffectedRowsValidator;
 use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\DeleteCommand;
+use ON\Data\ORM\Persistence\ExpectedAffectedRows;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use PHPUnit\Framework\TestCase;
@@ -114,6 +115,49 @@ final class AffectedRowsValidatorTest extends TestCase
 			self::fail('Expected UnexpectedAffectedRowsException.');
 		} catch (UnexpectedAffectedRowsException $exception) {
 			self::assertStringContainsString('{"id":1}', $exception->getMessage());
+		}
+	}
+
+	public function testCustomZeroOrOneDeleteAcceptsZeroAffectedRows(): void
+	{
+		$command = new DeleteCommand(
+			$this->posts(),
+			['post_id' => 1, 'tag_id' => 2],
+			ExpectedAffectedRows::zeroOrOne(),
+		);
+
+		$this->validator->validate($command, new CommandResult(0));
+
+		$this->addToAssertionCount(1);
+	}
+
+	public function testCustomZeroOrOneDeleteRejectsTwoAffectedRows(): void
+	{
+		$command = new DeleteCommand(
+			$this->posts(),
+			['post_id' => 1, 'tag_id' => 2],
+			ExpectedAffectedRows::zeroOrOne(),
+		);
+
+		$this->expectException(UnexpectedAffectedRowsException::class);
+		$this->expectExceptionMessage("Delete command for collection 'posts' with identity {\"post_id\":1,\"tag_id\":2} expected to affect 0 or 1 rows, affected 2.");
+
+		$this->validator->validate($command, new CommandResult(2));
+	}
+
+	public function testExceptionMessageIncludesExpectedPolicyDescription(): void
+	{
+		$command = new DeleteCommand(
+			$this->posts(),
+			['post_id' => 1, 'tag_id' => 2],
+			ExpectedAffectedRows::zeroOrOne(),
+		);
+
+		try {
+			$this->validator->validate($command, new CommandResult(2));
+			self::fail('Expected UnexpectedAffectedRowsException.');
+		} catch (UnexpectedAffectedRowsException $exception) {
+			self::assertStringContainsString('expected to affect 0 or 1 rows', $exception->getMessage());
 		}
 	}
 }

@@ -14,6 +14,7 @@ use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\DeleteCommand;
+use ON\Data\ORM\Persistence\ExpectedAffectedRows;
 use ON\Data\ORM\Persistence\FlushScheduler;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
@@ -229,6 +230,39 @@ final class FlushSchedulerTest extends TestCase
 
 		$this->expectException(UnexpectedAffectedRowsException::class);
 		$this->expectExceptionMessage("Insert command for collection 'user_tag' expected to affect 1 row, affected 0.");
+
+		(new FlushScheduler($executor))->run($this->states(), [$command]);
+	}
+
+	public function testBufferedThroughDeleteWithZeroAffectedRowsPasses(): void
+	{
+		$through = $this->throughCollection();
+		$command = new DeleteCommand(
+			$through,
+			['user_id' => 10, 'tag_id' => 3],
+			ExpectedAffectedRows::zeroOrOne(),
+		);
+		$executor = new RecordingCommandExecutor(new CommandResult(0));
+
+		$results = (new FlushScheduler($executor))->run($this->states(), [$command])->getCommandResults();
+
+		self::assertCount(1, $results);
+		self::assertSame(0, $results[0]->getAffectedRows());
+		self::assertSame([$command], $executor->getCommands());
+	}
+
+	public function testBufferedThroughDeleteWithTwoAffectedRowsThrows(): void
+	{
+		$through = $this->throughCollection();
+		$command = new DeleteCommand(
+			$through,
+			['user_id' => 10, 'tag_id' => 3],
+			ExpectedAffectedRows::zeroOrOne(),
+		);
+		$executor = new RecordingCommandExecutor(new CommandResult(2));
+
+		$this->expectException(UnexpectedAffectedRowsException::class);
+		$this->expectExceptionMessage("Delete command for collection 'user_tag' with identity {\"user_id\":10,\"tag_id\":3} expected to affect 0 or 1 rows, affected 2.");
 
 		(new FlushScheduler($executor))->run($this->states(), [$command]);
 	}
