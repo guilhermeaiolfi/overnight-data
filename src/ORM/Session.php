@@ -31,10 +31,7 @@ use stdClass;
 
 final class Session
 {
-	private RecordStateStore $records;
-	private RepresentationStore $representations;
-	private ToManyRelationStore $relations;
-	private ToOneRelationStore $references;
+	private SessionContext $context;
 	private RepresentationAdopter $adopter;
 	private GraphAdopter $graphAdopter;
 	private FlushExecutor $flusher;
@@ -45,11 +42,8 @@ final class Session
 		?FlushExecutor $flusher = null,
 		?RepresentationSyncer $syncer = null,
 	) {
-		$this->records = new RecordStateStore();
-		$this->representations = new RepresentationStore();
-		$this->relations = new ToManyRelationStore();
-		$this->references = new ToOneRelationStore();
-		$this->adopter = new RepresentationAdopter($this->records, $this->representations);
+		$this->context = new SessionContext();
+		$this->adopter = new RepresentationAdopter($this->getRecords(), $this->getRepresentations());
 		$this->graphAdopter = new GraphAdopter();
 		$this->syncer = $syncer ?? new RepresentationSyncer();
 		$this->flusher = $flusher ?? new FlushExecutor($executor, $this->syncer);
@@ -57,35 +51,32 @@ final class Session
 
 	public function getRecords(): RecordStateStore
 	{
-		return $this->records;
+		return $this->context->getRecords();
 	}
 
 	public function getRepresentations(): RepresentationStore
 	{
-		return $this->representations;
+		return $this->context->getRepresentations();
 	}
 
 	public function getRelations(): ToManyRelationStore
 	{
-		return $this->relations;
+		return $this->context->getRelations();
 	}
 
 	public function getReferences(): ToOneRelationStore
 	{
-		return $this->references;
+		return $this->context->getReferences();
 	}
 
 	public function clear(): void
 	{
-		$this->records->clear();
-		$this->representations->clear();
-		$this->relations->clear();
-		$this->references->clear();
+		$this->context->clear();
 	}
 
 	public function trackRecord(RecordState $record): RecordState
 	{
-		$this->records->add($record);
+		$this->getRecords()->add($record);
 
 		return $record;
 	}
@@ -116,9 +107,9 @@ final class Session
 		$representation ??= $this->keyOnlyRepresentation($key);
 		$binding ??= $this->keyOnlyBinding($collection);
 
-		$existingState = $this->representations->get($representation);
+		$existingState = $this->getRepresentations()->get($representation);
 		if ($existingState instanceof RepresentationState) {
-			$record = $this->records->getFromRepresentation($existingState);
+			$record = $this->getRecords()->getFromRepresentation($existingState);
 			if (! $record instanceof RecordState || ! $record->hasKey() || ! $record->getKey()?->equals($key)) {
 				throw new StateException('Cannot identify representation because it is already tracked for a different record.');
 			}
@@ -126,7 +117,7 @@ final class Session
 			return $representation;
 		}
 
-		$record = $this->records->getByKey($key);
+		$record = $this->getRecords()->getByKey($key);
 		if ($record instanceof RecordState) {
 			if ($record->isRemoved()) {
 				throw new StateException(sprintf(
@@ -160,13 +151,13 @@ final class Session
 	public function remove(object $target): void
 	{
 		if ($target instanceof RecordState) {
-			$this->records->add($target);
+			$this->getRecords()->add($target);
 			$target->markRemoved();
 
 			return;
 		}
 
-		$state = $this->representations->get($target);
+		$state = $this->getRepresentations()->get($target);
 		if (! $state instanceof RepresentationState) {
 			throw new SyncException('Cannot remove an untracked representation object.');
 		}
@@ -176,14 +167,14 @@ final class Session
 
 	public function trackRelation(ToManyRelationState $collection): ToManyRelationState
 	{
-		$this->relations->add($collection);
+		$this->getRelations()->add($collection);
 
 		return $collection;
 	}
 
 	public function trackReference(ToOneRelationState $reference): ToOneRelationState
 	{
-		$this->references->add($reference);
+		$this->getReferences()->add($reference);
 
 		return $reference;
 	}
@@ -191,28 +182,45 @@ final class Session
 	public function sync(?object $representation = null, ?RepresentationBinding $binding = null): SyncResult
 	{
 		if ($representation !== null) {
-			if (! $this->representations->has($representation) && ! $binding instanceof RepresentationBinding) {
+			if (! $this->getRepresentations()->has($representation) && ! $binding instanceof RepresentationBinding) {
 				throw new SyncException('Cannot synchronize an untracked representation object without a root RepresentationBinding.');
 			}
 
 			$this->graphAdopter->adopt(
 				$representation,
-				$this->representations,
-				$this->records,
-				$this->relations,
-				$this->references,
+				$this->context->getRepresentations(),
+				$this->context->getRecords(),
+				$this->context->getRelations(),
+				$this->context->getReferences(),
 				$binding
 			);
 
-			return $this->syncer->sync($this->representations, $this->records, $this->relations, $this->references);
+			return $this->syncer->sync(
+				$this->context->getRepresentations(),
+				$this->context->getRecords(),
+				$this->context->getRelations(),
+				$this->context->getReferences(),
+				$representation
+			);
 		}
 
-		return $this->syncer->sync($this->representations, $this->records, $this->relations, $this->references, $representation);
+		return $this->syncer->sync(
+			$this->context->getRepresentations(),
+			$this->context->getRecords(),
+			$this->context->getRelations(),
+			$this->context->getReferences(),
+			$representation
+		);
 	}
 
 	public function flush(): FlushResult
 	{
-		return $this->flusher->flush($this->representations, $this->records, $this->relations, $this->references);
+		return $this->flusher->flush(
+			$this->context->getRepresentations(),
+			$this->context->getRecords(),
+			$this->context->getRelations(),
+			$this->context->getReferences()
+		);
 	}
 
 	private function resolveSingleRecordForRemoval(RepresentationState $state): RecordState

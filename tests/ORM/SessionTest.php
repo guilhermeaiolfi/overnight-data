@@ -286,6 +286,58 @@ final class SessionTest extends TestCase
 		self::assertCount(1, $result->getRelationChanges());
 	}
 
+	public function testSyncTrackedRootOnlySynchronizesThatRepresentation(): void
+	{
+		$users = $this->users();
+		$session = new Session(new RecordingCommandExecutor());
+		$first = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$second = $session->trackClean($users->getKey(20), ['id' => 20, 'name' => 'B1']);
+		$firstRepresentation = $this->representation(['name' => 'A2']);
+		$secondRepresentation = $this->representation(['name' => 'B2']);
+		$session->adopt($firstRepresentation, $this->templateBinding(), $first);
+		$session->adopt($secondRepresentation, $this->templateBinding(), $second);
+
+		$result = $session->sync($firstRepresentation);
+
+		self::assertCount(1, $result->getSyncPlans());
+		self::assertSame('A2', $first->getValue('name'));
+		self::assertTrue($first->isDirty());
+		self::assertSame('B1', $second->getValue('name'));
+		self::assertTrue($second->isClean());
+
+		$secondResult = $session->sync($secondRepresentation);
+
+		self::assertCount(1, $secondResult->getSyncPlans());
+		self::assertSame('B2', $second->getValue('name'));
+		self::assertTrue($second->isDirty());
+	}
+
+	public function testSyncUntrackedRootWithBindingOnlySynchronizesAdoptedRootGraph(): void
+	{
+		$users = $this->users();
+		$session = new Session(new RecordingCommandExecutor());
+		$root = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$other = $session->trackClean($users->getKey(20), ['id' => 20, 'name' => 'B1']);
+		$rootRepresentation = $this->representation(['id' => 10, 'name' => 'A2']);
+		$otherRepresentation = $this->representation(['name' => 'B2']);
+		$session->adopt($otherRepresentation, $this->templateBinding(), $other);
+
+		$result = $session->sync($rootRepresentation, $this->userTemplateBindingFor($users));
+
+		self::assertCount(1, $result->getSyncPlans());
+		self::assertSame('A2', $root->getValue('name'));
+		self::assertTrue($root->isDirty());
+		self::assertSame('B1', $other->getValue('name'));
+		self::assertTrue($other->isClean());
+		self::assertInstanceOf(RepresentationState::class, $session->getRepresentations()->get($rootRepresentation));
+
+		$otherResult = $session->sync($otherRepresentation);
+
+		self::assertCount(1, $otherResult->getSyncPlans());
+		self::assertSame('B2', $other->getValue('name'));
+		self::assertTrue($other->isDirty());
+	}
+
 	public function testSyncUntrackedRootWithBindingTracksRootAndSyncsScalarValues(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
