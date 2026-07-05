@@ -55,10 +55,10 @@ composer check
 - `docs/definition-extension-guide.md` documents supported definition extension points and storage rules.
 - `docs/mapper-runtime-guide.md` documents the mapper runtime, conversion system, and runtime registration surface.
 - `docs/recursive-mapping-behavior.md` documents recursive mapping behavior and runtime traversal rules.
-- `docs/3-query/query-model.md` documents the current query model and reference types.
-- `docs/3-query/expressions-and-conditions.md` documents query expressions, aliases, and condition building.
-- `docs/3-query/grouping-ordering-pagination.md` documents grouping, ordering, and pagination.
-- `docs/3-query/bound-execution.md` documents bound execution and the neutral database facade.
-- `docs/3-query/relation-loading.md` documents relation selection, nested loading, and loader ownership boundaries.
-- `docs/4-orm/0-foundation.md` records ORM foundation concepts, state primitives, representation lineage, sync conflicts, and relation guardrails.
-- `docs/4-orm/2-persistence.md` documents the current ORM persistence pipeline, Cycle command executor boundary, generated-key support, relation persistence planning boundary, and write-side limitations.
+- `docs/query/query-model.md` documents the current query model and reference types.
+- `docs/query/expressions-and-conditions.md` documents query expressions, aliases, and condition building.
+- `docs/query/grouping-ordering-pagination.md` documents grouping, ordering, and pagination.
+- `docs/query/bound-execution.md` documents bound execution and the neutral database facade.
+- `docs/query/relation-loading.md` documents relation selection, nested loading, and loader ownership boundaries.
+- `docs/orm/foundation.md` documents ORM foundation concepts, state primitives, representation lineage, sync conflicts, and relation guardrails.
+- `docs/orm/persistence.md` documents the ORM persistence pipeline, Cycle command executor boundary, generated-key support, relation persistence planning boundary, and write-side limitations.

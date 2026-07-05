@@ -13,7 +13,7 @@ final class Phase34BindingModelTest extends TestCase
 {
 	public function testRepresentationBindingDocumentationNamesTheModelBoundaries(): void
 	{
-		$contents = file_get_contents(dirname(__DIR__, 3) . '/docs/4-orm/3-representation-binding.md');
+		$contents = file_get_contents(dirname(__DIR__, 3) . '/docs/orm/representation-binding.md');
 
 		self::assertIsString($contents);
 		self::assertStringContainsString('Definition Tree', $contents);

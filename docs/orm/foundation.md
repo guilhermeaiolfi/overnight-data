@@ -1,6 +1,6 @@
 # ORM Foundation
 
-This document records the foundation and historical phase notes for the `ON\Data` ORM. Some early sections describe the intended architecture before the runtime existed; current persistence behavior is documented in [`2-persistence.md`](./2-persistence.md), and the recursive representation binding model is documented in [`3-representation-binding.md`](./3-representation-binding.md).
+This document records the foundation concepts for the `ON\Data` ORM. Some early sections describe the intended architecture before the runtime existed; current persistence behavior is documented in [`persistence.md`](./persistence.md), and the recursive representation binding model is documented in [`representation-binding.md`](./representation-binding.md).
 
 The current implementation includes production record state, representation tracking, scalar sync, relation representation sync, relation persistence planning, scalar command planning, flush orchestration, session orchestration, and Cycle-backed scalar command execution. It still does not include lazy loading, generated repositories, service containers, events, proxy objects, `EntityManager`, or `UnitOfWork`.
 
@@ -474,7 +474,7 @@ Phase 1A introduces the first production ORM state primitives only:
 - `SyncConflict`
 - `SyncConflictDetector`
 
-Phase 1A did not introduce `EntityQuery`, `with()`, repositories, lazy loading, `sync()` runtime, `flush()` runtime, write planning, SQL commands, or a public `persist()` API. Later Phase 2 work added scalar sync, flush orchestration, and neutral scalar persistence commands; see [`2-persistence.md`](./2-persistence.md).
+Phase 1A did not introduce `EntityQuery`, `with()`, repositories, lazy loading, `sync()` runtime, `flush()` runtime, write planning, SQL commands, or a public `persist()` API. Later Phase 2 work added scalar sync, flush orchestration, and neutral scalar persistence commands; see [`persistence.md`](./persistence.md).
 
 ## Phase 1D Relation Collection Primitives
 
@@ -508,13 +508,13 @@ Phase 1G introduces `ON\Data\ORM\Sync\SyncPlanner`, `SyncPlan`, and `SyncFieldUp
 
 `SyncPlanner` reads current representation values, detects conflicts, and produces a `SyncPlan` containing path-specific conflicts plus planned field updates. Read-only bindings are ignored for updates, conflicted paths are not planned as updates, and duplicate target updates with conflicting values are rejected instead of implying last-write-wins.
 
-Different fields on the same `RecordState` remain separate `SyncFieldUpdate` entries. Later scalar sync and flush runtime aggregate them through the dirty `RecordState`; current relation persistence planning is described in [`2-persistence.md`](./2-persistence.md).
+Different fields on the same `RecordState` remain separate `SyncFieldUpdate` entries. Later scalar sync and flush runtime aggregate them through the dirty `RecordState`; current relation persistence planning is described in [`persistence.md`](./persistence.md).
 
-Planning does not mutate `RecordState`, update tracked baseline revisions, convert values, persist, flush, or apply the updates. Applying a `SyncPlan` is handled by the Phase 2 scalar synchronization runtime described in [`2-persistence.md`](./2-persistence.md). This completes the Phase 1 state/sync foundation.
+Planning does not mutate `RecordState`, update tracked baseline revisions, convert values, persist, flush, or apply the updates. Applying a `SyncPlan` is handled by the Phase 2 scalar synchronization runtime described in [`persistence.md`](./persistence.md). This completes the Phase 1 state/sync foundation.
 
 ## Phase 1 Completed Foundation
 
-Phase 1 introduced only in-memory state, representation tracking, relation intent tracking, value reading, conflict detection, and sync-planning primitives. It did not introduce public `sync()`, `flush()`, `EntityManager`, query hydration runtime, repositories, database writes, relation write planners, or lazy loading. Later Phase 2 work added scalar sync/flush services and scalar database writes without adding an `EntityManager`, `UnitOfWork`, repositories, or lazy loading. Phase 3 adds relation representation sync and relation persistence planning; see [`2-persistence.md`](./2-persistence.md).
+Phase 1 introduced only in-memory state, representation tracking, relation intent tracking, value reading, conflict detection, and sync-planning primitives. It did not introduce public `sync()`, `flush()`, `EntityManager`, query hydration runtime, repositories, database writes, relation write planners, or lazy loading. Later Phase 2 work added scalar sync/flush services and scalar database writes without adding an `EntityManager`, `UnitOfWork`, repositories, or lazy loading. Phase 3 adds relation representation sync and relation persistence planning; see [`persistence.md`](./persistence.md).
 
 `RecordState` is the canonical aggregation point for synchronized changes. `SyncPlanner` produces field-level `SyncFieldUpdate` objects in a `SyncPlan`; it does not mutate records, apply updates, group database commands, or clear conflicts. Multiple different fields on the same `RecordState` may appear as separate `SyncFieldUpdate` entries. `SyncPlanner` should only reject duplicate updates when the same concrete record target and same field receive conflicting values in the same plan.
 

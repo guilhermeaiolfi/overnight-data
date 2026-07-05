@@ -14,14 +14,14 @@ Start here for the current public documentation. The files linked below are the 
 
 ## Query
 
-- [`3-query/query-model.md`](./3-query/query-model.md): Root query construction, field and relation references, selections, joins, and query inspection.
-- [`3-query/expressions-and-conditions.md`](./3-query/expressions-and-conditions.md): Expressions, aliases, aggregates, semantic operations, and condition construction.
-- [`3-query/grouping-ordering-pagination.md`](./3-query/grouping-ordering-pagination.md): Grouping, `HAVING`, sorting, and limit/offset pagination.
-- [`3-query/bound-execution.md`](./3-query/bound-execution.md): Bound execution, detachment, and the neutral database facade.
-- [`3-query/relation-loading.md`](./3-query/relation-loading.md): Structured relation selection, nested result shaping, loader-owned execution decisions, and current execution limits.
+- [`query/query-model.md`](./query/query-model.md): Root query construction, field and relation references, selections, joins, and query inspection.
+- [`query/expressions-and-conditions.md`](./query/expressions-and-conditions.md): Expressions, aliases, aggregates, semantic operations, and condition construction.
+- [`query/grouping-ordering-pagination.md`](./query/grouping-ordering-pagination.md): Grouping, `HAVING`, sorting, and limit/offset pagination.
+- [`query/bound-execution.md`](./query/bound-execution.md): Bound execution, detachment, and the neutral database facade.
+- [`query/relation-loading.md`](./query/relation-loading.md): Structured relation selection, nested result shaping, loader-owned execution decisions, and current execution limits.
 
 ## ORM
 
-- [`4-orm/0-foundation.md`](./4-orm/0-foundation.md): ORM foundation concepts, record-state persistence model, representation lineage, sync conflicts, relation state, and historical phase guardrails.
-- [`4-orm/2-persistence.md`](./4-orm/2-persistence.md): Current scalar ORM persistence pipeline, command planning, Cycle command execution, generated primary-key merge, and write-side limits.
-- [`4-orm/3-representation-binding.md`](./4-orm/3-representation-binding.md): Recursive `RepresentationBinding` model, binding kinds, mapper/query/tracking boundaries, and current scalar sync guardrails.
+- [`orm/foundation.md`](./orm/foundation.md): ORM foundation concepts, record-state persistence model, representation lineage, sync conflicts, and relation state.
+- [`orm/persistence.md`](./orm/persistence.md): Scalar ORM persistence pipeline, command planning, Cycle command execution, generated primary-key merge, and write-side limits.
+- [`orm/representation-binding.md`](./orm/representation-binding.md): Recursive `RepresentationBinding` model, binding kinds, mapper/query/tracking boundaries, and scalar sync guardrails.
