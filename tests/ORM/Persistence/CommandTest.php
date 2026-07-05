@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Persistence;
 
-use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
@@ -15,10 +13,13 @@ use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\State\RecordState;
 use PHPUnit\Framework\TestCase;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
 
 final class CommandTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testCommandInterfaceOnlyExposesCollection(): void
 	{
 		self::assertSame(['getCollection'], get_class_methods(CommandInterface::class));
@@ -236,15 +237,5 @@ final class CommandTest extends TestCase
 		$executor->clear();
 
 		self::assertSame([], $executor->getCommands());
-	}
-
-	private function users(): CollectionInterface
-	{
-		return (new Registry())
-			->collection('users')
-			->primaryKey('id')
-			->field('tenant_id', 'int')->end()
-			->field('id', 'int')->end()
-			->field('name', 'string')->end();
 	}
 }

@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Sync;
 
-use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\Registry;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationFieldBinding;
@@ -13,9 +11,12 @@ use ON\Data\ORM\Sync\SyncConflict;
 use ON\Data\ORM\Sync\SyncFieldUpdate;
 use ON\Data\ORM\Sync\SyncPlan;
 use PHPUnit\Framework\TestCase;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 
 final class SyncPlanTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testExposesUpdates(): void
 	{
 		$update = $this->update('name', 'A2');
@@ -76,15 +77,5 @@ final class SyncPlanTest extends TestCase
 		$binding = new RepresentationFieldBinding($field, RecordFieldRef::forState($record, $field));
 
 		return new SyncFieldUpdate($record, $field, $value, $binding);
-	}
-
-	private function users(): CollectionInterface
-	{
-		return (new Registry())
-			->collection('users')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('name', 'string')->end()
-			->field('email', 'string')->end();
 	}
 }

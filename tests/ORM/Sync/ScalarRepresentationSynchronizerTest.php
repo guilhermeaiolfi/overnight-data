@@ -365,16 +365,6 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 		return new ScalarRepresentationSynchronizer();
 	}
 
-	private function users(): CollectionInterface
-	{
-		return (new Registry())
-			->collection('users')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('name', 'string')->end()
-			->field('email', 'string')->end();
-	}
-
 	private function profiles(): CollectionInterface
 	{
 		return (new Registry())

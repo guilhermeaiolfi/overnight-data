@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Sync;
 
-use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordFieldRef;
@@ -267,16 +265,6 @@ final class RepresentationReaderTest extends TestCase
 			RepresentationRelationCardinality::ONE,
 			$this->profileBinding()
 		);
-	}
-
-	private function users(): CollectionInterface
-	{
-		return (new Registry())
-			->collection('users')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('name', 'string')->end()
-			->field('email', 'string')->end();
 	}
 }
 

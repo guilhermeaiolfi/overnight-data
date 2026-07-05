@@ -298,16 +298,6 @@ final class RecordFlusherTest extends TestCase
 		self::assertSame(['id' => 50], $executor->getCommands()[0]->getIdentity());
 	}
 
-	private function posts(): CollectionInterface
-	{
-		return (new Registry())
-			->collection('posts')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('title', 'string')->end()
-			->field('user_id', 'int')->end();
-	}
-
 	/**
 	 * @return array{0: CollectionInterface, 1: CollectionInterface}
 	 */

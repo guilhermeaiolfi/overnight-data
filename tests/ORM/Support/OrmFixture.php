@@ -71,8 +71,12 @@ trait OrmFixture
 		return (new Registry())
 			->collection('users')
 			->primaryKey('id')
+			->field('tenant_id', 'int')->end()
 			->field('id', 'int')->end()
-			->field('name', 'string')->end();
+			->field('name', 'string')->end()
+			->field('email', 'string')->end()
+			->field('user_id', 'int')->end()
+			->field('manager_id', 'int')->end();
 	}
 
 	protected function posts(): CollectionInterface
@@ -81,7 +85,9 @@ trait OrmFixture
 			->collection('posts')
 			->primaryKey('id')
 			->field('id', 'int')->end()
-			->field('title', 'string')->end();
+			->field('title', 'string')->end()
+			->field('body', 'string')->end()
+			->field('user_id', 'int')->end();
 	}
 
 	protected function profiles(): CollectionInterface

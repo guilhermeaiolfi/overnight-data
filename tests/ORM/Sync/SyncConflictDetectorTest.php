@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Sync;
 
-use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordFieldRef;
@@ -16,9 +14,12 @@ use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\Sync\SyncConflictDetector;
 use PHPUnit\Framework\TestCase;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 
 final class SyncConflictDetectorTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testA1A2A3CaseReturnsConflict(): void
 	{
 		$users = $this->users();
@@ -219,15 +220,5 @@ final class SyncConflictDetectorTest extends TestCase
 		$binding->addField(new RepresentationFieldBinding('name', $field));
 
 		return new RepresentationState($binding, [$field->getRecordHash() => $revision]);
-	}
-
-	private function users(): CollectionInterface
-	{
-		return (new Registry())
-			->collection('users')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('name', 'string')->end()
-			->field('email', 'string')->end();
 	}
 }

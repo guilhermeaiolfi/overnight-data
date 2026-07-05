@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Sync;
 
-use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\ToManyRelationState;
@@ -182,15 +180,5 @@ final class RepresentationAdopterTest extends TestCase
 			$records ?? new RecordStateStore(),
 			$representations ?? new RepresentationStore()
 		);
-	}
-
-	private function posts(): CollectionInterface
-	{
-		return (new Registry())
-			->collection('posts')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('title', 'string')->end()
-			->field('body', 'string')->end();
 	}
 }

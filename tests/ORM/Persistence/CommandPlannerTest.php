@@ -14,9 +14,12 @@ use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 
 final class CommandPlannerTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testNewRecordBecomesInsertCommandWithCollectionAndValues(): void
 	{
 		$users = $this->users();
@@ -186,17 +189,6 @@ final class CommandPlannerTest extends TestCase
 
 		self::assertInstanceOf(UpdateCommand::class, $command);
 		self::assertSame(['manager_id' => 20], $command->getChanges());
-	}
-
-	private function users(): CollectionInterface
-	{
-		return (new Registry())
-			->collection('users')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('name', 'string')->end()
-			->field('manager_id', 'int')->end()
-			->field('email', 'string')->end();
 	}
 
 	private function memberships(): CollectionInterface

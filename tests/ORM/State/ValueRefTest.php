@@ -4,16 +4,17 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\State;
 
-use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 
 final class ValueRefTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testFieldStoresRecordAndField(): void
 	{
 		$record = RecordState::new($this->users(), ['id' => 10]);
@@ -98,15 +99,5 @@ final class ValueRefTest extends TestCase
 	public function testStringConversionIsNotAdded(): void
 	{
 		self::assertFalse((new ReflectionClass(ValueRef::class))->hasMethod('__toString'));
-	}
-
-	private function users(): CollectionInterface
-	{
-		return (new Registry())
-			->collection('users')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('name', 'string')->end()
-			->field('user_id', 'int')->end();
 	}
 }
