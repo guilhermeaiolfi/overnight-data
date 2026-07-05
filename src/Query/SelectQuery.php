@@ -659,15 +659,25 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
-	 * @return iterable<array<string, mixed>>
+	 * @return iterable<array<string, mixed>|stdClass>
 	 */
 	public function iterate(): iterable
 	{
+		if ($this->isMutable()) {
+			throw ObjectExportException::mutableIterationUnsupported();
+		}
+
 		if (! $this->getRelationSelections()->isEmpty()) {
 			throw RelationSelectionException::iterateNotSupported();
 		}
 
-		return $this->requireExecutor()->iterate($this);
+		$rows = $this->requireExecutor()->iterate($this);
+
+		if ($this->resultClass === null) {
+			return $rows;
+		}
+
+		return $this->materializeIterable($rows);
 	}
 
 	public function related(CollectionInterface $collection): self
@@ -746,6 +756,23 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		return (new ObjectResultMaterializer())->materialize($row, $this->resultClass);
+	}
+
+	/**
+	 * @param iterable<array<string, mixed>> $rows
+	 *
+	 * @return iterable<stdClass>
+	 */
+	private function materializeIterable(iterable $rows): iterable
+	{
+		$resultClass = $this->resultClass;
+		assert($resultClass !== null);
+
+		$materializer = new ObjectResultMaterializer();
+
+		foreach ($rows as $row) {
+			yield $materializer->materialize($row, $resultClass);
+		}
 	}
 
 	/**

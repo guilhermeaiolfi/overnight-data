@@ -6,11 +6,13 @@ namespace Tests\ON\Data\Query;
 
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
+use ON\Data\ORM\Session;
 use ON\Data\Query\Exception\ObjectExportException;
 use ON\Data\Query\Result\ObjectResultMaterializer;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\Support\RecordingCommandExecutor;
 
 final class ObjectResultExportTest extends TestCase
 {
@@ -233,6 +235,110 @@ final class ObjectResultExportTest extends TestCase
 		self::assertSame(2, $rows[1]->id);
 	}
 
+	public function testIterateReturnsArraysByDefault(): void
+	{
+		$query = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new ObjectExportRecordingExecutor(),
+		);
+
+		$rows = iterator_to_array($query->iterate(), false);
+
+		self::assertSame([['id' => 1, 'name' => 'Guilherme']], $rows);
+		self::assertIsArray($rows[0]);
+	}
+
+	public function testToStdClassIterateReturnsStdClassObjects(): void
+	{
+		$query = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new ObjectExportRecordingExecutor(),
+		);
+
+		$rows = iterator_to_array($query->to(stdClass::class)->iterate(), false);
+
+		self::assertCount(1, $rows);
+		self::assertInstanceOf(stdClass::class, $rows[0]);
+		self::assertSame(1, $rows[0]->id);
+		self::assertSame('Guilherme', $rows[0]->name);
+	}
+
+	public function testToStdClassIterateConvertsNestedAssociativeArrays(): void
+	{
+		$executor = new ObjectExportRecordingExecutor(
+			fetchAllRows: [[
+				'id' => 1,
+				'profile' => [
+					'label' => 'Primary',
+					'meta' => ['verified' => true],
+				],
+			]],
+		);
+		$query = new SelectQuery($this->makeRegistry()->getCollection('users'), $executor);
+
+		$row = $query->to(stdClass::class)->iterate()->current();
+
+		self::assertInstanceOf(stdClass::class, $row);
+		self::assertInstanceOf(stdClass::class, $row->profile);
+		self::assertSame('Primary', $row->profile->label);
+		self::assertInstanceOf(stdClass::class, $row->profile->meta);
+		self::assertTrue($row->profile->meta->verified);
+	}
+
+	public function testToStdClassIterateConvertsRelationListArrays(): void
+	{
+		$executor = new ObjectExportRecordingExecutor(
+			fetchAllRows: [[
+				'id' => 1,
+				'name' => 'Guilherme',
+				'posts' => [
+					['id' => 10, 'title' => 'Hello'],
+					['id' => 11, 'title' => 'World'],
+				],
+			]],
+		);
+		$query = new SelectQuery($this->makeRegistry()->getCollection('users'), $executor);
+
+		$row = $query->to(stdClass::class)->iterate()->current();
+
+		self::assertInstanceOf(stdClass::class, $row);
+		self::assertIsArray($row->posts);
+		self::assertInstanceOf(stdClass::class, $row->posts[0]);
+		self::assertSame(10, $row->posts[0]->id);
+		self::assertInstanceOf(stdClass::class, $row->posts[1]);
+		self::assertSame(11, $row->posts[1]->id);
+	}
+
+	public function testToStdClassIterateIsLazy(): void
+	{
+		$executor = new LazyIterateRecordingExecutor([
+			['id' => 1, 'name' => 'First'],
+			['id' => 2, 'name' => 'Second'],
+			['id' => 3, 'name' => 'Third'],
+		]);
+		$query = new SelectQuery($this->makeRegistry()->getCollection('users'), $executor);
+
+		$iterator = $query->to(stdClass::class)->iterate();
+		$first = $iterator->current();
+
+		self::assertInstanceOf(stdClass::class, $first);
+		self::assertSame(1, $first->id);
+		self::assertSame(1, $executor->iteratedRows);
+	}
+
+	public function testMutableIterateThrowsClearException(): void
+	{
+		$query = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new ObjectExportRecordingExecutor(),
+		);
+
+		$this->expectException(ObjectExportException::class);
+		$this->expectExceptionMessage('Mutable object export is not supported by iterate(); use fetchAll() or fetchOne().');
+
+		$query->to(stdClass::class)->mutable(new Session(new RecordingCommandExecutor()))->iterate();
+	}
+
 	private function makeRegistry(): Registry
 	{
 		$registry = new Registry();
@@ -277,5 +383,37 @@ final class ObjectExportRecordingExecutor implements QueryExecutorInterface
 	public function iterate(SelectQuery $query): iterable
 	{
 		yield from $this->fetchAllRows;
+	}
+}
+
+final class LazyIterateRecordingExecutor implements QueryExecutorInterface
+{
+	public int $iteratedRows = 0;
+
+	/**
+	 * @param list<array<string, mixed>> $rows
+	 */
+	public function __construct(
+		private readonly array $rows,
+	) {
+	}
+
+	public function fetchAll(SelectQuery $query): array
+	{
+		return $this->rows;
+	}
+
+	public function fetchOne(SelectQuery $query): ?array
+	{
+		return $this->rows[0] ?? null;
+	}
+
+	public function iterate(SelectQuery $query): iterable
+	{
+		foreach ($this->rows as $row) {
+			$this->iteratedRows++;
+
+			yield $row;
+		}
 	}
 }
