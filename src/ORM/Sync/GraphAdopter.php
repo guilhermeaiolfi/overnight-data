@@ -43,7 +43,7 @@ final class GraphAdopter
 			(new RepresentationAdopter($records, $representations))->adopt(
 				$root,
 				$rootBinding,
-				RecordState::new($this->collectionFor($rootBinding), $this->initialValues($root, $rootBinding))
+				RecordState::new($this->collectionFor($rootBinding, true), $this->initialValues($root, $rootBinding))
 			);
 		}
 
@@ -112,7 +112,7 @@ final class GraphAdopter
 			$adopted[] = $adopter->adopt(
 				$representation,
 				$binding,
-				RecordState::new($this->collectionFor($binding), $this->initialValues($representation, $binding))
+				RecordState::new($this->collectionFor($binding, false), $this->initialValues($representation, $binding))
 			);
 		}
 
@@ -164,33 +164,46 @@ final class GraphAdopter
 		));
 	}
 
-	private function collectionFor(RepresentationBinding $binding): CollectionInterface
+	private function collectionFor(RepresentationBinding $binding, bool $isRoot): CollectionInterface
 	{
 		$collection = null;
 		foreach ($binding->getFields() as $fieldBinding) {
 			$field = $fieldBinding->getField();
-			$collection = $this->mergeCollection($collection, $field->getCollection(), $fieldBinding->getPath());
+			$collection = $this->mergeCollection($collection, $field->getCollection(), $fieldBinding->getPath(), $isRoot);
 		}
 
 		foreach ($binding->getRelations() as $relationBinding) {
 			$relation = $relationBinding->getRelation();
-			$collection = $this->mergeCollection($collection, $relation->getCollection(), $relationBinding->getPath());
+			$collection = $this->mergeCollection($collection, $relation->getCollection(), $relationBinding->getPath(), $isRoot);
 		}
 
 		if (! $collection instanceof CollectionInterface) {
+			if ($isRoot) {
+				throw new StateException('Cannot synchronize untracked root representation because untracked root sync needs a binding targeting one collection.');
+			}
+
 			throw new StateException('Cannot adopt representation graph because a related binding does not target a collection.');
 		}
 
 		return $collection;
 	}
 
-	private function mergeCollection(?CollectionInterface $current, CollectionInterface $next, string $path): CollectionInterface
+	private function mergeCollection(?CollectionInterface $current, CollectionInterface $next, string $path, bool $isRoot): CollectionInterface
 	{
 		if ($current === null || $current === $next) {
 			return $next;
 		}
 
 		if ($current->getName() !== $next->getName()) {
+			if ($isRoot) {
+				throw new StateException(sprintf(
+					"Cannot synchronize untracked root representation because untracked root sync needs a binding targeting one collection; path '%s' targets collection '%s' after '%s'.",
+					$path,
+					$next->getName(),
+					$current->getName()
+				));
+			}
+
 			throw new StateException(sprintf(
 				"Cannot adopt representation graph because related binding path '%s' targets collection '%s' after '%s'.",
 				$path,

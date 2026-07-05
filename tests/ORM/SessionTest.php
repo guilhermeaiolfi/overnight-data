@@ -7,6 +7,7 @@ namespace Tests\ON\Data\ORM;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
@@ -189,6 +190,31 @@ final class SessionTest extends TestCase
 		self::assertCount(1, $result->getRelationChanges());
 	}
 
+	public function testSyncUntrackedRootWithRelationOnlySingleCollectionBindingSucceeds(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$session = new Session(new RecordingCommandExecutor());
+		$ownerRepresentation = $this->representation(['posts' => []]);
+		$binding = new RepresentationBinding();
+		$binding->addRelation(new RepresentationRelationBinding(
+			'posts',
+			RecordRelationRef::forCollection($users, 'posts'),
+			RepresentationRelationCardinality::MANY,
+			$this->postTemplateBindingFor($posts),
+			RelationCollectionState::FULLY_LOADED
+		));
+
+		$result = $session->sync($ownerRepresentation, $binding);
+
+		$trackedOwner = $session->getRepresentations()->get($ownerRepresentation);
+		self::assertInstanceOf(TrackedRepresentation::class, $trackedOwner);
+		$owner = $session->getRecords()->getFromRepresentation($trackedOwner);
+		self::assertInstanceOf(RecordState::class, $owner);
+		self::assertSame([], $owner->getValues());
+		self::assertSame([], $session->getRelations()->get($owner, 'posts')?->getItems());
+		self::assertCount(1, $result->getRelationChanges());
+	}
+
 	public function testSyncUntrackedRootWithBindingTracksOneRelatedPlainTarget(): void
 	{
 		[$users, $profiles] = $this->usersWithDefaultHasOneProfile();
@@ -205,6 +231,77 @@ final class SessionTest extends TestCase
 		self::assertInstanceOf(TrackedRepresentation::class, $session->getRepresentations()->get($profileRepresentation));
 		self::assertSame($profileRepresentation, $session->getReferences()->get($owner, 'profile')?->getTarget());
 		self::assertCount(1, $result->getRelationChanges());
+	}
+
+	public function testSyncUntrackedRootWithMixedCollectionFieldsThrows(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$session = new Session(new RecordingCommandExecutor());
+		$representation = $this->representation(['name' => 'Owner', 'title' => 'Post']);
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($users, 'name')));
+		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($posts, 'title')));
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage('untracked root sync needs a binding targeting one collection');
+
+		$session->sync($representation, $binding);
+	}
+
+	public function testSyncUntrackedRootWithMixedFieldAndRelationOwnerCollectionsThrows(): void
+	{
+		[$posts, $users] = $this->postsWithDefaultBelongsToAuthor();
+		$session = new Session(new RecordingCommandExecutor());
+		$representation = $this->representation(['name' => 'Owner', 'author' => null]);
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($users, 'name')));
+		$binding->addRelation(new RepresentationRelationBinding(
+			'author',
+			RecordRelationRef::forCollection($posts, 'author'),
+			RepresentationRelationCardinality::ONE,
+			$this->userTemplateBindingFor($users)
+		));
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage('untracked root sync needs a binding targeting one collection');
+
+		$session->sync($representation, $binding);
+	}
+
+	public function testSyncUntrackedRootWithEmptyBindingThrows(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage('untracked root sync needs a binding targeting one collection');
+
+		$session->sync(new stdClass(), new RepresentationBinding());
+	}
+
+	public function testSyncAlreadyTrackedRepresentationWithMixedBindingIsNotAffectedByUntrackedRootGuard(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$session = new Session(new RecordingCommandExecutor());
+		$userRecord = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$postRecord = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Original', 'user_id' => null]);
+		$representation = $this->representation(['name' => 'Owner Updated', 'title' => 'Post Updated']);
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::forState($userRecord, 'name')));
+		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::forState($postRecord, 'title')));
+		$session->getRepresentations()->add(new TrackedRepresentation(
+			$representation,
+			$binding,
+			[
+				$userRecord->getStateHash() => $userRecord->getRevision(),
+				$postRecord->getStateHash() => $postRecord->getRevision(),
+			]
+		));
+
+		$result = $session->sync($representation, new RepresentationBinding());
+
+		self::assertTrue($result->hasChanges());
+		self::assertSame('Owner Updated', $userRecord->getValue('name'));
+		self::assertSame('Post Updated', $postRecord->getValue('title'));
 	}
 
 	public function testSyncWithBindingDoesNotFlush(): void

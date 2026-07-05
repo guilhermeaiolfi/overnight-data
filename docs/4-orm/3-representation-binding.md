@@ -73,9 +73,9 @@ Relation representation sync connects the two models:
 
 In strict sync paths, related objects found at those representation paths must already be tracked/adopted. Relation representation sync validates that each `MANY` item and each non-null `ONE` target has a tracked representation, and throws `SyncException` with the relation path when it does not. It does not auto-adopt related objects by itself.
 
-`Session::sync($representation, $binding)` is the explicit graph entry point for an untracked plain root object. The root binding is required for now; there is no class-to-binding inference. `Session::sync($representation)` can be used when the root object is already tracked. In both cases, the graph walk follows explicit `RepresentationRelationBinding` entries only. A `MANY` value may be `null` or an iterable of objects. A `ONE` value may be `null` or an object. Discovered untracked related objects are tracked with the relation binding's `getRelatedBinding()`, which is then applied to a new related `RecordState` using the existing representation adoption path. Newly discovered related objects default to `NEW` and their new record state is initialized from bound field paths; already-tracked objects are not duplicated and keep their current lifecycle. The walker guards object identity cycles and still walks an already-tracked object once if it has not been visited.
+`Session::sync($representation, $binding)` is the explicit graph entry point for an untracked plain root object. The root binding is required for now; there is no class-to-binding inference. For an untracked root, the binding must be entity-shaped and target exactly one root collection through field bindings and/or relation owner bindings. Empty bindings and mixed/projection bindings spanning multiple root collections cannot create a new root `RecordState` and raise `StateException`. `Session::sync($representation)` can be used when the root object is already tracked. In both cases, the graph walk follows explicit `RepresentationRelationBinding` entries only. A `MANY` value may be `null` or an iterable of objects. A `ONE` value may be `null` or an object. Discovered untracked related objects are tracked with the relation binding's `getRelatedBinding()`, which is then applied to a new related `RecordState` using the existing representation adoption path. Newly discovered related objects default to `NEW` and their new record state is initialized from bound field paths; already-tracked objects are not duplicated and keep their current lifecycle. The walker guards object identity cycles and still walks an already-tracked object once if it has not been visited.
 
-Graph sync does not infer relations from collection definitions, object properties, mapper metadata, or query selections. It syncs scalar and relation runtime state, but does not plan relation persistence, flush records, execute commands, or clear relation changes. Calling `sync($object)` again refreshes state and can bring newly attached related plain objects into the session.
+Graph sync does not infer relations from collection definitions, object properties, mapper metadata, or query selections. It syncs scalar and relation runtime state, but does not plan relation persistence, flush records, execute commands, or clear relation changes. Calling `sync($object)` again refreshes state and can bring newly attached related plain objects into the session. Query/projection/mixed bindings remain valid provenance for already-tracked or query-created representations; they require existing tracked state rather than creating a new root record.
 
 Relation persistence planning then consumes changed `RelatedCollection` and `RelatedReference` instances. Built-in planners cover many-to-many, has-many, belongs-to, and has-one relation definitions.
 
@@ -175,7 +175,7 @@ RelationRepresentationSynchronizer -> RelatedCollection / RelatedReference
 TrackedRepresentationResolver      -> already-tracked related objects only
 ```
 
-`MANY` bindings become `RelatedCollection` runtime state. `ONE` bindings become `RelatedReference` runtime state. `Session::sync($object, $binding)` exposes this graph-aware representation sync step directly for plain objects with a root binding, and `Session::sync($object)` refreshes an already-tracked object graph. `Session::flush()` still runs strict sync automatically before planning and flushing. Expression bindings are ignored by both synchronizers for now. They should survive on the binding model as provenance for later tasks.
+`MANY` bindings become `RelatedCollection` runtime state. `ONE` bindings become `RelatedReference` runtime state. `Session::sync($object, $binding)` exposes this graph-aware representation sync step directly for plain objects with a single-collection root binding, and `Session::sync($object)` refreshes an already-tracked object graph. `Session::flush()` still runs strict sync automatically before planning and flushing. Expression bindings are ignored by both synchronizers for now. They should survive on the binding model as provenance for later tasks.
 
 `Session::flush()` does not adopt newly attached untracked objects. If a new related plain object is attached after the last explicit `sync($object)`, `flush()` raises through the strict relation synchronization path. Call `sync($object)` again to refresh runtime state before flushing.
 
@@ -185,6 +185,7 @@ The recursive binding model does not implement:
 
 - automatic relation graph inference
 - automatic child adoption from flush
+- array root input for sync
 - cascade persistence policy
 - orphan removal
 - relation inference from developer objects

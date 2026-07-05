@@ -33,9 +33,9 @@ Representations are user-facing objects or values. A tracked representation can 
 
 `Session::sync(?object $representation = null, ?RepresentationBinding $binding = null)` is the explicit graph entry point. With no argument it strictly syncs already-tracked representations. With an object it walks that object's explicit `RepresentationRelationBinding` graph, syncs scalar values into `RecordState`, and syncs relation values into `RelatedCollection` / `RelatedReference` runtime state. It returns `SyncResult`, containing scalar sync plans and touched relation changes. It does not plan relation persistence, flush records, execute commands, mark records clean, or clear relation changes.
 
-For an untracked root object, `sync($object, $binding)` requires a root `RepresentationBinding`. The root is tracked from that binding, then the method follows only explicit relation bindings. For `MANY` relation bindings, `null` means an empty collection and a non-null value must be iterable objects. For `ONE` relation bindings, `null` means no target and a non-null value must be an object. Each discovered untracked related object is tracked with that relation binding's `getRelatedBinding()`, and the walk continues recursively while guarding object identity cycles. Newly discovered records are currently adopted as `NEW` and initialized from the binding's field paths; already-tracked objects keep their existing lifecycle.
+For an untracked root object, `sync($object, $binding)` requires a root `RepresentationBinding` that targets exactly one root collection through its field bindings and/or relation owner bindings. This entry point is for entity-shaped object bindings. A binding with no resolvable collection, or a mixed/projection binding spanning multiple collections, cannot create a new root `RecordState` and raises `StateException`. When the binding is valid, the root is tracked from that binding, then the method follows only explicit relation bindings. For `MANY` relation bindings, `null` means an empty collection and a non-null value must be iterable objects. For `ONE` relation bindings, `null` means no target and a non-null value must be an object. Each discovered untracked related object is tracked with that relation binding's `getRelatedBinding()`, and the walk continues recursively while guarding object identity cycles. Newly discovered records are currently adopted as `NEW` and initialized from the binding's field paths; already-tracked objects keep their existing lifecycle.
 
-For an already-tracked root object, `sync($object)` uses its existing tracked binding and can bring newly attached related plain objects into the session through explicit relation bindings. Passing an extra binding for an already-tracked object is currently unnecessary; the tracked binding is the source of truth.
+For an already-tracked root object, `sync($object)` uses its existing tracked binding and can bring newly attached related plain objects into the session through explicit relation bindings. Passing an extra binding for an already-tracked object is currently unnecessary; the tracked binding is the source of truth. Query/projection/mixed bindings remain valid provenance for already-tracked or query-created representations because they already have concrete tracked state; they are not used to silently create a new root record.
 
 For a new plain object graph:
 
@@ -169,7 +169,8 @@ This is deliberately not an `EntityManager`. There is no repository API, object 
 ## Current Limits
 
 - Scalar insert/update/delete plus configured relation persistence planning only.
-- Untracked root objects passed to `sync($object)` need an explicit root `RepresentationBinding`; related objects use each relation binding's `getRelatedBinding()`.
+- Untracked root objects passed to `sync($object)` need an explicit root `RepresentationBinding` targeting one collection; related objects use each relation binding's `getRelatedBinding()`.
+- `sync()` accepts object roots only; array input is not supported yet.
 - No automatic relation cascade writes.
 - No automatic graph adoption from `flush()`.
 - No transaction orchestration.
