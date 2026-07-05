@@ -110,12 +110,12 @@ final class SelectQueryBindingCompilerTest extends TestCase
 		$internalSelections = $query->getSelections()->getByTag(SelectionTag::INTERNAL);
 		self::assertCount(1, $internalSelections);
 		self::assertTrue($internalSelections[0]->hasTag(SelectionTag::INTERNAL));
-		self::assertStringStartsWith('_od_internal_', $internalSelections[0]->getSelectionKey());
-		self::assertStringNotContainsString('__od.', $internalSelections[0]->getSelectionKey());
 
+		$projectionIdentities = $compilation->getProjectionIdentities();
+		self::assertNotNull($projectionIdentities->get($companies, 'id'));
 		self::assertSame(
 			$internalSelections[0]->getSelectionKey(),
-			$compilation->getProjectionIdentities()->get($companies, 'id'),
+			$projectionIdentities->get($companies, 'id'),
 		);
 	}
 

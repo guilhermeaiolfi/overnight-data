@@ -35,7 +35,7 @@ final class MutableFlatRelatedFieldExportTest extends TestCase
 		self::assertSame(1, $user->id);
 		self::assertSame('Acme', $user->name);
 		self::assertFalse(property_exists($user, 'company'));
-		self::assertFalse($this->hasInternalSelectionProperty($user));
+		$this->assertInternalSelectionsAreNotExported($query, $user);
 
 		$user->name = 'Dell';
 		$session->sync($user);
@@ -110,18 +110,20 @@ final class MutableFlatRelatedFieldExportTest extends TestCase
 		self::assertTrue($session->getRepresentations()->has($user));
 		self::assertSame(1, $user->id);
 		self::assertSame('Acme', $user->name);
-		self::assertFalse($this->hasInternalSelectionProperty($user));
+		$this->assertInternalSelectionsAreNotExported($query, $user);
 	}
 
-	private function hasInternalSelectionProperty(stdClass $user): bool
+	private function assertInternalSelectionsAreNotExported(SelectQuery $query, stdClass $user): void
 	{
-		foreach (array_keys(get_object_vars($user)) as $property) {
-			if (str_starts_with($property, '_od_internal_')) {
-				return true;
-			}
+		foreach ($query->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
+			self::assertFalse(
+				property_exists($user, $selection->getSelectionKey()),
+				sprintf(
+					'Internal selection "%s" must not be exported on the result.',
+					$selection->getSelectionKey(),
+				),
+			);
 		}
-
-		return false;
 	}
 
 	private function makeRegistry(): Registry
