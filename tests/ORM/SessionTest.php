@@ -26,10 +26,11 @@ use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\Sync\RepresentationSyncer;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 use stdClass;
+use Tests\ON\Data\Support\RecordingCommandExecutor;
 use Tests\ON\Data\Support\Relation\RecordingRelationPersistencePlanner;
 use Tests\ON\Data\Support\Relation\TestCommand;
-use Tests\ON\Data\Support\RecordingCommandExecutor;
 
 final class SessionTest extends TestCase
 {
@@ -53,11 +54,11 @@ final class SessionTest extends TestCase
 		$syncer = new RepresentationSyncer();
 		$session = new Session(new RecordingCommandExecutor(), syncer: $syncer);
 
-		$sessionReflection = new \ReflectionClass($session);
+		$sessionReflection = new ReflectionClass($session);
 		$flusherProperty = $sessionReflection->getProperty('flusher');
 		$flusher = $flusherProperty->getValue($session);
 
-		$flusherReflection = new \ReflectionClass($flusher);
+		$flusherReflection = new ReflectionClass($flusher);
 		$syncerProperty = $flusherReflection->getProperty('syncer');
 
 		self::assertSame($syncer, $syncerProperty->getValue($flusher));

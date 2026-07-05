@@ -16,7 +16,6 @@ use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\Sync\SyncConflictDetector;
 use PHPUnit\Framework\TestCase;
-use stdClass;
 
 final class SyncConflictDetectorTest extends TestCase
 {

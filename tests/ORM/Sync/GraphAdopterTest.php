@@ -22,6 +22,7 @@ use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\Sync\GraphAdopter;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
 
 final class GraphAdopterTest extends TestCase
 {
@@ -78,7 +79,7 @@ final class GraphAdopterTest extends TestCase
 		$result = $this->adopter()->adopt($root, $representations, $records, new RelatedCollectionStore(), new RelatedReferenceStore());
 
 		self::assertCount(1, $result);
-		self::assertSame($item, \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::objectFor($result[0]));
+		self::assertSame($item, RepresentationStateObjectRegistry::objectFor($result[0]));
 		self::assertSame($result[0], $representations->get($item));
 		self::assertTrue($records->getFromRepresentation($result[0])?->isNew());
 	}
@@ -126,7 +127,7 @@ final class GraphAdopterTest extends TestCase
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 
 		self::assertCount(1, $result);
-		self::assertSame($target, \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::objectFor($result[0]));
+		self::assertSame($target, RepresentationStateObjectRegistry::objectFor($result[0]));
 	}
 
 	public function testOneRelationWithNonObjectNonNullValueThrows(): void
@@ -173,7 +174,7 @@ final class GraphAdopterTest extends TestCase
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 
 		self::assertCount(1, $result);
-		self::assertSame($comment, \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::objectFor($result[0]));
+		self::assertSame($comment, RepresentationStateObjectRegistry::objectFor($result[0]));
 	}
 
 	public function testRecursiveManyRelationAdoptionWorks(): void
@@ -199,7 +200,7 @@ final class GraphAdopterTest extends TestCase
 
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 
-		self::assertSame([$post, $comment], array_map(static fn (RepresentationState $tracked): object => \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::objectFor($tracked), $result));
+		self::assertSame([$post, $comment], array_map(static fn (RepresentationState $tracked): object => RepresentationStateObjectRegistry::objectFor($tracked), $result));
 	}
 
 	public function testRecursiveOneRelationAdoptionWorks(): void
@@ -224,7 +225,7 @@ final class GraphAdopterTest extends TestCase
 
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 
-		self::assertSame([$profile, $user], array_map(static fn (RepresentationState $tracked): object => \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::objectFor($tracked), $result));
+		self::assertSame([$profile, $user], array_map(static fn (RepresentationState $tracked): object => RepresentationStateObjectRegistry::objectFor($tracked), $result));
 	}
 
 	public function testCyclicGraphDoesNotInfiniteLoop(): void
@@ -252,7 +253,7 @@ final class GraphAdopterTest extends TestCase
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 
 		self::assertCount(1, $result);
-		self::assertSame($item, \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::objectFor($result[0]));
+		self::assertSame($item, RepresentationStateObjectRegistry::objectFor($result[0]));
 	}
 
 	public function testRelatedObjectsAreAdoptedUsingGetRelatedBinding(): void
@@ -311,7 +312,7 @@ final class GraphAdopterTest extends TestCase
 
 	private function tracked(object $representation, RepresentationBinding $binding): RepresentationState
 	{
-		return \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember(
+		return RepresentationStateObjectRegistry::remember(
 			$representation,
 			new RepresentationState($binding, [])
 		);
@@ -321,7 +322,7 @@ final class GraphAdopterTest extends TestCase
 	{
 		$map = new RepresentationStore();
 		foreach ($RepresentationStates as $tracked) {
-			\Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::addTo($map, $tracked);
+			RepresentationStateObjectRegistry::addTo($map, $tracked);
 		}
 
 		return $map;

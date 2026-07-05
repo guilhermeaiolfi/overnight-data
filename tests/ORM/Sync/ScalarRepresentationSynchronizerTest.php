@@ -22,6 +22,7 @@ use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\Sync\ScalarRepresentationSynchronizer;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
 
 final class ScalarRepresentationSynchronizerTest extends TestCase
 {
@@ -289,7 +290,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 	 */
 	private function tracked(object $representation, RepresentationBinding $binding, ?array $baselineRevisions = null): RepresentationState
 	{
-		return \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember($representation, new RepresentationState(
+		return RepresentationStateObjectRegistry::remember($representation, new RepresentationState(
 			$binding,
 			$baselineRevisions ?? $this->baselineRevisions($binding)
 		));
@@ -299,7 +300,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 	{
 		$map = new RepresentationStore();
 		foreach ($RepresentationStates as $tracked) {
-			\Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::addTo($map, $tracked);
+			RepresentationStateObjectRegistry::addTo($map, $tracked);
 		}
 
 		return $map;

@@ -24,8 +24,9 @@ use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\Sync\RepresentationSyncer;
 use PHPUnit\Framework\TestCase;
 use stdClass;
-use Tests\ON\Data\Support\Relation\RecordingRelationPersistencePlanner;
+use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
+use Tests\ON\Data\Support\Relation\RecordingRelationPersistencePlanner;
 
 final class RepresentationSyncerTest extends TestCase
 {
@@ -193,7 +194,7 @@ final class RepresentationSyncerTest extends TestCase
 
 	private function tracked(object $representation, RepresentationBinding $binding): RepresentationState
 	{
-		return \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember(
+		return RepresentationStateObjectRegistry::remember(
 			$representation,
 			new RepresentationState($binding, $this->baselineRevisions($binding))
 		);
@@ -203,7 +204,7 @@ final class RepresentationSyncerTest extends TestCase
 	{
 		$map = new RepresentationStore();
 		foreach ($RepresentationStates as $tracked) {
-			\Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::addTo($map, $tracked);
+			RepresentationStateObjectRegistry::addTo($map, $tracked);
 		}
 
 		return $map;

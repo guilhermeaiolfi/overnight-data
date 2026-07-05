@@ -98,7 +98,7 @@ final class GraphAdopter
 
 	/**
 	 * @param array<int, true> $visited
-	 * @param list<\ON\Data\ORM\State\RepresentationState> $adopted
+	 * @param list<RepresentationState> $adopted
 	 */
 	private function adoptAndWalk(
 		object $representation,

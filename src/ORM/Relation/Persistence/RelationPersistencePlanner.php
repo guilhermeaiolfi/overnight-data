@@ -36,6 +36,7 @@ final class RelationPersistencePlanner
 
 		foreach ($changed as $change) {
 			$relation = $this->resolveRelation($change);
+
 			try {
 				$plannerClass = $relation->getPersistencePlanner();
 			} catch (InvalidArgumentException $exception) {

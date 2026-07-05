@@ -39,8 +39,7 @@ final class Session
 		CommandExecutorInterface $executor,
 		?FlushExecutor $flusher = null,
 		?RepresentationSyncer $syncer = null,
-	)
-	{
+	) {
 		$this->records = new RecordStateStore();
 		$this->representations = new RepresentationStore();
 		$this->relations = new RelatedCollectionStore();

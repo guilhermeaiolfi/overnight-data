@@ -19,7 +19,6 @@ use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
-use stdClass;
 
 final class RecordStateStoreTest extends TestCase
 {

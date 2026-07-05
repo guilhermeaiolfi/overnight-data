@@ -11,8 +11,8 @@ use ON\Data\ORM\Relation\RelatedCollection;
 use ON\Data\ORM\Relation\RelatedCollectionStore;
 use ON\Data\ORM\Relation\RelatedReference;
 use ON\Data\ORM\Relation\RelatedReferenceStore;
-use ON\Data\ORM\Relation\RelationCollectionState;
 use ON\Data\ORM\Relation\RelationChangeInterface;
+use ON\Data\ORM\Relation\RelationCollectionState;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
@@ -25,6 +25,7 @@ use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\Sync\RelationRepresentationSynchronizer;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
 
 final class RelationRepresentationSynchronizerTest extends TestCase
 {
@@ -453,7 +454,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 
 	private function tracked(object $representation, RepresentationBinding $binding): RepresentationState
 	{
-		return \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember(
+		return RepresentationStateObjectRegistry::remember(
 			$representation,
 			new RepresentationState($binding, [])
 		);
@@ -463,7 +464,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 	{
 		$map = new RepresentationStore();
 		foreach ($RepresentationStates as $tracked) {
-			\Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::addTo($map, $tracked);
+			RepresentationStateObjectRegistry::addTo($map, $tracked);
 		}
 
 		return $map;
@@ -474,7 +475,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$map = new RepresentationStore();
 		foreach ($entries as $entry) {
 			if ($entry instanceof RepresentationState) {
-				\Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::addTo($map, $entry);
+				RepresentationStateObjectRegistry::addTo($map, $entry);
 
 				continue;
 			}

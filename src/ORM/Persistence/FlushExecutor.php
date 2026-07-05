@@ -38,8 +38,7 @@ final class FlushExecutor
 		RecordStateStore $records,
 		?RelatedCollectionStore $relations = null,
 		?RelatedReferenceStore $references = null,
-	): FlushResult
-	{
+	): FlushResult {
 		$relations ??= new RelatedCollectionStore();
 		$references ??= new RelatedReferenceStore();
 		$syncResult = $this->syncer->sync($representations, $records, $relations, $references);

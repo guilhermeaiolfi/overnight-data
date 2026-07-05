@@ -16,9 +16,11 @@ use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\Sync\RepresentationValueReader;
 use ON\Data\ORM\Sync\SyncConflictDetector;
+use ON\Data\ORM\Sync\SyncPlan;
 use ON\Data\ORM\Sync\SyncPlanner;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
 
 final class SyncPlannerTest extends TestCase
 {
@@ -192,7 +194,7 @@ final class SyncPlannerTest extends TestCase
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
 		$binding = $this->binding(['name' => RecordFieldRef::forState($record, 'name')]);
-		$tracked = \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember(
+		$tracked = RepresentationStateObjectRegistry::remember(
 			$this->representation(['name' => 'A2']),
 			new RepresentationState($binding, ['other#1' => 1])
 		);
@@ -299,7 +301,7 @@ final class SyncPlannerTest extends TestCase
 	 */
 	private function tracked(object $representation, RepresentationBinding $binding, ?array $baselineRevisions = null): RepresentationState
 	{
-		return \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember($representation, new RepresentationState(
+		return RepresentationStateObjectRegistry::remember($representation, new RepresentationState(
 			$binding,
 			$baselineRevisions ?? $this->baselineRevisions($binding)
 		));
@@ -326,7 +328,7 @@ final class SyncPlannerTest extends TestCase
 			$records ?? new RecordStateStore()
 		);
 
-		return new class($planner) {
+		return new class ($planner) {
 			public function __construct(private SyncPlanner $planner)
 			{
 			}
@@ -334,7 +336,7 @@ final class SyncPlannerTest extends TestCase
 			public function plan(RepresentationState $state): SyncPlan
 			{
 				return $this->planner->plan(
-					\Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::objectFor($state),
+					RepresentationStateObjectRegistry::objectFor($state),
 					$state
 				);
 			}

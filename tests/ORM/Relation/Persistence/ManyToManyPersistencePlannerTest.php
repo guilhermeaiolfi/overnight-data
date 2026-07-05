@@ -9,8 +9,8 @@ use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\HasManyRelation;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\ORM\Exception\RelationPersistenceException;
-use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandBuffer;
+use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandValueResolver;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
@@ -30,6 +30,7 @@ use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
 
 final class ManyToManyPersistencePlannerTest extends TestCase
 {
@@ -210,7 +211,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 			'user_ref' => 10,
 			'role_tenant_ref' => 6,
 			'role_ref' => 3,
-		], $command->getValues());
+		]);
 	}
 
 	public function testMissingRepresentationStateThrows(): void
@@ -237,7 +238,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$collection->add($item);
 		$binding = new RepresentationBinding();
 		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($tags, 'id')));
-		$tracked = \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
+		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
 
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('cannot be resolved to a record state');
@@ -436,7 +437,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 
 	private function tracked(object $representation, RecordState $record): RepresentationState
 	{
-		return \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember(
+		return RepresentationStateObjectRegistry::remember(
 			$representation,
 			new RepresentationState($this->bindingFor($record), [
 				$record->getStateHash() => $record->getRevision(),
@@ -469,7 +470,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 	{
 		$map = new RepresentationStore();
 		foreach ($RepresentationStates as $tracked) {
-			\Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::addTo($map, $tracked);
+			RepresentationStateObjectRegistry::addTo($map, $tracked);
 		}
 
 		return $map;

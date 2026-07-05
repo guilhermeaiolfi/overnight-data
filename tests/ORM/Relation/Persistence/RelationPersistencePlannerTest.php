@@ -24,6 +24,7 @@ use ON\Data\ORM\State\RepresentationStore;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Fixture\CustomRelation;
+use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
 use Tests\ON\Data\Support\Relation\RecordingRelationPersistencePlanner;
 use Tests\ON\Data\Support\Relation\TestCommand;
 
@@ -485,7 +486,7 @@ final class RelationPersistencePlannerTest extends TestCase
 	{
 		$map = new RepresentationStore();
 		foreach ($RepresentationStates as $tracked) {
-			\Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::addTo($map, $tracked);
+			RepresentationStateObjectRegistry::addTo($map, $tracked);
 		}
 
 		return $map;
@@ -493,7 +494,7 @@ final class RelationPersistencePlannerTest extends TestCase
 
 	private function tracked(object $representation, RecordState $record): RepresentationState
 	{
-		return \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember(
+		return RepresentationStateObjectRegistry::remember(
 			$representation,
 			new RepresentationState($this->bindingFor($record), [
 				$record->getStateHash() => $record->getRevision(),

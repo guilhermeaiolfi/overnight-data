@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Support;
 
+use LogicException;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
 
@@ -28,7 +29,7 @@ final class RepresentationStateObjectRegistry
 	{
 		$object = self::$objects[spl_object_id($state)] ?? null;
 		if ($object === null) {
-			throw new \LogicException('Representation state was not registered with a representation object.');
+			throw new LogicException('Representation state was not registered with a representation object.');
 		}
 
 		return $object;

@@ -8,6 +8,7 @@ use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
+use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
@@ -34,9 +35,10 @@ use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
+use Tests\ON\Data\Support\RecordingCommandExecutor;
 use Tests\ON\Data\Support\Relation\RecordingRelationPersistencePlanner;
 use Tests\ON\Data\Support\Relation\TestCommand;
-use Tests\ON\Data\Support\RecordingCommandExecutor;
 
 final class FlushExecutorTest extends TestCase
 {
@@ -387,7 +389,7 @@ final class FlushExecutorTest extends TestCase
 		$collection = $this->changedRelatedCollection($record);
 		$executor = new RecordingCommandExecutor();
 
-		$this->expectException(\ON\Data\ORM\Exception\RelationPersistenceException::class);
+		$this->expectException(RelationPersistenceException::class);
 
 		try {
 			(new FlushExecutor($executor))->flush(
@@ -430,7 +432,7 @@ final class FlushExecutorTest extends TestCase
 		$reference = $this->changedRelatedReference($record);
 		$executor = new RecordingCommandExecutor();
 
-		$this->expectException(\ON\Data\ORM\Exception\RelationPersistenceException::class);
+		$this->expectException(RelationPersistenceException::class);
 
 		try {
 			(new FlushExecutor($executor))->flush(
@@ -814,7 +816,7 @@ final class FlushExecutorTest extends TestCase
 
 	private function tracked(object $representation, RepresentationBinding $binding): RepresentationState
 	{
-		return \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember(
+		return RepresentationStateObjectRegistry::remember(
 			$representation,
 			new RepresentationState($binding, $this->baselineRevisions($binding))
 		);
@@ -824,7 +826,7 @@ final class FlushExecutorTest extends TestCase
 	{
 		$map = new RepresentationStore();
 		foreach ($RepresentationStates as $tracked) {
-			\Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::addTo($map, $tracked);
+			RepresentationStateObjectRegistry::addTo($map, $tracked);
 		}
 
 		return $map;

@@ -26,6 +26,7 @@ use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
 
 final class HasManyPersistencePlannerTest extends TestCase
 {
@@ -122,7 +123,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$collection->add($item);
 		$binding = new RepresentationBinding();
 		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($posts, 'id')));
-		$tracked = \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
+		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
 
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('cannot be resolved to a record state');
@@ -325,7 +326,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 
 	private function tracked(object $representation, RecordState $record): RepresentationState
 	{
-		return \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember(
+		return RepresentationStateObjectRegistry::remember(
 			$representation,
 			new RepresentationState($this->bindingFor($record), [
 				$record->getStateHash() => $record->getRevision(),
@@ -358,7 +359,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 	{
 		$map = new RepresentationStore();
 		foreach ($RepresentationStates as $tracked) {
-			\Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::addTo($map, $tracked);
+			RepresentationStateObjectRegistry::addTo($map, $tracked);
 		}
 
 		return $map;
