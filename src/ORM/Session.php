@@ -44,7 +44,7 @@ final class Session
 		$this->references = new RelatedReferenceMap();
 		$this->adopter = new RepresentationAdopter($this->records, $this->representations);
 		$this->syncer = $syncer ?? new RepresentationSyncer();
-		$this->flusher = $flusher ?? new FlushExecutor($executor);
+		$this->flusher = $flusher ?? new FlushExecutor($executor, $this->syncer);
 	}
 
 	public function getRecords(): RecordStateMap

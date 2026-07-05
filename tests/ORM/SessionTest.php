@@ -22,6 +22,7 @@ use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
+use ON\Data\ORM\Sync\RepresentationSyncer;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Support\Relation\RecordingRelationPersistencePlanner;
@@ -43,6 +44,21 @@ final class SessionTest extends TestCase
 		self::assertSame([], $session->getRepresentations()->getAll());
 		self::assertSame([], $session->getRelations()->getAll());
 		self::assertSame([], $session->getReferences()->getAll());
+	}
+
+	public function testDefaultFlushExecutorUsesSessionRepresentationSyncer(): void
+	{
+		$syncer = new RepresentationSyncer();
+		$session = new Session(new RecordingCommandExecutor(), syncer: $syncer);
+
+		$sessionReflection = new \ReflectionClass($session);
+		$flusherProperty = $sessionReflection->getProperty('flusher');
+		$flusher = $flusherProperty->getValue($session);
+
+		$flusherReflection = new \ReflectionClass($flusher);
+		$syncerProperty = $flusherReflection->getProperty('syncer');
+
+		self::assertSame($syncer, $syncerProperty->getValue($flusher));
 	}
 
 	public function testTrackRecordAddsExistingRecordAndReturnsSameInstance(): void
