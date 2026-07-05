@@ -23,6 +23,7 @@ use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\TrackedRepresentation;
 use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
@@ -85,26 +86,32 @@ final class HasOnePersistencePlannerTest extends TestCase
 		self::assertSame(['user_id' => 10], $target->getDirtyValues());
 	}
 
-	public function testMissingOwnerKeyValueThrows(): void
+	public function testMissingOwnerKeyValueWritesValueRef(): void
 	{
 		[$relation, $users, $profiles] = $this->singleKeyModel();
 		$owner = RecordState::new($users, []);
 		$target = RecordState::new($profiles, ['id' => 5]);
 
-		$this->expectAvailableOwnerValueException('users', 'id');
-
 		$this->planSet($relation, $owner, $target);
+
+		$value = $target->getValue('user_id');
+		self::assertInstanceOf(ValueRef::class, $value);
+		self::assertSame($owner, $value->getRecord());
+		self::assertSame('id', $value->getField());
 	}
 
-	public function testNullOwnerKeyValueThrows(): void
+	public function testNullOwnerKeyValueWritesValueRef(): void
 	{
 		[$relation, $users, $profiles] = $this->singleKeyModel();
 		$owner = RecordState::new($users, ['id' => null]);
 		$target = RecordState::new($profiles, ['id' => 5]);
 
-		$this->expectAvailableOwnerValueException('users', 'id');
-
 		$this->planSet($relation, $owner, $target);
+
+		$value = $target->getValue('user_id');
+		self::assertInstanceOf(ValueRef::class, $value);
+		self::assertSame($owner, $value->getRecord());
+		self::assertSame('id', $value->getField());
 	}
 
 	public function testMissingTrackedCurrentTargetThrows(): void
@@ -282,14 +289,6 @@ final class HasOnePersistencePlannerTest extends TestCase
 
 		self::assertSame($ownerValues, $owner->getValues());
 		self::assertTrue($owner->isClean());
-	}
-
-	private function expectAvailableOwnerValueException(string $ownerCollectionName, string $fieldName): void
-	{
-		$this->expectException(RelationPersistenceException::class);
-		$this->expectExceptionMessage("Relation 'profile'");
-		$this->expectExceptionMessage("owner collection '{$ownerCollectionName}'");
-		$this->expectExceptionMessage($fieldName);
 	}
 
 	private function planSet(HasOneRelation $relation, RecordState $owner, RecordState $target): CommandBuffer

@@ -23,6 +23,7 @@ use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\TrackedRepresentation;
 use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
@@ -129,26 +130,32 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$this->plan($relation, $collection, $this->records($owner, $child), $this->trackedMap($tracked));
 	}
 
-	public function testMissingOwnerKeyValueThrows(): void
+	public function testMissingOwnerKeyValueWritesValueRef(): void
 	{
 		[$relation, $users, $posts] = $this->singleKeyModel();
 		$owner = RecordState::new($users, []);
 		$child = RecordState::new($posts, ['title' => 'Draft']);
 
-		$this->expectAvailableOwnerValueException('users', 'id');
-
 		$this->planSingleAdd($relation, $owner, $child);
+
+		$value = $child->getValue('user_id');
+		self::assertInstanceOf(ValueRef::class, $value);
+		self::assertSame($owner, $value->getRecord());
+		self::assertSame('id', $value->getField());
 	}
 
-	public function testNullOwnerKeyValueThrows(): void
+	public function testNullOwnerKeyValueWritesValueRef(): void
 	{
 		[$relation, $users, $posts] = $this->singleKeyModel();
 		$owner = RecordState::new($users, ['id' => null]);
 		$child = RecordState::new($posts, ['title' => 'Draft']);
 
-		$this->expectAvailableOwnerValueException('users', 'id');
-
 		$this->planSingleAdd($relation, $owner, $child);
+
+		$value = $child->getValue('user_id');
+		self::assertInstanceOf(ValueRef::class, $value);
+		self::assertSame($owner, $value->getRecord());
+		self::assertSame('id', $value->getField());
 	}
 
 	public function testRemovedChildOnNullableRelationSetsChildOuterKeyFieldsToNull(): void
@@ -264,14 +271,6 @@ final class HasManyPersistencePlannerTest extends TestCase
 
 		self::assertSame($ownerValues, $owner->getValues());
 		self::assertTrue($owner->isClean());
-	}
-
-	private function expectAvailableOwnerValueException(string $ownerCollectionName, string $fieldName): void
-	{
-		$this->expectException(RelationPersistenceException::class);
-		$this->expectExceptionMessage("Relation 'posts'");
-		$this->expectExceptionMessage("owner collection '{$ownerCollectionName}'");
-		$this->expectExceptionMessage($fieldName);
 	}
 
 	private function planSingleAdd(HasManyRelation $relation, RecordState $owner, RecordState $child): CommandBuffer

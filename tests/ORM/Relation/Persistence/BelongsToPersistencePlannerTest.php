@@ -23,6 +23,7 @@ use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\TrackedRepresentation;
 use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
@@ -129,26 +130,32 @@ final class BelongsToPersistencePlannerTest extends TestCase
 		$this->plan($relation, $reference, $this->records($owner, $target), $this->trackedMap($tracked));
 	}
 
-	public function testMissingTargetKeyValueThrows(): void
+	public function testMissingTargetKeyValueWritesValueRef(): void
 	{
 		[$relation, $posts, $users] = $this->singleKeyModel();
 		$owner = RecordState::new($posts, ['author_id' => null]);
 		$target = RecordState::new($users, ['name' => 'Ada']);
 
-		$this->expectAvailableTargetValueException('users', 'id');
-
 		$this->planSet($relation, $owner, $target);
+
+		$value = $owner->getValue('author_id');
+		self::assertInstanceOf(ValueRef::class, $value);
+		self::assertSame($target, $value->getRecord());
+		self::assertSame('id', $value->getField());
 	}
 
-	public function testNullTargetKeyValueThrows(): void
+	public function testNullTargetKeyValueWritesValueRef(): void
 	{
 		[$relation, $posts, $users] = $this->singleKeyModel();
 		$owner = RecordState::new($posts, ['author_id' => null]);
 		$target = RecordState::new($users, ['id' => null]);
 
-		$this->expectAvailableTargetValueException('users', 'id');
-
 		$this->planSet($relation, $owner, $target);
+
+		$value = $owner->getValue('author_id');
+		self::assertInstanceOf(ValueRef::class, $value);
+		self::assertSame($target, $value->getRecord());
+		self::assertSame('id', $value->getField());
 	}
 
 	public function testClearNullableBelongsToSetsOwnerInnerKeyFieldsToNull(): void
@@ -270,14 +277,6 @@ final class BelongsToPersistencePlannerTest extends TestCase
 
 		self::assertSame($targetValues, $target->getValues());
 		self::assertTrue($target->isClean());
-	}
-
-	private function expectAvailableTargetValueException(string $targetCollectionName, string $fieldName): void
-	{
-		$this->expectException(RelationPersistenceException::class);
-		$this->expectExceptionMessage("Relation 'author'");
-		$this->expectExceptionMessage("target collection '{$targetCollectionName}'");
-		$this->expectExceptionMessage($fieldName);
 	}
 
 	private function planSet(BelongsToRelation $relation, RecordState $owner, RecordState $target): CommandBuffer

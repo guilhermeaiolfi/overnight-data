@@ -64,11 +64,11 @@ For `ONE` relation bindings, the representation path must contain an object or `
 The built-in relation planners are:
 
 - `ManyToManyPersistencePlanner`: consumes `RelatedCollection` changes for `M2MRelation`, inserting or deleting rows in the through collection.
-- `HasManyPersistencePlanner`: consumes `RelatedCollection` changes for `HasManyRelation`, copying owner key values into added child records and nulling child outer keys for nullable removals.
-- `BelongsToPersistencePlanner`: consumes `RelatedReference` changes for `BelongsToRelation`, copying target key values into the owner record or nulling owner inner keys for nullable clears.
-- `HasOnePersistencePlanner`: consumes `RelatedReference` changes for `HasOneRelation`, copying owner key values into the current target record and, when replacing or clearing, nulling the previous target outer keys when the relation is nullable.
+- `HasManyPersistencePlanner`: consumes `RelatedCollection` changes for `HasManyRelation`, propagating owner key values into added child records and nulling child outer keys for nullable removals.
+- `BelongsToPersistencePlanner`: consumes `RelatedReference` changes for `BelongsToRelation`, propagating target key values into the owner record or nulling owner inner keys for nullable clears.
+- `HasOnePersistencePlanner`: consumes `RelatedReference` changes for `HasOneRelation`, propagating owner key values into the current target record and, when replacing or clearing, nulling the previous target outer keys when the relation is nullable.
 
-Relation planners require involved target objects to already be tracked so they can resolve each object to a `RecordState`. They do not adopt new objects, load missing relations, order commands around generated ids, or orchestrate transactions.
+For scalar foreign-key relation shapes, the has-many, belongs-to, and has-one planners may write a `ValueRef` when the source key is not concrete yet. If the source key is already concrete, `RecordState::setValue()` collapses that reference immediately and the target record stores the concrete value. Relation planners require involved target objects to already be tracked so they can resolve each object to a `RecordState`. They do not adopt new objects, load missing relations, or orchestrate transactions.
 
 ## Internal Value References
 
@@ -76,7 +76,9 @@ Relation planners require involved target objects to already be tracked so they 
 
 Persistence commands remain concrete-only. `CommandPlanner` resolves resolvable references before building commands and rejects unresolved references instead of passing them into `InsertCommand`, `UpdateCommand`, or `DeleteCommand`. Command objects also defensively reject `ValueRef` values.
 
-Relation planners do not write `ValueRef` yet, and generated-key dependency ordering is not complete in this phase. Wave-based flush planning is still future work.
+`RecordFlusher` flushes records in waves. Before each planning attempt it resolves any now-ready references and only plans records whose command-relevant values are concrete. This allows generated-key dependencies such as a new user with a new has-many post, a new belongs-to target with a new owner, or a new has-one owner with a new target to flush as parent/source insert first, generated value merge second, dependent record command third.
+
+Many-to-many through-row commands remain available-key-only in this phase. Generated-key support for M2M needs a separate command intent/draft/finalization layer because command objects and executors must continue to receive concrete values only.
 
 ## Commands
 
@@ -96,6 +98,8 @@ Each command carries the owning `CollectionInterface` plus canonical field-keyed
 - clean records as no command
 
 Composite identity remains first-class. Update and delete identities are keyed by primary-key field name in definition order.
+
+`RecordFlusher` preserves command result order by actual execution wave. Clean records do not block a flush, and removed keyless records are discarded without a command. Removed keyed records only require concrete delete identity values; unresolved non-identity values do not block deletion.
 
 ## Execution
 
@@ -181,6 +185,7 @@ This is deliberately not an `EntityManager`. There is no repository API, object 
 - `sync()` accepts object roots only; array input is not supported yet.
 - No automatic relation cascade writes.
 - No automatic graph adoption from `flush()`.
+- Many-to-many generated-key through rows are not supported until command intent/draft support is added.
 - No transaction orchestration.
 - No optimistic locking, stale-row detection, or affected-row conflict handling.
 - No lazy loading.

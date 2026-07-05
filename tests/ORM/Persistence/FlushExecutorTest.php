@@ -30,6 +30,7 @@ use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\TrackedRepresentation;
 use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Support\Relation\RecordingRelationPersistencePlanner;
@@ -470,6 +471,43 @@ final class FlushExecutorTest extends TestCase
 		self::assertSame($posts, $command->getCollection());
 		self::assertSame(['id' => 5], $command->getIdentity());
 		self::assertSame(['user_id' => 10], $command->getChanges());
+	}
+
+	public function testHasManyAddWithGeneratedOwnerKeyFlushesOwnerThenChildWithConcreteForeignKey(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$owner = RecordState::new($users, ['name' => 'Owner']);
+		$child = RecordState::new($posts, ['title' => 'Post']);
+		$postRepresentation = $this->representation(['title' => 'Post']);
+		$collection = new RelatedCollection($owner, 'posts', $this->bindingFor($child));
+		$collection->add($postRepresentation);
+		$executor = new RecordingCommandExecutor(results: [
+			new CommandResult(1, ['id' => 10]),
+			new CommandResult(1, ['id' => 5]),
+		]);
+
+		(new FlushExecutor($executor))->flush(
+			$this->trackedMap($this->tracked($postRepresentation, $this->bindingFor($child))),
+			$this->records($owner, $child),
+			$this->relations($collection)
+		);
+
+		self::assertFalse($collection->hasChanges());
+		self::assertSame(10, $owner->getValue('id'));
+		self::assertSame(10, $child->getValue('user_id'));
+		self::assertCount(2, $executor->getCommands());
+		$ownerCommand = $executor->getCommands()[0];
+		$childCommand = $executor->getCommands()[1];
+		self::assertInstanceOf(InsertCommand::class, $ownerCommand);
+		self::assertInstanceOf(InsertCommand::class, $childCommand);
+		self::assertSame($users, $ownerCommand->getCollection());
+		self::assertSame($posts, $childCommand->getCollection());
+		self::assertSame(['name' => 'Owner'], $ownerCommand->getValues());
+		self::assertSame(['title' => 'Post', 'user_id' => 10], $childCommand->getValues());
+		self::assertNotContains('ref', array_map(
+			static fn (mixed $value): string => $value instanceof ValueRef ? 'ref' : 'scalar',
+			array_merge($ownerCommand->getValues(), $childCommand->getValues()),
+		));
 	}
 
 	public function testNullableHasManyRemoveFlushSetsChildForeignKeyToNullThroughScalarUpdate(): void

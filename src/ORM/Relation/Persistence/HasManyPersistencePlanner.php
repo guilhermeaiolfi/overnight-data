@@ -89,7 +89,7 @@ final class HasManyPersistencePlanner implements RelationPersistencePlannerInter
 				));
 			}
 
-			$child->setValue($outerField, $this->requireAvailableOwnerValue($owner, $innerField, $relation->getName()));
+			$child->setValue($outerField, $owner->getValueRef($innerField));
 		}
 	}
 
@@ -100,27 +100,4 @@ final class HasManyPersistencePlanner implements RelationPersistencePlannerInter
 		}
 	}
 
-	private function requireAvailableOwnerValue(RecordState $owner, string $fieldName, string $relationName): mixed
-	{
-		if (! $owner->hasValue($fieldName)) {
-			throw new RelationPersistenceException(sprintf(
-				"Relation '%s' cannot persist has-many change: owner collection '%s' is missing required field '%s'.",
-				$relationName,
-				$owner->getCollectionName(),
-				$fieldName,
-			));
-		}
-
-		$value = $owner->getValue($fieldName);
-		if ($value === null) {
-			throw new RelationPersistenceException(sprintf(
-				"Relation '%s' cannot persist has-many change: owner collection '%s' has null required field '%s'.",
-				$relationName,
-				$owner->getCollectionName(),
-				$fieldName,
-			));
-		}
-
-		return $value;
-	}
 }

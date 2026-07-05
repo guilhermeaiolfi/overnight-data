@@ -88,7 +88,7 @@ final class BelongsToPersistencePlanner implements RelationPersistencePlannerInt
 				));
 			}
 
-			$owner->setValue($innerField, $this->requireAvailableTargetValue($target, $outerField, $relation->getName()));
+			$owner->setValue($innerField, $target->getValueRef($outerField));
 		}
 	}
 
@@ -99,27 +99,4 @@ final class BelongsToPersistencePlanner implements RelationPersistencePlannerInt
 		}
 	}
 
-	private function requireAvailableTargetValue(RecordState $target, string $fieldName, string $relationName): mixed
-	{
-		if (! $target->hasValue($fieldName)) {
-			throw new RelationPersistenceException(sprintf(
-				"Relation '%s' cannot persist belongs-to change: target collection '%s' is missing required field '%s'.",
-				$relationName,
-				$target->getCollectionName(),
-				$fieldName,
-			));
-		}
-
-		$value = $target->getValue($fieldName);
-		if ($value === null) {
-			throw new RelationPersistenceException(sprintf(
-				"Relation '%s' cannot persist belongs-to change: target collection '%s' has null required field '%s'.",
-				$relationName,
-				$target->getCollectionName(),
-				$fieldName,
-			));
-		}
-
-		return $value;
-	}
 }

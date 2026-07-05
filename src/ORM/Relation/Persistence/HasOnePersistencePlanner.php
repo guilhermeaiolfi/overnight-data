@@ -53,16 +53,12 @@ final class HasOnePersistencePlanner implements RelationPersistencePlannerInterf
 		$baselineRecord = $requiresUnlink && $baselineTarget !== null
 			? $this->resolveTargetRecord($context, $relation, $baselineTarget)
 			: null;
-		$ownerValues = $currentRecord === null
-			? []
-			: $this->requireAvailableOwnerValues($relation, $owner);
-
 		if ($baselineRecord instanceof RecordState) {
 			$this->nullTargetOuterKeys($relation, $baselineRecord);
 		}
 
 		if ($currentRecord instanceof RecordState) {
-			$this->copyOwnerKeysIntoTarget($relation, $ownerValues, $currentRecord);
+			$this->copyOwnerKeysIntoTarget($relation, $owner, $currentRecord);
 		}
 	}
 
@@ -87,24 +83,7 @@ final class HasOnePersistencePlanner implements RelationPersistencePlannerInterf
 		return $targetRecord;
 	}
 
-	/**
-	 * @return array<string, mixed>
-	 */
-	private function requireAvailableOwnerValues(HasOneRelation $relation, RecordState $owner): array
-	{
-		$values = [];
-		foreach ($relation->getInnerKeys() as $innerField) {
-			$innerField = (string) $innerField;
-			$values[$innerField] = $this->requireAvailableOwnerValue($owner, $innerField, $relation->getName());
-		}
-
-		return $values;
-	}
-
-	/**
-	 * @param array<string, mixed> $ownerValues
-	 */
-	private function copyOwnerKeysIntoTarget(HasOneRelation $relation, array $ownerValues, RecordState $target): void
+	private function copyOwnerKeysIntoTarget(HasOneRelation $relation, RecordState $owner, RecordState $target): void
 	{
 		foreach ($relation->getInnerKeys() as $index => $innerField) {
 			$innerField = (string) $innerField;
@@ -118,7 +97,7 @@ final class HasOnePersistencePlanner implements RelationPersistencePlannerInterf
 				));
 			}
 
-			$target->setValue($outerField, $ownerValues[$innerField]);
+			$target->setValue($outerField, $owner->getValueRef($innerField));
 		}
 	}
 
@@ -129,27 +108,4 @@ final class HasOnePersistencePlanner implements RelationPersistencePlannerInterf
 		}
 	}
 
-	private function requireAvailableOwnerValue(RecordState $owner, string $fieldName, string $relationName): mixed
-	{
-		if (! $owner->hasValue($fieldName)) {
-			throw new RelationPersistenceException(sprintf(
-				"Relation '%s' cannot persist has-one change: owner collection '%s' is missing required field '%s'.",
-				$relationName,
-				$owner->getCollectionName(),
-				$fieldName,
-			));
-		}
-
-		$value = $owner->getValue($fieldName);
-		if ($value === null) {
-			throw new RelationPersistenceException(sprintf(
-				"Relation '%s' cannot persist has-one change: owner collection '%s' has null required field '%s'.",
-				$relationName,
-				$owner->getCollectionName(),
-				$fieldName,
-			));
-		}
-
-		return $value;
-	}
 }
