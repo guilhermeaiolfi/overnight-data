@@ -5,19 +5,19 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\State\TrackedRepresentation;
-use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\State\RepresentationState;
+use ON\Data\ORM\State\RepresentationStore;
 
-final class TrackedRepresentationResolver
+final class RepresentationStateResolver
 {
-	public function __construct(private TrackedRepresentationMap $representations)
+	public function __construct(private RepresentationStore $representations)
 	{
 	}
 
-	public function getTrackedRepresentation(object $object, string $path): TrackedRepresentation
+	public function getRepresentationState(object $object, string $path): RepresentationState
 	{
 		$tracked = $this->representations->get($object);
-		if ($tracked instanceof TrackedRepresentation) {
+		if ($tracked instanceof RepresentationState) {
 			return $tracked;
 		}
 

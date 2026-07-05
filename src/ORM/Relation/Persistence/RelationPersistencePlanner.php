@@ -10,19 +10,19 @@ use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
-use ON\Data\ORM\Relation\RelatedCollectionMap;
-use ON\Data\ORM\Relation\RelatedReferenceMap;
+use ON\Data\ORM\Relation\RelatedCollectionStore;
+use ON\Data\ORM\Relation\RelatedReferenceStore;
 use ON\Data\ORM\Relation\RelationChangeInterface;
-use ON\Data\ORM\State\RecordStateMap;
-use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\State\RecordStateStore;
+use ON\Data\ORM\State\RepresentationStore;
 
 final class RelationPersistencePlanner
 {
 	public function plan(
-		RelatedCollectionMap $relations,
-		RelatedReferenceMap $references,
-		RecordStateMap $records,
-		TrackedRepresentationMap $representations,
+		RelatedCollectionStore $relations,
+		RelatedReferenceStore $references,
+		RecordStateStore $records,
+		RepresentationStore $representations,
 	): RelationPersistenceResult {
 		$changed = array_merge($relations->getChanged(), $references->getChanged());
 		$commands = new CommandBuffer();

@@ -7,7 +7,7 @@ namespace ON\Data\ORM\State;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
 
-final class RecordStateMap
+final class RecordStateStore
 {
 	/** @var array<string, RecordState> */
 	private array $statesByHash = [];
@@ -30,7 +30,7 @@ final class RecordStateMap
 		$stateHash = $state->getStateHash();
 		if (isset($this->statesByHash[$stateHash])) {
 			if ($this->statesByHash[$stateHash] !== $state) {
-				throw new StateException(sprintf("Record state map already contains a different state for state hash '%s'.", $stateHash));
+				throw new StateException(sprintf("Record state store already contains a different state for state hash '%s'.", $stateHash));
 			}
 		} else {
 			$this->statesByHash[$stateHash] = $state;
@@ -65,12 +65,12 @@ final class RecordStateMap
 	{
 		$key = $state->getKey();
 		if (! $key instanceof Key) {
-			throw new StateException('Cannot index a record state without a key in the record state map.');
+			throw new StateException('Cannot index a record state without a key in the record state store.');
 		}
 
 		$stateHash = $state->getStateHash();
 		if (isset($this->statesByHash[$stateHash]) && $this->statesByHash[$stateHash] !== $state) {
-			throw new StateException(sprintf("Record state map already contains a different state for state hash '%s'.", $stateHash));
+			throw new StateException(sprintf("Record state store already contains a different state for state hash '%s'.", $stateHash));
 		}
 
 		$this->statesByHash[$stateHash] = $state;
@@ -81,7 +81,7 @@ final class RecordStateMap
 				return;
 			}
 
-			throw new StateException(sprintf("Record state map already contains a different state for key '%s'.", $hash));
+			throw new StateException(sprintf("Record state store already contains a different state for key '%s'.", $hash));
 		}
 
 		$this->statesByKeyHash[$hash] = $state;
@@ -101,27 +101,45 @@ final class RecordStateMap
 		return null;
 	}
 
-	public function getFromRepresentation(TrackedRepresentation $tracked): ?RecordState
+	public function getFromRepresentation(RepresentationState $state): ?RecordState
 	{
-		$state = null;
-		foreach ($tracked->getBinding()->getFields() as $binding) {
+		$record = null;
+		foreach ($state->getBinding()->getFields() as $binding) {
 			$resolved = $this->getForField($binding->getField());
 			if (! $resolved instanceof RecordState) {
 				continue;
 			}
 
-			if ($state === null) {
-				$state = $resolved;
+			if ($record === null) {
+				$record = $resolved;
 
 				continue;
 			}
 
-			if ($state !== $resolved) {
-				throw new StateException('Tracked representation cannot be collapsed to one record.');
+			if ($record !== $resolved) {
+				throw new StateException('Representation state cannot be collapsed to one record.');
 			}
 		}
 
-		return $state;
+		foreach ($state->getBinding()->getRelations() as $binding) {
+			$relation = $binding->getRelation();
+			if (! $relation->hasState()) {
+				continue;
+			}
+
+			$resolved = $relation->getState();
+			if ($record === null) {
+				$record = $resolved;
+
+				continue;
+			}
+
+			if ($record !== $resolved) {
+				throw new StateException('Representation state cannot be collapsed to one record.');
+			}
+		}
+
+		return $record;
 	}
 
 	public function requireForField(RecordFieldRef $field): RecordState
@@ -131,7 +149,7 @@ final class RecordStateMap
 			return $state;
 		}
 
-		throw new StateException(sprintf("Record state map cannot resolve record state for field '%s.%s'.", $field->getCollectionName(), $field->getFieldName()));
+		throw new StateException(sprintf("Record state store cannot resolve record state for field '%s.%s'.", $field->getCollectionName(), $field->getFieldName()));
 	}
 
 	public function remove(Key $key): void

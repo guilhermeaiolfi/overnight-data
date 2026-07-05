@@ -48,17 +48,16 @@ It is the persistence provenance graph for one representation shape. It can be u
 
 A path can exist in only one of those maps. Scalar representation sync reads only field bindings. Relation representation sync reads only relation bindings. Expression bindings are modeled now so later work can reason about them without changing the shape of `RepresentationBinding`.
 
-### TrackedRepresentation
+### RepresentationState
 
-`TrackedRepresentation` describes one object instance.
+`RepresentationState` describes the applied binding state for one object instance. The object itself is held as the weak key in `RepresentationStore`, not inside `RepresentationState`.
 
 It stores:
 
-- the object
 - the `RepresentationBinding`
 - baseline record revisions
 
-It is not a binding template. Multiple object instances may share the same reusable representation binding shape, while each tracked representation stores instance-specific baseline revisions.
+It is not a binding template. Multiple object instances may share the same reusable representation binding shape, while each representation state stores instance-specific baseline revisions.
 
 ### RelatedCollection / RelatedReference
 
@@ -172,7 +171,7 @@ Relation representation sync uses relation bindings only:
 ```text
 RepresentationValueReader         -> getRelations()
 RelationRepresentationSynchronizer -> RelatedCollection / RelatedReference
-TrackedRepresentationResolver      -> already-tracked related objects only
+RepresentationStateResolver      -> already-tracked related objects only
 ```
 
 `MANY` bindings become `RelatedCollection` runtime state. `ONE` bindings become `RelatedReference` runtime state. `Session::sync($object, $binding)` exposes this graph-aware representation sync step directly for plain objects with a single-collection root binding, and `Session::sync($object)` refreshes an already-tracked object graph. `Session::flush()` still runs strict sync automatically before planning and flushing. Expression bindings are ignored by both synchronizers for now. They should survive on the binding model as provenance for later tasks.

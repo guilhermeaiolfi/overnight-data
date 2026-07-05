@@ -4,38 +4,38 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Persistence;
 
-use ON\Data\ORM\Relation\RelatedCollectionMap;
-use ON\Data\ORM\Relation\RelatedReferenceMap;
-use ON\Data\ORM\State\RecordStateMap;
-use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\Relation\RelatedCollectionStore;
+use ON\Data\ORM\Relation\RelatedReferenceStore;
+use ON\Data\ORM\State\RecordStateStore;
+use ON\Data\ORM\State\RepresentationStore;
 
 final class PersistenceContext
 {
 	public function __construct(
-		private RecordStateMap $records,
-		private TrackedRepresentationMap $representations,
-		private RelatedCollectionMap $relations,
-		private RelatedReferenceMap $references,
+		private RecordStateStore $records,
+		private RepresentationStore $representations,
+		private RelatedCollectionStore $relations,
+		private RelatedReferenceStore $references,
 		private CommandBuffer $commands,
 	) {
 	}
 
-	public function getRecords(): RecordStateMap
+	public function getRecords(): RecordStateStore
 	{
 		return $this->records;
 	}
 
-	public function getRepresentations(): TrackedRepresentationMap
+	public function getRepresentations(): RepresentationStore
 	{
 		return $this->representations;
 	}
 
-	public function getRelations(): RelatedCollectionMap
+	public function getRelations(): RelatedCollectionStore
 	{
 		return $this->relations;
 	}
 
-	public function getReferences(): RelatedReferenceMap
+	public function getReferences(): RelatedReferenceStore
 	{
 		return $this->references;
 	}

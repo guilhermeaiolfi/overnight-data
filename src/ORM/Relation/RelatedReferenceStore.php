@@ -7,7 +7,7 @@ namespace ON\Data\ORM\Relation;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordState;
 
-final class RelatedReferenceMap
+final class RelatedReferenceStore
 {
 	/** @var array<string, RelatedReference> */
 	private array $references = [];
@@ -21,7 +21,7 @@ final class RelatedReferenceMap
 			}
 
 			throw new StateException(sprintf(
-				"Related reference map already contains a different reference for relation '%s'.",
+				"Related reference store already contains a different reference for relation '%s'.",
 				$reference->getRelationName()
 			));
 		}

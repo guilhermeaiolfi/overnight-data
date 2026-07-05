@@ -14,6 +14,7 @@ use ON\Data\Definition\Internal\DefinitionFactory;
 use ON\Data\Definition\MetadataTrait;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Definition\Relation\RelationKeyPairing;
+use ON\Data\ORM\Relation\Persistence\RelationPersistencePlannerInterface;
 use ON\Data\Query\Relation\Loader\HasManyLoader;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Support\DefinitionNode;
@@ -39,6 +40,7 @@ final class CustomOwnedRelation extends DefinitionNode implements RelationInterf
 			'where' => [],
 			'orderBy' => [],
 			'loader' => HasManyLoader::class,
+			'persistencePlanner' => null,
 			'metadata' => [],
 			'options' => null,
 		];
@@ -192,6 +194,32 @@ final class CustomOwnedRelation extends DefinitionNode implements RelationInterf
 		}
 
 		return $loader;
+	}
+
+	public function persistencePlanner(string $planner): self
+	{
+		if (! is_a($planner, RelationPersistencePlannerInterface::class, true)) {
+			throw new LogicException(sprintf('Relation "%s" persistence planner must implement %s.', $this->getName(), RelationPersistencePlannerInterface::class));
+		}
+
+		$this->set('persistencePlanner', $planner);
+
+		return $this;
+	}
+
+	public function getPersistencePlanner(): ?string
+	{
+		$planner = $this->get('persistencePlanner');
+
+		if ($planner === null) {
+			return null;
+		}
+
+		if (! is_string($planner) || ! is_a($planner, RelationPersistencePlannerInterface::class, true)) {
+			throw new LogicException(sprintf('Relation "%s" persistence planner must implement %s.', $this->getName(), RelationPersistencePlannerInterface::class));
+		}
+
+		return $planner;
 	}
 
 	public function where(array $where): self

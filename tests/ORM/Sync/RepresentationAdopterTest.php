@@ -11,11 +11,11 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\RelatedCollection;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateMap;
+use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
-use ON\Data\ORM\State\TrackedRepresentation;
-use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\State\RepresentationState;
+use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\Sync\RepresentationAdopter;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -30,9 +30,9 @@ final class RepresentationAdopterTest extends TestCase
 		self::assertSame($record, $tracked->getBinding()->getField('title')->getField()->getState());
 	}
 
-	public function testAdoptAddsRecordToRecordStateMap(): void
+	public function testAdoptAddsRecordToRecordStateStore(): void
 	{
-		$records = new RecordStateMap();
+		$records = new RecordStateStore();
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
 
 		$this->adopter($records)->adopt(new stdClass(), $this->postBinding(), $record);
@@ -40,9 +40,9 @@ final class RepresentationAdopterTest extends TestCase
 		self::assertSame($record, $records->getByStateHash($record->getStateHash()));
 	}
 
-	public function testAdoptRegistersRepresentationInTrackedRepresentationMap(): void
+	public function testAdoptRegistersRepresentationInRepresentationStore(): void
 	{
-		$representations = new TrackedRepresentationMap();
+		$representations = new RepresentationStore();
 		$representation = new stdClass();
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
 
@@ -51,15 +51,16 @@ final class RepresentationAdopterTest extends TestCase
 		self::assertSame($tracked, $representations->get($representation));
 	}
 
-	public function testAdoptReturnsCreatedTrackedRepresentation(): void
+	public function testAdoptReturnsCreatedRepresentationState(): void
 	{
 		$representation = new stdClass();
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
+		$representations = new RepresentationStore();
 
-		$tracked = $this->adopter()->adopt($representation, $this->postBinding(), $record);
+		$tracked = $this->adopter(representations: $representations)->adopt($representation, $this->postBinding(), $record);
 
-		self::assertInstanceOf(TrackedRepresentation::class, $tracked);
-		self::assertSame($representation, $tracked->getRepresentation());
+		self::assertInstanceOf(RepresentationState::class, $tracked);
+		self::assertSame($tracked, $representations->get($representation));
 	}
 
 	public function testAppliedBindingFieldsTargetConcreteRecordState(): void
@@ -124,11 +125,11 @@ final class RepresentationAdopterTest extends TestCase
 		$this->adopter()->adopt(new stdClass(), $this->postBinding(), RecordState::new($this->users()));
 	}
 
-	public function testAdoptingAlreadyTrackedRepresentationThrows(): void
+	public function testAdoptingAlreadyRepresentationStateThrows(): void
 	{
 		$representation = new stdClass();
-		$records = new RecordStateMap();
-		$representations = new TrackedRepresentationMap();
+		$records = new RecordStateStore();
+		$representations = new RepresentationStore();
 		$adopter = $this->adopter($records, $representations);
 
 		$adopter->adopt($representation, $this->postBinding(), RecordState::new($this->posts(), ['title' => 'A1']));
@@ -153,7 +154,7 @@ final class RepresentationAdopterTest extends TestCase
 
 	public function testRelationItemCanBeAdoptedThroughPlainAdoptWithChildBinding(): void
 	{
-		$representations = new TrackedRepresentationMap();
+		$representations = new RepresentationStore();
 		$item = new stdClass();
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
 		$collection = new RelatedCollection(RecordState::new($this->users()), 'posts', $this->postBinding());
@@ -171,12 +172,12 @@ final class RepresentationAdopterTest extends TestCase
 	}
 
 	private function adopter(
-		?RecordStateMap $records = null,
-		?TrackedRepresentationMap $representations = null,
+		?RecordStateStore $records = null,
+		?RepresentationStore $representations = null,
 	): RepresentationAdopter {
 		return new RepresentationAdopter(
-			$records ?? new RecordStateMap(),
-			$representations ?? new TrackedRepresentationMap()
+			$records ?? new RecordStateStore(),
+			$representations ?? new RepresentationStore()
 		);
 	}
 

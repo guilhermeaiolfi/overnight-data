@@ -23,7 +23,7 @@ use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
-use ON\Data\ORM\State\TrackedRepresentation;
+use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\Sync\RepresentationSyncer;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -43,7 +43,7 @@ final class SessionTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 
 		self::assertSame([], $session->getRecords()->getAll());
-		self::assertSame([], $session->getRepresentations()->getAll());
+		self::assertSame([], iterator_to_array($session->getRepresentations()->getAll(), false));
 		self::assertSame([], $session->getRelations()->getAll());
 		self::assertSame([], $session->getReferences()->getAll());
 	}
@@ -139,7 +139,7 @@ final class SessionTest extends TestCase
 		$result = $session->sync($ownerRepresentation);
 
 		$trackedPost = $session->getRepresentations()->get($postRepresentation);
-		self::assertInstanceOf(TrackedRepresentation::class, $trackedPost);
+		self::assertInstanceOf(RepresentationState::class, $trackedPost);
 		self::assertCount(1, $result->getRelationChanges());
 	}
 
@@ -155,7 +155,7 @@ final class SessionTest extends TestCase
 		$result = $session->sync($ownerRepresentation);
 
 		$trackedProfile = $session->getRepresentations()->get($profileRepresentation);
-		self::assertInstanceOf(TrackedRepresentation::class, $trackedProfile);
+		self::assertInstanceOf(RepresentationState::class, $trackedProfile);
 		self::assertCount(1, $result->getRelationChanges());
 	}
 
@@ -167,7 +167,7 @@ final class SessionTest extends TestCase
 		$result = $session->sync($representation, $this->templateBinding());
 
 		$tracked = $session->getRepresentations()->get($representation);
-		self::assertInstanceOf(TrackedRepresentation::class, $tracked);
+		self::assertInstanceOf(RepresentationState::class, $tracked);
 		self::assertFalse($result->hasChanges());
 		self::assertSame('New User', $session->getRecords()->getFromRepresentation($tracked)?->getValue('name'));
 	}
@@ -182,10 +182,10 @@ final class SessionTest extends TestCase
 		$result = $session->sync($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts));
 
 		$trackedOwner = $session->getRepresentations()->get($ownerRepresentation);
-		self::assertInstanceOf(TrackedRepresentation::class, $trackedOwner);
+		self::assertInstanceOf(RepresentationState::class, $trackedOwner);
 		$owner = $session->getRecords()->getFromRepresentation($trackedOwner);
 		self::assertInstanceOf(RecordState::class, $owner);
-		self::assertInstanceOf(TrackedRepresentation::class, $session->getRepresentations()->get($postRepresentation));
+		self::assertInstanceOf(RepresentationState::class, $session->getRepresentations()->get($postRepresentation));
 		self::assertSame([$postRepresentation], $session->getRelations()->get($owner, 'posts')?->getItems());
 		self::assertCount(1, $result->getRelationChanges());
 	}
@@ -207,7 +207,7 @@ final class SessionTest extends TestCase
 		$result = $session->sync($ownerRepresentation, $binding);
 
 		$trackedOwner = $session->getRepresentations()->get($ownerRepresentation);
-		self::assertInstanceOf(TrackedRepresentation::class, $trackedOwner);
+		self::assertInstanceOf(RepresentationState::class, $trackedOwner);
 		$owner = $session->getRecords()->getFromRepresentation($trackedOwner);
 		self::assertInstanceOf(RecordState::class, $owner);
 		self::assertSame([], $owner->getValues());
@@ -225,10 +225,10 @@ final class SessionTest extends TestCase
 		$result = $session->sync($ownerRepresentation, $this->ownerTemplateBindingWithProfile($users, $profiles));
 
 		$trackedOwner = $session->getRepresentations()->get($ownerRepresentation);
-		self::assertInstanceOf(TrackedRepresentation::class, $trackedOwner);
+		self::assertInstanceOf(RepresentationState::class, $trackedOwner);
 		$owner = $session->getRecords()->getFromRepresentation($trackedOwner);
 		self::assertInstanceOf(RecordState::class, $owner);
-		self::assertInstanceOf(TrackedRepresentation::class, $session->getRepresentations()->get($profileRepresentation));
+		self::assertInstanceOf(RepresentationState::class, $session->getRepresentations()->get($profileRepresentation));
 		self::assertSame($profileRepresentation, $session->getReferences()->get($owner, 'profile')?->getTarget());
 		self::assertCount(1, $result->getRelationChanges());
 	}
@@ -278,7 +278,7 @@ final class SessionTest extends TestCase
 		$session->sync(new stdClass(), new RepresentationBinding());
 	}
 
-	public function testSyncAlreadyTrackedRepresentationWithMixedBindingIsNotAffectedByUntrackedRootGuard(): void
+	public function testSyncAlreadyRepresentationStateWithMixedBindingIsNotAffectedByUntrackedRootGuard(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session(new RecordingCommandExecutor());
@@ -288,8 +288,7 @@ final class SessionTest extends TestCase
 		$binding = new RepresentationBinding();
 		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::forState($userRecord, 'name')));
 		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::forState($postRecord, 'title')));
-		$session->getRepresentations()->add(new TrackedRepresentation(
-			$representation,
+		$session->getRepresentations()->add($representation, new RepresentationState(
 			$binding,
 			[
 				$userRecord->getStateHash() => $userRecord->getRevision(),
@@ -416,7 +415,7 @@ final class SessionTest extends TestCase
 		self::assertSame([], $session->getRecords()->getAll());
 	}
 
-	public function testFlushDoesNotClearTrackedRepresentations(): void
+	public function testFlushDoesNotClearRepresentationStates(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
@@ -427,6 +426,23 @@ final class SessionTest extends TestCase
 		$session->flush();
 
 		self::assertSame($tracked, $session->getRepresentations()->get($representation));
+	}
+
+	public function testClearClearsAllRuntimeStores(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$record = $session->trackNew($this->users(), ['name' => 'A1']);
+		$representation = $this->representation(['name' => 'A1']);
+		$session->adopt($representation, $this->templateBinding(), $record);
+		$session->trackRelation(new RelatedCollection($record, 'posts', new RepresentationBinding()));
+		$session->trackReference(new RelatedReference($record, 'profile', new RepresentationBinding()));
+
+		$session->clear();
+
+		self::assertSame([], $session->getRecords()->getAll());
+		self::assertSame([], iterator_to_array($session->getRepresentations()->getAll(), false));
+		self::assertSame([], $session->getRelations()->getAll());
+		self::assertSame([], $session->getReferences()->getAll());
 	}
 
 	public function testFlushPassesOwnedRelationsToFlushExecutor(): void
@@ -488,8 +504,8 @@ final class SessionTest extends TestCase
 		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Ada']);
 		$owner->setValue('name', 'Ada Lovelace');
 		$target = $session->trackClean($tags->getKey(3), ['id' => 3, 'label' => 'math']);
-		$item = new stdClass();
-		$session->adopt($item, $this->bindingFor($target), $target);
+		$item = $this->representation(['id' => 3, 'label' => 'math']);
+		$session->adopt($item, $this->tagTemplateBindingFor($tags), $target);
 		$collection = new RelatedCollection($owner, 'tags', $this->bindingFor($target));
 		$collection->add($item);
 		$session->trackRelation($collection);
@@ -508,7 +524,7 @@ final class SessionTest extends TestCase
 		self::assertFalse($collection->hasChanges());
 	}
 
-	public function testFlushInfersHasManyRelationAddFromTrackedRepresentationGraph(): void
+	public function testFlushInfersHasManyRelationAddFromRepresentationStateGraph(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$executor = new RecordingCommandExecutor();
@@ -538,7 +554,7 @@ final class SessionTest extends TestCase
 		self::assertSame(['user_id' => 10], $command->getChanges());
 	}
 
-	public function testFlushInfersBelongsToReferenceSetFromTrackedRepresentationGraph(): void
+	public function testFlushInfersBelongsToReferenceSetFromRepresentationStateGraph(): void
 	{
 		[$posts, $users] = $this->postsWithDefaultBelongsToAuthor();
 		$executor = new RecordingCommandExecutor();
@@ -568,7 +584,7 @@ final class SessionTest extends TestCase
 		self::assertSame(['author_id' => 10], $command->getChanges());
 	}
 
-	public function testFlushInfersNullableBelongsToReferenceClearFromTrackedRepresentationGraph(): void
+	public function testFlushInfersNullableBelongsToReferenceClearFromRepresentationStateGraph(): void
 	{
 		[$posts, $users] = $this->postsWithDefaultBelongsToAuthor();
 		$executor = new RecordingCommandExecutor();
@@ -597,7 +613,7 @@ final class SessionTest extends TestCase
 		self::assertSame(['author_id' => null], $command->getChanges());
 	}
 
-	public function testFlushInfersHasOneReferenceSetFromTrackedRepresentationGraph(): void
+	public function testFlushInfersHasOneReferenceSetFromRepresentationStateGraph(): void
 	{
 		[$users, $profiles] = $this->usersWithDefaultHasOneProfile();
 		$executor = new RecordingCommandExecutor();
@@ -627,7 +643,7 @@ final class SessionTest extends TestCase
 		self::assertSame(['user_id' => 10], $command->getChanges());
 	}
 
-	public function testSyncSynchronizesAllTrackedRepresentationsWithoutFlushingCommands(): void
+	public function testSyncSynchronizesAllRepresentationStatesWithoutFlushingCommands(): void
 	{
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
@@ -654,7 +670,7 @@ final class SessionTest extends TestCase
 
 		$result = $session->sync($ownerRepresentation);
 
-		self::assertInstanceOf(TrackedRepresentation::class, $session->getRepresentations()->get($postRepresentation));
+		self::assertInstanceOf(RepresentationState::class, $session->getRepresentations()->get($postRepresentation));
 		self::assertCount(1, $result->getRelationChanges());
 	}
 
@@ -675,7 +691,7 @@ final class SessionTest extends TestCase
 		self::assertInstanceOf(InsertCommand::class, $executor->getCommands()[0]);
 	}
 
-	public function testSyncTrackedRepresentationWorksWithoutBinding(): void
+	public function testSyncRepresentationStateWorksWithoutBinding(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$first = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
@@ -687,7 +703,7 @@ final class SessionTest extends TestCase
 		self::assertSame('A2', $first->getValue('name'));
 	}
 
-	public function testSyncUntrackedRepresentationWithoutBindingThrowsSyncException(): void
+	public function testSyncUnRepresentationStateWithoutBindingThrowsSyncException(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 
@@ -902,6 +918,15 @@ final class SessionTest extends TestCase
 		return $binding;
 	}
 
+	private function tagTemplateBindingFor(CollectionInterface $tags): RepresentationBinding
+	{
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($tags, 'id')));
+		$binding->addField(new RepresentationFieldBinding('label', RecordFieldRef::template($tags, 'label')));
+
+		return $binding;
+	}
+
 	private function users(): CollectionInterface
 	{
 		return (new Registry())
@@ -986,16 +1011,18 @@ final class SessionTest extends TestCase
 	private function usersWithDefaultHasManyPosts(): array
 	{
 		$registry = new Registry();
-		$posts = $registry->collection('posts')
+		$registry->collection('posts')
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('title', 'string')->end()
 			->field('user_id', 'int')->end()
 			->end();
+		$posts = $registry->getCollection('posts');
 		$users = $registry->collection('users')
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('name', 'string')->end();
+		self::assertInstanceOf(CollectionInterface::class, $posts);
 		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('user_id');
 
 		return [$users, $posts];
@@ -1007,16 +1034,18 @@ final class SessionTest extends TestCase
 	private function usersWithDefaultHasOneProfile(): array
 	{
 		$registry = new Registry();
-		$profiles = $registry->collection('profiles')
+		$registry->collection('profiles')
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('label', 'string')->end()
 			->field('user_id', 'int')->end()
 			->end();
+		$profiles = $registry->getCollection('profiles');
 		$users = $registry->collection('users')
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('name', 'string')->end();
+		self::assertInstanceOf(CollectionInterface::class, $profiles);
 		$users->hasOne('profile', 'profiles')->innerKey('id')->outerKey('user_id');
 
 		return [$users, $profiles];
@@ -1028,16 +1057,18 @@ final class SessionTest extends TestCase
 	private function postsWithDefaultBelongsToAuthor(): array
 	{
 		$registry = new Registry();
-		$users = $registry->collection('users')
+		$registry->collection('users')
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('name', 'string')->end()
 			->end();
+		$users = $registry->getCollection('users');
 		$posts = $registry->collection('posts')
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('title', 'string')->end()
 			->field('author_id', 'int')->end();
+		self::assertInstanceOf(CollectionInterface::class, $users);
 		$posts->belongsTo('author', 'users')->innerKey('author_id')->outerKey('id');
 
 		return [$posts, $users];

@@ -6,9 +6,9 @@ namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateMap;
-use ON\Data\ORM\State\TrackedRepresentation;
-use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\State\RecordStateStore;
+use ON\Data\ORM\State\RepresentationState;
+use ON\Data\ORM\State\RepresentationStore;
 
 final class ScalarRepresentationSynchronizer
 {
@@ -26,20 +26,22 @@ final class ScalarRepresentationSynchronizer
 	/**
 	 * @return list<SyncPlan>
 	 */
-	public function sync(TrackedRepresentationMap $representations, RecordStateMap $records): array
+	public function sync(RepresentationStore $representations, RecordStateStore $records): array
 	{
-		$trackedRepresentations = $representations->getAll();
+		$states = $representations->getAll();
 		$planner = new SyncPlanner($this->reader, $this->conflicts, $records);
 		$plans = [];
+		$plannedStates = [];
 
-		foreach ($trackedRepresentations as $tracked) {
-			$plans[] = $planner->plan($tracked);
+		foreach ($states as $representation => $state) {
+			$plans[] = $planner->plan($representation, $state);
+			$plannedStates[] = $state;
 		}
 
 		$this->assertNoConflicts($plans);
 
-		foreach ($trackedRepresentations as $index => $tracked) {
-			$this->applyPlan($tracked, $plans[$index]);
+		foreach ($plannedStates as $index => $state) {
+			$this->applyPlan($state, $plans[$index]);
 		}
 
 		return $plans;
@@ -67,13 +69,13 @@ final class ScalarRepresentationSynchronizer
 		}
 
 		throw new SyncException(sprintf(
-			'Cannot synchronize tracked representations because %d conflict(s) were detected; first conflict at path \'%s\'.',
+			'Cannot synchronize representation states because %d conflict(s) were detected; first conflict at path \'%s\'.',
 			$count,
 			$firstPath
 		));
 	}
 
-	private function applyPlan(TrackedRepresentation $tracked, SyncPlan $plan): void
+	private function applyPlan(RepresentationState $state, SyncPlan $plan): void
 	{
 		$touchedRecords = [];
 
@@ -83,23 +85,23 @@ final class ScalarRepresentationSynchronizer
 			$touchedRecords[$record->getStateHash()] = $record;
 		}
 
-		$this->refreshBaselineRevisions($tracked, $touchedRecords);
+		$this->refreshBaselineRevisions($state, $touchedRecords);
 	}
 
 	/**
 	 * @param array<string, RecordState> $touchedRecords
 	 */
-	private function refreshBaselineRevisions(TrackedRepresentation $tracked, array $touchedRecords): void
+	private function refreshBaselineRevisions(RepresentationState $state, array $touchedRecords): void
 	{
 		if ($touchedRecords === []) {
 			return;
 		}
 
-		$baselineRevisions = $tracked->getBaselineRevisions();
+		$baselineRevisions = $state->getBaselineRevisions();
 		foreach ($touchedRecords as $recordHash => $record) {
 			$baselineRevisions[$recordHash] = $record->getRevision();
 		}
 
-		$tracked->replaceBaselineRevisions($baselineRevisions);
+		$state->replaceBaselineRevisions($baselineRevisions);
 	}
 }

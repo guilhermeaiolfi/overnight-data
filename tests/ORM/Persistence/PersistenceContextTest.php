@@ -6,20 +6,20 @@ namespace Tests\ON\Data\ORM\Persistence;
 
 use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
-use ON\Data\ORM\Relation\RelatedCollectionMap;
-use ON\Data\ORM\Relation\RelatedReferenceMap;
-use ON\Data\ORM\State\RecordStateMap;
-use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\Relation\RelatedCollectionStore;
+use ON\Data\ORM\Relation\RelatedReferenceStore;
+use ON\Data\ORM\State\RecordStateStore;
+use ON\Data\ORM\State\RepresentationStore;
 use PHPUnit\Framework\TestCase;
 
 final class PersistenceContextTest extends TestCase
 {
 	public function testGettersReturnExactInstancesPassedToConstructor(): void
 	{
-		$records = new RecordStateMap();
-		$representations = new TrackedRepresentationMap();
-		$relations = new RelatedCollectionMap();
-		$references = new RelatedReferenceMap();
+		$records = new RecordStateStore();
+		$representations = new RepresentationStore();
+		$relations = new RelatedCollectionStore();
+		$references = new RelatedReferenceStore();
 		$commands = new CommandBuffer();
 		$context = new PersistenceContext($records, $representations, $relations, $references, $commands);
 

@@ -8,19 +8,19 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\RelatedCollection;
-use ON\Data\ORM\Relation\RelatedCollectionMap;
+use ON\Data\ORM\Relation\RelatedCollectionStore;
 use ON\Data\ORM\Relation\RelatedReference;
-use ON\Data\ORM\Relation\RelatedReferenceMap;
+use ON\Data\ORM\Relation\RelatedReferenceStore;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateMap;
+use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
-use ON\Data\ORM\State\TrackedRepresentation;
-use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\State\RepresentationState;
+use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\Sync\RepresentationSyncer;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -34,22 +34,22 @@ final class RepresentationSyncerTest extends TestCase
 		RecordingRelationPersistencePlanner::reset();
 	}
 
-	public function testSyncAllTrackedRepresentationsUpdatesScalarRecordStateValues(): void
+	public function testSyncAllRepresentationStatesUpdatesScalarRecordStateValues(): void
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
 
 		$result = $this->syncer()->sync(
 			$this->trackedMap($this->tracked($this->representation(['name' => 'A2']), $this->binding($record))),
 			$this->records($record),
-			new RelatedCollectionMap(),
-			new RelatedReferenceMap()
+			new RelatedCollectionStore(),
+			new RelatedReferenceStore()
 		);
 
 		self::assertSame('A2', $record->getValue('name'));
 		self::assertTrue($result->hasChanges());
 	}
 
-	public function testSyncOneTrackedRepresentationUpdatesOnlyThatRepresentation(): void
+	public function testSyncOneRepresentationStateUpdatesOnlyThatRepresentation(): void
 	{
 		$first = RecordState::new($this->users(), ['name' => 'A1']);
 		$second = RecordState::new($this->users(), ['name' => 'B1']);
@@ -62,8 +62,8 @@ final class RepresentationSyncerTest extends TestCase
 				$this->tracked($secondRepresentation, $this->binding($second))
 			),
 			$this->records($first, $second),
-			new RelatedCollectionMap(),
-			new RelatedReferenceMap(),
+			new RelatedCollectionStore(),
+			new RelatedReferenceStore(),
 			$firstRepresentation
 		);
 
@@ -71,19 +71,19 @@ final class RepresentationSyncerTest extends TestCase
 		self::assertSame('B1', $second->getValue('name'));
 	}
 
-	public function testSyncOneUntrackedRepresentationThrowsSyncException(): void
+	public function testSyncOneUnRepresentationStateThrowsSyncException(): void
 	{
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('untracked');
 
-		$this->syncer()->sync(new TrackedRepresentationMap(), new RecordStateMap(), new RelatedCollectionMap(), new RelatedReferenceMap(), new stdClass());
+		$this->syncer()->sync(new RepresentationStore(), new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore(), new stdClass());
 	}
 
 	public function testSyncAllUpdatesManyRelationPathsIntoRelatedCollection(): void
 	{
 		$owner = RecordState::new($this->users(), ['name' => 'Owner']);
 		$item = new stdClass();
-		$relations = new RelatedCollectionMap();
+		$relations = new RelatedCollectionStore();
 
 		$this->syncer()->sync(
 			$this->trackedMap(
@@ -92,7 +92,7 @@ final class RepresentationSyncerTest extends TestCase
 			),
 			$this->records($owner),
 			$relations,
-			new RelatedReferenceMap()
+			new RelatedReferenceStore()
 		);
 
 		$collection = $relations->get($owner, 'posts');
@@ -104,7 +104,7 @@ final class RepresentationSyncerTest extends TestCase
 	{
 		$owner = RecordState::new($this->users(), ['name' => 'Owner']);
 		$target = new stdClass();
-		$references = new RelatedReferenceMap();
+		$references = new RelatedReferenceStore();
 
 		$this->syncer()->sync(
 			$this->trackedMap(
@@ -112,7 +112,7 @@ final class RepresentationSyncerTest extends TestCase
 				$this->tracked($target, new RepresentationBinding())
 			),
 			$this->records($owner),
-			new RelatedCollectionMap(),
+			new RelatedCollectionStore(),
 			$references
 		);
 
@@ -132,11 +132,11 @@ final class RepresentationSyncerTest extends TestCase
 				$this->tracked($item, new RepresentationBinding())
 			),
 			$this->records($owner),
-			new RelatedCollectionMap(),
-			new RelatedReferenceMap()
+			new RelatedCollectionStore(),
+			new RelatedReferenceStore()
 		);
 
-		self::assertCount(1, $result->getSyncPlans());
+		self::assertCount(2, $result->getSyncPlans());
 		self::assertCount(1, $result->getRelationChanges());
 		self::assertTrue($result->hasChanges());
 	}
@@ -145,7 +145,7 @@ final class RepresentationSyncerTest extends TestCase
 	{
 		$owner = RecordState::clean($this->usersWithPosts()->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$item = new stdClass();
-		$relations = new RelatedCollectionMap();
+		$relations = new RelatedCollectionStore();
 		$executor = new RecordingCommandExecutor();
 
 		$this->syncer()->sync(
@@ -155,7 +155,7 @@ final class RepresentationSyncerTest extends TestCase
 			),
 			$this->records($owner),
 			$relations,
-			new RelatedReferenceMap()
+			new RelatedReferenceStore()
 		);
 
 		$collection = $relations->get($owner, 'posts');
@@ -191,24 +191,27 @@ final class RepresentationSyncerTest extends TestCase
 		return $representation;
 	}
 
-	private function tracked(object $representation, RepresentationBinding $binding): TrackedRepresentation
+	private function tracked(object $representation, RepresentationBinding $binding): RepresentationState
 	{
-		return new TrackedRepresentation($representation, $binding, $this->baselineRevisions($binding));
+		return \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember(
+			$representation,
+			new RepresentationState($binding, $this->baselineRevisions($binding))
+		);
 	}
 
-	private function trackedMap(TrackedRepresentation ...$trackedRepresentations): TrackedRepresentationMap
+	private function trackedMap(RepresentationState ...$RepresentationStates): RepresentationStore
 	{
-		$map = new TrackedRepresentationMap();
-		foreach ($trackedRepresentations as $tracked) {
-			$map->add($tracked);
+		$map = new RepresentationStore();
+		foreach ($RepresentationStates as $tracked) {
+			\Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::addTo($map, $tracked);
 		}
 
 		return $map;
 	}
 
-	private function records(RecordState ...$records): RecordStateMap
+	private function records(RecordState ...$records): RecordStateStore
 	{
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 		foreach ($records as $record) {
 			$map->add($record);
 		}

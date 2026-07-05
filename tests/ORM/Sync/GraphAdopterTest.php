@@ -7,18 +7,18 @@ namespace Tests\ON\Data\ORM\Sync;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Relation\RelatedCollectionMap;
-use ON\Data\ORM\Relation\RelatedReferenceMap;
+use ON\Data\ORM\Relation\RelatedCollectionStore;
+use ON\Data\ORM\Relation\RelatedReferenceStore;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateMap;
+use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
-use ON\Data\ORM\State\TrackedRepresentation;
-use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\State\RepresentationState;
+use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\Sync\GraphAdopter;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -30,7 +30,7 @@ final class GraphAdopterTest extends TestCase
 		$root = $this->representation(['name' => 'Root']);
 		$representations = $this->trackedMap($this->tracked($root, $this->appliedUserBinding(RecordState::new($this->users()))));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateMap(), new RelatedCollectionMap(), new RelatedReferenceMap());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 
 		self::assertSame([], $result);
 	}
@@ -38,14 +38,14 @@ final class GraphAdopterTest extends TestCase
 	public function testUntrackedRootWithBindingIsAdopted(): void
 	{
 		$root = $this->representation(['name' => 'Root']);
-		$records = new RecordStateMap();
-		$representations = new TrackedRepresentationMap();
+		$records = new RecordStateStore();
+		$representations = new RepresentationStore();
 
-		$result = $this->adopter()->adopt($root, $representations, $records, new RelatedCollectionMap(), new RelatedReferenceMap(), $this->userBinding());
+		$result = $this->adopter()->adopt($root, $representations, $records, new RelatedCollectionStore(), new RelatedReferenceStore(), $this->userBinding());
 
 		self::assertSame([], $result);
 		$tracked = $representations->get($root);
-		self::assertInstanceOf(TrackedRepresentation::class, $tracked);
+		self::assertInstanceOf(RepresentationState::class, $tracked);
 		self::assertSame('Root', $records->getFromRepresentation($tracked)?->getValue('name'));
 		self::assertTrue($records->getFromRepresentation($tracked)?->isNew());
 	}
@@ -55,7 +55,7 @@ final class GraphAdopterTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('root binding');
 
-		$this->adopter()->adopt(new stdClass(), new TrackedRepresentationMap(), new RecordStateMap(), new RelatedCollectionMap(), new RelatedReferenceMap());
+		$this->adopter()->adopt(new stdClass(), new RepresentationStore(), new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 	}
 
 	public function testManyRelationWithNullValueAdoptsNothing(): void
@@ -63,7 +63,7 @@ final class GraphAdopterTest extends TestCase
 		$root = $this->representation(['posts' => null]);
 		$representations = $this->trackedMap($this->trackedRootWithPosts($root));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateMap(), new RelatedCollectionMap(), new RelatedReferenceMap());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 
 		self::assertSame([], $result);
 	}
@@ -72,13 +72,13 @@ final class GraphAdopterTest extends TestCase
 	{
 		$item = $this->representation(['title' => 'A']);
 		$root = $this->representation(['posts' => [$item]]);
-		$records = new RecordStateMap();
+		$records = new RecordStateStore();
 		$representations = $this->trackedMap($this->trackedRootWithPosts($root));
 
-		$result = $this->adopter()->adopt($root, $representations, $records, new RelatedCollectionMap(), new RelatedReferenceMap());
+		$result = $this->adopter()->adopt($root, $representations, $records, new RelatedCollectionStore(), new RelatedReferenceStore());
 
 		self::assertCount(1, $result);
-		self::assertSame($item, $result[0]->getRepresentation());
+		self::assertSame($item, \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::objectFor($result[0]));
 		self::assertSame($result[0], $representations->get($item));
 		self::assertTrue($records->getFromRepresentation($result[0])?->isNew());
 	}
@@ -92,7 +92,7 @@ final class GraphAdopterTest extends TestCase
 		$this->expectExceptionMessage('posts');
 		$this->expectExceptionMessage('iterable');
 
-		$this->adopter()->adopt($root, $representations, new RecordStateMap(), new RelatedCollectionMap(), new RelatedReferenceMap());
+		$this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 	}
 
 	public function testManyRelationWithNonObjectItemThrows(): void
@@ -104,7 +104,7 @@ final class GraphAdopterTest extends TestCase
 		$this->expectExceptionMessage('posts');
 		$this->expectExceptionMessage('only contain objects');
 
-		$this->adopter()->adopt($root, $representations, new RecordStateMap(), new RelatedCollectionMap(), new RelatedReferenceMap());
+		$this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 	}
 
 	public function testOneRelationWithNullValueAdoptsNothing(): void
@@ -112,7 +112,7 @@ final class GraphAdopterTest extends TestCase
 		$root = $this->representation(['profile' => null]);
 		$representations = $this->trackedMap($this->trackedRootWithProfile($root));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateMap(), new RelatedCollectionMap(), new RelatedReferenceMap());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 
 		self::assertSame([], $result);
 	}
@@ -123,10 +123,10 @@ final class GraphAdopterTest extends TestCase
 		$root = $this->representation(['profile' => $target]);
 		$representations = $this->trackedMap($this->trackedRootWithProfile($root));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateMap(), new RelatedCollectionMap(), new RelatedReferenceMap());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 
 		self::assertCount(1, $result);
-		self::assertSame($target, $result[0]->getRepresentation());
+		self::assertSame($target, \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::objectFor($result[0]));
 	}
 
 	public function testOneRelationWithNonObjectNonNullValueThrows(): void
@@ -138,7 +138,7 @@ final class GraphAdopterTest extends TestCase
 		$this->expectExceptionMessage('profile');
 		$this->expectExceptionMessage('object value or null');
 
-		$this->adopter()->adopt($root, $representations, new RecordStateMap(), new RelatedCollectionMap(), new RelatedReferenceMap());
+		$this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 	}
 
 	public function testAlreadyTrackedRelatedObjectIsNotDuplicated(): void
@@ -150,7 +150,7 @@ final class GraphAdopterTest extends TestCase
 			$this->tracked($item, $this->appliedPostBinding(RecordState::new($this->posts())))
 		);
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateMap(), new RelatedCollectionMap(), new RelatedReferenceMap());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 
 		self::assertSame([], $result);
 		self::assertCount(2, $representations->getAll());
@@ -170,10 +170,10 @@ final class GraphAdopterTest extends TestCase
 		));
 		$representations = $this->trackedMap($this->trackedRootWithPosts($root), $this->tracked($post, $postBinding));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateMap(), new RelatedCollectionMap(), new RelatedReferenceMap());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 
 		self::assertCount(1, $result);
-		self::assertSame($comment, $result[0]->getRepresentation());
+		self::assertSame($comment, \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::objectFor($result[0]));
 	}
 
 	public function testRecursiveManyRelationAdoptionWorks(): void
@@ -197,9 +197,9 @@ final class GraphAdopterTest extends TestCase
 		));
 		$representations = $this->trackedMap($this->tracked($root, $rootBinding));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateMap(), new RelatedCollectionMap(), new RelatedReferenceMap());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 
-		self::assertSame([$post, $comment], array_map(static fn (TrackedRepresentation $tracked): object => $tracked->getRepresentation(), $result));
+		self::assertSame([$post, $comment], array_map(static fn (RepresentationState $tracked): object => \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::objectFor($tracked), $result));
 	}
 
 	public function testRecursiveOneRelationAdoptionWorks(): void
@@ -222,9 +222,9 @@ final class GraphAdopterTest extends TestCase
 		));
 		$representations = $this->trackedMap($this->tracked($root, $rootBinding));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateMap(), new RelatedCollectionMap(), new RelatedReferenceMap());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 
-		self::assertSame([$profile, $user], array_map(static fn (TrackedRepresentation $tracked): object => $tracked->getRepresentation(), $result));
+		self::assertSame([$profile, $user], array_map(static fn (RepresentationState $tracked): object => \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::objectFor($tracked), $result));
 	}
 
 	public function testCyclicGraphDoesNotInfiniteLoop(): void
@@ -249,10 +249,10 @@ final class GraphAdopterTest extends TestCase
 		));
 		$representations = $this->trackedMap($this->tracked($root, $rootBinding));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateMap(), new RelatedCollectionMap(), new RelatedReferenceMap());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 
 		self::assertCount(1, $result);
-		self::assertSame($item, $result[0]->getRepresentation());
+		self::assertSame($item, \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::objectFor($result[0]));
 	}
 
 	public function testRelatedObjectsAreAdoptedUsingGetRelatedBinding(): void
@@ -261,7 +261,7 @@ final class GraphAdopterTest extends TestCase
 		$root = $this->representation(['posts' => [$item]]);
 		$representations = $this->trackedMap($this->trackedRootWithPosts($root));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateMap(), new RelatedCollectionMap(), new RelatedReferenceMap());
+		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore());
 
 		self::assertSame('posts', $result[0]->getBinding()->getField('title')->getField()->getCollectionName());
 	}
@@ -283,7 +283,7 @@ final class GraphAdopterTest extends TestCase
 		return new GraphAdopter();
 	}
 
-	private function trackedRootWithPosts(object $root): TrackedRepresentation
+	private function trackedRootWithPosts(object $root): RepresentationState
 	{
 		$binding = $this->appliedUserBinding(RecordState::new($this->users()));
 		$binding->addRelation(new RepresentationRelationBinding(
@@ -296,7 +296,7 @@ final class GraphAdopterTest extends TestCase
 		return $this->tracked($root, $binding);
 	}
 
-	private function trackedRootWithProfile(object $root): TrackedRepresentation
+	private function trackedRootWithProfile(object $root): RepresentationState
 	{
 		$binding = $this->appliedUserBinding(RecordState::new($this->users()));
 		$binding->addRelation(new RepresentationRelationBinding(
@@ -309,16 +309,19 @@ final class GraphAdopterTest extends TestCase
 		return $this->tracked($root, $binding);
 	}
 
-	private function tracked(object $representation, RepresentationBinding $binding): TrackedRepresentation
+	private function tracked(object $representation, RepresentationBinding $binding): RepresentationState
 	{
-		return new TrackedRepresentation($representation, $binding, []);
+		return \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember(
+			$representation,
+			new RepresentationState($binding, [])
+		);
 	}
 
-	private function trackedMap(TrackedRepresentation ...$trackedRepresentations): TrackedRepresentationMap
+	private function trackedMap(RepresentationState ...$RepresentationStates): RepresentationStore
 	{
-		$map = new TrackedRepresentationMap();
-		foreach ($trackedRepresentations as $tracked) {
-			$map->add($tracked);
+		$map = new RepresentationStore();
+		foreach ($RepresentationStates as $tracked) {
+			\Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::addTo($map, $tracked);
 		}
 
 		return $map;

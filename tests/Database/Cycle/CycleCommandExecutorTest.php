@@ -20,7 +20,7 @@ use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\RecordFlusher;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateMap;
+use ON\Data\ORM\State\RecordStateStore;
 use PDO;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
@@ -159,7 +159,7 @@ final class CycleCommandExecutorTest extends TestCase
 			'name' => 'Dorothy',
 			'email' => 'dorothy@example.test',
 		]);
-		$states = new RecordStateMap();
+		$states = new RecordStateStore();
 		$states->add($record);
 
 		(new RecordFlusher($this->executor))->flush($states);

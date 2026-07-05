@@ -6,33 +6,33 @@ namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateMap;
+use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationFieldBinding;
-use ON\Data\ORM\State\TrackedRepresentation;
+use ON\Data\ORM\State\RepresentationState;
 
 final class SyncPlanner
 {
 	public function __construct(
 		private RepresentationValueReader $reader,
 		private SyncConflictDetector $conflicts,
-		private RecordStateMap $records,
+		private RecordStateStore $records,
 	) {
 	}
 
-	public function plan(TrackedRepresentation $tracked): SyncPlan
+	public function plan(object $representation, RepresentationState $state): SyncPlan
 	{
 		$currentValues = $this->reader->read(
-			$tracked->getRepresentation(),
-			$tracked->getBinding()
+			$representation,
+			$state->getBinding()
 		);
 		$conflicts = $this->conflicts->detect(
-			$tracked,
+			$state,
 			$currentValues,
 			$this->records->requireForField(...)
 		);
 
 		return new SyncPlan(
-			$this->buildUpdates($tracked, $currentValues, $this->conflictPaths($conflicts)),
+			$this->buildUpdates($state, $currentValues, $this->conflictPaths($conflicts)),
 			$conflicts
 		);
 	}
@@ -42,12 +42,12 @@ final class SyncPlanner
 	 * @param array<string, true> $conflictPaths
 	 * @return list<SyncFieldUpdate>
 	 */
-	private function buildUpdates(TrackedRepresentation $tracked, array $currentValues, array $conflictPaths): array
+	private function buildUpdates(RepresentationState $state, array $currentValues, array $conflictPaths): array
 	{
 		$updates = [];
 		$updatesByTarget = [];
 
-		foreach ($tracked->getBinding()->getWritableFieldBindings() as $binding) {
+		foreach ($state->getBinding()->getWritableFieldBindings() as $binding) {
 			$path = $binding->getPath();
 			if (isset($conflictPaths[$path])) {
 				continue;
@@ -60,7 +60,7 @@ final class SyncPlanner
 			$record = $this->recordFor($binding);
 			$field = $binding->getField();
 			$fieldName = $field->getFieldName();
-			$baselineRevision = $tracked->getBaselineRevisionFor($field);
+			$baselineRevision = $state->getBaselineRevisionFor($field);
 			$baselineValue = $record->getHistory()->getValue($baselineRevision, $fieldName);
 			$currentValue = $currentValues[$path];
 			if ($currentValue === $baselineValue) {

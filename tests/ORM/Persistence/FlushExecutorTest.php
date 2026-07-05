@@ -17,20 +17,20 @@ use ON\Data\ORM\Persistence\FlushExecutor;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\Relation\RelatedCollection;
-use ON\Data\ORM\Relation\RelatedCollectionMap;
+use ON\Data\ORM\Relation\RelatedCollectionStore;
 use ON\Data\ORM\Relation\RelatedReference;
-use ON\Data\ORM\Relation\RelatedReferenceMap;
+use ON\Data\ORM\Relation\RelatedReferenceStore;
 use ON\Data\ORM\Relation\RelationCollectionState;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateMap;
+use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
-use ON\Data\ORM\State\TrackedRepresentation;
-use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\State\RepresentationState;
+use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -95,7 +95,7 @@ final class FlushExecutorTest extends TestCase
 			new CommandResult(1),
 		]);
 
-		(new FlushExecutor($executor))->flush(new TrackedRepresentationMap(), $this->records($new, $dirty, $removed));
+		(new FlushExecutor($executor))->flush(new RepresentationStore(), $this->records($new, $dirty, $removed));
 
 		self::assertInstanceOf(InsertCommand::class, $executor->getCommands()[0]);
 		self::assertInstanceOf(UpdateCommand::class, $executor->getCommands()[1]);
@@ -134,7 +134,7 @@ final class FlushExecutorTest extends TestCase
 		$this->expectException(LogicException::class);
 		$this->expectExceptionMessage('executor failed');
 
-		(new FlushExecutor($executor))->flush(new TrackedRepresentationMap(), $this->records($record));
+		(new FlushExecutor($executor))->flush(new RepresentationStore(), $this->records($record));
 	}
 
 	public function testNewRecordChangedThroughRepresentationSyncIsInsertedWithSynchronizedValues(): void
@@ -184,7 +184,7 @@ final class FlushExecutorTest extends TestCase
 		$record->markRemoved();
 		$executor = new RecordingCommandExecutor();
 
-		(new FlushExecutor($executor))->flush(new TrackedRepresentationMap(), $records);
+		(new FlushExecutor($executor))->flush(new RepresentationStore(), $records);
 
 		self::assertInstanceOf(DeleteCommand::class, $executor->getCommands()[0]);
 		self::assertSame([], $records->getAll());
@@ -211,7 +211,7 @@ final class FlushExecutorTest extends TestCase
 		$item = new stdClass();
 		$tracked = $this->tracked($this->representation(['name' => 'after', 'posts' => [$item]]), $this->ownerBindingWithPosts($record));
 
-		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->trackedMap($tracked, $this->tracked($item, new RepresentationBinding())), $this->records($record), new RelatedCollectionMap());
+		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->trackedMap($tracked, $this->tracked($item, new RepresentationBinding())), $this->records($record), new RelatedCollectionStore());
 
 		self::assertSame(['after'], RecordingRelationPersistencePlanner::$observedOwnerValues);
 		self::assertCount(1, RecordingRelationPersistencePlanner::$collections);
@@ -223,7 +223,7 @@ final class FlushExecutorTest extends TestCase
 		$users = $this->usersWithPosts();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$item = new stdClass();
-		$relations = new RelatedCollectionMap();
+		$relations = new RelatedCollectionStore();
 
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush(
 			$this->trackedMap(
@@ -245,7 +245,7 @@ final class FlushExecutorTest extends TestCase
 		$users = $this->usersWithProfile();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$target = new stdClass();
-		$references = new RelatedReferenceMap();
+		$references = new RelatedReferenceStore();
 
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush(
 			$this->trackedMap(
@@ -253,7 +253,7 @@ final class FlushExecutorTest extends TestCase
 				$this->tracked($target, new RepresentationBinding())
 			),
 			$this->records($record),
-			new RelatedCollectionMap(),
+			new RelatedCollectionStore(),
 			$references
 		);
 
@@ -276,7 +276,7 @@ final class FlushExecutorTest extends TestCase
 			(new FlushExecutor($executor))->flush(
 				$this->trackedMap($this->tracked($this->representation(['name' => 'after', 'posts' => 'bad']), $this->ownerBindingWithPosts($record))),
 				$this->records($record),
-				new RelatedCollectionMap()
+				new RelatedCollectionStore()
 			);
 		} finally {
 			self::assertSame([], $executor->getCommands());
@@ -290,7 +290,7 @@ final class FlushExecutorTest extends TestCase
 		$users = $this->usersWithPosts();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$item = new stdClass();
-		$relations = new RelatedCollectionMap();
+		$relations = new RelatedCollectionStore();
 
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush(
 			$this->trackedMap(
@@ -313,9 +313,9 @@ final class FlushExecutorTest extends TestCase
 		$reference = $this->changedRelatedReference($record);
 
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush(
-			new TrackedRepresentationMap(),
+			new RepresentationStore(),
 			$this->records($record),
-			new RelatedCollectionMap(),
+			new RelatedCollectionStore(),
 			$this->references($reference)
 		);
 
@@ -331,7 +331,7 @@ final class FlushExecutorTest extends TestCase
 		$executor = new RecordingCommandExecutor();
 
 		(new FlushExecutor($executor))->flush(
-			new TrackedRepresentationMap(),
+			new RepresentationStore(),
 			$this->records($record),
 			$this->relations($this->changedRelatedCollection($record))
 		);
@@ -355,7 +355,7 @@ final class FlushExecutorTest extends TestCase
 		$executor = new RecordingCommandExecutor(results: [$scalarResult, $relationResult]);
 
 		$result = (new FlushExecutor($executor))->flush(
-			new TrackedRepresentationMap(),
+			new RepresentationStore(),
 			$this->records($record),
 			$this->relations($this->changedRelatedCollection($record))
 		);
@@ -372,7 +372,7 @@ final class FlushExecutorTest extends TestCase
 		$collection = $this->changedRelatedCollection($record);
 
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush(
-			new TrackedRepresentationMap(),
+			new RepresentationStore(),
 			$this->records($record),
 			$this->relations($collection)
 		);
@@ -391,7 +391,7 @@ final class FlushExecutorTest extends TestCase
 
 		try {
 			(new FlushExecutor($executor))->flush(
-				new TrackedRepresentationMap(),
+				new RepresentationStore(),
 				$this->records($record),
 				$this->relations($collection)
 			);
@@ -414,7 +414,7 @@ final class FlushExecutorTest extends TestCase
 			(new FlushExecutor($executor))->flush(
 				$this->trackedMap($this->tracked($this->representation(['name' => 'after', 'profile' => 'bad']), $this->ownerBindingWithProfile($record))),
 				$this->records($record),
-				new RelatedCollectionMap(),
+				new RelatedCollectionStore(),
 				$this->references($reference)
 			);
 		} finally {
@@ -434,9 +434,9 @@ final class FlushExecutorTest extends TestCase
 
 		try {
 			(new FlushExecutor($executor))->flush(
-				new TrackedRepresentationMap(),
+				new RepresentationStore(),
 				$this->records($record),
-				new RelatedCollectionMap(),
+				new RelatedCollectionStore(),
 				$this->references($reference)
 			);
 		} finally {
@@ -651,8 +651,8 @@ final class FlushExecutorTest extends TestCase
 				$this->tracked($ownerRepresentation, $this->ownerBindingWithProfile($owner))
 			),
 			$this->records($owner, $target),
-			new RelatedCollectionMap(),
-			new RelatedReferenceMap()
+			new RelatedCollectionStore(),
+			new RelatedReferenceStore()
 		);
 
 		self::assertSame(10, $target->getValue('user_id'));
@@ -684,7 +684,7 @@ final class FlushExecutorTest extends TestCase
 
 		try {
 			(new FlushExecutor($executor))->flush(
-				new TrackedRepresentationMap(),
+				new RepresentationStore(),
 				$this->records($record),
 				$this->relations($collection)
 			);
@@ -710,9 +710,9 @@ final class FlushExecutorTest extends TestCase
 
 		try {
 			(new FlushExecutor($executor))->flush(
-				new TrackedRepresentationMap(),
+				new RepresentationStore(),
 				$this->records($record),
-				new RelatedCollectionMap(),
+				new RelatedCollectionStore(),
 				$this->references($reference)
 			);
 		} finally {
@@ -737,7 +737,7 @@ final class FlushExecutorTest extends TestCase
 
 		try {
 			(new FlushExecutor($executor))->flush(
-				new TrackedRepresentationMap(),
+				new RepresentationStore(),
 				$this->records($record),
 				$this->relations($collection)
 			);
@@ -763,9 +763,9 @@ final class FlushExecutorTest extends TestCase
 
 		try {
 			(new FlushExecutor($executor))->flush(
-				new TrackedRepresentationMap(),
+				new RepresentationStore(),
 				$this->records($record),
-				new RelatedCollectionMap(),
+				new RelatedCollectionStore(),
 				$this->references($reference)
 			);
 		} finally {
@@ -812,16 +812,19 @@ final class FlushExecutorTest extends TestCase
 		return $binding;
 	}
 
-	private function tracked(object $representation, RepresentationBinding $binding): TrackedRepresentation
+	private function tracked(object $representation, RepresentationBinding $binding): RepresentationState
 	{
-		return new TrackedRepresentation($representation, $binding, $this->baselineRevisions($binding));
+		return \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember(
+			$representation,
+			new RepresentationState($binding, $this->baselineRevisions($binding))
+		);
 	}
 
-	private function trackedMap(TrackedRepresentation ...$trackedRepresentations): TrackedRepresentationMap
+	private function trackedMap(RepresentationState ...$RepresentationStates): RepresentationStore
 	{
-		$map = new TrackedRepresentationMap();
-		foreach ($trackedRepresentations as $tracked) {
-			$map->add($tracked);
+		$map = new RepresentationStore();
+		foreach ($RepresentationStates as $tracked) {
+			\Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::addTo($map, $tracked);
 		}
 
 		return $map;
@@ -840,9 +843,9 @@ final class FlushExecutorTest extends TestCase
 		return $baselineRevisions;
 	}
 
-	private function records(RecordState ...$records): RecordStateMap
+	private function records(RecordState ...$records): RecordStateStore
 	{
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 		foreach ($records as $record) {
 			$map->add($record);
 		}
@@ -850,9 +853,9 @@ final class FlushExecutorTest extends TestCase
 		return $map;
 	}
 
-	private function relations(RelatedCollection ...$collections): RelatedCollectionMap
+	private function relations(RelatedCollection ...$collections): RelatedCollectionStore
 	{
-		$map = new RelatedCollectionMap();
+		$map = new RelatedCollectionStore();
 		foreach ($collections as $collection) {
 			$map->add($collection);
 		}
@@ -860,9 +863,9 @@ final class FlushExecutorTest extends TestCase
 		return $map;
 	}
 
-	private function references(RelatedReference ...$references): RelatedReferenceMap
+	private function references(RelatedReference ...$references): RelatedReferenceStore
 	{
-		$map = new RelatedReferenceMap();
+		$map = new RelatedReferenceStore();
 		foreach ($references as $reference) {
 			$map->add($reference);
 		}

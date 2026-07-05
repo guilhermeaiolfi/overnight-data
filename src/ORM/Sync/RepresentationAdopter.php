@@ -6,16 +6,16 @@ namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateMap;
+use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\TrackedRepresentation;
-use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\State\RepresentationState;
+use ON\Data\ORM\State\RepresentationStore;
 
 final class RepresentationAdopter
 {
 	public function __construct(
-		private RecordStateMap $records,
-		private TrackedRepresentationMap $representations,
+		private RecordStateStore $records,
+		private RepresentationStore $representations,
 	) {
 	}
 
@@ -23,22 +23,21 @@ final class RepresentationAdopter
 		object $representation,
 		RepresentationBinding $binding,
 		RecordState $record,
-	): TrackedRepresentation {
+	): RepresentationState {
 		if ($this->representations->has($representation)) {
 			throw new SyncException('Cannot adopt representation because it is already tracked.');
 		}
 
 		$this->records->add($record);
 		$appliedBinding = $binding->applyToRecordState($record);
-		$tracked = new TrackedRepresentation(
-			$representation,
+		$state = new RepresentationState(
 			$appliedBinding,
 			$this->buildBaselineRevisions($appliedBinding, $record)
 		);
 
-		$this->representations->add($tracked);
+		$this->representations->add($representation, $state);
 
-		return $tracked;
+		return $state;
 	}
 
 	/**

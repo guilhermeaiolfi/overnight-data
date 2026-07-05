@@ -8,7 +8,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Relation\RelatedReference;
-use ON\Data\ORM\Relation\RelatedReferenceMap;
+use ON\Data\ORM\Relation\RelatedReferenceStore;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -16,13 +16,13 @@ use ON\Data\ORM\State\RepresentationFieldBinding;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
-final class RelatedReferenceMapTest extends TestCase
+final class RelatedReferenceStoreTest extends TestCase
 {
 	public function testAddGetAndHasByOwnerAndRelationName(): void
 	{
 		$owner = RecordState::new($this->users());
 		$reference = $this->relatedReference($owner, 'author');
-		$map = new RelatedReferenceMap();
+		$map = new RelatedReferenceStore();
 
 		$map->add($reference);
 
@@ -33,7 +33,7 @@ final class RelatedReferenceMapTest extends TestCase
 	public function testAddingSameInstanceTwiceIsIdempotent(): void
 	{
 		$reference = $this->relatedReference(RecordState::new($this->users()), 'author');
-		$map = new RelatedReferenceMap();
+		$map = new RelatedReferenceStore();
 
 		$map->add($reference);
 		$map->add($reference);
@@ -44,7 +44,7 @@ final class RelatedReferenceMapTest extends TestCase
 	public function testAddingDifferentReferenceForSameOwnerAndRelationThrows(): void
 	{
 		$owner = RecordState::new($this->users());
-		$map = new RelatedReferenceMap();
+		$map = new RelatedReferenceStore();
 		$map->add($this->relatedReference($owner, 'author'));
 
 		$this->expectException(StateException::class);
@@ -56,7 +56,7 @@ final class RelatedReferenceMapTest extends TestCase
 	{
 		$first = $this->relatedReference(RecordState::new($this->users()), 'author');
 		$second = $this->relatedReference(RecordState::new($this->users()), 'profile');
-		$map = new RelatedReferenceMap();
+		$map = new RelatedReferenceStore();
 
 		$map->add($first);
 		$map->add($second);
@@ -69,7 +69,7 @@ final class RelatedReferenceMapTest extends TestCase
 		$unchanged = $this->relatedReference(RecordState::new($this->users()), 'author');
 		$changed = $this->relatedReference(RecordState::new($this->users()), 'profile');
 		$changed->set(new stdClass());
-		$map = new RelatedReferenceMap();
+		$map = new RelatedReferenceStore();
 
 		$map->add($unchanged);
 		$map->add($changed);
@@ -82,7 +82,7 @@ final class RelatedReferenceMapTest extends TestCase
 		$owner = RecordState::new($this->users());
 		$first = $this->relatedReference($owner, 'author');
 		$second = $this->relatedReference(RecordState::new($this->users()), 'profile');
-		$map = new RelatedReferenceMap();
+		$map = new RelatedReferenceStore();
 		$map->add($first);
 		$map->add($second);
 

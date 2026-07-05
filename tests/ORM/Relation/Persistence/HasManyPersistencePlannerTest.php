@@ -13,16 +13,16 @@ use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\HasManyPersistencePlanner;
 use ON\Data\ORM\Relation\RelatedCollection;
-use ON\Data\ORM\Relation\RelatedCollectionMap;
-use ON\Data\ORM\Relation\RelatedReferenceMap;
+use ON\Data\ORM\Relation\RelatedCollectionStore;
+use ON\Data\ORM\Relation\RelatedReferenceStore;
 use ON\Data\ORM\Relation\RelationCollectionState;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateMap;
+use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
-use ON\Data\ORM\State\TrackedRepresentation;
-use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\State\RepresentationState;
+use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -109,7 +109,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage("Relation 'posts' child item is not tracked");
 
-		$this->plan($relation, $collection, $this->records($owner, $child), new TrackedRepresentationMap());
+		$this->plan($relation, $collection, $this->records($owner, $child), new RepresentationStore());
 	}
 
 	public function testTrackedChildRepresentationThatCannotResolveToRecordStateThrows(): void
@@ -122,7 +122,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$collection->add($item);
 		$binding = new RepresentationBinding();
 		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($posts, 'id')));
-		$tracked = new TrackedRepresentation($item, $binding, []);
+		$tracked = \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
 
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('cannot be resolved to a record state');
@@ -208,7 +208,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('child item is not tracked');
 
-		$this->plan($relation, $collection, $this->records($owner, $child), new TrackedRepresentationMap());
+		$this->plan($relation, $collection, $this->records($owner, $child), new RepresentationStore());
 	}
 
 	public function testPassingNonHasManyRelationThrows(): void
@@ -225,10 +225,10 @@ final class HasManyPersistencePlannerTest extends TestCase
 
 		(new HasManyPersistencePlanner())->plan(
 			new PersistenceContext(
-				new RecordStateMap(),
-				new TrackedRepresentationMap(),
-				new RelatedCollectionMap(),
-				new RelatedReferenceMap(),
+				new RecordStateStore(),
+				new RepresentationStore(),
+				new RelatedCollectionStore(),
+				new RelatedReferenceStore(),
 				new CommandBuffer()
 			),
 			$relation,
@@ -304,16 +304,16 @@ final class HasManyPersistencePlannerTest extends TestCase
 	private function plan(
 		HasManyRelation $relation,
 		RelatedCollection $collection,
-		RecordStateMap $records,
-		TrackedRepresentationMap $representations,
+		RecordStateStore $records,
+		RepresentationStore $representations,
 	): CommandBuffer {
 		$commands = new CommandBuffer();
 		(new HasManyPersistencePlanner())->plan(
 			new PersistenceContext(
 				$records,
 				$representations,
-				new RelatedCollectionMap(),
-				new RelatedReferenceMap(),
+				new RelatedCollectionStore(),
+				new RelatedReferenceStore(),
 				$commands
 			),
 			$relation,
@@ -323,11 +323,14 @@ final class HasManyPersistencePlannerTest extends TestCase
 		return $commands;
 	}
 
-	private function tracked(object $representation, RecordState $record): TrackedRepresentation
+	private function tracked(object $representation, RecordState $record): RepresentationState
 	{
-		return new TrackedRepresentation($representation, $this->bindingFor($record), [
-			$record->getStateHash() => $record->getRevision(),
-		]);
+		return \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember(
+			$representation,
+			new RepresentationState($this->bindingFor($record), [
+				$record->getStateHash() => $record->getRevision(),
+			])
+		);
 	}
 
 	private function bindingFor(RecordState $record): RepresentationBinding
@@ -341,9 +344,9 @@ final class HasManyPersistencePlannerTest extends TestCase
 		return $binding;
 	}
 
-	private function records(RecordState ...$records): RecordStateMap
+	private function records(RecordState ...$records): RecordStateStore
 	{
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 		foreach ($records as $record) {
 			$map->add($record);
 		}
@@ -351,11 +354,11 @@ final class HasManyPersistencePlannerTest extends TestCase
 		return $map;
 	}
 
-	private function trackedMap(TrackedRepresentation ...$trackedRepresentations): TrackedRepresentationMap
+	private function trackedMap(RepresentationState ...$RepresentationStates): RepresentationStore
 	{
-		$map = new TrackedRepresentationMap();
-		foreach ($trackedRepresentations as $tracked) {
-			$map->add($tracked);
+		$map = new RepresentationStore();
+		foreach ($RepresentationStates as $tracked) {
+			\Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::addTo($map, $tracked);
 		}
 
 		return $map;

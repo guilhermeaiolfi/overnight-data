@@ -7,7 +7,7 @@ namespace ON\Data\ORM\Relation;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordState;
 
-final class RelatedCollectionMap
+final class RelatedCollectionStore
 {
 	/** @var array<string, RelatedCollection> */
 	private array $collections = [];
@@ -21,7 +21,7 @@ final class RelatedCollectionMap
 			}
 
 			throw new StateException(sprintf(
-				"Related collection map already contains a different collection for relation '%s'.",
+				"Related collection store already contains a different collection for relation '%s'.",
 				$collection->getRelationName()
 			));
 		}

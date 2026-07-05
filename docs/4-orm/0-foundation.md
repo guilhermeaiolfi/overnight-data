@@ -48,13 +48,12 @@ A representation is a PHP value that exposes data to the user. It may be a class
 
 Representations are not automatically the source of truth. They can drift from the record state until explicitly synchronized.
 
-## TrackedRepresentation
+## RepresentationState
 
-A `TrackedRepresentation` is concrete. It binds one PHP representation object/value to one or more record states through an applied `RepresentationBinding`.
+A `RepresentationState` is concrete runtime state for an applied `RepresentationBinding`. It stores baseline record revisions for one representation object, but it does not store the object itself.
 
 It stores:
 
-- the PHP representation object/value;
 - the applied representation binding;
 - baseline record revisions captured when it was created, attached, or last synced/refreshed;
 - field lineage from representation paths/properties to record field references;
@@ -63,7 +62,7 @@ It stores:
 
 It does not store baseline field values. When sync needs an old value, it asks the owning `RecordState` history for the value at the tracked baseline revision.
 
-Do not use `TrackedRepresentation` as a template. It is only for a concrete representation object/value after a binding has been applied and baseline record revisions are known.
+Do not use `RepresentationState` as a template. It is only for concrete runtime state after a binding has been applied and baseline record revisions are known. The owning `RepresentationStore` keeps the association between the PHP object and its `RepresentationState`.
 
 A single representation may map to multiple records and collections:
 
@@ -159,24 +158,28 @@ $em->refresh($representation);
 
 Default `sync()` remains safe.
 
-## State Maps
+## Runtime Stores
 
-Avoid object-first identity-map terminology. The preferred model is:
+Avoid object-first identity-map terminology. `Session` owns runtime stores:
 
 ```text
 ON\Data\Key / RecordState state hash -> RecordState
-Representation object id -> TrackedRepresentation
+weak representation object -> RepresentationState
 ```
 
 Classic ORMs usually map identity to entity object. This ORM maps identity to record state, then allows many representations over that state.
 
-`RecordStateMap` is the record-state registry. It indexes each known state by its stable local state hash and, when available, by its database `ON\Data\Key` hash. A new record keeps its local state hash after it receives a generated database key through `RecordState::markClean($key)`; the state hash must not be rewritten to the key hash, because existing state-targeted bindings use that stable local handle.
+`RecordStateStore` is the record-state registry. It indexes each known state by its stable local state hash and, when available, by its database `ON\Data\Key` hash. A new record keeps its local state hash after it receives a generated database key through `RecordState::markClean($key)`; the state hash must not be rewritten to the key hash, because existing state-targeted bindings use that stable local handle.
 
-The map is responsible for aliasing both handles to the same `RecordState`. Scalar insert/flush logic calls `RecordStateMap::indexKey($state)` after assigning a generated key so keyed references can resolve the same state that was previously known only by local state hash.
+The store is responsible for aliasing both handles to the same `RecordState`. Scalar insert/flush logic calls `RecordStateStore::indexKey($state)` after assigning a generated key so keyed references can resolve the same state that was previously known only by local state hash.
 
-`RecordFieldRef` resolution should first use a direct state target, then fall back to key lookup through `RecordStateMap`. Template refs have no concrete record to resolve until a binding is applied to a state.
+`RecordFieldRef` resolution should first use a direct state target, then fall back to key lookup through `RecordStateStore`. Template refs have no concrete record to resolve until a binding is applied to a state.
 
-`RecordStateMap` is not an object identity map. `TrackedRepresentationMap` remains separate and continues to track PHP representation object identity by object id.
+`RecordStateStore` is not an object identity store. It strongly owns record state for the current session/unit of work. `RelatedCollectionStore` and `RelatedReferenceStore` also strongly own relation runtime state for the session.
+
+`RepresentationStore` remains separate and tracks PHP representation object identity with weak keys. It does not keep representation objects alive in long-lived workers. When a representation object becomes otherwise unreachable, its store entry can disappear after garbage collection.
+
+Use one `Session` per request/job in long-lived workers. If a session is intentionally reused, call `Session::clear()` to clear record, representation, collection, and reference stores between jobs.
 
 ## SelectQuery Integration
 
@@ -281,7 +284,7 @@ Use this terminology:
 ```text
 RepresentationMap
 RepresentationBinding
-TrackedRepresentation
+RepresentationState
 ```
 
 `RepresentationBinding` is the reusable mapping shape. It is not limited to instance-level tracking and can represent:
@@ -300,7 +303,7 @@ The distinction is:
 RepresentationBinding
     reusable mapping shape
 
-TrackedRepresentation
+RepresentationState
     concrete object + applied binding + baseline record revisions
 ```
 
@@ -464,12 +467,12 @@ Phase 1A introduces the first production ORM state primitives only:
 - `RecordLifecycle`
 - `RecordHistory`
 - `RecordState`
-- `RecordStateMap`
+- `RecordStateStore`
 - `RecordFieldRef`
 - `RepresentationFieldBinding`
 - `RepresentationBinding`
-- `TrackedRepresentation`
-- `TrackedRepresentationMap`
+- `RepresentationState`
+- `RepresentationStore`
 - `SyncConflict`
 - `SyncConflictDetector`
 
@@ -489,7 +492,7 @@ Future ORM runtime will apply the child binding to child `RecordState` instances
 
 Phase 1E introduces `ON\Data\ORM\Sync\RepresentationAdopter` as the small bridge between reusable child binding templates and concrete ORM tracking.
 
-`RepresentationAdopter::adopt()` applies a reusable `RepresentationBinding` template to a concrete child `RecordState`, registers that record in `RecordStateMap`, captures baseline record revisions from the applied binding, and registers the child object as a `TrackedRepresentation` in `TrackedRepresentationMap`. Future relation runtime can use a `RelatedCollection` child's binding with `RepresentationAdopter::adopt()` around flows such as adding a post object to a user's `RelatedCollection`.
+`RepresentationAdopter::adopt()` applies a reusable `RepresentationBinding` template to a concrete child `RecordState`, registers that record in `RecordStateStore`, captures baseline record revisions from the applied binding, and registers the child object as a `RepresentationState` in `RepresentationStore`. Future relation runtime can use a `RelatedCollection` child's binding with `RepresentationAdopter::adopt()` around flows such as adding a post object to a user's `RelatedCollection`.
 
 `RelatedCollection` still owns relation add/remove intent. Adoption only tracks the child representation; it does not add the item to the relation collection, inspect relation loaded state, sync representation values, persist, flush, write SQL, or mutate the child binding template.
 

@@ -7,7 +7,7 @@ namespace ON\Data\ORM\Persistence;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateMap;
+use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\ValueRef;
 
 final class RecordFlusher
@@ -22,7 +22,7 @@ final class RecordFlusher
 	/**
 	 * @return list<CommandResult>
 	 */
-	public function flush(RecordStateMap $states): array
+	public function flush(RecordStateStore $states): array
 	{
 		$results = [];
 		$snapshot = $states->getAll();
@@ -200,7 +200,7 @@ final class RecordFlusher
 		return [];
 	}
 
-	private function syncInsertedRecord(RecordStateMap $states, RecordState $record, CommandResult $result): void
+	private function syncInsertedRecord(RecordStateStore $states, RecordState $record, CommandResult $result): void
 	{
 		$generatedValues = $result->getGeneratedValues();
 		if ($generatedValues !== []) {

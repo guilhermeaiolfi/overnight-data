@@ -6,7 +6,7 @@ namespace ON\Data\ORM\State;
 
 use ON\Data\ORM\Exception\StateException;
 
-final class TrackedRepresentation
+final class RepresentationState
 {
 	/** @var array<string, int> */
 	private array $baselineRevisions;
@@ -15,16 +15,10 @@ final class TrackedRepresentation
 	 * @param array<string, int> $baselineRevisions
 	 */
 	public function __construct(
-		private object $representation,
 		private RepresentationBinding $binding,
 		array $baselineRevisions,
 	) {
 		$this->baselineRevisions = $this->normalizeBaselineRevisions($baselineRevisions);
-	}
-
-	public function getRepresentation(): object
-	{
-		return $this->representation;
 	}
 
 	public function getBinding(): RepresentationBinding
@@ -48,7 +42,7 @@ final class TrackedRepresentation
 	public function getBaselineRevision(string $recordHash): int
 	{
 		if (! array_key_exists($recordHash, $this->baselineRevisions)) {
-			throw new StateException(sprintf("Tracked representation has no baseline revision for record '%s'.", $recordHash));
+			throw new StateException(sprintf("Representation state has no baseline revision for record '%s'.", $recordHash));
 		}
 
 		return $this->baselineRevisions[$recordHash];
@@ -75,11 +69,11 @@ final class TrackedRepresentation
 	{
 		foreach ($baselineRevisions as $recordHash => $revision) {
 			if (! is_string($recordHash) || $recordHash === '') {
-				throw new StateException('Tracked representation baseline revision record hashes must be non-empty strings.');
+				throw new StateException('Representation state baseline revision record hashes must be non-empty strings.');
 			}
 
 			if ($revision < 1) {
-				throw new StateException(sprintf("Tracked representation baseline revision for record '%s' must be positive.", $recordHash));
+				throw new StateException(sprintf("Representation state baseline revision for record '%s' must be positive.", $recordHash));
 			}
 		}
 

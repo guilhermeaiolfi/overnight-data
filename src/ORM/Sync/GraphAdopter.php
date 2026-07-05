@@ -6,14 +6,14 @@ namespace ON\Data\ORM\Sync;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Relation\RelatedCollectionMap;
-use ON\Data\ORM\Relation\RelatedReferenceMap;
+use ON\Data\ORM\Relation\RelatedCollectionStore;
+use ON\Data\ORM\Relation\RelatedReferenceStore;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateMap;
+use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
-use ON\Data\ORM\State\TrackedRepresentation;
-use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\State\RepresentationState;
+use ON\Data\ORM\State\RepresentationStore;
 
 final class GraphAdopter
 {
@@ -25,14 +25,14 @@ final class GraphAdopter
 	}
 
 	/**
-	 * @return list<TrackedRepresentation>
+	 * @return list<RepresentationState>
 	 */
 	public function adopt(
 		object $root,
-		TrackedRepresentationMap $representations,
-		RecordStateMap $records,
-		RelatedCollectionMap $relations,
-		RelatedReferenceMap $references,
+		RepresentationStore $representations,
+		RecordStateStore $records,
+		RelatedCollectionStore $relations,
+		RelatedReferenceStore $references,
 		?RepresentationBinding $rootBinding = null,
 	): array {
 		if ($representations->get($root) === null) {
@@ -58,11 +58,11 @@ final class GraphAdopter
 
 	/**
 	 * @param array<int, true> $visited
-	 * @param list<TrackedRepresentation> $adopted
+	 * @param list<RepresentationState> $adopted
 	 */
 	private function walk(
 		object $representation,
-		TrackedRepresentationMap $representations,
+		RepresentationStore $representations,
 		RepresentationAdopter $adopter,
 		array &$visited,
 		array &$adopted,
@@ -98,12 +98,12 @@ final class GraphAdopter
 
 	/**
 	 * @param array<int, true> $visited
-	 * @param list<\ON\Data\ORM\State\TrackedRepresentation> $adopted
+	 * @param list<\ON\Data\ORM\State\RepresentationState> $adopted
 	 */
 	private function adoptAndWalk(
 		object $representation,
 		RepresentationBinding $binding,
-		TrackedRepresentationMap $representations,
+		RepresentationStore $representations,
 		RepresentationAdopter $adopter,
 		array &$visited,
 		array &$adopted,

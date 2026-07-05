@@ -10,23 +10,23 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateMap;
+use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationExpressionBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
-use ON\Data\ORM\State\TrackedRepresentation;
+use ON\Data\ORM\State\RepresentationState;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use stdClass;
 
-final class RecordStateMapTest extends TestCase
+final class RecordStateStoreTest extends TestCase
 {
 	public function testAddIndexesKeylessStateByStateHash(): void
 	{
 		$state = RecordState::new($this->users(), ['name' => 'A1']);
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 
 		$map->add($state);
 
@@ -38,7 +38,7 @@ final class RecordStateMapTest extends TestCase
 	public function testGetByKeyReturnsNullForKeylessState(): void
 	{
 		$users = $this->users();
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 
 		$map->add(RecordState::new($users, ['name' => 'A1']));
 
@@ -49,7 +49,7 @@ final class RecordStateMapTest extends TestCase
 	{
 		$users = $this->users();
 		$state = RecordState::clean($users->getKey(10), ['name' => 'A1']);
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 
 		$map->add($state);
 
@@ -62,7 +62,7 @@ final class RecordStateMapTest extends TestCase
 	{
 		$users = $this->users();
 		$state = RecordState::clean($users->getKey(10), ['name' => 'A1']);
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 
 		$map->add($state);
 
@@ -75,7 +75,7 @@ final class RecordStateMapTest extends TestCase
 		$postUser = $this->postUser();
 		$key = $postUser->getKey(['post_id' => 10, 'user_id' => 4]);
 		$state = RecordState::clean($key, ['role' => 'author']);
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 
 		$map->add($state);
 
@@ -85,7 +85,7 @@ final class RecordStateMapTest extends TestCase
 	public function testDuplicateSameStateIsNoOp(): void
 	{
 		$state = RecordState::new($this->users(), ['name' => 'A1']);
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 
 		$map->add($state);
 		$map->add($state);
@@ -99,7 +99,7 @@ final class RecordStateMapTest extends TestCase
 		$state = RecordState::new($users, ['name' => 'A1']);
 		$stateHash = $state->getStateHash();
 		$key = $users->getKey(10);
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 		$map->add($state);
 
 		$state->markClean($key);
@@ -114,7 +114,7 @@ final class RecordStateMapTest extends TestCase
 	{
 		$users = $this->users();
 		$state = RecordState::new($users, ['name' => 'A1']);
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 		$map->add($state);
 
 		$state->markClean($users->getKey(10));
@@ -130,7 +130,7 @@ final class RecordStateMapTest extends TestCase
 		$existing = RecordState::clean($key, ['name' => 'A1']);
 		$duplicate = RecordState::new($users, ['name' => 'A2']);
 		$duplicate->markClean($key);
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 		$map->add($existing);
 
 		$this->expectException(StateException::class);
@@ -144,7 +144,7 @@ final class RecordStateMapTest extends TestCase
 		$duplicate = RecordState::new($users, ['name' => 'A2']);
 		$stateHash = new ReflectionProperty(RecordState::class, 'stateHash');
 		$stateHash->setValue($duplicate, $existing->getStateHash());
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 		$map->add($existing);
 
 		$this->expectException(StateException::class);
@@ -154,7 +154,7 @@ final class RecordStateMapTest extends TestCase
 	public function testGetForFieldReturnsDirectStateForStateTargetedRef(): void
 	{
 		$state = RecordState::new($this->users(), ['name' => 'A1']);
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 
 		self::assertSame($state, $map->getForField(RecordFieldRef::forState($state, 'name')));
 	}
@@ -164,7 +164,7 @@ final class RecordStateMapTest extends TestCase
 		$users = $this->users();
 		$key = $users->getKey(10);
 		$state = RecordState::clean($key, ['name' => 'A1']);
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 		$map->add($state);
 
 		self::assertSame($state, $map->getForField(RecordFieldRef::forKey($key, 'name')));
@@ -172,14 +172,14 @@ final class RecordStateMapTest extends TestCase
 
 	public function testGetForFieldReturnsNullForTemplateRef(): void
 	{
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 
 		self::assertNull($map->getForField(RecordFieldRef::template($this->users(), 'name')));
 	}
 
 	public function testRequireForFieldThrowsForUnresolvableRef(): void
 	{
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("field 'users.name'");
@@ -192,7 +192,7 @@ final class RecordStateMapTest extends TestCase
 			'name' => RecordFieldRef::template($this->users(), 'name'),
 		]));
 
-		self::assertNull((new RecordStateMap())->getFromRepresentation($tracked));
+		self::assertNull((new RecordStateStore())->getFromRepresentation($tracked));
 	}
 
 	public function testGetFromRepresentationReturnsStateWhenBindingFieldsResolveToOneRecord(): void
@@ -202,7 +202,7 @@ final class RecordStateMapTest extends TestCase
 			'name' => RecordFieldRef::forState($state, 'name'),
 		]));
 
-		self::assertSame($state, (new RecordStateMap())->getFromRepresentation($tracked));
+		self::assertSame($state, (new RecordStateStore())->getFromRepresentation($tracked));
 	}
 
 	public function testGetFromRepresentationReturnsSameStateForMultipleFieldsOnSameRecord(): void
@@ -213,7 +213,7 @@ final class RecordStateMapTest extends TestCase
 			'name' => RecordFieldRef::forState($state, 'name'),
 		]));
 
-		self::assertSame($state, (new RecordStateMap())->getFromRepresentation($tracked));
+		self::assertSame($state, (new RecordStateStore())->getFromRepresentation($tracked));
 	}
 
 	public function testGetFromRepresentationThrowsWhenFieldsResolveToDifferentRecords(): void
@@ -229,14 +229,14 @@ final class RecordStateMapTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('cannot be collapsed to one record');
 
-		(new RecordStateMap())->getFromRepresentation($tracked);
+		(new RecordStateStore())->getFromRepresentation($tracked);
 	}
 
-	public function testGetFromRepresentationDoesNotRequireTrackedRepresentationMap(): void
+	public function testGetFromRepresentationDoesNotRequireRepresentationStore(): void
 	{
 		$users = $this->users();
 		$state = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 		$map->add($state);
 		$tracked = $this->tracked($this->binding([
 			'name' => RecordFieldRef::forKey($users->getKey(10), 'name'),
@@ -260,7 +260,7 @@ final class RecordStateMapTest extends TestCase
 		));
 		$tracked = $this->tracked($binding);
 
-		self::assertSame($state, (new RecordStateMap())->getFromRepresentation($tracked));
+		self::assertSame($state, (new RecordStateStore())->getFromRepresentation($tracked));
 	}
 
 	public function testRemoveOnlyRemovesKeyAlias(): void
@@ -268,7 +268,7 @@ final class RecordStateMapTest extends TestCase
 		$users = $this->users();
 		$key = $users->getKey(10);
 		$state = RecordState::clean($key, ['name' => 'A1']);
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 		$map->add($state);
 
 		$map->remove($key);
@@ -282,7 +282,7 @@ final class RecordStateMapTest extends TestCase
 		$users = $this->users();
 		$key = $users->getKey(10);
 		$state = RecordState::clean($key, ['name' => 'A1']);
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 		$map->add($state);
 
 		$map->removeState($state);
@@ -297,7 +297,7 @@ final class RecordStateMapTest extends TestCase
 		$users = $this->users();
 		$key = $users->getKey(10);
 		$state = RecordState::clean($key, ['name' => 'A1']);
-		$map = new RecordStateMap();
+		$map = new RecordStateStore();
 		$map->add($state);
 
 		$map->clear();
@@ -334,8 +334,8 @@ final class RecordStateMapTest extends TestCase
 		return $binding;
 	}
 
-	private function tracked(RepresentationBinding $binding): TrackedRepresentation
+	private function tracked(RepresentationBinding $binding): RepresentationState
 	{
-		return new TrackedRepresentation(new stdClass(), $binding, ['template' => 1]);
+		return new RepresentationState($binding, ['template' => 1]);
 	}
 }

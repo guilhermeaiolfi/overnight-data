@@ -6,12 +6,12 @@ namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\RelatedCollection;
-use ON\Data\ORM\Relation\RelatedCollectionMap;
+use ON\Data\ORM\Relation\RelatedCollectionStore;
 use ON\Data\ORM\Relation\RelatedReference;
-use ON\Data\ORM\Relation\RelatedReferenceMap;
+use ON\Data\ORM\Relation\RelatedReferenceStore;
 use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\State\RepresentationRelationBinding;
-use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\State\RepresentationStore;
 
 final class RelationRepresentationSynchronizer
 {
@@ -26,18 +26,17 @@ final class RelationRepresentationSynchronizer
 	 * @return list<RelationChangeInterface>
 	 */
 	public function sync(
-		TrackedRepresentationMap $representations,
-		RelatedCollectionMap $relations,
-		RelatedReferenceMap $references,
-		?TrackedRepresentationMap $trackedRepresentations = null,
+		RepresentationStore $representations,
+		RelatedCollectionStore $relations,
+		RelatedReferenceStore $references,
+		?RepresentationStore $states = null,
 	): array {
 		$touched = [];
 		$touchedIds = [];
-		$resolver = new TrackedRepresentationResolver($trackedRepresentations ?? $representations);
+		$resolver = new RepresentationStateResolver($states ?? $representations);
 
-		foreach ($representations->getAll() as $tracked) {
-			$representation = $tracked->getRepresentation();
-			foreach ($tracked->getBinding()->getRelations() as $relationBinding) {
+		foreach ($representations->getAll() as $representation => $state) {
+			foreach ($state->getBinding()->getRelations() as $relationBinding) {
 				if ($relationBinding->isMany()) {
 					$this->syncMany($representation, $relationBinding, $relations, $resolver, $touched, $touchedIds);
 
@@ -60,8 +59,8 @@ final class RelationRepresentationSynchronizer
 	private function syncMany(
 		object $representation,
 		RepresentationRelationBinding $relationBinding,
-		RelatedCollectionMap $relations,
-		TrackedRepresentationResolver $resolver,
+		RelatedCollectionStore $relations,
+		RepresentationStateResolver $resolver,
 		array &$touched,
 		array &$touchedIds,
 	): void {
@@ -77,7 +76,7 @@ final class RelationRepresentationSynchronizer
 		$relationName = $relationRef->getRelationName();
 		$items = $this->readItems($representation, $relationBinding);
 		foreach ($items as $item) {
-			$resolver->getTrackedRepresentation($item, $relationBinding->getPath());
+			$resolver->getRepresentationState($item, $relationBinding->getPath());
 		}
 
 		$collection = $relations->get($owner, $relationName);
@@ -102,8 +101,8 @@ final class RelationRepresentationSynchronizer
 	private function syncOne(
 		object $representation,
 		RepresentationRelationBinding $relationBinding,
-		RelatedReferenceMap $references,
-		TrackedRepresentationResolver $resolver,
+		RelatedReferenceStore $references,
+		RepresentationStateResolver $resolver,
 		array &$touched,
 		array &$touchedIds,
 	): void {
@@ -119,7 +118,7 @@ final class RelationRepresentationSynchronizer
 		$relationName = $relationRef->getRelationName();
 		$target = $this->readTarget($representation, $relationBinding);
 		if ($target !== null) {
-			$resolver->getTrackedRepresentation($target, $relationBinding->getPath());
+			$resolver->getRepresentationState($target, $relationBinding->getPath());
 		}
 
 		$reference = $references->get($owner, $relationName);

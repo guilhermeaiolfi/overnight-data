@@ -10,10 +10,10 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateMap;
+use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
-use ON\Data\ORM\State\TrackedRepresentation;
+use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\Sync\RepresentationValueReader;
 use ON\Data\ORM\Sync\SyncConflictDetector;
 use ON\Data\ORM\Sync\SyncPlanner;
@@ -103,12 +103,12 @@ final class SyncPlannerTest extends TestCase
 		self::assertSame($record, $this->planner()->plan($tracked)->getUpdates()[0]->getRecord());
 	}
 
-	public function testKeyedFieldRefResolvesThroughRecordStateMap(): void
+	public function testKeyedFieldRefResolvesThroughRecordStateStore(): void
 	{
 		$users = $this->users();
 		$key = $users->getKey(10);
 		$record = RecordState::clean($key, ['name' => 'A1']);
-		$records = new RecordStateMap();
+		$records = new RecordStateStore();
 		$records->add($record);
 		$tracked = $this->tracked($this->representation(['name' => 'A2']), $this->binding([
 			'name' => RecordFieldRef::forKey($key, 'name'),
@@ -192,7 +192,10 @@ final class SyncPlannerTest extends TestCase
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
 		$binding = $this->binding(['name' => RecordFieldRef::forState($record, 'name')]);
-		$tracked = new TrackedRepresentation($this->representation(['name' => 'A2']), $binding, ['other#1' => 1]);
+		$tracked = \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember(
+			$this->representation(['name' => 'A2']),
+			new RepresentationState($binding, ['other#1' => 1])
+		);
 
 		$this->expectException(StateException::class);
 		$this->planner()->plan($tracked);
@@ -252,7 +255,7 @@ final class SyncPlannerTest extends TestCase
 	}
 
 	/**
-	 * @return array{RecordState, TrackedRepresentation}
+	 * @return array{RecordState, RepresentationState}
 	 */
 	private function conflictScenario(): array
 	{
@@ -294,13 +297,12 @@ final class SyncPlannerTest extends TestCase
 	/**
 	 * @param array<string, int>|null $baselineRevisions
 	 */
-	private function tracked(object $representation, RepresentationBinding $binding, ?array $baselineRevisions = null): TrackedRepresentation
+	private function tracked(object $representation, RepresentationBinding $binding, ?array $baselineRevisions = null): RepresentationState
 	{
-		return new TrackedRepresentation(
-			$representation,
+		return \Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::remember($representation, new RepresentationState(
 			$binding,
 			$baselineRevisions ?? $this->baselineRevisions($binding)
-		);
+		));
 	}
 
 	/**
@@ -316,13 +318,27 @@ final class SyncPlannerTest extends TestCase
 		return $baselineRevisions;
 	}
 
-	private function planner(?RecordStateMap $records = null): SyncPlanner
+	private function planner(?RecordStateStore $records = null): object
 	{
-		return new SyncPlanner(
+		$planner = new SyncPlanner(
 			new RepresentationValueReader(),
 			new SyncConflictDetector(),
-			$records ?? new RecordStateMap()
+			$records ?? new RecordStateStore()
 		);
+
+		return new class($planner) {
+			public function __construct(private SyncPlanner $planner)
+			{
+			}
+
+			public function plan(RepresentationState $state): SyncPlan
+			{
+				return $this->planner->plan(
+					\Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry::objectFor($state),
+					$state
+				);
+			}
+		};
 	}
 
 	private function users(): CollectionInterface

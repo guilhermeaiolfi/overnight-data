@@ -7,7 +7,7 @@ namespace ON\Data\ORM\Sync;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\TrackedRepresentation;
+use ON\Data\ORM\State\RepresentationState;
 
 final class SyncConflictDetector
 {
@@ -17,7 +17,7 @@ final class SyncConflictDetector
 	 * @return list<SyncConflict>
 	 */
 	public function detect(
-		TrackedRepresentation $tracked,
+		RepresentationState $tracked,
 		array $currentValues,
 		callable $recordStateResolver,
 	): array {

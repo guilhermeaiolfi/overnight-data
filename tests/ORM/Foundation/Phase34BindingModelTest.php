@@ -21,7 +21,7 @@ final class Phase34BindingModelTest extends TestCase
 		self::assertStringContainsString('`map($source)->to(...)`', $contents);
 		self::assertStringContainsString('The mapper does not by itself know persistence provenance.', $contents);
 		self::assertStringContainsString('RepresentationBinding', $contents);
-		self::assertStringContainsString('TrackedRepresentation', $contents);
+		self::assertStringContainsString('RepresentationState', $contents);
 		self::assertStringContainsString('RelatedCollection / Future RelatedReference', $contents);
 		self::assertStringContainsString('field bindings', $contents);
 		self::assertStringContainsString('expression bindings', $contents);
@@ -69,7 +69,7 @@ final class Phase34BindingModelTest extends TestCase
 			dirname(__DIR__, 3) . '/src/ORM/Sync/RepresentationValueReader.php' => 'getFields()',
 			dirname(__DIR__, 3) . '/src/ORM/Sync/SyncConflictDetector.php' => 'getWritableFieldBindings()',
 			dirname(__DIR__, 3) . '/src/ORM/Sync/SyncPlanner.php' => 'getWritableFieldBindings()',
-			dirname(__DIR__, 3) . '/src/ORM/State/RecordStateMap.php' => 'getFields()',
+			dirname(__DIR__, 3) . '/src/ORM/State/RecordStateStore.php' => 'getFields()',
 		];
 
 		foreach ($sources as $path => $expectedCall) {

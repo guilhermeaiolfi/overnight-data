@@ -16,7 +16,7 @@ use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\RecordFlusher;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateMap;
+use ON\Data\ORM\State\RecordStateStore;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
 
@@ -139,7 +139,7 @@ final class RecordFlusherTest extends TestCase
 		self::assertSame([$firstResult, $secondResult], $results);
 	}
 
-	public function testMultipleStatesAreFlushedInRecordStateMapInsertionOrder(): void
+	public function testMultipleStatesAreFlushedInRecordStateStoreInsertionOrder(): void
 	{
 		$users = $this->users();
 		$first = RecordState::new($users, ['id' => 10, 'name' => 'Ada']);
@@ -336,9 +336,9 @@ final class RecordFlusherTest extends TestCase
 		return [$owners, $children];
 	}
 
-	private function states(RecordState ...$records): RecordStateMap
+	private function states(RecordState ...$records): RecordStateStore
 	{
-		$states = new RecordStateMap();
+		$states = new RecordStateStore();
 		foreach ($records as $record) {
 			$states->add($record);
 		}

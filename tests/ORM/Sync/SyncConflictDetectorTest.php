@@ -10,10 +10,10 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateMap;
+use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
-use ON\Data\ORM\State\TrackedRepresentation;
+use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\Sync\SyncConflictDetector;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -85,7 +85,7 @@ final class SyncConflictDetectorTest extends TestCase
 		$key = $users->getKey(10);
 		$binding = new RepresentationBinding();
 		$binding->addField(new RepresentationFieldBinding('name', new RecordFieldRef($users, 'name', $key), false));
-		$tracked = new TrackedRepresentation(new stdClass(), $binding, [$key->getHash() => 1]);
+		$tracked = new RepresentationState($binding, [$key->getHash() => 1]);
 
 		self::assertSame([], (new SyncConflictDetector())->detect($tracked, [], static fn () => null));
 	}
@@ -146,7 +146,7 @@ final class SyncConflictDetectorTest extends TestCase
 		self::assertTrue($resolverCalled);
 	}
 
-	public function testDetectorCanResolveKeyedRefThroughRecordStateMap(): void
+	public function testDetectorCanResolveKeyedRefThroughRecordStateStore(): void
 	{
 		$users = $this->users();
 		$key = $users->getKey(10);
@@ -154,7 +154,7 @@ final class SyncConflictDetectorTest extends TestCase
 		$record = RecordState::clean($key, ['name' => 'A1']);
 		$rep1 = $this->tracked($field, 1);
 		$rep2 = $this->tracked($field, 1);
-		$stateMap = new RecordStateMap();
+		$stateMap = new RecordStateStore();
 		$stateMap->add($record);
 		$detector = new SyncConflictDetector();
 
@@ -201,7 +201,7 @@ final class SyncConflictDetectorTest extends TestCase
 	}
 
 	/**
-	 * @return array{RecordState, TrackedRepresentation}
+	 * @return array{RecordState, RepresentationState}
 	 */
 	private function changedRecordScenario(string $recordName): array
 	{
@@ -214,12 +214,12 @@ final class SyncConflictDetectorTest extends TestCase
 		return [$record, $this->tracked($field, 1)];
 	}
 
-	private function tracked(RecordFieldRef $field, int $revision): TrackedRepresentation
+	private function tracked(RecordFieldRef $field, int $revision): RepresentationState
 	{
 		$binding = new RepresentationBinding();
 		$binding->addField(new RepresentationFieldBinding('name', $field));
 
-		return new TrackedRepresentation(new stdClass(), $binding, [$field->getRecordHash() => $revision]);
+		return new RepresentationState($binding, [$field->getRecordHash() => $revision]);
 	}
 
 	private function users(): CollectionInterface
