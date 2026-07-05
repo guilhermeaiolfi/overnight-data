@@ -125,11 +125,12 @@ final class FlushScheduler
 				$progress = $this->commandValueResolver->resolve($command) || $progress;
 
 				if ($this->commandValueResolver->hasUnresolvedValueRefs($command)) {
-					continue;
+					break;
 				}
 
 				$result = $this->executor->execute($command);
 				$results[] = $result;
+
 				unset($pendingCommands[$index]);
 				$progress = true;
 			}

@@ -350,6 +350,30 @@ final class FlushSchedulerTest extends TestCase
 		self::assertSame($through, $executor->getCommands()[1]->getCollection());
 	}
 
+	public function testBlockedExplicitCommandPreventsLaterExplicitCommandsFromExecuting(): void
+	{
+		$users = $this->users();
+		$unresolvableOwner = RecordState::new($users, ['name' => 'Owner']);
+		$through = $this->throughCollection();
+		$blockedCommand = new InsertCommand($through, [
+			'user_id' => $unresolvableOwner->getValueRef('id'),
+			'tag_id' => 5,
+		]);
+		$readyCommand = new InsertCommand($through, [
+			'user_id' => 10,
+			'tag_id' => 6,
+		]);
+		$executor = new RecordingCommandExecutor();
+
+		$this->expectException(InvalidCommandException::class);
+
+		try {
+			(new FlushScheduler($executor))->run(new RecordStateStore(), [$blockedCommand, $readyCommand]);
+		} finally {
+			self::assertSame([], $executor->getCommands());
+		}
+	}
+
 	public function testUnresolvedExplicitCommandReusesCommandValueResolverErrorMessage(): void
 	{
 		$users = $this->users();
