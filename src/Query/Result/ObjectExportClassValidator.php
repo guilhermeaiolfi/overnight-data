@@ -16,15 +16,15 @@ final class ObjectExportClassValidator
 			return;
 		}
 
-		if (trait_exists($class, autoload: false)) {
+		if (trait_exists($class)) {
 			throw ObjectExportException::traitNotSupported($class);
 		}
 
-		if (interface_exists($class, autoload: false)) {
+		if (interface_exists($class)) {
 			throw ObjectExportException::interfaceNotSupported($class);
 		}
 
-		if (! class_exists($class, autoload: false)) {
+		if (! class_exists($class)) {
 			throw ObjectExportException::classNotFound($class);
 		}
 
