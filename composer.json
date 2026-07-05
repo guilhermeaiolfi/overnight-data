@@ -10,7 +10,7 @@
         "data-layer"
     ],
     "require": {
-        "php": ">=8.1",
+        "php": ">=8.3",
         "cycle/database": "^2.16"
     },
     "require-dev": {
@@ -36,12 +36,12 @@
     },
     "scripts": {
         "validate-composer": "composer validate --strict",
-        "test": "vendor/bin/phpunit --configuration phpunit.xml.dist",
-        "analyse": "vendor/bin/phpstan analyse --configuration phpstan.neon.dist",
-        "check-style": "vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.php --dry-run --diff",
-        "fix-style": "vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.php",
-        "bench": "phpbench run --config=phpbench.json",
-        "bench:mapping": "phpbench run --config=phpbench.json --filter=MappingBench",
+        "test": "php vendor/phpunit/phpunit/phpunit --configuration phpunit.xml.dist",
+        "analyse": "php vendor/phpstan/phpstan/phpstan analyse --configuration phpstan.neon.dist",
+        "check-style": "php vendor/friendsofphp/php-cs-fixer/php-cs-fixer fix --config=.php-cs-fixer.php --dry-run --diff",
+        "fix-style": "php vendor/friendsofphp/php-cs-fixer/php-cs-fixer fix --config=.php-cs-fixer.php",
+        "bench": "php vendor/phpbench/phpbench/bin/phpbench run --config=phpbench.json",
+        "bench:mapping": "php vendor/phpbench/phpbench/bin/phpbench run --config=phpbench.json --filter=MappingBench",
         "bench:mapping:record": "php benchmark/mapping_bench.php record",
         "bench:mapping:compare": "php benchmark/mapping_bench.php compare",
         "bench:mapping:history": "php benchmark/mapping_bench.php history",
