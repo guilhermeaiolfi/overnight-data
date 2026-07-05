@@ -11,6 +11,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Query\Condition\ConditionInterface;
+use ON\Data\Query\Exception\ObjectExportException;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Exception\UnknownQueryExpressionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
@@ -24,8 +25,10 @@ use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelectionTree;
+use ON\Data\Query\Result\ObjectResultMaterializer;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Sort\Sort;
+use stdClass;
 
 final class SelectQuery implements QuerySourceInterface
 {
@@ -82,6 +85,8 @@ final class SelectQuery implements QuerySourceInterface
 	private ?string $alias = null;
 
 	private ?StarExpression $sourceStar = null;
+
+	private ?string $resultClass = null;
 
 	public function __construct(
 		private readonly CollectionInterface|SelectQuery $source,
@@ -294,6 +299,7 @@ final class SelectQuery implements QuerySourceInterface
 		);
 		$copy->limit = $this->limit;
 		$copy->offset = $this->offset;
+		$copy->resultClass = $this->resultClass;
 
 		$joinMap = [spl_object_id($this) => $copy];
 
@@ -445,6 +451,22 @@ final class SelectQuery implements QuerySourceInterface
 		return $this;
 	}
 
+	public function to(string $class): self
+	{
+		if ($class !== stdClass::class) {
+			throw ObjectExportException::unsupportedClass($class);
+		}
+
+		$this->resultClass = $class;
+
+		return $this;
+	}
+
+	public function getResultClass(): ?string
+	{
+		return $this->resultClass;
+	}
+
 	public function getSelections(): SelectionList
 	{
 		return $this->selections;
@@ -557,7 +579,7 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
-	 * @return list<array<string, mixed>>
+	 * @return list<array<string, mixed>>|list<stdClass>
 	 */
 	public function fetchAll(): array
 	{
@@ -565,25 +587,33 @@ final class SelectQuery implements QuerySourceInterface
 		$relationSelections = $this->getRelationSelections();
 
 		if ($relationSelections->isEmpty()) {
-			return $executor->fetchAll($this);
+			$rows = $executor->fetchAll($this);
+		} else {
+			$rows = (new Relation\LoadRuntime($this, $executor))->fetchAll();
 		}
 
-		return (new Relation\LoadRuntime($this, $executor))->fetchAll();
+		return $this->materializeRows($rows);
 	}
 
 	/**
-	 * @return array<string, mixed>|null
+	 * @return array<string, mixed>|stdClass|null
 	 */
-	public function fetchOne(): ?array
+	public function fetchOne(): array|object|null
 	{
 		$executor = $this->requireExecutor();
 		$relationSelections = $this->getRelationSelections();
 
 		if ($relationSelections->isEmpty()) {
-			return $executor->fetchOne($this);
+			$row = $executor->fetchOne($this);
+		} else {
+			$row = (new Relation\LoadRuntime($this, $executor))->fetchOne();
 		}
 
-		return (new Relation\LoadRuntime($this, $executor))->fetchOne();
+		if ($row === null) {
+			return null;
+		}
+
+		return $this->materializeRow($row);
 	}
 
 	/**
@@ -646,6 +676,34 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		return $this->executor;
+	}
+
+	/**
+	 * @param list<array<string, mixed>> $rows
+	 *
+	 * @return list<array<string, mixed>>|list<stdClass>
+	 */
+	private function materializeRows(array $rows): array
+	{
+		if ($this->resultClass === null) {
+			return $rows;
+		}
+
+		return (new ObjectResultMaterializer())->materializeAll($rows, $this->resultClass);
+	}
+
+	/**
+	 * @param array<string, mixed> $row
+	 *
+	 * @return array<string, mixed>|stdClass
+	 */
+	private function materializeRow(array $row): array|object
+	{
+		if ($this->resultClass === null) {
+			return $row;
+		}
+
+		return (new ObjectResultMaterializer())->materialize($row, $this->resultClass);
 	}
 
 	private function describeSource(QuerySourceInterface $source): string
