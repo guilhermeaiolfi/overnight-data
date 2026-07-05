@@ -107,7 +107,7 @@ final class SelectQueryBindingCompilerTest extends TestCase
 		self::assertSame('companies', $binding->getField('name')->getField()->getCollectionName());
 		self::assertSame('name', $binding->getField('name')->getField()->getFieldName());
 
-		$internalSelections = $query->getSelections()->getByTag(SelectionTag::INTERNAL_RESULT);
+		$internalSelections = $query->getSelections()->getByTag(SelectionTag::INTERNAL);
 		self::assertCount(1, $internalSelections);
 		self::assertTrue($internalSelections[0]->hasTag(SelectionTag::INTERNAL));
 		self::assertStringStartsWith('_od_internal_', $internalSelections[0]->getSelectionKey());

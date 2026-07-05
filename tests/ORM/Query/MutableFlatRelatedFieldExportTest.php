@@ -35,7 +35,7 @@ final class MutableFlatRelatedFieldExportTest extends TestCase
 		self::assertSame(1, $user->id);
 		self::assertSame('Acme', $user->name);
 		self::assertFalse(property_exists($user, 'company'));
-		self::assertFalse($this->hasInternalResultProperty($user));
+		self::assertFalse($this->hasInternalSelectionProperty($user));
 
 		$user->name = 'Dell';
 		$session->sync($user);
@@ -110,10 +110,10 @@ final class MutableFlatRelatedFieldExportTest extends TestCase
 		self::assertTrue($session->getRepresentations()->has($user));
 		self::assertSame(1, $user->id);
 		self::assertSame('Acme', $user->name);
-		self::assertFalse($this->hasInternalResultProperty($user));
+		self::assertFalse($this->hasInternalSelectionProperty($user));
 	}
 
-	private function hasInternalResultProperty(stdClass $user): bool
+	private function hasInternalSelectionProperty(stdClass $user): bool
 	{
 		foreach (array_keys(get_object_vars($user)) as $property) {
 			if (str_starts_with($property, '_od_internal_')) {
@@ -157,7 +157,7 @@ final class FlatCompanyUserQueryExecutor implements QueryExecutorInterface
 
 	public function fetchOne(SelectQuery $query): ?array
 	{
-		return InternalResultRowFactory::withInternalCompanyId($query, [
+		return InternalSelectionRowFactory::withInternalCompanyId($query, [
 			'id' => 1,
 			'name' => 'Acme',
 		]);
@@ -199,19 +199,19 @@ final class AssertingInternalCompanyIdSelectionExecutor implements QueryExecutor
 
 	public function fetchOne(SelectQuery $query): ?array
 	{
-		$internalSelections = $query->getSelections()->getByTag(SelectionTag::INTERNAL_RESULT);
+		$internalSelections = $query->getSelections()->getByTag(SelectionTag::INTERNAL);
 
 		if ($internalSelections === []) {
-			throw new AssertionFailedError('Expected internal result selection before query execution.');
+			throw new AssertionFailedError('Expected internal selection before query execution.');
 		}
 
 		foreach ($internalSelections as $selection) {
-			if (! $selection->hasTag(SelectionTag::INTERNAL_RESULT)) {
-				throw new AssertionFailedError('Expected INTERNAL_RESULT tag on internal selection.');
+			if (! $selection->hasTag(SelectionTag::INTERNAL)) {
+				throw new AssertionFailedError('Expected INTERNAL tag on internal selection.');
 			}
 		}
 
-		return InternalResultRowFactory::withInternalCompanyId($query, [
+		return InternalSelectionRowFactory::withInternalCompanyId($query, [
 			'id' => 1,
 			'name' => 'Acme',
 		]);
@@ -223,7 +223,7 @@ final class AssertingInternalCompanyIdSelectionExecutor implements QueryExecutor
 	}
 }
 
-final class InternalResultRowFactory
+final class InternalSelectionRowFactory
 {
 	/**
 	 * @param array<string, mixed> $row
@@ -232,7 +232,7 @@ final class InternalResultRowFactory
 	 */
 	public static function withInternalCompanyId(SelectQuery $query, array $row): array
 	{
-		foreach ($query->getSelections()->getByTag(SelectionTag::INTERNAL_RESULT) as $selection) {
+		foreach ($query->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
 			$row[$selection->getSelectionKey()] = 5;
 		}
 

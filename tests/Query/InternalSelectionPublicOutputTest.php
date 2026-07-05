@@ -11,11 +11,11 @@ use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
-final class InternalResultPublicOutputTest extends TestCase
+final class InternalSelectionPublicOutputTest extends TestCase
 {
-	public function testInternalResultFieldsAreStrippedFromFetchAllArrayOutput(): void
+	public function testInternalSelectionsAreStrippedFromFetchAllArrayOutput(): void
 	{
-		$query = $this->queryWithInternalResultSelection();
+		$query = $this->queryWithInternalSelection();
 
 		$rows = $query->fetchAll();
 
@@ -23,9 +23,9 @@ final class InternalResultPublicOutputTest extends TestCase
 		self::assertArrayNotHasKey('_od_internal_1', $rows[0]);
 	}
 
-	public function testInternalResultFieldsAreStrippedFromFetchOneArrayOutput(): void
+	public function testInternalSelectionsAreStrippedFromFetchOneArrayOutput(): void
 	{
-		$query = $this->queryWithInternalResultSelection();
+		$query = $this->queryWithInternalSelection();
 
 		$row = $query->fetchOne();
 
@@ -33,9 +33,9 @@ final class InternalResultPublicOutputTest extends TestCase
 		self::assertArrayNotHasKey('_od_internal_1', $row);
 	}
 
-	public function testInternalResultFieldsAreStrippedFromToStdClassOutput(): void
+	public function testInternalSelectionsAreStrippedFromToStdClassOutput(): void
 	{
-		$query = $this->queryWithInternalResultSelection();
+		$query = $this->queryWithInternalSelection();
 
 		$row = $query->to(stdClass::class)->fetchOne();
 
@@ -45,9 +45,9 @@ final class InternalResultPublicOutputTest extends TestCase
 		self::assertFalse(property_exists($row, '_od_internal_1'));
 	}
 
-	public function testInternalResultFieldsAreStrippedFromIterateArrayOutput(): void
+	public function testInternalSelectionsAreStrippedFromIterateArrayOutput(): void
 	{
-		$query = $this->queryWithInternalResultSelection();
+		$query = $this->queryWithInternalSelection();
 
 		$rows = iterator_to_array($query->iterate(), false);
 
@@ -55,9 +55,9 @@ final class InternalResultPublicOutputTest extends TestCase
 		self::assertArrayNotHasKey('_od_internal_1', $rows[0]);
 	}
 
-	public function testInternalResultFieldsAreStrippedFromToStdClassIterateOutput(): void
+	public function testInternalSelectionsAreStrippedFromToStdClassIterateOutput(): void
 	{
-		$query = $this->queryWithInternalResultSelection();
+		$query = $this->queryWithInternalSelection();
 
 		$rows = iterator_to_array($query->to(stdClass::class)->iterate(), false);
 
@@ -70,7 +70,7 @@ final class InternalResultPublicOutputTest extends TestCase
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
-		$query = new SelectQuery($users, new InternalResultPublicOutputExecutor());
+		$query = new SelectQuery($users, new InternalSelectionPublicOutputExecutor());
 		$query->select($query->id, $query->name->as('__od.foo'));
 
 		$row = $query->fetchOne();
@@ -78,16 +78,13 @@ final class InternalResultPublicOutputTest extends TestCase
 		self::assertSame(['id' => 1, '__od.foo' => 'Ada'], $row);
 	}
 
-	private function queryWithInternalResultSelection(): SelectQuery
+	private function queryWithInternalSelection(): SelectQuery
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
-		$query = new SelectQuery($users, new InternalResultPublicOutputExecutor());
+		$query = new SelectQuery($users, new InternalSelectionPublicOutputExecutor());
 		$query->select($query->id, $query->name);
-		$query->getSelections()->add($query->id->as('_od_internal_1'), [
-			SelectionTag::INTERNAL,
-			SelectionTag::INTERNAL_RESULT,
-		]);
+		$query->getSelections()->add($query->id->as('_od_internal_1'), SelectionTag::INTERNAL);
 
 		return $query;
 	}
@@ -105,7 +102,7 @@ final class InternalResultPublicOutputTest extends TestCase
 	}
 }
 
-final class InternalResultPublicOutputExecutor implements QueryExecutorInterface
+final class InternalSelectionPublicOutputExecutor implements QueryExecutorInterface
 {
 	public function fetchAll(SelectQuery $query): array
 	{
@@ -124,7 +121,7 @@ final class InternalResultPublicOutputExecutor implements QueryExecutorInterface
 			unset($row['name']);
 		}
 
-		foreach ($query->getSelections()->getByTag(SelectionTag::INTERNAL_RESULT) as $selection) {
+		foreach ($query->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
 			$row[$selection->getSelectionKey()] = 99;
 		}
 

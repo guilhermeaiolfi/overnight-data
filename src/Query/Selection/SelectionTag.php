@@ -18,8 +18,5 @@ final class SelectionTag
 
 	public const INTERNAL = 'internal';
 
-	/** Internal result value retained in raw rows for post-processing and stripped from public output. */
-	public const INTERNAL_RESULT = 'internal-result';
-
 	public const SQL_ONLY = 'sql-only';
 }

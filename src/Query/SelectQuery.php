@@ -844,10 +844,6 @@ final class SelectQuery implements QuerySourceInterface
 	{
 		$public = $row;
 
-		foreach ($this->selections->getByTag(SelectionTag::INTERNAL_RESULT) as $selection) {
-			unset($public[$selection->getSelectionKey()]);
-		}
-
 		foreach ($this->selections->getByTag(SelectionTag::INTERNAL) as $selection) {
 			unset($public[$selection->getSelectionKey()]);
 		}

@@ -257,7 +257,7 @@ final class SelectQueryBindingCompiler
 			$fieldRef = $relationRef->field($fieldName);
 			$query->getSelections()->add(
 				$fieldRef->as($resultKey),
-				[SelectionTag::INTERNAL, SelectionTag::INTERNAL_RESULT],
+				SelectionTag::INTERNAL,
 			);
 			$projectionIdentities->add($targetCollection, $fieldName, $resultKey);
 		}
