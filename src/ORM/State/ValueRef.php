@@ -48,7 +48,7 @@ final class ValueRef
 		if (! $this->isResolved()) {
 			throw new StateException(sprintf(
 				"Value reference '%s.%s' on record '%s' is unresolved.",
-				$this->record->getCollectionName(),
+				$this->record->getCollection()->getName(),
 				$this->field,
 				$this->record->getStateHash(),
 			));

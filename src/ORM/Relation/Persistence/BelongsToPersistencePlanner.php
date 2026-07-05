@@ -14,6 +14,15 @@ use ON\Data\ORM\State\RecordState;
 
 final class BelongsToPersistencePlanner implements RelationPersistencePlannerInterface
 {
+	private TrackedRecordResolver $records;
+	private ForeignKeyWriter $keys;
+
+	public function __construct(?TrackedRecordResolver $records = null, ?ForeignKeyWriter $keys = null)
+	{
+		$this->records = $records ?? new TrackedRecordResolver();
+		$this->keys = $keys ?? new ForeignKeyWriter();
+	}
+
 	public function plan(PersistenceContext $context, RelationInterface $relation, RelationChangeInterface $change): void
 	{
 		if (! $change instanceof ToOneRelationState) {
@@ -36,7 +45,7 @@ final class BelongsToPersistencePlanner implements RelationPersistencePlannerInt
 		$owner = $reference->getOwner();
 		$target = $reference->getTarget();
 		if ($target !== null) {
-			$targetRecord = $this->resolveTargetRecord($context, $relation, $target);
+			$targetRecord = $this->records->resolve($context, $relation, $target, 'target');
 			$this->copyTargetKeysIntoOwner($relation, $targetRecord, $owner);
 
 			return;
@@ -46,56 +55,28 @@ final class BelongsToPersistencePlanner implements RelationPersistencePlannerInt
 			throw new RelationPersistenceException(sprintf(
 				"Relation '%s' on owner collection '%s' cannot clear target by nulling inner keys because the relation is not nullable.",
 				$relation->getName(),
-				$owner->getCollectionName(),
+				$owner->getCollection()->getName(),
 			));
 		}
 
-		$this->nullOwnerInnerKeys($relation, $owner);
-	}
-
-	private function resolveTargetRecord(PersistenceContext $context, BelongsToRelation $relation, object $target): RecordState
-	{
-		$tracked = $context->getRepresentations()->get($target);
-		if ($tracked === null) {
-			throw new RelationPersistenceException(sprintf(
-				"Relation '%s' target item is not tracked.",
-				$relation->getName(),
-			));
-		}
-
-		$targetRecord = $context->getRecords()->getFromRepresentation($tracked);
-		if (! $targetRecord instanceof RecordState) {
-			throw new RelationPersistenceException(sprintf(
-				"Relation '%s' tracked target item cannot be resolved to a record state.",
-				$relation->getName(),
-			));
-		}
-
-		return $targetRecord;
+		$this->keys->nullValues($owner, $relation->getInnerKeys());
 	}
 
 	private function copyTargetKeysIntoOwner(BelongsToRelation $relation, RecordState $target, RecordState $owner): void
 	{
-		foreach ($relation->getOuterKeys() as $index => $outerField) {
-			$outerField = (string) $outerField;
-			$innerField = $relation->getInnerKeys()[$index] ?? null;
-			if (! is_string($innerField) || $innerField === '') {
-				throw new RelationPersistenceException(sprintf(
-					"Relation '%s' is missing an inner key field for target collection '%s' field '%s'.",
-					$relation->getName(),
-					$target->getCollectionName(),
-					$outerField,
-				));
-			}
-
-			$owner->setValue($innerField, $target->getValueRef($outerField));
-		}
-	}
-
-	private function nullOwnerInnerKeys(BelongsToRelation $relation, RecordState $owner): void
-	{
-		foreach ($relation->getInnerKeys() as $innerField) {
-			$owner->setValue((string) $innerField, null);
-		}
+		$targetCollection = $target->getCollection()->getName();
+		$this->keys->copyValues(
+			$relation->getName(),
+			$relation->getOuterKeys(),
+			$relation->getInnerKeys(),
+			$target,
+			$owner,
+			static fn (string $relationName, string $sourceField, int|string $index): RelationPersistenceException => new RelationPersistenceException(sprintf(
+				"Relation '%s' is missing an inner key field for target collection '%s' field '%s'.",
+				$relationName,
+				$targetCollection,
+				$sourceField,
+			)),
+		);
 	}
 }

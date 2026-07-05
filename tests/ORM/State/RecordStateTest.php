@@ -56,7 +56,7 @@ final class RecordStateTest extends TestCase
 
 		self::assertTrue($state->isClean());
 		self::assertSame($key, $state->getKey());
-		self::assertSame('users', $state->getCollectionName());
+		self::assertSame('users', $state->getCollection()->getName());
 	}
 
 	public function testCleanRecordsInitialValuesInHistoryRevisionOne(): void

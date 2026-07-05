@@ -189,10 +189,10 @@ final class RecordFlusher
 			foreach ($unresolved as $field => $ref) {
 				throw new InvalidCommandException(sprintf(
 					"Cannot flush collection '%s' record '%s' because field '%s' references unresolved value '%s.%s' on record '%s'.",
-					$record->getCollectionName(),
+					$record->getCollection()->getName(),
 					$record->getStateHash(),
 					(string) $field,
-					$ref->getRecord()->getCollectionName(),
+					$ref->getRecord()->getCollection()->getName(),
 					$ref->getField(),
 					$ref->getRecord()->getStateHash(),
 				));

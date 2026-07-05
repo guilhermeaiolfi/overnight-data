@@ -154,12 +154,12 @@ final class RepresentationBinding
 				throw new StateException(sprintf("Representation binding path '%s' already targets a concrete record.", $binding->getPath()));
 			}
 
-			if ($field->getCollectionName() !== $state->getCollectionName()) {
+			if ($field->getCollectionName() !== $state->getCollection()->getName()) {
 				throw new StateException(sprintf(
 					"Representation binding path '%s' targets collection '%s', not '%s'.",
 					$binding->getPath(),
 					$field->getCollectionName(),
-					$state->getCollectionName()
+					$state->getCollection()->getName()
 				));
 			}
 
@@ -176,12 +176,12 @@ final class RepresentationBinding
 				throw new StateException(sprintf("Representation binding path '%s' already targets a concrete record.", $binding->getPath()));
 			}
 
-			if ($relation->getCollectionName() !== $state->getCollectionName()) {
+			if ($relation->getCollectionName() !== $state->getCollection()->getName()) {
 				throw new StateException(sprintf(
 					"Representation binding path '%s' targets collection '%s', not '%s'.",
 					$binding->getPath(),
 					$relation->getCollectionName(),
-					$state->getCollectionName()
+					$state->getCollection()->getName()
 				));
 			}
 

@@ -14,6 +14,15 @@ use ON\Data\ORM\State\RecordState;
 
 final class HasManyPersistencePlanner implements RelationPersistencePlannerInterface
 {
+	private TrackedRecordResolver $records;
+	private ForeignKeyWriter $keys;
+
+	public function __construct(?TrackedRecordResolver $records = null, ?ForeignKeyWriter $keys = null)
+	{
+		$this->records = $records ?? new TrackedRecordResolver();
+		$this->keys = $keys ?? new ForeignKeyWriter();
+	}
+
 	public function plan(PersistenceContext $context, RelationInterface $relation, RelationChangeInterface $change): void
 	{
 		if (! $change instanceof ToManyRelationState) {
@@ -36,67 +45,39 @@ final class HasManyPersistencePlanner implements RelationPersistencePlannerInter
 		$owner = $collection->getOwner();
 
 		foreach ($collection->getAdded() as $item) {
-			$child = $this->resolveChildRecord($context, $relation, $item);
+			$child = $this->records->resolve($context, $relation, $item, 'child');
 			$this->copyOwnerKeysIntoChild($relation, $owner, $child);
 		}
 
 		foreach ($collection->getRemoved() as $item) {
-			$child = $this->resolveChildRecord($context, $relation, $item);
+			$child = $this->records->resolve($context, $relation, $item, 'child');
 			if (! $relation->isNullable()) {
 				throw new RelationPersistenceException(sprintf(
 					"Relation '%s' on owner collection '%s' cannot remove child by nulling outer keys because the relation is not nullable.",
 					$relation->getName(),
-					$owner->getCollectionName(),
+					$owner->getCollection()->getName(),
 				));
 			}
 
-			$this->nullChildOuterKeys($relation, $child);
+			$this->keys->nullValues($child, $relation->getOuterKeys());
 		}
-	}
-
-	private function resolveChildRecord(PersistenceContext $context, RelationInterface $relation, object $item): RecordState
-	{
-		$tracked = $context->getRepresentations()->get($item);
-		if ($tracked === null) {
-			throw new RelationPersistenceException(sprintf(
-				"Relation '%s' child item is not tracked.",
-				$relation->getName(),
-			));
-		}
-
-		$child = $context->getRecords()->getFromRepresentation($tracked);
-		if (! $child instanceof RecordState) {
-			throw new RelationPersistenceException(sprintf(
-				"Relation '%s' tracked child item cannot be resolved to a record state.",
-				$relation->getName(),
-			));
-		}
-
-		return $child;
 	}
 
 	private function copyOwnerKeysIntoChild(HasManyRelation $relation, RecordState $owner, RecordState $child): void
 	{
-		foreach ($relation->getInnerKeys() as $index => $innerField) {
-			$innerField = (string) $innerField;
-			$outerField = $relation->getOuterKeys()[$index] ?? null;
-			if (! is_string($outerField) || $outerField === '') {
-				throw new RelationPersistenceException(sprintf(
-					"Relation '%s' is missing an outer key field for owner collection '%s' field '%s'.",
-					$relation->getName(),
-					$owner->getCollectionName(),
-					$innerField,
-				));
-			}
-
-			$child->setValue($outerField, $owner->getValueRef($innerField));
-		}
-	}
-
-	private function nullChildOuterKeys(HasManyRelation $relation, RecordState $child): void
-	{
-		foreach ($relation->getOuterKeys() as $outerField) {
-			$child->setValue((string) $outerField, null);
-		}
+		$ownerCollection = $owner->getCollection()->getName();
+		$this->keys->copyValues(
+			$relation->getName(),
+			$relation->getInnerKeys(),
+			$relation->getOuterKeys(),
+			$owner,
+			$child,
+			static fn (string $relationName, string $sourceField, int|string $index): RelationPersistenceException => new RelationPersistenceException(sprintf(
+				"Relation '%s' is missing an outer key field for owner collection '%s' field '%s'.",
+				$relationName,
+				$ownerCollection,
+				$sourceField,
+			)),
+		);
 	}
 }

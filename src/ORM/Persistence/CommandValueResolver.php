@@ -74,7 +74,7 @@ final class CommandValueResolver
 			$this->commandType($command),
 			$slot,
 			$field,
-			$ref->getRecord()->getCollectionName(),
+			$ref->getRecord()->getCollection()->getName(),
 			$ref->getField(),
 			$ref->getRecord()->getStateHash(),
 		));

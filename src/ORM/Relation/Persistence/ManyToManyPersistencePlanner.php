@@ -16,6 +16,15 @@ use ON\Data\ORM\State\RecordState;
 
 final class ManyToManyPersistencePlanner implements RelationPersistencePlannerInterface
 {
+	private TrackedRecordResolver $records;
+	private ForeignKeyWriter $keys;
+
+	public function __construct(?TrackedRecordResolver $records = null, ?ForeignKeyWriter $keys = null)
+	{
+		$this->records = $records ?? new TrackedRecordResolver();
+		$this->keys = $keys ?? new ForeignKeyWriter();
+	}
+
 	public function plan(PersistenceContext $context, RelationInterface $relation, RelationChangeInterface $change): void
 	{
 		if (! $change instanceof ToManyRelationState) {
@@ -39,7 +48,7 @@ final class ManyToManyPersistencePlanner implements RelationPersistencePlannerIn
 		$owner = $collection->getOwner();
 
 		foreach ($collection->getAdded() as $item) {
-			$target = $this->resolveTargetRecord($context, $relation, $item);
+			$target = $this->records->resolve($context, $relation, $item, 'target');
 			$context->getCommands()->add(new InsertCommand(
 				$throughCollection,
 				$this->buildThroughValues($relation, $owner, $target),
@@ -47,33 +56,12 @@ final class ManyToManyPersistencePlanner implements RelationPersistencePlannerIn
 		}
 
 		foreach ($collection->getRemoved() as $item) {
-			$target = $this->resolveTargetRecord($context, $relation, $item);
+			$target = $this->records->resolve($context, $relation, $item, 'target');
 			$context->getCommands()->add(new DeleteCommand(
 				$throughCollection,
 				$this->buildThroughValues($relation, $owner, $target),
 			));
 		}
-	}
-
-	private function resolveTargetRecord(PersistenceContext $context, RelationInterface $relation, object $item): RecordState
-	{
-		$tracked = $context->getRepresentations()->get($item);
-		if ($tracked === null) {
-			throw new RelationPersistenceException(sprintf(
-				"Relation '%s' target item is not tracked.",
-				$relation->getName(),
-			));
-		}
-
-		$target = $context->getRecords()->getFromRepresentation($tracked);
-		if (! $target instanceof RecordState) {
-			throw new RelationPersistenceException(sprintf(
-				"Relation '%s' tracked target item cannot be resolved to a record state.",
-				$relation->getName(),
-			));
-		}
-
-		return $target;
 	}
 
 	/**
@@ -82,51 +70,30 @@ final class ManyToManyPersistencePlanner implements RelationPersistencePlannerIn
 	private function buildThroughValues(M2MRelation $relation, RecordState $owner, RecordState $target): array
 	{
 		return array_replace(
-			$this->copyMappedValues(
+			$this->keys->buildValues(
+				$relation->getName(),
 				$relation->getInnerKeys(),
 				$relation->getThrough()->getInnerKeys(),
 				$owner,
-				$relation->getName(),
-				'owner',
+				static fn (string $relationName, string $sourceField, int|string $index): RelationPersistenceException => new RelationPersistenceException(sprintf(
+					"Relation '%s' through mapping is missing a target field for %s field '%s'.",
+					$relationName,
+					'owner',
+					$sourceField,
+				)),
 			),
-			$this->copyMappedValues(
+			$this->keys->buildValues(
+				$relation->getName(),
 				$relation->getOuterKeys(),
 				$relation->getThrough()->getOuterKeys(),
 				$target,
-				$relation->getName(),
-				'target',
-			),
-		);
-	}
-
-	/**
-	 * @param array<int, string> $sourceFields
-	 * @param array<int, string> $targetFields
-	 * @return array<string, mixed>
-	 */
-	private function copyMappedValues(
-		array $sourceFields,
-		array $targetFields,
-		RecordState $source,
-		string $relationName,
-		string $side,
-	): array {
-		$values = [];
-		foreach ($sourceFields as $index => $sourceField) {
-			$sourceField = (string) $sourceField;
-			$targetField = $targetFields[$index] ?? null;
-			if (! is_string($targetField) || $targetField === '') {
-				throw new RelationPersistenceException(sprintf(
+				static fn (string $relationName, string $sourceField, int|string $index): RelationPersistenceException => new RelationPersistenceException(sprintf(
 					"Relation '%s' through mapping is missing a target field for %s field '%s'.",
 					$relationName,
-					$side,
+					'target',
 					$sourceField,
-				));
-			}
-
-			$values[$targetField] = $source->getValueRef($sourceField);
-		}
-
-		return $values;
+				)),
+			),
+		);
 	}
 }

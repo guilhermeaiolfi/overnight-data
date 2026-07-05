@@ -59,11 +59,6 @@ final class RecordState
 		return $this->collection;
 	}
 
-	public function getCollectionName(): string
-	{
-		return $this->collection->getName();
-	}
-
 	public function getKey(): ?Key
 	{
 		return $this->key;
@@ -138,7 +133,7 @@ final class RecordState
 	public function getValue(string $field): mixed
 	{
 		if (! array_key_exists($field, $this->values)) {
-			throw new StateException(sprintf("Record state for collection '%s' does not contain field '%s'.", $this->getCollectionName(), $field));
+			throw new StateException(sprintf("Record state for collection '%s' does not contain field '%s'.", $this->collection->getName(), $field));
 		}
 
 		return $this->values[$field];
