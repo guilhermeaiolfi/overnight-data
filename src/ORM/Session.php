@@ -18,6 +18,8 @@ use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\TrackedRepresentation;
 use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\Sync\GraphAdopter;
+use ON\Data\ORM\Sync\GraphAdoptionResult;
 use ON\Data\ORM\Sync\RepresentationAdopter;
 use ON\Data\ORM\Sync\RepresentationSyncer;
 use ON\Data\ORM\Sync\SyncResult;
@@ -29,6 +31,7 @@ final class Session
 	private RelatedCollectionMap $relations;
 	private RelatedReferenceMap $references;
 	private RepresentationAdopter $adopter;
+	private GraphAdopter $graphAdopter;
 	private FlushExecutor $flusher;
 	private RepresentationSyncer $syncer;
 
@@ -43,6 +46,7 @@ final class Session
 		$this->relations = new RelatedCollectionMap();
 		$this->references = new RelatedReferenceMap();
 		$this->adopter = new RepresentationAdopter($this->records, $this->representations);
+		$this->graphAdopter = new GraphAdopter();
 		$this->syncer = $syncer ?? new RepresentationSyncer();
 		$this->flusher = $flusher ?? new FlushExecutor($executor, $this->syncer);
 	}
@@ -96,6 +100,17 @@ final class Session
 		RecordState $record,
 	): TrackedRepresentation {
 		return $this->adopter->adopt($representation, $binding, $record);
+	}
+
+	public function adoptGraph(object $representation): GraphAdoptionResult
+	{
+		return $this->graphAdopter->adopt(
+			$representation,
+			$this->representations,
+			$this->records,
+			$this->relations,
+			$this->references
+		);
 	}
 
 	public function removeRecord(RecordState $record): void

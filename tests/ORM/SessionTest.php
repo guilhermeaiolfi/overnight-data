@@ -7,6 +7,7 @@ namespace Tests\ON\Data\ORM;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
@@ -123,6 +124,65 @@ final class SessionTest extends TestCase
 		$this->expectExceptionMessage('already tracked');
 
 		$session->adopt($representation, $this->templateBinding(), $record);
+	}
+
+	public function testAdoptGraphAdoptsUntrackedRelatedManyItems(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$session = new Session(new RecordingCommandExecutor());
+		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
+
+		$result = $session->adoptGraph($ownerRepresentation);
+
+		self::assertSame(1, $result->getCount());
+		self::assertSame($postRepresentation, $result->getTrackedRepresentations()[0]->getRepresentation());
+		self::assertSame($result->getTrackedRepresentations()[0], $session->getRepresentations()->get($postRepresentation));
+	}
+
+	public function testAdoptGraphAdoptsUntrackedOneTarget(): void
+	{
+		[$users, $profiles] = $this->usersWithDefaultHasOneProfile();
+		$session = new Session(new RecordingCommandExecutor());
+		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$profileRepresentation = $this->representation(['id' => 5, 'label' => 'Profile', 'user_id' => null]);
+		$ownerRepresentation = $this->representation(['name' => 'Owner', 'profile' => $profileRepresentation]);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithProfile($users, $profiles), $owner);
+
+		$result = $session->adoptGraph($ownerRepresentation);
+
+		self::assertSame(1, $result->getCount());
+		self::assertSame($profileRepresentation, $result->getTrackedRepresentations()[0]->getRepresentation());
+		self::assertSame($result->getTrackedRepresentations()[0], $session->getRepresentations()->get($profileRepresentation));
+	}
+
+	public function testAdoptGraphThrowsForUntrackedRoot(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage('root representation is not tracked');
+
+		$session->adoptGraph(new stdClass());
+	}
+
+	public function testAdoptGraphDoesNotFlush(): void
+	{
+		$executor = new RecordingCommandExecutor();
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$session = new Session($executor);
+		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$owner->setValue('name', 'Owner Updated');
+		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$ownerRepresentation = $this->representation(['name' => 'Owner Updated', 'posts' => [$postRepresentation]]);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
+
+		$session->adoptGraph($ownerRepresentation);
+
+		self::assertSame([], $executor->getCommands());
+		self::assertTrue($owner->isDirty());
 	}
 
 	public function testRemoveRecordMarksTrackedCleanRecordRemovedAndKeepsItInMapBeforeFlush(): void
@@ -447,6 +507,38 @@ final class SessionTest extends TestCase
 		self::assertTrue($record->isDirty());
 	}
 
+	public function testAfterAdoptGraphSyncSucceedsForPreviouslyUntrackedRelatedObject(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$session = new Session(new RecordingCommandExecutor());
+		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
+
+		$session->adoptGraph($ownerRepresentation);
+		$result = $session->sync();
+
+		self::assertCount(1, $result->getRelationChanges());
+	}
+
+	public function testAfterAdoptGraphFlushCanProceedToNormalSyncAndPlanningPath(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
+
+		$session->adoptGraph($ownerRepresentation);
+		$session->flush();
+
+		self::assertCount(1, $executor->getCommands());
+		self::assertInstanceOf(InsertCommand::class, $executor->getCommands()[0]);
+	}
+
 	public function testSyncOneSynchronizesOnlyTheSelectedTrackedRepresentation(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
@@ -485,6 +577,28 @@ final class SessionTest extends TestCase
 
 		self::assertCount(1, $executor->getCommands());
 		self::assertInstanceOf(UpdateCommand::class, $executor->getCommands()[0]);
+	}
+
+	public function testSyncAndFlushStillDoNotAutoAdoptWhenAdoptGraphWasNotCalled(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$session = new Session(new RecordingCommandExecutor());
+		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
+
+		try {
+			$session->sync();
+			self::fail('Expected sync to reject the untracked related object.');
+		} catch (SyncException $exception) {
+			self::assertStringContainsString('not tracked', $exception->getMessage());
+		}
+
+		$this->expectException(SyncException::class);
+		$this->expectExceptionMessage('not tracked');
+
+		$session->flush();
 	}
 
 	public function testCallingSyncBeforeFlushDoesNotDuplicateRelationChanges(): void
