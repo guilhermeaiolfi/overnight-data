@@ -43,11 +43,11 @@ final class FlushExecutor
 	{
 		$representations = $context->getRepresentations();
 		$records = $context->getRecords();
-		$relations = $context->getRelations();
-		$references = $context->getReferences();
+		$toManyRelations = $context->getToManyRelations();
+		$toOneRelations = $context->getToOneRelations();
 
 		$syncResult = $this->syncer->sync($context);
-		$relationResult = $this->relationPlanner->plan($relations, $references, $records, $representations);
+		$relationResult = $this->relationPlanner->plan($toManyRelations, $toOneRelations, $records, $representations);
 		$commandResults = $this->flusher->flush($records);
 
 		foreach ($relationResult->getCommands() as $command) {
@@ -76,11 +76,11 @@ final class FlushExecutor
 		): FlushResult {
 			$representations = $context->getRepresentations();
 			$records = $context->getRecords();
-			$relations = $context->getRelations();
-			$references = $context->getReferences();
+			$toManyRelations = $context->getToManyRelations();
+			$toOneRelations = $context->getToOneRelations();
 
 			$syncResult = $this->syncer->sync($context);
-			$relationResult = $this->relationPlanner->plan($relations, $references, $records, $representations);
+			$relationResult = $this->relationPlanner->plan($toManyRelations, $toOneRelations, $records, $representations);
 			$recordFlush = $this->flusher->flushDeferred($records);
 			$commandResults = $recordFlush->getCommandResults();
 

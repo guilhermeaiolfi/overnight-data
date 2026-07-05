@@ -55,14 +55,14 @@ trait OrmFixture
 	protected function context(
 		?RepresentationStore $representations = null,
 		?RecordStateStore $records = null,
-		?RelationStateStore $relations = null,
-		?RelationStateStore $references = null,
+		?RelationStateStore $toManyRelations = null,
+		?RelationStateStore $toOneRelations = null,
 	): SessionContext {
 		return new SessionContext(
 			$records,
 			$representations,
-			$relations,
-			$references
+			$toManyRelations,
+			$toOneRelations
 		);
 	}
 

@@ -13,14 +13,14 @@ use ON\Data\ORM\State\RepresentationStore;
 final class PersistenceContext
 {
 	/**
-	 * @param RelationStateStore<ToManyRelationState> $relations
-	 * @param RelationStateStore<ToOneRelationState> $references
+	 * @param RelationStateStore<ToManyRelationState> $toManyRelations
+	 * @param RelationStateStore<ToOneRelationState> $toOneRelations
 	 */
 	public function __construct(
 		private RecordStateStore $records,
 		private RepresentationStore $representations,
-		private RelationStateStore $relations,
-		private RelationStateStore $references,
+		private RelationStateStore $toManyRelations,
+		private RelationStateStore $toOneRelations,
 		private CommandBuffer $commands,
 	) {
 	}
@@ -38,17 +38,17 @@ final class PersistenceContext
 	/**
 	 * @return RelationStateStore<ToManyRelationState>
 	 */
-	public function getRelations(): RelationStateStore
+	public function getToManyRelations(): RelationStateStore
 	{
-		return $this->relations;
+		return $this->toManyRelations;
 	}
 
 	/**
 	 * @return RelationStateStore<ToOneRelationState>
 	 */
-	public function getReferences(): RelationStateStore
+	public function getToOneRelations(): RelationStateStore
 	{
-		return $this->references;
+		return $this->toOneRelations;
 	}
 
 	public function getCommands(): CommandBuffer

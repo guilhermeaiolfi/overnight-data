@@ -24,13 +24,13 @@ final class RelationRepresentationSynchronizer
 	/**
 	 * @return list<RelationChangeInterface>
 	 *
-	 * @param RelationStateStore<ToManyRelationState> $relations
-	 * @param RelationStateStore<ToOneRelationState> $references
+	 * @param RelationStateStore<ToManyRelationState> $toManyRelations
+	 * @param RelationStateStore<ToOneRelationState> $toOneRelations
 	 */
 	public function sync(
 		RepresentationStore $representations,
-		RelationStateStore $relations,
-		RelationStateStore $references,
+		RelationStateStore $toManyRelations,
+		RelationStateStore $toOneRelations,
 		?RepresentationStore $states = null,
 	): array {
 		$touched = [];
@@ -40,13 +40,13 @@ final class RelationRepresentationSynchronizer
 		foreach ($representations->getAll() as $representation => $state) {
 			foreach ($state->getBinding()->getRelations() as $relationBinding) {
 				if ($relationBinding->isMany()) {
-					$this->syncMany($representation, $relationBinding, $relations, $resolver, $touched, $touchedIds);
+					$this->syncMany($representation, $relationBinding, $toManyRelations, $resolver, $touched, $touchedIds);
 
 					continue;
 				}
 
 				if ($relationBinding->isSingle()) {
-					$this->syncOne($representation, $relationBinding, $references, $resolver, $touched, $touchedIds);
+					$this->syncOne($representation, $relationBinding, $toOneRelations, $resolver, $touched, $touchedIds);
 				}
 			}
 		}
@@ -57,12 +57,12 @@ final class RelationRepresentationSynchronizer
 	/**
 	 * @param list<RelationChangeInterface> $touched
 	 * @param array<int, true> $touchedIds
-	 * @param RelationStateStore<ToManyRelationState> $relations
+	 * @param RelationStateStore<ToManyRelationState> $toManyRelations
 	 */
 	private function syncMany(
 		object $representation,
 		RepresentationRelationBinding $relationBinding,
-		RelationStateStore $relations,
+		RelationStateStore $toManyRelations,
 		RepresentationStateResolver $resolver,
 		array &$touched,
 		array &$touchedIds,
@@ -82,27 +82,27 @@ final class RelationRepresentationSynchronizer
 			$resolver->getRepresentationState($item, $relationBinding->getPath());
 		}
 
-		$collection = $relations->get($owner, $relationName);
-		if (! $collection instanceof ToManyRelationState) {
-			$collection = $relationBinding->isCollectionFullyLoaded()
+		$relation = $toManyRelations->get($owner, $relationName);
+		if (! $relation instanceof ToManyRelationState) {
+			$relation = $relationBinding->isCollectionFullyLoaded()
 				? ToManyRelationState::full($owner, $relationName, $relationBinding->getRelatedBinding())
 				: new ToManyRelationState($owner, $relationName, $relationBinding->getRelatedBinding());
-			$relations->add($collection);
+			$toManyRelations->add($relation);
 		}
 
-		$this->applyItems($collection, $items);
-		$this->touch($collection, $touched, $touchedIds);
+		$this->applyItems($relation, $items);
+		$this->touch($relation, $touched, $touchedIds);
 	}
 
 	/**
 	 * @param list<RelationChangeInterface> $touched
 	 * @param array<int, true> $touchedIds
-	 * @param RelationStateStore<ToOneRelationState> $references
+	 * @param RelationStateStore<ToOneRelationState> $toOneRelations
 	 */
 	private function syncOne(
 		object $representation,
 		RepresentationRelationBinding $relationBinding,
-		RelationStateStore $references,
+		RelationStateStore $toOneRelations,
 		RepresentationStateResolver $resolver,
 		array &$touched,
 		array &$touchedIds,
@@ -122,18 +122,18 @@ final class RelationRepresentationSynchronizer
 			$resolver->getRepresentationState($target, $relationBinding->getPath());
 		}
 
-		$reference = $references->get($owner, $relationName);
-		if (! $reference instanceof ToOneRelationState) {
-			$reference = new ToOneRelationState(
+		$relation = $toOneRelations->get($owner, $relationName);
+		if (! $relation instanceof ToOneRelationState) {
+			$relation = new ToOneRelationState(
 				$owner,
 				$relationName,
 				$relationBinding->getRelatedBinding()
 			);
-			$references->add($reference);
+			$toOneRelations->add($relation);
 		}
 
-		$reference->set($target);
-		$this->touch($reference, $touched, $touchedIds);
+		$relation->set($target);
+		$this->touch($relation, $touched, $touchedIds);
 	}
 
 	/**
@@ -197,11 +197,11 @@ final class RelationRepresentationSynchronizer
 	/**
 	 * @param list<object> $items
 	 */
-	private function applyItems(ToManyRelationState $collection, array $items): void
+	private function applyItems(ToManyRelationState $relation, array $items): void
 	{
-		if (! $collection->isFullyLoaded()) {
+		if (! $relation->isFullyLoaded()) {
 			foreach ($items as $item) {
-				$collection->add($item);
+				$relation->add($item);
 			}
 
 			return;
@@ -210,14 +210,14 @@ final class RelationRepresentationSynchronizer
 		$currentIds = [];
 		foreach ($items as $item) {
 			$currentIds[spl_object_id($item)] = true;
-			if (! $collection->contains($item)) {
-				$collection->add($item);
+			if (! $relation->contains($item)) {
+				$relation->add($item);
 			}
 		}
 
-		foreach ($collection->getItems() as $known) {
+		foreach ($relation->getItems() as $known) {
 			if (! array_key_exists(spl_object_id($known), $currentIds)) {
-				$collection->remove($known);
+				$relation->remove($known);
 			}
 		}
 	}

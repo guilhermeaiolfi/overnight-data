@@ -16,25 +16,25 @@ final class SessionContext
 	private RepresentationStore $representations;
 
 	/** @var RelationStateStore<ToManyRelationState> */
-	private RelationStateStore $relations;
+	private RelationStateStore $toManyRelations;
 
 	/** @var RelationStateStore<ToOneRelationState> */
-	private RelationStateStore $references;
+	private RelationStateStore $toOneRelations;
 
 	/**
-	 * @param RelationStateStore<ToManyRelationState>|null $relations
-	 * @param RelationStateStore<ToOneRelationState>|null $references
+	 * @param RelationStateStore<ToManyRelationState>|null $toManyRelations
+	 * @param RelationStateStore<ToOneRelationState>|null $toOneRelations
 	 */
 	public function __construct(
 		?RecordStateStore $records = null,
 		?RepresentationStore $representations = null,
-		?RelationStateStore $relations = null,
-		?RelationStateStore $references = null,
+		?RelationStateStore $toManyRelations = null,
+		?RelationStateStore $toOneRelations = null,
 	) {
 		$this->records = $records ?? new RecordStateStore();
 		$this->representations = $representations ?? new RepresentationStore();
-		$this->relations = $relations ?? new RelationStateStore();
-		$this->references = $references ?? new RelationStateStore();
+		$this->toManyRelations = $toManyRelations ?? new RelationStateStore();
+		$this->toOneRelations = $toOneRelations ?? new RelationStateStore();
 	}
 
 	public function getRecords(): RecordStateStore
@@ -50,24 +50,24 @@ final class SessionContext
 	/**
 	 * @return RelationStateStore<ToManyRelationState>
 	 */
-	public function getRelations(): RelationStateStore
+	public function getToManyRelations(): RelationStateStore
 	{
-		return $this->relations;
+		return $this->toManyRelations;
 	}
 
 	/**
 	 * @return RelationStateStore<ToOneRelationState>
 	 */
-	public function getReferences(): RelationStateStore
+	public function getToOneRelations(): RelationStateStore
 	{
-		return $this->references;
+		return $this->toOneRelations;
 	}
 
 	public function clear(): void
 	{
 		$this->records->clear();
 		$this->representations->clear();
-		$this->relations->clear();
-		$this->references->clear();
+		$this->toManyRelations->clear();
+		$this->toOneRelations->clear();
 	}
 }

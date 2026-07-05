@@ -212,7 +212,7 @@ final class FlushExecutorTest extends TestCase
 			(new FlushExecutor($executor))->flush($this->context(
 				new RepresentationStore(),
 				$records,
-				$this->relations($collection)
+				$this->toManyRelations($collection)
 			));
 		} finally {
 			self::assertSame(1, $executor->transactions);
@@ -338,10 +338,10 @@ final class FlushExecutorTest extends TestCase
 		$tracked = $this->tracked($item, $this->bindingFor($target));
 		$representations = $this->representations($tracked);
 		$records = $this->records($owner, $target);
-		$relations = $this->relations($collection);
+		$toManyRelations = $this->toManyRelations($collection);
 
-		$flusher->flush($this->context($representations, $records, $relations));
-		$flusher->flush($this->context($representations, $records, $relations));
+		$flusher->flush($this->context($representations, $records, $toManyRelations));
+		$flusher->flush($this->context($representations, $records, $toManyRelations));
 
 		self::assertFalse($collection->hasChanges());
 		self::assertCount(1, $executor->getCommands());
@@ -361,12 +361,12 @@ final class FlushExecutorTest extends TestCase
 		$tracked = $this->tracked($item, $this->bindingFor($target));
 		$representations = $this->representations($tracked);
 		$records = $this->records($owner, $target);
-		$relations = $this->relations($collection);
+		$toManyRelations = $this->toManyRelations($collection);
 		$executor = new RecordingCommandExecutor();
 		$flusher = new FlushExecutor($executor);
 
-		$flusher->flush($this->context($representations, $records, $relations));
-		$flusher->flush($this->context($representations, $records, $relations));
+		$flusher->flush($this->context($representations, $records, $toManyRelations));
+		$flusher->flush($this->context($representations, $records, $toManyRelations));
 
 		self::assertFalse($collection->hasChanges());
 		self::assertCount(1, $executor->getCommands());
@@ -387,8 +387,8 @@ final class FlushExecutorTest extends TestCase
 		$executor = new RecordingCommandExecutor();
 		$flusher = new FlushExecutor($executor);
 
-		$flusher->flush($this->context($this->representations($tracked), $this->records($owner, $target), new RelationStateStore(), $this->references($reference)));
-		$flusher->flush($this->context($this->representations($tracked), $this->records($owner, $target), new RelationStateStore(), $this->references($reference)));
+		$flusher->flush($this->context($this->representations($tracked), $this->records($owner, $target), new RelationStateStore(), $this->toOneRelations($reference)));
+		$flusher->flush($this->context($this->representations($tracked), $this->records($owner, $target), new RelationStateStore(), $this->toOneRelations($reference)));
 
 		self::assertFalse($reference->hasChanges());
 		self::assertCount(1, $executor->getCommands());
@@ -407,8 +407,8 @@ final class FlushExecutorTest extends TestCase
 		$executor = new RecordingCommandExecutor();
 		$flusher = new FlushExecutor($executor);
 
-		$flusher->flush($this->context($this->representations($tracked), $this->records($owner, $target), new RelationStateStore(), $this->references($reference)));
-		$flusher->flush($this->context($this->representations($tracked), $this->records($owner, $target), new RelationStateStore(), $this->references($reference)));
+		$flusher->flush($this->context($this->representations($tracked), $this->records($owner, $target), new RelationStateStore(), $this->toOneRelations($reference)));
+		$flusher->flush($this->context($this->representations($tracked), $this->records($owner, $target), new RelationStateStore(), $this->toOneRelations($reference)));
 
 		self::assertFalse($reference->hasChanges());
 		self::assertCount(1, $executor->getCommands());
@@ -422,9 +422,9 @@ final class FlushExecutorTest extends TestCase
 		$tracked = $this->tracked($this->representation(['name' => 'after']), $this->binding([
 			'name' => RecordFieldRef::forState($record, 'name'),
 		]));
-		$relations = $this->relations($this->changedToManyRelationState($record));
+		$toManyRelations = $this->toManyRelations($this->changedToManyRelationState($record));
 
-		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->context($this->representations($tracked), $this->records($record), $relations));
+		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->context($this->representations($tracked), $this->records($record), $toManyRelations));
 
 		self::assertSame(['after'], RecordingRelationPersistencePlanner::$observedOwnerValues);
 	}
@@ -448,7 +448,7 @@ final class FlushExecutorTest extends TestCase
 		$users = $this->usersWithPosts();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$item = new stdClass();
-		$relations = new RelationStateStore();
+		$toManyRelations = new RelationStateStore();
 
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->context(
 			$this->representations(
@@ -456,10 +456,10 @@ final class FlushExecutorTest extends TestCase
 				$this->tracked($item, new RepresentationBinding())
 			),
 			$this->records($record),
-			$relations
+			$toManyRelations
 		));
 
-		$collection = $relations->get($record, 'posts');
+		$collection = $toManyRelations->get($record, 'posts');
 		self::assertInstanceOf(ToManyRelationState::class, $collection);
 		self::assertSame([$collection], RecordingRelationPersistencePlanner::$collections);
 		self::assertFalse($collection->hasChanges());
@@ -470,7 +470,7 @@ final class FlushExecutorTest extends TestCase
 		$users = $this->usersWithProfile();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$target = new stdClass();
-		$references = new RelationStateStore();
+		$toOneRelations = new RelationStateStore();
 
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->context(
 			$this->representations(
@@ -479,10 +479,10 @@ final class FlushExecutorTest extends TestCase
 			),
 			$this->records($record),
 			new RelationStateStore(),
-			$references
+			$toOneRelations
 		));
 
-		$reference = $references->get($record, 'profile');
+		$reference = $toOneRelations->get($record, 'profile');
 		self::assertInstanceOf(ToOneRelationState::class, $reference);
 		self::assertSame($target, $reference->getTarget());
 		self::assertSame([$reference], RecordingRelationPersistencePlanner::$changes);
@@ -515,7 +515,7 @@ final class FlushExecutorTest extends TestCase
 		$users = $this->usersWithPosts();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$item = new stdClass();
-		$relations = new RelationStateStore();
+		$toManyRelations = new RelationStateStore();
 
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->context(
 			$this->representations(
@@ -523,10 +523,10 @@ final class FlushExecutorTest extends TestCase
 				$this->tracked($item, new RepresentationBinding())
 			),
 			$this->records($record),
-			$relations
+			$toManyRelations
 		));
 
-		$collection = $relations->get($record, 'posts');
+		$collection = $toManyRelations->get($record, 'posts');
 		self::assertInstanceOf(ToManyRelationState::class, $collection);
 		self::assertFalse($collection->hasChanges());
 	}
@@ -541,7 +541,7 @@ final class FlushExecutorTest extends TestCase
 			new RepresentationStore(),
 			$this->records($record),
 			new RelationStateStore(),
-			$this->references($reference)
+			$this->toOneRelations($reference)
 		));
 
 		self::assertFalse($reference->hasChanges());
@@ -558,7 +558,7 @@ final class FlushExecutorTest extends TestCase
 		(new FlushExecutor($executor))->flush($this->context(
 			new RepresentationStore(),
 			$this->records($record),
-			$this->relations($this->changedToManyRelationState($record))
+			$this->toManyRelations($this->changedToManyRelationState($record))
 		));
 
 		$command = $executor->getCommands()[0];
@@ -582,7 +582,7 @@ final class FlushExecutorTest extends TestCase
 		$result = (new FlushExecutor($executor))->flush($this->context(
 			new RepresentationStore(),
 			$this->records($record),
-			$this->relations($this->changedToManyRelationState($record))
+			$this->toManyRelations($this->changedToManyRelationState($record))
 		));
 
 		self::assertInstanceOf(UpdateCommand::class, $executor->getCommands()[0]);
@@ -599,7 +599,7 @@ final class FlushExecutorTest extends TestCase
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->context(
 			new RepresentationStore(),
 			$this->records($record),
-			$this->relations($collection)
+			$this->toManyRelations($collection)
 		));
 
 		self::assertFalse($collection->hasChanges());
@@ -618,7 +618,7 @@ final class FlushExecutorTest extends TestCase
 			(new FlushExecutor($executor))->flush($this->context(
 				new RepresentationStore(),
 				$this->records($record),
-				$this->relations($collection)
+				$this->toManyRelations($collection)
 			));
 		} finally {
 			self::assertTrue($collection->hasChanges());
@@ -640,7 +640,7 @@ final class FlushExecutorTest extends TestCase
 				$this->representations($this->tracked($this->representation(['name' => 'after', 'profile' => 'bad']), $this->ownerBindingWithProfile($record))),
 				$this->records($record),
 				new RelationStateStore(),
-				$this->references($reference)
+				$this->toOneRelations($reference)
 			));
 		} finally {
 			self::assertTrue($reference->hasChanges());
@@ -662,7 +662,7 @@ final class FlushExecutorTest extends TestCase
 				new RepresentationStore(),
 				$this->records($record),
 				new RelationStateStore(),
-				$this->references($reference)
+				$this->toOneRelations($reference)
 			));
 		} finally {
 			self::assertTrue($reference->hasChanges());
@@ -683,7 +683,7 @@ final class FlushExecutorTest extends TestCase
 		(new FlushExecutor($executor))->flush($this->context(
 			$this->representations($this->tracked($item, $this->bindingFor($child))),
 			$this->records($owner, $child),
-			$this->relations($collection)
+			$this->toManyRelations($collection)
 		));
 
 		self::assertSame(10, $child->getValue('user_id'));
@@ -715,7 +715,7 @@ final class FlushExecutorTest extends TestCase
 		(new FlushExecutor($executor))->flush($this->context(
 			$this->representations($this->tracked($postRepresentation, $this->bindingFor($child))),
 			$this->records($owner, $child),
-			$this->relations($collection)
+			$this->toManyRelations($collection)
 		));
 
 		self::assertFalse($collection->hasChanges());
@@ -753,7 +753,7 @@ final class FlushExecutorTest extends TestCase
 		(new FlushExecutor($executor))->flush($this->context(
 			$this->representations($this->tracked($tagRepresentation, $this->bindingFor($target))),
 			$this->records($owner, $target),
-			$this->relations($collection)
+			$this->toManyRelations($collection)
 		));
 
 		self::assertSame(10, $owner->getValue('id'));
@@ -788,7 +788,7 @@ final class FlushExecutorTest extends TestCase
 		(new FlushExecutor($executor))->flush($this->context(
 			$this->representations($this->tracked($tagRepresentation, $this->bindingFor($target))),
 			$this->records($owner, $target),
-			$this->relations($collection)
+			$this->toManyRelations($collection)
 		));
 
 		self::assertCount(2, $executor->getCommands());
@@ -818,7 +818,7 @@ final class FlushExecutorTest extends TestCase
 		(new FlushExecutor($executor))->flush($this->context(
 			$this->representations($this->tracked($tagRepresentation, $this->bindingFor($target))),
 			$this->records($owner, $target),
-			$this->relations($collection)
+			$this->toManyRelations($collection)
 		));
 
 		self::assertCount(2, $executor->getCommands());
@@ -845,7 +845,7 @@ final class FlushExecutorTest extends TestCase
 		(new FlushExecutor($executor))->flush($this->context(
 			$this->representations($this->tracked($item, $this->bindingFor($child))),
 			$this->records($owner, $child),
-			$this->relations($collection)
+			$this->toManyRelations($collection)
 		));
 
 		self::assertNull($child->getValue('user_id'));
@@ -911,7 +911,7 @@ final class FlushExecutorTest extends TestCase
 			(new FlushExecutor($executor))->flush($this->context(
 				new RepresentationStore(),
 				$this->records($record),
-				$this->relations($collection)
+				$this->toManyRelations($collection)
 			));
 		} finally {
 			self::assertTrue($collection->hasChanges());
@@ -938,7 +938,7 @@ final class FlushExecutorTest extends TestCase
 				new RepresentationStore(),
 				$this->records($record),
 				new RelationStateStore(),
-				$this->references($reference)
+				$this->toOneRelations($reference)
 			));
 		} finally {
 			self::assertTrue($reference->hasChanges());
@@ -964,7 +964,7 @@ final class FlushExecutorTest extends TestCase
 			(new FlushExecutor($executor))->flush($this->context(
 				new RepresentationStore(),
 				$this->records($record),
-				$this->relations($collection)
+				$this->toManyRelations($collection)
 			));
 		} finally {
 			self::assertTrue($collection->hasChanges());
@@ -991,7 +991,7 @@ final class FlushExecutorTest extends TestCase
 				new RepresentationStore(),
 				$this->records($record),
 				new RelationStateStore(),
-				$this->references($reference)
+				$this->toOneRelations($reference)
 			));
 		} finally {
 			self::assertTrue($reference->hasChanges());
@@ -1031,7 +1031,7 @@ final class FlushExecutorTest extends TestCase
 		);
 	}
 
-	private function relations(ToManyRelationState ...$collections): RelationStateStore
+	private function toManyRelations(ToManyRelationState ...$collections): RelationStateStore
 	{
 		$map = new RelationStateStore();
 		foreach ($collections as $collection) {
@@ -1041,7 +1041,7 @@ final class FlushExecutorTest extends TestCase
 		return $map;
 	}
 
-	private function references(ToOneRelationState ...$references): RelationStateStore
+	private function toOneRelations(ToOneRelationState ...$references): RelationStateStore
 	{
 		$map = new RelationStateStore();
 		foreach ($references as $reference) {

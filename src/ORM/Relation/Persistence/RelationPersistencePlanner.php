@@ -20,22 +20,22 @@ use ON\Data\ORM\State\RepresentationStore;
 final class RelationPersistencePlanner
 {
 	/**
-	 * @param RelationStateStore<ToManyRelationState> $relations
-	 * @param RelationStateStore<ToOneRelationState> $references
+	 * @param RelationStateStore<ToManyRelationState> $toManyRelations
+	 * @param RelationStateStore<ToOneRelationState> $toOneRelations
 	 */
 	public function plan(
-		RelationStateStore $relations,
-		RelationStateStore $references,
+		RelationStateStore $toManyRelations,
+		RelationStateStore $toOneRelations,
 		RecordStateStore $records,
 		RepresentationStore $representations,
 	): RelationPersistenceResult {
-		$changed = array_merge($relations->getChanged(), $references->getChanged());
+		$changed = array_merge($toManyRelations->getChanged(), $toOneRelations->getChanged());
 		$commands = new CommandBuffer();
 		$context = new PersistenceContext(
 			$records,
 			$representations,
-			$relations,
-			$references,
+			$toManyRelations,
+			$toOneRelations,
 			$commands
 		);
 

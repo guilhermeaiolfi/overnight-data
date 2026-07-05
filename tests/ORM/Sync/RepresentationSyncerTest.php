@@ -83,7 +83,7 @@ final class RepresentationSyncerTest extends TestCase
 	{
 		$owner = RecordState::new($this->users(), ['name' => 'Owner']);
 		$item = new stdClass();
-		$relations = new RelationStateStore();
+		$toManyRelations = new RelationStateStore();
 
 		$this->syncer()->sync(
 			$this->context(
@@ -92,11 +92,11 @@ final class RepresentationSyncerTest extends TestCase
 					$this->tracked($item, new RepresentationBinding())
 				),
 				$this->records($owner),
-				$relations
+				$toManyRelations
 			),
 		);
 
-		$collection = $relations->get($owner, 'posts');
+		$collection = $toManyRelations->get($owner, 'posts');
 		self::assertInstanceOf(ToManyRelationState::class, $collection);
 		self::assertSame([$item], $collection->getAdded());
 	}
@@ -105,7 +105,7 @@ final class RepresentationSyncerTest extends TestCase
 	{
 		$owner = RecordState::new($this->users(), ['name' => 'Owner']);
 		$target = new stdClass();
-		$references = new RelationStateStore();
+		$toOneRelations = new RelationStateStore();
 
 		$this->syncer()->sync(
 			$this->context(
@@ -114,11 +114,11 @@ final class RepresentationSyncerTest extends TestCase
 					$this->tracked($target, new RepresentationBinding())
 				),
 				$this->records($owner),
-				references: $references
+				toOneRelations: $toOneRelations
 			),
 		);
 
-		$reference = $references->get($owner, 'profile');
+		$reference = $toOneRelations->get($owner, 'profile');
 		self::assertInstanceOf(ToOneRelationState::class, $reference);
 		self::assertSame($target, $reference->getTarget());
 	}
@@ -147,7 +147,7 @@ final class RepresentationSyncerTest extends TestCase
 	{
 		$owner = RecordState::clean($this->usersWithPosts()->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$item = new stdClass();
-		$relations = new RelationStateStore();
+		$toManyRelations = new RelationStateStore();
 		$executor = new RecordingCommandExecutor();
 
 		$this->syncer()->sync(
@@ -157,11 +157,11 @@ final class RepresentationSyncerTest extends TestCase
 					$this->tracked($item, new RepresentationBinding())
 				),
 				$this->records($owner),
-				$relations
+				$toManyRelations
 			),
 		);
 
-		$collection = $relations->get($owner, 'posts');
+		$collection = $toManyRelations->get($owner, 'posts');
 		self::assertInstanceOf(ToManyRelationState::class, $collection);
 		self::assertSame(0, RecordingRelationPersistencePlanner::$calls);
 		self::assertSame([], $executor->getCommands());

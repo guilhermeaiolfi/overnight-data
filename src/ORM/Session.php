@@ -61,17 +61,17 @@ final class Session
 	/**
 	 * @return RelationStateStore<ToManyRelationState>
 	 */
-	public function getRelations(): RelationStateStore
+	public function getToManyRelations(): RelationStateStore
 	{
-		return $this->context->getRelations();
+		return $this->context->getToManyRelations();
 	}
 
 	/**
 	 * @return RelationStateStore<ToOneRelationState>
 	 */
-	public function getReferences(): RelationStateStore
+	public function getToOneRelations(): RelationStateStore
 	{
-		return $this->context->getReferences();
+		return $this->context->getToOneRelations();
 	}
 
 	public function clear(): void
@@ -170,18 +170,18 @@ final class Session
 		$this->resolveSingleRecordForRemoval($state)->markRemoved();
 	}
 
-	public function trackRelation(ToManyRelationState $collection): ToManyRelationState
+	public function trackToManyRelation(ToManyRelationState $relation): ToManyRelationState
 	{
-		$this->getRelations()->add($collection);
+		$this->getToManyRelations()->add($relation);
 
-		return $collection;
+		return $relation;
 	}
 
-	public function trackReference(ToOneRelationState $reference): ToOneRelationState
+	public function trackToOneRelation(ToOneRelationState $relation): ToOneRelationState
 	{
-		$this->getReferences()->add($reference);
+		$this->getToOneRelations()->add($relation);
 
-		return $reference;
+		return $relation;
 	}
 
 	public function sync(?object $representation = null, ?RepresentationBinding $binding = null): SyncResult
@@ -195,8 +195,8 @@ final class Session
 				$representation,
 				$this->context->getRepresentations(),
 				$this->context->getRecords(),
-				$this->context->getRelations(),
-				$this->context->getReferences(),
+				$this->context->getToManyRelations(),
+				$this->context->getToOneRelations(),
 				$binding
 			);
 

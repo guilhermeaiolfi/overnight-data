@@ -29,15 +29,15 @@ final class GraphAdopter
 	/**
 	 * @return list<RepresentationState>
 	 *
-	 * @param RelationStateStore<ToManyRelationState> $relations
-	 * @param RelationStateStore<ToOneRelationState> $references
+	 * @param RelationStateStore<ToManyRelationState> $toManyRelations
+	 * @param RelationStateStore<ToOneRelationState> $toOneRelations
 	 */
 	public function adopt(
 		object $root,
 		RepresentationStore $representations,
 		RecordStateStore $records,
-		RelationStateStore $relations,
-		RelationStateStore $references,
+		RelationStateStore $toManyRelations,
+		RelationStateStore $toOneRelations,
 		?RepresentationBinding $rootBinding = null,
 	): array {
 		if ($representations->get($root) === null) {

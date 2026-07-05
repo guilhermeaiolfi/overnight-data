@@ -47,8 +47,8 @@ final class SessionTest extends TestCase
 
 		self::assertSame([], $session->getRecords()->getAll());
 		self::assertSame([], iterator_to_array($session->getRepresentations()->getAll(), false));
-		self::assertSame([], $session->getRelations()->getAll());
-		self::assertSame([], $session->getReferences()->getAll());
+		self::assertSame([], $session->getToManyRelations()->getAll());
+		self::assertSame([], $session->getToOneRelations()->getAll());
 	}
 
 	public function testDefaultFlushExecutorUsesSessionRepresentationSyncer(): void
@@ -397,7 +397,7 @@ final class SessionTest extends TestCase
 		$owner = $session->getRecords()->getFromRepresentation($trackedOwner);
 		self::assertInstanceOf(RecordState::class, $owner);
 		self::assertInstanceOf(RepresentationState::class, $session->getRepresentations()->get($postRepresentation));
-		self::assertSame([$postRepresentation], $session->getRelations()->get($owner, 'posts')?->getItems());
+		self::assertSame([$postRepresentation], $session->getToManyRelations()->get($owner, 'posts')?->getItems());
 		self::assertCount(1, $result->getRelationChanges());
 	}
 
@@ -455,7 +455,7 @@ final class SessionTest extends TestCase
 		$owner = $session->getRecords()->getFromRepresentation($trackedOwner);
 		self::assertInstanceOf(RecordState::class, $owner);
 		self::assertSame([], $owner->getValues());
-		self::assertSame([], $session->getRelations()->get($owner, 'posts')?->getItems());
+		self::assertSame([], $session->getToManyRelations()->get($owner, 'posts')?->getItems());
 		self::assertCount(1, $result->getRelationChanges());
 	}
 
@@ -473,7 +473,7 @@ final class SessionTest extends TestCase
 		$owner = $session->getRecords()->getFromRepresentation($trackedOwner);
 		self::assertInstanceOf(RecordState::class, $owner);
 		self::assertInstanceOf(RepresentationState::class, $session->getRepresentations()->get($profileRepresentation));
-		self::assertSame($profileRepresentation, $session->getReferences()->get($owner, 'profile')?->getTarget());
+		self::assertSame($profileRepresentation, $session->getToOneRelations()->get($owner, 'profile')?->getTarget());
 		self::assertCount(1, $result->getRelationChanges());
 	}
 
@@ -656,14 +656,14 @@ final class SessionTest extends TestCase
 	{
 		$session = new Session(new RecordingCommandExecutor());
 
-		self::assertSame($session->getRelations(), $session->getRelations());
+		self::assertSame($session->getToManyRelations(), $session->getToManyRelations());
 	}
 
 	public function testGetReferencesReturnsOwnedMap(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 
-		self::assertSame($session->getReferences(), $session->getReferences());
+		self::assertSame($session->getToOneRelations(), $session->getToOneRelations());
 	}
 
 	public function testTrackRelationAddsAndReturnsSameCollection(): void
@@ -671,10 +671,10 @@ final class SessionTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 		$collection = $this->changedToManyRelationState(RecordState::new($this->usersWithPosts()));
 
-		$result = $session->trackRelation($collection);
+		$result = $session->trackToManyRelation($collection);
 
 		self::assertSame($collection, $result);
-		self::assertSame([$collection], $session->getRelations()->getAll());
+		self::assertSame([$collection], $session->getToManyRelations()->getAll());
 	}
 
 	public function testTrackReferenceAddsAndReturnsSameReference(): void
@@ -682,10 +682,10 @@ final class SessionTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 		$reference = $this->changedToOneRelationState(RecordState::new($this->usersWithProfile()));
 
-		$result = $session->trackReference($reference);
+		$result = $session->trackToOneRelation($reference);
 
 		self::assertSame($reference, $result);
-		self::assertSame([$reference], $session->getReferences()->getAll());
+		self::assertSame([$reference], $session->getToOneRelations()->getAll());
 	}
 
 	public function testFlushSynchronizesRepresentationChangesAndExecutesCommandsUsingOwnedMaps(): void
@@ -771,15 +771,15 @@ final class SessionTest extends TestCase
 		$record = $session->trackNew($this->users(), ['name' => 'A1']);
 		$representation = $this->representation(['name' => 'A1']);
 		$session->adopt($representation, $this->templateBinding(), $record);
-		$session->trackRelation(new ToManyRelationState($record, 'posts', new RepresentationBinding()));
-		$session->trackReference(new ToOneRelationState($record, 'profile', new RepresentationBinding()));
+		$session->trackToManyRelation(new ToManyRelationState($record, 'posts', new RepresentationBinding()));
+		$session->trackToOneRelation(new ToOneRelationState($record, 'profile', new RepresentationBinding()));
 
 		$session->clear();
 
 		self::assertSame([], $session->getRecords()->getAll());
 		self::assertSame([], iterator_to_array($session->getRepresentations()->getAll(), false));
-		self::assertSame([], $session->getRelations()->getAll());
-		self::assertSame([], $session->getReferences()->getAll());
+		self::assertSame([], $session->getToManyRelations()->getAll());
+		self::assertSame([], $session->getToOneRelations()->getAll());
 	}
 
 	public function testFlushPassesOwnedRelationsToFlushExecutor(): void
@@ -788,7 +788,7 @@ final class SessionTest extends TestCase
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
 		$record = $session->trackClean($this->usersWithPosts()->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$session->trackRelation($this->changedToManyRelationState($record));
+		$session->trackToManyRelation($this->changedToManyRelationState($record));
 
 		$session->flush();
 
@@ -802,7 +802,7 @@ final class SessionTest extends TestCase
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
 		$record = $session->trackClean($this->usersWithProfile()->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$session->trackReference($this->changedToOneRelationState($record));
+		$session->trackToOneRelation($this->changedToOneRelationState($record));
 
 		$session->flush();
 
@@ -815,7 +815,7 @@ final class SessionTest extends TestCase
 		RecordingRelationPersistencePlanner::$addCommand = true;
 		$session = new Session(new RecordingCommandExecutor());
 		$record = $session->trackClean($this->usersWithPosts()->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$collection = $session->trackRelation($this->changedToManyRelationState($record));
+		$collection = $session->trackToManyRelation($this->changedToManyRelationState($record));
 
 		$session->flush();
 
@@ -826,7 +826,7 @@ final class SessionTest extends TestCase
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$record = $session->trackClean($this->usersWithProfile()->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$reference = $session->trackReference($this->changedToOneRelationState($record));
+		$reference = $session->trackToOneRelation($this->changedToOneRelationState($record));
 
 		$session->flush();
 
@@ -845,7 +845,7 @@ final class SessionTest extends TestCase
 		$session->adopt($item, $this->tagTemplateBindingFor($tags), $target);
 		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
 		$collection->add($item);
-		$session->trackRelation($collection);
+		$session->trackToManyRelation($collection);
 
 		$session->flush();
 
@@ -875,7 +875,7 @@ final class SessionTest extends TestCase
 
 		$session->flush();
 
-		$collection = $session->getRelations()->get($owner, 'posts');
+		$collection = $session->getToManyRelations()->get($owner, 'posts');
 		self::assertInstanceOf(ToManyRelationState::class, $collection);
 		self::assertSame([$postRepresentation], $collection->getItems());
 		self::assertFalse($collection->hasChanges());
@@ -905,7 +905,7 @@ final class SessionTest extends TestCase
 
 		$session->flush();
 
-		$reference = $session->getReferences()->get($owner, 'author');
+		$reference = $session->getToOneRelations()->get($owner, 'author');
 		self::assertInstanceOf(ToOneRelationState::class, $reference);
 		self::assertSame($authorRepresentation, $reference->getTarget());
 		self::assertFalse($reference->hasChanges());
@@ -930,11 +930,11 @@ final class SessionTest extends TestCase
 		$baselineAuthor = new stdClass();
 		$ownerRepresentation = $this->representation(['title' => 'Post', 'author' => null]);
 		$session->adopt($ownerRepresentation, $this->postTemplateBindingWithAuthor($posts, $users), $owner);
-		$session->trackReference(new ToOneRelationState($owner, 'author', $this->userTemplateBindingFor($users), $baselineAuthor));
+		$session->trackToOneRelation(new ToOneRelationState($owner, 'author', $this->userTemplateBindingFor($users), $baselineAuthor));
 
 		$session->flush();
 
-		$reference = $session->getReferences()->get($owner, 'author');
+		$reference = $session->getToOneRelations()->get($owner, 'author');
 		self::assertInstanceOf(ToOneRelationState::class, $reference);
 		self::assertNull($reference->getTarget());
 		self::assertFalse($reference->hasChanges());
@@ -964,7 +964,7 @@ final class SessionTest extends TestCase
 
 		$session->flush();
 
-		$reference = $session->getReferences()->get($owner, 'profile');
+		$reference = $session->getToOneRelations()->get($owner, 'profile');
 		self::assertInstanceOf(ToOneRelationState::class, $reference);
 		self::assertSame($profileRepresentation, $reference->getTarget());
 		self::assertFalse($reference->hasChanges());
@@ -1127,7 +1127,7 @@ final class SessionTest extends TestCase
 
 		self::assertCount(1, $syncResult->getRelationChanges());
 		self::assertCount(1, $executor->getCommands());
-		$collection = $session->getRelations()->get($owner, 'posts');
+		$collection = $session->getToManyRelations()->get($owner, 'posts');
 		self::assertInstanceOf(ToManyRelationState::class, $collection);
 		self::assertSame([$postRepresentation], $collection->getItems());
 		self::assertFalse($collection->hasChanges());
@@ -1140,7 +1140,7 @@ final class SessionTest extends TestCase
 		$session = new Session($executor);
 		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$tag = $session->identify($tags, ['id' => 3]);
-		$collection = $session->trackRelation(new ToManyRelationState($owner, 'tags', $this->tagTemplateBindingFor($tags)));
+		$collection = $session->trackToManyRelation(new ToManyRelationState($owner, 'tags', $this->tagTemplateBindingFor($tags)));
 
 		$collection->remove($tag);
 		$session->flush();
