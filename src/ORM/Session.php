@@ -195,22 +195,10 @@ final class Session
 				$binding
 			);
 
-			return $this->syncer->sync(
-				$this->context->getRepresentations(),
-				$this->context->getRecords(),
-				$this->context->getRelations(),
-				$this->context->getReferences(),
-				$representation
-			);
+			return $this->syncer->sync($this->context, $representation);
 		}
 
-		return $this->syncer->sync(
-			$this->context->getRepresentations(),
-			$this->context->getRecords(),
-			$this->context->getRelations(),
-			$this->context->getReferences(),
-			$representation
-		);
+		return $this->syncer->sync($this->context);
 	}
 
 	public function flush(): FlushResult

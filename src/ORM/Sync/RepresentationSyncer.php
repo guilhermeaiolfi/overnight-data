@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\Relation\ToManyRelationStore;
-use ON\Data\ORM\Relation\ToOneRelationStore;
-use ON\Data\ORM\State\RecordStateStore;
+use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
 
@@ -22,12 +20,13 @@ final class RepresentationSyncer
 	}
 
 	public function sync(
-		RepresentationStore $representations,
-		RecordStateStore $records,
-		ToManyRelationStore $relations,
-		ToOneRelationStore $references,
+		SessionContext $context,
 		?object $representation = null,
 	): SyncResult {
+		$representations = $context->getRepresentations();
+		$records = $context->getRecords();
+		$relations = $context->getRelations();
+		$references = $context->getReferences();
 		$syncRepresentations = $representations;
 		if ($representation !== null) {
 			$state = $representations->get($representation);

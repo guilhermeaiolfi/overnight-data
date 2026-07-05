@@ -11,6 +11,7 @@ use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToManyRelationStore;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Relation\ToOneRelationStore;
+use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
@@ -40,10 +41,10 @@ final class RepresentationSyncerTest extends TestCase
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
 
 		$result = $this->syncer()->sync(
-			$this->trackedMap($this->tracked($this->representation(['name' => 'A2']), $this->binding($record))),
-			$this->records($record),
-			new ToManyRelationStore(),
-			new ToOneRelationStore()
+			$this->context(
+				$this->trackedMap($this->tracked($this->representation(['name' => 'A2']), $this->binding($record))),
+				$this->records($record)
+			)
 		);
 
 		self::assertSame('A2', $record->getValue('name'));
@@ -58,13 +59,13 @@ final class RepresentationSyncerTest extends TestCase
 		$secondRepresentation = $this->representation(['name' => 'B2']);
 
 		$this->syncer()->sync(
-			$this->trackedMap(
-				$this->tracked($firstRepresentation, $this->binding($first)),
-				$this->tracked($secondRepresentation, $this->binding($second))
+			$this->context(
+				$this->trackedMap(
+					$this->tracked($firstRepresentation, $this->binding($first)),
+					$this->tracked($secondRepresentation, $this->binding($second))
+				),
+				$this->records($first, $second)
 			),
-			$this->records($first, $second),
-			new ToManyRelationStore(),
-			new ToOneRelationStore(),
 			$firstRepresentation
 		);
 
@@ -77,7 +78,7 @@ final class RepresentationSyncerTest extends TestCase
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('untracked');
 
-		$this->syncer()->sync(new RepresentationStore(), new RecordStateStore(), new ToManyRelationStore(), new ToOneRelationStore(), new stdClass());
+		$this->syncer()->sync(new SessionContext(), new stdClass());
 	}
 
 	public function testSyncAllUpdatesManyRelationPathsIntoToManyRelationState(): void
@@ -87,13 +88,14 @@ final class RepresentationSyncerTest extends TestCase
 		$relations = new ToManyRelationStore();
 
 		$this->syncer()->sync(
-			$this->trackedMap(
-				$this->tracked($this->representation(['name' => 'Owner', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner)),
-				$this->tracked($item, new RepresentationBinding())
+			$this->context(
+				$this->trackedMap(
+					$this->tracked($this->representation(['name' => 'Owner', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner)),
+					$this->tracked($item, new RepresentationBinding())
+				),
+				$this->records($owner),
+				$relations
 			),
-			$this->records($owner),
-			$relations,
-			new ToOneRelationStore()
 		);
 
 		$collection = $relations->get($owner, 'posts');
@@ -108,13 +110,14 @@ final class RepresentationSyncerTest extends TestCase
 		$references = new ToOneRelationStore();
 
 		$this->syncer()->sync(
-			$this->trackedMap(
-				$this->tracked($this->representation(['name' => 'Owner', 'profile' => $target]), $this->ownerBindingWithProfile($owner)),
-				$this->tracked($target, new RepresentationBinding())
+			$this->context(
+				$this->trackedMap(
+					$this->tracked($this->representation(['name' => 'Owner', 'profile' => $target]), $this->ownerBindingWithProfile($owner)),
+					$this->tracked($target, new RepresentationBinding())
+				),
+				$this->records($owner),
+				references: $references
 			),
-			$this->records($owner),
-			new ToManyRelationStore(),
-			$references
 		);
 
 		$reference = $references->get($owner, 'profile');
@@ -128,13 +131,13 @@ final class RepresentationSyncerTest extends TestCase
 		$item = new stdClass();
 
 		$result = $this->syncer()->sync(
-			$this->trackedMap(
-				$this->tracked($this->representation(['name' => 'Changed', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner)),
-				$this->tracked($item, new RepresentationBinding())
+			$this->context(
+				$this->trackedMap(
+					$this->tracked($this->representation(['name' => 'Changed', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner)),
+					$this->tracked($item, new RepresentationBinding())
+				),
+				$this->records($owner)
 			),
-			$this->records($owner),
-			new ToManyRelationStore(),
-			new ToOneRelationStore()
 		);
 
 		self::assertCount(2, $result->getSyncPlans());
@@ -150,13 +153,14 @@ final class RepresentationSyncerTest extends TestCase
 		$executor = new RecordingCommandExecutor();
 
 		$this->syncer()->sync(
-			$this->trackedMap(
-				$this->tracked($this->representation(['name' => 'Changed', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner)),
-				$this->tracked($item, new RepresentationBinding())
+			$this->context(
+				$this->trackedMap(
+					$this->tracked($this->representation(['name' => 'Changed', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner)),
+					$this->tracked($item, new RepresentationBinding())
+				),
+				$this->records($owner),
+				$relations
 			),
-			$this->records($owner),
-			$relations,
-			new ToOneRelationStore()
 		);
 
 		$collection = $relations->get($owner, 'posts');
@@ -218,6 +222,20 @@ final class RepresentationSyncerTest extends TestCase
 		}
 
 		return $map;
+	}
+
+	private function context(
+		RepresentationStore $representations,
+		RecordStateStore $records,
+		?ToManyRelationStore $relations = null,
+		?ToOneRelationStore $references = null,
+	): SessionContext {
+		return new SessionContext(
+			$records,
+			$representations,
+			$relations ?? new ToManyRelationStore(),
+			$references ?? new ToOneRelationStore()
+		);
 	}
 
 	private function binding(RecordState $record): RepresentationBinding

@@ -7,6 +7,7 @@ namespace ON\Data\ORM\Persistence;
 use ON\Data\ORM\Relation\Persistence\RelationPersistencePlanner;
 use ON\Data\ORM\Relation\ToManyRelationStore;
 use ON\Data\ORM\Relation\ToOneRelationStore;
+use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\Sync\RepresentationSyncer;
@@ -55,7 +56,7 @@ final class FlushExecutor
 		ToManyRelationStore $relations,
 		ToOneRelationStore $references,
 	): FlushResult {
-		$syncResult = $this->syncer->sync($representations, $records, $relations, $references);
+		$syncResult = $this->syncer->sync(new SessionContext($records, $representations, $relations, $references));
 		$relationResult = $this->relationPlanner->plan($relations, $references, $records, $representations);
 		$commandResults = $this->flusher->flush($records);
 
@@ -89,7 +90,7 @@ final class FlushExecutor
 			&$recordFlush,
 			&$relationResult,
 		): FlushResult {
-			$syncResult = $this->syncer->sync($representations, $records, $relations, $references);
+			$syncResult = $this->syncer->sync(new SessionContext($records, $representations, $relations, $references));
 			$relationResult = $this->relationPlanner->plan($relations, $references, $records, $representations);
 			$recordFlush = $this->flusher->flushDeferred($records);
 			$commandResults = $recordFlush->getCommandResults();
