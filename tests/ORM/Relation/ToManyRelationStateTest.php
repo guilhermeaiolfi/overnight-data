@@ -107,13 +107,19 @@ final class ToManyRelationStateTest extends TestCase
 
 	public function testAddingObjectToPartiallyLoadedCollectionKeepsPartiallyLoadedState(): void
 	{
+		$existing = new stdClass();
 		$item = new stdClass();
-		$collection = ToManyRelationState::partial(RecordState::new($this->users()), 'posts', $this->postBinding());
+		$collection = new ToManyRelationState(
+			RecordState::new($this->users()),
+			'posts',
+			$this->postBinding(),
+			[$existing],
+		);
 
 		$collection->add($item);
 
 		self::assertTrue($collection->isPartiallyLoaded());
-		self::assertSame([$item], $collection->getItems());
+		self::assertSame([$existing, $item], $collection->getItems());
 		self::assertSame([$item], $collection->getAdded());
 	}
 

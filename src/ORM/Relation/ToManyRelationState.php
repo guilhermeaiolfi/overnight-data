@@ -62,33 +62,6 @@ final class ToManyRelationState implements RelationChangeInterface
 	/**
 	 * @param list<object> $items
 	 */
-	public static function unloaded(
-		RecordState $owner,
-		string $relationName,
-		RepresentationBinding $childBinding,
-		array $items = [],
-	): self {
-		return new self($owner, $relationName, $childBinding, $items);
-	}
-
-	/**
-	 * @param list<object> $items
-	 */
-	public static function partial(
-		RecordState $owner,
-		string $relationName,
-		RepresentationBinding $childBinding,
-		array $items = [],
-	): self {
-		$state = new self($owner, $relationName, $childBinding, $items);
-		$state->markPartiallyLoaded();
-
-		return $state;
-	}
-
-	/**
-	 * @param list<object> $items
-	 */
 	public static function full(
 		RecordState $owner,
 		string $relationName,
