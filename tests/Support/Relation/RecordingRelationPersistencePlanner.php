@@ -7,7 +7,7 @@ namespace Tests\ON\Data\Support\Relation;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\RelationPersistencePlannerInterface;
-use ON\Data\ORM\Relation\RelatedCollection;
+use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\RelationChangeInterface;
 
 final class RecordingRelationPersistencePlanner implements RelationPersistencePlannerInterface
@@ -20,7 +20,7 @@ final class RecordingRelationPersistencePlanner implements RelationPersistencePl
 	/** @var list<RelationInterface> */
 	public static array $relations = [];
 
-	/** @var list<RelatedCollection> */
+	/** @var list<ToManyRelationState> */
 	public static array $collections = [];
 
 	/** @var list<RelationChangeInterface> */
@@ -55,7 +55,7 @@ final class RecordingRelationPersistencePlanner implements RelationPersistencePl
 		self::$relations[] = $relation;
 		self::$changes[] = $change;
 
-		if ($change instanceof RelatedCollection) {
+		if ($change instanceof ToManyRelationState) {
 			self::$collections[] = $change;
 		}
 

@@ -12,10 +12,9 @@ use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\HasManyPersistencePlanner;
-use ON\Data\ORM\Relation\RelatedCollection;
-use ON\Data\ORM\Relation\RelatedCollectionStore;
-use ON\Data\ORM\Relation\RelatedReferenceStore;
-use ON\Data\ORM\Relation\RelationCollectionState;
+use ON\Data\ORM\Relation\ToManyRelationState;
+use ON\Data\ORM\Relation\ToManyRelationStore;
+use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
@@ -104,7 +103,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		[$relation, $users, $posts] = $this->singleKeyModel();
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$child = RecordState::clean($posts->getKey(5), ['id' => 5]);
-		$collection = new RelatedCollection($owner, 'posts', $this->bindingFor($child));
+		$collection = new ToManyRelationState($owner, 'posts', $this->bindingFor($child));
 		$collection->add(new stdClass());
 
 		$this->expectException(RelationPersistenceException::class);
@@ -119,7 +118,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$child = RecordState::clean($posts->getKey(5), ['id' => 5]);
 		$item = new stdClass();
-		$collection = new RelatedCollection($owner, 'posts', $this->bindingFor($child));
+		$collection = new ToManyRelationState($owner, 'posts', $this->bindingFor($child));
 		$collection->add($item);
 		$binding = new RepresentationBinding();
 		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($posts, 'id')));
@@ -203,7 +202,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$child = RecordState::clean($posts->getKey(5), ['id' => 5]);
 		$item = new stdClass();
-		$collection = new RelatedCollection($owner, 'posts', $this->bindingFor($child), RelationCollectionState::FULLY_LOADED, [$item]);
+		$collection = ToManyRelationState::full($owner, 'posts', $this->bindingFor($child), [$item]);
 		$collection->remove($item);
 
 		$this->expectException(RelationPersistenceException::class);
@@ -219,7 +218,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$posts = $registry->collection('posts')->primaryKey('id')->field('id', 'int')->end()->field('user_id', 'int')->end();
 		$relation = $posts->belongsTo('author', 'users')->innerKey('user_id')->outerKey('id');
 		self::assertInstanceOf(BelongsToRelation::class, $relation);
-		$collection = new RelatedCollection(RecordState::new($posts, ['user_id' => 10]), 'author', new RepresentationBinding());
+		$collection = new ToManyRelationState(RecordState::new($posts, ['user_id' => 10]), 'author', new RepresentationBinding());
 
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('must be a has-many relation');
@@ -228,8 +227,8 @@ final class HasManyPersistencePlannerTest extends TestCase
 			new PersistenceContext(
 				new RecordStateStore(),
 				new RepresentationStore(),
-				new RelatedCollectionStore(),
-				new RelatedReferenceStore(),
+				new ToManyRelationStore(),
+				new ToOneRelationStore(),
 				new CommandBuffer()
 			),
 			$relation,
@@ -237,13 +236,13 @@ final class HasManyPersistencePlannerTest extends TestCase
 		);
 	}
 
-	public function testPlannerDoesNotClearRelatedCollectionChanges(): void
+	public function testPlannerDoesNotClearToManyRelationStateChanges(): void
 	{
 		[$relation, $users, $posts] = $this->singleKeyModel();
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$child = RecordState::clean($posts->getKey(5), ['id' => 5]);
 		$item = new stdClass();
-		$collection = new RelatedCollection($owner, 'posts', $this->bindingFor($child));
+		$collection = new ToManyRelationState($owner, 'posts', $this->bindingFor($child));
 		$collection->add($item);
 
 		$this->plan($relation, $collection, $this->records($owner, $child), $this->trackedMap($this->tracked($item, $child)));
@@ -277,7 +276,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 	private function planSingleAdd(HasManyRelation $relation, RecordState $owner, RecordState $child): CommandBuffer
 	{
 		$item = new stdClass();
-		$collection = new RelatedCollection($owner, $relation->getName(), $this->bindingFor($child));
+		$collection = new ToManyRelationState($owner, $relation->getName(), $this->bindingFor($child));
 		$collection->add($item);
 
 		return $this->plan($relation, $collection, $this->records($owner, $child), $this->trackedMap(
@@ -288,11 +287,10 @@ final class HasManyPersistencePlannerTest extends TestCase
 	private function planSingleRemove(HasManyRelation $relation, RecordState $owner, RecordState $child): void
 	{
 		$item = new stdClass();
-		$collection = new RelatedCollection(
+		$collection = ToManyRelationState::full(
 			$owner,
 			$relation->getName(),
 			$this->bindingFor($child),
-			RelationCollectionState::FULLY_LOADED,
 			[$item],
 		);
 		$collection->remove($item);
@@ -304,7 +302,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 
 	private function plan(
 		HasManyRelation $relation,
-		RelatedCollection $collection,
+		ToManyRelationState $collection,
 		RecordStateStore $records,
 		RepresentationStore $representations,
 	): CommandBuffer {
@@ -313,8 +311,8 @@ final class HasManyPersistencePlannerTest extends TestCase
 			new PersistenceContext(
 				$records,
 				$representations,
-				new RelatedCollectionStore(),
-				new RelatedReferenceStore(),
+				new ToManyRelationStore(),
+				new ToOneRelationStore(),
 				$commands
 			),
 			$relation,

@@ -7,10 +7,10 @@ namespace Tests\ON\Data\ORM\Sync;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\Relation\RelatedCollection;
-use ON\Data\ORM\Relation\RelatedCollectionStore;
-use ON\Data\ORM\Relation\RelatedReference;
-use ON\Data\ORM\Relation\RelatedReferenceStore;
+use ON\Data\ORM\Relation\ToManyRelationState;
+use ON\Data\ORM\Relation\ToManyRelationStore;
+use ON\Data\ORM\Relation\ToOneRelationState;
+use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
@@ -42,8 +42,8 @@ final class RepresentationSyncerTest extends TestCase
 		$result = $this->syncer()->sync(
 			$this->trackedMap($this->tracked($this->representation(['name' => 'A2']), $this->binding($record))),
 			$this->records($record),
-			new RelatedCollectionStore(),
-			new RelatedReferenceStore()
+			new ToManyRelationStore(),
+			new ToOneRelationStore()
 		);
 
 		self::assertSame('A2', $record->getValue('name'));
@@ -63,8 +63,8 @@ final class RepresentationSyncerTest extends TestCase
 				$this->tracked($secondRepresentation, $this->binding($second))
 			),
 			$this->records($first, $second),
-			new RelatedCollectionStore(),
-			new RelatedReferenceStore(),
+			new ToManyRelationStore(),
+			new ToOneRelationStore(),
 			$firstRepresentation
 		);
 
@@ -77,14 +77,14 @@ final class RepresentationSyncerTest extends TestCase
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('untracked');
 
-		$this->syncer()->sync(new RepresentationStore(), new RecordStateStore(), new RelatedCollectionStore(), new RelatedReferenceStore(), new stdClass());
+		$this->syncer()->sync(new RepresentationStore(), new RecordStateStore(), new ToManyRelationStore(), new ToOneRelationStore(), new stdClass());
 	}
 
-	public function testSyncAllUpdatesManyRelationPathsIntoRelatedCollection(): void
+	public function testSyncAllUpdatesManyRelationPathsIntoToManyRelationState(): void
 	{
 		$owner = RecordState::new($this->users(), ['name' => 'Owner']);
 		$item = new stdClass();
-		$relations = new RelatedCollectionStore();
+		$relations = new ToManyRelationStore();
 
 		$this->syncer()->sync(
 			$this->trackedMap(
@@ -93,19 +93,19 @@ final class RepresentationSyncerTest extends TestCase
 			),
 			$this->records($owner),
 			$relations,
-			new RelatedReferenceStore()
+			new ToOneRelationStore()
 		);
 
 		$collection = $relations->get($owner, 'posts');
-		self::assertInstanceOf(RelatedCollection::class, $collection);
+		self::assertInstanceOf(ToManyRelationState::class, $collection);
 		self::assertSame([$item], $collection->getAdded());
 	}
 
-	public function testSyncAllUpdatesOneRelationPathsIntoRelatedReference(): void
+	public function testSyncAllUpdatesOneRelationPathsIntoToOneRelationState(): void
 	{
 		$owner = RecordState::new($this->users(), ['name' => 'Owner']);
 		$target = new stdClass();
-		$references = new RelatedReferenceStore();
+		$references = new ToOneRelationStore();
 
 		$this->syncer()->sync(
 			$this->trackedMap(
@@ -113,12 +113,12 @@ final class RepresentationSyncerTest extends TestCase
 				$this->tracked($target, new RepresentationBinding())
 			),
 			$this->records($owner),
-			new RelatedCollectionStore(),
+			new ToManyRelationStore(),
 			$references
 		);
 
 		$reference = $references->get($owner, 'profile');
-		self::assertInstanceOf(RelatedReference::class, $reference);
+		self::assertInstanceOf(ToOneRelationState::class, $reference);
 		self::assertSame($target, $reference->getTarget());
 	}
 
@@ -133,8 +133,8 @@ final class RepresentationSyncerTest extends TestCase
 				$this->tracked($item, new RepresentationBinding())
 			),
 			$this->records($owner),
-			new RelatedCollectionStore(),
-			new RelatedReferenceStore()
+			new ToManyRelationStore(),
+			new ToOneRelationStore()
 		);
 
 		self::assertCount(2, $result->getSyncPlans());
@@ -146,7 +146,7 @@ final class RepresentationSyncerTest extends TestCase
 	{
 		$owner = RecordState::clean($this->usersWithPosts()->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$item = new stdClass();
-		$relations = new RelatedCollectionStore();
+		$relations = new ToManyRelationStore();
 		$executor = new RecordingCommandExecutor();
 
 		$this->syncer()->sync(
@@ -156,11 +156,11 @@ final class RepresentationSyncerTest extends TestCase
 			),
 			$this->records($owner),
 			$relations,
-			new RelatedReferenceStore()
+			new ToOneRelationStore()
 		);
 
 		$collection = $relations->get($owner, 'posts');
-		self::assertInstanceOf(RelatedCollection::class, $collection);
+		self::assertInstanceOf(ToManyRelationState::class, $collection);
 		self::assertSame(0, RecordingRelationPersistencePlanner::$calls);
 		self::assertSame([], $executor->getCommands());
 		self::assertTrue($owner->isDirty());

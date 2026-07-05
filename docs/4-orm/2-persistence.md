@@ -11,10 +11,10 @@ ScalarRepresentationSynchronizer
   object scalar fields -> RecordState scalar values
 
 RelationRepresentationSynchronizer
-  object relation paths from RepresentationBinding -> RelatedCollection / RelatedReference runtime state
+  object relation paths from RepresentationBinding -> ToManyRelationState / ToOneRelationState runtime state
 
 RelationPersistencePlanner
-  RelatedCollection / RelatedReference changes -> RecordState mutations and/or extra persistence commands
+  ToManyRelationState / ToOneRelationState changes -> RecordState mutations and/or extra persistence commands
 
 RecordFlusher
   RecordState lifecycle/dirty state -> InsertCommand / UpdateCommand / DeleteCommand
@@ -23,7 +23,7 @@ CommandExecutorInterface
   executes neutral commands
 ```
 
-`FlushExecutor` coordinates the pipeline as representation sync, relation persistence planning, then record flushing. `Session` owns the in-memory runtime stores used by that flow: weak `RepresentationStore`, strong `RecordStateStore`, strong `RelatedCollectionStore`, and strong `RelatedReferenceStore`.
+`FlushExecutor` coordinates the pipeline as representation sync, relation persistence planning, then record flushing. `Session` owns the in-memory runtime stores used by that flow: weak `RepresentationStore`, strong `RecordStateStore`, strong `ToManyRelationStore`, and strong `ToOneRelationStore`.
 
 ## State And Sync
 
@@ -31,7 +31,7 @@ CommandExecutorInterface
 
 Representations are user-facing objects or values. A representation object can drift from its record state until synchronization happens. `RepresentationStore` associates the object with `RepresentationState` through weak object keys, so the session does not keep otherwise-unused representation objects alive. `ScalarRepresentationSynchronizer` reads field bindings only and applies planned representation field updates into `RecordState` while preserving the conflict rules from the ORM foundation: a representation based on a stale record revision cannot silently overwrite a newer record value.
 
-`Session::sync(?object $representation = null, ?RepresentationBinding $binding = null)` is the explicit graph entry point. With no argument it strictly syncs already-tracked representations. With an object it walks that object's explicit `RepresentationRelationBinding` graph, syncs scalar values into `RecordState`, and syncs relation values into `RelatedCollection` / `RelatedReference` runtime state. It returns `SyncResult`, containing scalar sync plans and touched relation changes. It does not plan relation persistence, flush records, execute commands, mark records clean, or clear relation changes.
+`Session::sync(?object $representation = null, ?RepresentationBinding $binding = null)` is the explicit graph entry point. With no argument it strictly syncs already-tracked representations. With an object it walks that object's explicit `RepresentationRelationBinding` graph, syncs scalar values into `RecordState`, and syncs relation values into `ToManyRelationState` / `ToOneRelationState` runtime state. It returns `SyncResult`, containing scalar sync plans and touched relation changes. It does not plan relation persistence, flush records, execute commands, mark records clean, or clear relation changes.
 
 For an untracked root object, `sync($object, $binding)` requires a root `RepresentationBinding` that targets exactly one root collection through its field bindings and/or relation owner bindings. This entry point is for entity-shaped object bindings. A binding with no resolvable collection, or a mixed/projection binding spanning multiple collections, cannot create a new root `RecordState` and raises `StateException`. When the binding is valid, the root is tracked from that binding, then the method follows only explicit relation bindings. For `MANY` relation bindings, `null` means an empty collection and a non-null value must be iterable objects. For `ONE` relation bindings, `null` means no target and a non-null value must be an object. Each discovered untracked related object is tracked with that relation binding's `getRelatedBinding()`, and the walk continues recursively while guarding object identity cycles. Newly discovered records are currently adopted as `NEW` and initialized from the binding's field paths; already-tracked objects keep their existing lifecycle.
 
@@ -55,20 +55,20 @@ $session->flush();
 
 For long-lived workers, prefer one `Session` per request/job. When intentionally reusing a session, call `Session::clear()` between jobs to drop all four runtime stores. If sessions are discarded normally, an extra clear step is unnecessary.
 
-`RelationRepresentationSynchronizer` reads relation bindings only. It projects current representation relation values into `RelatedCollection` and `RelatedReference` runtime state; it does not write scalar fields, execute commands, or adopt child objects by itself. In the strict no-argument sync and pre-flush sync paths, any object discovered through a relation binding must already be tracked/adopted; an untracked related object raises `SyncException` with the relation path. This strict behavior is intentional to avoid hidden persistence from `flush()`.
+`RelationRepresentationSynchronizer` reads relation bindings only. It projects current representation relation values into `ToManyRelationState` and `ToOneRelationState` runtime state; it does not write scalar fields, execute commands, or adopt child objects by itself. In the strict no-argument sync and pre-flush sync paths, any object discovered through a relation binding must already be tracked/adopted; an untracked related object raises `SyncException` with the relation path. This strict behavior is intentional to avoid hidden persistence from `flush()`.
 
-For `MANY` relation bindings, the representation path must contain an iterable of objects or `null`. The synchronizer creates or reuses a `RelatedCollection` for the concrete owner record and relation name. A `null` value is treated as an empty current item list. If the collection is not fully loaded, current items are added as known local additions without implying that absent database rows were removed. If the collection is fully loaded, the synchronizer can also remove known items that are absent from the current representation value.
+For `MANY` relation bindings, the representation path must contain an iterable of objects or `null`. The synchronizer creates or reuses a `ToManyRelationState` for the concrete owner record and relation name. A `null` value is treated as an empty current item list. If the collection is not fully loaded, current items are added as known local additions without implying that absent database rows were removed. If the collection is fully loaded, the synchronizer can also remove known items that are absent from the current representation value.
 
-For `ONE` relation bindings, the representation path must contain an object or `null`. The synchronizer creates or reuses a `RelatedReference` for the concrete owner record and relation name, then sets the current target. `RelatedReference` keeps both baseline and current target object identity so the planner can distinguish unchanged, replaced, and cleared references.
+For `ONE` relation bindings, the representation path must contain an object or `null`. The synchronizer creates or reuses a `ToOneRelationState` for the concrete owner record and relation name, then sets the current target. `ToOneRelationState` keeps both baseline and current target object identity so the planner can distinguish unchanged, replaced, and cleared references.
 
-`RelationPersistencePlanner` consumes changed `RelatedCollection` and `RelatedReference` instances. It resolves each relation's configured `RelationPersistencePlannerInterface`, lets that planner mutate scalar `RecordState` values and/or add commands, and returns the planned relation changes plus commands for `FlushExecutor` to finish.
+`RelationPersistencePlanner` consumes changed `ToManyRelationState` and `ToOneRelationState` instances. It resolves each relation's configured `RelationPersistencePlannerInterface`, lets that planner mutate scalar `RecordState` values and/or add commands, and returns the planned relation changes plus commands for `FlushExecutor` to finish.
 
 The built-in relation planners are:
 
-- `ManyToManyPersistencePlanner`: consumes `RelatedCollection` changes for `M2MRelation`, inserting or deleting rows in the through collection.
-- `HasManyPersistencePlanner`: consumes `RelatedCollection` changes for `HasManyRelation`, propagating owner key values into added child records and nulling child outer keys for nullable removals.
-- `BelongsToPersistencePlanner`: consumes `RelatedReference` changes for `BelongsToRelation`, propagating target key values into the owner record or nulling owner inner keys for nullable clears.
-- `HasOnePersistencePlanner`: consumes `RelatedReference` changes for `HasOneRelation`, propagating owner key values into the current target record and, when replacing or clearing, nulling the previous target outer keys when the relation is nullable.
+- `ManyToManyPersistencePlanner`: consumes `ToManyRelationState` changes for `M2MRelation`, inserting or deleting rows in the through collection.
+- `HasManyPersistencePlanner`: consumes `ToManyRelationState` changes for `HasManyRelation`, propagating owner key values into added child records and nulling child outer keys for nullable removals.
+- `BelongsToPersistencePlanner`: consumes `ToOneRelationState` changes for `BelongsToRelation`, propagating target key values into the owner record or nulling owner inner keys for nullable clears.
+- `HasOnePersistencePlanner`: consumes `ToOneRelationState` changes for `HasOneRelation`, propagating owner key values into the current target record and, when replacing or clearing, nulling the previous target outer keys when the relation is nullable.
 
 For scalar foreign-key relation shapes, the has-many, belongs-to, and has-one planners may write a `ValueRef` when the source key is not concrete yet. If the source key is already concrete, `RecordState::setValue()` collapses that reference immediately and the target record stores the concrete value. Relation planners require involved target objects to already be tracked so they can resolve each object to a `RecordState`. They do not adopt new objects, load missing relations, or orchestrate transactions.
 

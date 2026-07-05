@@ -6,8 +6,8 @@ namespace ON\Data\ORM\Sync;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Relation\RelatedCollectionStore;
-use ON\Data\ORM\Relation\RelatedReferenceStore;
+use ON\Data\ORM\Relation\ToManyRelationStore;
+use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -31,8 +31,8 @@ final class GraphAdopter
 		object $root,
 		RepresentationStore $representations,
 		RecordStateStore $records,
-		RelatedCollectionStore $relations,
-		RelatedReferenceStore $references,
+		ToManyRelationStore $relations,
+		ToOneRelationStore $references,
 		?RepresentationBinding $rootBinding = null,
 	): array {
 		if ($representations->get($root) === null) {

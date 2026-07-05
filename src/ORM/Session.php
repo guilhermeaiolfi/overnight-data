@@ -10,10 +10,10 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\FlushExecutor;
 use ON\Data\ORM\Persistence\FlushResult;
-use ON\Data\ORM\Relation\RelatedCollection;
-use ON\Data\ORM\Relation\RelatedCollectionStore;
-use ON\Data\ORM\Relation\RelatedReference;
-use ON\Data\ORM\Relation\RelatedReferenceStore;
+use ON\Data\ORM\Relation\ToManyRelationState;
+use ON\Data\ORM\Relation\ToManyRelationStore;
+use ON\Data\ORM\Relation\ToOneRelationState;
+use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -28,8 +28,8 @@ final class Session
 {
 	private RecordStateStore $records;
 	private RepresentationStore $representations;
-	private RelatedCollectionStore $relations;
-	private RelatedReferenceStore $references;
+	private ToManyRelationStore $relations;
+	private ToOneRelationStore $references;
 	private RepresentationAdopter $adopter;
 	private GraphAdopter $graphAdopter;
 	private FlushExecutor $flusher;
@@ -42,8 +42,8 @@ final class Session
 	) {
 		$this->records = new RecordStateStore();
 		$this->representations = new RepresentationStore();
-		$this->relations = new RelatedCollectionStore();
-		$this->references = new RelatedReferenceStore();
+		$this->relations = new ToManyRelationStore();
+		$this->references = new ToOneRelationStore();
 		$this->adopter = new RepresentationAdopter($this->records, $this->representations);
 		$this->graphAdopter = new GraphAdopter();
 		$this->syncer = $syncer ?? new RepresentationSyncer();
@@ -60,12 +60,12 @@ final class Session
 		return $this->representations;
 	}
 
-	public function getRelations(): RelatedCollectionStore
+	public function getRelations(): ToManyRelationStore
 	{
 		return $this->relations;
 	}
 
-	public function getReferences(): RelatedReferenceStore
+	public function getReferences(): ToOneRelationStore
 	{
 		return $this->references;
 	}
@@ -115,14 +115,14 @@ final class Session
 		$record->markRemoved();
 	}
 
-	public function trackRelation(RelatedCollection $collection): RelatedCollection
+	public function trackRelation(ToManyRelationState $collection): ToManyRelationState
 	{
 		$this->relations->add($collection);
 
 		return $collection;
 	}
 
-	public function trackReference(RelatedReference $reference): RelatedReference
+	public function trackReference(ToOneRelationState $reference): ToOneRelationState
 	{
 		$this->references->add($reference);
 

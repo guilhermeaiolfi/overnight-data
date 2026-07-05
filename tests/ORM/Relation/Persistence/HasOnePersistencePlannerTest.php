@@ -12,10 +12,10 @@ use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\HasOnePersistencePlanner;
-use ON\Data\ORM\Relation\RelatedCollection;
-use ON\Data\ORM\Relation\RelatedCollectionStore;
-use ON\Data\ORM\Relation\RelatedReference;
-use ON\Data\ORM\Relation\RelatedReferenceStore;
+use ON\Data\ORM\Relation\ToManyRelationState;
+use ON\Data\ORM\Relation\ToManyRelationStore;
+use ON\Data\ORM\Relation\ToOneRelationState;
+use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
@@ -120,7 +120,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		[$relation, $users, $profiles] = $this->singleKeyModel();
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$target = RecordState::clean($profiles->getKey(5), ['id' => 5]);
-		$reference = new RelatedReference($owner, 'profile', $this->bindingFor($target));
+		$reference = new ToOneRelationState($owner, 'profile', $this->bindingFor($target));
 		$reference->set(new stdClass());
 
 		$this->expectException(RelationPersistenceException::class);
@@ -135,7 +135,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$target = RecordState::clean($profiles->getKey(5), ['id' => 5]);
 		$item = new stdClass();
-		$reference = new RelatedReference($owner, 'profile', $this->bindingFor($target));
+		$reference = new ToOneRelationState($owner, 'profile', $this->bindingFor($target));
 		$reference->set($item);
 		$binding = new RepresentationBinding();
 		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($profiles, 'id')));
@@ -213,7 +213,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$posts = $registry->collection('posts')->primaryKey('id')->field('id', 'int')->end()->field('user_id', 'int')->end();
 		$relation = $posts->belongsTo('author', 'users')->innerKey('user_id')->outerKey('id');
 		self::assertInstanceOf(BelongsToRelation::class, $relation);
-		$reference = new RelatedReference(RecordState::new($posts, ['user_id' => null]), 'author', new RepresentationBinding());
+		$reference = new ToOneRelationState(RecordState::new($posts, ['user_id' => null]), 'author', new RepresentationBinding());
 		$reference->set(new stdClass());
 
 		$this->expectException(RelationPersistenceException::class);
@@ -223,8 +223,8 @@ final class HasOnePersistencePlannerTest extends TestCase
 			new PersistenceContext(
 				new RecordStateStore(),
 				new RepresentationStore(),
-				new RelatedCollectionStore(),
-				new RelatedReferenceStore(),
+				new ToManyRelationStore(),
+				new ToOneRelationStore(),
 				new CommandBuffer()
 			),
 			$relation,
@@ -232,10 +232,10 @@ final class HasOnePersistencePlannerTest extends TestCase
 		);
 	}
 
-	public function testPassingRelatedCollectionChangeThrows(): void
+	public function testPassingToManyRelationStateChangeThrows(): void
 	{
 		[$relation, $users] = $this->singleKeyModel();
-		$collection = new RelatedCollection(RecordState::new($users, ['id' => 10]), 'profile', new RepresentationBinding());
+		$collection = new ToManyRelationState(RecordState::new($users, ['id' => 10]), 'profile', new RepresentationBinding());
 		$collection->add(new stdClass());
 
 		$this->expectException(RelationPersistenceException::class);
@@ -245,8 +245,8 @@ final class HasOnePersistencePlannerTest extends TestCase
 			new PersistenceContext(
 				new RecordStateStore(),
 				new RepresentationStore(),
-				new RelatedCollectionStore(),
-				new RelatedReferenceStore(),
+				new ToManyRelationStore(),
+				new ToOneRelationStore(),
 				new CommandBuffer()
 			),
 			$relation,
@@ -254,7 +254,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		);
 	}
 
-	public function testPlannerDoesNotClearRelatedReferenceChanges(): void
+	public function testPlannerDoesNotClearToOneRelationStateChanges(): void
 	{
 		[$relation, $users, $profiles] = $this->singleKeyModel();
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
@@ -306,7 +306,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 	private function planClear(HasOneRelation $relation, RecordState $owner, RecordState $baseline): void
 	{
 		$baselineObject = new stdClass();
-		$reference = new RelatedReference($owner, $relation->getName(), $this->bindingFor($baseline), $baselineObject);
+		$reference = new ToOneRelationState($owner, $relation->getName(), $this->bindingFor($baseline), $baselineObject);
 		$reference->clear();
 
 		$this->plan($relation, $reference, $this->records($owner, $baseline), $this->trackedMap(
@@ -322,7 +322,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 	): void {
 		$oldObject = new stdClass();
 		$newObject = new stdClass();
-		$reference = new RelatedReference($owner, $relation->getName(), $this->bindingFor($newTarget), $oldObject);
+		$reference = new ToOneRelationState($owner, $relation->getName(), $this->bindingFor($newTarget), $oldObject);
 		$reference->set($newObject);
 
 		$this->plan($relation, $reference, $this->records($owner, $oldTarget, $newTarget), $this->trackedMap(
@@ -331,10 +331,10 @@ final class HasOnePersistencePlannerTest extends TestCase
 		));
 	}
 
-	private function changedReference(HasOneRelation $relation, RecordState $owner, RecordState $target): RelatedReference
+	private function changedReference(HasOneRelation $relation, RecordState $owner, RecordState $target): ToOneRelationState
 	{
 		$targetObject = new stdClass();
-		$reference = new RelatedReference($owner, $relation->getName(), $this->bindingFor($target));
+		$reference = new ToOneRelationState($owner, $relation->getName(), $this->bindingFor($target));
 		$reference->set($targetObject);
 
 		return $reference;
@@ -342,7 +342,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 
 	private function plan(
 		HasOneRelation $relation,
-		RelatedReference $reference,
+		ToOneRelationState $reference,
 		RecordStateStore $records,
 		RepresentationStore $representations,
 	): CommandBuffer {
@@ -351,8 +351,8 @@ final class HasOnePersistencePlannerTest extends TestCase
 			new PersistenceContext(
 				$records,
 				$representations,
-				new RelatedCollectionStore(),
-				new RelatedReferenceStore(),
+				new ToManyRelationStore(),
+				new ToOneRelationStore(),
 				$commands
 			),
 			$relation,

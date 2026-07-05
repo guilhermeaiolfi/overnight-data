@@ -12,9 +12,8 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
-use ON\Data\ORM\Relation\RelatedCollection;
-use ON\Data\ORM\Relation\RelatedReference;
-use ON\Data\ORM\Relation\RelationCollectionState;
+use ON\Data\ORM\Relation\ToManyRelationState;
+use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordRelationRef;
@@ -202,7 +201,7 @@ final class SessionTest extends TestCase
 			RecordRelationRef::forCollection($users, 'posts'),
 			RepresentationRelationCardinality::MANY,
 			$this->postTemplateBindingFor($posts),
-			RelationCollectionState::FULLY_LOADED
+			true
 		));
 
 		$result = $session->sync($ownerRepresentation, $binding);
@@ -360,7 +359,7 @@ final class SessionTest extends TestCase
 	public function testTrackRelationAddsAndReturnsSameCollection(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
-		$collection = $this->changedRelatedCollection(RecordState::new($this->usersWithPosts()));
+		$collection = $this->changedToManyRelationState(RecordState::new($this->usersWithPosts()));
 
 		$result = $session->trackRelation($collection);
 
@@ -371,7 +370,7 @@ final class SessionTest extends TestCase
 	public function testTrackReferenceAddsAndReturnsSameReference(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
-		$reference = $this->changedRelatedReference(RecordState::new($this->usersWithProfile()));
+		$reference = $this->changedToOneRelationState(RecordState::new($this->usersWithProfile()));
 
 		$result = $session->trackReference($reference);
 
@@ -435,8 +434,8 @@ final class SessionTest extends TestCase
 		$record = $session->trackNew($this->users(), ['name' => 'A1']);
 		$representation = $this->representation(['name' => 'A1']);
 		$session->adopt($representation, $this->templateBinding(), $record);
-		$session->trackRelation(new RelatedCollection($record, 'posts', new RepresentationBinding()));
-		$session->trackReference(new RelatedReference($record, 'profile', new RepresentationBinding()));
+		$session->trackRelation(new ToManyRelationState($record, 'posts', new RepresentationBinding()));
+		$session->trackReference(new ToOneRelationState($record, 'profile', new RepresentationBinding()));
 
 		$session->clear();
 
@@ -452,7 +451,7 @@ final class SessionTest extends TestCase
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
 		$record = $session->trackClean($this->usersWithPosts()->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$session->trackRelation($this->changedRelatedCollection($record));
+		$session->trackRelation($this->changedToManyRelationState($record));
 
 		$session->flush();
 
@@ -466,7 +465,7 @@ final class SessionTest extends TestCase
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
 		$record = $session->trackClean($this->usersWithProfile()->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$session->trackReference($this->changedRelatedReference($record));
+		$session->trackReference($this->changedToOneRelationState($record));
 
 		$session->flush();
 
@@ -479,7 +478,7 @@ final class SessionTest extends TestCase
 		RecordingRelationPersistencePlanner::$addCommand = true;
 		$session = new Session(new RecordingCommandExecutor());
 		$record = $session->trackClean($this->usersWithPosts()->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$collection = $session->trackRelation($this->changedRelatedCollection($record));
+		$collection = $session->trackRelation($this->changedToManyRelationState($record));
 
 		$session->flush();
 
@@ -490,7 +489,7 @@ final class SessionTest extends TestCase
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$record = $session->trackClean($this->usersWithProfile()->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$reference = $session->trackReference($this->changedRelatedReference($record));
+		$reference = $session->trackReference($this->changedToOneRelationState($record));
 
 		$session->flush();
 
@@ -507,7 +506,7 @@ final class SessionTest extends TestCase
 		$target = $session->trackClean($tags->getKey(3), ['id' => 3, 'label' => 'math']);
 		$item = $this->representation(['id' => 3, 'label' => 'math']);
 		$session->adopt($item, $this->tagTemplateBindingFor($tags), $target);
-		$collection = new RelatedCollection($owner, 'tags', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
 		$collection->add($item);
 		$session->trackRelation($collection);
 
@@ -540,7 +539,7 @@ final class SessionTest extends TestCase
 		$session->flush();
 
 		$collection = $session->getRelations()->get($owner, 'posts');
-		self::assertInstanceOf(RelatedCollection::class, $collection);
+		self::assertInstanceOf(ToManyRelationState::class, $collection);
 		self::assertSame([$postRepresentation], $collection->getItems());
 		self::assertFalse($collection->hasChanges());
 		self::assertSame(10, $child->getValue('user_id'));
@@ -570,7 +569,7 @@ final class SessionTest extends TestCase
 		$session->flush();
 
 		$reference = $session->getReferences()->get($owner, 'author');
-		self::assertInstanceOf(RelatedReference::class, $reference);
+		self::assertInstanceOf(ToOneRelationState::class, $reference);
 		self::assertSame($authorRepresentation, $reference->getTarget());
 		self::assertFalse($reference->hasChanges());
 		self::assertSame(10, $owner->getValue('author_id'));
@@ -594,12 +593,12 @@ final class SessionTest extends TestCase
 		$baselineAuthor = new stdClass();
 		$ownerRepresentation = $this->representation(['title' => 'Post', 'author' => null]);
 		$session->adopt($ownerRepresentation, $this->postTemplateBindingWithAuthor($posts, $users), $owner);
-		$session->trackReference(new RelatedReference($owner, 'author', $this->userTemplateBindingFor($users), $baselineAuthor));
+		$session->trackReference(new ToOneRelationState($owner, 'author', $this->userTemplateBindingFor($users), $baselineAuthor));
 
 		$session->flush();
 
 		$reference = $session->getReferences()->get($owner, 'author');
-		self::assertInstanceOf(RelatedReference::class, $reference);
+		self::assertInstanceOf(ToOneRelationState::class, $reference);
 		self::assertNull($reference->getTarget());
 		self::assertFalse($reference->hasChanges());
 		self::assertNull($owner->getValue('author_id'));
@@ -629,7 +628,7 @@ final class SessionTest extends TestCase
 		$session->flush();
 
 		$reference = $session->getReferences()->get($owner, 'profile');
-		self::assertInstanceOf(RelatedReference::class, $reference);
+		self::assertInstanceOf(ToOneRelationState::class, $reference);
 		self::assertSame($profileRepresentation, $reference->getTarget());
 		self::assertFalse($reference->hasChanges());
 		self::assertSame(10, $target->getValue('user_id'));
@@ -768,7 +767,7 @@ final class SessionTest extends TestCase
 		self::assertCount(1, $syncResult->getRelationChanges());
 		self::assertCount(1, $executor->getCommands());
 		$collection = $session->getRelations()->get($owner, 'posts');
-		self::assertInstanceOf(RelatedCollection::class, $collection);
+		self::assertInstanceOf(ToManyRelationState::class, $collection);
 		self::assertSame([$postRepresentation], $collection->getItems());
 		self::assertFalse($collection->hasChanges());
 	}
@@ -821,7 +820,7 @@ final class SessionTest extends TestCase
 			RecordRelationRef::forCollection($users, 'posts'),
 			RepresentationRelationCardinality::MANY,
 			$this->postTemplateBindingFor($posts),
-			RelationCollectionState::UNLOADED
+			false
 		));
 
 		return $binding;
@@ -884,17 +883,17 @@ final class SessionTest extends TestCase
 		return $binding;
 	}
 
-	private function changedRelatedCollection(RecordState $owner): RelatedCollection
+	private function changedToManyRelationState(RecordState $owner): ToManyRelationState
 	{
-		$collection = new RelatedCollection($owner, 'posts', $this->postBinding());
+		$collection = new ToManyRelationState($owner, 'posts', $this->postBinding());
 		$collection->add(new stdClass());
 
 		return $collection;
 	}
 
-	private function changedRelatedReference(RecordState $owner): RelatedReference
+	private function changedToOneRelationState(RecordState $owner): ToOneRelationState
 	{
-		$reference = new RelatedReference($owner, 'profile', $this->postBinding());
+		$reference = new ToOneRelationState($owner, 'profile', $this->postBinding());
 		$reference->set(new stdClass());
 
 		return $reference;

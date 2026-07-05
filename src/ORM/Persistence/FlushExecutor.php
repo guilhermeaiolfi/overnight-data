@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Persistence;
 
 use ON\Data\ORM\Relation\Persistence\RelationPersistencePlanner;
-use ON\Data\ORM\Relation\RelatedCollectionStore;
-use ON\Data\ORM\Relation\RelatedReferenceStore;
+use ON\Data\ORM\Relation\ToManyRelationStore;
+use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\Sync\RepresentationSyncer;
@@ -36,11 +36,11 @@ final class FlushExecutor
 	public function flush(
 		RepresentationStore $representations,
 		RecordStateStore $records,
-		?RelatedCollectionStore $relations = null,
-		?RelatedReferenceStore $references = null,
+		?ToManyRelationStore $relations = null,
+		?ToOneRelationStore $references = null,
 	): FlushResult {
-		$relations ??= new RelatedCollectionStore();
-		$references ??= new RelatedReferenceStore();
+		$relations ??= new ToManyRelationStore();
+		$references ??= new ToOneRelationStore();
 		$syncResult = $this->syncer->sync($representations, $records, $relations, $references);
 		$relationResult = $this->relationPlanner->plan($relations, $references, $records, $representations);
 		$commandResults = $this->flusher->flush($records);

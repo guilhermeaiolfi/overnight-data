@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\Relation\RelatedCollection;
-use ON\Data\ORM\Relation\RelatedCollectionStore;
-use ON\Data\ORM\Relation\RelatedReference;
-use ON\Data\ORM\Relation\RelatedReferenceStore;
+use ON\Data\ORM\Relation\ToManyRelationState;
+use ON\Data\ORM\Relation\ToManyRelationStore;
+use ON\Data\ORM\Relation\ToOneRelationState;
+use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationStore;
@@ -27,8 +27,8 @@ final class RelationRepresentationSynchronizer
 	 */
 	public function sync(
 		RepresentationStore $representations,
-		RelatedCollectionStore $relations,
-		RelatedReferenceStore $references,
+		ToManyRelationStore $relations,
+		ToOneRelationStore $references,
 		?RepresentationStore $states = null,
 	): array {
 		$touched = [];
@@ -59,7 +59,7 @@ final class RelationRepresentationSynchronizer
 	private function syncMany(
 		object $representation,
 		RepresentationRelationBinding $relationBinding,
-		RelatedCollectionStore $relations,
+		ToManyRelationStore $relations,
 		RepresentationStateResolver $resolver,
 		array &$touched,
 		array &$touchedIds,
@@ -80,13 +80,10 @@ final class RelationRepresentationSynchronizer
 		}
 
 		$collection = $relations->get($owner, $relationName);
-		if (! $collection instanceof RelatedCollection) {
-			$collection = new RelatedCollection(
-				$owner,
-				$relationName,
-				$relationBinding->getRelatedBinding(),
-				$relationBinding->getCollectionState()
-			);
+		if (! $collection instanceof ToManyRelationState) {
+			$collection = $relationBinding->isCollectionFullyLoaded()
+				? ToManyRelationState::full($owner, $relationName, $relationBinding->getRelatedBinding())
+				: new ToManyRelationState($owner, $relationName, $relationBinding->getRelatedBinding());
 			$relations->add($collection);
 		}
 
@@ -101,7 +98,7 @@ final class RelationRepresentationSynchronizer
 	private function syncOne(
 		object $representation,
 		RepresentationRelationBinding $relationBinding,
-		RelatedReferenceStore $references,
+		ToOneRelationStore $references,
 		RepresentationStateResolver $resolver,
 		array &$touched,
 		array &$touchedIds,
@@ -122,8 +119,8 @@ final class RelationRepresentationSynchronizer
 		}
 
 		$reference = $references->get($owner, $relationName);
-		if (! $reference instanceof RelatedReference) {
-			$reference = new RelatedReference(
+		if (! $reference instanceof ToOneRelationState) {
+			$reference = new ToOneRelationState(
 				$owner,
 				$relationName,
 				$relationBinding->getRelatedBinding()
@@ -196,7 +193,7 @@ final class RelationRepresentationSynchronizer
 	/**
 	 * @param list<object> $items
 	 */
-	private function applyItems(RelatedCollection $collection, array $items): void
+	private function applyItems(ToManyRelationState $collection, array $items): void
 	{
 		if (! $collection->isFullyLoaded()) {
 			foreach ($items as $item) {

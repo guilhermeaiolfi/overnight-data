@@ -7,7 +7,7 @@ namespace Tests\ON\Data\ORM\Relation;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Relation\RelatedReference;
+use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -15,7 +15,7 @@ use ON\Data\ORM\State\RepresentationFieldBinding;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
-final class RelatedReferenceTest extends TestCase
+final class ToOneRelationStateTest extends TestCase
 {
 	public function testConstructorStoresOwnerRelationNameRelatedBindingBaselineTargetAndCurrentTarget(): void
 	{
@@ -23,7 +23,7 @@ final class RelatedReferenceTest extends TestCase
 		$binding = $this->postBinding();
 		$target = new stdClass();
 
-		$reference = new RelatedReference($owner, 'author', $binding, $target);
+		$reference = new ToOneRelationState($owner, 'author', $binding, $target);
 
 		self::assertSame($owner, $reference->getOwner());
 		self::assertSame('author', $reference->getRelationName());
@@ -36,7 +36,7 @@ final class RelatedReferenceTest extends TestCase
 	{
 		$this->expectException(StateException::class);
 
-		new RelatedReference(RecordState::new($this->users()), '', $this->postBinding());
+		new ToOneRelationState(RecordState::new($this->users()), '', $this->postBinding());
 	}
 
 	public function testSetChangesCurrentTarget(): void
@@ -124,12 +124,12 @@ final class RelatedReferenceTest extends TestCase
 	{
 		$binding = $this->postBinding();
 
-		self::assertSame($binding, (new RelatedReference(RecordState::new($this->users()), 'author', $binding))->getRelatedBinding());
+		self::assertSame($binding, (new ToOneRelationState(RecordState::new($this->users()), 'author', $binding))->getRelatedBinding());
 	}
 
-	private function reference(?object $target = null): RelatedReference
+	private function reference(?object $target = null): ToOneRelationState
 	{
-		return new RelatedReference(RecordState::new($this->users()), 'author', $this->postBinding(), $target);
+		return new ToOneRelationState(RecordState::new($this->users()), 'author', $this->postBinding(), $target);
 	}
 
 	private function postBinding(): RepresentationBinding

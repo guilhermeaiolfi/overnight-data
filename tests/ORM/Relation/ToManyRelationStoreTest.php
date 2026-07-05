@@ -7,8 +7,8 @@ namespace Tests\ON\Data\ORM\Relation;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Relation\RelatedCollection;
-use ON\Data\ORM\Relation\RelatedCollectionStore;
+use ON\Data\ORM\Relation\ToManyRelationState;
+use ON\Data\ORM\Relation\ToManyRelationStore;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -16,13 +16,13 @@ use ON\Data\ORM\State\RepresentationFieldBinding;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
-final class RelatedCollectionStoreTest extends TestCase
+final class ToManyRelationStoreTest extends TestCase
 {
 	public function testAddGetAndHasByOwnerAndRelationName(): void
 	{
 		$owner = RecordState::new($this->users());
 		$collection = $this->relatedCollection($owner, 'posts');
-		$map = new RelatedCollectionStore();
+		$map = new ToManyRelationStore();
 
 		$map->add($collection);
 
@@ -33,7 +33,7 @@ final class RelatedCollectionStoreTest extends TestCase
 	public function testAddingSameInstanceTwiceIsIdempotent(): void
 	{
 		$collection = $this->relatedCollection(RecordState::new($this->users()), 'posts');
-		$map = new RelatedCollectionStore();
+		$map = new ToManyRelationStore();
 
 		$map->add($collection);
 		$map->add($collection);
@@ -44,7 +44,7 @@ final class RelatedCollectionStoreTest extends TestCase
 	public function testAddingDifferentCollectionForSameOwnerAndRelationThrows(): void
 	{
 		$owner = RecordState::new($this->users());
-		$map = new RelatedCollectionStore();
+		$map = new ToManyRelationStore();
 		$map->add($this->relatedCollection($owner, 'posts'));
 
 		$this->expectException(StateException::class);
@@ -56,7 +56,7 @@ final class RelatedCollectionStoreTest extends TestCase
 	{
 		$first = $this->relatedCollection(RecordState::new($this->users()), 'posts');
 		$second = $this->relatedCollection(RecordState::new($this->users()), 'comments');
-		$map = new RelatedCollectionStore();
+		$map = new ToManyRelationStore();
 
 		$map->add($first);
 		$map->add($second);
@@ -69,7 +69,7 @@ final class RelatedCollectionStoreTest extends TestCase
 		$unchanged = $this->relatedCollection(RecordState::new($this->users()), 'posts');
 		$changed = $this->relatedCollection(RecordState::new($this->users()), 'comments');
 		$changed->add(new stdClass());
-		$map = new RelatedCollectionStore();
+		$map = new ToManyRelationStore();
 
 		$map->add($unchanged);
 		$map->add($changed);
@@ -82,7 +82,7 @@ final class RelatedCollectionStoreTest extends TestCase
 		$owner = RecordState::new($this->users());
 		$first = $this->relatedCollection($owner, 'posts');
 		$second = $this->relatedCollection(RecordState::new($this->users()), 'comments');
-		$map = new RelatedCollectionStore();
+		$map = new ToManyRelationStore();
 		$map->add($first);
 		$map->add($second);
 
@@ -96,9 +96,9 @@ final class RelatedCollectionStoreTest extends TestCase
 		self::assertSame([], $map->getAll());
 	}
 
-	private function relatedCollection(RecordState $owner, string $relationName): RelatedCollection
+	private function relatedCollection(RecordState $owner, string $relationName): ToManyRelationState
 	{
-		return new RelatedCollection($owner, $relationName, $this->postBinding());
+		return new ToManyRelationState($owner, $relationName, $this->postBinding());
 	}
 
 	private function postBinding(): RepresentationBinding

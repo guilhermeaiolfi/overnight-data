@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Relation\RelatedReference;
+use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -34,7 +34,7 @@ final class SyncResultTest extends TestCase
 	public function testHasChangesIsTrueWhenRelationChangeHasChanges(): void
 	{
 		$record = RecordState::new((new Registry())->collection('users')->field('id', 'int')->end());
-		$reference = new RelatedReference($record, 'profile', new RepresentationBinding());
+		$reference = new ToOneRelationState($record, 'profile', new RepresentationBinding());
 		$reference->set(new stdClass());
 
 		self::assertTrue((new SyncResult([], [$reference]))->hasChanges());

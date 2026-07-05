@@ -8,8 +8,12 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 
-final class RelatedCollection implements RelationChangeInterface
+final class ToManyRelationState implements RelationChangeInterface
 {
+	private const LOAD_UNLOADED = 'unloaded';
+	private const LOAD_PARTIAL = 'partial';
+	private const LOAD_FULL = 'full';
+
 	/**
 	 * Known in-memory relation members. This may be only a partial view of the
 	 * database relation when the collection is unloaded or partially loaded.
@@ -23,7 +27,7 @@ final class RelatedCollection implements RelationChangeInterface
 	private array $added = [];
 	/** @var array<int, object> */
 	private array $removed = [];
-	private RelationCollectionState $state;
+	private string $loadState = self::LOAD_UNLOADED;
 
 	/**
 	 * @param list<object> $items
@@ -32,17 +36,16 @@ final class RelatedCollection implements RelationChangeInterface
 		private readonly RecordState $owner,
 		private readonly string $relationName,
 		private readonly RepresentationBinding $childBinding,
-		RelationCollectionState $state = RelationCollectionState::UNLOADED,
 		array $items = [],
 	) {
 		if (trim($relationName) === '') {
-			throw new StateException('Relation collection name cannot be empty.');
+			throw new StateException('To-many relation name cannot be empty.');
 		}
 
 		foreach ($items as $item) {
 			if (! is_object($item)) {
 				throw new StateException(sprintf(
-					"Relation collection '%s' can only contain objects.",
+					"To-many relation '%s' can only contain objects.",
 					$relationName
 				));
 			}
@@ -51,9 +54,51 @@ final class RelatedCollection implements RelationChangeInterface
 		}
 
 		$this->baselineKnownItems = $this->knownItems;
-		$this->state = $state === RelationCollectionState::UNLOADED && $this->knownItems !== []
-			? RelationCollectionState::PARTIALLY_LOADED
-			: $state;
+		if ($this->knownItems !== []) {
+			$this->markPartiallyLoaded();
+		}
+	}
+
+	/**
+	 * @param list<object> $items
+	 */
+	public static function unloaded(
+		RecordState $owner,
+		string $relationName,
+		RepresentationBinding $childBinding,
+		array $items = [],
+	): self {
+		return new self($owner, $relationName, $childBinding, $items);
+	}
+
+	/**
+	 * @param list<object> $items
+	 */
+	public static function partial(
+		RecordState $owner,
+		string $relationName,
+		RepresentationBinding $childBinding,
+		array $items = [],
+	): self {
+		$state = new self($owner, $relationName, $childBinding, $items);
+		$state->markPartiallyLoaded();
+
+		return $state;
+	}
+
+	/**
+	 * @param list<object> $items
+	 */
+	public static function full(
+		RecordState $owner,
+		string $relationName,
+		RepresentationBinding $childBinding,
+		array $items = [],
+	): self {
+		$state = new self($owner, $relationName, $childBinding, $items);
+		$state->markFullyLoaded();
+
+		return $state;
 	}
 
 	public function getOwner(): RecordState
@@ -76,34 +121,33 @@ final class RelatedCollection implements RelationChangeInterface
 		return $this->childBinding;
 	}
 
-	public function getState(): RelationCollectionState
-	{
-		return $this->state;
-	}
-
 	public function isUnloaded(): bool
 	{
-		return $this->state === RelationCollectionState::UNLOADED;
+		return $this->loadState === self::LOAD_UNLOADED;
 	}
 
 	public function isPartiallyLoaded(): bool
 	{
-		return $this->state === RelationCollectionState::PARTIALLY_LOADED;
+		return $this->loadState === self::LOAD_PARTIAL;
 	}
 
 	public function isFullyLoaded(): bool
 	{
-		return $this->state === RelationCollectionState::FULLY_LOADED;
+		return $this->loadState === self::LOAD_FULL;
 	}
 
 	public function markPartiallyLoaded(): void
 	{
-		$this->state = RelationCollectionState::PARTIALLY_LOADED;
+		if ($this->isFullyLoaded()) {
+			return;
+		}
+
+		$this->loadState = self::LOAD_PARTIAL;
 	}
 
 	public function markFullyLoaded(): void
 	{
-		$this->state = RelationCollectionState::FULLY_LOADED;
+		$this->loadState = self::LOAD_FULL;
 	}
 
 	public function add(object $item): void
@@ -117,8 +161,8 @@ final class RelatedCollection implements RelationChangeInterface
 		}
 
 		$this->knownItems[$id] = $item;
-		if ($this->state === RelationCollectionState::UNLOADED) {
-			$this->state = RelationCollectionState::PARTIALLY_LOADED;
+		if ($this->isUnloaded()) {
+			$this->markPartiallyLoaded();
 		}
 
 		if (! array_key_exists($id, $this->baselineKnownItems)) {

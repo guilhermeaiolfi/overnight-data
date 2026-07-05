@@ -7,12 +7,12 @@ namespace ON\Data\ORM\Relation;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordState;
 
-final class RelatedCollectionStore
+final class ToManyRelationStore
 {
-	/** @var array<string, RelatedCollection> */
+	/** @var array<string, ToManyRelationState> */
 	private array $collections = [];
 
-	public function add(RelatedCollection $collection): void
+	public function add(ToManyRelationState $collection): void
 	{
 		$key = $this->key($collection->getOwner(), $collection->getRelationName());
 		if (isset($this->collections[$key])) {
@@ -21,7 +21,7 @@ final class RelatedCollectionStore
 			}
 
 			throw new StateException(sprintf(
-				"Related collection store already contains a different collection for relation '%s'.",
+				"To-many relation store already contains a different state for relation '%s'.",
 				$collection->getRelationName()
 			));
 		}
@@ -34,7 +34,7 @@ final class RelatedCollectionStore
 		return array_key_exists($this->key($owner, $relationName), $this->collections);
 	}
 
-	public function get(RecordState $owner, string $relationName): ?RelatedCollection
+	public function get(RecordState $owner, string $relationName): ?ToManyRelationState
 	{
 		return $this->collections[$this->key($owner, $relationName)] ?? null;
 	}
@@ -50,7 +50,7 @@ final class RelatedCollectionStore
 	}
 
 	/**
-	 * @return list<RelatedCollection>
+	 * @return list<ToManyRelationState>
 	 */
 	public function getAll(): array
 	{
@@ -58,20 +58,20 @@ final class RelatedCollectionStore
 	}
 
 	/**
-	 * @return list<RelatedCollection>
+	 * @return list<ToManyRelationState>
 	 */
 	public function getChanged(): array
 	{
 		return array_values(array_filter(
 			$this->collections,
-			static fn (RelatedCollection $collection): bool => $collection->hasChanges()
+			static fn (ToManyRelationState $collection): bool => $collection->hasChanges()
 		));
 	}
 
 	private function key(RecordState $owner, string $relationName): string
 	{
 		if (trim($relationName) === '') {
-			throw new StateException('Relation collection name cannot be empty.');
+			throw new StateException('To-many relation name cannot be empty.');
 		}
 
 		return $owner->getStateHash() . "\0" . $relationName;

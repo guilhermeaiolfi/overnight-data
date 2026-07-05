@@ -175,7 +175,7 @@ The store is responsible for aliasing both handles to the same `RecordState`. Sc
 
 `RecordFieldRef` resolution should first use a direct state target, then fall back to key lookup through `RecordStateStore`. Template refs have no concrete record to resolve until a binding is applied to a state.
 
-`RecordStateStore` is not an object identity store. It strongly owns record state for the current session/unit of work. `RelatedCollectionStore` and `RelatedReferenceStore` also strongly own relation runtime state for the session.
+`RecordStateStore` is not an object identity store. It strongly owns record state for the current session/unit of work. `ToManyRelationStore` and `ToOneRelationStore` also strongly own relation runtime state for the session.
 
 `RepresentationStore` remains separate and tracks PHP representation object identity with weak keys. It does not keep representation objects alive in long-lived workers. When a representation object becomes otherwise unreachable, its store entry can disappear after garbage collection.
 
@@ -376,15 +376,13 @@ Guardrails:
 
 ## Relation State
 
-Future relation collection states:
+`ToManyRelationState` owns relation deltas and knowledge completeness for to-many relations. Its load knowledge is internal to the runtime state:
 
-```php
-enum RelationCollectionState
-{
-    case UNLOADED;
-    case PARTIALLY_LOADED;
-    case FULLY_LOADED;
-}
+```text
+unloaded
+partial
+full
+```
 ```
 
 Rules:
@@ -425,7 +423,7 @@ $em->add($user, 'posts', $post);
 $em->removeFrom($user, 'posts', $post);
 ```
 
-The intended object concept is `RelatedCollection` or, if the implementation prefers an internal name, `TrackedRelationCollection`.
+The intended object concept is `ToManyRelationState`.
 
 It should eventually own:
 
@@ -480,9 +478,9 @@ Phase 1A did not introduce `EntityQuery`, `with()`, repositories, lazy loading, 
 
 ## Phase 1D Relation Collection Primitives
 
-Phase 1D introduces `ON\Data\ORM\Relation\RelatedCollection` as the ORM-owned relation collection primitive. Plain arrays remain valid read/projection values, but they are not writable relation persistence trackers because they cannot own loaded state or add/remove intent.
+Phase 1D introduces `ON\Data\ORM\Relation\ToManyRelationState` as the ORM-owned relation collection primitive. Plain arrays remain valid read/projection values, but they are not writable relation persistence trackers because they cannot own loaded state or add/remove intent.
 
-`RelatedCollection` owns the owner `RecordState`, relation name, loaded state, known in-memory items, local added/removed child intent, and the reusable child `RepresentationBinding` template. Known items are only the in-memory view currently held by the collection; they are not necessarily the full database relation. `isEmptyKnown()` means no items are currently known in memory, not that the database relation is empty. The collection stores the child binding for later relation runtime work, but it does not mutate that reusable template, apply the binding, or register tracked child representations in this phase.
+`ToManyRelationState` owns the owner `RecordState`, relation name, loaded state, known in-memory items, local added/removed child intent, and the reusable child `RepresentationBinding` template. Known items are only the in-memory view currently held by the collection; they are not necessarily the full database relation. `isEmptyKnown()` means no items are currently known in memory, not that the database relation is empty. The collection stores the child binding for later relation runtime work, but it does not mutate that reusable template, apply the binding, or register tracked child representations in this phase.
 
 Adding a child to an unloaded collection is allowed and makes the collection partially loaded because at least one item is now known, while the complete database set remains unknown. Removing one known object reference from an unloaded collection is also allowed and does not imply the relation is empty. Removing from a relation collection removes the relation link intent; it is not necessarily deletion of the child entity.
 
@@ -492,9 +490,9 @@ Future ORM runtime will apply the child binding to child `RecordState` instances
 
 Phase 1E introduces `ON\Data\ORM\Sync\RepresentationAdopter` as the small bridge between reusable child binding templates and concrete ORM tracking.
 
-`RepresentationAdopter::adopt()` applies a reusable `RepresentationBinding` template to a concrete child `RecordState`, registers that record in `RecordStateStore`, captures baseline record revisions from the applied binding, and registers the child object as a `RepresentationState` in `RepresentationStore`. Future relation runtime can use a `RelatedCollection` child's binding with `RepresentationAdopter::adopt()` around flows such as adding a post object to a user's `RelatedCollection`.
+`RepresentationAdopter::adopt()` applies a reusable `RepresentationBinding` template to a concrete child `RecordState`, registers that record in `RecordStateStore`, captures baseline record revisions from the applied binding, and registers the child object as a `RepresentationState` in `RepresentationStore`. Future relation runtime can use a `ToManyRelationState` child's binding with `RepresentationAdopter::adopt()` around flows such as adding a post object to a user's `ToManyRelationState`.
 
-`RelatedCollection` still owns relation add/remove intent. Adoption only tracks the child representation; it does not add the item to the relation collection, inspect relation loaded state, sync representation values, persist, flush, write SQL, or mutate the child binding template.
+`ToManyRelationState` still owns relation add/remove intent. Adoption only tracks the child representation; it does not add the item to the relation collection, inspect relation loaded state, sync representation values, persist, flush, write SQL, or mutate the child binding template.
 
 ## Phase 1F Representation Value Reading
 
@@ -538,7 +536,7 @@ After scalar sync apply:
 Scalar flush can group those dirty values into one database update for the users record.
 ```
 
-`RelatedCollection` tracks relation add/remove intent only. It does not persist, adopt, or write relations. `RepresentationAdopter` adopts tracking only; it does not sync values. `RepresentationValueReader` reads current values only; it does not convert, mutate, or sync. `SyncPlan` is a description of conflicts and possible field updates, not an apply operation.
+`ToManyRelationState` tracks relation add/remove intent only. It does not persist, adopt, or write relations. `RepresentationAdopter` adopts tracking only; it does not sync values. `RepresentationValueReader` reads current values only; it does not convert, mutate, or sync. `SyncPlan` is a description of conflicts and possible field updates, not an apply operation.
 
 ## Remaining Non-Goals
 

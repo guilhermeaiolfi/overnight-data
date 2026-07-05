@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\ORM\State;
 
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Relation\RelationCollectionState;
 
 final class RepresentationRelationBinding
 {
@@ -14,7 +13,7 @@ final class RepresentationRelationBinding
 		private RecordRelationRef $relation,
 		private RepresentationRelationCardinality $cardinality,
 		private RepresentationBinding $relatedBinding,
-		private RelationCollectionState $collectionState = RelationCollectionState::UNLOADED,
+		private bool $collectionFullyLoaded = false,
 	) {
 		if ($path === '') {
 			throw new StateException('Representation relation binding path cannot be empty.');
@@ -33,7 +32,7 @@ final class RepresentationRelationBinding
 
 	public function withRelation(RecordRelationRef $relation): self
 	{
-		return new self($this->path, $relation, $this->cardinality, $this->relatedBinding, $this->collectionState);
+		return new self($this->path, $relation, $this->cardinality, $this->relatedBinding, $this->collectionFullyLoaded);
 	}
 
 	public function getRelationName(): string
@@ -51,9 +50,9 @@ final class RepresentationRelationBinding
 		return $this->relatedBinding;
 	}
 
-	public function getCollectionState(): RelationCollectionState
+	public function isCollectionFullyLoaded(): bool
 	{
-		return $this->collectionState;
+		return $this->collectionFullyLoaded;
 	}
 
 	public function isMany(): bool

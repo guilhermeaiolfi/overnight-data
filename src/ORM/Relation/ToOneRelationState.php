@@ -8,7 +8,7 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 
-final class RelatedReference implements RelationChangeInterface
+final class ToOneRelationState implements RelationChangeInterface
 {
 	private ?object $baselineTarget;
 	private ?object $target;
@@ -20,7 +20,7 @@ final class RelatedReference implements RelationChangeInterface
 		?object $target = null,
 	) {
 		if (trim($relationName) === '') {
-			throw new StateException('Related reference relation name cannot be empty.');
+			throw new StateException('To-one relation name cannot be empty.');
 		}
 
 		$this->baselineTarget = $target;

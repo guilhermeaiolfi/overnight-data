@@ -7,7 +7,6 @@ namespace Tests\ON\Data\ORM\State;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Relation\RelationCollectionState;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
@@ -209,7 +208,7 @@ final class RepresentationBindingTest extends TestCase
 		self::assertSame($state, $applied->getRelation('posts')->getRelation()->getState());
 		self::assertSame('posts', $applied->getRelation('posts')->getRelationName());
 		self::assertSame($relation->getRelatedBinding(), $applied->getRelation('posts')->getRelatedBinding());
-		self::assertSame($relation->getCollectionState(), $applied->getRelation('posts')->getCollectionState());
+		self::assertSame($relation->isCollectionFullyLoaded(), $applied->getRelation('posts')->isCollectionFullyLoaded());
 		self::assertSame(['name', 'postCount', 'posts'], $applied->getPaths());
 	}
 
@@ -298,7 +297,7 @@ final class RepresentationBindingTest extends TestCase
 			RecordRelationRef::forCollection($this->users(), $path),
 			RepresentationRelationCardinality::MANY,
 			new RepresentationBinding(),
-			RelationCollectionState::PARTIALLY_LOADED
+			false
 		);
 	}
 

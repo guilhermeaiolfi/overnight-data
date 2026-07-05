@@ -10,10 +10,10 @@ use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Relation\Persistence\RelationPersistencePlanner;
-use ON\Data\ORM\Relation\RelatedCollection;
-use ON\Data\ORM\Relation\RelatedCollectionStore;
-use ON\Data\ORM\Relation\RelatedReference;
-use ON\Data\ORM\Relation\RelatedReferenceStore;
+use ON\Data\ORM\Relation\ToManyRelationState;
+use ON\Data\ORM\Relation\ToManyRelationStore;
+use ON\Data\ORM\Relation\ToOneRelationState;
+use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
@@ -38,8 +38,8 @@ final class RelationPersistencePlannerTest extends TestCase
 	public function testNoChangedRelationsReturnsEmptyResult(): void
 	{
 		$result = (new RelationPersistencePlanner())->plan(
-			new RelatedCollectionStore(),
-			new RelatedReferenceStore(),
+			new ToManyRelationStore(),
+			new ToOneRelationStore(),
 			new RecordStateStore(),
 			new RepresentationStore()
 		);
@@ -52,27 +52,27 @@ final class RelationPersistencePlannerTest extends TestCase
 	{
 		$users = $this->registryWithRelation(useCustomRelation: true)->getCollection('users');
 		self::assertInstanceOf(CollectionInterface::class, $users);
-		$collection = $this->changedRelatedCollection(RecordState::new($users));
-		$relations = new RelatedCollectionStore();
+		$collection = $this->changedToManyRelationState(RecordState::new($users));
+		$relations = new ToManyRelationStore();
 		$relations->add($collection);
 
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('no configured persistence planner');
 
-		(new RelationPersistencePlanner())->plan($relations, new RelatedReferenceStore(), new RecordStateStore(), new RepresentationStore());
+		(new RelationPersistencePlanner())->plan($relations, new ToOneRelationStore(), new RecordStateStore(), new RepresentationStore());
 	}
 
 	public function testChangedRelationWithMissingDefinitionThrows(): void
 	{
 		$users = (new Registry())->collection('users')->primaryKey('id')->field('id', 'int')->end();
-		$collection = $this->changedRelatedCollection(RecordState::new($users));
-		$relations = new RelatedCollectionStore();
+		$collection = $this->changedToManyRelationState(RecordState::new($users));
+		$relations = new ToManyRelationStore();
 		$relations->add($collection);
 
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('no relation definition');
 
-		(new RelationPersistencePlanner())->plan($relations, new RelatedReferenceStore(), new RecordStateStore(), new RepresentationStore());
+		(new RelationPersistencePlanner())->plan($relations, new ToOneRelationStore(), new RecordStateStore(), new RepresentationStore());
 	}
 
 	public function testChangedRelationWithPlannerInvokesPlannerWithContextRelationAndCollection(): void
@@ -80,13 +80,13 @@ final class RelationPersistencePlannerTest extends TestCase
 		$registry = $this->registryWithRelation(RecordingRelationPersistencePlanner::class);
 		$users = $registry->getCollection('users');
 		self::assertInstanceOf(CollectionInterface::class, $users);
-		$collection = $this->changedRelatedCollection(RecordState::new($users));
-		$relations = new RelatedCollectionStore();
+		$collection = $this->changedToManyRelationState(RecordState::new($users));
+		$relations = new ToManyRelationStore();
 		$relations->add($collection);
 		$records = new RecordStateStore();
 		$representations = new RepresentationStore();
 
-		$references = new RelatedReferenceStore();
+		$references = new ToOneRelationStore();
 
 		$result = (new RelationPersistencePlanner())->plan($relations, $references, $records, $representations);
 
@@ -106,10 +106,10 @@ final class RelationPersistencePlannerTest extends TestCase
 		$registry = $this->registryWithRelation(RecordingRelationPersistencePlanner::class);
 		$users = $registry->getCollection('users');
 		self::assertInstanceOf(CollectionInterface::class, $users);
-		$relations = new RelatedCollectionStore();
-		$relations->add($this->changedRelatedCollection(RecordState::new($users)));
+		$relations = new ToManyRelationStore();
+		$relations->add($this->changedToManyRelationState(RecordState::new($users)));
 
-		$result = (new RelationPersistencePlanner())->plan($relations, new RelatedReferenceStore(), new RecordStateStore(), new RepresentationStore());
+		$result = (new RelationPersistencePlanner())->plan($relations, new ToOneRelationStore(), new RecordStateStore(), new RepresentationStore());
 
 		self::assertCount(1, $result->getCommands());
 		self::assertInstanceOf(TestCommand::class, $result->getCommands()[0]);
@@ -120,12 +120,12 @@ final class RelationPersistencePlannerTest extends TestCase
 		$registry = $this->registryWithOneRelation(RecordingRelationPersistencePlanner::class);
 		$users = $registry->getCollection('users');
 		self::assertInstanceOf(CollectionInterface::class, $users);
-		$reference = $this->changedRelatedReference(RecordState::new($users));
-		$references = new RelatedReferenceStore();
+		$reference = $this->changedToOneRelationState(RecordState::new($users));
+		$references = new ToOneRelationStore();
 		$references->add($reference);
 
 		$result = (new RelationPersistencePlanner())->plan(
-			new RelatedCollectionStore(),
+			new ToManyRelationStore(),
 			$references,
 			new RecordStateStore(),
 			new RepresentationStore()
@@ -141,11 +141,11 @@ final class RelationPersistencePlannerTest extends TestCase
 		$registry = $this->registryWithRelation(RecordingRelationPersistencePlanner::class);
 		$users = $registry->getCollection('users');
 		self::assertInstanceOf(CollectionInterface::class, $users);
-		$collection = $this->changedRelatedCollection(RecordState::new($users));
-		$relations = new RelatedCollectionStore();
+		$collection = $this->changedToManyRelationState(RecordState::new($users));
+		$relations = new ToManyRelationStore();
 		$relations->add($collection);
-		$reference = $this->changedRelatedReference(RecordState::new($users), 'posts');
-		$references = new RelatedReferenceStore();
+		$reference = $this->changedToOneRelationState(RecordState::new($users), 'posts');
+		$references = new ToOneRelationStore();
 		$references->add($reference);
 
 		$result = (new RelationPersistencePlanner())->plan($relations, $references, new RecordStateStore(), new RepresentationStore());
@@ -159,12 +159,12 @@ final class RelationPersistencePlannerTest extends TestCase
 		$registry = $this->registryWithOneRelation(RecordingRelationPersistencePlanner::class);
 		$users = $registry->getCollection('users');
 		self::assertInstanceOf(CollectionInterface::class, $users);
-		$reference = new RelatedReference(RecordState::new($users), 'profile', $this->postBinding());
-		$references = new RelatedReferenceStore();
+		$reference = new ToOneRelationState(RecordState::new($users), 'profile', $this->postBinding());
+		$references = new ToOneRelationStore();
 		$references->add($reference);
 
 		$result = (new RelationPersistencePlanner())->plan(
-			new RelatedCollectionStore(),
+			new ToManyRelationStore(),
 			$references,
 			new RecordStateStore(),
 			new RepresentationStore()
@@ -180,14 +180,14 @@ final class RelationPersistencePlannerTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$target = RecordState::clean($tags->getKey(3), ['id' => 3]);
 		$item = new stdClass();
-		$collection = new RelatedCollection($owner, 'tags', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
 		$collection->add($item);
-		$relations = new RelatedCollectionStore();
+		$relations = new ToManyRelationStore();
 		$relations->add($collection);
 
 		$result = (new RelationPersistencePlanner())->plan(
 			$relations,
-			new RelatedReferenceStore(),
+			new ToOneRelationStore(),
 			$this->records($owner, $target),
 			$this->trackedMap($this->tracked($item, $target)),
 		);
@@ -208,14 +208,14 @@ final class RelationPersistencePlannerTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$child = RecordState::clean($posts->getKey(5), ['id' => 5, 'user_id' => null]);
 		$item = new stdClass();
-		$collection = new RelatedCollection($owner, 'posts', $this->bindingFor($child));
+		$collection = new ToManyRelationState($owner, 'posts', $this->bindingFor($child));
 		$collection->add($item);
-		$relations = new RelatedCollectionStore();
+		$relations = new ToManyRelationStore();
 		$relations->add($collection);
 
 		$result = (new RelationPersistencePlanner())->plan(
 			$relations,
-			new RelatedReferenceStore(),
+			new ToOneRelationStore(),
 			$this->records($owner, $child),
 			$this->trackedMap($this->tracked($item, $child)),
 		);
@@ -230,13 +230,13 @@ final class RelationPersistencePlannerTest extends TestCase
 		$owner = RecordState::clean($posts->getKey(5), ['id' => 5, 'author_id' => null]);
 		$target = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$item = new stdClass();
-		$reference = new RelatedReference($owner, 'author', $this->bindingFor($target));
+		$reference = new ToOneRelationState($owner, 'author', $this->bindingFor($target));
 		$reference->set($item);
-		$references = new RelatedReferenceStore();
+		$references = new ToOneRelationStore();
 		$references->add($reference);
 
 		$result = (new RelationPersistencePlanner())->plan(
-			new RelatedCollectionStore(),
+			new ToManyRelationStore(),
 			$references,
 			$this->records($owner, $target),
 			$this->trackedMap($this->tracked($item, $target)),
@@ -252,13 +252,13 @@ final class RelationPersistencePlannerTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$target = RecordState::clean($profiles->getKey(5), ['id' => 5, 'user_id' => null]);
 		$item = new stdClass();
-		$reference = new RelatedReference($owner, 'profile', $this->bindingFor($target));
+		$reference = new ToOneRelationState($owner, 'profile', $this->bindingFor($target));
 		$reference->set($item);
-		$references = new RelatedReferenceStore();
+		$references = new ToOneRelationStore();
 		$references->add($reference);
 
 		$result = (new RelationPersistencePlanner())->plan(
-			new RelatedCollectionStore(),
+			new ToManyRelationStore(),
 			$references,
 			$this->records($owner, $target),
 			$this->trackedMap($this->tracked($item, $target)),
@@ -276,25 +276,25 @@ final class RelationPersistencePlannerTest extends TestCase
 		$users = $registry->getCollection('users');
 		self::assertInstanceOf(CollectionInterface::class, $users);
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'before']);
-		$relations = new RelatedCollectionStore();
-		$relations->add($this->changedRelatedCollection($owner));
+		$relations = new ToManyRelationStore();
+		$relations->add($this->changedToManyRelationState($owner));
 
-		(new RelationPersistencePlanner())->plan($relations, new RelatedReferenceStore(), new RecordStateStore(), new RepresentationStore());
+		(new RelationPersistencePlanner())->plan($relations, new ToOneRelationStore(), new RecordStateStore(), new RepresentationStore());
 
 		self::assertSame('planned', $owner->getValue('name'));
 		self::assertTrue($owner->isDirty());
 	}
 
-	public function testPlannerDoesNotClearRelatedCollectionChanges(): void
+	public function testPlannerDoesNotClearToManyRelationStateChanges(): void
 	{
 		$registry = $this->registryWithRelation(RecordingRelationPersistencePlanner::class);
 		$users = $registry->getCollection('users');
 		self::assertInstanceOf(CollectionInterface::class, $users);
-		$collection = $this->changedRelatedCollection(RecordState::new($users));
-		$relations = new RelatedCollectionStore();
+		$collection = $this->changedToManyRelationState(RecordState::new($users));
+		$relations = new ToManyRelationStore();
 		$relations->add($collection);
 
-		(new RelationPersistencePlanner())->plan($relations, new RelatedReferenceStore(), new RecordStateStore(), new RepresentationStore());
+		(new RelationPersistencePlanner())->plan($relations, new ToOneRelationStore(), new RecordStateStore(), new RepresentationStore());
 
 		self::assertTrue($collection->hasChanges());
 	}
@@ -305,10 +305,10 @@ final class RelationPersistencePlannerTest extends TestCase
 		$registry = $this->registryWithRelation(RecordingRelationPersistencePlanner::class);
 		$users = $registry->getCollection('users');
 		self::assertInstanceOf(CollectionInterface::class, $users);
-		$relations = new RelatedCollectionStore();
-		$relations->add($this->changedRelatedCollection(RecordState::new($users)));
+		$relations = new ToManyRelationStore();
+		$relations->add($this->changedToManyRelationState(RecordState::new($users)));
 
-		$result = (new RelationPersistencePlanner())->plan($relations, new RelatedReferenceStore(), new RecordStateStore(), new RepresentationStore());
+		$result = (new RelationPersistencePlanner())->plan($relations, new ToOneRelationStore(), new RecordStateStore(), new RepresentationStore());
 
 		self::assertCount(1, $result->getCommands());
 		self::assertSame(1, RecordingRelationPersistencePlanner::$calls);
@@ -424,17 +424,17 @@ final class RelationPersistencePlannerTest extends TestCase
 		return [$users, $profiles];
 	}
 
-	private function changedRelatedCollection(RecordState $owner): RelatedCollection
+	private function changedToManyRelationState(RecordState $owner): ToManyRelationState
 	{
-		$collection = new RelatedCollection($owner, 'posts', $this->postBinding());
+		$collection = new ToManyRelationState($owner, 'posts', $this->postBinding());
 		$collection->add(new stdClass());
 
 		return $collection;
 	}
 
-	private function changedRelatedReference(RecordState $owner, string $relationName = 'profile'): RelatedReference
+	private function changedToOneRelationState(RecordState $owner, string $relationName = 'profile'): ToOneRelationState
 	{
-		$reference = new RelatedReference($owner, $relationName, $this->postBinding());
+		$reference = new ToOneRelationState($owner, $relationName, $this->postBinding());
 		$reference->set(new stdClass());
 
 		return $reference;

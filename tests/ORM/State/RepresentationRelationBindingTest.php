@@ -6,7 +6,6 @@ namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Relation\RelationCollectionState;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
@@ -24,7 +23,7 @@ final class RepresentationRelationBindingTest extends TestCase
 			$relation,
 			RepresentationRelationCardinality::MANY,
 			$relatedBinding,
-			RelationCollectionState::FULLY_LOADED
+			true
 		);
 
 		self::assertSame('posts', $binding->getPath());
@@ -32,7 +31,7 @@ final class RepresentationRelationBindingTest extends TestCase
 		self::assertSame('posts', $binding->getRelationName());
 		self::assertSame(RepresentationRelationCardinality::MANY, $binding->getCardinality());
 		self::assertSame($relatedBinding, $binding->getRelatedBinding());
-		self::assertSame(RelationCollectionState::FULLY_LOADED, $binding->getCollectionState());
+		self::assertSame(true, $binding->isCollectionFullyLoaded());
 	}
 
 	public function testRejectsEmptyPath(): void
@@ -80,7 +79,7 @@ final class RepresentationRelationBindingTest extends TestCase
 			$this->relation('posts'),
 			RepresentationRelationCardinality::MANY,
 			new RepresentationBinding(),
-			RelationCollectionState::PARTIALLY_LOADED
+			false
 		);
 		$nextRelation = RecordRelationRef::forCollection((new Registry())->collection('companies'), 'posts');
 
@@ -91,7 +90,7 @@ final class RepresentationRelationBindingTest extends TestCase
 		self::assertSame($binding->getPath(), $next->getPath());
 		self::assertSame($binding->getCardinality(), $next->getCardinality());
 		self::assertSame($binding->getRelatedBinding(), $next->getRelatedBinding());
-		self::assertSame($binding->getCollectionState(), $next->getCollectionState());
+		self::assertSame($binding->isCollectionFullyLoaded(), $next->isCollectionFullyLoaded());
 	}
 
 	private function relation(string $relationName): RecordRelationRef

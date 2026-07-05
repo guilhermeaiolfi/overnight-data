@@ -7,8 +7,7 @@ namespace Tests\ON\Data\ORM\Relation;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Relation\RelatedCollection;
-use ON\Data\ORM\Relation\RelationCollectionState;
+use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -16,14 +15,15 @@ use ON\Data\ORM\State\RepresentationFieldBinding;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
-final class RelatedCollectionTest extends TestCase
+final class ToManyRelationStateTest extends TestCase
 {
 	public function testCreatesUnloadedCollectionByDefault(): void
 	{
 		$collection = $this->relatedCollection();
 
 		self::assertTrue($collection->isUnloaded());
-		self::assertSame(RelationCollectionState::UNLOADED, $collection->getState());
+		self::assertFalse($collection->isPartiallyLoaded());
+		self::assertFalse($collection->isFullyLoaded());
 	}
 
 	public function testExposesOwnerRelationNameChildBindingAndState(): void
@@ -31,11 +31,10 @@ final class RelatedCollectionTest extends TestCase
 		$owner = RecordState::new($this->users());
 		$binding = $this->postBinding();
 
-		$collection = new RelatedCollection(
+		$collection = ToManyRelationState::full(
 			$owner,
 			'posts',
-			$binding,
-			RelationCollectionState::FULLY_LOADED
+			$binding
 		);
 
 		self::assertSame($owner, $collection->getOwner());
@@ -49,18 +48,17 @@ final class RelatedCollectionTest extends TestCase
 	{
 		$this->expectException(StateException::class);
 
-		new RelatedCollection(RecordState::new($this->users()), '', $this->postBinding());
+		new ToManyRelationState(RecordState::new($this->users()), '', $this->postBinding());
 	}
 
 	public function testConstructorRejectsNonObjectItems(): void
 	{
 		$this->expectException(StateException::class);
 
-		new RelatedCollection(
+		new ToManyRelationState(
 			RecordState::new($this->users()),
 			'posts',
 			$this->postBinding(),
-			RelationCollectionState::UNLOADED,
 			['not-an-object']
 		);
 	}
@@ -79,7 +77,7 @@ final class RelatedCollectionTest extends TestCase
 	{
 		$item = new stdClass();
 
-		$collection = $this->relatedCollection(RelationCollectionState::FULLY_LOADED, [$item]);
+		$collection = $this->relatedCollection(fullyLoaded: true, items: [$item]);
 
 		self::assertSame([$item], $collection->getItems());
 		self::assertSame([], $collection->getAdded());
@@ -89,7 +87,7 @@ final class RelatedCollectionTest extends TestCase
 	{
 		$item = new stdClass();
 
-		$collection = $this->relatedCollection(RelationCollectionState::FULLY_LOADED, [$item, $item]);
+		$collection = $this->relatedCollection(fullyLoaded: true, items: [$item, $item]);
 
 		self::assertSame([$item], $collection->getItems());
 		self::assertSame(1, $collection->countKnown());
@@ -110,7 +108,7 @@ final class RelatedCollectionTest extends TestCase
 	public function testAddingObjectToPartiallyLoadedCollectionKeepsPartiallyLoadedState(): void
 	{
 		$item = new stdClass();
-		$collection = $this->relatedCollection(RelationCollectionState::PARTIALLY_LOADED);
+		$collection = ToManyRelationState::partial(RecordState::new($this->users()), 'posts', $this->postBinding());
 
 		$collection->add($item);
 
@@ -122,7 +120,7 @@ final class RelatedCollectionTest extends TestCase
 	public function testAddingObjectToFullyLoadedCollectionKeepsFullyLoadedState(): void
 	{
 		$item = new stdClass();
-		$collection = $this->relatedCollection(RelationCollectionState::FULLY_LOADED);
+		$collection = $this->relatedCollection(fullyLoaded: true);
 
 		$collection->add($item);
 
@@ -146,7 +144,7 @@ final class RelatedCollectionTest extends TestCase
 	public function testRemovingKnownLoadedObjectRemovesItFromKnownItemsAndRecordsRemoval(): void
 	{
 		$item = new stdClass();
-		$collection = $this->relatedCollection(RelationCollectionState::FULLY_LOADED, [$item]);
+		$collection = $this->relatedCollection(fullyLoaded: true, items: [$item]);
 
 		$collection->remove($item);
 
@@ -171,7 +169,7 @@ final class RelatedCollectionTest extends TestCase
 	public function testAddingRemovedBaselineObjectCancelsRemovalAndDoesNotMarkAddition(): void
 	{
 		$item = new stdClass();
-		$collection = $this->relatedCollection(RelationCollectionState::FULLY_LOADED, [$item]);
+		$collection = $this->relatedCollection(fullyLoaded: true, items: [$item]);
 
 		$collection->remove($item);
 		$collection->add($item);
@@ -223,11 +221,20 @@ final class RelatedCollectionTest extends TestCase
 
 	public function testMarkPartiallyLoadedSetsPartialState(): void
 	{
-		$collection = $this->relatedCollection(RelationCollectionState::FULLY_LOADED);
+		$collection = $this->relatedCollection();
 
 		$collection->markPartiallyLoaded();
 
 		self::assertTrue($collection->isPartiallyLoaded());
+	}
+
+	public function testMarkPartiallyLoadedDoesNotDowngradeFullyLoadedState(): void
+	{
+		$collection = $this->relatedCollection(fullyLoaded: true);
+
+		$collection->markPartiallyLoaded();
+
+		self::assertTrue($collection->isFullyLoaded());
 	}
 
 	public function testHasChangesIsTrueWhenAddedIntentExists(): void
@@ -276,7 +283,7 @@ final class RelatedCollectionTest extends TestCase
 	{
 		$known = new stdClass();
 		$removed = new stdClass();
-		$collection = $this->relatedCollection();
+		$collection = $this->relatedCollection(fullyLoaded: true);
 		$collection->add($known);
 		$collection->remove($removed);
 
@@ -286,6 +293,7 @@ final class RelatedCollectionTest extends TestCase
 		self::assertSame([], $collection->getAdded());
 		self::assertSame([], $collection->getRemoved());
 		self::assertFalse($collection->hasChanges());
+		self::assertTrue($collection->isFullyLoaded());
 	}
 
 	public function testIsEmptyKnownOnlyDescribesInMemoryItemsNotDatabaseEmptiness(): void
@@ -300,7 +308,7 @@ final class RelatedCollectionTest extends TestCase
 	{
 		$binding = $this->postBinding();
 		$item = new stdClass();
-		$collection = new RelatedCollection(RecordState::new($this->users()), 'posts', $binding);
+		$collection = new ToManyRelationState(RecordState::new($this->users()), 'posts', $binding);
 
 		$collection->add($item);
 		$collection->remove($item);
@@ -314,10 +322,14 @@ final class RelatedCollectionTest extends TestCase
 	 * @param list<object> $items
 	 */
 	private function relatedCollection(
-		RelationCollectionState $state = RelationCollectionState::UNLOADED,
+		bool $fullyLoaded = false,
 		array $items = [],
-	): RelatedCollection {
-		return new RelatedCollection(RecordState::new($this->users()), 'posts', $this->postBinding(), $state, $items);
+	): ToManyRelationState {
+		if ($fullyLoaded) {
+			return ToManyRelationState::full(RecordState::new($this->users()), 'posts', $this->postBinding(), $items);
+		}
+
+		return new ToManyRelationState(RecordState::new($this->users()), 'posts', $this->postBinding(), $items);
 	}
 
 	private function postBinding(): RepresentationBinding

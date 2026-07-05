@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Persistence;
 
-use ON\Data\ORM\Relation\RelatedCollectionStore;
-use ON\Data\ORM\Relation\RelatedReferenceStore;
+use ON\Data\ORM\Relation\ToManyRelationStore;
+use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationStore;
 
@@ -14,8 +14,8 @@ final class PersistenceContext
 	public function __construct(
 		private RecordStateStore $records,
 		private RepresentationStore $representations,
-		private RelatedCollectionStore $relations,
-		private RelatedReferenceStore $references,
+		private ToManyRelationStore $relations,
+		private ToOneRelationStore $references,
 		private CommandBuffer $commands,
 	) {
 	}
@@ -30,12 +30,12 @@ final class PersistenceContext
 		return $this->representations;
 	}
 
-	public function getRelations(): RelatedCollectionStore
+	public function getRelations(): ToManyRelationStore
 	{
 		return $this->relations;
 	}
 
-	public function getReferences(): RelatedReferenceStore
+	public function getReferences(): ToOneRelationStore
 	{
 		return $this->references;
 	}

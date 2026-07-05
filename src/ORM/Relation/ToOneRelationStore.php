@@ -7,12 +7,12 @@ namespace ON\Data\ORM\Relation;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordState;
 
-final class RelatedReferenceStore
+final class ToOneRelationStore
 {
-	/** @var array<string, RelatedReference> */
+	/** @var array<string, ToOneRelationState> */
 	private array $references = [];
 
-	public function add(RelatedReference $reference): void
+	public function add(ToOneRelationState $reference): void
 	{
 		$key = $this->key($reference->getOwner(), $reference->getRelationName());
 		if (isset($this->references[$key])) {
@@ -21,7 +21,7 @@ final class RelatedReferenceStore
 			}
 
 			throw new StateException(sprintf(
-				"Related reference store already contains a different reference for relation '%s'.",
+				"To-one relation store already contains a different state for relation '%s'.",
 				$reference->getRelationName()
 			));
 		}
@@ -34,7 +34,7 @@ final class RelatedReferenceStore
 		return array_key_exists($this->key($owner, $relationName), $this->references);
 	}
 
-	public function get(RecordState $owner, string $relationName): ?RelatedReference
+	public function get(RecordState $owner, string $relationName): ?ToOneRelationState
 	{
 		return $this->references[$this->key($owner, $relationName)] ?? null;
 	}
@@ -50,7 +50,7 @@ final class RelatedReferenceStore
 	}
 
 	/**
-	 * @return list<RelatedReference>
+	 * @return list<ToOneRelationState>
 	 */
 	public function getAll(): array
 	{
@@ -58,20 +58,20 @@ final class RelatedReferenceStore
 	}
 
 	/**
-	 * @return list<RelatedReference>
+	 * @return list<ToOneRelationState>
 	 */
 	public function getChanged(): array
 	{
 		return array_values(array_filter(
 			$this->references,
-			static fn (RelatedReference $reference): bool => $reference->hasChanges()
+			static fn (ToOneRelationState $reference): bool => $reference->hasChanges()
 		));
 	}
 
 	private function key(RecordState $owner, string $relationName): string
 	{
 		if (trim($relationName) === '') {
-			throw new StateException('Related reference relation name cannot be empty.');
+			throw new StateException('To-one relation name cannot be empty.');
 		}
 
 		return $owner->getStateHash() . "\0" . $relationName;

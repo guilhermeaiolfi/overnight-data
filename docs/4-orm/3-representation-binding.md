@@ -59,16 +59,16 @@ It stores:
 
 It is not a binding template. Multiple object instances may share the same reusable representation binding shape, while each representation state stores instance-specific baseline revisions.
 
-### RelatedCollection / RelatedReference
+### ToManyRelationState / ToOneRelationState
 
-`RelatedCollection` is runtime relation state for one owner object. It tracks known, added, and removed collection items plus the collection load state. `RelatedReference` is the singular-relation runtime state and tracks the current target plus local change intent.
+`ToManyRelationState` is runtime relation state for one owner object. It tracks known, added, and removed collection items plus the collection load state. `ToOneRelationState` is the singular-relation runtime state and tracks the current target plus local change intent.
 
-Runtime relation state is not representation shape. A `RepresentationRelationBinding` says that a representation path is a relation and stores the reusable related binding branch. A `RelatedCollection` or `RelatedReference` says what one owner currently knows and intends to add, remove, or set at runtime.
+Runtime relation state is not representation shape. A `RepresentationRelationBinding` says that a representation path is a relation and stores the reusable related binding branch. A `ToManyRelationState` or `ToOneRelationState` says what one owner currently knows and intends to add, remove, or set at runtime.
 
 Relation representation sync connects the two models:
 
-- `MANY` relation bindings sync representation paths into `RelatedCollection` instances.
-- `ONE` relation bindings sync representation paths into `RelatedReference` instances.
+- `MANY` relation bindings sync representation paths into `ToManyRelationState` instances.
+- `ONE` relation bindings sync representation paths into `ToOneRelationState` instances.
 
 In strict sync paths, related objects found at those representation paths must already be tracked/adopted. Relation representation sync validates that each `MANY` item and each non-null `ONE` target has a tracked representation, and throws `SyncException` with the relation path when it does not. It does not auto-adopt related objects by itself.
 
@@ -76,7 +76,7 @@ In strict sync paths, related objects found at those representation paths must a
 
 Graph sync does not infer relations from collection definitions, object properties, mapper metadata, or query selections. It syncs scalar and relation runtime state, but does not plan relation persistence, flush records, execute commands, or clear relation changes. Calling `sync($object)` again refreshes state and can bring newly attached related plain objects into the session. Query/projection/mixed bindings remain valid provenance for already-tracked or query-created representations; they require existing tracked state rather than creating a new root record.
 
-Relation persistence planning then consumes changed `RelatedCollection` and `RelatedReference` instances. Built-in planners cover many-to-many, has-many, belongs-to, and has-one relation definitions.
+Relation persistence planning then consumes changed `ToManyRelationState` and `ToOneRelationState` instances. Built-in planners cover many-to-many, has-many, belongs-to, and has-one relation definitions.
 
 ## Binding Kinds
 
@@ -170,11 +170,11 @@ Relation representation sync uses relation bindings only:
 
 ```text
 RepresentationValueReader         -> getRelations()
-RelationRepresentationSynchronizer -> RelatedCollection / RelatedReference
+RelationRepresentationSynchronizer -> ToManyRelationState / ToOneRelationState
 RepresentationStateResolver      -> already-tracked related objects only
 ```
 
-`MANY` bindings become `RelatedCollection` runtime state. `ONE` bindings become `RelatedReference` runtime state. `Session::sync($object, $binding)` exposes this graph-aware representation sync step directly for plain objects with a single-collection root binding, and `Session::sync($object)` refreshes an already-tracked object graph. `Session::flush()` still runs strict sync automatically before planning and flushing. Expression bindings are ignored by both synchronizers for now. They should survive on the binding model as provenance for later tasks.
+`MANY` bindings become `ToManyRelationState` runtime state. `ONE` bindings become `ToOneRelationState` runtime state. `Session::sync($object, $binding)` exposes this graph-aware representation sync step directly for plain objects with a single-collection root binding, and `Session::sync($object)` refreshes an already-tracked object graph. `Session::flush()` still runs strict sync automatically before planning and flushing. Expression bindings are ignored by both synchronizers for now. They should survive on the binding model as provenance for later tasks.
 
 `Session::flush()` does not adopt newly attached untracked objects. If a new related plain object is attached after the last explicit `sync($object)`, `flush()` raises through the strict relation synchronization path. Call `sync($object)` again to refresh runtime state before flushing.
 

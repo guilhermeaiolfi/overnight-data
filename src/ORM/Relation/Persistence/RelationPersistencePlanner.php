@@ -10,8 +10,8 @@ use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
-use ON\Data\ORM\Relation\RelatedCollectionStore;
-use ON\Data\ORM\Relation\RelatedReferenceStore;
+use ON\Data\ORM\Relation\ToManyRelationStore;
+use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationStore;
@@ -19,8 +19,8 @@ use ON\Data\ORM\State\RepresentationStore;
 final class RelationPersistencePlanner
 {
 	public function plan(
-		RelatedCollectionStore $relations,
-		RelatedReferenceStore $references,
+		ToManyRelationStore $relations,
+		ToOneRelationStore $references,
 		RecordStateStore $records,
 		RepresentationStore $representations,
 	): RelationPersistenceResult {

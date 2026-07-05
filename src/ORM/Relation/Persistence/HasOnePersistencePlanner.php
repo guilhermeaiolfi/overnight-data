@@ -9,7 +9,7 @@ use ON\Data\Definition\Relation\HasOneRelation;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\PersistenceContext;
-use ON\Data\ORM\Relation\RelatedReference;
+use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\State\RecordState;
 
@@ -17,7 +17,7 @@ final class HasOnePersistencePlanner implements RelationPersistencePlannerInterf
 {
 	public function plan(PersistenceContext $context, RelationInterface $relation, RelationChangeInterface $change): void
 	{
-		if (! $change instanceof RelatedReference) {
+		if (! $change instanceof ToOneRelationState) {
 			throw new RelationPersistenceException(sprintf(
 				"Relation '%s' must be a related reference to use %s.",
 				$change->getRelationName(),

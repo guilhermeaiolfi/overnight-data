@@ -22,7 +22,7 @@ final class Phase34BindingModelTest extends TestCase
 		self::assertStringContainsString('The mapper does not by itself know persistence provenance.', $contents);
 		self::assertStringContainsString('RepresentationBinding', $contents);
 		self::assertStringContainsString('RepresentationState', $contents);
-		self::assertStringContainsString('RelatedCollection / Future RelatedReference', $contents);
+		self::assertStringContainsString('ToManyRelationState / Future ToOneRelationState', $contents);
 		self::assertStringContainsString('field bindings', $contents);
 		self::assertStringContainsString('expression bindings', $contents);
 		self::assertStringContainsString('relation bindings', $contents);

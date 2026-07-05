@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\Relation\RelatedCollectionStore;
-use ON\Data\ORM\Relation\RelatedReferenceStore;
+use ON\Data\ORM\Relation\ToManyRelationStore;
+use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
@@ -24,8 +24,8 @@ final class RepresentationSyncer
 	public function sync(
 		RepresentationStore $representations,
 		RecordStateStore $records,
-		RelatedCollectionStore $relations,
-		RelatedReferenceStore $references,
+		ToManyRelationStore $relations,
+		ToOneRelationStore $references,
 		?object $representation = null,
 	): SyncResult {
 		$syncRepresentations = $representations;

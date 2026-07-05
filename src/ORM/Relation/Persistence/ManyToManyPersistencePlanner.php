@@ -10,7 +10,7 @@ use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\PersistenceContext;
-use ON\Data\ORM\Relation\RelatedCollection;
+use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\State\RecordState;
 
@@ -18,7 +18,7 @@ final class ManyToManyPersistencePlanner implements RelationPersistencePlannerIn
 {
 	public function plan(PersistenceContext $context, RelationInterface $relation, RelationChangeInterface $change): void
 	{
-		if (! $change instanceof RelatedCollection) {
+		if (! $change instanceof ToManyRelationState) {
 			throw new RelationPersistenceException(sprintf(
 				"Relation '%s' must be a related collection to use %s.",
 				$change->getRelationName(),

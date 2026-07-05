@@ -105,10 +105,10 @@ final class Phase1BoundaryTest extends TestCase
 		);
 	}
 
-	public function testRelatedCollectionTracksRelationIntentOnly(): void
+	public function testToManyRelationStateTracksRelationIntentOnly(): void
 	{
 		self::markTestIncomplete(
-			'Phase 1 boundary: RelatedCollection owns relation add/remove intent only; it does not persist, adopt, or write relations.'
+			'Phase 1 boundary: ToManyRelationState owns relation add/remove intent only; it does not persist, adopt, or write relations.'
 		);
 	}
 

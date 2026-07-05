@@ -8,7 +8,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\Relation\RelatedCollection;
+use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
@@ -157,7 +157,7 @@ final class RepresentationAdopterTest extends TestCase
 		$representations = new RepresentationStore();
 		$item = new stdClass();
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
-		$collection = new RelatedCollection(RecordState::new($this->users()), 'posts', $this->postBinding());
+		$collection = new ToManyRelationState(RecordState::new($this->users()), 'posts', $this->postBinding());
 
 		$collection->add($item);
 		$tracked = $this->adopter(representations: $representations)->adopt(
