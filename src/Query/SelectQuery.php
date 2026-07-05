@@ -10,6 +10,8 @@ use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
+use ON\Data\ORM\Binding\MutableQueryResultTracker;
+use ON\Data\ORM\Session;
 use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Exception\ObjectExportException;
 use ON\Data\Query\Exception\RelationSelectionException;
@@ -87,6 +89,10 @@ final class SelectQuery implements QuerySourceInterface
 	private ?StarExpression $sourceStar = null;
 
 	private ?string $resultClass = null;
+
+	private bool $mutable = false;
+
+	private ?Session $session = null;
 
 	public function __construct(
 		private readonly CollectionInterface|SelectQuery $source,
@@ -300,6 +306,8 @@ final class SelectQuery implements QuerySourceInterface
 		$copy->limit = $this->limit;
 		$copy->offset = $this->offset;
 		$copy->resultClass = $this->resultClass;
+		$copy->mutable = $this->mutable;
+		$copy->session = $this->session;
 
 		$joinMap = [spl_object_id($this) => $copy];
 
@@ -467,6 +475,28 @@ final class SelectQuery implements QuerySourceInterface
 		return $this->resultClass;
 	}
 
+	public function mutable(?Session $session = null): self
+	{
+		if ($this->resultClass === null) {
+			throw ObjectExportException::requiresObjectExport();
+		}
+
+		$this->mutable = true;
+		$this->session = $session;
+
+		return $this;
+	}
+
+	public function isMutable(): bool
+	{
+		return $this->mutable;
+	}
+
+	public function getSession(): ?Session
+	{
+		return $this->session;
+	}
+
 	public function getSelections(): SelectionList
 	{
 		return $this->selections;
@@ -592,7 +622,13 @@ final class SelectQuery implements QuerySourceInterface
 			$rows = (new Relation\LoadRuntime($this, $executor))->fetchAll();
 		}
 
-		return $this->materializeRows($rows);
+		$rows = $this->materializeRows($rows);
+
+		if ($this->mutable) {
+			$this->trackMutableResults($rows);
+		}
+
+		return $rows;
 	}
 
 	/**
@@ -613,7 +649,13 @@ final class SelectQuery implements QuerySourceInterface
 			return null;
 		}
 
-		return $this->materializeRow($row);
+		$result = $this->materializeRow($row);
+
+		if ($this->mutable && is_object($result)) {
+			(new MutableQueryResultTracker())->trackOne($this, $this->requireMutableSession(), $result);
+		}
+
+		return $result;
 	}
 
 	/**
@@ -704,6 +746,23 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		return (new ObjectResultMaterializer())->materialize($row, $this->resultClass);
+	}
+
+	/**
+	 * @param list<object> $objects
+	 */
+	private function trackMutableResults(array $objects): void
+	{
+		(new MutableQueryResultTracker())->trackAll($this, $this->requireMutableSession(), $objects);
+	}
+
+	private function requireMutableSession(): Session
+	{
+		if ($this->session instanceof Session) {
+			return $this->session;
+		}
+
+		return $this->session = (new MutableQueryResultTracker())->createSession();
 	}
 
 	private function describeSource(QuerySourceInterface $source): string

@@ -15,4 +15,9 @@ final class ObjectExportException extends InvalidArgumentException
 			$class,
 		));
 	}
+
+	public static function requiresObjectExport(): self
+	{
+		return new self('Mutable query export requires object export; call to(stdClass::class) before mutable().');
+	}
 }
