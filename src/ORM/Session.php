@@ -21,9 +21,9 @@ use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\Sync\AdoptionRecordResolver;
 use ON\Data\ORM\Sync\GraphAdopter;
 use ON\Data\ORM\Sync\RepresentationAdopter;
-use ON\Data\ORM\Sync\RepresentationReader;
 use ON\Data\ORM\Sync\RepresentationSyncer;
 use ON\Data\ORM\Sync\SyncResult;
 use stdClass;
@@ -32,6 +32,7 @@ final class Session
 {
 	private SessionContext $context;
 	private RepresentationAdopter $adopter;
+	private AdoptionRecordResolver $recordResolver;
 	private GraphAdopter $graphAdopter;
 	private FlushExecutor $flusher;
 	private RepresentationSyncer $syncer;
@@ -43,7 +44,8 @@ final class Session
 	) {
 		$this->context = new SessionContext();
 		$this->adopter = new RepresentationAdopter($this->getRecords(), $this->getRepresentations());
-		$this->graphAdopter = new GraphAdopter();
+		$this->recordResolver = new AdoptionRecordResolver();
+		$this->graphAdopter = new GraphAdopter(records: $this->recordResolver);
 		$this->syncer = $syncer ?? new RepresentationSyncer();
 		$this->flusher = $flusher ?? new FlushExecutor($executor, $this->syncer);
 	}
@@ -132,7 +134,7 @@ final class Session
 				));
 			}
 		} else {
-			$record = RecordState::clean($key, $this->identifyInitialValues($representation, $binding, $key));
+			$record = RecordState::clean($key, $this->recordResolver->initialValuesForKey($representation, $binding, $key));
 		}
 
 		$this->adopter->adopt($representation, $binding, $record);
@@ -259,24 +261,5 @@ final class Session
 		}
 
 		return $binding;
-	}
-
-	/**
-	 * @return array<string, mixed>
-	 */
-	private function identifyInitialValues(object $representation, RepresentationBinding $binding, Key $key): array
-	{
-		$values = $key->getValues();
-		$reader = new RepresentationReader();
-		foreach ($binding->getFields() as $fieldBinding) {
-			$fieldName = $fieldBinding->getField()->getFieldName();
-
-			try {
-				$values[$fieldName] = $reader->readPath($representation, $fieldBinding->getPath());
-			} catch (SyncException) {
-			}
-		}
-
-		return $values;
 	}
 }

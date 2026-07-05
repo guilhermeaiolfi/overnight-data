@@ -73,7 +73,7 @@ final class HasOnePersistencePlanner implements RelationPersistencePlannerInterf
 
 	private function copyOwnerKeysIntoTarget(HasOneRelation $relation, RecordState $owner, RecordState $target): void
 	{
-		$ownerCollection = $relation->getParent()->getName();
+		$ownerCollection = $owner->getCollection()->getName();
 		$this->keys->copyValues(
 			$relation->getName(),
 			$relation->getInnerKeys(),
