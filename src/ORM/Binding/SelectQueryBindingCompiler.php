@@ -36,9 +36,10 @@ final class SelectQueryBindingCompiler
 		SelectQuery $query,
 		CollectionInterface $collection,
 	): void {
+		$explicitSelections = $query->getSelections()->getExplicit();
 		$selectedFields = $this->getRootExplicitScalarSelections($query);
 
-		if ($selectedFields === []) {
+		if ($explicitSelections === []) {
 			$this->addDefaultFields($binding, $collection);
 		} else {
 			$this->addSelectedFields($binding, $collection, $query, $selectedFields);

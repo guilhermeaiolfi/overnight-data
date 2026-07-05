@@ -241,6 +241,21 @@ final class SelectQueryBindingCompilerTest extends TestCase
 		self::assertSame([], $binding->getExpressions());
 	}
 
+	public function testExpressionOnlyRootSelectionDoesNotFallbackToDefaultFields(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = query($users, fn (SelectQuery $query) => $query->select($query->id->count()->as('total')));
+
+		$binding = $this->compiler->compile($query);
+
+		self::assertTrue($binding->hasField('id'));
+		self::assertTrue($binding->getField('id')->isReadOnly());
+
+		self::assertFalse($binding->hasField('name'));
+		self::assertSame([], $binding->getExpressions());
+	}
+
 	public function testReturnsNewRepresentationBindingEachTime(): void
 	{
 		$registry = $this->makeRegistry();
