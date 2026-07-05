@@ -100,6 +100,98 @@ final class SessionTest extends TestCase
 		self::assertSame($record, $session->getRecords()->getByKey($key));
 	}
 
+	public function testIdentifyCreatesKeyOnlyObjectTrackedAsCleanExisting(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$posts = $this->posts();
+
+		$post = $session->identify($posts, ['id' => 123]);
+
+		self::assertInstanceOf(stdClass::class, $post);
+		self::assertSame(123, $post->id);
+		$tracked = $session->getRepresentations()->get($post);
+		self::assertInstanceOf(RepresentationState::class, $tracked);
+		$record = $session->getRecords()->getFromRepresentation($tracked);
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertTrue($record->isClean());
+		self::assertSame(['id' => 123], $record->getValues());
+	}
+
+	public function testIdentifyTracksProvidedObjectAsCleanExisting(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$posts = $this->posts();
+		$post = $this->representation(['id' => 123, 'title' => 'Existing']);
+
+		$result = $session->identify($posts, ['id' => 123], $post, $this->postTemplateBindingFor($posts));
+
+		self::assertSame($post, $result);
+		$tracked = $session->getRepresentations()->get($post);
+		self::assertInstanceOf(RepresentationState::class, $tracked);
+		$record = $session->getRecords()->getFromRepresentation($tracked);
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertTrue($record->isClean());
+		self::assertSame(['id' => 123, 'title' => 'Existing'], $record->getValues());
+	}
+
+	public function testIdentifySupportsCompositeKeys(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$collection = $this->compositeMemberships();
+
+		$membership = $session->identify($collection, ['user_id' => 10, 'group_id' => 20]);
+
+		$tracked = $session->getRepresentations()->get($membership);
+		self::assertInstanceOf(RepresentationState::class, $tracked);
+		$record = $session->getRecords()->getFromRepresentation($tracked);
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertSame(['user_id' => 10, 'group_id' => 20], $record->getKey()?->getValues());
+	}
+
+	public function testIdentifyReusesAlreadyTrackedCleanOrDirtyRecordWithSameKey(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$posts = $this->posts();
+		$record = $session->trackClean($posts->getKey(123), ['id' => 123, 'title' => 'Before']);
+		$record->setValue('title', 'Dirty');
+		$post = $this->representation(['id' => 123, 'title' => 'Object']);
+
+		$session->identify($posts, ['id' => 123], $post, $this->postTemplateBindingFor($posts));
+
+		$tracked = $session->getRepresentations()->get($post);
+		self::assertInstanceOf(RepresentationState::class, $tracked);
+		self::assertSame($record, $session->getRecords()->getFromRepresentation($tracked));
+		self::assertTrue($record->isDirty());
+	}
+
+	public function testIdentifyThrowsWhenSameKeyIsAlreadyTrackedAsRemoved(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$posts = $this->posts();
+		$record = $session->trackClean($posts->getKey(123), ['id' => 123, 'title' => 'Before']);
+		$record->markRemoved();
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage('removed');
+
+		$session->identify($posts, ['id' => 123]);
+	}
+
+	public function testIdentifyReturnsAlreadyTrackedObjectForSameKeyAndThrowsForDifferentKey(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$posts = $this->posts();
+		$post = $this->representation(['id' => 123, 'title' => 'Existing']);
+		$session->identify($posts, ['id' => 123], $post, $this->postTemplateBindingFor($posts));
+
+		self::assertSame($post, $session->identify($posts, ['id' => 123], $post));
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage('different record');
+
+		$session->identify($posts, ['id' => 456], $post);
+	}
+
 	public function testAdoptTracksRepresentationAndRecordThroughAdopter(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
@@ -172,6 +264,35 @@ final class SessionTest extends TestCase
 		self::assertSame('New User', $session->getRecords()->getFromRepresentation($tracked)?->getValue('name'));
 	}
 
+	public function testSyncUntrackedRootWithCompleteKeyTracksRootAsCleanExisting(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$representation = $this->representation(['id' => 10, 'name' => 'Existing User']);
+
+		$result = $session->sync($representation, $this->userTemplateBindingFor($this->users()));
+
+		$tracked = $session->getRepresentations()->get($representation);
+		self::assertInstanceOf(RepresentationState::class, $tracked);
+		$record = $session->getRecords()->getFromRepresentation($tracked);
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertTrue($record->isClean());
+		self::assertFalse($result->hasChanges());
+	}
+
+	public function testSyncUntrackedRootWithoutCompleteKeyTracksRootAsNew(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$representation = $this->representation(['id' => null, 'name' => 'New User']);
+
+		$session->sync($representation, $this->userTemplateBindingFor($this->users()));
+
+		$tracked = $session->getRepresentations()->get($representation);
+		self::assertInstanceOf(RepresentationState::class, $tracked);
+		$record = $session->getRecords()->getFromRepresentation($tracked);
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertTrue($record->isNew());
+	}
+
 	public function testSyncUntrackedRootWithBindingTracksManyRelatedPlainObjects(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
@@ -188,6 +309,39 @@ final class SessionTest extends TestCase
 		self::assertInstanceOf(RepresentationState::class, $session->getRepresentations()->get($postRepresentation));
 		self::assertSame([$postRepresentation], $session->getRelations()->get($owner, 'posts')?->getItems());
 		self::assertCount(1, $result->getRelationChanges());
+	}
+
+	public function testSyncUntrackedRootWithBindingTracksManyRelatedObjectWithCompleteKeyAsCleanExisting(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$session = new Session(new RecordingCommandExecutor());
+		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
+
+		$session->sync($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts));
+
+		$trackedPost = $session->getRepresentations()->get($postRepresentation);
+		self::assertInstanceOf(RepresentationState::class, $trackedPost);
+		$post = $session->getRecords()->getFromRepresentation($trackedPost);
+		self::assertInstanceOf(RecordState::class, $post);
+		self::assertTrue($post->isClean());
+		self::assertSame(5, $post->getKey()?->getFieldValue('id'));
+	}
+
+	public function testSyncUntrackedRootWithBindingTracksManyRelatedObjectWithoutCompleteKeyAsNew(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$session = new Session(new RecordingCommandExecutor());
+		$postRepresentation = $this->representation(['id' => null, 'title' => 'Post', 'user_id' => null]);
+		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
+
+		$session->sync($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts));
+
+		$trackedPost = $session->getRepresentations()->get($postRepresentation);
+		self::assertInstanceOf(RepresentationState::class, $trackedPost);
+		$post = $session->getRecords()->getFromRepresentation($trackedPost);
+		self::assertInstanceOf(RecordState::class, $post);
+		self::assertTrue($post->isNew());
 	}
 
 	public function testSyncUntrackedRootWithRelationOnlySingleCollectionBindingSucceeds(): void
@@ -773,7 +927,7 @@ final class SessionTest extends TestCase
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
 		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
-		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$postRepresentation = $this->representation(['id' => null, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
 		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
 
@@ -782,6 +936,30 @@ final class SessionTest extends TestCase
 
 		self::assertCount(1, $executor->getCommands());
 		self::assertInstanceOf(InsertCommand::class, $executor->getCommands()[0]);
+	}
+
+	public function testRemoveAfterGraphSyncAdoptsExistingChildProducesDeleteOnFlush(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Existing title', 'user_id' => 10]);
+		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
+
+		$session->sync($ownerRepresentation);
+		$session->remove($postRepresentation);
+		$session->flush();
+
+		self::assertCount(1, $executor->getCommands());
+		$command = $executor->getCommands()[0];
+		if (! $command instanceof DeleteCommand) {
+			self::fail('Expected a delete command.');
+		}
+
+		self::assertSame($posts, $command->getCollection());
+		self::assertSame(['id' => 5], $command->getIdentity());
 	}
 
 	public function testSyncRepresentationStateWorksWithoutBinding(): void
@@ -863,6 +1041,31 @@ final class SessionTest extends TestCase
 		self::assertInstanceOf(ToManyRelationState::class, $collection);
 		self::assertSame([$postRepresentation], $collection->getItems());
 		self::assertFalse($collection->hasChanges());
+	}
+
+	public function testRemovingIdentifiedChildFromUnloadedManyToManyUnlinksWithoutLoadingCollection(): void
+	{
+		[$users, $tags, $through] = $this->usersWithTags();
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$tag = $session->identify($tags, ['id' => 3]);
+		$collection = $session->trackRelation(new ToManyRelationState($owner, 'tags', $this->tagTemplateBindingFor($tags)));
+
+		$collection->remove($tag);
+		$session->flush();
+		$session->flush();
+
+		self::assertFalse($collection->isFullyLoaded());
+		self::assertFalse($collection->hasChanges());
+		self::assertCount(1, $executor->getCommands());
+		$command = $executor->getCommands()[0];
+		if (! $command instanceof DeleteCommand) {
+			self::fail('Expected a through delete command.');
+		}
+
+		self::assertSame($through, $command->getCollection());
+		self::assertSame(['user_id' => 10, 'tag_id' => 3], $command->getIdentity());
 	}
 
 	public function testSessionSourceDoesNotMentionDeferredOrmRuntimeConcepts(): void
@@ -1174,5 +1377,14 @@ final class SessionTest extends TestCase
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('title', 'string')->end();
+	}
+
+	private function compositeMemberships(): CollectionInterface
+	{
+		return (new Registry())
+			->collection('memberships')
+			->primaryKey('user_id', 'group_id')
+			->field('user_id', 'int')->end()
+			->field('group_id', 'int')->end();
 	}
 }

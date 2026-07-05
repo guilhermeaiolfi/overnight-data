@@ -6,6 +6,7 @@ namespace ON\Data\ORM\Sync;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\ToManyRelationStore;
 use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\State\RecordState;
@@ -43,7 +44,7 @@ final class GraphAdopter
 			(new RepresentationAdopter($records, $representations))->adopt(
 				$root,
 				$rootBinding,
-				RecordState::new($this->collectionFor($rootBinding, true), $this->initialValues($root, $rootBinding))
+				$this->resolveRecordForAdoption($root, $rootBinding, $records, true)
 			);
 		}
 
@@ -51,7 +52,7 @@ final class GraphAdopter
 		$visited = [];
 		$adopted = [];
 
-		$this->walk($root, $representations, $adopter, $visited, $adopted);
+		$this->walk($root, $representations, $records, $adopter, $visited, $adopted);
 
 		return $adopted;
 	}
@@ -63,6 +64,7 @@ final class GraphAdopter
 	private function walk(
 		object $representation,
 		RepresentationStore $representations,
+		RecordStateStore $records,
 		RepresentationAdopter $adopter,
 		array &$visited,
 		array &$adopted,
@@ -81,7 +83,7 @@ final class GraphAdopter
 		foreach ($tracked->getBinding()->getRelations() as $relationBinding) {
 			if ($relationBinding->isMany()) {
 				foreach ($this->readItems($representation, $relationBinding) as $item) {
-					$this->adoptAndWalk($item, $relationBinding->getRelatedBinding(), $representations, $adopter, $visited, $adopted);
+					$this->adoptAndWalk($item, $relationBinding->getRelatedBinding(), $representations, $records, $adopter, $visited, $adopted);
 				}
 
 				continue;
@@ -90,7 +92,7 @@ final class GraphAdopter
 			if ($relationBinding->isSingle()) {
 				$target = $this->readTarget($representation, $relationBinding);
 				if ($target !== null) {
-					$this->adoptAndWalk($target, $relationBinding->getRelatedBinding(), $representations, $adopter, $visited, $adopted);
+					$this->adoptAndWalk($target, $relationBinding->getRelatedBinding(), $representations, $records, $adopter, $visited, $adopted);
 				}
 			}
 		}
@@ -104,6 +106,7 @@ final class GraphAdopter
 		object $representation,
 		RepresentationBinding $binding,
 		RepresentationStore $representations,
+		RecordStateStore $records,
 		RepresentationAdopter $adopter,
 		array &$visited,
 		array &$adopted,
@@ -112,11 +115,11 @@ final class GraphAdopter
 			$adopted[] = $adopter->adopt(
 				$representation,
 				$binding,
-				RecordState::new($this->collectionFor($binding, false), $this->initialValues($representation, $binding))
+				$this->resolveRecordForAdoption($representation, $binding, $records, false)
 			);
 		}
 
-		$this->walk($representation, $representations, $adopter, $visited, $adopted);
+		$this->walk($representation, $representations, $records, $adopter, $visited, $adopted);
 	}
 
 	/**
@@ -188,6 +191,76 @@ final class GraphAdopter
 		return $collection;
 	}
 
+	private function resolveRecordForAdoption(
+		object $representation,
+		RepresentationBinding $binding,
+		RecordStateStore $records,
+		bool $isRoot,
+	): RecordState {
+		$collection = $this->collectionFor($binding, $isRoot);
+		$values = $this->initialValues($representation, $binding, $collection);
+		$keyValues = $this->completeKeyValues($representation, $binding, $collection);
+
+		if ($keyValues === null) {
+			return RecordState::new($collection, $values);
+		}
+
+		$key = $collection->getKey($keyValues);
+		$record = $records->getByKey($key);
+		if ($record instanceof RecordState) {
+			if ($record->isRemoved()) {
+				throw new StateException(sprintf(
+					"Cannot adopt representation for collection '%s' because key '%s' is already tracked as removed.",
+					$collection->getName(),
+					$key->getDebugString()
+				));
+			}
+
+			return $record;
+		}
+
+		return RecordState::clean($key, $values);
+	}
+
+	/**
+	 * @return non-empty-array<string, string|int|float|bool>|null
+	 */
+	private function completeKeyValues(
+		object $representation,
+		RepresentationBinding $binding,
+		CollectionInterface $collection,
+	): ?array {
+		$pathsByField = [];
+		foreach ($binding->getFields() as $fieldBinding) {
+			$field = $fieldBinding->getField();
+			if ($field->getCollectionName() === $collection->getName()) {
+				$pathsByField[$field->getFieldName()] = $fieldBinding->getPath();
+			}
+		}
+
+		$values = [];
+		foreach ($collection->getPrimaryKey() as $fieldName) {
+			if (! array_key_exists($fieldName, $pathsByField)) {
+				return null;
+			}
+
+			try {
+				$value = $this->reader->readPath($representation, $pathsByField[$fieldName]);
+			} catch (SyncException) {
+				return null;
+			}
+
+			if ($value === null) {
+				return null;
+			}
+
+			$values[$fieldName] = $value;
+		}
+
+		/** @var non-empty-array<string, string|int|float|bool> $values */
+		return $values;
+	}
+
 	private function mergeCollection(?CollectionInterface $current, CollectionInterface $next, string $path, bool $isRoot): CollectionInterface
 	{
 		if ($current === null || $current === $next) {
@@ -218,11 +291,24 @@ final class GraphAdopter
 	/**
 	 * @return array<string, mixed>
 	 */
-	private function initialValues(object $representation, RepresentationBinding $binding): array
+	private function initialValues(object $representation, RepresentationBinding $binding, CollectionInterface $collection): array
 	{
 		$values = [];
+		$primaryKey = array_flip($collection->getPrimaryKey());
 		foreach ($binding->getFields() as $fieldBinding) {
-			$values[$fieldBinding->getField()->getFieldName()] = $this->reader->readPath($representation, $fieldBinding->getPath());
+			$fieldName = $fieldBinding->getField()->getFieldName();
+
+			try {
+				$value = $this->reader->readPath($representation, $fieldBinding->getPath());
+			} catch (SyncException) {
+				continue;
+			}
+
+			if ($value === null && array_key_exists($fieldName, $primaryKey)) {
+				continue;
+			}
+
+			$values[$fieldName] = $value;
 		}
 
 		return $values;

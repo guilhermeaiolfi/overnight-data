@@ -61,8 +61,17 @@ final class SyncPlanner
 			$field = $binding->getField();
 			$fieldName = $field->getFieldName();
 			$baselineRevision = $state->getBaselineRevisionFor($field);
-			$baselineValue = $record->getHistory()->getValue($baselineRevision, $fieldName);
 			$currentValue = $currentValues[$path];
+			if (! $record->getHistory()->hasValue($baselineRevision, $fieldName)) {
+				if ($currentValue === null && ! $record->hasValue($fieldName)) {
+					continue;
+				}
+
+				$baselineValue = null;
+			} else {
+				$baselineValue = $record->getHistory()->getValue($baselineRevision, $fieldName);
+			}
+
 			if ($currentValue === $baselineValue) {
 				continue;
 			}

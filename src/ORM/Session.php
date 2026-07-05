@@ -15,15 +15,19 @@ use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToManyRelationStore;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Relation\ToOneRelationStore;
+use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\Sync\GraphAdopter;
 use ON\Data\ORM\Sync\RepresentationAdopter;
 use ON\Data\ORM\Sync\RepresentationSyncer;
+use ON\Data\ORM\Sync\RepresentationValueReader;
 use ON\Data\ORM\Sync\SyncResult;
+use stdClass;
 
 final class Session
 {
@@ -100,6 +104,44 @@ final class Session
 	public function trackClean(Key $key, array $values): RecordState
 	{
 		return $this->trackRecord(RecordState::clean($key, $values));
+	}
+
+	public function identify(
+		CollectionInterface $collection,
+		Key|array $key,
+		?object $representation = null,
+		?RepresentationBinding $binding = null,
+	): object {
+		$key = $collection->getKey($key);
+		$representation ??= $this->keyOnlyRepresentation($key);
+		$binding ??= $this->keyOnlyBinding($collection);
+
+		$existingState = $this->representations->get($representation);
+		if ($existingState instanceof RepresentationState) {
+			$record = $this->records->getFromRepresentation($existingState);
+			if (! $record instanceof RecordState || ! $record->hasKey() || ! $record->getKey()?->equals($key)) {
+				throw new StateException('Cannot identify representation because it is already tracked for a different record.');
+			}
+
+			return $representation;
+		}
+
+		$record = $this->records->getByKey($key);
+		if ($record instanceof RecordState) {
+			if ($record->isRemoved()) {
+				throw new StateException(sprintf(
+					"Cannot identify collection '%s' key '%s' because it is already tracked as removed.",
+					$collection->getName(),
+					$key->getDebugString()
+				));
+			}
+		} else {
+			$record = RecordState::clean($key, $this->identifyInitialValues($representation, $binding, $key));
+		}
+
+		$this->adopter->adopt($representation, $binding, $record);
+
+		return $representation;
 	}
 
 	public function adopt(
@@ -203,5 +245,44 @@ final class Session
 		}
 
 		return array_values($records)[0];
+	}
+
+	private function keyOnlyRepresentation(Key $key): object
+	{
+		$representation = new stdClass();
+		foreach ($key->getValues() as $fieldName => $value) {
+			$representation->{$fieldName} = $value;
+		}
+
+		return $representation;
+	}
+
+	private function keyOnlyBinding(CollectionInterface $collection): RepresentationBinding
+	{
+		$binding = new RepresentationBinding();
+		foreach ($collection->getPrimaryKey() as $fieldName) {
+			$binding->addField(new RepresentationFieldBinding($fieldName, RecordFieldRef::template($collection, $fieldName)));
+		}
+
+		return $binding;
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function identifyInitialValues(object $representation, RepresentationBinding $binding, Key $key): array
+	{
+		$values = $key->getValues();
+		$reader = new RepresentationValueReader();
+		foreach ($binding->getFields() as $fieldBinding) {
+			$fieldName = $fieldBinding->getField()->getFieldName();
+
+			try {
+				$values[$fieldName] = $reader->readPath($representation, $fieldBinding->getPath());
+			} catch (SyncException) {
+			}
+		}
+
+		return $values;
 	}
 }

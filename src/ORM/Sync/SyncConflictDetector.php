@@ -36,6 +36,10 @@ final class SyncConflictDetector
 
 			$fieldName = $field->getFieldName();
 			$baselineRevision = $tracked->getBaselineRevisionFor($field);
+			if (! $recordState->getHistory()->hasValue($baselineRevision, $fieldName)) {
+				continue;
+			}
+
 			$baselineValue = $recordState->getHistory()->getValue($baselineRevision, $fieldName);
 			$recordValue = $recordState->getValue($fieldName);
 			$representationValue = $currentValues[$path];

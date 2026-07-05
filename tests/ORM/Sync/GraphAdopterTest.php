@@ -51,6 +51,38 @@ final class GraphAdopterTest extends TestCase
 		self::assertTrue($records->getFromRepresentation($tracked)?->isNew());
 	}
 
+	public function testUntrackedRootWithCompleteKeyIsAdoptedAsCleanExisting(): void
+	{
+		$root = $this->representation(['id' => 10, 'name' => 'Root']);
+		$records = new RecordStateStore();
+		$representations = new RepresentationStore();
+
+		$this->adopter()->adopt($root, $representations, $records, new ToManyRelationStore(), new ToOneRelationStore(), $this->userBindingWithId());
+
+		$tracked = $representations->get($root);
+		self::assertInstanceOf(RepresentationState::class, $tracked);
+		$record = $records->getFromRepresentation($tracked);
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertTrue($record->isClean());
+		self::assertSame(10, $record->getKey()?->getFieldValue('id'));
+		self::assertSame('Root', $record->getValue('name'));
+	}
+
+	public function testUntrackedRootWithoutCompleteKeyIsAdoptedAsNew(): void
+	{
+		$root = $this->representation(['id' => null, 'name' => 'Root']);
+		$records = new RecordStateStore();
+		$representations = new RepresentationStore();
+
+		$this->adopter()->adopt($root, $representations, $records, new ToManyRelationStore(), new ToOneRelationStore(), $this->userBindingWithId());
+
+		$tracked = $representations->get($root);
+		self::assertInstanceOf(RepresentationState::class, $tracked);
+		$record = $records->getFromRepresentation($tracked);
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertTrue($record->isNew());
+	}
+
 	public function testUntrackedRootWithoutBindingThrows(): void
 	{
 		$this->expectException(StateException::class);
@@ -82,6 +114,37 @@ final class GraphAdopterTest extends TestCase
 		self::assertSame($representations->get($item), $result[0]);
 		self::assertSame($result[0], $representations->get($item));
 		self::assertTrue($records->getFromRepresentation($result[0])?->isNew());
+	}
+
+	public function testManyRelationWithCompleteKeyAdoptsUntrackedItemAsCleanExisting(): void
+	{
+		$item = $this->representation(['id' => 5, 'title' => 'A']);
+		$root = $this->representation(['posts' => [$item]]);
+		$records = new RecordStateStore();
+		$representations = $this->trackedMap($this->trackedRootWithPostsAndPostIds($root));
+
+		$result = $this->adopter()->adopt($root, $representations, $records, new ToManyRelationStore(), new ToOneRelationStore());
+
+		self::assertCount(1, $result);
+		$record = $records->getFromRepresentation($result[0]);
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertTrue($record->isClean());
+		self::assertSame(5, $record->getKey()?->getFieldValue('id'));
+	}
+
+	public function testManyRelationWithoutCompleteKeyAdoptsUntrackedItemAsNew(): void
+	{
+		$item = $this->representation(['title' => 'A']);
+		$root = $this->representation(['posts' => [$item]]);
+		$records = new RecordStateStore();
+		$representations = $this->trackedMap($this->trackedRootWithPostsAndPostIds($root));
+
+		$result = $this->adopter()->adopt($root, $representations, $records, new ToManyRelationStore(), new ToOneRelationStore());
+
+		self::assertCount(1, $result);
+		$record = $records->getFromRepresentation($result[0]);
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertTrue($record->isNew());
 	}
 
 	public function testManyRelationWithNonIterableNonNullValueThrows(): void
@@ -297,6 +360,19 @@ final class GraphAdopterTest extends TestCase
 		return $this->tracked($root, $binding);
 	}
 
+	private function trackedRootWithPostsAndPostIds(object $root): RepresentationState
+	{
+		$binding = $this->appliedUserBinding(RecordState::new($this->users()));
+		$binding->addRelation(new RepresentationRelationBinding(
+			'posts',
+			RecordRelationRef::forState(RecordState::new($this->users()), 'posts'),
+			RepresentationRelationCardinality::MANY,
+			$this->postBindingWithId()
+		));
+
+		return $this->tracked($root, $binding);
+	}
+
 	private function trackedRootWithProfile(object $root): RepresentationState
 	{
 		$binding = $this->appliedUserBinding(RecordState::new($this->users()));
@@ -365,9 +441,27 @@ final class GraphAdopterTest extends TestCase
 		return $binding;
 	}
 
+	private function userBindingWithId(): RepresentationBinding
+	{
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($this->users(), 'id')));
+		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
+
+		return $binding;
+	}
+
 	private function postBinding(): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
+
+		return $binding;
+	}
+
+	private function postBindingWithId(): RepresentationBinding
+	{
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($this->posts(), 'id')));
 		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
 
 		return $binding;
