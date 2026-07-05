@@ -26,10 +26,13 @@ use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
 
 final class HasOnePersistencePlannerTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testSetTrackedTargetCopiesOwnerKeyIntoTargetOuterKey(): void
 	{
 		[$relation, $users, $profiles] = $this->singleKeyModel();
@@ -144,7 +147,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('cannot be resolved to a record state');
 
-		$this->plan($relation, $reference, $this->records($owner, $target), $this->trackedMap($tracked));
+		$this->plan($relation, $reference, $this->records($owner, $target), $this->representations($tracked));
 	}
 
 	public function testClearNullableHasOneNullsBaselineTargetOuterKeyFields(): void
@@ -263,7 +266,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$targetObject = $reference->getTarget();
 		self::assertNotNull($targetObject);
 
-		$this->plan($relation, $reference, $this->records($owner, $target), $this->trackedMap($this->tracked($targetObject, $target)));
+		$this->plan($relation, $reference, $this->records($owner, $target), $this->representations($this->tracked($targetObject, $target)));
 
 		self::assertTrue($reference->hasChanges());
 	}
@@ -298,7 +301,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$targetObject = $reference->getTarget();
 		self::assertNotNull($targetObject);
 
-		return $this->plan($relation, $reference, $this->records($owner, $target), $this->trackedMap(
+		return $this->plan($relation, $reference, $this->records($owner, $target), $this->representations(
 			$this->tracked($targetObject, $target),
 		));
 	}
@@ -309,7 +312,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$reference = new ToOneRelationState($owner, $relation->getName(), $this->bindingFor($baseline), $baselineObject);
 		$reference->clear();
 
-		$this->plan($relation, $reference, $this->records($owner, $baseline), $this->trackedMap(
+		$this->plan($relation, $reference, $this->records($owner, $baseline), $this->representations(
 			$this->tracked($baselineObject, $baseline),
 		));
 	}
@@ -325,7 +328,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$reference = new ToOneRelationState($owner, $relation->getName(), $this->bindingFor($newTarget), $oldObject);
 		$reference->set($newObject);
 
-		$this->plan($relation, $reference, $this->records($owner, $oldTarget, $newTarget), $this->trackedMap(
+		$this->plan($relation, $reference, $this->records($owner, $oldTarget, $newTarget), $this->representations(
 			$this->tracked($oldObject, $oldTarget),
 			$this->tracked($newObject, $newTarget),
 		));
@@ -381,26 +384,6 @@ final class HasOnePersistencePlannerTest extends TestCase
 		}
 
 		return $binding;
-	}
-
-	private function records(RecordState ...$records): RecordStateStore
-	{
-		$map = new RecordStateStore();
-		foreach ($records as $record) {
-			$map->add($record);
-		}
-
-		return $map;
-	}
-
-	private function trackedMap(RepresentationState ...$RepresentationStates): RepresentationStore
-	{
-		$map = new RepresentationStore();
-		foreach ($RepresentationStates as $tracked) {
-			RepresentationStateObjectRegistry::addTo($map, $tracked);
-		}
-
-		return $map;
 	}
 
 	/**

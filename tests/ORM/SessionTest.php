@@ -27,12 +27,15 @@ use ON\Data\ORM\Sync\RepresentationSyncer;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use stdClass;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
 use Tests\ON\Data\Support\Relation\RecordingRelationPersistencePlanner;
 use Tests\ON\Data\Support\Relation\TestCommand;
 
 final class SessionTest extends TestCase
 {
+	use OrmFixture;
+
 	protected function setUp(): void
 	{
 		RecordingRelationPersistencePlanner::reset();
@@ -1173,19 +1176,6 @@ final class SessionTest extends TestCase
 		self::assertFalse(method_exists(Session::class, 'adoptGraph'));
 	}
 
-	/**
-	 * @param array<string, mixed> $values
-	 */
-	private function representation(array $values): stdClass
-	{
-		$representation = new stdClass();
-		foreach ($values as $path => $value) {
-			$representation->{$path} = $value;
-		}
-
-		return $representation;
-	}
-
 	private function templateBinding(): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
@@ -1282,14 +1272,6 @@ final class SessionTest extends TestCase
 		return $reference;
 	}
 
-	private function postBinding(): RepresentationBinding
-	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
-
-		return $binding;
-	}
-
 	private function bindingFor(RecordState $record): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
@@ -1308,15 +1290,6 @@ final class SessionTest extends TestCase
 		$binding->addField(new RepresentationFieldBinding('label', RecordFieldRef::template($tags, 'label')));
 
 		return $binding;
-	}
-
-	private function users(): CollectionInterface
-	{
-		return (new Registry())
-			->collection('users')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('name', 'string')->end();
 	}
 
 	private function usersWithPosts(): CollectionInterface
@@ -1455,15 +1428,6 @@ final class SessionTest extends TestCase
 		$posts->belongsTo('author', 'users')->innerKey('author_id')->outerKey('id');
 
 		return [$posts, $users];
-	}
-
-	private function posts(): CollectionInterface
-	{
-		return (new Registry())
-			->collection('posts')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('title', 'string')->end();
 	}
 
 	private function compositeMemberships(): CollectionInterface

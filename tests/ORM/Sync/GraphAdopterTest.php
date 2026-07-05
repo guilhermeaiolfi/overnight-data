@@ -4,17 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Sync;
 
-use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Relation\ToManyRelationStore;
 use ON\Data\ORM\Relation\ToOneRelationStore;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
@@ -22,14 +17,16 @@ use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\Sync\GraphAdopter;
 use PHPUnit\Framework\TestCase;
 use stdClass;
-use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 
 final class GraphAdopterTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testAdoptRootWithNoRelationBindingsReturnsEmptyResult(): void
 	{
 		$root = $this->representation(['name' => 'Root']);
-		$representations = $this->trackedMap($this->tracked($root, $this->appliedUserBinding(RecordState::new($this->users()))));
+		$representations = $this->representations($this->tracked($root, $this->userBindingFor(RecordState::new($this->users()))));
 
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new ToManyRelationStore(), new ToOneRelationStore());
 
@@ -94,7 +91,7 @@ final class GraphAdopterTest extends TestCase
 	public function testManyRelationWithNullValueAdoptsNothing(): void
 	{
 		$root = $this->representation(['posts' => null]);
-		$representations = $this->trackedMap($this->trackedRootWithPosts($root));
+		$representations = $this->representations($this->trackedRootWithPosts($root));
 
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new ToManyRelationStore(), new ToOneRelationStore());
 
@@ -106,7 +103,7 @@ final class GraphAdopterTest extends TestCase
 		$item = $this->representation(['title' => 'A']);
 		$root = $this->representation(['posts' => [$item]]);
 		$records = new RecordStateStore();
-		$representations = $this->trackedMap($this->trackedRootWithPosts($root));
+		$representations = $this->representations($this->trackedRootWithPosts($root));
 
 		$result = $this->adopter()->adopt($root, $representations, $records, new ToManyRelationStore(), new ToOneRelationStore());
 
@@ -121,7 +118,7 @@ final class GraphAdopterTest extends TestCase
 		$item = $this->representation(['id' => 5, 'title' => 'A']);
 		$root = $this->representation(['posts' => [$item]]);
 		$records = new RecordStateStore();
-		$representations = $this->trackedMap($this->trackedRootWithPostsAndPostIds($root));
+		$representations = $this->representations($this->trackedRootWithPostsAndPostIds($root));
 
 		$result = $this->adopter()->adopt($root, $representations, $records, new ToManyRelationStore(), new ToOneRelationStore());
 
@@ -137,7 +134,7 @@ final class GraphAdopterTest extends TestCase
 		$item = $this->representation(['title' => 'A']);
 		$root = $this->representation(['posts' => [$item]]);
 		$records = new RecordStateStore();
-		$representations = $this->trackedMap($this->trackedRootWithPostsAndPostIds($root));
+		$representations = $this->representations($this->trackedRootWithPostsAndPostIds($root));
 
 		$result = $this->adopter()->adopt($root, $representations, $records, new ToManyRelationStore(), new ToOneRelationStore());
 
@@ -150,7 +147,7 @@ final class GraphAdopterTest extends TestCase
 	public function testManyRelationWithNonIterableNonNullValueThrows(): void
 	{
 		$root = $this->representation(['posts' => 'bad']);
-		$representations = $this->trackedMap($this->trackedRootWithPosts($root));
+		$representations = $this->representations($this->trackedRootWithPosts($root));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('posts');
@@ -162,7 +159,7 @@ final class GraphAdopterTest extends TestCase
 	public function testManyRelationWithNonObjectItemThrows(): void
 	{
 		$root = $this->representation(['posts' => ['bad']]);
-		$representations = $this->trackedMap($this->trackedRootWithPosts($root));
+		$representations = $this->representations($this->trackedRootWithPosts($root));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('posts');
@@ -174,7 +171,7 @@ final class GraphAdopterTest extends TestCase
 	public function testOneRelationWithNullValueAdoptsNothing(): void
 	{
 		$root = $this->representation(['profile' => null]);
-		$representations = $this->trackedMap($this->trackedRootWithProfile($root));
+		$representations = $this->representations($this->trackedRootWithProfile($root));
 
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new ToManyRelationStore(), new ToOneRelationStore());
 
@@ -185,7 +182,7 @@ final class GraphAdopterTest extends TestCase
 	{
 		$target = $this->representation(['label' => 'Profile']);
 		$root = $this->representation(['profile' => $target]);
-		$representations = $this->trackedMap($this->trackedRootWithProfile($root));
+		$representations = $this->representations($this->trackedRootWithProfile($root));
 
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new ToManyRelationStore(), new ToOneRelationStore());
 
@@ -196,7 +193,7 @@ final class GraphAdopterTest extends TestCase
 	public function testOneRelationWithNonObjectNonNullValueThrows(): void
 	{
 		$root = $this->representation(['profile' => 123]);
-		$representations = $this->trackedMap($this->trackedRootWithProfile($root));
+		$representations = $this->representations($this->trackedRootWithProfile($root));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('profile');
@@ -209,9 +206,9 @@ final class GraphAdopterTest extends TestCase
 	{
 		$item = $this->representation(['title' => 'A']);
 		$root = $this->representation(['posts' => [$item]]);
-		$representations = $this->trackedMap(
+		$representations = $this->representations(
 			$this->trackedRootWithPosts($root),
-			$this->tracked($item, $this->appliedPostBinding(RecordState::new($this->posts())))
+			$this->tracked($item, $this->postBindingFor(RecordState::new($this->posts())))
 		);
 
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new ToManyRelationStore(), new ToOneRelationStore());
@@ -225,14 +222,14 @@ final class GraphAdopterTest extends TestCase
 		$comment = $this->representation(['body' => 'Nested']);
 		$post = $this->representation(['comments' => [$comment]]);
 		$root = $this->representation(['posts' => [$post]]);
-		$postBinding = $this->appliedPostBinding(RecordState::new($this->posts()));
+		$postBinding = $this->postBindingFor(RecordState::new($this->posts()));
 		$postBinding->addRelation(new RepresentationRelationBinding(
 			'comments',
 			RecordRelationRef::forState(RecordState::new($this->posts()), 'comments'),
 			RepresentationRelationCardinality::MANY,
 			$this->commentBinding()
 		));
-		$representations = $this->trackedMap($this->trackedRootWithPosts($root), $this->tracked($post, $postBinding));
+		$representations = $this->representations($this->trackedRootWithPosts($root), $this->tracked($post, $postBinding));
 
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new ToManyRelationStore(), new ToOneRelationStore());
 
@@ -245,7 +242,7 @@ final class GraphAdopterTest extends TestCase
 		$comment = $this->representation(['body' => 'Nested']);
 		$post = $this->representation(['title' => 'A', 'comments' => [$comment]]);
 		$root = $this->representation(['posts' => [$post]]);
-		$rootBinding = $this->appliedUserBinding(RecordState::new($this->users()));
+		$rootBinding = $this->userBindingFor(RecordState::new($this->users()));
 		$postBinding = $this->postBinding();
 		$postBinding->addRelation(new RepresentationRelationBinding(
 			'comments',
@@ -259,7 +256,7 @@ final class GraphAdopterTest extends TestCase
 			RepresentationRelationCardinality::MANY,
 			$postBinding
 		));
-		$representations = $this->trackedMap($this->tracked($root, $rootBinding));
+		$representations = $this->representations($this->tracked($root, $rootBinding));
 
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new ToManyRelationStore(), new ToOneRelationStore());
 
@@ -277,14 +274,14 @@ final class GraphAdopterTest extends TestCase
 			RepresentationRelationCardinality::ONE,
 			$this->userBinding()
 		));
-		$rootBinding = $this->appliedUserBinding(RecordState::new($this->users()));
+		$rootBinding = $this->userBindingFor(RecordState::new($this->users()));
 		$rootBinding->addRelation(new RepresentationRelationBinding(
 			'profile',
 			RecordRelationRef::forState(RecordState::new($this->users()), 'profile'),
 			RepresentationRelationCardinality::ONE,
 			$profileBinding
 		));
-		$representations = $this->trackedMap($this->tracked($root, $rootBinding));
+		$representations = $this->representations($this->tracked($root, $rootBinding));
 
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new ToManyRelationStore(), new ToOneRelationStore());
 
@@ -304,14 +301,14 @@ final class GraphAdopterTest extends TestCase
 			RepresentationRelationCardinality::ONE,
 			$this->userBinding()
 		));
-		$rootBinding = $this->appliedUserBinding(RecordState::new($this->users()));
+		$rootBinding = $this->userBindingFor(RecordState::new($this->users()));
 		$rootBinding->addRelation(new RepresentationRelationBinding(
 			'posts',
 			RecordRelationRef::forState(RecordState::new($this->users()), 'posts'),
 			RepresentationRelationCardinality::MANY,
 			$postBinding
 		));
-		$representations = $this->trackedMap($this->tracked($root, $rootBinding));
+		$representations = $this->representations($this->tracked($root, $rootBinding));
 
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new ToManyRelationStore(), new ToOneRelationStore());
 
@@ -323,7 +320,7 @@ final class GraphAdopterTest extends TestCase
 	{
 		$item = $this->representation(['title' => 'A']);
 		$root = $this->representation(['posts' => [$item]]);
-		$representations = $this->trackedMap($this->trackedRootWithPosts($root));
+		$representations = $this->representations($this->trackedRootWithPosts($root));
 
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new ToManyRelationStore(), new ToOneRelationStore());
 
@@ -349,7 +346,7 @@ final class GraphAdopterTest extends TestCase
 
 	private function trackedRootWithPosts(object $root): RepresentationState
 	{
-		$binding = $this->appliedUserBinding(RecordState::new($this->users()));
+		$binding = $this->userBindingFor(RecordState::new($this->users()));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
 			RecordRelationRef::forState(RecordState::new($this->users()), 'posts'),
@@ -362,7 +359,7 @@ final class GraphAdopterTest extends TestCase
 
 	private function trackedRootWithPostsAndPostIds(object $root): RepresentationState
 	{
-		$binding = $this->appliedUserBinding(RecordState::new($this->users()));
+		$binding = $this->userBindingFor(RecordState::new($this->users()));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
 			RecordRelationRef::forState(RecordState::new($this->users()), 'posts'),
@@ -375,7 +372,7 @@ final class GraphAdopterTest extends TestCase
 
 	private function trackedRootWithProfile(object $root): RepresentationState
 	{
-		$binding = $this->appliedUserBinding(RecordState::new($this->users()));
+		$binding = $this->userBindingFor(RecordState::new($this->users()));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'profile',
 			RecordRelationRef::forState(RecordState::new($this->users()), 'profile'),
@@ -384,122 +381,5 @@ final class GraphAdopterTest extends TestCase
 		));
 
 		return $this->tracked($root, $binding);
-	}
-
-	private function tracked(object $representation, RepresentationBinding $binding): RepresentationState
-	{
-		return RepresentationStateObjectRegistry::remember(
-			$representation,
-			new RepresentationState($binding, [])
-		);
-	}
-
-	private function trackedMap(RepresentationState ...$RepresentationStates): RepresentationStore
-	{
-		$map = new RepresentationStore();
-		foreach ($RepresentationStates as $tracked) {
-			RepresentationStateObjectRegistry::addTo($map, $tracked);
-		}
-
-		return $map;
-	}
-
-	/**
-	 * @param array<string, mixed> $values
-	 */
-	private function representation(array $values): stdClass
-	{
-		$representation = new stdClass();
-		foreach ($values as $path => $value) {
-			$representation->{$path} = $value;
-		}
-
-		return $representation;
-	}
-
-	private function appliedUserBinding(RecordState $record): RepresentationBinding
-	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::forState($record, 'name')));
-
-		return $binding;
-	}
-
-	private function appliedPostBinding(RecordState $record): RepresentationBinding
-	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::forState($record, 'title')));
-
-		return $binding;
-	}
-
-	private function userBinding(): RepresentationBinding
-	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
-
-		return $binding;
-	}
-
-	private function userBindingWithId(): RepresentationBinding
-	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($this->users(), 'id')));
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
-
-		return $binding;
-	}
-
-	private function postBinding(): RepresentationBinding
-	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
-
-		return $binding;
-	}
-
-	private function postBindingWithId(): RepresentationBinding
-	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($this->posts(), 'id')));
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
-
-		return $binding;
-	}
-
-	private function profileBinding(): RepresentationBinding
-	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('label', RecordFieldRef::template($this->profiles(), 'label')));
-
-		return $binding;
-	}
-
-	private function commentBinding(): RepresentationBinding
-	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('body', RecordFieldRef::template($this->comments(), 'body')));
-
-		return $binding;
-	}
-
-	private function users(): CollectionInterface
-	{
-		return (new Registry())->collection('users')->primaryKey('id')->field('id', 'int')->end()->field('name', 'string')->end();
-	}
-
-	private function posts(): CollectionInterface
-	{
-		return (new Registry())->collection('posts')->primaryKey('id')->field('id', 'int')->end()->field('title', 'string')->end();
-	}
-
-	private function profiles(): CollectionInterface
-	{
-		return (new Registry())->collection('profiles')->primaryKey('id')->field('id', 'int')->end()->field('label', 'string')->end();
-	}
-
-	private function comments(): CollectionInterface
-	{
-		return (new Registry())->collection('comments')->primaryKey('id')->field('id', 'int')->end()->field('body', 'string')->end();
 	}
 }

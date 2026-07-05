@@ -12,25 +12,24 @@ use ON\Data\ORM\Relation\ToManyRelationStore;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\SessionContext;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\Sync\RepresentationSyncer;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
 use Tests\ON\Data\Support\Relation\RecordingRelationPersistencePlanner;
 
 final class RepresentationSyncerTest extends TestCase
 {
+	use OrmFixture;
+
 	protected function setUp(): void
 	{
 		RecordingRelationPersistencePlanner::reset();
@@ -42,7 +41,7 @@ final class RepresentationSyncerTest extends TestCase
 
 		$result = $this->syncer()->sync(
 			$this->context(
-				$this->trackedMap($this->tracked($this->representation(['name' => 'A2']), $this->binding($record))),
+				$this->representations($this->tracked($this->representation(['name' => 'A2']), $this->userBindingFor($record))),
 				$this->records($record)
 			)
 		);
@@ -60,9 +59,9 @@ final class RepresentationSyncerTest extends TestCase
 
 		$this->syncer()->sync(
 			$this->context(
-				$this->trackedMap(
-					$this->tracked($firstRepresentation, $this->binding($first)),
-					$this->tracked($secondRepresentation, $this->binding($second))
+				$this->representations(
+					$this->tracked($firstRepresentation, $this->userBindingFor($first)),
+					$this->tracked($secondRepresentation, $this->userBindingFor($second))
 				),
 				$this->records($first, $second)
 			),
@@ -89,7 +88,7 @@ final class RepresentationSyncerTest extends TestCase
 
 		$this->syncer()->sync(
 			$this->context(
-				$this->trackedMap(
+				$this->representations(
 					$this->tracked($this->representation(['name' => 'Owner', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner)),
 					$this->tracked($item, new RepresentationBinding())
 				),
@@ -111,7 +110,7 @@ final class RepresentationSyncerTest extends TestCase
 
 		$this->syncer()->sync(
 			$this->context(
-				$this->trackedMap(
+				$this->representations(
 					$this->tracked($this->representation(['name' => 'Owner', 'profile' => $target]), $this->ownerBindingWithProfile($owner)),
 					$this->tracked($target, new RepresentationBinding())
 				),
@@ -132,7 +131,7 @@ final class RepresentationSyncerTest extends TestCase
 
 		$result = $this->syncer()->sync(
 			$this->context(
-				$this->trackedMap(
+				$this->representations(
 					$this->tracked($this->representation(['name' => 'Changed', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner)),
 					$this->tracked($item, new RepresentationBinding())
 				),
@@ -154,7 +153,7 @@ final class RepresentationSyncerTest extends TestCase
 
 		$this->syncer()->sync(
 			$this->context(
-				$this->trackedMap(
+				$this->representations(
 					$this->tracked($this->representation(['name' => 'Changed', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner)),
 					$this->tracked($item, new RepresentationBinding())
 				),
@@ -183,19 +182,6 @@ final class RepresentationSyncerTest extends TestCase
 		self::assertStringNotContainsString('CommandInterface', $source);
 	}
 
-	/**
-	 * @param array<string, mixed> $values
-	 */
-	private function representation(array $values): stdClass
-	{
-		$representation = new stdClass();
-		foreach ($values as $path => $value) {
-			$representation->{$path} = $value;
-		}
-
-		return $representation;
-	}
-
 	private function tracked(object $representation, RepresentationBinding $binding): RepresentationState
 	{
 		return RepresentationStateObjectRegistry::remember(
@@ -204,51 +190,9 @@ final class RepresentationSyncerTest extends TestCase
 		);
 	}
 
-	private function trackedMap(RepresentationState ...$RepresentationStates): RepresentationStore
-	{
-		$map = new RepresentationStore();
-		foreach ($RepresentationStates as $tracked) {
-			RepresentationStateObjectRegistry::addTo($map, $tracked);
-		}
-
-		return $map;
-	}
-
-	private function records(RecordState ...$records): RecordStateStore
-	{
-		$map = new RecordStateStore();
-		foreach ($records as $record) {
-			$map->add($record);
-		}
-
-		return $map;
-	}
-
-	private function context(
-		RepresentationStore $representations,
-		RecordStateStore $records,
-		?ToManyRelationStore $relations = null,
-		?ToOneRelationStore $references = null,
-	): SessionContext {
-		return new SessionContext(
-			$records,
-			$representations,
-			$relations ?? new ToManyRelationStore(),
-			$references ?? new ToOneRelationStore()
-		);
-	}
-
-	private function binding(RecordState $record): RepresentationBinding
-	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::forState($record, 'name')));
-
-		return $binding;
-	}
-
 	private function ownerBindingWithPosts(RecordState $record): RepresentationBinding
 	{
-		$binding = $this->binding($record);
+		$binding = $this->userBindingFor($record);
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
 			RecordRelationRef::forState($record, 'posts'),
@@ -261,7 +205,7 @@ final class RepresentationSyncerTest extends TestCase
 
 	private function ownerBindingWithProfile(RecordState $record): RepresentationBinding
 	{
-		$binding = $this->binding($record);
+		$binding = $this->userBindingFor($record);
 		$binding->addRelation(new RepresentationRelationBinding(
 			'profile',
 			RecordRelationRef::forState($record, 'profile'),
@@ -272,31 +216,9 @@ final class RepresentationSyncerTest extends TestCase
 		return $binding;
 	}
 
-	/**
-	 * @return array<string, int>
-	 */
-	private function baselineRevisions(RepresentationBinding $binding): array
-	{
-		$baselineRevisions = [];
-		foreach ($binding->getFields() as $fieldBinding) {
-			$baselineRevisions[$fieldBinding->getField()->getRecordHash()] = 1;
-		}
-
-		return $baselineRevisions;
-	}
-
 	private function syncer(): RepresentationSyncer
 	{
 		return new RepresentationSyncer();
-	}
-
-	private function users(): CollectionInterface
-	{
-		return (new Registry())
-			->collection('users')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('name', 'string')->end();
 	}
 
 	private function usersWithPosts(): CollectionInterface

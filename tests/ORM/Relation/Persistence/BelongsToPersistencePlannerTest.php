@@ -26,10 +26,13 @@ use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
 
 final class BelongsToPersistencePlannerTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testSetTrackedTargetCopiesTargetKeyIntoOwnerInnerKey(): void
 	{
 		[$relation, $posts, $users] = $this->singleKeyModel();
@@ -128,7 +131,7 @@ final class BelongsToPersistencePlannerTest extends TestCase
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('cannot be resolved to a record state');
 
-		$this->plan($relation, $reference, $this->records($owner, $target), $this->trackedMap($tracked));
+		$this->plan($relation, $reference, $this->records($owner, $target), $this->representations($tracked));
 	}
 
 	public function testMissingTargetKeyValueWritesValueRef(): void
@@ -251,7 +254,7 @@ final class BelongsToPersistencePlannerTest extends TestCase
 		$targetObject = $reference->getTarget();
 		self::assertNotNull($targetObject);
 
-		$this->plan($relation, $reference, $this->records($owner, $target), $this->trackedMap($this->tracked($targetObject, $target)));
+		$this->plan($relation, $reference, $this->records($owner, $target), $this->representations($this->tracked($targetObject, $target)));
 
 		self::assertTrue($reference->hasChanges());
 	}
@@ -286,7 +289,7 @@ final class BelongsToPersistencePlannerTest extends TestCase
 		$targetObject = $reference->getTarget();
 		self::assertNotNull($targetObject);
 
-		return $this->plan($relation, $reference, $this->records($owner, $target), $this->trackedMap(
+		return $this->plan($relation, $reference, $this->records($owner, $target), $this->representations(
 			$this->tracked($targetObject, $target),
 		));
 	}
@@ -350,26 +353,6 @@ final class BelongsToPersistencePlannerTest extends TestCase
 		}
 
 		return $binding;
-	}
-
-	private function records(RecordState ...$records): RecordStateStore
-	{
-		$map = new RecordStateStore();
-		foreach ($records as $record) {
-			$map->add($record);
-		}
-
-		return $map;
-	}
-
-	private function trackedMap(RepresentationState ...$RepresentationStates): RepresentationStore
-	{
-		$map = new RepresentationStore();
-		foreach ($RepresentationStates as $tracked) {
-			RepresentationStateObjectRegistry::addTo($map, $tracked);
-		}
-
-		return $map;
 	}
 
 	/**

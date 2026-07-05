@@ -29,10 +29,13 @@ use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
 
 final class ManyToManyPersistencePlannerTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testAddedTrackedTargetProducesInsertCommandForThroughCollection(): void
 	{
 		[$relation, $users, $tags, $through] = $this->singleKeyModel();
@@ -42,7 +45,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
 		$collection->add($item);
 
-		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->trackedMap(
+		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->representations(
 			$this->tracked($item, $target),
 		));
 
@@ -61,7 +64,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$collection = ToManyRelationState::full($owner, 'tags', $this->bindingFor($target), [$item]);
 		$collection->remove($item);
 
-		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->trackedMap(
+		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->representations(
 			$this->tracked($item, $target),
 		));
 
@@ -98,7 +101,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 			$relation,
 			$collection,
 			$this->records($owner, $addOne, $addTwo, $removeOne, $removeTwo),
-			$this->trackedMap(
+			$this->representations(
 				$this->tracked($addOneItem, $addOne),
 				$this->tracked($addTwoItem, $addTwo),
 				$this->tracked($removeOneItem, $removeOne),
@@ -126,7 +129,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
 		$collection->add($item);
 
-		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->trackedMap(
+		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->representations(
 			$this->tracked($item, $target),
 		));
 
@@ -182,7 +185,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$collection = new ToManyRelationState($owner, 'roles', $this->bindingFor($target));
 		$collection->add($item);
 
-		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->trackedMap(
+		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->representations(
 			$this->tracked($item, $target),
 		));
 
@@ -199,7 +202,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$collection = new ToManyRelationState($owner, 'roles', $this->bindingFor($target));
 		$collection->add($item);
 
-		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->trackedMap(
+		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->representations(
 			$this->tracked($item, $target),
 		));
 
@@ -241,7 +244,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('cannot be resolved to a record state');
 
-		$this->plan($relation, $collection, $this->records($owner, $target), $this->trackedMap($tracked));
+		$this->plan($relation, $collection, $this->records($owner, $target), $this->representations($tracked));
 	}
 
 	public function testMissingOwnerKeyValueCreatesUnresolvedValueRef(): void
@@ -322,7 +325,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
 		$collection->add($item);
 
-		$this->plan($relation, $collection, $this->records($owner, $target), $this->trackedMap(
+		$this->plan($relation, $collection, $this->records($owner, $target), $this->representations(
 			$this->tracked($item, $target),
 		));
 
@@ -401,7 +404,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$collection = new ToManyRelationState($owner, $relation->getName(), $this->bindingFor($target));
 		$collection->add($item);
 
-		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->trackedMap(
+		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->representations(
 			$this->tracked($item, $target),
 		));
 
@@ -453,26 +456,6 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		}
 
 		return $binding;
-	}
-
-	private function records(RecordState ...$records): RecordStateStore
-	{
-		$map = new RecordStateStore();
-		foreach ($records as $record) {
-			$map->add($record);
-		}
-
-		return $map;
-	}
-
-	private function trackedMap(RepresentationState ...$RepresentationStates): RepresentationStore
-	{
-		$map = new RepresentationStore();
-		foreach ($RepresentationStates as $tracked) {
-			RepresentationStateObjectRegistry::addTo($map, $tracked);
-		}
-
-		return $map;
 	}
 
 	/**

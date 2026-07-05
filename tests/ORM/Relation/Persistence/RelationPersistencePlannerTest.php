@@ -25,12 +25,15 @@ use ON\Data\ORM\State\RepresentationStore;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Fixture\CustomRelation;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
 use Tests\ON\Data\Support\Relation\RecordingRelationPersistencePlanner;
 use Tests\ON\Data\Support\Relation\TestCommand;
 
 final class RelationPersistencePlannerTest extends TestCase
 {
+	use OrmFixture;
+
 	protected function setUp(): void
 	{
 		RecordingRelationPersistencePlanner::reset();
@@ -190,7 +193,7 @@ final class RelationPersistencePlannerTest extends TestCase
 			$relations,
 			new ToOneRelationStore(),
 			$this->records($owner, $target),
-			$this->trackedMap($this->tracked($item, $target)),
+			$this->representations($this->tracked($item, $target)),
 		);
 
 		self::assertCount(1, $result->getCommands());
@@ -219,7 +222,7 @@ final class RelationPersistencePlannerTest extends TestCase
 			$relations,
 			new ToOneRelationStore(),
 			$this->records($owner, $child),
-			$this->trackedMap($this->tracked($item, $child)),
+			$this->representations($this->tracked($item, $child)),
 		);
 
 		self::assertSame(10, $child->getValue('user_id'));
@@ -241,7 +244,7 @@ final class RelationPersistencePlannerTest extends TestCase
 			new ToManyRelationStore(),
 			$references,
 			$this->records($owner, $target),
-			$this->trackedMap($this->tracked($item, $target)),
+			$this->representations($this->tracked($item, $target)),
 		);
 
 		self::assertSame(10, $owner->getValue('author_id'));
@@ -263,7 +266,7 @@ final class RelationPersistencePlannerTest extends TestCase
 			new ToManyRelationStore(),
 			$references,
 			$this->records($owner, $target),
-			$this->trackedMap($this->tracked($item, $target)),
+			$this->representations($this->tracked($item, $target)),
 		);
 
 		self::assertSame(10, $target->getValue('user_id'));
@@ -469,26 +472,6 @@ final class RelationPersistencePlannerTest extends TestCase
 		self::assertInstanceOf(CollectionInterface::class, $through);
 
 		return [$users, $tags, $through];
-	}
-
-	private function records(RecordState ...$records): RecordStateStore
-	{
-		$map = new RecordStateStore();
-		foreach ($records as $record) {
-			$map->add($record);
-		}
-
-		return $map;
-	}
-
-	private function trackedMap(RepresentationState ...$RepresentationStates): RepresentationStore
-	{
-		$map = new RepresentationStore();
-		foreach ($RepresentationStates as $tracked) {
-			RepresentationStateObjectRegistry::addTo($map, $tracked);
-		}
-
-		return $map;
 	}
 
 	private function tracked(object $representation, RecordState $record): RepresentationState

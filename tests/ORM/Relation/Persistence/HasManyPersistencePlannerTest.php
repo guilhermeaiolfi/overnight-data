@@ -25,10 +25,13 @@ use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
 
 final class HasManyPersistencePlannerTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testAddedTrackedChildCopiesOwnerKeyIntoChildOuterKey(): void
 	{
 		[$relation, $users, $posts] = $this->singleKeyModel();
@@ -127,7 +130,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('cannot be resolved to a record state');
 
-		$this->plan($relation, $collection, $this->records($owner, $child), $this->trackedMap($tracked));
+		$this->plan($relation, $collection, $this->records($owner, $child), $this->representations($tracked));
 	}
 
 	public function testMissingOwnerKeyValueWritesValueRef(): void
@@ -245,7 +248,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$collection = new ToManyRelationState($owner, 'posts', $this->bindingFor($child));
 		$collection->add($item);
 
-		$this->plan($relation, $collection, $this->records($owner, $child), $this->trackedMap($this->tracked($item, $child)));
+		$this->plan($relation, $collection, $this->records($owner, $child), $this->representations($this->tracked($item, $child)));
 
 		self::assertTrue($collection->hasChanges());
 	}
@@ -279,7 +282,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$collection = new ToManyRelationState($owner, $relation->getName(), $this->bindingFor($child));
 		$collection->add($item);
 
-		return $this->plan($relation, $collection, $this->records($owner, $child), $this->trackedMap(
+		return $this->plan($relation, $collection, $this->records($owner, $child), $this->representations(
 			$this->tracked($item, $child),
 		));
 	}
@@ -295,7 +298,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		);
 		$collection->remove($item);
 
-		$this->plan($relation, $collection, $this->records($owner, $child), $this->trackedMap(
+		$this->plan($relation, $collection, $this->records($owner, $child), $this->representations(
 			$this->tracked($item, $child),
 		));
 	}
@@ -341,26 +344,6 @@ final class HasManyPersistencePlannerTest extends TestCase
 		}
 
 		return $binding;
-	}
-
-	private function records(RecordState ...$records): RecordStateStore
-	{
-		$map = new RecordStateStore();
-		foreach ($records as $record) {
-			$map->add($record);
-		}
-
-		return $map;
-	}
-
-	private function trackedMap(RepresentationState ...$RepresentationStates): RepresentationStore
-	{
-		$map = new RepresentationStore();
-		foreach ($RepresentationStates as $tracked) {
-			RepresentationStateObjectRegistry::addTo($map, $tracked);
-		}
-
-		return $map;
 	}
 
 	/**
