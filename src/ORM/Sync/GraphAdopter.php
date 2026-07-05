@@ -7,8 +7,9 @@ namespace ON\Data\ORM\Sync;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\Relation\ToManyRelationStore;
-use ON\Data\ORM\Relation\ToOneRelationStore;
+use ON\Data\ORM\Relation\RelationStateStore;
+use ON\Data\ORM\Relation\ToManyRelationState;
+use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -27,13 +28,16 @@ final class GraphAdopter
 
 	/**
 	 * @return list<RepresentationState>
+	 *
+	 * @param RelationStateStore<ToManyRelationState> $relations
+	 * @param RelationStateStore<ToOneRelationState> $references
 	 */
 	public function adopt(
 		object $root,
 		RepresentationStore $representations,
 		RecordStateStore $records,
-		ToManyRelationStore $relations,
-		ToOneRelationStore $references,
+		RelationStateStore $relations,
+		RelationStateStore $references,
 		?RepresentationBinding $rootBinding = null,
 	): array {
 		if ($representations->get($root) === null) {

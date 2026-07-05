@@ -6,10 +6,9 @@ namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\RelationChangeInterface;
+use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Relation\ToManyRelationStore;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationStore;
 
@@ -24,11 +23,14 @@ final class RelationRepresentationSynchronizer
 
 	/**
 	 * @return list<RelationChangeInterface>
+	 *
+	 * @param RelationStateStore<ToManyRelationState> $relations
+	 * @param RelationStateStore<ToOneRelationState> $references
 	 */
 	public function sync(
 		RepresentationStore $representations,
-		ToManyRelationStore $relations,
-		ToOneRelationStore $references,
+		RelationStateStore $relations,
+		RelationStateStore $references,
 		?RepresentationStore $states = null,
 	): array {
 		$touched = [];
@@ -55,11 +57,12 @@ final class RelationRepresentationSynchronizer
 	/**
 	 * @param list<RelationChangeInterface> $touched
 	 * @param array<int, true> $touchedIds
+	 * @param RelationStateStore<ToManyRelationState> $relations
 	 */
 	private function syncMany(
 		object $representation,
 		RepresentationRelationBinding $relationBinding,
-		ToManyRelationStore $relations,
+		RelationStateStore $relations,
 		RepresentationStateResolver $resolver,
 		array &$touched,
 		array &$touchedIds,
@@ -94,11 +97,12 @@ final class RelationRepresentationSynchronizer
 	/**
 	 * @param list<RelationChangeInterface> $touched
 	 * @param array<int, true> $touchedIds
+	 * @param RelationStateStore<ToOneRelationState> $references
 	 */
 	private function syncOne(
 		object $representation,
 		RepresentationRelationBinding $relationBinding,
-		ToOneRelationStore $references,
+		RelationStateStore $references,
 		RepresentationStateResolver $resolver,
 		array &$touched,
 		array &$touchedIds,

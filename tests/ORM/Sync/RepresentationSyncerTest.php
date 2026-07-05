@@ -8,9 +8,8 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Relation\ToManyRelationStore;
+use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
@@ -84,7 +83,7 @@ final class RepresentationSyncerTest extends TestCase
 	{
 		$owner = RecordState::new($this->users(), ['name' => 'Owner']);
 		$item = new stdClass();
-		$relations = new ToManyRelationStore();
+		$relations = new RelationStateStore();
 
 		$this->syncer()->sync(
 			$this->context(
@@ -106,7 +105,7 @@ final class RepresentationSyncerTest extends TestCase
 	{
 		$owner = RecordState::new($this->users(), ['name' => 'Owner']);
 		$target = new stdClass();
-		$references = new ToOneRelationStore();
+		$references = new RelationStateStore();
 
 		$this->syncer()->sync(
 			$this->context(
@@ -148,7 +147,7 @@ final class RepresentationSyncerTest extends TestCase
 	{
 		$owner = RecordState::clean($this->usersWithPosts()->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$item = new stdClass();
-		$relations = new ToManyRelationStore();
+		$relations = new RelationStateStore();
 		$executor = new RecordingCommandExecutor();
 
 		$this->syncer()->sync(

@@ -11,10 +11,9 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\FlushExecutor;
 use ON\Data\ORM\Persistence\FlushResult;
+use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Relation\ToManyRelationStore;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
@@ -59,12 +58,18 @@ final class Session
 		return $this->context->getRepresentations();
 	}
 
-	public function getRelations(): ToManyRelationStore
+	/**
+	 * @return RelationStateStore<ToManyRelationState>
+	 */
+	public function getRelations(): RelationStateStore
 	{
 		return $this->context->getRelations();
 	}
 
-	public function getReferences(): ToOneRelationStore
+	/**
+	 * @return RelationStateStore<ToOneRelationState>
+	 */
+	public function getReferences(): RelationStateStore
 	{
 		return $this->context->getReferences();
 	}

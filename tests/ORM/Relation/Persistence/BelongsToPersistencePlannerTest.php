@@ -13,9 +13,8 @@ use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\BelongsToPersistencePlanner;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Relation\ToManyRelationStore;
+use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
@@ -214,8 +213,8 @@ final class BelongsToPersistencePlannerTest extends TestCase
 			new PersistenceContext(
 				new RecordStateStore(),
 				new RepresentationStore(),
-				new ToManyRelationStore(),
-				new ToOneRelationStore(),
+				new RelationStateStore(),
+				new RelationStateStore(),
 				new CommandBuffer()
 			),
 			$relation,
@@ -236,8 +235,8 @@ final class BelongsToPersistencePlannerTest extends TestCase
 			new PersistenceContext(
 				new RecordStateStore(),
 				new RepresentationStore(),
-				new ToManyRelationStore(),
-				new ToOneRelationStore(),
+				new RelationStateStore(),
+				new RelationStateStore(),
 				new CommandBuffer()
 			),
 			$relation,
@@ -323,8 +322,8 @@ final class BelongsToPersistencePlannerTest extends TestCase
 			new PersistenceContext(
 				$records,
 				$representations,
-				new ToManyRelationStore(),
-				new ToOneRelationStore(),
+				new RelationStateStore(),
+				new RelationStateStore(),
 				$commands
 			),
 			$relation,

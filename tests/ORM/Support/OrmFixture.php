@@ -6,8 +6,7 @@ namespace Tests\ON\Data\ORM\Support;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Relation\ToManyRelationStore;
-use ON\Data\ORM\Relation\ToOneRelationStore;
+use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
@@ -56,8 +55,8 @@ trait OrmFixture
 	protected function context(
 		?RepresentationStore $representations = null,
 		?RecordStateStore $records = null,
-		?ToManyRelationStore $relations = null,
-		?ToOneRelationStore $references = null,
+		?RelationStateStore $relations = null,
+		?RelationStateStore $references = null,
 	): SessionContext {
 		return new SessionContext(
 			$records,

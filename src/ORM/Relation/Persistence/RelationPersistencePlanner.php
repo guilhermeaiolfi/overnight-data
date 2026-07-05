@@ -11,16 +11,21 @@ use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\RelationChangeInterface;
-use ON\Data\ORM\Relation\ToManyRelationStore;
-use ON\Data\ORM\Relation\ToOneRelationStore;
+use ON\Data\ORM\Relation\RelationStateStore;
+use ON\Data\ORM\Relation\ToManyRelationState;
+use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationStore;
 
 final class RelationPersistencePlanner
 {
+	/**
+	 * @param RelationStateStore<ToManyRelationState> $relations
+	 * @param RelationStateStore<ToOneRelationState> $references
+	 */
 	public function plan(
-		ToManyRelationStore $relations,
-		ToOneRelationStore $references,
+		RelationStateStore $relations,
+		RelationStateStore $references,
 		RecordStateStore $records,
 		RepresentationStore $representations,
 	): RelationPersistenceResult {

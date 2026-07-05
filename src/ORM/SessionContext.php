@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM;
 
-use ON\Data\ORM\Relation\ToManyRelationStore;
-use ON\Data\ORM\Relation\ToOneRelationStore;
+use ON\Data\ORM\Relation\RelationStateStore;
+use ON\Data\ORM\Relation\ToManyRelationState;
+use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationStore;
 
@@ -13,19 +14,27 @@ final class SessionContext
 {
 	private RecordStateStore $records;
 	private RepresentationStore $representations;
-	private ToManyRelationStore $relations;
-	private ToOneRelationStore $references;
 
+	/** @var RelationStateStore<ToManyRelationState> */
+	private RelationStateStore $relations;
+
+	/** @var RelationStateStore<ToOneRelationState> */
+	private RelationStateStore $references;
+
+	/**
+	 * @param RelationStateStore<ToManyRelationState>|null $relations
+	 * @param RelationStateStore<ToOneRelationState>|null $references
+	 */
 	public function __construct(
 		?RecordStateStore $records = null,
 		?RepresentationStore $representations = null,
-		?ToManyRelationStore $relations = null,
-		?ToOneRelationStore $references = null,
+		?RelationStateStore $relations = null,
+		?RelationStateStore $references = null,
 	) {
 		$this->records = $records ?? new RecordStateStore();
 		$this->representations = $representations ?? new RepresentationStore();
-		$this->relations = $relations ?? new ToManyRelationStore();
-		$this->references = $references ?? new ToOneRelationStore();
+		$this->relations = $relations ?? new RelationStateStore();
+		$this->references = $references ?? new RelationStateStore();
 	}
 
 	public function getRecords(): RecordStateStore
@@ -38,12 +47,18 @@ final class SessionContext
 		return $this->representations;
 	}
 
-	public function getRelations(): ToManyRelationStore
+	/**
+	 * @return RelationStateStore<ToManyRelationState>
+	 */
+	public function getRelations(): RelationStateStore
 	{
 		return $this->relations;
 	}
 
-	public function getReferences(): ToOneRelationStore
+	/**
+	 * @return RelationStateStore<ToOneRelationState>
+	 */
+	public function getReferences(): RelationStateStore
 	{
 		return $this->references;
 	}

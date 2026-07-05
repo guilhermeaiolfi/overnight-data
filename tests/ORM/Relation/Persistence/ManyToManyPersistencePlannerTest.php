@@ -17,8 +17,7 @@ use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\ManyToManyPersistencePlanner;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Relation\ToManyRelationStore;
-use ON\Data\ORM\Relation\ToOneRelationStore;
+use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
@@ -307,8 +306,8 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 			new PersistenceContext(
 				new RecordStateStore(),
 				new RepresentationStore(),
-				new ToManyRelationStore(),
-				new ToOneRelationStore(),
+				new RelationStateStore(),
+				new RelationStateStore(),
 				new CommandBuffer()
 			),
 			$relation,
@@ -425,8 +424,8 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 			new PersistenceContext(
 				$records,
 				$representations,
-				new ToManyRelationStore(),
-				new ToOneRelationStore(),
+				new RelationStateStore(),
+				new RelationStateStore(),
 				$commands
 			),
 			$relation,
