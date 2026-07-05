@@ -17,17 +17,20 @@ final class FlushExecutor
 	private RepresentationSyncer $syncer;
 	private RecordFlusher $flusher;
 	private RelationPersistencePlanner $relationPlanner;
+	private CommandValueResolver $commandValueResolver;
 
 	public function __construct(
 		CommandExecutorInterface $executor,
 		?RepresentationSyncer $syncer = null,
 		?RecordFlusher $flusher = null,
 		?RelationPersistencePlanner $relationPlanner = null,
+		?CommandValueResolver $commandValueResolver = null,
 	) {
 		$this->executor = $executor;
 		$this->syncer = $syncer ?? new RepresentationSyncer();
 		$this->flusher = $flusher ?? new RecordFlusher($executor);
 		$this->relationPlanner = $relationPlanner ?? new RelationPersistencePlanner();
+		$this->commandValueResolver = $commandValueResolver ?? new CommandValueResolver();
 	}
 
 	public function flush(
@@ -44,6 +47,7 @@ final class FlushExecutor
 		$commandResults = $this->flusher->flush($records);
 
 		foreach ($relationResult->getCommands() as $command) {
+			$this->commandValueResolver->assertReady($command);
 			$commandResults[] = $this->executor->execute($command);
 		}
 

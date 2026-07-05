@@ -11,6 +11,7 @@ use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
+use ON\Data\ORM\Persistence\CommandValueResolver;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
@@ -19,11 +20,15 @@ final class CycleCommandExecutor implements CommandExecutorInterface
 {
 	public function __construct(
 		private readonly DatabaseInterface $database,
+		private ?CommandValueResolver $commandValueResolver = null,
 	) {
+		$this->commandValueResolver ??= new CommandValueResolver();
 	}
 
 	public function execute(CommandInterface $command): CommandResult
 	{
+		$this->commandValueResolver->assertReady($command);
+
 		return match (true) {
 			$command instanceof InsertCommand => $this->insert($command),
 			$command instanceof UpdateCommand => $this->update($command),

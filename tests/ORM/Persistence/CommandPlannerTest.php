@@ -12,6 +12,7 @@ use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\State\RecordState;
+use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 
 final class CommandPlannerTest extends TestCase
@@ -132,31 +133,34 @@ final class CommandPlannerTest extends TestCase
 		self::assertSame($revision, $record->getRevision());
 	}
 
-	public function testInsertPlanningWithUnresolvedValueRefThrows(): void
+	public function testInsertPlanningCanCarryUnresolvedValueRef(): void
 	{
 		$source = RecordState::new($this->users());
 		$record = RecordState::new($this->users(), ['name' => 'Ada']);
 		$record->setValue('manager_id', $source->getValueRef('id'));
 
-		$this->expectException(InvalidCommandException::class);
-		$this->expectExceptionMessage("collection 'users'");
-		$this->expectExceptionMessage("field 'manager_id'");
-		$this->expectExceptionMessage('users.id');
+		$command = (new CommandPlanner())->plan($record);
 
-		(new CommandPlanner())->plan($record);
+		self::assertInstanceOf(InsertCommand::class, $command);
+		$value = $command->getValues()['manager_id'];
+		self::assertInstanceOf(ValueRef::class, $value);
+		self::assertSame($source, $value->getRecord());
+		self::assertSame('id', $value->getField());
 	}
 
-	public function testUpdatePlanningWithUnresolvedValueRefThrows(): void
+	public function testUpdatePlanningCanCarryUnresolvedValueRef(): void
 	{
 		$source = RecordState::new($this->users());
 		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'Ada', 'manager_id' => null]);
 		$record->setValue('manager_id', $source->getValueRef('id'));
 
-		$this->expectException(InvalidCommandException::class);
-		$this->expectExceptionMessage("field 'manager_id'");
-		$this->expectExceptionMessage('users.id');
+		$command = (new CommandPlanner())->plan($record);
 
-		(new CommandPlanner())->plan($record);
+		self::assertInstanceOf(UpdateCommand::class, $command);
+		$value = $command->getChanges()['manager_id'];
+		self::assertInstanceOf(ValueRef::class, $value);
+		self::assertSame($source, $value->getRecord());
+		self::assertSame('id', $value->getField());
 	}
 
 	public function testCommandPlanningResolvesInsertRefsBeforeCreatingCommand(): void

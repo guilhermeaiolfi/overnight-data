@@ -7,6 +7,7 @@ namespace Tests\ON\Data\ORM\Persistence;
 use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
+use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
@@ -510,6 +511,102 @@ final class FlushExecutorTest extends TestCase
 		));
 	}
 
+	public function testManyToManyAddWithGeneratedOwnerAndTargetKeysFlushesThroughCommandWithConcreteValues(): void
+	{
+		[$users, $tags, $through] = $this->usersWithTags();
+		$owner = RecordState::new($users, ['name' => 'Owner']);
+		$target = RecordState::new($tags, ['label' => 'Tag']);
+		$tagRepresentation = $this->representation(['label' => 'Tag']);
+		$collection = new RelatedCollection($owner, 'tags', $this->bindingFor($target));
+		$collection->add($tagRepresentation);
+		$executor = new RecordingCommandExecutor(results: [
+			new CommandResult(1, ['id' => 10]),
+			new CommandResult(1, ['id' => 3]),
+			new CommandResult(1),
+		]);
+
+		(new FlushExecutor($executor))->flush(
+			$this->trackedMap($this->tracked($tagRepresentation, $this->bindingFor($target))),
+			$this->records($owner, $target),
+			$this->relations($collection)
+		);
+
+		self::assertSame(10, $owner->getValue('id'));
+		self::assertSame(3, $target->getValue('id'));
+		self::assertFalse($collection->hasChanges());
+		self::assertCount(3, $executor->getCommands());
+		self::assertInstanceOf(InsertCommand::class, $executor->getCommands()[0]);
+		self::assertInstanceOf(InsertCommand::class, $executor->getCommands()[1]);
+		$throughCommand = $executor->getCommands()[2];
+		if (! $throughCommand instanceof InsertCommand) {
+			self::fail('Expected a through insert command.');
+		}
+
+		self::assertSame($through, $throughCommand->getCollection());
+		self::assertSame(['user_id' => 10, 'tag_id' => 3], $throughCommand->getValues());
+		self::assertFalse($this->commandContainsValueRef($throughCommand));
+	}
+
+	public function testManyToManyAddWithConcreteOwnerAndGeneratedTargetFlushesThroughCommandWithConcreteValues(): void
+	{
+		[$users, $tags, $through] = $this->usersWithTags();
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$target = RecordState::new($tags, ['label' => 'Tag']);
+		$tagRepresentation = $this->representation(['label' => 'Tag']);
+		$collection = new RelatedCollection($owner, 'tags', $this->bindingFor($target));
+		$collection->add($tagRepresentation);
+		$executor = new RecordingCommandExecutor(results: [
+			new CommandResult(1, ['id' => 3]),
+			new CommandResult(1),
+		]);
+
+		(new FlushExecutor($executor))->flush(
+			$this->trackedMap($this->tracked($tagRepresentation, $this->bindingFor($target))),
+			$this->records($owner, $target),
+			$this->relations($collection)
+		);
+
+		self::assertCount(2, $executor->getCommands());
+		$throughCommand = $executor->getCommands()[1];
+		if (! $throughCommand instanceof InsertCommand) {
+			self::fail('Expected a through insert command.');
+		}
+
+		self::assertSame($through, $throughCommand->getCollection());
+		self::assertSame(['user_id' => 10, 'tag_id' => 3], $throughCommand->getValues());
+		self::assertFalse($this->commandContainsValueRef($throughCommand));
+	}
+
+	public function testManyToManyAddWithGeneratedOwnerAndConcreteTargetFlushesThroughCommandWithConcreteValues(): void
+	{
+		[$users, $tags, $through] = $this->usersWithTags();
+		$owner = RecordState::new($users, ['name' => 'Owner']);
+		$target = RecordState::clean($tags->getKey(3), ['id' => 3, 'label' => 'Tag']);
+		$tagRepresentation = $this->representation(['id' => 3, 'label' => 'Tag']);
+		$collection = new RelatedCollection($owner, 'tags', $this->bindingFor($target));
+		$collection->add($tagRepresentation);
+		$executor = new RecordingCommandExecutor(results: [
+			new CommandResult(1, ['id' => 10]),
+			new CommandResult(1),
+		]);
+
+		(new FlushExecutor($executor))->flush(
+			$this->trackedMap($this->tracked($tagRepresentation, $this->bindingFor($target))),
+			$this->records($owner, $target),
+			$this->relations($collection)
+		);
+
+		self::assertCount(2, $executor->getCommands());
+		$throughCommand = $executor->getCommands()[1];
+		if (! $throughCommand instanceof InsertCommand) {
+			self::fail('Expected a through insert command.');
+		}
+
+		self::assertSame($through, $throughCommand->getCollection());
+		self::assertSame(['user_id' => 10, 'tag_id' => 3], $throughCommand->getValues());
+		self::assertFalse($this->commandContainsValueRef($throughCommand));
+	}
+
 	public function testNullableHasManyRemoveFlushSetsChildForeignKeyToNullThroughScalarUpdate(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts(nullable: true);
@@ -930,5 +1027,72 @@ final class FlushExecutorTest extends TestCase
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('title', 'string')->end();
+	}
+
+	/**
+	 * @return array{0: CollectionInterface, 1: CollectionInterface, 2: CollectionInterface}
+	 */
+	private function usersWithTags(): array
+	{
+		$registry = new Registry();
+		$registry->collection('tags')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('label', 'string')->end()
+			->end();
+		$registry->collection('user_tag')
+			->field('user_id', 'int')->end()
+			->field('tag_id', 'int')->end()
+			->end();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+		$users->relation('tags', M2MRelation::class)
+			->collection('tags')
+			->innerKey('id')
+			->outerKey('id')
+			->through('user_tag')
+				->innerKey('user_id')
+				->outerKey('tag_id')
+				->end();
+		$tags = $registry->getCollection('tags');
+		$through = $registry->getCollection('user_tag');
+		self::assertInstanceOf(CollectionInterface::class, $tags);
+		self::assertInstanceOf(CollectionInterface::class, $through);
+
+		return [$users, $tags, $through];
+	}
+
+	private function commandContainsValueRef(CommandInterface $command): bool
+	{
+		if ($command instanceof InsertCommand) {
+			return $this->containsValueRef($command->getValues());
+		}
+
+		if ($command instanceof UpdateCommand) {
+			return $this->containsValueRef($command->getIdentity())
+				|| $this->containsValueRef($command->getChanges());
+		}
+
+		if ($command instanceof DeleteCommand) {
+			return $this->containsValueRef($command->getIdentity());
+		}
+
+		return false;
+	}
+
+	/**
+	 * @param array<string, mixed> $values
+	 */
+	private function containsValueRef(array $values): bool
+	{
+		foreach ($values as $value) {
+			if ($value instanceof ValueRef) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

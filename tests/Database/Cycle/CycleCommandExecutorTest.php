@@ -247,6 +247,68 @@ final class CycleCommandExecutorTest extends TestCase
 		]));
 	}
 
+	public function testRejectsInsertCommandWithUnresolvedValueRefBeforeSqlBuilderUse(): void
+	{
+		$record = RecordState::new($this->users());
+
+		$this->expectException(InvalidCommandException::class);
+		$this->expectExceptionMessage('Insert command');
+		$this->expectExceptionMessage('values');
+		$this->expectExceptionMessage('users.id');
+
+		$this->executor->execute(new InsertCommand($this->users(), [
+			'id' => $record->getValueRef('id'),
+			'name' => 'Unready',
+			'email' => 'unready@example.test',
+		]));
+	}
+
+	public function testRejectsUpdateCommandWithUnresolvedValueRefInIdentity(): void
+	{
+		$record = RecordState::new($this->users());
+
+		$this->expectException(InvalidCommandException::class);
+		$this->expectExceptionMessage('Update command');
+		$this->expectExceptionMessage('identity');
+		$this->expectExceptionMessage('users.id');
+
+		$this->executor->execute(new UpdateCommand($this->users(), [
+			'id' => $record->getValueRef('id'),
+		], [
+			'name' => 'Unready',
+		]));
+	}
+
+	public function testRejectsUpdateCommandWithUnresolvedValueRefInChanges(): void
+	{
+		$record = RecordState::new($this->users());
+
+		$this->expectException(InvalidCommandException::class);
+		$this->expectExceptionMessage('Update command');
+		$this->expectExceptionMessage('changes');
+		$this->expectExceptionMessage('users.name');
+
+		$this->executor->execute(new UpdateCommand($this->users(), [
+			'id' => 1,
+		], [
+			'name' => $record->getValueRef('name'),
+		]));
+	}
+
+	public function testRejectsDeleteCommandWithUnresolvedValueRefInIdentity(): void
+	{
+		$record = RecordState::new($this->users());
+
+		$this->expectException(InvalidCommandException::class);
+		$this->expectExceptionMessage('Delete command');
+		$this->expectExceptionMessage('identity');
+		$this->expectExceptionMessage('users.id');
+
+		$this->executor->execute(new DeleteCommand($this->users(), [
+			'id' => $record->getValueRef('id'),
+		]));
+	}
+
 	public function testUnknownUpdateChangeFieldThrows(): void
 	{
 		$this->expectException(InvalidCommandException::class);

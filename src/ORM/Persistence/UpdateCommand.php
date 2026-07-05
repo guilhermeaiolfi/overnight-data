@@ -18,9 +18,6 @@ final class UpdateCommand implements CommandInterface
 		private array $identity,
 		private array $changes,
 	) {
-		CommandValueGuard::assertConcreteValues('Update', 'identity', $identity);
-		CommandValueGuard::assertConcreteValues('Update', 'changes', $changes);
-
 		if ($identity === []) {
 			throw new InvalidCommandException('Update command identity cannot be empty.');
 		}
@@ -53,10 +50,26 @@ final class UpdateCommand implements CommandInterface
 	}
 
 	/**
+	 * @param array<string, mixed> $identity
+	 */
+	public function setIdentity(array $identity): void
+	{
+		$this->identity = $identity;
+	}
+
+	/**
 	 * @return array<string, mixed>
 	 */
 	public function getChanges(): array
 	{
 		return $this->changes;
+	}
+
+	/**
+	 * @param array<string, mixed> $changes
+	 */
+	public function setChanges(array $changes): void
+	{
+		$this->changes = $changes;
 	}
 }

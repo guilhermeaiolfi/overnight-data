@@ -11,6 +11,7 @@ use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandBuffer;
+use ON\Data\ORM\Persistence\CommandValueResolver;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\PersistenceContext;
@@ -26,6 +27,7 @@ use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\TrackedRepresentation;
 use ON\Data\ORM\State\TrackedRepresentationMap;
+use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
@@ -47,7 +49,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		self::assertCount(1, $commands);
 		$command = $this->insertCommand($commands[0]);
 		self::assertSame($through, $command->getCollection());
-		self::assertSame(['user_id' => 10, 'tag_id' => 3], $command->getValues());
+		$this->assertInsertResolvesTo($command, ['user_id' => 10, 'tag_id' => 3]);
 	}
 
 	public function testRemovedTrackedTargetProducesDeleteCommandForThroughCollection(): void
@@ -66,7 +68,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		self::assertCount(1, $commands);
 		$command = $this->deleteCommand($commands[0]);
 		self::assertSame($through, $command->getCollection());
-		self::assertSame(['user_id' => 10, 'tag_id' => 3], $command->getIdentity());
+		$this->assertDeleteResolvesTo($command, ['user_id' => 10, 'tag_id' => 3]);
 	}
 
 	public function testAddedAndRemovedCommandsPreserveInsertThenDeleteOrder(): void
@@ -110,10 +112,10 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$secondInsert = $this->insertCommand($commands[1]);
 		$firstDelete = $this->deleteCommand($commands[2]);
 		$secondDelete = $this->deleteCommand($commands[3]);
-		self::assertSame(['user_id' => 10, 'tag_id' => 1], $firstInsert->getValues());
-		self::assertSame(['user_id' => 10, 'tag_id' => 2], $secondInsert->getValues());
-		self::assertSame(['user_id' => 10, 'tag_id' => 3], $firstDelete->getIdentity());
-		self::assertSame(['user_id' => 10, 'tag_id' => 4], $secondDelete->getIdentity());
+		$this->assertInsertResolvesTo($firstInsert, ['user_id' => 10, 'tag_id' => 1]);
+		$this->assertInsertResolvesTo($secondInsert, ['user_id' => 10, 'tag_id' => 2]);
+		$this->assertDeleteResolvesTo($firstDelete, ['user_id' => 10, 'tag_id' => 3]);
+		$this->assertDeleteResolvesTo($secondDelete, ['user_id' => 10, 'tag_id' => 4]);
 	}
 
 	public function testThroughCommandValuesAreKeyedByThroughFields(): void
@@ -133,6 +135,45 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		self::assertSame(['user_id', 'tag_id'], array_keys($command->getValues()));
 	}
 
+	public function testAddedItemWithGeneratedOwnerKeyCreatesInsertCommandContainingValueRef(): void
+	{
+		[$relation, $users, $tags] = $this->singleKeyModel();
+		$owner = RecordState::new($users, ['name' => 'Owner']);
+		$target = RecordState::clean($tags->getKey(3), ['id' => 3]);
+		$command = $this->planSingleAddAndReturnInsert($relation, $owner, $target);
+
+		$this->assertValueRefFor($command->getValues()['user_id'], $owner, 'id');
+		$this->assertValueRefFor($command->getValues()['tag_id'], $target, 'id');
+		self::assertTrue($command->getValues()['tag_id']->isResolved());
+		self::assertFalse($command->getValues()['user_id']->isResolved());
+	}
+
+	public function testAddedItemWithGeneratedTargetKeyCreatesInsertCommandContainingValueRef(): void
+	{
+		[$relation, $users, $tags] = $this->singleKeyModel();
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
+		$target = RecordState::new($tags, ['name' => 'Tag']);
+		$command = $this->planSingleAddAndReturnInsert($relation, $owner, $target);
+
+		$this->assertValueRefFor($command->getValues()['user_id'], $owner, 'id');
+		$this->assertValueRefFor($command->getValues()['tag_id'], $target, 'id');
+		self::assertTrue($command->getValues()['user_id']->isResolved());
+		self::assertFalse($command->getValues()['tag_id']->isResolved());
+	}
+
+	public function testAddedItemWithGeneratedOwnerAndTargetKeysCreatesTwoValueRefs(): void
+	{
+		[$relation, $users, $tags] = $this->singleKeyModel();
+		$owner = RecordState::new($users, ['name' => 'Owner']);
+		$target = RecordState::new($tags, ['name' => 'Tag']);
+		$command = $this->planSingleAddAndReturnInsert($relation, $owner, $target);
+
+		$this->assertValueRefFor($command->getValues()['user_id'], $owner, 'id');
+		$this->assertValueRefFor($command->getValues()['tag_id'], $target, 'id');
+		self::assertFalse($command->getValues()['user_id']->isResolved());
+		self::assertFalse($command->getValues()['tag_id']->isResolved());
+	}
+
 	public function testCustomThroughFieldNamesWork(): void
 	{
 		[$relation, $accounts, $roles] = $this->customKeyModel();
@@ -147,7 +188,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		));
 
 		$command = $this->insertCommand($commands[0]);
-		self::assertSame(['account_ref' => 10, 'role_ref' => 3], $command->getValues());
+		$this->assertInsertResolvesTo($command, ['account_ref' => 10, 'role_ref' => 3]);
 	}
 
 	public function testCompositeOwnerAndTargetKeysWork(): void
@@ -164,7 +205,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		));
 
 		$command = $this->insertCommand($commands[0]);
-		self::assertSame([
+		$this->assertInsertResolvesTo($command, [
 			'tenant_ref' => 5,
 			'user_ref' => 10,
 			'role_tenant_ref' => 6,
@@ -204,48 +245,48 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$this->plan($relation, $collection, $this->records($owner, $target), $this->trackedMap($tracked));
 	}
 
-	public function testMissingOwnerKeyValueThrows(): void
+	public function testMissingOwnerKeyValueCreatesUnresolvedValueRef(): void
 	{
 		[$relation, $users, $tags] = $this->singleKeyModel();
 		$owner = RecordState::new($users, []);
 		$target = RecordState::clean($tags->getKey(3), ['id' => 3]);
+		$command = $this->planSingleAddAndReturnInsert($relation, $owner, $target);
 
-		$this->expectAvailableValueException('owner', 'users', 'id');
-
-		$this->planSingleAdd($relation, $owner, $target);
+		$this->assertValueRefFor($command->getValues()['user_id'], $owner, 'id');
+		self::assertFalse($command->getValues()['user_id']->isResolved());
 	}
 
-	public function testNullOwnerKeyValueThrows(): void
+	public function testNullOwnerKeyValueCreatesUnresolvedValueRef(): void
 	{
 		[$relation, $users, $tags] = $this->singleKeyModel();
 		$owner = RecordState::new($users, ['id' => null]);
 		$target = RecordState::clean($tags->getKey(3), ['id' => 3]);
+		$command = $this->planSingleAddAndReturnInsert($relation, $owner, $target);
 
-		$this->expectAvailableValueException('owner', 'users', 'id');
-
-		$this->planSingleAdd($relation, $owner, $target);
+		$this->assertValueRefFor($command->getValues()['user_id'], $owner, 'id');
+		self::assertFalse($command->getValues()['user_id']->isResolved());
 	}
 
-	public function testMissingTargetKeyValueThrows(): void
+	public function testMissingTargetKeyValueCreatesUnresolvedValueRef(): void
 	{
 		[$relation, $users, $tags] = $this->singleKeyModel();
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$target = RecordState::new($tags, []);
+		$command = $this->planSingleAddAndReturnInsert($relation, $owner, $target);
 
-		$this->expectAvailableValueException('target', 'tags', 'id');
-
-		$this->planSingleAdd($relation, $owner, $target);
+		$this->assertValueRefFor($command->getValues()['tag_id'], $target, 'id');
+		self::assertFalse($command->getValues()['tag_id']->isResolved());
 	}
 
-	public function testNullTargetKeyValueThrows(): void
+	public function testNullTargetKeyValueCreatesUnresolvedValueRef(): void
 	{
 		[$relation, $users, $tags] = $this->singleKeyModel();
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$target = RecordState::new($tags, ['id' => null]);
+		$command = $this->planSingleAddAndReturnInsert($relation, $owner, $target);
 
-		$this->expectAvailableValueException('target', 'tags', 'id');
-
-		$this->planSingleAdd($relation, $owner, $target);
+		$this->assertValueRefFor($command->getValues()['tag_id'], $target, 'id');
+		self::assertFalse($command->getValues()['tag_id']->isResolved());
 	}
 
 	public function testPassingNonM2MRelationThrows(): void
@@ -305,13 +346,31 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		self::assertTrue($target->isClean());
 	}
 
-	private function expectAvailableValueException(string $side, string $collectionName, string $fieldName): void
+	/**
+	 * @param array<string, mixed> $expectedValues
+	 */
+	private function assertInsertResolvesTo(InsertCommand $command, array $expectedValues): void
 	{
-		$this->expectException(RelationPersistenceException::class);
-		$this->expectExceptionMessage("Relation 'tags'");
-		$this->expectExceptionMessage($side);
-		$this->expectExceptionMessage($collectionName);
-		$this->expectExceptionMessage($fieldName);
+		(new CommandValueResolver())->assertReady($command);
+
+		self::assertSame($expectedValues, $command->getValues());
+	}
+
+	/**
+	 * @param array<string, mixed> $expectedValues
+	 */
+	private function assertDeleteResolvesTo(DeleteCommand $command, array $expectedValues): void
+	{
+		(new CommandValueResolver())->assertReady($command);
+
+		self::assertSame($expectedValues, $command->getIdentity());
+	}
+
+	private function assertValueRefFor(mixed $value, RecordState $record, string $field): void
+	{
+		self::assertInstanceOf(ValueRef::class, $value);
+		self::assertSame($record, $value->getRecord());
+		self::assertSame($field, $value->getField());
 	}
 
 	private function insertCommand(CommandInterface $command): InsertCommand
@@ -334,13 +393,20 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 
 	private function planSingleAdd(M2MRelation $relation, RecordState $owner, RecordState $target): void
 	{
+		$this->planSingleAddAndReturnInsert($relation, $owner, $target);
+	}
+
+	private function planSingleAddAndReturnInsert(M2MRelation $relation, RecordState $owner, RecordState $target): InsertCommand
+	{
 		$item = new stdClass();
 		$collection = new RelatedCollection($owner, $relation->getName(), $this->bindingFor($target));
 		$collection->add($item);
 
-		$this->plan($relation, $collection, $this->records($owner, $target), $this->trackedMap(
+		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->trackedMap(
 			$this->tracked($item, $target),
 		));
+
+		return $this->insertCommand($commands[0]);
 	}
 
 	/**

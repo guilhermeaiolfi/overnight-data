@@ -124,35 +124,9 @@ final class ManyToManyPersistencePlanner implements RelationPersistencePlannerIn
 				));
 			}
 
-			$values[$targetField] = $this->requireAvailableValue($source, $sourceField, $relationName, $side);
+			$values[$targetField] = $source->getValueRef($sourceField);
 		}
 
 		return $values;
-	}
-
-	private function requireAvailableValue(RecordState $source, string $fieldName, string $relationName, string $side): mixed
-	{
-		if (! $source->hasValue($fieldName)) {
-			throw new RelationPersistenceException(sprintf(
-				"Relation '%s' cannot build through row: %s collection '%s' is missing required field '%s'.",
-				$relationName,
-				$side,
-				$source->getCollectionName(),
-				$fieldName,
-			));
-		}
-
-		$value = $source->getValue($fieldName);
-		if ($value === null) {
-			throw new RelationPersistenceException(sprintf(
-				"Relation '%s' cannot build through row: %s collection '%s' has null required field '%s'.",
-				$relationName,
-				$side,
-				$source->getCollectionName(),
-				$fieldName,
-			));
-		}
-
-		return $value;
 	}
 }

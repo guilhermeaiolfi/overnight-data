@@ -74,11 +74,11 @@ For scalar foreign-key relation shapes, the has-many, belongs-to, and has-one pl
 
 `ValueRef` is an internal ORM state value used to represent a temporary dependency on another `RecordState` field. A `RecordState` may temporarily hold a `ValueRef` in its current values and dirty values. When the referenced field later contains a concrete non-null value, `RecordState::resolveValueRefs()` collapses the reference into that concrete value.
 
-Persistence commands remain concrete-only. `CommandPlanner` resolves resolvable references before building commands and rejects unresolved references instead of passing them into `InsertCommand`, `UpdateCommand`, or `DeleteCommand`. Command objects also defensively reject `ValueRef` values.
+Neutral ORM persistence commands may also temporarily carry `ValueRef` values while they remain inside the flush pipeline. `CommandPlanner` and relation planners can build `InsertCommand`, `UpdateCommand`, and `DeleteCommand` instances that still contain unresolved references. `CommandValueResolver` collapses resolved command references in place before execution and rejects unresolved references at the adapter boundary.
 
 `RecordFlusher` flushes records in waves. Before each planning attempt it resolves any now-ready references and only plans records whose command-relevant values are concrete. This allows generated-key dependencies such as a new user with a new has-many post, a new belongs-to target with a new owner, or a new has-one owner with a new target to flush as parent/source insert first, generated value merge second, dependent record command third.
 
-Many-to-many through-row commands remain available-key-only in this phase. Generated-key support for M2M needs a separate command intent/draft/finalization layer because command objects and executors must continue to receive concrete values only.
+Many-to-many through-row commands use `ValueRef` for mapped owner and target key fields. Because relation commands execute after `RecordFlusher`, generated owner and target keys can be merged into their records first, then `CommandValueResolver` resolves the through-row command before it reaches `CommandExecutorInterface`.
 
 ## Commands
 
@@ -116,7 +116,7 @@ public function execute(CommandInterface $command): CommandResult;
 
 Unknown command field names are rejected with `InvalidCommandException`; they are not passed through as raw column names.
 
-The executor does not build raw SQL strings and does not manage transactions.
+`CycleCommandExecutor` defensively calls `CommandValueResolver::assertReady()` before using query builders. A `ValueRef` that cannot be resolved is rejected with `InvalidCommandException` instead of being bound into SQL. The executor does not build raw SQL strings and does not manage transactions.
 
 ## Generated Values
 
@@ -185,7 +185,6 @@ This is deliberately not an `EntityManager`. There is no repository API, object 
 - `sync()` accepts object roots only; array input is not supported yet.
 - No automatic relation cascade writes.
 - No automatic graph adoption from `flush()`.
-- Many-to-many generated-key through rows are not supported until command intent/draft support is added.
 - No transaction orchestration.
 - No optimistic locking, stale-row detection, or affected-row conflict handling.
 - No lazy loading.
