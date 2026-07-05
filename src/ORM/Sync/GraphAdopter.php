@@ -12,6 +12,7 @@ use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
+use ON\Data\ORM\State\TrackedRepresentation;
 use ON\Data\ORM\State\TrackedRepresentationMap;
 
 final class GraphAdopter
@@ -23,16 +24,27 @@ final class GraphAdopter
 		$this->reader = $reader ?? new RepresentationValueReader();
 	}
 
+	/**
+	 * @return list<TrackedRepresentation>
+	 */
 	public function adopt(
 		object $root,
 		TrackedRepresentationMap $representations,
 		RecordStateMap $records,
 		RelatedCollectionMap $relations,
 		RelatedReferenceMap $references,
-	): GraphAdoptionResult {
-		$tracked = $representations->get($root);
-		if ($tracked === null) {
-			throw new StateException('Cannot adopt representation graph because the root representation is not tracked.');
+		?RepresentationBinding $rootBinding = null,
+	): array {
+		if ($representations->get($root) === null) {
+			if (! $rootBinding instanceof RepresentationBinding) {
+				throw new StateException('Cannot adopt representation graph because the root representation is not tracked and no root binding was provided.');
+			}
+
+			(new RepresentationAdopter($records, $representations))->adopt(
+				$root,
+				$rootBinding,
+				RecordState::new($this->collectionFor($rootBinding), $this->initialValues($root, $rootBinding))
+			);
 		}
 
 		$adopter = new RepresentationAdopter($records, $representations);
@@ -41,12 +53,12 @@ final class GraphAdopter
 
 		$this->walk($root, $representations, $adopter, $visited, $adopted);
 
-		return new GraphAdoptionResult($adopted);
+		return $adopted;
 	}
 
 	/**
 	 * @param array<int, true> $visited
-	 * @param list<\ON\Data\ORM\State\TrackedRepresentation> $adopted
+	 * @param list<TrackedRepresentation> $adopted
 	 */
 	private function walk(
 		object $representation,

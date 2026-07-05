@@ -6,6 +6,7 @@ namespace ON\Data\ORM;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
+use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\FlushExecutor;
 use ON\Data\ORM\Persistence\FlushResult;
@@ -19,7 +20,6 @@ use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\TrackedRepresentation;
 use ON\Data\ORM\State\TrackedRepresentationMap;
 use ON\Data\ORM\Sync\GraphAdopter;
-use ON\Data\ORM\Sync\GraphAdoptionResult;
 use ON\Data\ORM\Sync\RepresentationAdopter;
 use ON\Data\ORM\Sync\RepresentationSyncer;
 use ON\Data\ORM\Sync\SyncResult;
@@ -102,17 +102,6 @@ final class Session
 		return $this->adopter->adopt($representation, $binding, $record);
 	}
 
-	public function adoptGraph(object $representation): GraphAdoptionResult
-	{
-		return $this->graphAdopter->adopt(
-			$representation,
-			$this->representations,
-			$this->records,
-			$this->relations,
-			$this->references
-		);
-	}
-
 	public function removeRecord(RecordState $record): void
 	{
 		$this->records->add($record);
@@ -133,8 +122,25 @@ final class Session
 		return $reference;
 	}
 
-	public function sync(?object $representation = null): SyncResult
+	public function sync(?object $representation = null, ?RepresentationBinding $binding = null): SyncResult
 	{
+		if ($representation !== null) {
+			if (! $this->representations->has($representation) && ! $binding instanceof RepresentationBinding) {
+				throw new SyncException('Cannot synchronize an untracked representation object without a root RepresentationBinding.');
+			}
+
+			$this->graphAdopter->adopt(
+				$representation,
+				$this->representations,
+				$this->records,
+				$this->relations,
+				$this->references,
+				$binding
+			);
+
+			return $this->syncer->sync($this->representations, $this->records, $this->relations, $this->references);
+		}
+
 		return $this->syncer->sync($this->representations, $this->records, $this->relations, $this->references, $representation);
 	}
 

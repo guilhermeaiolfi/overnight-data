@@ -7,7 +7,6 @@ namespace Tests\ON\Data\ORM;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
-use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
@@ -23,6 +22,7 @@ use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
+use ON\Data\ORM\State\TrackedRepresentation;
 use ON\Data\ORM\Sync\RepresentationSyncer;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -126,7 +126,7 @@ final class SessionTest extends TestCase
 		$session->adopt($representation, $this->templateBinding(), $record);
 	}
 
-	public function testAdoptGraphAdoptsUntrackedRelatedManyItems(): void
+	public function testSyncTrackedRootAdoptsUntrackedRelatedManyItems(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session(new RecordingCommandExecutor());
@@ -135,14 +135,14 @@ final class SessionTest extends TestCase
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
 		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
 
-		$result = $session->adoptGraph($ownerRepresentation);
+		$result = $session->sync($ownerRepresentation);
 
-		self::assertSame(1, $result->getCount());
-		self::assertSame($postRepresentation, $result->getTrackedRepresentations()[0]->getRepresentation());
-		self::assertSame($result->getTrackedRepresentations()[0], $session->getRepresentations()->get($postRepresentation));
+		$trackedPost = $session->getRepresentations()->get($postRepresentation);
+		self::assertInstanceOf(TrackedRepresentation::class, $trackedPost);
+		self::assertCount(1, $result->getRelationChanges());
 	}
 
-	public function testAdoptGraphAdoptsUntrackedOneTarget(): void
+	public function testSyncTrackedRootAdoptsUntrackedOneTarget(): void
 	{
 		[$users, $profiles] = $this->usersWithDefaultHasOneProfile();
 		$session = new Session(new RecordingCommandExecutor());
@@ -151,24 +151,63 @@ final class SessionTest extends TestCase
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'profile' => $profileRepresentation]);
 		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithProfile($users, $profiles), $owner);
 
-		$result = $session->adoptGraph($ownerRepresentation);
+		$result = $session->sync($ownerRepresentation);
 
-		self::assertSame(1, $result->getCount());
-		self::assertSame($profileRepresentation, $result->getTrackedRepresentations()[0]->getRepresentation());
-		self::assertSame($result->getTrackedRepresentations()[0], $session->getRepresentations()->get($profileRepresentation));
+		$trackedProfile = $session->getRepresentations()->get($profileRepresentation);
+		self::assertInstanceOf(TrackedRepresentation::class, $trackedProfile);
+		self::assertCount(1, $result->getRelationChanges());
 	}
 
-	public function testAdoptGraphThrowsForUntrackedRoot(): void
+	public function testSyncUntrackedRootWithBindingTracksRootAndSyncsScalarValues(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
+		$representation = $this->representation(['name' => 'New User']);
 
-		$this->expectException(StateException::class);
-		$this->expectExceptionMessage('root representation is not tracked');
+		$result = $session->sync($representation, $this->templateBinding());
 
-		$session->adoptGraph(new stdClass());
+		$tracked = $session->getRepresentations()->get($representation);
+		self::assertInstanceOf(TrackedRepresentation::class, $tracked);
+		self::assertFalse($result->hasChanges());
+		self::assertSame('New User', $session->getRecords()->getFromRepresentation($tracked)?->getValue('name'));
 	}
 
-	public function testAdoptGraphDoesNotFlush(): void
+	public function testSyncUntrackedRootWithBindingTracksManyRelatedPlainObjects(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$session = new Session(new RecordingCommandExecutor());
+		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
+
+		$result = $session->sync($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts));
+
+		$trackedOwner = $session->getRepresentations()->get($ownerRepresentation);
+		self::assertInstanceOf(TrackedRepresentation::class, $trackedOwner);
+		$owner = $session->getRecords()->getFromRepresentation($trackedOwner);
+		self::assertInstanceOf(RecordState::class, $owner);
+		self::assertInstanceOf(TrackedRepresentation::class, $session->getRepresentations()->get($postRepresentation));
+		self::assertSame([$postRepresentation], $session->getRelations()->get($owner, 'posts')?->getItems());
+		self::assertCount(1, $result->getRelationChanges());
+	}
+
+	public function testSyncUntrackedRootWithBindingTracksOneRelatedPlainTarget(): void
+	{
+		[$users, $profiles] = $this->usersWithDefaultHasOneProfile();
+		$session = new Session(new RecordingCommandExecutor());
+		$profileRepresentation = $this->representation(['id' => 5, 'label' => 'Profile', 'user_id' => null]);
+		$ownerRepresentation = $this->representation(['name' => 'Owner', 'profile' => $profileRepresentation]);
+
+		$result = $session->sync($ownerRepresentation, $this->ownerTemplateBindingWithProfile($users, $profiles));
+
+		$trackedOwner = $session->getRepresentations()->get($ownerRepresentation);
+		self::assertInstanceOf(TrackedRepresentation::class, $trackedOwner);
+		$owner = $session->getRecords()->getFromRepresentation($trackedOwner);
+		self::assertInstanceOf(RecordState::class, $owner);
+		self::assertInstanceOf(TrackedRepresentation::class, $session->getRepresentations()->get($profileRepresentation));
+		self::assertSame($profileRepresentation, $session->getReferences()->get($owner, 'profile')?->getTarget());
+		self::assertCount(1, $result->getRelationChanges());
+	}
+
+	public function testSyncWithBindingDoesNotFlush(): void
 	{
 		$executor = new RecordingCommandExecutor();
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
@@ -179,7 +218,7 @@ final class SessionTest extends TestCase
 		$ownerRepresentation = $this->representation(['name' => 'Owner Updated', 'posts' => [$postRepresentation]]);
 		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
 
-		$session->adoptGraph($ownerRepresentation);
+		$session->sync($ownerRepresentation);
 
 		self::assertSame([], $executor->getCommands());
 		self::assertTrue($owner->isDirty());
@@ -507,7 +546,7 @@ final class SessionTest extends TestCase
 		self::assertTrue($record->isDirty());
 	}
 
-	public function testAfterAdoptGraphSyncSucceedsForPreviouslyUntrackedRelatedObject(): void
+	public function testSyncTrackedRootAfterAddingRelatedPlainObjectTracksAndSynchronizesIt(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session(new RecordingCommandExecutor());
@@ -516,13 +555,13 @@ final class SessionTest extends TestCase
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
 		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
 
-		$session->adoptGraph($ownerRepresentation);
-		$result = $session->sync();
+		$result = $session->sync($ownerRepresentation);
 
+		self::assertInstanceOf(TrackedRepresentation::class, $session->getRepresentations()->get($postRepresentation));
 		self::assertCount(1, $result->getRelationChanges());
 	}
 
-	public function testAfterAdoptGraphFlushCanProceedToNormalSyncAndPlanningPath(): void
+	public function testFlushSucceedsAfterExplicitSyncAdoptsNewRelatedObject(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$executor = new RecordingCommandExecutor();
@@ -532,30 +571,26 @@ final class SessionTest extends TestCase
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
 		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
 
-		$session->adoptGraph($ownerRepresentation);
+		$session->sync($ownerRepresentation);
 		$session->flush();
 
 		self::assertCount(1, $executor->getCommands());
 		self::assertInstanceOf(InsertCommand::class, $executor->getCommands()[0]);
 	}
 
-	public function testSyncOneSynchronizesOnlyTheSelectedTrackedRepresentation(): void
+	public function testSyncTrackedRepresentationWorksWithoutBinding(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$first = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$second = $session->trackClean($this->users()->getKey(11), ['id' => 11, 'name' => 'B1']);
 		$firstRepresentation = $this->representation(['name' => 'A2']);
-		$secondRepresentation = $this->representation(['name' => 'B2']);
 		$session->adopt($firstRepresentation, $this->templateBinding(), $first);
-		$session->adopt($secondRepresentation, $this->templateBinding(), $second);
 
 		$session->sync($firstRepresentation);
 
 		self::assertSame('A2', $first->getValue('name'));
-		self::assertSame('B1', $second->getValue('name'));
 	}
 
-	public function testSyncOneUntrackedRepresentationThrowsSyncException(): void
+	public function testSyncUntrackedRepresentationWithoutBindingThrowsSyncException(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 
@@ -579,7 +614,7 @@ final class SessionTest extends TestCase
 		self::assertInstanceOf(UpdateCommand::class, $executor->getCommands()[0]);
 	}
 
-	public function testSyncAndFlushStillDoNotAutoAdoptWhenAdoptGraphWasNotCalled(): void
+	public function testSyncWithoutObjectAndFlushStillDoNotAutoAdoptNewRelatedObject(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session(new RecordingCommandExecutor());
@@ -635,6 +670,11 @@ final class SessionTest extends TestCase
 		self::assertStringNotContainsString('Transaction', $source);
 		self::assertStringNotContainsString('SQL', $source);
 		self::assertStringNotContainsString('Database', $source);
+	}
+
+	public function testSessionHasNoPublicAdoptGraphMethod(): void
+	{
+		self::assertFalse(method_exists(Session::class, 'adoptGraph'));
 	}
 
 	/**

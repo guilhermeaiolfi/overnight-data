@@ -31,15 +31,29 @@ CommandExecutorInterface
 
 Representations are user-facing objects or values. A tracked representation can drift from its record state until synchronization happens. `ScalarRepresentationSynchronizer` reads field bindings only and applies planned representation field updates into `RecordState` while preserving the conflict rules from the ORM foundation: a representation based on a stale record revision cannot silently overwrite a newer record value.
 
-`Session::sync()` explicitly copies already-tracked representation object state into ORM runtime state. With no argument it syncs all tracked representations; with one object it syncs only that already-tracked representation. It returns `SyncResult`, containing scalar sync plans and touched relation changes. It does not plan relation persistence, flush records, execute commands, mark records clean, or clear relation changes.
+`Session::sync(?object $representation = null, ?RepresentationBinding $binding = null)` is the explicit graph entry point. With no argument it strictly syncs already-tracked representations. With an object it walks that object's explicit `RepresentationRelationBinding` graph, syncs scalar values into `RecordState`, and syncs relation values into `RelatedCollection` / `RelatedReference` runtime state. It returns `SyncResult`, containing scalar sync plans and touched relation changes. It does not plan relation persistence, flush records, execute commands, mark records clean, or clear relation changes.
 
-`Session::adoptGraph($representation)` is the explicit graph adoption entry point. The root representation must already be tracked/adopted. The method walks only `RepresentationRelationBinding` entries on tracked representation bindings. For `MANY` relation bindings, `null` means no related objects and a non-null value must be iterable objects. For `ONE` relation bindings, `null` means no related object and a non-null value must be an object. Each discovered untracked related object is adopted with that relation binding's `getRelatedBinding()`, and the walk continues recursively while guarding object identity cycles. Newly discovered records are currently adopted as `NEW` and initialized from the related binding's field paths; already-tracked objects keep their existing lifecycle. The result reports only representations newly tracked by that call.
+For an untracked root object, `sync($object, $binding)` requires a root `RepresentationBinding`. The root is tracked from that binding, then the method follows only explicit relation bindings. For `MANY` relation bindings, `null` means an empty collection and a non-null value must be iterable objects. For `ONE` relation bindings, `null` means no target and a non-null value must be an object. Each discovered untracked related object is tracked with that relation binding's `getRelatedBinding()`, and the walk continues recursively while guarding object identity cycles. Newly discovered records are currently adopted as `NEW` and initialized from the binding's field paths; already-tracked objects keep their existing lifecycle.
 
-Graph adoption is opt-in. It does not sync scalar values beyond the existing adopt/track behavior, does not create relation changes, does not plan relation persistence, does not flush records, does not execute commands, and does not clear relation changes.
+For an already-tracked root object, `sync($object)` uses its existing tracked binding and can bring newly attached related plain objects into the session through explicit relation bindings. Passing an extra binding for an already-tracked object is currently unnecessary; the tracked binding is the source of truth.
 
-`Session::flush()` still calls representation sync automatically before relation persistence planning and record flushing. Calling `sync()` before `flush()` is allowed when application code wants to inspect or validate runtime state before persistence.
+For a new plain object graph:
 
-`RelationRepresentationSynchronizer` reads relation bindings only. It projects current representation relation values into `RelatedCollection` and `RelatedReference` runtime state; it does not write scalar fields, execute commands, or adopt child objects. Any object discovered through a relation binding must already be tracked/adopted, either directly through `adopt()` or explicitly through `adoptGraph()`. An untracked related object raises `SyncException` with the relation path. This strict behavior is intentional to avoid hidden persistence; `sync()` and `flush()` never auto-adopt related objects.
+```php
+$session->sync($user, $userBinding);
+$session->flush();
+```
+
+For an already-tracked or loaded object graph:
+
+```php
+$session->sync($user);
+$session->flush();
+```
+
+`Session::flush()` still calls strict representation sync automatically before relation persistence planning and record flushing. That pre-flush sync does not adopt new untracked related objects. Calling `sync($object)` before `flush()` is the explicit step that admits a changed object graph into the session.
+
+`RelationRepresentationSynchronizer` reads relation bindings only. It projects current representation relation values into `RelatedCollection` and `RelatedReference` runtime state; it does not write scalar fields, execute commands, or adopt child objects by itself. In the strict no-argument sync and pre-flush sync paths, any object discovered through a relation binding must already be tracked/adopted; an untracked related object raises `SyncException` with the relation path. This strict behavior is intentional to avoid hidden persistence from `flush()`.
 
 For `MANY` relation bindings, the representation path must contain an iterable of objects or `null`. The synchronizer creates or reuses a `RelatedCollection` for the concrete owner record and relation name. A `null` value is treated as an empty current item list. If the collection is not fully loaded, current items are added as known local additions without implying that absent database rows were removed. If the collection is fully loaded, the synchronizer can also remove known items that are absent from the current representation value.
 
@@ -148,16 +162,16 @@ Generated ids are currently supported only for simple auto-increment primary key
 - flushes changed records through `RecordFlusher`
 - returns `FlushResult` with sync plans and command results
 
-`Session` is the small runtime container around tracked representations and records. It provides public entry points for explicitly adopting a tracked representation graph, explicitly syncing already-tracked representations, and flushing planned persistence work.
+`Session` is the small runtime container around tracked representations and records. It provides public entry points for explicitly syncing an object graph and flushing planned persistence work.
 
-This is deliberately not an `EntityManager`. There is no repository API, object proxy system, lifecycle event system, generated model layer, or relation cascade writer. `adoptGraph()` is graph tracking only; it is not a cascade policy, orphan-removal policy, generated-key dependency sorter, or transaction boundary.
+This is deliberately not an `EntityManager`. There is no repository API, object proxy system, lifecycle event system, generated model layer, or relation cascade writer. `sync($object)` is graph synchronization only; it is not a cascade policy, orphan-removal policy, generated-key dependency sorter, or transaction boundary.
 
 ## Current Limits
 
 - Scalar insert/update/delete plus configured relation persistence planning only.
-- Related objects found through representation relation bindings must already be tracked/adopted before sync/flush; use explicit `Session::adoptGraph()` when you want to adopt reachable objects first.
+- Untracked root objects passed to `sync($object)` need an explicit root `RepresentationBinding`; related objects use each relation binding's `getRelatedBinding()`.
 - No automatic relation cascade writes.
-- No automatic graph adoption from sync/flush.
+- No automatic graph adoption from `flush()`.
 - No transaction orchestration.
 - No optimistic locking, stale-row detection, or affected-row conflict handling.
 - No lazy loading.
