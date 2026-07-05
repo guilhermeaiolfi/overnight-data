@@ -7,6 +7,7 @@ namespace ON\Data\ORM\Sync;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
+use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
@@ -52,10 +53,7 @@ final class ScalarRepresentationSynchronizer
 		RepresentationState $state,
 		RecordStateStore $records,
 	): SyncPlan {
-		$currentValues = $this->reader->read(
-			$representation,
-			$state->getBinding()
-		);
+		$currentValues = $this->readWritableValues($representation, $state->getBinding());
 		$conflicts = $this->conflicts->detect(
 			$state,
 			$currentValues,
@@ -66,6 +64,23 @@ final class ScalarRepresentationSynchronizer
 			$this->buildUpdates($state, $records, $currentValues, $this->conflictPaths($conflicts)),
 			$conflicts
 		);
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function readWritableValues(object $representation, RepresentationBinding $binding): array
+	{
+		$values = [];
+
+		foreach ($binding->getWritableFieldBindings() as $fieldBinding) {
+			$values[$fieldBinding->getPath()] = $this->reader->readPath(
+				$representation,
+				$fieldBinding->getPath()
+			);
+		}
+
+		return $values;
 	}
 
 	/**

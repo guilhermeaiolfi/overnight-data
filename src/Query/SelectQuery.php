@@ -30,6 +30,7 @@ use ON\Data\Query\Relation\RelationSelectionTree;
 use ON\Data\Query\Result\ObjectExportClassValidator;
 use ON\Data\Query\Result\ObjectResultMaterializer;
 use ON\Data\Query\Selection\SelectionList;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\Sort\Sort;
 use stdClass;
 
@@ -625,13 +626,13 @@ final class SelectQuery implements QuerySourceInterface
 			$rows = (new Relation\LoadRuntime($this, $executor))->fetchAll();
 		}
 
-		$rows = $this->materializeRows($rows);
+		$materialized = $this->materializeRows($rows);
 
 		if ($this->mutable) {
-			$this->trackMutableResults($rows);
+			$this->trackMutableResults($rows, $materialized);
 		}
 
-		return $rows;
+		return $materialized;
 	}
 
 	/**
@@ -652,13 +653,13 @@ final class SelectQuery implements QuerySourceInterface
 			return null;
 		}
 
-		$result = $this->materializeRow($row);
+		if ($this->mutable && is_object($materialized = $this->materializeRow($row))) {
+			(new MutableQueryResultTracker())->trackOne($this, $this->requireMutableSession(), $materialized, $row);
 
-		if ($this->mutable && is_object($result)) {
-			(new MutableQueryResultTracker())->trackOne($this, $this->requireMutableSession(), $result);
+			return $materialized;
 		}
 
-		return $result;
+		return $this->materializeRow($row);
 	}
 
 	/**
@@ -741,10 +742,15 @@ final class SelectQuery implements QuerySourceInterface
 	private function materializeRows(array $rows): array
 	{
 		if ($this->resultClass === null) {
-			return $rows;
+			return $this->mutable ? array_map($this->filterPublicRow(...), $rows) : $rows;
 		}
 
-		return (new ObjectResultMaterializer())->materializeAll($rows, $this->resultClass);
+		$materializer = new ObjectResultMaterializer();
+
+		return array_map(
+			fn (array $row): object => $materializer->materialize($this->filterPublicRow($row), $this->resultClass),
+			$rows,
+		);
 	}
 
 	/**
@@ -754,6 +760,8 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	private function materializeRow(array $row): array|object
 	{
+		$row = $this->filterPublicRow($row);
+
 		if ($this->resultClass === null) {
 			return $row;
 		}
@@ -780,10 +788,53 @@ final class SelectQuery implements QuerySourceInterface
 
 	/**
 	 * @param list<object> $objects
+	 * @param list<object> $materializedRows
 	 */
-	private function trackMutableResults(array $objects): void
+	private function trackMutableResults(array $sourceRows, array $materializedRows): void
 	{
-		(new MutableQueryResultTracker())->trackAll($this, $this->requireMutableSession(), $objects);
+		$objects = [];
+
+		foreach ($materializedRows as $materialized) {
+			if (! is_object($materialized)) {
+				continue;
+			}
+
+			$objects[] = $materialized;
+		}
+
+		if ($objects === []) {
+			return;
+		}
+
+		(new MutableQueryResultTracker())->trackAll(
+			$this,
+			$this->requireMutableSession(),
+			$objects,
+			$sourceRows,
+		);
+	}
+
+	/**
+	 * @param array<string, mixed> $row
+	 * @return array<string, mixed>
+	 */
+	private function filterPublicRow(array $row): array
+	{
+		if (! $this->mutable || ! $this->getRelationSelections()->isEmpty()) {
+			return $row;
+		}
+
+		$publicKeys = [];
+
+		foreach ($this->selections->getByTag(SelectionTag::PUBLIC) as $selection) {
+			$publicKeys[$selection->getSelectionKey()] = true;
+		}
+
+		if ($publicKeys === []) {
+			return $row;
+		}
+
+		return array_intersect_key($row, $publicKeys);
 	}
 
 	private function requireMutableSession(): Session

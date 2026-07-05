@@ -206,6 +206,24 @@ final class Session
 		return $this->syncer->sync($this->context);
 	}
 
+	public function adoptTrackedRepresentation(
+		object $representation,
+		RepresentationBinding $binding,
+		CollectionInterface $rootCollection,
+		?array $sourceRow = null,
+	): void {
+		$this->graphAdopter->adopt(
+			$representation,
+			$this->context->getRepresentations(),
+			$this->context->getRecords(),
+			$binding,
+			$rootCollection,
+			$sourceRow,
+		);
+
+		$this->syncer->sync($this->context, $representation);
+	}
+
 	public function flush(): FlushResult
 	{
 		return $this->flusher->flush($this->context);

@@ -89,6 +89,25 @@ final class SelectQueryBindingCompilerTest extends TestCase
 		self::assertTrue($binding->getField('name')->isWritable());
 	}
 
+	public function testCompilesRelationSourcedFlatFieldToRelatedCollection(): void
+	{
+		$registry = $this->makeRegistryWithCompany();
+		$users = $registry->getCollection('users');
+		$query = query($users, fn (SelectQuery $query) => $query
+			->select($query->id, $query->company->name->as('name')));
+
+		$binding = $this->compiler->compile($query);
+
+		self::assertTrue($binding->hasField('id'));
+		self::assertTrue($binding->hasField('name'));
+		self::assertSame('users', $binding->getField('id')->getField()->getCollectionName());
+		self::assertSame('companies', $binding->getField('name')->getField()->getCollectionName());
+		self::assertSame('name', $binding->getField('name')->getField()->getFieldName());
+		self::assertTrue($binding->hasField('company.id'));
+		self::assertTrue($binding->getField('company.id')->isReadOnly());
+		self::assertSame('companies', $binding->getField('company.id')->getField()->getCollectionName());
+	}
+
 	public function testCompilesSelectedRootRelation(): void
 	{
 		$registry = $this->makeRegistry();
@@ -323,6 +342,22 @@ final class SelectQueryBindingCompilerTest extends TestCase
 
 		$users = $registry->getCollection('users');
 		$users->hasOne('profile', 'profiles')->innerKey('id')->outerKey('user_id');
+
+		return $registry;
+	}
+
+	private function makeRegistryWithCompany(): Registry
+	{
+		$registry = $this->makeRegistry();
+
+		$registry->collection('companies')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+
+		$users = $registry->getCollection('users');
+		$users->field('company_id', 'int')->end();
+		$users->belongsTo('company', 'companies')->innerKey('company_id')->outerKey('id');
 
 		return $registry;
 	}

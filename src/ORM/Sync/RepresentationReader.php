@@ -27,6 +27,11 @@ final class RepresentationReader
 
 	public function readPath(object $representation, string $path): mixed
 	{
+		$properties = get_object_vars($representation);
+		if (array_key_exists($path, $properties)) {
+			return $properties[$path];
+		}
+
 		$current = $representation;
 		foreach (explode('.', $path) as $segment) {
 			$current = $this->readSegment($current, $segment, $path);

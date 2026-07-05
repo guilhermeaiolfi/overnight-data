@@ -14,6 +14,35 @@ It is independent from the Overnight framework. The package can be consumed on i
 - Relation loading: structured relation selection for nested results, loader-owned join or separate-query execution, and parser-backed result assembly for built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relations.
 - ORM persistence: `RecordState`-backed scalar insert/update/delete planning, scalar and relation representation synchronization, configured relation persistence planning, `FlushExecutor` / `Session` orchestration, Cycle-backed command execution, and simple auto-increment primary-key merge after inserts.
 
+## Why Overnight Data is different
+
+Most data layers treat query results as read-only snapshots. Overnight Data can remember where each selected value came from, even when the result object is flat.
+
+```php
+$session = new Session($executor);
+$users = $database->query($registry->getCollection('users'));
+
+$user = $users
+    ->select(
+        $users->id,
+        $users->company->name->as('name'),
+    )
+    ->to(stdClass::class)
+    ->mutable($session)
+    ->fetchOne();
+
+$user->name = 'Dell';
+
+$session->sync($user);
+$session->flush();
+
+// Persists "Dell" to companies.name, not users.name.
+```
+
+The object is flat (`$user->id`, `$user->name`) and does not need a nested `$user->company` object. That works because mutable object export compiles the query into a `RepresentationBinding`: each exported path keeps the field's real record provenance. Changing `$user->name` updates the related company row because the binding says `name -> companies.name`, not `users.name`.
+
+This is not generic magic. It works when the query binding is explicit and the selected relation field is compiled into provenance the session can sync and flush.
+
 ## Current Limitations
 
 - Structured relation loading supports the built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relation types.
