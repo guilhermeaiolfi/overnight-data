@@ -7,16 +7,20 @@ It is not a full entity manager, unit of work, automatic relation cascade writer
 ## Flow
 
 ```text
-representation object
-  -> ScalarRepresentationSynchronizer
-  -> RelationRepresentationSynchronizer
-  -> RelationPersistencePlanner
-  -> RecordState
-  -> CommandPlanner
-  -> InsertCommand / UpdateCommand / DeleteCommand
-  -> CommandExecutorInterface
-  -> CommandResult
-  -> RecordFlusher syncs successful results back into RecordState
+ScalarRepresentationSynchronizer
+  object scalar fields -> RecordState scalar values
+
+RelationRepresentationSynchronizer
+  object relation paths from RepresentationBinding -> RelatedCollection / RelatedReference runtime state
+
+RelationPersistencePlanner
+  RelatedCollection / RelatedReference changes -> RecordState mutations and/or extra persistence commands
+
+RecordFlusher
+  RecordState lifecycle/dirty state -> InsertCommand / UpdateCommand / DeleteCommand
+
+CommandExecutorInterface
+  executes neutral commands
 ```
 
 `FlushExecutor` coordinates the pipeline as scalar representation sync, relation representation sync, relation persistence planning, then record flushing. `Session` owns the in-memory `TrackedRepresentationMap` and `RecordStateMap` used by that flow.
@@ -29,7 +33,20 @@ Representations are user-facing objects or values. A tracked representation can 
 
 `RelationRepresentationSynchronizer` reads relation bindings only. It projects current representation relation values into `RelatedCollection` and `RelatedReference` runtime state; it does not write scalar fields, execute commands, or adopt child objects.
 
+For `MANY` relation bindings, the representation path must contain an iterable of objects or `null`. The synchronizer creates or reuses a `RelatedCollection` for the concrete owner record and relation name. A `null` value is treated as an empty current item list. If the collection is not fully loaded, current items are added as known local additions without implying that absent database rows were removed. If the collection is fully loaded, the synchronizer can also remove known items that are absent from the current representation value.
+
+For `ONE` relation bindings, the representation path must contain an object or `null`. The synchronizer creates or reuses a `RelatedReference` for the concrete owner record and relation name, then sets the current target. `RelatedReference` keeps both baseline and current target object identity so the planner can distinguish unchanged, replaced, and cleared references.
+
 `RelationPersistencePlanner` consumes changed `RelatedCollection` and `RelatedReference` instances. It resolves each relation's configured `RelationPersistencePlannerInterface`, lets that planner mutate scalar `RecordState` values and/or add commands, and returns the planned relation changes plus commands for `FlushExecutor` to finish.
+
+The built-in relation planners are:
+
+- `ManyToManyPersistencePlanner`: consumes `RelatedCollection` changes for `M2MRelation`, inserting or deleting rows in the through collection.
+- `HasManyPersistencePlanner`: consumes `RelatedCollection` changes for `HasManyRelation`, copying owner key values into added child records and nulling child outer keys for nullable removals.
+- `BelongsToPersistencePlanner`: consumes `RelatedReference` changes for `BelongsToRelation`, copying target key values into the owner record or nulling owner inner keys for nullable clears.
+- `HasOnePersistencePlanner`: consumes `RelatedReference` changes for `HasOneRelation`, copying owner key values into the current target record and, when replacing or clearing, nulling the previous target outer keys when the relation is nullable.
+
+Relation planners require involved target objects to already be tracked so they can resolve each object to a `RecordState`. They do not adopt new objects, load missing relations, order commands around generated ids, or orchestrate transactions.
 
 ## Commands
 

@@ -1,8 +1,8 @@
 # ORM Foundation
 
-This document records the foundation and historical phase notes for the `ON\Data` ORM. Some early sections describe the intended architecture before the runtime existed; current scalar persistence behavior is documented in [`2-persistence.md`](./2-persistence.md), and the recursive representation binding model is documented in [`3-representation-binding.md`](./3-representation-binding.md).
+This document records the foundation and historical phase notes for the `ON\Data` ORM. Some early sections describe the intended architecture before the runtime existed; current persistence behavior is documented in [`2-persistence.md`](./2-persistence.md), and the recursive representation binding model is documented in [`3-representation-binding.md`](./3-representation-binding.md).
 
-The current implementation includes production record state, representation tracking, scalar sync, scalar command planning, flush orchestration, session orchestration, and Cycle-backed scalar command execution. It still does not include lazy loading, generated repositories, service containers, events, proxy objects, `EntityManager`, `UnitOfWork`, or relation write planning.
+The current implementation includes production record state, representation tracking, scalar sync, relation representation sync, relation persistence planning, scalar command planning, flush orchestration, session orchestration, and Cycle-backed scalar command execution. It still does not include lazy loading, generated repositories, service containers, events, proxy objects, `EntityManager`, or `UnitOfWork`.
 
 The library remains standalone `ON\Data`. The Registry remains the owner of one plain-array definition tree, and definition objects remain wrappers over that array. ORM state, unit-of-work behavior, identity maps, lazy loading, relation write planning, and representation synchronization rules belong outside the Registry.
 
@@ -270,7 +270,7 @@ Hidden required fields must not appear in the final mapped representation unless
 
 Relation loading must keep using `RelationRef` and `select()` / relation branch configuration. Do not add `with()`.
 
-Relations remain class-based and pluggable. Relation definitions remain the source of relation intent; ORM write behavior should be implemented later by relation write planners that interpret those definitions.
+Relations remain class-based and pluggable. Relation definitions remain the source of relation intent; ORM write behavior is implemented by relation persistence planners that interpret those definitions.
 
 ## Binding Metadata
 
@@ -319,7 +319,7 @@ posts[no-key].title
 
 Template refs describe reusable mapping shapes. Keyed refs point to persisted records. State-targeted refs point to a concrete in-memory `RecordState`, including a new unsaved record before any database key exists. Their record hash is the `RecordState::getStateHash()` value; keyed refs use `Key::getHash()`.
 
-`RepresentationBinding::applyToRecordState($state)` turns a reusable same-collection template binding into a new applied binding whose fields target that concrete `RecordState`. It preserves paths and writable/read-only flags, and it does not mutate the reusable binding. Future relation collections will use this when adding new children, but relation collection runtime and write planning are not implemented yet.
+`RepresentationBinding::applyToRecordState($state)` turns a reusable same-collection template binding into a new applied binding whose fields and relation owners target that concrete `RecordState`. It preserves paths and writable/read-only flags, and it does not mutate the reusable binding.
 
 Sources of binding information:
 
@@ -438,7 +438,7 @@ backing collection
 
 When a new child is added, the relation collection should apply the child `RepresentationBinding` for that relation item.
 
-Do not hard-depend on Doctrine Collections, Illuminate Collections, Loophp Collections, or any other collection package in the ORM foundation. Relation tracking is ORM-specific because the ORM needs owner record, relation definition, loaded state, child binding, added/removed children, cascade/orphan behavior, and future relation write planning. Generic collection libraries do not know those things.
+Do not hard-depend on Doctrine Collections, Illuminate Collections, Loophp Collections, or any other collection package in the ORM foundation. Relation tracking is ORM-specific because the ORM needs owner record, relation definition, loaded state, child binding, added/removed children, cascade/orphan behavior, and relation persistence planning. Generic collection libraries do not know those things.
 
 Later, allow backing collection adapters/factories, similar to Cycle's collection factory approach. A third-party collection can be backing storage or an exposed collection API, but it cannot own ORM relation semantics.
 
@@ -507,13 +507,13 @@ Phase 1G introduces `ON\Data\ORM\Sync\SyncPlanner`, `SyncPlan`, and `SyncFieldUp
 
 `SyncPlanner` reads current representation values, detects conflicts, and produces a `SyncPlan` containing path-specific conflicts plus planned field updates. Read-only bindings are ignored for updates, conflicted paths are not planned as updates, and duplicate target updates with conflicting values are rejected instead of implying last-write-wins.
 
-Different fields on the same `RecordState` remain separate `SyncFieldUpdate` entries. Later scalar sync and flush runtime aggregate them through the dirty `RecordState`; relation write planning remains future work.
+Different fields on the same `RecordState` remain separate `SyncFieldUpdate` entries. Later scalar sync and flush runtime aggregate them through the dirty `RecordState`; current relation persistence planning is described in [`2-persistence.md`](./2-persistence.md).
 
 Planning does not mutate `RecordState`, update tracked baseline revisions, convert values, persist, flush, or apply the updates. Applying a `SyncPlan` is handled by the Phase 2 scalar synchronization runtime described in [`2-persistence.md`](./2-persistence.md). This completes the Phase 1 state/sync foundation.
 
 ## Phase 1 Completed Foundation
 
-Phase 1 introduced only in-memory state, representation tracking, relation intent tracking, value reading, conflict detection, and sync-planning primitives. It did not introduce public `sync()`, `flush()`, `EntityManager`, query hydration runtime, repositories, database writes, relation write planners, or lazy loading. Later Phase 2 work added scalar sync/flush services and scalar database writes without adding an `EntityManager`, `UnitOfWork`, repositories, lazy loading, or relation write planners.
+Phase 1 introduced only in-memory state, representation tracking, relation intent tracking, value reading, conflict detection, and sync-planning primitives. It did not introduce public `sync()`, `flush()`, `EntityManager`, query hydration runtime, repositories, database writes, relation write planners, or lazy loading. Later Phase 2 work added scalar sync/flush services and scalar database writes without adding an `EntityManager`, `UnitOfWork`, repositories, or lazy loading. Phase 3 adds relation representation sync and relation persistence planning; see [`2-persistence.md`](./2-persistence.md).
 
 `RecordState` is the canonical aggregation point for synchronized changes. `SyncPlanner` produces field-level `SyncFieldUpdate` objects in a `SyncPlan`; it does not mutate records, apply updates, group database commands, or clear conflicts. Multiple different fields on the same `RecordState` may appear as separate `SyncFieldUpdate` entries. `SyncPlanner` should only reject duplicate updates when the same concrete record target and same field receive conflicting values in the same plan.
 
@@ -539,12 +539,11 @@ Scalar flush can group those dirty values into one database update for the users
 
 ## Remaining Non-Goals
 
-Do not introduce as part of the current scalar persistence layer:
+Do not introduce as part of the current ORM persistence layer:
 
 - EntityManager;
 - UnitOfWork;
 - lazy loading;
-- relation write planners;
 - generated repositories;
 - entity metadata registry;
 - service container;

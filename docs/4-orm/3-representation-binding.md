@@ -66,6 +66,13 @@ It is not a binding template. Multiple object instances may share the same reusa
 
 Runtime relation state is not representation shape. A `RepresentationRelationBinding` says that a representation path is a relation and stores the reusable related binding branch. A `RelatedCollection` or `RelatedReference` says what one owner currently knows and intends to add, remove, or set at runtime.
 
+Relation representation sync connects the two models:
+
+- `MANY` relation bindings sync representation paths into `RelatedCollection` instances.
+- `ONE` relation bindings sync representation paths into `RelatedReference` instances.
+
+Relation persistence planning then consumes changed `RelatedCollection` and `RelatedReference` instances. Built-in planners cover many-to-many, has-many, belongs-to, and has-one relation definitions.
+
 ## Binding Kinds
 
 ### Field Binding
@@ -161,7 +168,7 @@ RepresentationValueReader         -> getRelations()
 RelationRepresentationSynchronizer -> RelatedCollection / RelatedReference
 ```
 
-Expression bindings are ignored by both synchronizers for now. They should survive on the binding model as provenance for later tasks.
+`MANY` bindings become `RelatedCollection` runtime state. `ONE` bindings become `RelatedReference` runtime state. Expression bindings are ignored by both synchronizers for now. They should survive on the binding model as provenance for later tasks.
 
 ## Non-Goals
 
@@ -170,7 +177,6 @@ The recursive binding model does not implement:
 - automatic relation graph inference
 - automatic child adoption
 - relation inference from developer objects
-- `BelongsTo` or `HasOne` persistence planners
 - SQL generation
 - transactions
 - dependency ordering for generated ids
