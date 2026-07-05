@@ -4,19 +4,17 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Relation;
 
-use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 
 final class ToOneRelationStateTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testConstructorStoresOwnerRelationNameRelatedBindingBaselineTargetAndCurrentTarget(): void
 	{
 		$owner = RecordState::new($this->users());
@@ -130,23 +128,5 @@ final class ToOneRelationStateTest extends TestCase
 	private function reference(?object $target = null): ToOneRelationState
 	{
 		return new ToOneRelationState(RecordState::new($this->users()), 'author', $this->postBinding(), $target);
-	}
-
-	private function postBinding(): RepresentationBinding
-	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
-
-		return $binding;
-	}
-
-	private function users(): CollectionInterface
-	{
-		return (new Registry())->collection('users')->primaryKey('id')->field('id', 'int')->end();
-	}
-
-	private function posts(): CollectionInterface
-	{
-		return (new Registry())->collection('posts')->primaryKey('id')->field('id', 'int')->end()->field('title', 'string')->end();
 	}
 }

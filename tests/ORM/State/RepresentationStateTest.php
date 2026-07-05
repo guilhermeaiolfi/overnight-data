@@ -4,17 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\State;
 
-use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationState;
 use PHPUnit\Framework\TestCase;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 
 final class RepresentationStateTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testExposesBindingWithoutRepresentationObject(): void
 	{
 		$binding = new RepresentationBinding();
@@ -88,10 +89,5 @@ final class RepresentationStateTest extends TestCase
 
 		self::assertFalse($tracked->hasBaselineRevision($first));
 		self::assertSame(3, $tracked->getBaselineRevision($second));
-	}
-
-	private function users(): CollectionInterface
-	{
-		return (new Registry())->collection('users')->primaryKey('id')->field('id', 'int')->end();
 	}
 }

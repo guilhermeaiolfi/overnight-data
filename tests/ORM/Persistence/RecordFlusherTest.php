@@ -18,10 +18,13 @@ use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use PHPUnit\Framework\TestCase;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
 
 final class RecordFlusherTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testCleanRecordsAreSkippedAndNoCommandIsExecuted(): void
 	{
 		$users = $this->users();
@@ -293,15 +296,6 @@ final class RecordFlusherTest extends TestCase
 		self::assertInstanceOf(DeleteCommand::class, $executor->getCommands()[0]);
 		self::assertInstanceOf(InsertCommand::class, $executor->getCommands()[1]);
 		self::assertSame(['id' => 50], $executor->getCommands()[0]->getIdentity());
-	}
-
-	private function users(): CollectionInterface
-	{
-		return (new Registry())
-			->collection('users')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('name', 'string')->end();
 	}
 
 	private function posts(): CollectionInterface

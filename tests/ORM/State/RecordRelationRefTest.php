@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\State;
 
-use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
 use PHPUnit\Framework\TestCase;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 
 final class RecordRelationRefTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testForCollectionCreatesTemplateRef(): void
 	{
 		$users = $this->users();
@@ -63,10 +64,5 @@ final class RecordRelationRefTest extends TestCase
 
 		$this->expectException(StateException::class);
 		$relation->getRecordHash();
-	}
-
-	private function users(): CollectionInterface
-	{
-		return (new Registry())->collection('users')->primaryKey('id')->field('id', 'int')->end();
 	}
 }

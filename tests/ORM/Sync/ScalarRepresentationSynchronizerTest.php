@@ -21,10 +21,13 @@ use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\Sync\ScalarRepresentationSynchronizer;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
 
 final class ScalarRepresentationSynchronizerTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testSyncReturnsEmptyListWhenThereAreNoRepresentationStates(): void
 	{
 		self::assertSame([], $this->synchronizer()->sync(new RepresentationStore(), new RecordStateStore()));
@@ -37,7 +40,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 			'name' => RecordFieldRef::forState($record, 'name'),
 		]));
 
-		$plans = $this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+		$plans = $this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
 
 		self::assertCount(1, $plans);
 		self::assertTrue($plans[0]->isEmpty());
@@ -52,7 +55,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 			'name' => RecordFieldRef::forState($record, 'name'),
 		]));
 
-		$plans = $this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+		$plans = $this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
 
 		self::assertCount(1, $plans[0]->getUpdates());
 		self::assertSame('A2', $record->getValue('name'));
@@ -66,7 +69,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 			'name' => RecordFieldRef::forState($record, 'name'),
 		]));
 
-		$this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+		$this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
 
 		self::assertTrue($record->isDirty());
 		self::assertSame(['name' => 'A2'], $record->getDirtyValues());
@@ -83,7 +86,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 			'name' => RecordFieldRef::forState($second, 'name'),
 		]));
 
-		$plans = $this->synchronizer()->sync($this->trackedMap($firstTracked, $secondTracked), new RecordStateStore());
+		$plans = $this->synchronizer()->sync($this->representations($firstTracked, $secondTracked), new RecordStateStore());
 
 		self::assertSame($first, $plans[0]->getUpdates()[0]->getRecord());
 		self::assertSame($second, $plans[1]->getUpdates()[0]->getRecord());
@@ -98,7 +101,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::forState($record, 'name'), false));
 		$tracked = $this->tracked($this->representation(['name' => 'A2']), $binding);
 
-		$plans = $this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+		$plans = $this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
 
 		self::assertTrue($plans[0]->isEmpty());
 		self::assertSame('A1', $record->getValue('name'));
@@ -119,7 +122,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 		));
 		$tracked = $this->tracked($this->representation(['name' => 'A2']), $binding);
 
-		$plans = $this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+		$plans = $this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
 
 		self::assertCount(1, $plans[0]->getUpdates());
 		self::assertSame('A2', $record->getValue('name'));
@@ -133,7 +136,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 			'displayName' => RecordFieldRef::forState($record, 'name'),
 		]));
 
-		$plans = $this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+		$plans = $this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
 
 		self::assertCount(1, $plans[0]->getUpdates());
 		self::assertSame('A2', $record->getValue('name'));
@@ -152,7 +155,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 		$this->expectExceptionMessage('multiple values');
 
 		try {
-			$this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+			$this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
 		} finally {
 			self::assertSame('A1', $record->getValue('name'));
 		}
@@ -171,7 +174,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 		$this->expectExceptionMessage('name');
 
 		try {
-			$this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+			$this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
 		} finally {
 			self::assertSame('A2', $record->getValue('name'));
 			self::assertSame([$record->getStateHash() => 1], $tracked->getBaselineRevisions());
@@ -193,7 +196,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 		$this->expectException(SyncException::class);
 
 		try {
-			$this->synchronizer()->sync($this->trackedMap($firstTracked, $secondTracked), new RecordStateStore());
+			$this->synchronizer()->sync($this->representations($firstTracked, $secondTracked), new RecordStateStore());
 		} finally {
 			self::assertSame('A1', $first->getValue('name'));
 			self::assertSame('B2', $second->getValue('name'));
@@ -208,7 +211,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 			'email' => RecordFieldRef::forState($record, 'email'),
 		]));
 
-		$this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+		$this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
 
 		self::assertSame([$record->getStateHash() => $record->getRevision()], $tracked->getBaselineRevisions());
 		self::assertSame(3, $record->getRevision());
@@ -225,7 +228,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 		$tracked = $this->tracked($this->representation(['name' => 'A2', 'nickname' => 'N1']), $binding);
 		$second->setValue('nickname', 'N2');
 
-		$this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+		$this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
 
 		self::assertSame([
 			$first->getStateHash() => $first->getRevision(),
@@ -241,7 +244,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 			'name' => RecordFieldRef::forState($record, 'name'),
 		]));
 
-		$this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+		$this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
 
 		self::assertFalse($record->isClean());
 		self::assertTrue($record->isDirty());
@@ -267,7 +270,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 
 		$this->expectException(SyncException::class);
 
-		$this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+		$this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
 	}
 
 	public function testKeyedFieldRefResolvesThroughRecordStateStore(): void
@@ -281,7 +284,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 			'name' => RecordFieldRef::forKey($key, 'name'),
 		]), [$key->getHash() => 1]);
 
-		$plans = $this->synchronizer()->sync($this->trackedMap($tracked), $records);
+		$plans = $this->synchronizer()->sync($this->representations($tracked), $records);
 
 		self::assertSame($record, $plans[0]->getUpdates()[0]->getRecord());
 		self::assertSame('A2', $record->getValue('name'));
@@ -294,7 +297,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 			'name' => RecordFieldRef::forState($record, 'name'),
 		]));
 
-		$plans = $this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+		$plans = $this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
 
 		self::assertCount(1, $plans[0]->getUpdates());
 		self::assertNull($plans[0]->getUpdates()[0]->getValue());
@@ -309,7 +312,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 		]));
 		$record->setValue('email', 'b@example.test');
 
-		$plans = $this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+		$plans = $this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
 
 		self::assertTrue($plans[0]->isEmpty());
 	}
@@ -327,23 +330,10 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 		$this->expectException(SyncException::class);
 
 		try {
-			$this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+			$this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
 		} finally {
 			self::assertSame('a@example.test', $record->getValue('email'));
 		}
-	}
-
-	/**
-	 * @param array<string, mixed> $values
-	 */
-	private function representation(array $values): stdClass
-	{
-		$representation = new stdClass();
-		foreach ($values as $path => $value) {
-			$representation->{$path} = $value;
-		}
-
-		return $representation;
 	}
 
 	/**
@@ -368,29 +358,6 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 			$binding,
 			$baselineRevisions ?? $this->baselineRevisions($binding)
 		));
-	}
-
-	private function trackedMap(RepresentationState ...$RepresentationStates): RepresentationStore
-	{
-		$map = new RepresentationStore();
-		foreach ($RepresentationStates as $tracked) {
-			RepresentationStateObjectRegistry::addTo($map, $tracked);
-		}
-
-		return $map;
-	}
-
-	/**
-	 * @return array<string, int>
-	 */
-	private function baselineRevisions(RepresentationBinding $binding): array
-	{
-		$baselineRevisions = [];
-		foreach ($binding->getFields() as $fieldBinding) {
-			$baselineRevisions[$fieldBinding->getField()->getRecordHash()] = 1;
-		}
-
-		return $baselineRevisions;
 	}
 
 	private function synchronizer(): ScalarRepresentationSynchronizer

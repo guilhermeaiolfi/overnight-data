@@ -19,9 +19,12 @@ use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 
 final class RecordStateStoreTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testAddIndexesKeylessStateByStateHash(): void
 	{
 		$state = RecordState::new($this->users(), ['name' => 'A1']);
@@ -304,11 +307,6 @@ final class RecordStateStoreTest extends TestCase
 		self::assertNull($map->getByStateHash($state->getStateHash()));
 		self::assertNull($map->getByKey($key));
 		self::assertSame([], $map->getAll());
-	}
-
-	private function users(): CollectionInterface
-	{
-		return (new Registry())->collection('users')->primaryKey('id')->field('id', 'int')->end();
 	}
 
 	private function postUser(): CollectionInterface

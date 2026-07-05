@@ -4,19 +4,17 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Relation;
 
-use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 
 final class ToManyRelationStateTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testCreatesUnloadedCollectionByDefault(): void
 	{
 		$collection = $this->relatedCollection();
@@ -336,31 +334,5 @@ final class ToManyRelationStateTest extends TestCase
 		}
 
 		return new ToManyRelationState(RecordState::new($this->users()), 'posts', $this->postBinding(), $items);
-	}
-
-	private function postBinding(): RepresentationBinding
-	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
-
-		return $binding;
-	}
-
-	private function users(): CollectionInterface
-	{
-		return (new Registry())
-			->collection('users')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('name', 'string')->end();
-	}
-
-	private function posts(): CollectionInterface
-	{
-		return (new Registry())
-			->collection('posts')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('title', 'string')->end();
 	}
 }

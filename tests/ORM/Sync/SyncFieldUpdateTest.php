@@ -4,17 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Sync;
 
-use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\Sync\SyncFieldUpdate;
 use PHPUnit\Framework\TestCase;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 
 final class SyncFieldUpdateTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testExposesRecordFieldValueAndBinding(): void
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
@@ -45,14 +46,5 @@ final class SyncFieldUpdateTest extends TestCase
 
 		self::assertSame(['name' => 'A1'], $record->getValues());
 		self::assertSame(1, $record->getRevision());
-	}
-
-	private function users(): CollectionInterface
-	{
-		return (new Registry())
-			->collection('users')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('name', 'string')->end();
 	}
 }

@@ -489,17 +489,4 @@ final class RelationPersistencePlannerTest extends TestCase
 
 		return $binding;
 	}
-
-	private function postBinding(): RepresentationBinding
-	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
-
-		return $binding;
-	}
-
-	private function posts(): CollectionInterface
-	{
-		return (new Registry())->collection('posts')->primaryKey('id')->field('id', 'int')->end()->field('title', 'string')->end();
-	}
 }

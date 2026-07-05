@@ -19,9 +19,12 @@ use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\Sync\RepresentationAdopter;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 
 final class RepresentationAdopterTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testAdoptAppliesTemplateBindingToRecordState(): void
 	{
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
@@ -179,23 +182,6 @@ final class RepresentationAdopterTest extends TestCase
 			$records ?? new RecordStateStore(),
 			$representations ?? new RepresentationStore()
 		);
-	}
-
-	private function postBinding(): RepresentationBinding
-	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
-
-		return $binding;
-	}
-
-	private function users(): CollectionInterface
-	{
-		return (new Registry())
-			->collection('users')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('name', 'string')->end();
 	}
 
 	private function posts(): CollectionInterface
