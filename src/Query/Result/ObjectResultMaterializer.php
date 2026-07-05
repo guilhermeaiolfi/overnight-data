@@ -5,10 +5,17 @@ declare(strict_types=1);
 namespace ON\Data\Query\Result;
 
 use ON\Data\Query\Exception\ObjectExportException;
+use ReflectionClass;
+use ReflectionNamedType;
 use stdClass;
 
 final class ObjectResultMaterializer
 {
+	/**
+	 * @var array<class-string, ReflectionClass<object>>
+	 */
+	private array $reflections = [];
+
 	public function materialize(array $data, string $class): object
 	{
 		return $this->convertAssociativeArray($data, $class);
@@ -38,7 +45,12 @@ final class ObjectResultMaterializer
 		$object = $this->createInstance($class);
 
 		foreach ($data as $key => $value) {
-			$object->{$key} = $this->convertValue($value, $class);
+			if ($class !== stdClass::class) {
+				$this->assertKnownPublicProperty($class, $key);
+			}
+
+			$nestedClass = $this->resolveNestedClass($class, $key);
+			$object->{$key} = $this->convertValue($value, $nestedClass);
 		}
 
 		return $object;
@@ -62,7 +74,7 @@ final class ObjectResultMaterializer
 			$converted = [];
 
 			foreach ($value as $item) {
-				$converted[] = $this->convertValue($item, $class);
+				$converted[] = $this->convertValue($item, stdClass::class);
 			}
 
 			return $converted;
@@ -81,10 +93,65 @@ final class ObjectResultMaterializer
 
 	private function createInstance(string $class): object
 	{
-		if ($class !== stdClass::class) {
-			throw ObjectExportException::unsupportedClass($class);
+		ObjectExportClassValidator::assertSupported($class);
+
+		if ($class === stdClass::class) {
+			return new stdClass();
 		}
 
-		return new stdClass();
+		return new $class();
+	}
+
+	/**
+	 * @param class-string $class
+	 */
+	private function assertKnownPublicProperty(string $class, string $property): void
+	{
+		$reflection = $this->getReflection($class);
+
+		if (! $reflection->hasProperty($property)) {
+			throw ObjectExportException::unknownProperty($class, $property);
+		}
+
+		$propertyReflection = $reflection->getProperty($property);
+
+		if (! $propertyReflection->isPublic()) {
+			throw ObjectExportException::unknownProperty($class, $property);
+		}
+	}
+
+	/**
+	 * @param class-string $class
+	 */
+	private function resolveNestedClass(string $class, string $property): string
+	{
+		if ($class === stdClass::class) {
+			return stdClass::class;
+		}
+
+		$reflection = $this->getReflection($class);
+		$propertyReflection = $reflection->getProperty($property);
+
+		if (! $propertyReflection->isPublic()) {
+			return stdClass::class;
+		}
+
+		$type = $propertyReflection->getType();
+
+		if ($type instanceof ReflectionNamedType && ! $type->isBuiltin()) {
+			return $type->getName();
+		}
+
+		return stdClass::class;
+	}
+
+	/**
+	 * @param class-string $class
+	 *
+	 * @return ReflectionClass<object>
+	 */
+	private function getReflection(string $class): ReflectionClass
+	{
+		return $this->reflections[$class] ??= new ReflectionClass($class);
 	}
 }

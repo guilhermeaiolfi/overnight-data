@@ -182,7 +182,7 @@ final class MutableQueryExportTest extends TestCase
 		);
 
 		$this->expectException(ObjectExportException::class);
-		$this->expectExceptionMessage('Object export currently supports stdClass only');
+		$this->expectExceptionMessage('Object export class "App\\User" does not exist.');
 
 		$query->to('App\\User')->mutable($this->session());
 	}

@@ -27,6 +27,7 @@ use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelectionTree;
+use ON\Data\Query\Result\ObjectExportClassValidator;
 use ON\Data\Query\Result\ObjectResultMaterializer;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Sort\Sort;
@@ -461,9 +462,7 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function to(string $class): self
 	{
-		if ($class !== stdClass::class) {
-			throw ObjectExportException::unsupportedClass($class);
-		}
+		ObjectExportClassValidator::assertSupported($class);
 
 		$this->resultClass = $class;
 
@@ -479,6 +478,10 @@ final class SelectQuery implements QuerySourceInterface
 	{
 		if ($this->resultClass === null) {
 			throw ObjectExportException::requiresObjectExport();
+		}
+
+		if ($this->resultClass !== stdClass::class) {
+			throw ObjectExportException::mutableRequiresStdClass($this->resultClass);
 		}
 
 		$this->mutable = true;

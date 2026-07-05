@@ -8,10 +8,59 @@ use InvalidArgumentException;
 
 final class ObjectExportException extends InvalidArgumentException
 {
-	public static function unsupportedClass(string $class): self
+	public static function classNotFound(string $class): self
 	{
 		return new self(sprintf(
-			'Object export currently supports stdClass only; "%s" was requested.',
+			'Object export class "%s" does not exist.',
+			$class,
+		));
+	}
+
+	public static function interfaceNotSupported(string $class): self
+	{
+		return new self(sprintf(
+			'Object export does not support interfaces; "%s" was requested.',
+			$class,
+		));
+	}
+
+	public static function traitNotSupported(string $class): self
+	{
+		return new self(sprintf(
+			'Object export does not support traits; "%s" was requested.',
+			$class,
+		));
+	}
+
+	public static function abstractClassNotSupported(string $class): self
+	{
+		return new self(sprintf(
+			'Object export does not support abstract classes; "%s" was requested.',
+			$class,
+		));
+	}
+
+	public static function constructorRequiresArguments(string $class): self
+	{
+		return new self(sprintf(
+			'Object export requires a class with no required constructor arguments; "%s" was requested.',
+			$class,
+		));
+	}
+
+	public static function unknownProperty(string $class, string $property): self
+	{
+		return new self(sprintf(
+			'Object export encountered unknown property "%s" for class "%s".',
+			$property,
+			$class,
+		));
+	}
+
+	public static function mutableRequiresStdClass(string $class): self
+	{
+		return new self(sprintf(
+			'Mutable query export currently supports stdClass only; "%s" was requested.',
 			$class,
 		));
 	}

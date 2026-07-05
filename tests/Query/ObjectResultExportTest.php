@@ -176,9 +176,224 @@ final class ObjectResultExportTest extends TestCase
 		);
 
 		$this->expectException(ObjectExportException::class);
-		$this->expectExceptionMessage('Object export currently supports stdClass only');
+		$this->expectExceptionMessage('Object export class "App\\User" does not exist.');
 
 		$query->to('App\\User');
+	}
+
+	public function testToUserRowFetchAllReturnsUserRowObjects(): void
+	{
+		$executor = new ObjectExportRecordingExecutor(
+			fetchAllRows: [[
+				'id' => 1,
+				'name' => 'Guilherme',
+				'posts' => [
+					['id' => 10, 'title' => 'Hello'],
+				],
+			]],
+		);
+		$query = new SelectQuery($this->makeRegistry()->getCollection('users'), $executor);
+
+		$rows = $query->to(ExportUserRow::class)->fetchAll();
+
+		self::assertCount(1, $rows);
+		self::assertInstanceOf(ExportUserRow::class, $rows[0]);
+		self::assertSame(1, $rows[0]->id);
+		self::assertSame('Guilherme', $rows[0]->name);
+		self::assertIsArray($rows[0]->posts);
+		self::assertInstanceOf(stdClass::class, $rows[0]->posts[0]);
+	}
+
+	public function testToUserRowFetchOneReturnsUserRowOrNull(): void
+	{
+		$query = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new ObjectExportRecordingExecutor(fetchOneRow: ['id' => 1, 'name' => 'Ada']),
+		);
+
+		$row = $query->to(ExportUserRow::class)->fetchOne();
+
+		self::assertInstanceOf(ExportUserRow::class, $row);
+		self::assertSame(1, $row->id);
+		self::assertSame('Ada', $row->name);
+	}
+
+	public function testToUserRowFetchOneReturnsNullWhenNoRow(): void
+	{
+		$query = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new ObjectExportRecordingExecutor(fetchOneRow: null),
+		);
+
+		self::assertNull($query->to(ExportUserRow::class)->fetchOne());
+	}
+
+	public function testToUserRowIterateReturnsUserRowObjects(): void
+	{
+		$query = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new ObjectExportRecordingExecutor(fetchAllRows: [
+				['id' => 1, 'name' => 'First'],
+				['id' => 2, 'name' => 'Second'],
+			]),
+		);
+
+		$rows = iterator_to_array($query->to(ExportUserRow::class)->iterate(), false);
+
+		self::assertCount(2, $rows);
+		self::assertInstanceOf(ExportUserRow::class, $rows[0]);
+		self::assertInstanceOf(ExportUserRow::class, $rows[1]);
+		self::assertSame(1, $rows[0]->id);
+		self::assertSame(2, $rows[1]->id);
+	}
+
+	public function testToUserRowMutableThrowsClearException(): void
+	{
+		$query = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new ObjectExportRecordingExecutor(),
+		);
+
+		$this->expectException(ObjectExportException::class);
+		$this->expectExceptionMessage('Mutable query export currently supports stdClass only');
+
+		$query->to(ExportUserRow::class)->mutable(new Session(new RecordingCommandExecutor()));
+	}
+
+	public function testMaterializesRootUserDefinedPublicPropertyClass(): void
+	{
+		$materializer = new ObjectResultMaterializer();
+
+		$object = $materializer->materialize([
+			'id' => 1,
+			'name' => 'Ada',
+		], ExportUserRow::class);
+
+		self::assertInstanceOf(ExportUserRow::class, $object);
+		self::assertSame(1, $object->id);
+		self::assertSame('Ada', $object->name);
+		self::assertSame([], $object->posts);
+	}
+
+	public function testRejectsMissingClass(): void
+	{
+		$materializer = new ObjectResultMaterializer();
+
+		$this->expectException(ObjectExportException::class);
+		$this->expectExceptionMessage('Object export class "App\\MissingRow" does not exist.');
+
+		$materializer->materialize(['id' => 1], 'App\\MissingRow');
+	}
+
+	public function testRejectsInterface(): void
+	{
+		$query = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new ObjectExportRecordingExecutor(),
+		);
+
+		$this->expectException(ObjectExportException::class);
+		$this->expectExceptionMessage('Object export does not support interfaces');
+
+		$query->to(ExportRowInterface::class);
+	}
+
+	public function testRejectsAbstractClass(): void
+	{
+		$query = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new ObjectExportRecordingExecutor(),
+		);
+
+		$this->expectException(ObjectExportException::class);
+		$this->expectExceptionMessage('Object export does not support abstract classes');
+
+		$query->to(AbstractExportRow::class);
+	}
+
+	public function testRejectsClassWithRequiredConstructorArgs(): void
+	{
+		$query = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new ObjectExportRecordingExecutor(),
+		);
+
+		$this->expectException(ObjectExportException::class);
+		$this->expectExceptionMessage('Object export requires a class with no required constructor arguments');
+
+		$query->to(RequiredConstructorExportRow::class);
+	}
+
+	public function testRejectsTrait(): void
+	{
+		$query = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new ObjectExportRecordingExecutor(),
+		);
+
+		$this->expectException(ObjectExportException::class);
+		$this->expectExceptionMessage('Object export does not support traits');
+
+		$query->to(ExportRowTrait::class);
+	}
+
+	public function testThrowsForUnknownPublicPropertyClassKeys(): void
+	{
+		$materializer = new ObjectResultMaterializer();
+
+		$this->expectException(ObjectExportException::class);
+		$this->expectExceptionMessage('Object export encountered unknown property "unknown" for class');
+
+		$materializer->materialize([
+			'id' => 1,
+			'unknown' => 'value',
+		], ExportUserRow::class);
+	}
+
+	public function testNestedTypedObjectPropertyMaterializesIntoDeclaredClass(): void
+	{
+		$materializer = new ObjectResultMaterializer();
+
+		$object = $materializer->materialize([
+			'id' => 1,
+			'name' => 'Ada',
+			'profile' => [
+				'bio' => 'Hi',
+			],
+		], ExportUserWithProfileRow::class);
+
+		self::assertInstanceOf(ExportUserWithProfileRow::class, $object);
+		self::assertInstanceOf(ExportProfileRow::class, $object->profile);
+		self::assertSame('Hi', $object->profile->bio);
+	}
+
+	public function testPublicArrayRelationPropertyReceivesArrayOfStdClassItems(): void
+	{
+		$materializer = new ObjectResultMaterializer();
+
+		$object = $materializer->materialize([
+			'id' => 1,
+			'name' => 'Guilherme',
+			'posts' => [
+				['id' => 10, 'title' => 'Hello'],
+				['id' => 11, 'title' => 'World'],
+			],
+		], ExportUserRow::class);
+
+		self::assertIsArray($object->posts);
+		self::assertCount(2, $object->posts);
+		self::assertInstanceOf(stdClass::class, $object->posts[0]);
+		self::assertSame(10, $object->posts[0]->id);
+		self::assertInstanceOf(stdClass::class, $object->posts[1]);
+		self::assertSame(11, $object->posts[1]->id);
+	}
+
+	public function testCopyPreservesUserDefinedResultClass(): void
+	{
+		$query = new SelectQuery($this->makeRegistry()->getCollection('users'));
+		$query->to(ExportUserRow::class);
+
+		self::assertSame(ExportUserRow::class, $query->copy()->getResultClass());
 	}
 
 	public function testToStdClassFetchAllDoesNotRequireOrmSession(): void
@@ -415,5 +630,45 @@ final class LazyIterateRecordingExecutor implements QueryExecutorInterface
 
 			yield $row;
 		}
+	}
+}
+
+final class ExportUserRow
+{
+	public int $id;
+	public string $name;
+
+	/** @var list<stdClass> */
+	public array $posts = [];
+}
+
+final class ExportProfileRow
+{
+	public string $bio;
+}
+
+final class ExportUserWithProfileRow
+{
+	public int $id;
+	public string $name;
+	public ExportProfileRow $profile;
+}
+
+interface ExportRowInterface
+{
+}
+
+abstract class AbstractExportRow
+{
+}
+
+trait ExportRowTrait
+{
+}
+
+final class RequiredConstructorExportRow
+{
+	public function __construct(public int $id)
+	{
 	}
 }
