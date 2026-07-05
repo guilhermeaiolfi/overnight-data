@@ -258,6 +258,81 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 		self::assertStringNotContainsString('CommandInterface', $source);
 	}
 
+	public function testMissingCurrentPathThrowsSyncException(): void
+	{
+		$record = RecordState::new($this->users(), ['name' => 'A1']);
+		$tracked = $this->tracked(new stdClass(), $this->binding([
+			'name' => RecordFieldRef::forState($record, 'name'),
+		]));
+
+		$this->expectException(SyncException::class);
+
+		$this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+	}
+
+	public function testKeyedFieldRefResolvesThroughRecordStateStore(): void
+	{
+		$users = $this->users();
+		$key = $users->getKey(10);
+		$record = RecordState::clean($key, ['name' => 'A1']);
+		$records = new RecordStateStore();
+		$records->add($record);
+		$tracked = $this->tracked($this->representation(['name' => 'A2']), $this->binding([
+			'name' => RecordFieldRef::forKey($key, 'name'),
+		]), [$key->getHash() => 1]);
+
+		$plans = $this->synchronizer()->sync($this->trackedMap($tracked), $records);
+
+		self::assertSame($record, $plans[0]->getUpdates()[0]->getRecord());
+		self::assertSame('A2', $record->getValue('name'));
+	}
+
+	public function testNullValueIsHandledAsNormalValue(): void
+	{
+		$record = RecordState::new($this->users(), ['name' => 'A1']);
+		$tracked = $this->tracked($this->representation(['name' => null]), $this->binding([
+			'name' => RecordFieldRef::forState($record, 'name'),
+		]));
+
+		$plans = $this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+
+		self::assertCount(1, $plans[0]->getUpdates());
+		self::assertNull($plans[0]->getUpdates()[0]->getValue());
+		self::assertNull($record->getValue('name'));
+	}
+
+	public function testCurrentValueEqualToBaselineDoesNotProduceUpdateWhenRecordRevisionChangedElsewhere(): void
+	{
+		$record = RecordState::new($this->users(), ['name' => 'A1', 'email' => 'a@example.test']);
+		$tracked = $this->tracked($this->representation(['name' => 'A1']), $this->binding([
+			'name' => RecordFieldRef::forState($record, 'name'),
+		]));
+		$record->setValue('email', 'b@example.test');
+
+		$plans = $this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+
+		self::assertTrue($plans[0]->isEmpty());
+	}
+
+	public function testConflictedPathStillPlansUpdatesForOtherNonConflictingFields(): void
+	{
+		$record = RecordState::new($this->users(), ['name' => 'A1', 'email' => 'a@example.test']);
+		$binding = $this->binding([
+			'name' => RecordFieldRef::forState($record, 'name'),
+			'email' => RecordFieldRef::forState($record, 'email'),
+		]);
+		$tracked = $this->tracked($this->representation(['name' => 'A3', 'email' => 'b@example.test']), $binding);
+		$record->setValue('name', 'A2');
+
+		$this->expectException(SyncException::class);
+
+		try {
+			$this->synchronizer()->sync($this->trackedMap($tracked), new RecordStateStore());
+		} finally {
+			self::assertSame('a@example.test', $record->getValue('email'));
+		}
+	}
+
 	/**
 	 * @param array<string, mixed> $values
 	 */

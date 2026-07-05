@@ -91,10 +91,10 @@ final class Phase1BoundaryTest extends TestCase
 		self::assertFalse(function_exists('ON\\Data\\ORM\\with'));
 	}
 
-	public function testSyncPlannerPlansFieldUpdatesOnly(): void
+	public function testScalarRepresentationSynchronizerPlansFieldUpdatesOnly(): void
 	{
 		self::markTestIncomplete(
-			'Phase 1 boundary: SyncPlanner returns SyncPlan field updates only; it must not group database commands or apply records.'
+			'Phase 1 boundary: ScalarRepresentationSynchronizer returns SyncPlan field updates only; it must not group database commands or apply records.'
 		);
 	}
 
