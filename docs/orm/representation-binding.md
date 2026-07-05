@@ -172,9 +172,10 @@ It does not recursively apply related bindings by itself. `Session::sync($object
 Scalar representation sync uses field bindings only:
 
 ```text
-RepresentationReader -> getFields()
-SyncConflictDetector      -> getWritableFieldBindings()
-SyncPlanner               -> getWritableFieldBindings()
+RepresentationBinding              -> getWritableFieldBindings()
+RepresentationReader               -> readPath()
+SyncConflictDetector                 -> detect()
+ScalarRepresentationSynchronizer     -> buildPlan() / applyPlan()
 ```
 
 Relation representation sync uses relation bindings only:

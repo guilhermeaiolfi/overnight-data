@@ -14,20 +14,20 @@ use RecursiveIteratorIterator;
 use ReflectionClass;
 use SplFileInfo;
 
-final class Phase1BoundaryTest extends TestCase
+final class OrmArchitectureBoundaryTest extends TestCase
 {
-	public function testPhase1HasNoPublicEntityManager(): void
+	public function testHasNoPublicEntityManager(): void
 	{
 		self::assertFalse(class_exists('ON\\Data\\ORM\\EntityManager'));
 		self::assertFileDoesNotExist(dirname(__DIR__, 3) . '/src/ORM/EntityManager.php');
 	}
 
-	public function testPhase1HasNoPublicSyncApi(): void
+	public function testHasNoGlobalSyncFunction(): void
 	{
 		self::assertFalse(function_exists('ON\\Data\\ORM\\sync'));
 	}
 
-	public function testPhase1HasNoFlushRuntime(): void
+	public function testHasNoGlobalFlushFunction(): void
 	{
 		self::assertFalse(function_exists('ON\\Data\\ORM\\flush'));
 		self::assertFileDoesNotExist(dirname(__DIR__, 3) . '/src/ORM/Flush.php');
@@ -80,49 +80,14 @@ final class Phase1BoundaryTest extends TestCase
 		}
 	}
 
-	public function testPhase1HasNoEntityQuery(): void
+	public function testHasNoEntityQuery(): void
 	{
 		self::assertFalse(class_exists('ON\\Data\\ORM\\EntityQuery'));
 		self::assertFileDoesNotExist(dirname(__DIR__, 3) . '/src/ORM/EntityQuery.php');
 	}
 
-	public function testPhase1HasNoWithApi(): void
+	public function testHasNoGlobalWithFunction(): void
 	{
 		self::assertFalse(function_exists('ON\\Data\\ORM\\with'));
-	}
-
-	public function testScalarRepresentationSynchronizerPlansFieldUpdatesOnly(): void
-	{
-		self::markTestIncomplete(
-			'Phase 1 boundary: ScalarRepresentationSynchronizer returns SyncPlan field updates only; it must not group database commands or apply records.'
-		);
-	}
-
-	public function testDirtyFieldAggregationBelongsToRecordStateAndFutureFlushPlanning(): void
-	{
-		self::markTestIncomplete(
-			'Phase 1 boundary: future sync-apply mutates RecordState, and future flush/write planning aggregates RecordState::getDirtyValues() into database commands.'
-		);
-	}
-
-	public function testToManyRelationStateTracksRelationIntentOnly(): void
-	{
-		self::markTestIncomplete(
-			'Phase 1 boundary: ToManyRelationState owns relation add/remove intent only; it does not persist, adopt, or write relations.'
-		);
-	}
-
-	public function testRepresentationAdopterDoesNotSyncValues(): void
-	{
-		self::markTestIncomplete(
-			'Phase 1 boundary: RepresentationAdopter registers tracked representations only; value synchronization remains future runtime work.'
-		);
-	}
-
-	public function testRepresentationReaderDoesNotMutateOrConvertValues(): void
-	{
-		self::markTestIncomplete(
-			'Phase 1 boundary: RepresentationReader reads public representation values only; mapper conversion and mutation are future runtime work.'
-		);
 	}
 }

@@ -1,6 +1,6 @@
 {
     "name": "guilhermeaiolfi/overnight-data",
-    "description": "The definition foundation of a metadata-driven PHP data layer.",
+    "description": "A metadata-driven PHP data layer with definitions, mapping, query modeling, relation loading, and ORM persistence.",
     "type": "library",
     "license": "MIT",
     "keywords": [

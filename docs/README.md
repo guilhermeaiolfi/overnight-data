@@ -2,6 +2,12 @@
 
 Start here for the current public documentation. The files linked below are the canonical docs for the current API.
 
+## Getting started
+
+- [`quickstart.md`](./quickstart.md): First end-to-end walkthrough using definitions, mapping, bound queries, and relation loading.
+- [`../CHANGELOG.md`](../CHANGELOG.md): Release history.
+- [`../UPGRADE.md`](../UPGRADE.md): Backward-compatibility policy for the 1.x line.
+
 ## Definitions
 
 - [`definition-api.md`](./definition-api.md): Canonical registry storage, naming rules, export, restoration, and the public definition wrappers.

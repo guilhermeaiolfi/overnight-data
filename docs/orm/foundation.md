@@ -504,9 +504,9 @@ It only reads current representation values. It does not sync values into `Recor
 
 ## Phase 1G Sync Planning
 
-Phase 1G introduces `ON\Data\ORM\Sync\SyncPlanner`, `SyncPlan`, and `SyncFieldUpdate` as the planning layer between tracked representations and future sync application.
+Phase 1G introduces `SyncPlan` and `SyncFieldUpdate` as the planning layer between tracked representations and sync application. Scalar sync planning and apply now live in `ScalarRepresentationSynchronizer`.
 
-`SyncPlanner` reads current representation values, detects conflicts, and produces a `SyncPlan` containing path-specific conflicts plus planned field updates. Read-only bindings are ignored for updates, conflicted paths are not planned as updates, and duplicate target updates with conflicting values are rejected instead of implying last-write-wins.
+`ScalarRepresentationSynchronizer` reads current representation values through `RepresentationReader`, detects conflicts, and produces a `SyncPlan` containing path-specific conflicts plus planned field updates. Read-only bindings are ignored for updates, conflicted paths are not planned as updates, and duplicate target updates with conflicting values are rejected instead of implying last-write-wins.
 
 Different fields on the same `RecordState` remain separate `SyncFieldUpdate` entries. Later scalar sync and flush runtime aggregate them through the dirty `RecordState`; current relation persistence planning is described in [`persistence.md`](./persistence.md).
 
@@ -516,7 +516,7 @@ Planning does not mutate `RecordState`, update tracked baseline revisions, conve
 
 Phase 1 introduced only in-memory state, representation tracking, relation intent tracking, value reading, conflict detection, and sync-planning primitives. It did not introduce public `sync()`, `flush()`, `EntityManager`, query hydration runtime, repositories, database writes, relation write planners, or lazy loading. Later Phase 2 work added scalar sync/flush services and scalar database writes without adding an `EntityManager`, `UnitOfWork`, repositories, or lazy loading. Phase 3 adds relation representation sync and relation persistence planning; see [`persistence.md`](./persistence.md).
 
-`RecordState` is the canonical aggregation point for synchronized changes. `SyncPlanner` produces field-level `SyncFieldUpdate` objects in a `SyncPlan`; it does not mutate records, apply updates, group database commands, or clear conflicts. Multiple different fields on the same `RecordState` may appear as separate `SyncFieldUpdate` entries. `SyncPlanner` should only reject duplicate updates when the same concrete record target and same field receive conflicting values in the same plan.
+`RecordState` is the canonical aggregation point for synchronized changes. `ScalarRepresentationSynchronizer` produces field-level `SyncFieldUpdate` objects in a `SyncPlan` and applies them to `RecordState`; it does not group database commands or clear conflicts by itself. Multiple different fields on the same `RecordState` may appear as separate `SyncFieldUpdate` entries. Scalar sync rejects duplicate updates when the same concrete record target and same field receive conflicting values in the same plan.
 
 Scalar sync-apply logic applies planned field updates to `RecordState`. Scalar flush/write planning aggregates dirty values from `RecordState::getDirtyValues()` into database commands, such as one update per record when possible.
 

@@ -1,11 +1,22 @@
 # Overnight Data
 
-`ON\Data` is a standalone PHP data-layer library focused on metadata definitions, value conversion, mapping, and database-independent read-query modeling.
+`ON\Data` is a standalone PHP data-layer library focused on metadata definitions, value conversion, mapping, database-independent read-query modeling, relation loading, and ORM persistence.
 
-It is independent from the Overnight framework. The package can be consumed on its own today and may be integrated elsewhere later.
+It is independent from the Overnight framework. The package can be consumed on its own and may be integrated elsewhere later.
+
+## Stability
+
+**v1.0** is the first stable release of the public data-layer foundation:
+
+- definitions, conversion, and mapper runtime;
+- query model, bound execution, and relation loading;
+- initial ORM persistence through `Session` and Cycle-backed command execution.
+
+Patch and minor releases within `^1.0` follow the policy in [`UPGRADE.md`](UPGRADE.md). Features listed under **Current Limitations** may still evolve in minor releases.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for release history and [`docs/quickstart.md`](docs/quickstart.md) for a first end-to-end walkthrough.
 
 ## Current Scope
-
 - Definitions: canonical `Registry` storage, collection and view definitions, typed definition wrappers, shared metadata, and class-based extension points.
 - Field metadata and conversion: field types, representations, codecs, and the `ConversionGateway` used to convert values through canonical PHP representations.
 - Mapper runtime: recursive mapping across arrays, `stdClass`, and public-property DTOs, with definition-aware resolution, `FieldMap` support, delayed object creation for constructor and readonly targets, and reusable mapper/writer/resolver registration through `MapperManager`.
@@ -127,11 +138,18 @@ Production code autoloads from the `ON\Data\` namespace.
 
 ## Installation
 
+Requires PHP `>=8.3`.
+
 ```bash
-composer config repositories.overnight-data vcs <repository-url>
-composer require guilhermeaiolfi/overnight-data:dev-main
+composer require guilhermeaiolfi/overnight-data:^1.0
 ```
 
+If Composer cannot resolve the package from Packagist yet, register the GitHub repository first:
+
+```bash
+composer config repositories.overnight-data vcs https://github.com/guilhermeaiolfi/overnight-data
+composer require guilhermeaiolfi/overnight-data:^1.0
+```
 ## Quality Commands
 
 ```bash
@@ -146,8 +164,10 @@ composer check
 
 ## Documentation
 
-- `docs/README.md` is the documentation index.
-- `docs/definition-api.md` documents the canonical registry and definition API.
+- [`docs/quickstart.md`](docs/quickstart.md) is the recommended first walkthrough.
+- [`CHANGELOG.md`](CHANGELOG.md) lists release history.
+- [`UPGRADE.md`](UPGRADE.md) documents the 1.x compatibility policy.
+- `docs/README.md` is the full documentation index.- `docs/definition-api.md` documents the canonical registry and definition API.
 - `docs/definition-extension-guide.md` documents supported definition extension points and storage rules.
 - `docs/mapper-runtime-guide.md` documents the mapper runtime, conversion system, and runtime registration surface.
 - `docs/recursive-mapping-behavior.md` documents recursive mapping behavior and runtime traversal rules.
