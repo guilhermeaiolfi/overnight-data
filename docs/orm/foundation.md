@@ -550,6 +550,6 @@ Do not introduce as part of the current ORM persistence layer:
 - service container;
 - event system;
 - proxy objects;
-- transaction orchestration;
+- a separate transaction API on `Session`;
 - stale-row detection;
 - full database-default refresh.

@@ -68,50 +68,103 @@ $posts->select($posts->all());
 
 `require()` records an implicit selection with a tag and is used by internal query assembly when fields must be present without becoming caller-facing API.
 
-## Targeted results and default root fields
+## Result export
 
-For future ORM result targets, a `SelectQuery` with `to(...)` and no explicit `select()` means "select the root collection's default scalar fields." The default applies only to the root collection; it does not auto-load relations.
-
-Examples:
+By default, bound queries return arrays. Object export is opt-in through `to(...)`.
 
 ```php
-$users = query($users)
-    ->where(fn ($u) => $u->active->equals(true))
-    ->to(User::class)
-    ->fetchAll();
+$rows = $database->query($users)->fetchAll();
+// list<array<string, mixed>>
 
-$rows = query($users)
+$row = $database->query($users)->fetchOne();
+// array<string, mixed>|null
+
+foreach ($database->query($users)->iterate() as $row) {
+    // array<string, mixed>
+}
+
+$u = $database->query($users);
+
+$objects = $u
+    ->select($u->id, $u->name)
     ->to(stdClass::class)
     ->fetchAll();
-
-$rows = query($users)
-    ->to([])
-    ->fetchAll();
+// list<stdClass>
 ```
 
-The first implementation may define the root defaults as all normal root scalar fields. Later implementations may narrow this based on target representation requirements.
+Read-only public-property class export:
+
+```php
+final class UserRow
+{
+    public int $id;
+    public string $name;
+}
+
+$u = $database->query($users);
+
+$rows = $u
+    ->select($u->id, $u->name)
+    ->to(UserRow::class)
+    ->fetchAll();
+// list<UserRow>
+```
+
+Public-property class export requirements:
+
+- `stdClass` is supported.
+- User-defined public-property classes are supported for read-only export.
+- Classes must be instantiable without required constructor arguments.
+- Public result keys must match public properties.
+- Nested typed object properties may be materialized into their declared classes when supported.
+- Array relation/list properties receive arrays of `stdClass` items unless explicitly supported otherwise.
+- Mutable export is `stdClass`-only for now.
+
+Read-only object export supports lazy iteration through `to(...)->iterate()`. `mutable(...)->iterate()` is intentionally unsupported.
+
+Mutable export tracks query provenance in a `Session`:
+
+```php
+$session = new Session($commandExecutor);
+
+$u = $database->query($users);
+
+$user = $u
+    ->select($u->id, $u->company->name->as('name'))
+    ->to(stdClass::class)
+    ->mutable($session)
+    ->fetchOne();
+```
+
+See [`bound-execution.md`](./bound-execution.md) for the full result-mode table and execution boundaries.
+
+## Targeted results and default root fields
+
+A `SelectQuery` with `to(...)` and no explicit `select()` selects the root collection's default scalar fields. The default applies only to the root collection; it does not auto-load relations.
 
 Explicit `select(...)` disables default root field selection:
 
 ```php
-$rows = query($users)
+$u = $database->query($users);
+
+$rows = $u
     ->select($u->id, $u->name)
-    ->to(UserSummary::class)
+    ->to(UserRow::class)
     ->fetchAll();
 ```
 
-The runtime may still include hidden required fields for identity or tracking. Those fields are internal and must not appear in the final mapped representation unless explicitly selected or mapped.
+The runtime may still include hidden required fields for identity or mutable projection tracking. Selections tagged `SelectionTag::INTERNAL` are stripped from public array and object results.
 
 Relation loading remains explicit through `RelationRef` branch selection/configuration:
 
 ```php
-$u = query($users);
+$u = $database->query($users);
 
 $users = $u
     ->select(
         $u->posts->fields('id', 'title'),
     )
-    ->to(User::class)
+    ->to(stdClass::class)
     ->fetchAll();
 ```
 

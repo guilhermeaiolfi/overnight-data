@@ -2,7 +2,7 @@
 
 The current ORM persistence layer writes scalar record fields and plans configured relation changes. It is intentionally small: representations synchronize into `RecordState` and relation state, dirty/new/removed records become neutral commands, configured relation planners can mutate scalar record state or add commands, and an adapter executes those commands against a backend.
 
-It is not a full entity manager, unit of work, automatic relation cascade writer, or transaction coordinator.
+It is not a full entity manager, unit of work, automatic relation cascade writer, or transaction coordinator. `Session::flush()` does use executor-backed transactions when the command executor implements `TransactionalCommandExecutorInterface`.
 
 ## Flow
 
@@ -126,7 +126,15 @@ public function execute(CommandInterface $command): CommandResult;
 
 Unknown command field names are rejected with `InvalidCommandException`; they are not passed through as raw column names.
 
-`CycleCommandExecutor` defensively calls `CommandValueResolver::assertReady()` before using query builders. A `ValueRef` that cannot be resolved is rejected with `InvalidCommandException` instead of being bound into SQL. The executor does not build raw SQL strings and does not manage transactions.
+`CycleCommandExecutor` defensively calls `CommandValueResolver::assertReady()` before using query builders. A `ValueRef` that cannot be resolved is rejected with `InvalidCommandException` instead of being bound into SQL. The executor does not build raw SQL strings. When used through `FlushExecutor`, it participates in flush-scoped transactions through `TransactionalCommandExecutorInterface`.
+
+## Affected-row validation
+
+`FlushScheduler` validates affected rows after each command executes. Insert, update, and delete commands default to expecting exactly one affected row. Commands can carry an explicit `ExpectedAffectedRows` policy when a different result is valid.
+
+Many-to-many through-row deletes may use a zero-or-one affected-row policy because unlinking an already-absent through row is valid.
+
+When the actual affected-row count does not match the command policy, flush raises `UnexpectedAffectedRowsException`. Failed commands leave record state unchanged for that operation.
 
 ## Generated Values
 
@@ -173,7 +181,7 @@ $session->flush();
 $generatedId = $record->getValue('id');
 ```
 
-Generated ids are currently supported only for simple auto-increment primary keys. Relation persistence planning is limited to configured planners that produce scalar mutations and/or commands; transactions are not orchestrated yet. Physical table and column mapping happens in `CycleCommandExecutor` using collection and field metadata.
+Generated ids are currently supported only for simple auto-increment primary keys. Relation persistence planning is limited to configured planners that produce scalar mutations and/or commands. Physical table and column mapping happens in `CycleCommandExecutor` using collection and field metadata.
 
 ## Public Runtime
 
@@ -188,6 +196,8 @@ Generated ids are currently supported only for simple auto-increment primary key
 
 This is deliberately not an `EntityManager`. There is no repository API, object proxy system, lifecycle event system, generated model layer, or relation cascade writer. `sync($object)` is graph synchronization only; it is not a cascade policy, orphan-removal policy, generated-key dependency sorter, or transaction boundary. `remove($object)` only removes an already-tracked representation that maps to one concrete record.
 
+`Session::flush()` runs inside a database transaction when the command executor implements `TransactionalCommandExecutorInterface` (including `CycleCommandExecutor`). There is no separate transaction API on `Session`.
+
 ## Current Limits
 
 - Scalar insert/update/delete plus configured relation persistence planning only.
@@ -197,10 +207,13 @@ This is deliberately not an `EntityManager`. There is no repository API, object 
 - `sync()` accepts object roots only; array input is not supported yet.
 - No automatic relation cascade writes.
 - No automatic graph adoption from `flush()`.
-- No transaction orchestration.
-- No optimistic locking, stale-row detection, or affected-row conflict handling.
+- `Session::flush()` uses executor-backed transactions when available; there is no separate transaction API on `Session`.
+- No optimistic locking or stale-row revision conflict handling beyond representation sync baseline checks.
 - No lazy loading.
 - No repositories, `EntityManager`, `UnitOfWork`, lifecycle events, proxies, or generated model layer.
 - No full database-default refresh beyond simple auto-increment primary keys.
 - No batch command execution.
 - No public SQL command API.
+- Mutable user-defined class export is not supported yet.
+- Mutable iteration is not supported yet.
+- Flat projection provenance is for mutable `stdClass` query export.
