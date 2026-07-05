@@ -6,8 +6,8 @@ namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\RelationChangeInterface;
-use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\RelationStateStore;
+use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordRelationRef;
