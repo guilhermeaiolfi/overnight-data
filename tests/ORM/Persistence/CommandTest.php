@@ -12,6 +12,7 @@ use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
+use ON\Data\ORM\State\RecordState;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
 
@@ -76,6 +77,33 @@ final class CommandTest extends TestCase
 		$this->expectException(InvalidCommandException::class);
 
 		new DeleteCommand($this->users(), []);
+	}
+
+	public function testInsertCommandRejectsValueRef(): void
+	{
+		$record = RecordState::new($this->users());
+
+		$this->expectException(InvalidCommandException::class);
+
+		new InsertCommand($this->users(), ['id' => $record->getValueRef('id')]);
+	}
+
+	public function testUpdateCommandRejectsValueRefInChanges(): void
+	{
+		$record = RecordState::new($this->users());
+
+		$this->expectException(InvalidCommandException::class);
+
+		new UpdateCommand($this->users(), ['id' => 10], ['name' => $record->getValueRef('name')]);
+	}
+
+	public function testDeleteCommandRejectsValueRefInIdentity(): void
+	{
+		$record = RecordState::new($this->users());
+
+		$this->expectException(InvalidCommandException::class);
+
+		new DeleteCommand($this->users(), ['id' => $record->getValueRef('id')]);
 	}
 
 	public function testCommandResultStoresAffectedRowsAndGeneratedValues(): void

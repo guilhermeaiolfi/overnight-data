@@ -15,6 +15,7 @@ final class InsertCommand implements CommandInterface
 		private CollectionInterface $collection,
 		private array $values,
 	) {
+		CommandValueGuard::assertConcreteValues('Insert', 'values', $values);
 	}
 
 	public function getCollection(): CollectionInterface

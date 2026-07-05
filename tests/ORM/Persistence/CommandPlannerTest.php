@@ -132,6 +132,58 @@ final class CommandPlannerTest extends TestCase
 		self::assertSame($revision, $record->getRevision());
 	}
 
+	public function testInsertPlanningWithUnresolvedValueRefThrows(): void
+	{
+		$source = RecordState::new($this->users());
+		$record = RecordState::new($this->users(), ['name' => 'Ada']);
+		$record->setValue('manager_id', $source->getValueRef('id'));
+
+		$this->expectException(InvalidCommandException::class);
+		$this->expectExceptionMessage("collection 'users'");
+		$this->expectExceptionMessage("field 'manager_id'");
+		$this->expectExceptionMessage('users.id');
+
+		(new CommandPlanner())->plan($record);
+	}
+
+	public function testUpdatePlanningWithUnresolvedValueRefThrows(): void
+	{
+		$source = RecordState::new($this->users());
+		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'Ada', 'manager_id' => null]);
+		$record->setValue('manager_id', $source->getValueRef('id'));
+
+		$this->expectException(InvalidCommandException::class);
+		$this->expectExceptionMessage("field 'manager_id'");
+		$this->expectExceptionMessage('users.id');
+
+		(new CommandPlanner())->plan($record);
+	}
+
+	public function testCommandPlanningResolvesInsertRefsBeforeCreatingCommand(): void
+	{
+		$source = RecordState::new($this->users(), ['id' => 20]);
+		$record = RecordState::new($this->users(), ['name' => 'Ada']);
+		$record->setValue('manager_id', $source->getValueRef('id'));
+
+		$command = (new CommandPlanner())->plan($record);
+
+		self::assertInstanceOf(InsertCommand::class, $command);
+		self::assertSame(['name' => 'Ada', 'manager_id' => 20], $command->getValues());
+		self::assertSame(20, $record->getValue('manager_id'));
+	}
+
+	public function testCommandPlanningResolvesUpdateRefsBeforeCreatingCommand(): void
+	{
+		$source = RecordState::new($this->users(), ['id' => 20]);
+		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'Ada', 'manager_id' => null]);
+		$record->setValue('manager_id', $source->getValueRef('id'));
+
+		$command = (new CommandPlanner())->plan($record);
+
+		self::assertInstanceOf(UpdateCommand::class, $command);
+		self::assertSame(['manager_id' => 20], $command->getChanges());
+	}
+
 	private function users(): CollectionInterface
 	{
 		return (new Registry())
@@ -139,6 +191,7 @@ final class CommandPlannerTest extends TestCase
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('name', 'string')->end()
+			->field('manager_id', 'int')->end()
 			->field('email', 'string')->end();
 	}
 

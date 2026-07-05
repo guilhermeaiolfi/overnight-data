@@ -18,6 +18,9 @@ final class UpdateCommand implements CommandInterface
 		private array $identity,
 		private array $changes,
 	) {
+		CommandValueGuard::assertConcreteValues('Update', 'identity', $identity);
+		CommandValueGuard::assertConcreteValues('Update', 'changes', $changes);
+
 		if ($identity === []) {
 			throw new InvalidCommandException('Update command identity cannot be empty.');
 		}

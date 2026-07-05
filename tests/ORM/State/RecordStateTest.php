@@ -9,6 +9,7 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordLifecycle;
 use ON\Data\ORM\State\RecordState;
+use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 
 final class RecordStateTest extends TestCase
@@ -177,6 +178,128 @@ final class RecordStateTest extends TestCase
 		self::assertTrue($state->isRemoved());
 	}
 
+	public function testGetValueRefReturnsRefForStateAndField(): void
+	{
+		$state = RecordState::new($this->users());
+		$ref = $state->getValueRef('id');
+
+		self::assertSame($state, $ref->getRecord());
+		self::assertSame('id', $ref->getField());
+	}
+
+	public function testSetValueWithResolvedValueRefStoresConcreteValue(): void
+	{
+		$source = RecordState::new($this->users(), ['id' => 10]);
+		$target = RecordState::new($this->users());
+
+		$target->setValue('user_id', $source->getValueRef('id'));
+
+		self::assertSame(10, $target->getValue('user_id'));
+	}
+
+	public function testSetValueWithUnresolvedValueRefStoresRef(): void
+	{
+		$source = RecordState::new($this->users());
+		$target = RecordState::new($this->users());
+		$ref = $source->getValueRef('id');
+
+		$target->setValue('user_id', $ref);
+
+		self::assertSame($ref, $target->getValue('user_id'));
+	}
+
+	public function testGetValueReturnsStoredUnresolvedValueRefWithoutResolving(): void
+	{
+		$source = RecordState::new($this->users());
+		$target = RecordState::new($this->users());
+		$target->setValue('user_id', $source->getValueRef('id'));
+
+		$stored = $target->getValue('user_id');
+
+		self::assertInstanceOf(ValueRef::class, $stored);
+		self::assertFalse($stored->isResolved());
+	}
+
+	public function testResolveValueRefsReplacesNowResolvedRefsWithConcreteValues(): void
+	{
+		$source = RecordState::new($this->users());
+		$target = RecordState::new($this->users());
+		$target->setValue('user_id', $source->getValueRef('id'));
+
+		$source->setValue('id', 10);
+
+		self::assertTrue($target->resolveValueRefs());
+		self::assertSame(10, $target->getValue('user_id'));
+	}
+
+	public function testResolveValueRefsReturnsFalseWhenNothingChanges(): void
+	{
+		$state = RecordState::new($this->users(), ['id' => 10]);
+
+		self::assertFalse($state->resolveValueRefs());
+	}
+
+	public function testUnresolvedValueRefInspection(): void
+	{
+		$source = RecordState::new($this->users());
+		$target = RecordState::new($this->users());
+		$ref = $source->getValueRef('id');
+		$target->setValue('user_id', $ref);
+
+		self::assertTrue($target->hasValueRefs());
+		self::assertTrue($target->hasUnresolvedValueRefs());
+		self::assertSame(['user_id' => $ref], $target->getUnresolvedValueRefs());
+	}
+
+	public function testConcreteNullIsStoredDirectlyButValueRefToNullSourceIsUnresolved(): void
+	{
+		$source = RecordState::new($this->users(), ['id' => null]);
+		$target = RecordState::new($this->users(), ['user_id' => null]);
+
+		self::assertSame(null, $target->getValue('user_id'));
+
+		$target->setValue('user_id', $source->getValueRef('id'));
+
+		self::assertInstanceOf(ValueRef::class, $target->getValue('user_id'));
+		self::assertTrue($target->hasUnresolvedValueRefs());
+	}
+
+	public function testSelfReferenceDoesNotInfiniteLoopAndRemainsUnresolved(): void
+	{
+		$state = RecordState::new($this->users());
+		$state->setValue('id', $state->getValueRef('id'));
+
+		self::assertFalse($state->resolveValueRefs());
+		self::assertInstanceOf(ValueRef::class, $state->getValue('id'));
+		self::assertTrue($state->hasUnresolvedValueRefs());
+	}
+
+	public function testSettingSameUnresolvedValueRefTwiceDoesNotBumpRevision(): void
+	{
+		$source = RecordState::new($this->users());
+		$target = RecordState::new($this->users());
+
+		$target->setValue('user_id', $source->getValueRef('id'));
+		$revision = $target->getRevision();
+		$target->setValue('user_id', $source->getValueRef('id'));
+
+		self::assertSame($revision, $target->getRevision());
+	}
+
+	public function testDirtyValuesIncludeValueRefBeforeResolutionAndConcreteValueAfterResolution(): void
+	{
+		$source = RecordState::new($this->users());
+		$target = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'user_id' => null]);
+		$target->setValue('user_id', $source->getValueRef('id'));
+
+		self::assertInstanceOf(ValueRef::class, $target->getDirtyValues()['user_id']);
+
+		$source->setValue('id', 20);
+		self::assertTrue($target->resolveValueRefs());
+
+		self::assertSame(['user_id' => 20], $target->getDirtyValues());
+	}
+
 	private function users(): CollectionInterface
 	{
 		return (new Registry())
@@ -184,6 +307,7 @@ final class RecordStateTest extends TestCase
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('name', 'string')->end()
+			->field('user_id', 'int')->end()
 			->field('email', 'string')->end();
 	}
 }

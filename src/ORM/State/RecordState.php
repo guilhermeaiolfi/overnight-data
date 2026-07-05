@@ -144,9 +144,16 @@ final class RecordState
 		return $this->values[$field];
 	}
 
+	public function getValueRef(string $field): ValueRef
+	{
+		return ValueRef::field($this, $field);
+	}
+
 	public function setValue(string $field, mixed $value): void
 	{
-		if (array_key_exists($field, $this->values) && $this->values[$field] === $value) {
+		$value = $this->normalizeValue($value);
+
+		if (array_key_exists($field, $this->values) && $this->valuesAreSame($this->values[$field], $value)) {
 			return;
 		}
 
@@ -163,7 +170,9 @@ final class RecordState
 		$nextValues = $this->values;
 		$changed = false;
 		foreach ($values as $field => $value) {
-			if (! array_key_exists($field, $nextValues) || $nextValues[$field] !== $value) {
+			$value = $this->normalizeValue($value);
+
+			if (! array_key_exists($field, $nextValues) || ! $this->valuesAreSame($nextValues[$field], $value)) {
 				$nextValues[$field] = $value;
 				$changed = true;
 			}
@@ -185,7 +194,7 @@ final class RecordState
 
 		$fields = [];
 		foreach ($this->values as $field => $value) {
-			if (! array_key_exists($field, $this->originalValues) || $this->originalValues[$field] !== $value) {
+			if (! array_key_exists($field, $this->originalValues) || ! $this->valuesAreSame($this->originalValues[$field], $value)) {
 				$fields[] = $field;
 			}
 		}
@@ -214,6 +223,63 @@ final class RecordState
 		return $dirty;
 	}
 
+	public function resolveValueRefs(): bool
+	{
+		$values = $this->values;
+		$changed = false;
+
+		foreach ($values as $field => $value) {
+			if (! $value instanceof ValueRef || ! $value->isResolved()) {
+				continue;
+			}
+
+			$resolved = $value->resolve();
+			if (! $this->valuesAreSame($value, $resolved)) {
+				$values[$field] = $resolved;
+				$changed = true;
+			}
+		}
+
+		if (! $changed) {
+			return false;
+		}
+
+		$this->applyChangedValues($values);
+
+		return true;
+	}
+
+	public function hasValueRefs(): bool
+	{
+		foreach ($this->values as $value) {
+			if ($value instanceof ValueRef) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public function hasUnresolvedValueRefs(): bool
+	{
+		return $this->getUnresolvedValueRefs() !== [];
+	}
+
+	/**
+	 * @return array<string, ValueRef>
+	 */
+	public function getUnresolvedValueRefs(): array
+	{
+		$unresolved = [];
+		foreach ($this->values as $field => $value) {
+			if ($value instanceof ValueRef && ! $value->isResolved()) {
+				$unresolved[$field] = $value;
+			}
+		}
+
+		return $unresolved;
+	}
+
 	public function markClean(?Key $key = null): void
 	{
 		if ($key instanceof Key) {
@@ -240,5 +306,23 @@ final class RecordState
 		if (! $this->isNew() && ! $this->isRemoved()) {
 			$this->lifecycle = RecordLifecycle::DIRTY;
 		}
+	}
+
+	private function normalizeValue(mixed $value): mixed
+	{
+		if ($value instanceof ValueRef && $value->isResolved()) {
+			return $value->resolve();
+		}
+
+		return $value;
+	}
+
+	private function valuesAreSame(mixed $left, mixed $right): bool
+	{
+		if ($left instanceof ValueRef && $right instanceof ValueRef) {
+			return $left->equals($right);
+		}
+
+		return $left === $right;
 	}
 }

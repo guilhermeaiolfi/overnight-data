@@ -70,6 +70,14 @@ The built-in relation planners are:
 
 Relation planners require involved target objects to already be tracked so they can resolve each object to a `RecordState`. They do not adopt new objects, load missing relations, order commands around generated ids, or orchestrate transactions.
 
+## Internal Value References
+
+`ValueRef` is an internal ORM state value used to represent a temporary dependency on another `RecordState` field. A `RecordState` may temporarily hold a `ValueRef` in its current values and dirty values. When the referenced field later contains a concrete non-null value, `RecordState::resolveValueRefs()` collapses the reference into that concrete value.
+
+Persistence commands remain concrete-only. `CommandPlanner` resolves resolvable references before building commands and rejects unresolved references instead of passing them into `InsertCommand`, `UpdateCommand`, or `DeleteCommand`. Command objects also defensively reject `ValueRef` values.
+
+Relation planners do not write `ValueRef` yet, and generated-key dependency ordering is not complete in this phase. Wave-based flush planning is still future work.
+
 ## Commands
 
 Persistence commands are database-neutral:

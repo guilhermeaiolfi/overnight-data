@@ -16,6 +16,8 @@ final class DeleteCommand implements CommandInterface
 		private CollectionInterface $collection,
 		private array $identity,
 	) {
+		CommandValueGuard::assertConcreteValues('Delete', 'identity', $identity);
+
 		if ($identity === []) {
 			throw new InvalidCommandException('Delete command identity cannot be empty.');
 		}
