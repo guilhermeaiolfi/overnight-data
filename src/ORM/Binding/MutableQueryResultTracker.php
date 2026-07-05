@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Binding;
 
-use ON\Data\ORM\Persistence\NoOpCommandExecutor;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\Query\SelectQuery;
@@ -37,10 +36,5 @@ final class MutableQueryResultTracker
 		$session->sync($object, $binding);
 
 		return $binding;
-	}
-
-	public function createSession(): Session
-	{
-		return new Session(new NoOpCommandExecutor());
 	}
 }

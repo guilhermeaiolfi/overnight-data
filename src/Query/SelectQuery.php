@@ -475,7 +475,7 @@ final class SelectQuery implements QuerySourceInterface
 		return $this->resultClass;
 	}
 
-	public function mutable(?Session $session = null): self
+	public function mutable(Session $session): self
 	{
 		if ($this->resultClass === null) {
 			throw ObjectExportException::requiresObjectExport();
@@ -758,11 +758,11 @@ final class SelectQuery implements QuerySourceInterface
 
 	private function requireMutableSession(): Session
 	{
-		if ($this->session instanceof Session) {
-			return $this->session;
+		if (! $this->session instanceof Session) {
+			throw ObjectExportException::requiresMutableSession();
 		}
 
-		return $this->session = (new MutableQueryResultTracker())->createSession();
+		return $this->session;
 	}
 
 	private function describeSource(QuerySourceInterface $source): string

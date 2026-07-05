@@ -41,7 +41,7 @@ final class MutableQueryExportTest extends TestCase
 		$this->expectException(ObjectExportException::class);
 		$this->expectExceptionMessage('Mutable query export requires object export; call to(stdClass::class) before mutable().');
 
-		$query->mutable();
+		$query->mutable($this->session());
 	}
 
 	public function testMutableFetchAllReturnsStdClassObjects(): void
@@ -51,7 +51,7 @@ final class MutableQueryExportTest extends TestCase
 			new MutableExportRecordingExecutor(),
 		);
 
-		$rows = $query->to(stdClass::class)->mutable()->fetchAll();
+		$rows = $query->to(stdClass::class)->mutable($this->session())->fetchAll();
 
 		self::assertCount(2, $rows);
 		self::assertInstanceOf(stdClass::class, $rows[0]);
@@ -63,14 +63,13 @@ final class MutableQueryExportTest extends TestCase
 
 	public function testMutableFetchAllTracksAllRootObjectsWithEquivalentBindings(): void
 	{
+		$session = $this->session();
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
 			new MutableExportRecordingExecutor(),
 		);
 
-		$rows = $query->to(stdClass::class)->mutable()->fetchAll();
-		$session = $query->getSession();
-		self::assertInstanceOf(Session::class, $session);
+		$rows = $query->to(stdClass::class)->mutable($session)->fetchAll();
 
 		$states = $this->representationStates($session, $rows[0], $rows[1]);
 
@@ -80,14 +79,13 @@ final class MutableQueryExportTest extends TestCase
 
 	public function testEachRootObjectGetsItsOwnRepresentationState(): void
 	{
+		$session = $this->session();
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
 			new MutableExportRecordingExecutor(),
 		);
 
-		$rows = $query->to(stdClass::class)->mutable()->fetchAll();
-		$session = $query->getSession();
-		self::assertInstanceOf(Session::class, $session);
+		$rows = $query->to(stdClass::class)->mutable($session)->fetchAll();
 
 		$first = $session->getRepresentations()->get($rows[0]);
 		$second = $session->getRepresentations()->get($rows[1]);
@@ -122,7 +120,7 @@ final class MutableQueryExportTest extends TestCase
 
 	public function testProvidedSessionIsUsedWhenPassed(): void
 	{
-		$session = new Session(new RecordingCommandExecutor());
+		$session = $this->session();
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
 			new MutableExportRecordingExecutor(),
@@ -135,47 +133,37 @@ final class MutableQueryExportTest extends TestCase
 		self::assertTrue($session->getRepresentations()->has($rows[1]));
 	}
 
-	public function testInternalSessionIsCreatedWhenNoneIsPassed(): void
-	{
-		$query = new SelectQuery(
-			$this->makeRegistry()->getCollection('users'),
-			new MutableExportRecordingExecutor(),
-		);
-
-		$query->to(stdClass::class)->mutable()->fetchAll();
-
-		self::assertInstanceOf(Session::class, $query->getSession());
-	}
-
 	public function testMutableFetchOneTracksSingleObject(): void
 	{
+		$session = $this->session();
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
 			new MutableExportRecordingExecutor(),
 		);
 
-		$row = $query->to(stdClass::class)->mutable()->fetchOne();
-		$session = $query->getSession();
+		$row = $query->to(stdClass::class)->mutable($session)->fetchOne();
 
 		self::assertInstanceOf(stdClass::class, $row);
-		self::assertInstanceOf(Session::class, $session);
+		self::assertSame($session, $query->getSession());
 		self::assertTrue($session->getRepresentations()->has($row));
 	}
 
 	public function testMutableFetchOneReturningNullDoesNotTrack(): void
 	{
+		$session = $this->session();
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
 			new MutableExportRecordingExecutor(fetchOneRow: null),
 		);
 
-		self::assertNull($query->to(stdClass::class)->mutable()->fetchOne());
-		self::assertNull($query->getSession());
+		self::assertNull($query->to(stdClass::class)->mutable($session)->fetchOne());
+		self::assertSame($session, $query->getSession());
+		self::assertSame([], iterator_to_array($session->getRepresentations()->getAll(), false));
 	}
 
 	public function testCopyPreservesMutableAndSessionState(): void
 	{
-		$session = new Session(new RecordingCommandExecutor());
+		$session = $this->session();
 		$query = new SelectQuery($this->makeRegistry()->getCollection('users'));
 		$query->to(stdClass::class)->mutable($session);
 
@@ -196,7 +184,12 @@ final class MutableQueryExportTest extends TestCase
 		$this->expectException(ObjectExportException::class);
 		$this->expectExceptionMessage('Object export currently supports stdClass only');
 
-		$query->to('App\\User')->mutable();
+		$query->to('App\\User')->mutable($this->session());
+	}
+
+	private function session(): Session
+	{
+		return new Session(new RecordingCommandExecutor());
 	}
 
 	private function makeRegistry(): Registry

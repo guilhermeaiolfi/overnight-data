@@ -20,4 +20,9 @@ final class ObjectExportException extends InvalidArgumentException
 	{
 		return new self('Mutable query export requires object export; call to(stdClass::class) before mutable().');
 	}
+
+	public static function requiresMutableSession(): self
+	{
+		return new self('Mutable query export requires an explicit Session; call mutable($session) before fetchAll() or fetchOne().');
+	}
 }
