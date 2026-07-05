@@ -80,14 +80,14 @@ final class Phase34BindingModelTest extends TestCase
 		}
 	}
 
-	public function testSelectQueryWasNotCoupledToOrmPersistence(): void
+	public function testSelectQueryMutableExportMayCompileBindingsButAvoidsPersistenceCoupling(): void
 	{
 		$contents = file_get_contents(dirname(__DIR__, 3) . '/src/Query/SelectQuery.php');
 
 		self::assertIsString($contents);
 		self::assertStringNotContainsString('ON\\Data\\ORM\\Persistence', $contents);
-		self::assertStringNotContainsString('RepresentationBinding', $contents);
 		self::assertStringNotContainsString('RecordState', $contents);
+		self::assertStringContainsString('SelectQueryBindingCompiler', $contents);
 	}
 
 	/**

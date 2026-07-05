@@ -11,6 +11,7 @@ use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\Session;
 use ON\Data\Query\SelectQuery;
+use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
@@ -94,6 +95,23 @@ final class MutableFlatRelatedFieldExportTest extends TestCase
 		$query->to(stdClass::class)->mutable($session)->fetchOne();
 	}
 
+	public function testMutableFlatProjectionCompilesInternalIdentitySelectionBeforeExecutorFetch(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$session = new Session(new RecordingCommandExecutor());
+		$query = new SelectQuery($users, new AssertingInternalCompanyIdSelectionExecutor());
+		$query->select($query->id, $query->company->name->as('name'));
+
+		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+
+		self::assertInstanceOf(stdClass::class, $user);
+		self::assertTrue($session->getRepresentations()->has($user));
+		self::assertSame(1, $user->id);
+		self::assertSame('Acme', $user->name);
+		self::assertFalse(property_exists($user, '__od.company.id'));
+	}
+
 	private function makeRegistry(): Registry
 	{
 		$registry = new Registry();
@@ -152,6 +170,32 @@ final class FlatCompanyUserQueryExecutorWithoutCompanyId implements QueryExecuto
 		return [
 			'id' => 1,
 			'name' => 'Acme',
+		];
+	}
+
+	public function iterate(SelectQuery $query): iterable
+	{
+		yield from $this->fetchAll($query);
+	}
+}
+
+final class AssertingInternalCompanyIdSelectionExecutor implements QueryExecutorInterface
+{
+	public function fetchAll(SelectQuery $query): array
+	{
+		return [$this->fetchOne($query) ?? []];
+	}
+
+	public function fetchOne(SelectQuery $query): ?array
+	{
+		if (! $query->getSelections()->hasSelectionKey('__od.company.id')) {
+			throw new AssertionFailedError('Expected internal company id selection before query execution.');
+		}
+
+		return [
+			'id' => 1,
+			'name' => 'Acme',
+			'__od.company.id' => 5,
 		];
 	}
 

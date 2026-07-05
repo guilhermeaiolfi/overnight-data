@@ -6,6 +6,7 @@ namespace Tests\ON\Data\ORM\Binding;
 
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
+use ON\Data\ORM\Binding\SelectQueryBindingCompiler;
 use ON\Data\ORM\Query\MutableQueryResultTracker;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RepresentationState;
@@ -112,7 +113,8 @@ final class MutableQueryExportTest extends TestCase
 		$user->posts = [$post];
 
 		$session = new Session(new RecordingCommandExecutor());
-		(new MutableQueryResultTracker())->trackOne($query, $session, $user, ['id' => 1, 'name' => 'Ada']);
+		$binding = (new SelectQueryBindingCompiler())->compile($query);
+		(new MutableQueryResultTracker())->trackOne($query, $session, $binding, $user, ['id' => 1, 'name' => 'Ada']);
 
 		self::assertTrue($session->getRepresentations()->has($user));
 		self::assertTrue($session->getRepresentations()->has($post));
@@ -244,11 +246,12 @@ final class MutableQueryResultTrackerTest extends TestCase
 
 		$tracker = new MutableQueryResultTracker();
 		$session = new Session(new RecordingCommandExecutor());
+		$binding = (new SelectQueryBindingCompiler())->compile($query);
 
 		$first = $this->userWithPosts(1, 'Ada', 10, 'Hello');
 		$second = $this->userWithPosts(2, 'Grace', 11, 'World');
 
-		$tracker->trackAll($query, $session, [$first, $second], [
+		$tracker->trackAll($query, $session, $binding, [$first, $second], [
 			['id' => 1, 'name' => 'Ada'],
 			['id' => 2, 'name' => 'Grace'],
 		]);
@@ -273,11 +276,12 @@ final class MutableQueryResultTrackerTest extends TestCase
 
 		$tracker = new MutableQueryResultTracker();
 		$session = new Session(new RecordingCommandExecutor());
+		$binding = (new SelectQueryBindingCompiler())->compile($query);
 
 		$first = $this->userObject(1, 'Ada');
 		$second = $this->userObject(2, 'Grace');
 
-		$tracker->trackAll($query, $session, [$first, $second], [
+		$tracker->trackAll($query, $session, $binding, [$first, $second], [
 			['id' => 1, 'name' => 'Ada'],
 			['id' => 2, 'name' => 'Grace'],
 		]);
@@ -290,7 +294,7 @@ final class MutableQueryResultTrackerTest extends TestCase
 		self::assertNotSame($firstState, $secondState);
 	}
 
-	public function testTrackOneCompilesOnceAndTracksObject(): void
+	public function testTrackOneTracksObjectWithPrecompiledBinding(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
@@ -300,10 +304,12 @@ final class MutableQueryResultTrackerTest extends TestCase
 		$tracker = new MutableQueryResultTracker();
 		$session = new Session(new RecordingCommandExecutor());
 		$user = $this->userObject(1, 'Ada');
+		$binding = (new SelectQueryBindingCompiler())->compile($query);
 
-		$binding = $tracker->trackOne($query, $session, $user, ['id' => 1, 'name' => 'Ada']);
+		$tracker->trackOne($query, $session, $binding, $user, ['id' => 1, 'name' => 'Ada']);
 
-		self::assertSame($binding, $session->getRepresentations()->get($user)?->getBinding());
+		self::assertTrue($session->getRepresentations()->has($user));
+		self::assertTrue($session->getRepresentations()->get($user)?->getBinding()->hasField('name'));
 	}
 
 	private function makeRegistry(): Registry

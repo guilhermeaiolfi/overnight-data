@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Query;
 
-use ON\Data\ORM\Binding\SelectQueryBindingCompiler;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\Query\SelectQuery;
@@ -12,10 +11,8 @@ use ON\Data\Query\SelectQuery;
 final class MutableQueryResultTracker
 {
 	public function __construct(
-		private ?SelectQueryBindingCompiler $compiler = null,
 		private ?ProjectionRepresentationAdopter $projectionAdopter = null,
 	) {
-		$this->compiler ??= new SelectQueryBindingCompiler();
 		$this->projectionAdopter ??= new ProjectionRepresentationAdopter();
 	}
 
@@ -26,16 +23,13 @@ final class MutableQueryResultTracker
 	public function trackAll(
 		SelectQuery $query,
 		Session $session,
+		RepresentationBinding $binding,
 		array $objects,
 		array $sourceRows,
-	): RepresentationBinding {
-		$binding = $this->compiler->compile($query);
-
+	): void {
 		foreach ($objects as $index => $object) {
 			$this->trackObject($query, $session, $object, $binding, $sourceRows[$index] ?? []);
 		}
-
-		return $binding;
 	}
 
 	/**
@@ -44,13 +38,11 @@ final class MutableQueryResultTracker
 	public function trackOne(
 		SelectQuery $query,
 		Session $session,
+		RepresentationBinding $binding,
 		object $object,
 		array $sourceRow,
-	): RepresentationBinding {
-		$binding = $this->compiler->compile($query);
+	): void {
 		$this->trackObject($query, $session, $object, $binding, $sourceRow);
-
-		return $binding;
 	}
 
 	/**

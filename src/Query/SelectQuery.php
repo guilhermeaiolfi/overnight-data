@@ -10,6 +10,7 @@ use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
+use ON\Data\ORM\Binding\SelectQueryBindingCompiler;
 use ON\Data\ORM\Query\MutableQueryResultTracker;
 use ON\Data\ORM\Session;
 use ON\Data\Query\Condition\ConditionInterface;
@@ -619,6 +620,11 @@ final class SelectQuery implements QuerySourceInterface
 	{
 		$executor = $this->requireExecutor();
 		$relationSelections = $this->getRelationSelections();
+		$binding = null;
+
+		if ($this->mutable) {
+			$binding = (new SelectQueryBindingCompiler())->compile($this);
+		}
 
 		if ($relationSelections->isEmpty()) {
 			$rows = $executor->fetchAll($this);
@@ -629,7 +635,7 @@ final class SelectQuery implements QuerySourceInterface
 		$materialized = $this->materializeRows($this->publicRows($rows));
 
 		if ($this->mutable) {
-			$this->trackMutableResults($rows, $materialized);
+			$this->trackMutableResults($binding, $rows, $materialized);
 		}
 
 		return $materialized;
@@ -642,6 +648,11 @@ final class SelectQuery implements QuerySourceInterface
 	{
 		$executor = $this->requireExecutor();
 		$relationSelections = $this->getRelationSelections();
+		$binding = null;
+
+		if ($this->mutable) {
+			$binding = (new SelectQueryBindingCompiler())->compile($this);
+		}
 
 		if ($relationSelections->isEmpty()) {
 			$row = $executor->fetchOne($this);
@@ -656,7 +667,13 @@ final class SelectQuery implements QuerySourceInterface
 		$materialized = $this->materializeRow($this->publicRow($row));
 
 		if ($this->mutable && is_object($materialized)) {
-			(new MutableQueryResultTracker())->trackOne($this, $this->requireMutableSession(), $materialized, $row);
+			(new MutableQueryResultTracker())->trackOne(
+				$this,
+				$this->requireMutableSession(),
+				$binding,
+				$materialized,
+				$row,
+			);
 		}
 
 		return $materialized;
@@ -780,14 +797,15 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
-	 * @param list<object> $objects
 	 * @param list<array<string, mixed>> $sourceRows
+	 * @param list<object> $objects
 	 */
-	private function trackMutableResults(array $sourceRows, array $objects): void
+	private function trackMutableResults(object $binding, array $sourceRows, array $objects): void
 	{
 		(new MutableQueryResultTracker())->trackAll(
 			$this,
 			$this->requireMutableSession(),
+			$binding,
 			$objects,
 			$sourceRows,
 		);
