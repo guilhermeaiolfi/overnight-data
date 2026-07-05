@@ -19,15 +19,9 @@ It is independent from the Overnight framework. The package can be consumed on i
 
 The result object is flat, but mutable query export remembers where each property came from. A property aliased from a related field still updates the underlying table column after `sync()` and `flush()`. This works through mutable query provenance and flat projection adoption.
 
+Given a bound query and a `Session` backed by a command executor (for example, a `CycleCommandExecutor`):
+
 ```php
-use ON\Data\Database\Database;
-use ON\Data\ORM\Session;
-
-$database = Database::connect($config);
-$session = new Session($commandExecutor);
-
-$q = $database->query($users);
-
 $user = $q
     ->select(
         $q->id,
