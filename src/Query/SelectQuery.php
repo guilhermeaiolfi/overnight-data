@@ -10,7 +10,7 @@ use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
-use ON\Data\ORM\Binding\MutableQueryResultTracker;
+use ON\Data\ORM\Query\MutableQueryResultTracker;
 use ON\Data\ORM\Session;
 use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Exception\ObjectExportException;

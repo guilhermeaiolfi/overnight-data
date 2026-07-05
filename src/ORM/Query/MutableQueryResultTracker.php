@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\Binding;
+namespace ON\Data\ORM\Query;
 
+use ON\Data\ORM\Binding\SelectQueryBindingCompiler;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\Query\SelectQuery;
