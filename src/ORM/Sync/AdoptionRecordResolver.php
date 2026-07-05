@@ -11,7 +11,6 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
 
 final class AdoptionRecordResolver
 {
@@ -27,12 +26,10 @@ final class AdoptionRecordResolver
 		RepresentationBinding $binding,
 		RecordStateStore $records,
 		bool $isRoot,
-		?array $sourceRow = null,
-		?CollectionInterface $rootCollection = null,
 	): RecordState {
-		$collection = $this->collectionFor($binding, $isRoot, $rootCollection);
-		$values = $this->initialValues($representation, $binding, $collection, $sourceRow);
-		$keyValues = $this->completeKeyValues($representation, $binding, $collection, $sourceRow);
+		$collection = $this->collectionFor($binding, $isRoot);
+		$values = $this->initialValues($representation, $binding, $collection);
+		$keyValues = $this->completeKeyValues($representation, $binding, $collection);
 
 		if ($keyValues === null) {
 			return RecordState::new($collection, $values);
@@ -56,47 +53,6 @@ final class AdoptionRecordResolver
 	}
 
 	/**
-	 * @return array<string, RecordState>
-	 */
-	public function resolveAll(
-		object $representation,
-		RepresentationBinding $binding,
-		RecordStateStore $records,
-		CollectionInterface $rootCollection,
-		?array $sourceRow = null,
-	): array {
-		$resolved = [];
-		$groupedBindings = $this->groupFieldBindingsByCollection($binding);
-
-		foreach ($groupedBindings as $collectionName => $fieldBindings) {
-			$collection = $fieldBindings[0]->getField()->getCollection();
-			$collectionBinding = $this->bindingForFields($binding, $fieldBindings);
-			$isRoot = $collectionName === $rootCollection->getName();
-			$resolved[$collectionName] = $this->resolve(
-				$representation,
-				$collectionBinding,
-				$records,
-				$isRoot,
-				$sourceRow,
-				$isRoot ? $rootCollection : null,
-			);
-		}
-
-		if (! isset($resolved[$rootCollection->getName()])) {
-			$resolved[$rootCollection->getName()] = $this->resolve(
-				$representation,
-				$this->bindingForCollection($binding, $rootCollection),
-				$records,
-				true,
-				$sourceRow,
-				$rootCollection,
-			);
-		}
-
-		return $resolved;
-	}
-
-	/**
 	 * @return array<string, mixed>
 	 */
 	public function initialValuesForKey(
@@ -117,15 +73,8 @@ final class AdoptionRecordResolver
 		return $values;
 	}
 
-	private function collectionFor(
-		RepresentationBinding $binding,
-		bool $isRoot,
-		?CollectionInterface $rootCollection = null,
-	): CollectionInterface {
-		if ($isRoot && $rootCollection instanceof CollectionInterface) {
-			return $rootCollection;
-		}
-
+	private function collectionFor(RepresentationBinding $binding, bool $isRoot): CollectionInterface
+	{
 		$collection = null;
 		foreach ($binding->getFields() as $fieldBinding) {
 			$field = $fieldBinding->getField();
@@ -155,7 +104,6 @@ final class AdoptionRecordResolver
 		object $representation,
 		RepresentationBinding $binding,
 		CollectionInterface $collection,
-		?array $sourceRow = null,
 	): ?array {
 		$pathsByField = [];
 		foreach ($binding->getFields() as $fieldBinding) {
@@ -172,7 +120,7 @@ final class AdoptionRecordResolver
 			}
 
 			try {
-				$value = $this->readPath($representation, $pathsByField[$fieldName], $sourceRow);
+				$value = $this->reader->readPath($representation, $pathsByField[$fieldName]);
 			} catch (SyncException) {
 				return null;
 			}
@@ -218,25 +166,15 @@ final class AdoptionRecordResolver
 	/**
 	 * @return array<string, mixed>
 	 */
-	private function initialValues(
-		object $representation,
-		RepresentationBinding $binding,
-		CollectionInterface $collection,
-		?array $sourceRow = null,
-	): array {
+	private function initialValues(object $representation, RepresentationBinding $binding, CollectionInterface $collection): array
+	{
 		$values = [];
 		$primaryKey = array_flip($collection->getPrimaryKey());
 		foreach ($binding->getFields() as $fieldBinding) {
-			$field = $fieldBinding->getField();
-
-			if ($field->getCollectionName() !== $collection->getName()) {
-				continue;
-			}
-
-			$fieldName = $field->getFieldName();
+			$fieldName = $fieldBinding->getField()->getFieldName();
 
 			try {
-				$value = $this->readPath($representation, $fieldBinding->getPath(), $sourceRow);
+				$value = $this->reader->readPath($representation, $fieldBinding->getPath());
 			} catch (SyncException) {
 				continue;
 			}
@@ -249,77 +187,5 @@ final class AdoptionRecordResolver
 		}
 
 		return $values;
-	}
-
-	private function readPath(object $representation, string $path, ?array $sourceRow = null): mixed
-	{
-		try {
-			return $this->reader->readPath($representation, $path);
-		} catch (SyncException $exception) {
-			if ($sourceRow !== null && array_key_exists($path, $sourceRow)) {
-				return $sourceRow[$path];
-			}
-
-			throw $exception;
-		}
-	}
-
-	/**
-	 * @return array<string, list<RepresentationFieldBinding>>
-	 */
-	private function groupFieldBindingsByCollection(RepresentationBinding $binding): array
-	{
-		$grouped = [];
-
-		foreach ($binding->getFields() as $fieldBinding) {
-			$collectionName = $fieldBinding->getField()->getCollectionName();
-			$grouped[$collectionName] ??= [];
-			$grouped[$collectionName][] = $fieldBinding;
-		}
-
-		return $grouped;
-	}
-
-	/**
-	 * @param list<RepresentationFieldBinding> $fieldBindings
-	 */
-	private function bindingForFields(RepresentationBinding $binding, array $fieldBindings): RepresentationBinding
-	{
-		$collectionBinding = new RepresentationBinding();
-
-		foreach ($fieldBindings as $fieldBinding) {
-			$collectionBinding->addField($fieldBinding);
-		}
-
-		foreach ($binding->getRelations() as $relationBinding) {
-			$collectionBinding->addRelation($relationBinding);
-		}
-
-		return $collectionBinding;
-	}
-
-	private function bindingForCollection(
-		RepresentationBinding $binding,
-		CollectionInterface $collection,
-	): RepresentationBinding {
-		$collectionBinding = new RepresentationBinding();
-
-		foreach ($binding->getFields() as $fieldBinding) {
-			if ($fieldBinding->getField()->getCollectionName() !== $collection->getName()) {
-				continue;
-			}
-
-			$collectionBinding->addField($fieldBinding);
-		}
-
-		foreach ($binding->getRelations() as $relationBinding) {
-			if ($relationBinding->getRelation()->getCollectionName() !== $collection->getName()) {
-				continue;
-			}
-
-			$collectionBinding->addRelation($relationBinding);
-		}
-
-		return $collectionBinding;
 	}
 }

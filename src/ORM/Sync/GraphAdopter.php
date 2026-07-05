@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Sync;
 
-use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -32,31 +31,17 @@ final class GraphAdopter
 		RepresentationStore $representations,
 		RecordStateStore $records,
 		?RepresentationBinding $rootBinding = null,
-		?CollectionInterface $rootCollection = null,
-		?array $sourceRow = null,
 	): array {
 		if ($representations->get($root) === null) {
 			if (! $rootBinding instanceof RepresentationBinding) {
 				throw new StateException('Cannot adopt representation graph because the root representation is not tracked and no root binding was provided.');
 			}
 
-			$adopter = new RepresentationAdopter($records, $representations);
-
-			if ($this->usesProjectionBinding($rootBinding, $rootCollection)) {
-				assert($rootCollection instanceof CollectionInterface);
-				$adopter->adoptWithRecords(
-					$root,
-					$rootBinding,
-					$this->records->resolveAll($root, $rootBinding, $records, $rootCollection, $sourceRow),
-					$rootCollection,
-				);
-			} else {
-				$adopter->adopt(
-					$root,
-					$rootBinding,
-					$this->records->resolve($root, $rootBinding, $records, true, $sourceRow, $rootCollection),
-				);
-			}
+			(new RepresentationAdopter($records, $representations))->adopt(
+				$root,
+				$rootBinding,
+				$this->records->resolve($root, $rootBinding, $records, true)
+			);
 		}
 
 		$adopter = new RepresentationAdopter($records, $representations);
@@ -126,7 +111,7 @@ final class GraphAdopter
 			$adopted[] = $adopter->adopt(
 				$representation,
 				$binding,
-				$this->records->resolve($representation, $binding, $records, false, null, null),
+				$this->records->resolve($representation, $binding, $records, false)
 			);
 		}
 
@@ -139,22 +124,5 @@ final class GraphAdopter
 	private function adoptionError(string $message): StateException
 	{
 		return new StateException(rtrim($message, '.') . ' during graph adoption.');
-	}
-
-	private function usesProjectionBinding(
-		RepresentationBinding $binding,
-		?CollectionInterface $rootCollection,
-	): bool {
-		if (! $rootCollection instanceof CollectionInterface) {
-			return false;
-		}
-
-		foreach ($binding->getFields() as $fieldBinding) {
-			if ($fieldBinding->getField()->getCollectionName() !== $rootCollection->getName()) {
-				return true;
-			}
-		}
-
-		return false;
 	}
 }

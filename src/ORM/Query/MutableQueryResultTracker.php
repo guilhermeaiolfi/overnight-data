@@ -19,19 +19,16 @@ final class MutableQueryResultTracker
 
 	/**
 	 * @param list<object> $objects
-	 * @param list<array<string, mixed>>|null $sourceRows
 	 */
 	public function trackAll(
 		SelectQuery $query,
 		Session $session,
 		array $objects,
-		?array $sourceRows = null,
 	): RepresentationBinding {
 		$binding = $this->compiler->compile($query);
 
-		foreach ($objects as $index => $object) {
-			$sourceRow = $sourceRows[$index] ?? null;
-			$this->adopt($query, $session, $object, $binding, $sourceRow);
+		foreach ($objects as $object) {
+			$session->sync($object, $binding);
 		}
 
 		return $binding;
@@ -41,26 +38,10 @@ final class MutableQueryResultTracker
 		SelectQuery $query,
 		Session $session,
 		object $object,
-		?array $sourceRow = null,
 	): RepresentationBinding {
 		$binding = $this->compiler->compile($query);
-		$this->adopt($query, $session, $object, $binding, $sourceRow);
+		$session->sync($object, $binding);
 
 		return $binding;
-	}
-
-	private function adopt(
-		SelectQuery $query,
-		Session $session,
-		object $object,
-		RepresentationBinding $binding,
-		?array $sourceRow,
-	): void {
-		$session->adoptTrackedRepresentation(
-			$object,
-			$binding,
-			$query->getCollection(),
-			$sourceRow,
-		);
 	}
 }
