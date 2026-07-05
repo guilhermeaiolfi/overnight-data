@@ -29,21 +29,23 @@ final class RelationRepresentationSynchronizer
 		TrackedRepresentationMap $representations,
 		RelatedCollectionMap $relations,
 		RelatedReferenceMap $references,
+		?TrackedRepresentationMap $trackedRepresentations = null,
 	): array {
 		$touched = [];
 		$touchedIds = [];
+		$resolver = new TrackedRepresentationResolver($trackedRepresentations ?? $representations);
 
 		foreach ($representations->getAll() as $tracked) {
 			$representation = $tracked->getRepresentation();
 			foreach ($tracked->getBinding()->getRelations() as $relationBinding) {
 				if ($relationBinding->isMany()) {
-					$this->syncMany($representation, $relationBinding, $relations, $touched, $touchedIds);
+					$this->syncMany($representation, $relationBinding, $relations, $resolver, $touched, $touchedIds);
 
 					continue;
 				}
 
 				if ($relationBinding->isSingle()) {
-					$this->syncOne($representation, $relationBinding, $references, $touched, $touchedIds);
+					$this->syncOne($representation, $relationBinding, $references, $resolver, $touched, $touchedIds);
 				}
 			}
 		}
@@ -59,6 +61,7 @@ final class RelationRepresentationSynchronizer
 		object $representation,
 		RepresentationRelationBinding $relationBinding,
 		RelatedCollectionMap $relations,
+		TrackedRepresentationResolver $resolver,
 		array &$touched,
 		array &$touchedIds,
 	): void {
@@ -73,6 +76,10 @@ final class RelationRepresentationSynchronizer
 		$owner = $relationRef->getState();
 		$relationName = $relationRef->getRelationName();
 		$items = $this->readItems($representation, $relationBinding);
+		foreach ($items as $item) {
+			$resolver->getTrackedRepresentation($item, $relationBinding->getPath());
+		}
+
 		$collection = $relations->get($owner, $relationName);
 		if (! $collection instanceof RelatedCollection) {
 			$collection = new RelatedCollection(
@@ -96,6 +103,7 @@ final class RelationRepresentationSynchronizer
 		object $representation,
 		RepresentationRelationBinding $relationBinding,
 		RelatedReferenceMap $references,
+		TrackedRepresentationResolver $resolver,
 		array &$touched,
 		array &$touchedIds,
 	): void {
@@ -110,6 +118,10 @@ final class RelationRepresentationSynchronizer
 		$owner = $relationRef->getState();
 		$relationName = $relationRef->getRelationName();
 		$target = $this->readTarget($representation, $relationBinding);
+		if ($target !== null) {
+			$resolver->getTrackedRepresentation($target, $relationBinding->getPath());
+		}
+
 		$reference = $references->get($owner, $relationName);
 		if (! $reference instanceof RelatedReference) {
 			$reference = new RelatedReference(

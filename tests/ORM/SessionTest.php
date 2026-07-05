@@ -415,6 +415,85 @@ final class SessionTest extends TestCase
 		self::assertSame(['user_id' => 10], $command->getChanges());
 	}
 
+	public function testSyncSynchronizesAllTrackedRepresentationsWithoutFlushingCommands(): void
+	{
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$representation = $this->representation(['name' => 'A2']);
+		$session->adopt($representation, $this->templateBinding(), $record);
+
+		$result = $session->sync();
+
+		self::assertSame('A2', $record->getValue('name'));
+		self::assertTrue($result->hasChanges());
+		self::assertSame([], $executor->getCommands());
+		self::assertTrue($record->isDirty());
+	}
+
+	public function testSyncOneSynchronizesOnlyTheSelectedTrackedRepresentation(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$first = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$second = $session->trackClean($this->users()->getKey(11), ['id' => 11, 'name' => 'B1']);
+		$firstRepresentation = $this->representation(['name' => 'A2']);
+		$secondRepresentation = $this->representation(['name' => 'B2']);
+		$session->adopt($firstRepresentation, $this->templateBinding(), $first);
+		$session->adopt($secondRepresentation, $this->templateBinding(), $second);
+
+		$session->sync($firstRepresentation);
+
+		self::assertSame('A2', $first->getValue('name'));
+		self::assertSame('B1', $second->getValue('name'));
+	}
+
+	public function testSyncOneUntrackedRepresentationThrowsSyncException(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+
+		$this->expectException(SyncException::class);
+		$this->expectExceptionMessage('untracked');
+
+		$session->sync(new stdClass());
+	}
+
+	public function testFlushStillPerformsSyncAutomaticallyAfterPublicSyncWasAdded(): void
+	{
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$representation = $this->representation(['name' => 'A2']);
+		$session->adopt($representation, $this->templateBinding(), $record);
+
+		$session->flush();
+
+		self::assertCount(1, $executor->getCommands());
+		self::assertInstanceOf(UpdateCommand::class, $executor->getCommands()[0]);
+	}
+
+	public function testCallingSyncBeforeFlushDoesNotDuplicateRelationChanges(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$child = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
+		$session->adopt($postRepresentation, $this->postTemplateBindingFor($posts), $child);
+
+		$syncResult = $session->sync();
+		$session->flush();
+
+		self::assertCount(1, $syncResult->getRelationChanges());
+		self::assertCount(1, $executor->getCommands());
+		$collection = $session->getRelations()->get($owner, 'posts');
+		self::assertInstanceOf(RelatedCollection::class, $collection);
+		self::assertSame([$postRepresentation], $collection->getItems());
+		self::assertFalse($collection->hasChanges());
+	}
+
 	public function testSessionSourceDoesNotMentionDeferredOrmRuntimeConcepts(): void
 	{
 		$source = file_get_contents(__DIR__ . '/../../src/ORM/Session.php');

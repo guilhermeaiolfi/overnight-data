@@ -94,7 +94,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$references = new RelatedReferenceMap();
 
 		$touched = $this->sync(
-			$this->trackedMap($this->trackedWithOneRelation($owner, ['posts' => $target])),
+			$this->trackedMapWithRelated($this->trackedWithOneRelation($owner, ['posts' => $target]), $target),
 			references: $references
 		);
 
@@ -121,7 +121,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$references = $this->references($existing);
 
 		$touched = $this->sync(
-			$this->trackedMap($this->trackedWithOneRelation($owner, ['posts' => $target])),
+			$this->trackedMapWithRelated($this->trackedWithOneRelation($owner, ['posts' => $target]), $target),
 			references: $references
 		);
 
@@ -145,9 +145,11 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		));
 
 		$touched = $this->sync(
-			$this->trackedMap(
+			$this->trackedMapWithRelated(
 				$this->tracked($this->representation(['posts' => [$item], 'author' => $target]), $binding),
-				$this->tracked($this->representation(['posts' => [$item], 'author' => $target]), $binding)
+				$this->tracked($this->representation(['posts' => [$item], 'author' => $target]), $binding),
+				$item,
+				$target
 			)
 		);
 
@@ -156,15 +158,16 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		self::assertInstanceOf(RelatedReference::class, $touched[1]);
 	}
 
-	public function testOneRelationSyncDoesNotAutoAdoptTargetObject(): void
+	public function testOneRelationWithUntrackedTargetThrowsSyncException(): void
 	{
 		$target = new stdClass();
 		$representations = $this->trackedMap($this->trackedWithOneRelation(RecordState::new($this->users()), ['posts' => $target]));
 
-		$touched = $this->sync($representations);
+		$this->expectException(SyncException::class);
+		$this->expectExceptionMessage('posts');
+		$this->expectExceptionMessage('not tracked');
 
-		self::assertNull($representations->get($target));
-		self::assertSame($target, $touched[0]->getTarget());
+		$this->sync($representations);
 	}
 
 	public function testManyRelationWithTemplateRecordRelationRefThrowsSyncException(): void
@@ -253,7 +256,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$relations = $this->relations($collection);
 
 		$this->sync(
-			$this->trackedMap($this->trackedWithRelation($owner, ['posts' => [$known, $added]], RelationCollectionState::FULLY_LOADED)),
+			$this->trackedMapWithRelated($this->trackedWithRelation($owner, ['posts' => [$known, $added]], RelationCollectionState::FULLY_LOADED), $known, $added),
 			$relations
 		);
 
@@ -270,7 +273,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$collection = new RelatedCollection($owner, 'posts', $this->postBinding(), RelationCollectionState::FULLY_LOADED, [$kept, $removed]);
 
 		$this->sync(
-			$this->trackedMap($this->trackedWithRelation($owner, ['posts' => [$kept]], RelationCollectionState::FULLY_LOADED)),
+			$this->trackedMapWithRelated($this->trackedWithRelation($owner, ['posts' => [$kept]], RelationCollectionState::FULLY_LOADED), $kept),
 			$this->relations($collection)
 		);
 
@@ -286,7 +289,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$collection = new RelatedCollection($owner, 'posts', $this->postBinding(), RelationCollectionState::FULLY_LOADED, [$known]);
 
 		$this->sync(
-			$this->trackedMap($this->trackedWithRelation($owner, ['posts' => [$known]], RelationCollectionState::FULLY_LOADED)),
+			$this->trackedMapWithRelated($this->trackedWithRelation($owner, ['posts' => [$known]], RelationCollectionState::FULLY_LOADED), $known),
 			$this->relations($collection)
 		);
 
@@ -302,7 +305,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$relations = $this->relations($existing);
 
 		$touched = $this->sync(
-			$this->trackedMap($this->trackedWithRelation($owner, ['posts' => [new stdClass()]])),
+			$this->trackedMapWithRelated($this->trackedWithRelation($owner, ['posts' => [$item = new stdClass()]]), $item),
 			$relations
 		);
 
@@ -358,9 +361,10 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$owner = RecordState::new($this->users());
 
 		$touched = $this->sync(
-			$this->trackedMap(
+			$this->trackedMapWithRelated(
 				$this->trackedWithRelation($owner, ['posts' => [$item]]),
-				$this->trackedWithRelation($owner, ['posts' => [$item]])
+				$this->trackedWithRelation($owner, ['posts' => [$item]]),
+				$item
 			),
 			new RelatedCollectionMap()
 		);
@@ -369,15 +373,16 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		self::assertSame([$item], $touched[0]->getAdded());
 	}
 
-	public function testRelationSynchronizerDoesNotAutoAdoptChildObjects(): void
+	public function testManyRelationWithUntrackedItemThrowsSyncException(): void
 	{
 		$item = new stdClass();
 		$representations = $this->trackedMap($this->trackedWithRelation(RecordState::new($this->users()), ['posts' => [$item]]));
 
-		$touched = $this->sync($representations, new RelatedCollectionMap());
+		$this->expectException(SyncException::class);
+		$this->expectExceptionMessage('posts');
+		$this->expectExceptionMessage('not tracked');
 
-		self::assertNull($representations->get($item));
-		self::assertSame([$item], $touched[0]->getAdded());
+		$this->sync($representations, new RelatedCollectionMap());
 	}
 
 	public function testRelationSynchronizerDoesNotExecuteCommandsOrCallRelationPersistencePlanners(): void
@@ -399,8 +404,10 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		array $items,
 		RelationCollectionState $state = RelationCollectionState::UNLOADED,
 	): array {
+		$tracked = $this->trackedWithRelation($owner, ['posts' => $items], $state);
+
 		return $this->sync(
-			$this->trackedMap($this->trackedWithRelation($owner, ['posts' => $items], $state)),
+			$this->trackedMapWithRelated($tracked, ...$items),
 			new RelatedCollectionMap()
 		);
 	}
@@ -454,6 +461,24 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$map = new TrackedRepresentationMap();
 		foreach ($trackedRepresentations as $tracked) {
 			$map->add($tracked);
+		}
+
+		return $map;
+	}
+
+	private function trackedMapWithRelated(object ...$entries): TrackedRepresentationMap
+	{
+		$map = new TrackedRepresentationMap();
+		foreach ($entries as $entry) {
+			if ($entry instanceof TrackedRepresentation) {
+				$map->add($entry);
+
+				continue;
+			}
+
+			if (! $map->has($entry)) {
+				$map->add($this->tracked($entry, new RepresentationBinding()));
+			}
 		}
 
 		return $map;

@@ -209,7 +209,7 @@ final class FlushExecutorTest extends TestCase
 		$item = new stdClass();
 		$tracked = $this->tracked($this->representation(['name' => 'after', 'posts' => [$item]]), $this->ownerBindingWithPosts($record));
 
-		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->trackedMap($tracked), $this->records($record), new RelatedCollectionMap());
+		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->trackedMap($tracked, $this->tracked($item, new RepresentationBinding())), $this->records($record), new RelatedCollectionMap());
 
 		self::assertSame(['after'], RecordingRelationPersistencePlanner::$observedOwnerValues);
 		self::assertCount(1, RecordingRelationPersistencePlanner::$collections);
@@ -224,7 +224,10 @@ final class FlushExecutorTest extends TestCase
 		$relations = new RelatedCollectionMap();
 
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush(
-			$this->trackedMap($this->tracked($this->representation(['name' => 'Owner', 'posts' => [$item]]), $this->ownerBindingWithPosts($record))),
+			$this->trackedMap(
+				$this->tracked($this->representation(['name' => 'Owner', 'posts' => [$item]]), $this->ownerBindingWithPosts($record)),
+				$this->tracked($item, new RepresentationBinding())
+			),
 			$this->records($record),
 			$relations
 		);
@@ -243,7 +246,10 @@ final class FlushExecutorTest extends TestCase
 		$references = new RelatedReferenceMap();
 
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush(
-			$this->trackedMap($this->tracked($this->representation(['name' => 'Owner', 'profile' => $target]), $this->ownerBindingWithProfile($record))),
+			$this->trackedMap(
+				$this->tracked($this->representation(['name' => 'Owner', 'profile' => $target]), $this->ownerBindingWithProfile($record)),
+				$this->tracked($target, new RepresentationBinding())
+			),
 			$this->records($record),
 			new RelatedCollectionMap(),
 			$references
@@ -281,10 +287,14 @@ final class FlushExecutorTest extends TestCase
 		RecordingRelationPersistencePlanner::$addCommand = true;
 		$users = $this->usersWithPosts();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$item = new stdClass();
 		$relations = new RelatedCollectionMap();
 
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush(
-			$this->trackedMap($this->tracked($this->representation(['name' => 'Owner', 'posts' => [new stdClass()]]), $this->ownerBindingWithPosts($record))),
+			$this->trackedMap(
+				$this->tracked($this->representation(['name' => 'Owner', 'posts' => [$item]]), $this->ownerBindingWithPosts($record)),
+				$this->tracked($item, new RepresentationBinding())
+			),
 			$this->records($record),
 			$relations
 		);

@@ -19,6 +19,8 @@ use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\TrackedRepresentation;
 use ON\Data\ORM\State\TrackedRepresentationMap;
 use ON\Data\ORM\Sync\RepresentationAdopter;
+use ON\Data\ORM\Sync\RepresentationSyncer;
+use ON\Data\ORM\Sync\SyncResult;
 
 final class Session
 {
@@ -28,14 +30,20 @@ final class Session
 	private RelatedReferenceMap $references;
 	private RepresentationAdopter $adopter;
 	private FlushExecutor $flusher;
+	private RepresentationSyncer $syncer;
 
-	public function __construct(CommandExecutorInterface $executor, ?FlushExecutor $flusher = null)
+	public function __construct(
+		CommandExecutorInterface $executor,
+		?FlushExecutor $flusher = null,
+		?RepresentationSyncer $syncer = null,
+	)
 	{
 		$this->records = new RecordStateMap();
 		$this->representations = new TrackedRepresentationMap();
 		$this->relations = new RelatedCollectionMap();
 		$this->references = new RelatedReferenceMap();
 		$this->adopter = new RepresentationAdopter($this->records, $this->representations);
+		$this->syncer = $syncer ?? new RepresentationSyncer();
 		$this->flusher = $flusher ?? new FlushExecutor($executor);
 	}
 
@@ -108,6 +116,11 @@ final class Session
 		$this->references->add($reference);
 
 		return $reference;
+	}
+
+	public function sync(?object $representation = null): SyncResult
+	{
+		return $this->syncer->sync($this->representations, $this->records, $this->relations, $this->references, $representation);
 	}
 
 	public function flush(): FlushResult

@@ -71,6 +71,8 @@ Relation representation sync connects the two models:
 - `MANY` relation bindings sync representation paths into `RelatedCollection` instances.
 - `ONE` relation bindings sync representation paths into `RelatedReference` instances.
 
+Related objects found at those representation paths must already be tracked/adopted. Relation representation sync validates that each `MANY` item and each non-null `ONE` target has a tracked representation, and throws `SyncException` with the relation path when it does not. It does not auto-adopt related objects.
+
 Relation persistence planning then consumes changed `RelatedCollection` and `RelatedReference` instances. Built-in planners cover many-to-many, has-many, belongs-to, and has-one relation definitions.
 
 ## Binding Kinds
@@ -166,9 +168,10 @@ Relation representation sync uses relation bindings only:
 ```text
 RepresentationValueReader         -> getRelations()
 RelationRepresentationSynchronizer -> RelatedCollection / RelatedReference
+TrackedRepresentationResolver      -> already-tracked related objects only
 ```
 
-`MANY` bindings become `RelatedCollection` runtime state. `ONE` bindings become `RelatedReference` runtime state. Expression bindings are ignored by both synchronizers for now. They should survive on the binding model as provenance for later tasks.
+`MANY` bindings become `RelatedCollection` runtime state. `ONE` bindings become `RelatedReference` runtime state. `Session::sync()` exposes this representation sync step directly for already-tracked representations, while `Session::flush()` still runs it automatically before planning and flushing. Expression bindings are ignored by both synchronizers for now. They should survive on the binding model as provenance for later tasks.
 
 ## Non-Goals
 
@@ -176,6 +179,7 @@ The recursive binding model does not implement:
 
 - automatic relation graph inference
 - automatic child adoption
+- cascade graph adoption
 - relation inference from developer objects
 - SQL generation
 - transactions

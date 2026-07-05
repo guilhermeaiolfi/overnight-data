@@ -9,27 +9,23 @@ use ON\Data\ORM\Relation\RelatedCollectionMap;
 use ON\Data\ORM\Relation\RelatedReferenceMap;
 use ON\Data\ORM\State\RecordStateMap;
 use ON\Data\ORM\State\TrackedRepresentationMap;
-use ON\Data\ORM\Sync\RelationRepresentationSynchronizer;
-use ON\Data\ORM\Sync\ScalarRepresentationSynchronizer;
+use ON\Data\ORM\Sync\RepresentationSyncer;
 
 final class FlushExecutor
 {
 	private CommandExecutorInterface $executor;
-	private ScalarRepresentationSynchronizer $scalarSynchronizer;
-	private RelationRepresentationSynchronizer $relationSynchronizer;
+	private RepresentationSyncer $syncer;
 	private RecordFlusher $flusher;
 	private RelationPersistencePlanner $relationPlanner;
 
 	public function __construct(
 		CommandExecutorInterface $executor,
-		?ScalarRepresentationSynchronizer $scalarSynchronizer = null,
+		?RepresentationSyncer $syncer = null,
 		?RecordFlusher $flusher = null,
 		?RelationPersistencePlanner $relationPlanner = null,
-		?RelationRepresentationSynchronizer $relationSynchronizer = null,
 	) {
 		$this->executor = $executor;
-		$this->scalarSynchronizer = $scalarSynchronizer ?? new ScalarRepresentationSynchronizer();
-		$this->relationSynchronizer = $relationSynchronizer ?? new RelationRepresentationSynchronizer();
+		$this->syncer = $syncer ?? new RepresentationSyncer();
 		$this->flusher = $flusher ?? new RecordFlusher($executor);
 		$this->relationPlanner = $relationPlanner ?? new RelationPersistencePlanner();
 	}
@@ -43,8 +39,7 @@ final class FlushExecutor
 	{
 		$relations ??= new RelatedCollectionMap();
 		$references ??= new RelatedReferenceMap();
-		$syncPlans = $this->scalarSynchronizer->sync($representations, $records);
-		$this->relationSynchronizer->sync($representations, $relations, $references);
+		$syncResult = $this->syncer->sync($representations, $records, $relations, $references);
 		$relationResult = $this->relationPlanner->plan($relations, $references, $records, $representations);
 		$commandResults = $this->flusher->flush($records);
 
@@ -56,6 +51,6 @@ final class FlushExecutor
 			$change->clearChanges();
 		}
 
-		return new FlushResult($syncPlans, $commandResults);
+		return new FlushResult($syncResult->getSyncPlans(), $commandResults);
 	}
 }

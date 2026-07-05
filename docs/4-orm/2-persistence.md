@@ -23,7 +23,7 @@ CommandExecutorInterface
   executes neutral commands
 ```
 
-`FlushExecutor` coordinates the pipeline as scalar representation sync, relation representation sync, relation persistence planning, then record flushing. `Session` owns the in-memory `TrackedRepresentationMap` and `RecordStateMap` used by that flow.
+`FlushExecutor` coordinates the pipeline as representation sync, relation persistence planning, then record flushing. `Session` owns the in-memory `TrackedRepresentationMap` and `RecordStateMap` used by that flow.
 
 ## State And Sync
 
@@ -31,7 +31,11 @@ CommandExecutorInterface
 
 Representations are user-facing objects or values. A tracked representation can drift from its record state until synchronization happens. `ScalarRepresentationSynchronizer` reads field bindings only and applies planned representation field updates into `RecordState` while preserving the conflict rules from the ORM foundation: a representation based on a stale record revision cannot silently overwrite a newer record value.
 
-`RelationRepresentationSynchronizer` reads relation bindings only. It projects current representation relation values into `RelatedCollection` and `RelatedReference` runtime state; it does not write scalar fields, execute commands, or adopt child objects.
+`Session::sync()` explicitly copies already-tracked representation object state into ORM runtime state. With no argument it syncs all tracked representations; with one object it syncs only that already-tracked representation. It returns `SyncResult`, containing scalar sync plans and touched relation changes. It does not plan relation persistence, flush records, execute commands, mark records clean, or clear relation changes.
+
+`Session::flush()` still calls representation sync automatically before relation persistence planning and record flushing. Calling `sync()` before `flush()` is allowed when application code wants to inspect or validate runtime state before persistence.
+
+`RelationRepresentationSynchronizer` reads relation bindings only. It projects current representation relation values into `RelatedCollection` and `RelatedReference` runtime state; it does not write scalar fields, execute commands, or adopt child objects. Any object discovered through a relation binding must already be tracked/adopted. An untracked related object raises `SyncException` with the relation path. This strict behavior is intentional to avoid hidden persistence; auto-adoption and cascade graph adoption are future work.
 
 For `MANY` relation bindings, the representation path must contain an iterable of objects or `null`. The synchronizer creates or reuses a `RelatedCollection` for the concrete owner record and relation name. A `null` value is treated as an empty current item list. If the collection is not fully loaded, current items are added as known local additions without implying that absent database rows were removed. If the collection is fully loaded, the synchronizer can also remove known items that are absent from the current representation value.
 
@@ -135,20 +139,21 @@ Generated ids are currently supported only for simple auto-increment primary key
 
 `FlushExecutor` is the low-level orchestration service for a flush cycle. It:
 
-- synchronizes scalar representation fields into records
-- synchronizes representation relation values into relation runtime state
+- synchronizes representation fields and relation values into ORM runtime state
 - plans configured relation persistence changes into scalar mutations and/or commands
 - flushes changed records through `RecordFlusher`
 - returns `FlushResult` with sync plans and command results
 
-`Session` is the small runtime container around tracked representations and records. It provides the current public entry point for syncing/flushing already-tracked scalar records.
+`Session` is the small runtime container around tracked representations and records. It provides public entry points for explicitly syncing already-tracked representations and for flushing planned persistence work.
 
 This is deliberately not an `EntityManager`. There is no repository API, object proxy system, lifecycle event system, generated model layer, or relation cascade writer.
 
 ## Current Limits
 
 - Scalar insert/update/delete plus configured relation persistence planning only.
+- Related objects found through representation relation bindings must already be tracked/adopted.
 - No automatic relation cascade writes.
+- No automatic graph adoption.
 - No transaction orchestration.
 - No optimistic locking, stale-row detection, or affected-row conflict handling.
 - No lazy loading.
