@@ -12,14 +12,14 @@ use ON\Data\ORM\State\RepresentationStore;
 
 final class ScalarRepresentationSynchronizer
 {
-	private RepresentationValueReader $reader;
+	private RepresentationReader $reader;
 	private SyncConflictDetector $conflicts;
 
 	public function __construct(
-		?RepresentationValueReader $reader = null,
+		?RepresentationReader $reader = null,
 		?SyncConflictDetector $conflicts = null,
 	) {
-		$this->reader = $reader ?? new RepresentationValueReader();
+		$this->reader = $reader ?? new RepresentationReader();
 		$this->conflicts = $conflicts ?? new SyncConflictDetector();
 	}
 

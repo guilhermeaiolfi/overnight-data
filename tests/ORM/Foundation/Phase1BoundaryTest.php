@@ -119,10 +119,10 @@ final class Phase1BoundaryTest extends TestCase
 		);
 	}
 
-	public function testRepresentationValueReaderDoesNotMutateOrConvertValues(): void
+	public function testRepresentationReaderDoesNotMutateOrConvertValues(): void
 	{
 		self::markTestIncomplete(
-			'Phase 1 boundary: RepresentationValueReader reads public representation values only; mapper conversion and mutation are future runtime work.'
+			'Phase 1 boundary: RepresentationReader reads public representation values only; mapper conversion and mutation are future runtime work.'
 		);
 	}
 }

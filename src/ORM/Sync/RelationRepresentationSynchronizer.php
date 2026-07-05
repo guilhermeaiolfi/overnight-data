@@ -14,14 +14,11 @@ use ON\Data\ORM\State\RepresentationStore;
 
 final class RelationRepresentationSynchronizer
 {
-	private RepresentationRelationReader $relationReader;
+	private RepresentationReader $reader;
 
-	public function __construct(
-		?RepresentationValueReader $reader = null,
-		?RepresentationRelationReader $relationReader = null,
-	) {
-		$reader ??= new RepresentationValueReader();
-		$this->relationReader = $relationReader ?? new RepresentationRelationReader($reader);
+	public function __construct(?RepresentationReader $reader = null)
+	{
+		$this->reader = $reader ?? new RepresentationReader();
 	}
 
 	/**
@@ -80,7 +77,7 @@ final class RelationRepresentationSynchronizer
 
 		$owner = $relationRef->getState();
 		$relationName = $relationRef->getRelationName();
-		$items = $this->relationReader->readItems($representation, $relationBinding, $this->syncError(...));
+		$items = $this->reader->readItems($representation, $relationBinding, $this->syncError(...));
 		foreach ($items as $item) {
 			$resolver->getRepresentationState($item, $relationBinding->getPath());
 		}
@@ -120,7 +117,7 @@ final class RelationRepresentationSynchronizer
 
 		$owner = $relationRef->getState();
 		$relationName = $relationRef->getRelationName();
-		$target = $this->relationReader->readTarget($representation, $relationBinding, $this->syncError(...));
+		$target = $this->reader->readTarget($representation, $relationBinding, $this->syncError(...));
 		if ($target !== null) {
 			$resolver->getRepresentationState($target, $relationBinding->getPath());
 		}

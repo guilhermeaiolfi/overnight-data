@@ -23,8 +23,8 @@ use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\Sync\GraphAdopter;
 use ON\Data\ORM\Sync\RepresentationAdopter;
+use ON\Data\ORM\Sync\RepresentationReader;
 use ON\Data\ORM\Sync\RepresentationSyncer;
-use ON\Data\ORM\Sync\RepresentationValueReader;
 use ON\Data\ORM\Sync\SyncResult;
 use stdClass;
 
@@ -267,7 +267,7 @@ final class Session
 	private function identifyInitialValues(object $representation, RepresentationBinding $binding, Key $key): array
 	{
 		$values = $key->getValues();
-		$reader = new RepresentationValueReader();
+		$reader = new RepresentationReader();
 		foreach ($binding->getFields() as $fieldBinding) {
 			$fieldName = $fieldBinding->getField()->getFieldName();
 

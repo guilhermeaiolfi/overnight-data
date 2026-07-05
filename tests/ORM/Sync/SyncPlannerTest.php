@@ -14,7 +14,7 @@ use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\Sync\RepresentationValueReader;
+use ON\Data\ORM\Sync\RepresentationReader;
 use ON\Data\ORM\Sync\SyncConflictDetector;
 use ON\Data\ORM\Sync\SyncPlan;
 use ON\Data\ORM\Sync\SyncPlanner;
@@ -323,7 +323,7 @@ final class SyncPlannerTest extends TestCase
 	private function planner(?RecordStateStore $records = null): object
 	{
 		$planner = new SyncPlanner(
-			new RepresentationValueReader(),
+			new RepresentationReader(),
 			new SyncConflictDetector(),
 			$records ?? new RecordStateStore()
 		);

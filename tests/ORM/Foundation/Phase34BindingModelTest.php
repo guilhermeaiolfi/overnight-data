@@ -66,7 +66,7 @@ final class Phase34BindingModelTest extends TestCase
 	public function testScalarSyncStillUsesExplicitFieldBindingsOnly(): void
 	{
 		$sources = [
-			dirname(__DIR__, 3) . '/src/ORM/Sync/RepresentationValueReader.php' => 'getFields()',
+			dirname(__DIR__, 3) . '/src/ORM/Sync/RepresentationReader.php' => 'getFields()',
 			dirname(__DIR__, 3) . '/src/ORM/Sync/SyncConflictDetector.php' => 'getWritableFieldBindings()',
 			dirname(__DIR__, 3) . '/src/ORM/Sync/SyncPlanner.php' => 'getWritableFieldBindings()',
 		];

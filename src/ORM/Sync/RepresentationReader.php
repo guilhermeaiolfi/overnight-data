@@ -6,8 +6,10 @@ namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationRelationBinding;
+use Throwable;
 
-final class RepresentationValueReader
+final class RepresentationReader
 {
 	/**
 	 * @return array<string, mixed>
@@ -31,6 +33,62 @@ final class RepresentationValueReader
 		}
 
 		return $current;
+	}
+
+	/**
+	 * @param callable(non-empty-string): Throwable $error
+	 *
+	 * @return list<object>
+	 */
+	public function readItems(
+		object $representation,
+		RepresentationRelationBinding $binding,
+		callable $error,
+	): array {
+		$value = $this->readPath($representation, $binding->getPath());
+		if ($value === null) {
+			return [];
+		}
+
+		if (! is_iterable($value)) {
+			throw $error(sprintf(
+				"Representation relation path '%s' must contain an iterable value or null.",
+				$binding->getPath()
+			));
+		}
+
+		$items = [];
+		foreach ($value as $item) {
+			if (! is_object($item)) {
+				throw $error(sprintf(
+					"Representation relation path '%s' can only contain objects.",
+					$binding->getPath()
+				));
+			}
+
+			$items[] = $item;
+		}
+
+		return $items;
+	}
+
+	/**
+	 * @param callable(non-empty-string): Throwable $error
+	 */
+	public function readTarget(
+		object $representation,
+		RepresentationRelationBinding $binding,
+		callable $error,
+	): ?object {
+		$value = $this->readPath($representation, $binding->getPath());
+		if ($value === null || is_object($value)) {
+			return $value;
+		}
+
+		throw $error(sprintf(
+			"Representation relation path '%s' must contain an object value or null.",
+			$binding->getPath()
+		));
 	}
 
 	private function readSegment(mixed $current, string $segment, string $path): mixed

@@ -15,16 +15,11 @@ use ON\Data\ORM\State\RepresentationStore;
 
 final class GraphAdopter
 {
-	private RepresentationValueReader $reader;
+	private RepresentationReader $reader;
 
-	private RepresentationRelationReader $relationReader;
-
-	public function __construct(
-		?RepresentationValueReader $reader = null,
-		?RepresentationRelationReader $relationReader = null,
-	) {
-		$this->reader = $reader ?? new RepresentationValueReader();
-		$this->relationReader = $relationReader ?? new RepresentationRelationReader($this->reader);
+	public function __construct(?RepresentationReader $reader = null)
+	{
+		$this->reader = $reader ?? new RepresentationReader();
 	}
 
 	/**
@@ -82,7 +77,7 @@ final class GraphAdopter
 		$visited[$id] = true;
 		foreach ($tracked->getBinding()->getRelations() as $relationBinding) {
 			if ($relationBinding->isMany()) {
-				foreach ($this->relationReader->readItems($representation, $relationBinding, $this->adoptionError(...)) as $item) {
+				foreach ($this->reader->readItems($representation, $relationBinding, $this->adoptionError(...)) as $item) {
 					$this->adoptAndWalk($item, $relationBinding->getRelatedBinding(), $representations, $records, $adopter, $visited, $adopted);
 				}
 
@@ -90,7 +85,7 @@ final class GraphAdopter
 			}
 
 			if ($relationBinding->isSingle()) {
-				$target = $this->relationReader->readTarget($representation, $relationBinding, $this->adoptionError(...));
+				$target = $this->reader->readTarget($representation, $relationBinding, $this->adoptionError(...));
 				if ($target !== null) {
 					$this->adoptAndWalk($target, $relationBinding->getRelatedBinding(), $representations, $records, $adopter, $visited, $adopted);
 				}

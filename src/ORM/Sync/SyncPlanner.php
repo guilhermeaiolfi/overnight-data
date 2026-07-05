@@ -13,7 +13,7 @@ use ON\Data\ORM\State\RepresentationState;
 final class SyncPlanner
 {
 	public function __construct(
-		private RepresentationValueReader $reader,
+		private RepresentationReader $reader,
 		private SyncConflictDetector $conflicts,
 		private RecordStateStore $records,
 	) {

@@ -496,7 +496,7 @@ Phase 1E introduces `ON\Data\ORM\Sync\RepresentationAdopter` as the small bridge
 
 ## Phase 1F Representation Value Reading
 
-Phase 1F introduces `ON\Data\ORM\Sync\RepresentationValueReader` as the small service that reads current values from object and `stdClass` representations using `RepresentationBinding` paths.
+Phase 1F introduces `ON\Data\ORM\Sync\RepresentationReader` as the small service that reads current values from object and `stdClass` representations using `RepresentationBinding` paths.
 
 The reader distinguishes a missing public property from a present `null` value, preserves binding insertion order, and supports simple dot paths through public properties. Numeric path segments can read array offsets for straightforward cases such as `posts.0.title`.
 
@@ -536,7 +536,7 @@ After scalar sync apply:
 Scalar flush can group those dirty values into one database update for the users record.
 ```
 
-`ToManyRelationState` tracks relation add/remove intent only. It does not persist, adopt, or write relations. `RepresentationAdopter` adopts tracking only; it does not sync values. `RepresentationValueReader` reads current values only; it does not convert, mutate, or sync. `SyncPlan` is a description of conflicts and possible field updates, not an apply operation.
+`ToManyRelationState` tracks relation add/remove intent only. It does not persist, adopt, or write relations. `RepresentationAdopter` adopts tracking only; it does not sync values. `RepresentationReader` reads current values only; it does not convert, mutate, or sync. `SyncPlan` is a description of conflicts and possible field updates, not an apply operation.
 
 ## Remaining Non-Goals
 
