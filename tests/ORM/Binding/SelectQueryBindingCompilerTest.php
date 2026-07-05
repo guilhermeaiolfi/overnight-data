@@ -9,6 +9,7 @@ use ON\Data\ORM\Binding\SelectQueryBindingCompiler;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use function ON\Data\Query\query;
 use ON\Data\Query\SelectQuery;
+use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 
 final class SelectQueryBindingCompilerTest extends TestCase
@@ -104,7 +105,7 @@ final class SelectQueryBindingCompilerTest extends TestCase
 		self::assertSame('users', $posts->getRelation()->getCollectionName());
 		self::assertSame('posts', $posts->getRelation()->getRelationName());
 		self::assertSame(RepresentationRelationCardinality::MANY, $posts->getCardinality());
-		self::assertFalse($posts->isCollectionFullyLoaded());
+		self::assertTrue($posts->isCollectionFullyLoaded());
 		self::assertTrue($posts->getRelatedBinding()->hasField('title'));
 		self::assertTrue($posts->getRelatedBinding()->hasField('id'));
 		self::assertTrue($posts->getRelatedBinding()->getField('id')->isReadOnly());
@@ -155,6 +156,51 @@ final class SelectQueryBindingCompilerTest extends TestCase
 		$binding = $this->compiler->compile($query);
 
 		self::assertFalse($binding->getRelation('posts')->isCollectionFullyLoaded());
+	}
+
+	public function testRelationWithOffsetIsNotCollectionFullyLoaded(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = query($users, fn (SelectQuery $query) => $query
+			->select($query->name)
+			->posts
+			->fields('title')
+			->offset(10));
+
+		$binding = $this->compiler->compile($query);
+
+		self::assertFalse($binding->getRelation('posts')->isCollectionFullyLoaded());
+	}
+
+	public function testRelationWithConditionsIsNotCollectionFullyLoaded(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = query($users, function (SelectQuery $query): void {
+			$query->select($query->name);
+			$query->posts->fields('title')->where(x()->eq($query->posts->title, 'Hello'));
+		});
+
+		$binding = $this->compiler->compile($query);
+
+		self::assertFalse($binding->getRelation('posts')->isCollectionFullyLoaded());
+	}
+
+	public function testToOneRelationDoesNotUseCollectionFullyLoadedSemantics(): void
+	{
+		$registry = $this->makeRegistryWithProfile();
+		$users = $registry->getCollection('users');
+		$query = query($users, fn (SelectQuery $query) => $query
+			->select($query->name)
+			->profile
+			->load());
+
+		$binding = $this->compiler->compile($query);
+		$profile = $binding->getRelation('profile');
+
+		self::assertSame(RepresentationRelationCardinality::ONE, $profile->getCardinality());
+		self::assertFalse($profile->isCollectionFullyLoaded());
 	}
 
 	public function testNestedRelationCompilesIntoNestedRelatedBindingNotFlattenedRootPaths(): void
@@ -246,6 +292,22 @@ final class SelectQueryBindingCompilerTest extends TestCase
 			->field('tenant_id', 'int')->end()
 			->field('user_id', 'int')->end()
 			->field('role', 'string')->end();
+
+		return $registry;
+	}
+
+	private function makeRegistryWithProfile(): Registry
+	{
+		$registry = $this->makeRegistry();
+
+		$registry->collection('profiles')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('label', 'string')->end()
+			->field('user_id', 'int')->end();
+
+		$users = $registry->getCollection('users');
+		$users->hasOne('profile', 'profiles')->innerKey('id')->outerKey('user_id');
 
 		return $registry;
 	}

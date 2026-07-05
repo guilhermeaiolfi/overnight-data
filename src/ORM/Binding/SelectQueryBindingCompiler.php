@@ -251,7 +251,7 @@ final class SelectQueryBindingCompiler
 			return false;
 		}
 
-		if ($selection->getFields() !== null) {
+		if ($selection->getConditions() !== []) {
 			return false;
 		}
 
