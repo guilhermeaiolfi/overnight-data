@@ -171,6 +171,69 @@ final class FlushExecutorTest extends TestCase
 		self::assertTrue($record->isClean());
 	}
 
+	public function testTransactionalFlushRunsSchedulerInsideTransactionWithImmediateValueMergeAndDeferredFinalizers(): void
+	{
+		[$users, $tags, $through] = $this->usersWithTags();
+		$owner = RecordState::new($users, ['name' => 'Owner']);
+		$target = RecordState::new($tags, ['label' => 'Tag']);
+		$tagRepresentation = $this->representation(['label' => 'Tag']);
+		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection->add($tagRepresentation);
+		$records = $this->records($owner, $target);
+		$executor = new class () implements CommandExecutorInterface, TransactionalCommandExecutorInterface {
+			public bool $insideTransaction = false;
+
+			/** @var list<CommandInterface> */
+			public array $commands = [];
+
+			public function execute(CommandInterface $command): CommandResult
+			{
+				if (! $this->insideTransaction) {
+					throw new LogicException('Commands must execute inside the transaction.');
+				}
+
+				$this->commands[] = $command;
+
+				return match (count($this->commands)) {
+					1 => new CommandResult(1, ['id' => 10]),
+					2 => new CommandResult(1, ['id' => 3]),
+					default => new CommandResult(1),
+				};
+			}
+
+			public function transaction(callable $callback): mixed
+			{
+				$this->insideTransaction = true;
+
+				try {
+					return $callback();
+				} finally {
+					$this->insideTransaction = false;
+				}
+			}
+		};
+
+		(new FlushExecutor($executor))->flush($this->context(
+			$this->representations($this->tracked($tagRepresentation, $this->bindingFor($target))),
+			$records,
+			$this->toManyRelations($collection)
+		));
+
+		self::assertCount(3, $executor->commands);
+		self::assertSame(10, $owner->getValue('id'));
+		self::assertSame(3, $target->getValue('id'));
+		self::assertTrue($owner->isClean());
+		self::assertTrue($target->isClean());
+		self::assertFalse($collection->hasChanges());
+		$throughCommand = $executor->commands[2];
+		if (! $throughCommand instanceof InsertCommand) {
+			self::fail('Expected a through insert command.');
+		}
+
+		self::assertSame($through, $throughCommand->getCollection());
+		self::assertSame(['user_id' => 10, 'tag_id' => 3], $throughCommand->getValues());
+	}
+
 	public function testTransactionalFlushDefersStateCleanupUntilTransactionSucceeds(): void
 	{
 		RecordingRelationPersistencePlanner::$addCommand = true;

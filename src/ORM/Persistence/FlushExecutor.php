@@ -12,22 +12,19 @@ final class FlushExecutor
 {
 	private CommandExecutorInterface $executor;
 	private RepresentationSyncer $syncer;
-	private RecordFlusher $flusher;
+	private FlushScheduler $scheduler;
 	private RelationPersistencePlanner $relationPlanner;
-	private CommandValueResolver $commandValueResolver;
 
 	public function __construct(
 		CommandExecutorInterface $executor,
 		?RepresentationSyncer $syncer = null,
-		?RecordFlusher $flusher = null,
+		?FlushScheduler $scheduler = null,
 		?RelationPersistencePlanner $relationPlanner = null,
-		?CommandValueResolver $commandValueResolver = null,
 	) {
 		$this->executor = $executor;
 		$this->syncer = $syncer ?? new RepresentationSyncer();
-		$this->flusher = $flusher ?? new RecordFlusher($executor);
+		$this->scheduler = $scheduler ?? new FlushScheduler($executor);
 		$this->relationPlanner = $relationPlanner ?? new RelationPersistencePlanner();
-		$this->commandValueResolver = $commandValueResolver ?? new CommandValueResolver();
 	}
 
 	public function flush(SessionContext $context): FlushResult
@@ -45,49 +42,53 @@ final class FlushExecutor
 
 		$syncResult = $this->syncer->sync($context);
 		$relationResult = $this->relationPlanner->plan($context);
-		$commandResults = $this->flusher->flush($records);
 
-		foreach ($relationResult->getCommands() as $command) {
-			$this->commandValueResolver->assertReady($command);
-			$commandResults[] = $this->executor->execute($command);
-		}
+		$flush = $this->scheduler->run(
+			$records,
+			$relationResult->getCommands(),
+			false,
+		);
 
 		foreach ($relationResult->getChanges() as $change) {
 			$change->clearChanges();
 		}
 
-		return new FlushResult($syncResult->getSyncPlans(), $commandResults);
+		return new FlushResult(
+			$syncResult->getSyncPlans(),
+			$flush->getCommandResults(),
+		);
 	}
 
 	private function flushInTransaction(
 		TransactionalCommandExecutorInterface $transactionalExecutor,
 		SessionContext $context,
 	): FlushResult {
-		$recordFlush = null;
+		$flush = null;
 		$relationResult = null;
 
 		$result = $transactionalExecutor->transaction(function () use (
 			$context,
-			&$recordFlush,
+			&$flush,
 			&$relationResult,
 		): FlushResult {
 			$records = $context->getRecords();
 
 			$syncResult = $this->syncer->sync($context);
 			$relationResult = $this->relationPlanner->plan($context);
-			$recordFlush = $this->flusher->flushDeferred($records);
-			$commandResults = $recordFlush->getCommandResults();
+			$flush = $this->scheduler->run(
+				$records,
+				$relationResult->getCommands(),
+				true,
+			);
 
-			foreach ($relationResult->getCommands() as $command) {
-				$this->commandValueResolver->assertReady($command);
-				$commandResults[] = $this->executor->execute($command);
-			}
-
-			return new FlushResult($syncResult->getSyncPlans(), $commandResults);
+			return new FlushResult(
+				$syncResult->getSyncPlans(),
+				$flush->getCommandResults(),
+			);
 		});
 
-		if ($recordFlush instanceof DeferredRecordFlushResult) {
-			$recordFlush->finalize();
+		if ($flush instanceof DeferredFlushResult) {
+			$flush->finalize();
 		}
 
 		if ($relationResult !== null) {

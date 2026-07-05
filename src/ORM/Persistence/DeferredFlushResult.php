@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Persistence;
 
-final class DeferredRecordFlushResult
+final class DeferredFlushResult
 {
 	/**
 	 * @param list<CommandResult> $commandResults
