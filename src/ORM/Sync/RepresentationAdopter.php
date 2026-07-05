@@ -28,13 +28,13 @@ final class RepresentationAdopter
 			throw new SyncException('Cannot adopt representation because it is already tracked.');
 		}
 
-		$this->records->add($record);
 		$appliedBinding = $binding->applyToRecordState($record);
 		$state = new RepresentationState(
 			$appliedBinding,
 			$this->buildBaselineRevisions($appliedBinding, $record)
 		);
 
+		$this->records->add($record);
 		$this->representations->add($representation, $state);
 
 		return $state;

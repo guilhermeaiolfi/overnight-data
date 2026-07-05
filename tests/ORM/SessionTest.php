@@ -134,6 +134,23 @@ final class SessionTest extends TestCase
 		self::assertSame(['id' => 123, 'title' => 'Existing'], $record->getValues());
 	}
 
+	public function testFailedIdentifyWithWrongBindingDoesNotLeavePartialSessionState(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$posts = $this->posts();
+		$key = $posts->getKey(['id' => 123]);
+		$post = $this->representation(['id' => 123, 'title' => 'Existing']);
+
+		try {
+			$session->identify($posts, $key, $post, $this->templateBinding());
+			self::fail('Expected identify to reject a binding targeting the wrong collection.');
+		} catch (StateException) {
+		}
+
+		self::assertFalse($session->getRecords()->hasKey($key));
+		self::assertFalse($session->getRepresentations()->has($post));
+	}
+
 	public function testIdentifySupportsCompositeKeys(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
@@ -203,6 +220,24 @@ final class SessionTest extends TestCase
 		self::assertSame($tracked, $session->getRepresentations()->get($representation));
 		self::assertSame($record, $session->getRecords()->getByStateHash($record->getStateHash()));
 		self::assertSame([$record->getStateHash() => $record->getRevision()], $tracked->getBaselineRevisions());
+	}
+
+	public function testFailedAdoptWithWrongBindingDoesNotLeavePartialSessionState(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$posts = $this->posts();
+		$key = $posts->getKey(['id' => 123]);
+		$record = RecordState::clean($key, ['id' => 123, 'title' => 'Existing']);
+		$post = $this->representation(['id' => 123, 'title' => 'Existing']);
+
+		try {
+			$session->adopt($post, $this->templateBinding(), $record);
+			self::fail('Expected adopt to reject a binding targeting the wrong collection.');
+		} catch (StateException) {
+		}
+
+		self::assertFalse($session->getRecords()->hasKey($key));
+		self::assertFalse($session->getRepresentations()->has($post));
 	}
 
 	public function testAdoptRejectsAdoptingSameRepresentationTwiceThroughExistingBehavior(): void
