@@ -191,6 +191,143 @@ final class FlushExecutorTest extends TestCase
 		self::assertSame([], $records->getAll());
 	}
 
+	public function testSecondFlushAfterSuccessfulInsertDoesNotInsertAgain(): void
+	{
+		$record = RecordState::new($this->users(), ['id' => 10, 'name' => 'A1']);
+		$records = $this->records($record);
+		$executor = new RecordingCommandExecutor();
+		$flusher = new FlushExecutor($executor);
+
+		$flusher->flush(new RepresentationStore(), $records);
+		$flusher->flush(new RepresentationStore(), $records);
+
+		self::assertCount(1, $executor->getCommands());
+		self::assertInstanceOf(InsertCommand::class, $executor->getCommands()[0]);
+	}
+
+	public function testSecondFlushAfterSuccessfulUpdateDoesNotUpdateAgain(): void
+	{
+		$users = $this->users();
+		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$record->setValue('name', 'A2');
+		$records = $this->records($record);
+		$executor = new RecordingCommandExecutor();
+		$flusher = new FlushExecutor($executor);
+
+		$flusher->flush(new RepresentationStore(), $records);
+		$flusher->flush(new RepresentationStore(), $records);
+
+		self::assertCount(1, $executor->getCommands());
+		self::assertInstanceOf(UpdateCommand::class, $executor->getCommands()[0]);
+	}
+
+	public function testSecondFlushAfterSuccessfulDeleteDoesNotDeleteAgain(): void
+	{
+		$users = $this->users();
+		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$record->markRemoved();
+		$records = $this->records($record);
+		$executor = new RecordingCommandExecutor();
+		$flusher = new FlushExecutor($executor);
+
+		$flusher->flush(new RepresentationStore(), $records);
+		$flusher->flush(new RepresentationStore(), $records);
+
+		self::assertCount(1, $executor->getCommands());
+		self::assertInstanceOf(DeleteCommand::class, $executor->getCommands()[0]);
+	}
+
+	public function testSecondFlushAfterToManyRelationAddDoesNotRepeatRelationCommand(): void
+	{
+		[$users, $tags, $through] = $this->usersWithTags();
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$target = RecordState::clean($tags->getKey(5), ['id' => 5, 'label' => 'Tag']);
+		$item = $this->representation(['id' => 5, 'label' => 'Tag']);
+		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection->add($item);
+		$executor = new RecordingCommandExecutor();
+		$flusher = new FlushExecutor($executor);
+
+		$tracked = $this->tracked($item, $this->bindingFor($target));
+		$representations = $this->trackedMap($tracked);
+		$records = $this->records($owner, $target);
+		$relations = $this->relations($collection);
+
+		$flusher->flush($representations, $records, $relations);
+		$flusher->flush($representations, $records, $relations);
+
+		self::assertFalse($collection->hasChanges());
+		self::assertCount(1, $executor->getCommands());
+		$command = $executor->getCommands()[0];
+		self::assertInstanceOf(InsertCommand::class, $command);
+		self::assertSame($through, $command->getCollection());
+	}
+
+	public function testSecondFlushAfterToManyRelationRemoveDoesNotRepeatRelationCommand(): void
+	{
+		[$users, $tags, $through] = $this->usersWithTags();
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$target = RecordState::clean($tags->getKey(5), ['id' => 5, 'label' => 'Tag']);
+		$item = $this->representation(['id' => 5, 'label' => 'Tag']);
+		$collection = ToManyRelationState::full($owner, 'tags', $this->bindingFor($target), [$item]);
+		$collection->remove($item);
+		$tracked = $this->tracked($item, $this->bindingFor($target));
+		$representations = $this->trackedMap($tracked);
+		$records = $this->records($owner, $target);
+		$relations = $this->relations($collection);
+		$executor = new RecordingCommandExecutor();
+		$flusher = new FlushExecutor($executor);
+
+		$flusher->flush($representations, $records, $relations);
+		$flusher->flush($representations, $records, $relations);
+
+		self::assertFalse($collection->hasChanges());
+		self::assertCount(1, $executor->getCommands());
+		$command = $executor->getCommands()[0];
+		self::assertInstanceOf(DeleteCommand::class, $command);
+		self::assertSame($through, $command->getCollection());
+	}
+
+	public function testSecondFlushAfterToOneRelationSetDoesNotRepeatForeignKeyUpdate(): void
+	{
+		[$posts, $users] = $this->postsWithDefaultBelongsToAuthor();
+		$owner = RecordState::clean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'author_id' => null]);
+		$target = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Author']);
+		$targetObject = $this->representation(['id' => 10, 'name' => 'Author']);
+		$reference = new ToOneRelationState($owner, 'author', $this->bindingFor($target));
+		$reference->set($targetObject);
+		$tracked = $this->tracked($targetObject, $this->bindingFor($target));
+		$executor = new RecordingCommandExecutor();
+		$flusher = new FlushExecutor($executor);
+
+		$flusher->flush($this->trackedMap($tracked), $this->records($owner, $target), new ToManyRelationStore(), $this->references($reference));
+		$flusher->flush($this->trackedMap($tracked), $this->records($owner, $target), new ToManyRelationStore(), $this->references($reference));
+
+		self::assertFalse($reference->hasChanges());
+		self::assertCount(1, $executor->getCommands());
+		self::assertInstanceOf(UpdateCommand::class, $executor->getCommands()[0]);
+	}
+
+	public function testSecondFlushAfterToOneRelationClearDoesNotRepeatForeignKeyNulling(): void
+	{
+		[$posts, $users] = $this->postsWithDefaultBelongsToAuthor();
+		$owner = RecordState::clean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'author_id' => 10]);
+		$target = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Author']);
+		$baselineObject = $this->representation(['id' => 10, 'name' => 'Author']);
+		$reference = new ToOneRelationState($owner, 'author', $this->bindingFor($target), $baselineObject);
+		$reference->clear();
+		$tracked = $this->tracked($baselineObject, $this->bindingFor($target));
+		$executor = new RecordingCommandExecutor();
+		$flusher = new FlushExecutor($executor);
+
+		$flusher->flush($this->trackedMap($tracked), $this->records($owner, $target), new ToManyRelationStore(), $this->references($reference));
+		$flusher->flush($this->trackedMap($tracked), $this->records($owner, $target), new ToManyRelationStore(), $this->references($reference));
+
+		self::assertFalse($reference->hasChanges());
+		self::assertCount(1, $executor->getCommands());
+		self::assertInstanceOf(UpdateCommand::class, $executor->getCommands()[0]);
+	}
+
 	public function testRepresentationSyncRunsBeforeRelationPersistencePlanning(): void
 	{
 		$users = $this->usersWithPosts();
@@ -1009,6 +1146,26 @@ final class FlushExecutorTest extends TestCase
 		$users->hasOne('profile', 'profiles')->innerKey('id')->outerKey('user_id');
 
 		return [$users, $profiles];
+	}
+
+	/**
+	 * @return array{0: CollectionInterface, 1: CollectionInterface}
+	 */
+	private function postsWithDefaultBelongsToAuthor(): array
+	{
+		$registry = new Registry();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+		$posts = $registry->collection('posts')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('title', 'string')->end()
+			->field('author_id', 'int')->end();
+		$posts->belongsTo('author', 'users')->innerKey('author_id')->outerKey('id')->nullable(true);
+
+		return [$posts, $users];
 	}
 
 	private function bindingFor(RecordState $record): RepresentationBinding

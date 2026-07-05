@@ -6,6 +6,7 @@ namespace ON\Data\ORM;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\FlushExecutor;
@@ -111,8 +112,24 @@ final class Session
 
 	public function removeRecord(RecordState $record): void
 	{
-		$this->records->add($record);
-		$record->markRemoved();
+		$this->remove($record);
+	}
+
+	public function remove(object $target): void
+	{
+		if ($target instanceof RecordState) {
+			$this->records->add($target);
+			$target->markRemoved();
+
+			return;
+		}
+
+		$state = $this->representations->get($target);
+		if (! $state instanceof RepresentationState) {
+			throw new SyncException('Cannot remove an untracked representation object.');
+		}
+
+		$this->resolveSingleRecordForRemoval($state)->markRemoved();
 	}
 
 	public function trackRelation(ToManyRelationState $collection): ToManyRelationState
@@ -154,5 +171,37 @@ final class Session
 	public function flush(): FlushResult
 	{
 		return $this->flusher->flush($this->representations, $this->records, $this->relations, $this->references);
+	}
+
+	private function resolveSingleRecordForRemoval(RepresentationState $state): RecordState
+	{
+		$records = [];
+		$binding = $state->getBinding();
+
+		foreach ($binding->getFields() as $fieldBinding) {
+			$field = $fieldBinding->getField();
+			if ($field->hasState()) {
+				$record = $field->getState();
+				$records[$record->getStateHash()] = $record;
+			}
+		}
+
+		foreach ($binding->getRelations() as $relationBinding) {
+			$relation = $relationBinding->getRelation();
+			if ($relation->hasState()) {
+				$record = $relation->getState();
+				$records[$record->getStateHash()] = $record;
+			}
+		}
+
+		if ($records === []) {
+			throw new StateException('Cannot remove representation because its binding does not resolve to a concrete record state.');
+		}
+
+		if (count($records) > 1) {
+			throw new StateException('Cannot remove representation because its binding resolves to multiple record states.');
+		}
+
+		return array_values($records)[0];
 	}
 }

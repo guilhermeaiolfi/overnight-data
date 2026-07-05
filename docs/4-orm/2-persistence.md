@@ -51,6 +51,10 @@ $session->sync($user);
 $session->flush();
 ```
 
+`Session::remove($target)` marks one record for deletion. Passing a `RecordState` tracks it if needed and marks that state removed. Passing an object requires that exact object to already be tracked in `RepresentationStore`; `remove()` does not adopt untracked objects and does not accept a binding override. The tracked representation binding must resolve to exactly one concrete root `RecordState`. Projection or mixed bindings that point at multiple records are rejected because they are not safely removable as a single record.
+
+Removal is record deletion only. It does not cascade to related records, perform orphan removal, or infer child deletion from object graph shape. Relation unlinking still goes through explicit `ToManyRelationState` / `ToOneRelationState` mutations and the configured relation persistence planners.
+
 `Session::flush()` still calls strict representation sync automatically before relation persistence planning and record flushing. That pre-flush sync does not adopt new untracked related objects. Calling `sync($object)` before `flush()` is the explicit step that admits a changed object graph into the session.
 
 For long-lived workers, prefer one `Session` per request/job. When intentionally reusing a session, call `Session::clear()` between jobs to drop all four runtime stores. If sessions are discarded normally, an extra clear step is unnecessary.
@@ -178,7 +182,7 @@ Generated ids are currently supported only for simple auto-increment primary key
 
 `Session` is the small runtime container around tracked representations and records. It provides public entry points for explicitly syncing an object graph and flushing planned persistence work.
 
-This is deliberately not an `EntityManager`. There is no repository API, object proxy system, lifecycle event system, generated model layer, or relation cascade writer. `sync($object)` is graph synchronization only; it is not a cascade policy, orphan-removal policy, generated-key dependency sorter, or transaction boundary.
+This is deliberately not an `EntityManager`. There is no repository API, object proxy system, lifecycle event system, generated model layer, or relation cascade writer. `sync($object)` is graph synchronization only; it is not a cascade policy, orphan-removal policy, generated-key dependency sorter, or transaction boundary. `remove($object)` only removes an already-tracked representation that maps to one concrete record.
 
 ## Current Limits
 

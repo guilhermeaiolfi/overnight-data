@@ -342,6 +342,72 @@ final class SessionTest extends TestCase
 		self::assertSame([$record], $session->getRecords()->getAll());
 	}
 
+	public function testRemoveMarksTrackedCleanRecordRemoved(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+
+		$session->remove($record);
+
+		self::assertTrue($record->isRemoved());
+		self::assertSame([$record], $session->getRecords()->getAll());
+	}
+
+	public function testRemoveObjectMarksSingleConcreteTrackedRecordRemoved(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$representation = $this->representation(['name' => 'A1']);
+		$session->adopt($representation, $this->templateBinding(), $record);
+
+		$session->remove($representation);
+
+		self::assertTrue($record->isRemoved());
+	}
+
+	public function testRemoveObjectThrowsForUntrackedObject(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+
+		$this->expectException(SyncException::class);
+		$this->expectExceptionMessage('untracked');
+
+		$session->remove(new stdClass());
+	}
+
+	public function testRemoveObjectThrowsWhenBindingHasNoConcreteRecordState(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$representation = new stdClass();
+		$session->getRepresentations()->add($representation, new RepresentationState(new RepresentationBinding(), []));
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage('does not resolve to a concrete record state');
+
+		$session->remove($representation);
+	}
+
+	public function testRemoveObjectThrowsForMixedProjectionBinding(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$session = new Session(new RecordingCommandExecutor());
+		$userRecord = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$postRecord = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'user_id' => 10]);
+		$representation = $this->representation(['name' => 'Owner', 'title' => 'Post']);
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::forState($userRecord, 'name')));
+		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::forState($postRecord, 'title')));
+		$session->getRepresentations()->add($representation, new RepresentationState($binding, [
+			$userRecord->getStateHash() => $userRecord->getRevision(),
+			$postRecord->getStateHash() => $postRecord->getRevision(),
+		]));
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage('multiple record states');
+
+		$session->remove($representation);
+	}
+
 	public function testGetRelationsReturnsOwnedMap(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
@@ -413,6 +479,33 @@ final class SessionTest extends TestCase
 		self::assertCount(1, $executor->getCommands());
 		self::assertInstanceOf(DeleteCommand::class, $executor->getCommands()[0]);
 		self::assertSame([], $session->getRecords()->getAll());
+	}
+
+	public function testFlushRemovedNewUnkeyedRecordExecutesNoCommandAndRemovesItFromOwnedMap(): void
+	{
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$record = $session->trackNew($this->users(), ['name' => 'A1']);
+		$session->remove($record);
+
+		$session->flush();
+
+		self::assertSame([], $executor->getCommands());
+		self::assertSame([], $session->getRecords()->getAll());
+	}
+
+	public function testSecondFlushAfterDeletionDoesNotDeleteAgain(): void
+	{
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->remove($record);
+
+		$session->flush();
+		$session->flush();
+
+		self::assertCount(1, $executor->getCommands());
+		self::assertInstanceOf(DeleteCommand::class, $executor->getCommands()[0]);
 	}
 
 	public function testFlushDoesNotClearRepresentationStates(): void
