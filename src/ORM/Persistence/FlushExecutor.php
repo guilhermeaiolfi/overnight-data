@@ -5,11 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Persistence;
 
 use ON\Data\ORM\Relation\Persistence\RelationPersistencePlanner;
-use ON\Data\ORM\Relation\ToManyRelationStore;
-use ON\Data\ORM\Relation\ToOneRelationStore;
 use ON\Data\ORM\SessionContext;
-use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\Sync\RepresentationSyncer;
 
 final class FlushExecutor
@@ -34,29 +30,23 @@ final class FlushExecutor
 		$this->commandValueResolver = $commandValueResolver ?? new CommandValueResolver();
 	}
 
-	public function flush(
-		RepresentationStore $representations,
-		RecordStateStore $records,
-		?ToManyRelationStore $relations = null,
-		?ToOneRelationStore $references = null,
-	): FlushResult {
-		$relations ??= new ToManyRelationStore();
-		$references ??= new ToOneRelationStore();
-
+	public function flush(SessionContext $context): FlushResult
+	{
 		if ($this->executor instanceof TransactionalCommandExecutorInterface) {
-			return $this->flushInTransaction($this->executor, $representations, $records, $relations, $references);
+			return $this->flushInTransaction($this->executor, $context);
 		}
 
-		return $this->flushImmediately($representations, $records, $relations, $references);
+		return $this->flushImmediately($context);
 	}
 
-	private function flushImmediately(
-		RepresentationStore $representations,
-		RecordStateStore $records,
-		ToManyRelationStore $relations,
-		ToOneRelationStore $references,
-	): FlushResult {
-		$syncResult = $this->syncer->sync(new SessionContext($records, $representations, $relations, $references));
+	private function flushImmediately(SessionContext $context): FlushResult
+	{
+		$representations = $context->getRepresentations();
+		$records = $context->getRecords();
+		$relations = $context->getRelations();
+		$references = $context->getReferences();
+
+		$syncResult = $this->syncer->sync($context);
 		$relationResult = $this->relationPlanner->plan($relations, $references, $records, $representations);
 		$commandResults = $this->flusher->flush($records);
 
@@ -74,23 +64,22 @@ final class FlushExecutor
 
 	private function flushInTransaction(
 		TransactionalCommandExecutorInterface $transactionalExecutor,
-		RepresentationStore $representations,
-		RecordStateStore $records,
-		ToManyRelationStore $relations,
-		ToOneRelationStore $references,
+		SessionContext $context,
 	): FlushResult {
 		$recordFlush = null;
 		$relationResult = null;
 
 		$result = $transactionalExecutor->transaction(function () use (
-			$representations,
-			$records,
-			$relations,
-			$references,
+			$context,
 			&$recordFlush,
 			&$relationResult,
 		): FlushResult {
-			$syncResult = $this->syncer->sync(new SessionContext($records, $representations, $relations, $references));
+			$representations = $context->getRepresentations();
+			$records = $context->getRecords();
+			$relations = $context->getRelations();
+			$references = $context->getReferences();
+
+			$syncResult = $this->syncer->sync($context);
 			$relationResult = $this->relationPlanner->plan($relations, $references, $records, $representations);
 			$recordFlush = $this->flusher->flushDeferred($records);
 			$commandResults = $recordFlush->getCommandResults();

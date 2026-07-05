@@ -203,12 +203,7 @@ final class Session
 
 	public function flush(): FlushResult
 	{
-		return $this->flusher->flush(
-			$this->context->getRepresentations(),
-			$this->context->getRecords(),
-			$this->context->getRelations(),
-			$this->context->getReferences()
-		);
+		return $this->flusher->flush($this->context);
 	}
 
 	private function resolveSingleRecordForRemoval(RepresentationState $state): RecordState
