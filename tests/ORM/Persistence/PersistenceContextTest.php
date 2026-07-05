@@ -7,6 +7,7 @@ namespace Tests\ON\Data\ORM\Persistence;
 use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\RelationStateStore;
+use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationStore;
 use PHPUnit\Framework\TestCase;
@@ -20,8 +21,10 @@ final class PersistenceContextTest extends TestCase
 		$toManyRelations = new RelationStateStore();
 		$toOneRelations = new RelationStateStore();
 		$commands = new CommandBuffer();
-		$context = new PersistenceContext($records, $representations, $toManyRelations, $toOneRelations, $commands);
+		$session = new SessionContext($records, $representations, $toManyRelations, $toOneRelations);
+		$context = new PersistenceContext($session, $commands);
 
+		self::assertSame($session, $context->getSession());
 		self::assertSame($records, $context->getRecords());
 		self::assertSame($representations, $context->getRepresentations());
 		self::assertSame($toManyRelations, $context->getToManyRelations());

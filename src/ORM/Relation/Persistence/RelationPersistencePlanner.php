@@ -11,33 +11,18 @@ use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\RelationChangeInterface;
-use ON\Data\ORM\Relation\RelationStateStore;
-use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\SessionContext;
 
 final class RelationPersistencePlanner
 {
-	/**
-	 * @param RelationStateStore<ToManyRelationState> $toManyRelations
-	 * @param RelationStateStore<ToOneRelationState> $toOneRelations
-	 */
-	public function plan(
-		RelationStateStore $toManyRelations,
-		RelationStateStore $toOneRelations,
-		RecordStateStore $records,
-		RepresentationStore $representations,
-	): RelationPersistenceResult {
-		$changed = array_merge($toManyRelations->getChanged(), $toOneRelations->getChanged());
-		$commands = new CommandBuffer();
-		$context = new PersistenceContext(
-			$records,
-			$representations,
-			$toManyRelations,
-			$toOneRelations,
-			$commands
+	public function plan(SessionContext $session): RelationPersistenceResult
+	{
+		$changed = array_merge(
+			$session->getToManyRelations()->getChanged(),
+			$session->getToOneRelations()->getChanged()
 		);
+		$commands = new CommandBuffer();
+		$context = new PersistenceContext($session, $commands);
 
 		foreach ($changed as $change) {
 			$relation = $this->resolveRelation($change);

@@ -7,32 +7,31 @@ namespace ON\Data\ORM\Persistence;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
+use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationStore;
 
 final class PersistenceContext
 {
-	/**
-	 * @param RelationStateStore<ToManyRelationState> $toManyRelations
-	 * @param RelationStateStore<ToOneRelationState> $toOneRelations
-	 */
 	public function __construct(
-		private RecordStateStore $records,
-		private RepresentationStore $representations,
-		private RelationStateStore $toManyRelations,
-		private RelationStateStore $toOneRelations,
+		private SessionContext $session,
 		private CommandBuffer $commands,
 	) {
 	}
 
+	public function getSession(): SessionContext
+	{
+		return $this->session;
+	}
+
 	public function getRecords(): RecordStateStore
 	{
-		return $this->records;
+		return $this->session->getRecords();
 	}
 
 	public function getRepresentations(): RepresentationStore
 	{
-		return $this->representations;
+		return $this->session->getRepresentations();
 	}
 
 	/**
@@ -40,7 +39,7 @@ final class PersistenceContext
 	 */
 	public function getToManyRelations(): RelationStateStore
 	{
-		return $this->toManyRelations;
+		return $this->session->getToManyRelations();
 	}
 
 	/**
@@ -48,7 +47,7 @@ final class PersistenceContext
 	 */
 	public function getToOneRelations(): RelationStateStore
 	{
-		return $this->toOneRelations;
+		return $this->session->getToOneRelations();
 	}
 
 	public function getCommands(): CommandBuffer

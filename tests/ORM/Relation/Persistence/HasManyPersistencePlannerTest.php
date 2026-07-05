@@ -12,7 +12,6 @@ use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\HasManyPersistencePlanner;
-use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
@@ -226,13 +225,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$this->expectExceptionMessage('must be a has-many relation');
 
 		(new HasManyPersistencePlanner())->plan(
-			new PersistenceContext(
-				new RecordStateStore(),
-				new RepresentationStore(),
-				new RelationStateStore(),
-				new RelationStateStore(),
-				new CommandBuffer()
-			),
+			new PersistenceContext($this->context(), new CommandBuffer()),
 			$relation,
 			$collection,
 		);
@@ -310,13 +303,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 	): CommandBuffer {
 		$commands = new CommandBuffer();
 		(new HasManyPersistencePlanner())->plan(
-			new PersistenceContext(
-				$records,
-				$representations,
-				new RelationStateStore(),
-				new RelationStateStore(),
-				$commands
-			),
+			new PersistenceContext($this->context($representations, $records), $commands),
 			$relation,
 			$collection,
 		);

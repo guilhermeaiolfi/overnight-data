@@ -12,7 +12,6 @@ use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\BelongsToPersistencePlanner;
-use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordFieldRef;
@@ -210,13 +209,7 @@ final class BelongsToPersistencePlannerTest extends TestCase
 		$this->expectExceptionMessage('must be a belongs-to relation');
 
 		(new BelongsToPersistencePlanner())->plan(
-			new PersistenceContext(
-				new RecordStateStore(),
-				new RepresentationStore(),
-				new RelationStateStore(),
-				new RelationStateStore(),
-				new CommandBuffer()
-			),
+			new PersistenceContext($this->context(), new CommandBuffer()),
 			$relation,
 			$reference,
 		);
@@ -232,13 +225,7 @@ final class BelongsToPersistencePlannerTest extends TestCase
 		$this->expectExceptionMessage('must be a related reference');
 
 		(new BelongsToPersistencePlanner())->plan(
-			new PersistenceContext(
-				new RecordStateStore(),
-				new RepresentationStore(),
-				new RelationStateStore(),
-				new RelationStateStore(),
-				new CommandBuffer()
-			),
+			new PersistenceContext($this->context(), new CommandBuffer()),
 			$relation,
 			$collection,
 		);
@@ -319,13 +306,7 @@ final class BelongsToPersistencePlannerTest extends TestCase
 	): CommandBuffer {
 		$commands = new CommandBuffer();
 		(new BelongsToPersistencePlanner())->plan(
-			new PersistenceContext(
-				$records,
-				$representations,
-				new RelationStateStore(),
-				new RelationStateStore(),
-				$commands
-			),
+			new PersistenceContext($this->context($representations, $records), $commands),
 			$relation,
 			$reference,
 		);

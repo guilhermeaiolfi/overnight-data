@@ -41,13 +41,10 @@ final class FlushExecutor
 
 	private function flushImmediately(SessionContext $context): FlushResult
 	{
-		$representations = $context->getRepresentations();
 		$records = $context->getRecords();
-		$toManyRelations = $context->getToManyRelations();
-		$toOneRelations = $context->getToOneRelations();
 
 		$syncResult = $this->syncer->sync($context);
-		$relationResult = $this->relationPlanner->plan($toManyRelations, $toOneRelations, $records, $representations);
+		$relationResult = $this->relationPlanner->plan($context);
 		$commandResults = $this->flusher->flush($records);
 
 		foreach ($relationResult->getCommands() as $command) {
@@ -74,13 +71,10 @@ final class FlushExecutor
 			&$recordFlush,
 			&$relationResult,
 		): FlushResult {
-			$representations = $context->getRepresentations();
 			$records = $context->getRecords();
-			$toManyRelations = $context->getToManyRelations();
-			$toOneRelations = $context->getToOneRelations();
 
 			$syncResult = $this->syncer->sync($context);
-			$relationResult = $this->relationPlanner->plan($toManyRelations, $toOneRelations, $records, $representations);
+			$relationResult = $this->relationPlanner->plan($context);
 			$recordFlush = $this->flusher->flushDeferred($records);
 			$commandResults = $recordFlush->getCommandResults();
 

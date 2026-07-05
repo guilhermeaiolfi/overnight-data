@@ -12,7 +12,6 @@ use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\HasOnePersistencePlanner;
-use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordFieldRef;
@@ -222,13 +221,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$this->expectExceptionMessage('must be a has-one relation');
 
 		(new HasOnePersistencePlanner())->plan(
-			new PersistenceContext(
-				new RecordStateStore(),
-				new RepresentationStore(),
-				new RelationStateStore(),
-				new RelationStateStore(),
-				new CommandBuffer()
-			),
+			new PersistenceContext($this->context(), new CommandBuffer()),
 			$relation,
 			$reference,
 		);
@@ -244,13 +237,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$this->expectExceptionMessage('must be a related reference');
 
 		(new HasOnePersistencePlanner())->plan(
-			new PersistenceContext(
-				new RecordStateStore(),
-				new RepresentationStore(),
-				new RelationStateStore(),
-				new RelationStateStore(),
-				new CommandBuffer()
-			),
+			new PersistenceContext($this->context(), new CommandBuffer()),
 			$relation,
 			$collection,
 		);
@@ -350,13 +337,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 	): CommandBuffer {
 		$commands = new CommandBuffer();
 		(new HasOnePersistencePlanner())->plan(
-			new PersistenceContext(
-				$records,
-				$representations,
-				new RelationStateStore(),
-				new RelationStateStore(),
-				$commands
-			),
+			new PersistenceContext($this->context($representations, $records), $commands),
 			$relation,
 			$reference,
 		);

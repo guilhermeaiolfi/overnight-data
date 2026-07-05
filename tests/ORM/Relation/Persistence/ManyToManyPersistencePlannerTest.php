@@ -16,7 +16,6 @@ use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\ManyToManyPersistencePlanner;
-use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
@@ -303,13 +302,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$this->expectExceptionMessage('must be a many-to-many relation');
 
 		(new ManyToManyPersistencePlanner())->plan(
-			new PersistenceContext(
-				new RecordStateStore(),
-				new RepresentationStore(),
-				new RelationStateStore(),
-				new RelationStateStore(),
-				new CommandBuffer()
-			),
+			new PersistenceContext($this->context(), new CommandBuffer()),
 			$relation,
 			$collection,
 		);
@@ -421,13 +414,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 	): array {
 		$commands = new CommandBuffer();
 		(new ManyToManyPersistencePlanner())->plan(
-			new PersistenceContext(
-				$records,
-				$representations,
-				new RelationStateStore(),
-				new RelationStateStore(),
-				$commands
-			),
+			new PersistenceContext($this->context($representations, $records), $commands),
 			$relation,
 			$collection,
 		);
