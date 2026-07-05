@@ -12,7 +12,9 @@ use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Binding\SelectQueryBindingCompiler;
 use ON\Data\ORM\Query\MutableQueryResultTracker;
+use ON\Data\ORM\Query\ProjectionIdentityMap;
 use ON\Data\ORM\Session;
+use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Exception\ObjectExportException;
 use ON\Data\Query\Exception\RelationSelectionException;
@@ -621,9 +623,12 @@ final class SelectQuery implements QuerySourceInterface
 		$executor = $this->requireExecutor();
 		$relationSelections = $this->getRelationSelections();
 		$binding = null;
+		$projectionIdentities = null;
 
 		if ($this->mutable) {
-			$binding = (new SelectQueryBindingCompiler())->compile($this);
+			$compilation = (new SelectQueryBindingCompiler())->compileResult($this);
+			$binding = $compilation->getBinding();
+			$projectionIdentities = $compilation->getProjectionIdentities();
 		}
 
 		if ($relationSelections->isEmpty()) {
@@ -635,7 +640,7 @@ final class SelectQuery implements QuerySourceInterface
 		$materialized = $this->materializeRows($this->publicRows($rows));
 
 		if ($this->mutable) {
-			$this->trackMutableResults($binding, $rows, $materialized);
+			$this->trackMutableResults($binding, $projectionIdentities, $rows, $materialized);
 		}
 
 		return $materialized;
@@ -649,9 +654,12 @@ final class SelectQuery implements QuerySourceInterface
 		$executor = $this->requireExecutor();
 		$relationSelections = $this->getRelationSelections();
 		$binding = null;
+		$projectionIdentities = null;
 
 		if ($this->mutable) {
-			$binding = (new SelectQueryBindingCompiler())->compile($this);
+			$compilation = (new SelectQueryBindingCompiler())->compileResult($this);
+			$binding = $compilation->getBinding();
+			$projectionIdentities = $compilation->getProjectionIdentities();
 		}
 
 		if ($relationSelections->isEmpty()) {
@@ -668,9 +676,9 @@ final class SelectQuery implements QuerySourceInterface
 
 		if ($this->mutable && is_object($materialized)) {
 			(new MutableQueryResultTracker())->trackOne(
-				$this,
 				$this->requireMutableSession(),
 				$binding,
+				$projectionIdentities,
 				$materialized,
 				$row,
 			);
@@ -695,10 +703,22 @@ final class SelectQuery implements QuerySourceInterface
 		$rows = $this->requireExecutor()->iterate($this);
 
 		if ($this->resultClass === null) {
-			return $rows;
+			return $this->publicIterable($rows);
 		}
 
 		return $this->materializeIterable($rows);
+	}
+
+	/**
+	 * @param iterable<array<string, mixed>> $rows
+	 *
+	 * @return iterable<array<string, mixed>>
+	 */
+	private function publicIterable(iterable $rows): iterable
+	{
+		foreach ($rows as $row) {
+			yield $this->publicRow($row);
+		}
 	}
 
 	public function related(CollectionInterface $collection): self
@@ -792,7 +812,7 @@ final class SelectQuery implements QuerySourceInterface
 		$materializer = new ObjectResultMaterializer();
 
 		foreach ($rows as $row) {
-			yield $materializer->materialize($row, $resultClass);
+			yield $materializer->materialize($this->publicRow($row), $resultClass);
 		}
 	}
 
@@ -800,12 +820,16 @@ final class SelectQuery implements QuerySourceInterface
 	 * @param list<array<string, mixed>> $sourceRows
 	 * @param list<object> $objects
 	 */
-	private function trackMutableResults(object $binding, array $sourceRows, array $objects): void
-	{
+	private function trackMutableResults(
+		RepresentationBinding $binding,
+		ProjectionIdentityMap $projectionIdentities,
+		array $sourceRows,
+		array $objects,
+	): void {
 		(new MutableQueryResultTracker())->trackAll(
-			$this,
 			$this->requireMutableSession(),
 			$binding,
+			$projectionIdentities,
 			$objects,
 			$sourceRows,
 		);
@@ -820,14 +844,12 @@ final class SelectQuery implements QuerySourceInterface
 	{
 		$public = $row;
 
-		foreach ($this->selections->getByTag(SelectionTag::INTERNAL) as $selection) {
+		foreach ($this->selections->getByTag(SelectionTag::INTERNAL_RESULT) as $selection) {
 			unset($public[$selection->getSelectionKey()]);
 		}
 
-		foreach (array_keys($public) as $key) {
-			if (str_starts_with($key, '__od.')) {
-				unset($public[$key]);
-			}
+		foreach ($this->selections->getByTag(SelectionTag::INTERNAL) as $selection) {
+			unset($public[$selection->getSelectionKey()]);
 		}
 
 		return $public;

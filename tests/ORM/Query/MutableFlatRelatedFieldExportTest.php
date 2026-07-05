@@ -10,6 +10,7 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\Session;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\TestCase;
@@ -34,7 +35,7 @@ final class MutableFlatRelatedFieldExportTest extends TestCase
 		self::assertSame(1, $user->id);
 		self::assertSame('Acme', $user->name);
 		self::assertFalse(property_exists($user, 'company'));
-		self::assertFalse(property_exists($user, '__od.company.id'));
+		self::assertFalse($this->hasInternalResultProperty($user));
 
 		$user->name = 'Dell';
 		$session->sync($user);
@@ -90,7 +91,7 @@ final class MutableFlatRelatedFieldExportTest extends TestCase
 		$query->select($query->id, $query->company->name->as('name'));
 
 		$this->expectException(StateException::class);
-		$this->expectExceptionMessage("primary key field 'id' is missing or incomplete");
+		$this->expectExceptionMessage("internal result key");
 
 		$query->to(stdClass::class)->mutable($session)->fetchOne();
 	}
@@ -109,7 +110,18 @@ final class MutableFlatRelatedFieldExportTest extends TestCase
 		self::assertTrue($session->getRepresentations()->has($user));
 		self::assertSame(1, $user->id);
 		self::assertSame('Acme', $user->name);
-		self::assertFalse(property_exists($user, '__od.company.id'));
+		self::assertFalse($this->hasInternalResultProperty($user));
+	}
+
+	private function hasInternalResultProperty(stdClass $user): bool
+	{
+		foreach (array_keys(get_object_vars($user)) as $property) {
+			if (str_starts_with($property, '_od_internal_')) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private function makeRegistry(): Registry
@@ -145,11 +157,10 @@ final class FlatCompanyUserQueryExecutor implements QueryExecutorInterface
 
 	public function fetchOne(SelectQuery $query): ?array
 	{
-		return [
+		return InternalResultRowFactory::withInternalCompanyId($query, [
 			'id' => 1,
 			'name' => 'Acme',
-			'__od.company.id' => 5,
-		];
+		]);
 	}
 
 	public function iterate(SelectQuery $query): iterable
@@ -188,19 +199,43 @@ final class AssertingInternalCompanyIdSelectionExecutor implements QueryExecutor
 
 	public function fetchOne(SelectQuery $query): ?array
 	{
-		if (! $query->getSelections()->hasSelectionKey('__od.company.id')) {
-			throw new AssertionFailedError('Expected internal company id selection before query execution.');
+		$internalSelections = $query->getSelections()->getByTag(SelectionTag::INTERNAL_RESULT);
+
+		if ($internalSelections === []) {
+			throw new AssertionFailedError('Expected internal result selection before query execution.');
 		}
 
-		return [
+		foreach ($internalSelections as $selection) {
+			if (! $selection->hasTag(SelectionTag::INTERNAL_RESULT)) {
+				throw new AssertionFailedError('Expected INTERNAL_RESULT tag on internal selection.');
+			}
+		}
+
+		return InternalResultRowFactory::withInternalCompanyId($query, [
 			'id' => 1,
 			'name' => 'Acme',
-			'__od.company.id' => 5,
-		];
+		]);
 	}
 
 	public function iterate(SelectQuery $query): iterable
 	{
 		yield from $this->fetchAll($query);
+	}
+}
+
+final class InternalResultRowFactory
+{
+	/**
+	 * @param array<string, mixed> $row
+	 *
+	 * @return array<string, mixed>
+	 */
+	public static function withInternalCompanyId(SelectQuery $query, array $row): array
+	{
+		foreach ($query->getSelections()->getByTag(SelectionTag::INTERNAL_RESULT) as $selection) {
+			$row[$selection->getSelectionKey()] = 5;
+		}
+
+		return $row;
 	}
 }

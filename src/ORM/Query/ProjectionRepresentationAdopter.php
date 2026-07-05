@@ -15,7 +15,6 @@ use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\Sync\RepresentationReader;
-use ON\Data\Query\SelectQuery;
 
 final class ProjectionRepresentationAdopter
 {
@@ -31,12 +30,10 @@ final class ProjectionRepresentationAdopter
 	public function adopt(
 		object $representation,
 		RepresentationBinding $binding,
-		SelectQuery $query,
+		ProjectionIdentityMap $projectionIdentities,
 		array $sourceRow,
 		SessionContext $context,
 	): RepresentationState {
-		unset($query);
-
 		if ($binding->getRelations() !== []) {
 			throw new StateException('Cannot adopt flat projection representation because the binding contains relation bindings.');
 		}
@@ -48,7 +45,13 @@ final class ProjectionRepresentationAdopter
 			throw new SyncException('Cannot adopt representation because it is already tracked.');
 		}
 
-		$recordsByCollection = $this->resolveRecords($representation, $binding, $records, $sourceRow);
+		$recordsByCollection = $this->resolveRecords(
+			$representation,
+			$binding,
+			$projectionIdentities,
+			$records,
+			$sourceRow,
+		);
 		$appliedBinding = $this->applyProjectionBinding($binding, $recordsByCollection);
 		$state = new RepresentationState(
 			$appliedBinding,
@@ -109,6 +112,7 @@ final class ProjectionRepresentationAdopter
 	private function resolveRecords(
 		object $representation,
 		RepresentationBinding $binding,
+		ProjectionIdentityMap $projectionIdentities,
 		RecordStateStore $records,
 		array $sourceRow,
 	): array {
@@ -121,6 +125,7 @@ final class ProjectionRepresentationAdopter
 				$representation,
 				$collectionBinding,
 				$collection,
+				$projectionIdentities,
 				$records,
 				$sourceRow,
 			);
@@ -133,11 +138,12 @@ final class ProjectionRepresentationAdopter
 		object $representation,
 		RepresentationBinding $binding,
 		CollectionInterface $collection,
+		ProjectionIdentityMap $projectionIdentities,
 		RecordStateStore $records,
 		array $sourceRow,
 	): RecordState {
 		$values = $this->initialValues($representation, $binding, $collection, $sourceRow);
-		$keyValues = $this->completeKeyValues($representation, $binding, $collection, $sourceRow);
+		$keyValues = $this->completeKeyValues($representation, $binding, $collection, $projectionIdentities, $sourceRow);
 		$key = $collection->getKey($keyValues);
 		$record = $records->getByKey($key);
 
@@ -200,6 +206,7 @@ final class ProjectionRepresentationAdopter
 		object $representation,
 		RepresentationBinding $binding,
 		CollectionInterface $collection,
+		ProjectionIdentityMap $projectionIdentities,
 		array $sourceRow,
 	): array {
 		$pathsByField = [];
@@ -215,15 +222,33 @@ final class ProjectionRepresentationAdopter
 		$values = [];
 
 		foreach ($collection->getPrimaryKey() as $fieldName) {
-			if (! array_key_exists($fieldName, $pathsByField)) {
-				throw new StateException(sprintf(
-					"Cannot adopt projection representation for collection '%s' because primary key field '%s' is not bound.",
-					$collection->getName(),
-					$fieldName,
-				));
-			}
+			$path = $pathsByField[$fieldName] ?? null;
+			$value = $path !== null
+				? $this->readValue($representation, $path, $sourceRow)
+				: null;
 
-			$value = $this->readValue($representation, $pathsByField[$fieldName], $sourceRow);
+			if ($value === null) {
+				$resultKey = $projectionIdentities->get($collection, $fieldName);
+
+				if ($resultKey === null) {
+					throw new StateException(sprintf(
+						"Cannot adopt projection representation for collection '%s' because primary key field '%s' is missing or incomplete.",
+						$collection->getName(),
+						$fieldName,
+					));
+				}
+
+				if (! array_key_exists($resultKey, $sourceRow)) {
+					throw new StateException(sprintf(
+						"Cannot adopt projection representation for collection '%s' because internal result key '%s' for primary key field '%s' is missing from the source row.",
+						$collection->getName(),
+						$resultKey,
+						$fieldName,
+					));
+				}
+
+				$value = $sourceRow[$resultKey];
+			}
 
 			if ($value === null) {
 				throw new StateException(sprintf(

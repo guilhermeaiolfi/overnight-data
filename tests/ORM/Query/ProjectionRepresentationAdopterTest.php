@@ -7,6 +7,7 @@ namespace Tests\ON\Data\ORM\Query;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\Query\ProjectionIdentityMap;
 use ON\Data\ORM\Query\ProjectionRepresentationAdopter;
 use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordFieldRef;
@@ -17,8 +18,6 @@ use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
-use function ON\Data\Query\query;
-use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
@@ -29,15 +28,15 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
-		$query = query($users, fn (SelectQuery $query) => $query->select($query->id));
 		$binding = $this->projectionBinding($users, $companies);
 		$object = $this->flatUser(1, 'Acme');
 		$context = new SessionContext();
+		$projectionIdentities = $this->companyIdProjectionIdentities($companies, 'company_id');
 
-		$state = $this->adopter()->adopt($object, $binding, $query, [
+		$state = $this->adopter()->adopt($object, $binding, $projectionIdentities, [
 			'id' => 1,
 			'name' => 'Acme',
-			'__od.company.id' => 5,
+			'company_id' => 5,
 		], $context);
 
 		self::assertTrue($context->getRepresentations()->has($object));
@@ -51,14 +50,14 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
-		$query = query($users, fn (SelectQuery $query) => $query->select($query->id));
 		$binding = $this->projectionBinding($users, $companies);
 		$context = new SessionContext();
+		$projectionIdentities = $this->companyIdProjectionIdentities($companies, 'company_id');
 
-		$this->adopter()->adopt($this->flatUser(1, 'Acme'), $binding, $query, [
+		$this->adopter()->adopt($this->flatUser(1, 'Acme'), $binding, $projectionIdentities, [
 			'id' => 1,
 			'name' => 'Acme',
-			'__od.company.id' => 5,
+			'company_id' => 5,
 		], $context);
 
 		$userRecord = $context->getRecords()->getByKey($users->getKey(1));
@@ -74,14 +73,14 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
-		$query = query($users, fn (SelectQuery $query) => $query->select($query->id));
 		$binding = $this->projectionBinding($users, $companies);
 		$context = new SessionContext();
+		$projectionIdentities = $this->companyIdProjectionIdentities($companies, 'company_id');
 
-		$state = $this->adopter()->adopt($this->flatUser(1, 'Acme'), $binding, $query, [
+		$state = $this->adopter()->adopt($this->flatUser(1, 'Acme'), $binding, $projectionIdentities, [
 			'id' => 1,
 			'name' => 'Acme',
-			'__od.company.id' => 5,
+			'company_id' => 5,
 		], $context);
 
 		$idField = $state->getBinding()->getField('id')->getField();
@@ -99,14 +98,14 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
-		$query = query($users, fn (SelectQuery $query) => $query->select($query->id));
 		$binding = $this->projectionBinding($users, $companies);
 		$context = new SessionContext();
+		$projectionIdentities = $this->companyIdProjectionIdentities($companies, 'company_id');
 
-		$state = $this->adopter()->adopt($this->flatUser(1, 'Acme'), $binding, $query, [
+		$state = $this->adopter()->adopt($this->flatUser(1, 'Acme'), $binding, $projectionIdentities, [
 			'id' => 1,
 			'name' => 'Acme',
-			'__od.company.id' => 5,
+			'company_id' => 5,
 		], $context);
 
 		$userRecord = $context->getRecords()->getByKey($users->getKey(1));
@@ -118,20 +117,20 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		self::assertTrue($state->hasBaselineRevision($companyRecord->getStateHash()));
 	}
 
-	public function testHiddenIdentityValuesCanComeFromSourceRow(): void
+	public function testHiddenIdentityValuesAreReadThroughProjectionIdentityMap(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
-		$query = query($users, fn (SelectQuery $query) => $query->select($query->id));
 		$binding = $this->projectionBinding($users, $companies);
 		$object = new stdClass();
 		$object->id = 1;
 		$object->name = 'Acme';
 		$context = new SessionContext();
+		$projectionIdentities = $this->companyIdProjectionIdentities($companies, 'company_id');
 
-		$this->adopter()->adopt($object, $binding, $query, [
-			'__od.company.id' => 5,
+		$this->adopter()->adopt($object, $binding, $projectionIdentities, [
+			'company_id' => 5,
 		], $context);
 
 		$companyRecord = $context->getRecords()->getByKey($companies->getKey(5));
@@ -143,35 +142,52 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
-		$query = query($users, fn (SelectQuery $query) => $query->select($query->id));
 		$binding = $this->projectionBinding($users, $companies);
 		$object = new stdClass();
 		$object->id = 1;
 		$object->name = 'Acme';
 		$context = new SessionContext();
+		$projectionIdentities = $this->companyIdProjectionIdentities($companies, 'company_id');
 
-		$this->adopter()->adopt($object, $binding, $query, [
+		$this->adopter()->adopt($object, $binding, $projectionIdentities, [
 			'name' => 'Acme',
-			'__od.company.id' => 5,
+			'company_id' => 5,
 		], $context);
 
 		$userRecord = $context->getRecords()->getByKey($users->getKey(1));
 		self::assertInstanceOf(RecordState::class, $userRecord);
 	}
 
-	public function testThrowsWhenKeyForReferencedCollectionIsMissing(): void
+	public function testThrowsWhenMapEntryIsMissingAndVisibleObjectLacksKey(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
-		$query = query($users, fn (SelectQuery $query) => $query->select($query->id));
 		$binding = $this->projectionBinding($users, $companies);
 		$context = new SessionContext();
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("primary key field 'id' is missing or incomplete");
 
-		$this->adopter()->adopt($this->flatUser(1, 'Acme'), $binding, $query, [
+		$this->adopter()->adopt($this->flatUser(1, 'Acme'), $binding, new ProjectionIdentityMap(), [
+			'id' => 1,
+			'name' => 'Acme',
+		], $context);
+	}
+
+	public function testThrowsWhenMapPointsToMissingSourceRowKey(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$companies = $registry->getCollection('companies');
+		$binding = $this->projectionBinding($users, $companies);
+		$context = new SessionContext();
+		$projectionIdentities = $this->companyIdProjectionIdentities($companies, 'missing_key');
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage("internal result key 'missing_key' for primary key field 'id' is missing from the source row");
+
+		$this->adopter()->adopt($this->flatUser(1, 'Acme'), $binding, $projectionIdentities, [
 			'id' => 1,
 			'name' => 'Acme',
 		], $context);
@@ -181,7 +197,6 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
-		$query = query($users, fn (SelectQuery $query) => $query->select($query->id));
 		$binding = $this->projectionBinding($users, $registry->getCollection('companies'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'company',
@@ -190,14 +205,15 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 			new RepresentationBinding(),
 		));
 		$context = new SessionContext();
+		$projectionIdentities = $this->companyIdProjectionIdentities($registry->getCollection('companies'), 'company_id');
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('binding contains relation bindings');
 
-		$this->adopter()->adopt($this->flatUser(1, 'Acme'), $binding, $query, [
+		$this->adopter()->adopt($this->flatUser(1, 'Acme'), $binding, $projectionIdentities, [
 			'id' => 1,
 			'name' => 'Acme',
-			'__od.company.id' => 5,
+			'company_id' => 5,
 		], $context);
 	}
 
@@ -206,17 +222,17 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
-		$query = query($users, fn (SelectQuery $query) => $query->select($query->id));
 		$binding = $this->projectionBinding($users, $companies);
 		$existing = RecordState::clean($companies->getKey(5), ['id' => 5, 'name' => 'Existing']);
 		$records = new RecordStateStore();
 		$records->add($existing);
 		$context = new SessionContext($records);
+		$projectionIdentities = $this->companyIdProjectionIdentities($companies, 'company_id');
 
-		$this->adopter()->adopt($this->flatUser(1, 'Acme'), $binding, $query, [
+		$this->adopter()->adopt($this->flatUser(1, 'Acme'), $binding, $projectionIdentities, [
 			'id' => 1,
 			'name' => 'Acme',
-			'__od.company.id' => 5,
+			'company_id' => 5,
 		], $context);
 
 		self::assertSame($existing, $context->getRecords()->getByKey($companies->getKey(5)));
@@ -236,6 +252,14 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		return $user;
 	}
 
+	private function companyIdProjectionIdentities(CollectionInterface $companies, string $resultKey): ProjectionIdentityMap
+	{
+		$map = new ProjectionIdentityMap();
+		$map->add($companies, 'id', $resultKey);
+
+		return $map;
+	}
+
 	private function projectionBinding(
 		CollectionInterface $users,
 		CollectionInterface $companies,
@@ -243,7 +267,6 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$binding = new RepresentationBinding();
 		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($users, 'id'), writable: false));
 		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($companies, 'name'), writable: true));
-		$binding->addField(new RepresentationFieldBinding('__od.company.id', RecordFieldRef::template($companies, 'id'), writable: false));
 
 		return $binding;
 	}

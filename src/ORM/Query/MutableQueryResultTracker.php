@@ -6,7 +6,6 @@ namespace ON\Data\ORM\Query;
 
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\Query\SelectQuery;
 
 final class MutableQueryResultTracker
 {
@@ -21,14 +20,14 @@ final class MutableQueryResultTracker
 	 * @param list<array<string, mixed>> $sourceRows
 	 */
 	public function trackAll(
-		SelectQuery $query,
 		Session $session,
 		RepresentationBinding $binding,
+		ProjectionIdentityMap $projectionIdentities,
 		array $objects,
 		array $sourceRows,
 	): void {
 		foreach ($objects as $index => $object) {
-			$this->trackObject($query, $session, $object, $binding, $sourceRows[$index] ?? []);
+			$this->trackObject($session, $object, $binding, $projectionIdentities, $sourceRows[$index] ?? []);
 		}
 	}
 
@@ -36,27 +35,33 @@ final class MutableQueryResultTracker
 	 * @param array<string, mixed> $sourceRow
 	 */
 	public function trackOne(
-		SelectQuery $query,
 		Session $session,
 		RepresentationBinding $binding,
+		ProjectionIdentityMap $projectionIdentities,
 		object $object,
 		array $sourceRow,
 	): void {
-		$this->trackObject($query, $session, $object, $binding, $sourceRow);
+		$this->trackObject($session, $object, $binding, $projectionIdentities, $sourceRow);
 	}
 
 	/**
 	 * @param array<string, mixed> $sourceRow
 	 */
 	private function trackObject(
-		SelectQuery $query,
 		Session $session,
 		object $object,
 		RepresentationBinding $binding,
+		ProjectionIdentityMap $projectionIdentities,
 		array $sourceRow,
 	): void {
 		if ($this->isProjectionBinding($binding)) {
-			$this->projectionAdopter->adopt($object, $binding, $query, $sourceRow, $session->getContext());
+			$this->projectionAdopter->adopt(
+				$object,
+				$binding,
+				$projectionIdentities,
+				$sourceRow,
+				$session->getContext(),
+			);
 			$session->sync($object);
 
 			return;

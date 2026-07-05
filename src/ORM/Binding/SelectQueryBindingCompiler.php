@@ -6,6 +6,7 @@ namespace ON\Data\ORM\Binding;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
+use ON\Data\ORM\Query\ProjectionIdentityMap;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -22,16 +23,26 @@ use ON\Data\Query\SelectQuery;
 
 final class SelectQueryBindingCompiler
 {
+	private int $internalResultKeyCounter = 0;
+
 	public function compile(SelectQuery $query): RepresentationBinding
 	{
+		return $this->compileResult($query)->getBinding();
+	}
+
+	public function compileResult(SelectQuery $query): SelectQueryBindingCompilation
+	{
+		$this->internalResultKeyCounter = 0;
+
 		$collection = $query->getCollection();
 		$binding = new RepresentationBinding();
+		$projectionIdentities = new ProjectionIdentityMap();
 
 		$this->compileRootScalarFields($binding, $query, $collection);
-		$this->compileRelationSourcedFlatFields($binding, $query);
+		$this->compileRelationSourcedFlatFields($binding, $query, $projectionIdentities);
 		$this->compileRelationSelections($binding, $query);
 
-		return $binding;
+		return new SelectQueryBindingCompilation($binding, $projectionIdentities);
 	}
 
 	private function compileRootScalarFields(
@@ -151,8 +162,11 @@ final class SelectQueryBindingCompiler
 		}
 	}
 
-	private function compileRelationSourcedFlatFields(RepresentationBinding $binding, SelectQuery $query): void
-	{
+	private function compileRelationSourcedFlatFields(
+		RepresentationBinding $binding,
+		SelectQuery $query,
+		ProjectionIdentityMap $projectionIdentities,
+	): void {
 		/** @var array<string, RelationRef> $relationRefsByPath */
 		$relationRefsByPath = [];
 
@@ -186,7 +200,7 @@ final class SelectQueryBindingCompiler
 		}
 
 		foreach ($relationRefsByPath as $relationRef) {
-			$this->ensureRelatedIdentityBindings($binding, $query, $relationRef);
+			$this->ensureRelatedIdentitySelections($binding, $query, $relationRef, $projectionIdentities);
 		}
 	}
 
@@ -222,10 +236,11 @@ final class SelectQueryBindingCompiler
 		];
 	}
 
-	private function ensureRelatedIdentityBindings(
+	private function ensureRelatedIdentitySelections(
 		RepresentationBinding $binding,
 		SelectQuery $query,
 		RelationRef $relationRef,
+		ProjectionIdentityMap $projectionIdentities,
 	): void {
 		$targetCollection = $relationRef->getCollection();
 
@@ -234,27 +249,27 @@ final class SelectQueryBindingCompiler
 				continue;
 			}
 
-			$internalPath = $this->internalIdentityPath($relationRef->getPath(), $fieldName);
-			$fieldRef = $relationRef->field($fieldName);
-			$query->getSelections()->add($fieldRef->as($internalPath), SelectionTag::INTERNAL);
+			if ($projectionIdentities->get($targetCollection, $fieldName) !== null) {
+				continue;
+			}
 
-			$this->addFieldBinding(
-				$binding,
-				new RepresentationFieldBinding(
-					$internalPath,
-					RecordFieldRef::template($targetCollection, $fieldName),
-					writable: false,
-				),
+			$resultKey = $this->generateInternalResultKey($query);
+			$fieldRef = $relationRef->field($fieldName);
+			$query->getSelections()->add(
+				$fieldRef->as($resultKey),
+				[SelectionTag::INTERNAL, SelectionTag::INTERNAL_RESULT],
 			);
+			$projectionIdentities->add($targetCollection, $fieldName, $resultKey);
 		}
 	}
 
-	/**
-	 * @param list<string> $relationPath
-	 */
-	private function internalIdentityPath(array $relationPath, string $fieldName): string
+	private function generateInternalResultKey(SelectQuery $query): string
 	{
-		return '__od.' . implode('.', [...$relationPath, $fieldName]);
+		do {
+			$key = '_od_internal_' . ++$this->internalResultKeyCounter;
+		} while ($query->getSelections()->hasSelectionKey($key));
+
+		return $key;
 	}
 
 	private function compileRelationSelections(RepresentationBinding $rootBinding, SelectQuery $query): void

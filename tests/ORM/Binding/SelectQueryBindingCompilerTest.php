@@ -8,6 +8,7 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Binding\SelectQueryBindingCompiler;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use function ON\Data\Query\query;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
@@ -93,19 +94,29 @@ final class SelectQueryBindingCompilerTest extends TestCase
 	{
 		$registry = $this->makeRegistryWithCompany();
 		$users = $registry->getCollection('users');
+		$companies = $registry->getCollection('companies');
 		$query = query($users, fn (SelectQuery $query) => $query
 			->select($query->id, $query->company->name->as('name')));
 
-		$binding = $this->compiler->compile($query);
+		$compilation = $this->compiler->compileResult($query);
+		$binding = $compilation->getBinding();
 
 		self::assertTrue($binding->hasField('id'));
 		self::assertTrue($binding->hasField('name'));
 		self::assertSame('users', $binding->getField('id')->getField()->getCollectionName());
 		self::assertSame('companies', $binding->getField('name')->getField()->getCollectionName());
 		self::assertSame('name', $binding->getField('name')->getField()->getFieldName());
-		self::assertTrue($binding->hasField('__od.company.id'));
-		self::assertTrue($binding->getField('__od.company.id')->isReadOnly());
-		self::assertSame('companies', $binding->getField('__od.company.id')->getField()->getCollectionName());
+
+		$internalSelections = $query->getSelections()->getByTag(SelectionTag::INTERNAL_RESULT);
+		self::assertCount(1, $internalSelections);
+		self::assertTrue($internalSelections[0]->hasTag(SelectionTag::INTERNAL));
+		self::assertStringStartsWith('_od_internal_', $internalSelections[0]->getSelectionKey());
+		self::assertStringNotContainsString('__od.', $internalSelections[0]->getSelectionKey());
+
+		self::assertSame(
+			$internalSelections[0]->getSelectionKey(),
+			$compilation->getProjectionIdentities()->get($companies, 'id'),
+		);
 	}
 
 	public function testInternalIdentityFieldPathsDoNotCollideWithVisibleAliases(): void
@@ -115,11 +126,12 @@ final class SelectQueryBindingCompilerTest extends TestCase
 		$query = query($users, fn (SelectQuery $query) => $query
 			->select($query->company->name->as('company_name')));
 
-		$binding = $this->compiler->compile($query);
+		$compilation = $this->compiler->compileResult($query);
+		$binding = $compilation->getBinding();
 
 		self::assertTrue($binding->hasField('company_name'));
-		self::assertTrue($binding->hasField('__od.company.id'));
 		self::assertFalse($binding->hasField('company.id'));
+		self::assertNotNull($compilation->getProjectionIdentities()->get($registry->getCollection('companies'), 'id'));
 	}
 
 	public function testCompilesSelectedRootRelation(): void
