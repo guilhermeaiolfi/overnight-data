@@ -6,9 +6,9 @@ namespace Tests\ON\Data\ORM\Relation;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
+use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use PHPUnit\Framework\TestCase;

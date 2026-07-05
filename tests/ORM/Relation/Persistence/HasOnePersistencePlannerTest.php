@@ -413,8 +413,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('label', 'string')->end()
-			->field('user_id', 'int')->end()
-			->end();
+			->field('user_id', 'int')->end();
 		$users = $registry->collection('users')
 			->primaryKey('id')
 			->field('id', 'int')->end()
@@ -433,8 +432,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$profiles = $registry->collection('profiles')
 			->primaryKey('id')
 			->field('id', 'int')->end()
-			->field('owner_uuid', 'string')->end()
-			->end();
+			->field('owner_uuid', 'string')->end();
 		$accounts = $registry->collection('accounts')
 			->primaryKey('account_uuid')
 			->field('account_uuid', 'string')->end();
@@ -452,8 +450,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$profiles = $registry->collection('profiles')
 			->primaryKey('tenant_ref', 'user_ref')
 			->field('tenant_ref', 'int')->end()
-			->field('user_ref', 'int')->end()
-			->end();
+			->field('user_ref', 'int')->end();
 		$users = $registry->collection('users')
 			->primaryKey('tenant_id', 'user_id')
 			->field('tenant_id', 'int')->end()

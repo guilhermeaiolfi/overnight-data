@@ -10,8 +10,8 @@ use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\PersistenceContext;
-use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\RelationChangeInterface;
+use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\State\RecordState;
 
 final class ManyToManyPersistencePlanner implements RelationPersistencePlannerInterface

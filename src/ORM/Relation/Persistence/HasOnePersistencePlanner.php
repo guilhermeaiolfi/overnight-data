@@ -9,8 +9,8 @@ use ON\Data\Definition\Relation\HasOneRelation;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\PersistenceContext;
-use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Relation\RelationChangeInterface;
+use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordState;
 
 final class HasOnePersistencePlanner implements RelationPersistencePlannerInterface
@@ -107,5 +107,4 @@ final class HasOnePersistencePlanner implements RelationPersistencePlannerInterf
 			$target->setValue((string) $outerField, null);
 		}
 	}
-
 }

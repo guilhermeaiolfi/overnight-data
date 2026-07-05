@@ -7,8 +7,8 @@ namespace Tests\ON\Data\Support\Relation;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\RelationPersistencePlannerInterface;
-use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\RelationChangeInterface;
+use ON\Data\ORM\Relation\ToManyRelationState;
 
 final class RecordingRelationPersistencePlanner implements RelationPersistencePlannerInterface
 {

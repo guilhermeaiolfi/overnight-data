@@ -22,13 +22,13 @@ final class Phase34BindingModelTest extends TestCase
 		self::assertStringContainsString('The mapper does not by itself know persistence provenance.', $contents);
 		self::assertStringContainsString('RepresentationBinding', $contents);
 		self::assertStringContainsString('RepresentationState', $contents);
-		self::assertStringContainsString('ToManyRelationState / Future ToOneRelationState', $contents);
+		self::assertStringContainsString('ToManyRelationState / ToOneRelationState', $contents);
 		self::assertStringContainsString('field bindings', $contents);
 		self::assertStringContainsString('expression bindings', $contents);
 		self::assertStringContainsString('relation bindings', $contents);
 		self::assertStringContainsString('getRelatedBinding()', $contents);
 		self::assertStringContainsString('Do not create one binding object per child instance.', $contents);
-		self::assertStringContainsString('Scalar sync uses field bindings only', $contents);
+		self::assertStringContainsString('Scalar representation sync uses field bindings only', $contents);
 	}
 
 	public function testNoSeparateBindingOrPersistenceGraphClassesWereIntroduced(): void
@@ -69,7 +69,6 @@ final class Phase34BindingModelTest extends TestCase
 			dirname(__DIR__, 3) . '/src/ORM/Sync/RepresentationValueReader.php' => 'getFields()',
 			dirname(__DIR__, 3) . '/src/ORM/Sync/SyncConflictDetector.php' => 'getWritableFieldBindings()',
 			dirname(__DIR__, 3) . '/src/ORM/Sync/SyncPlanner.php' => 'getWritableFieldBindings()',
-			dirname(__DIR__, 3) . '/src/ORM/State/RecordStateStore.php' => 'getFields()',
 		];
 
 		foreach ($sources as $path => $expectedCall) {

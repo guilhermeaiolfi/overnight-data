@@ -216,7 +216,7 @@ final class FlushExecutorTest extends TestCase
 
 		self::assertSame(['after'], RecordingRelationPersistencePlanner::$observedOwnerValues);
 		self::assertCount(1, RecordingRelationPersistencePlanner::$collections);
-		self::assertSame([$item], RecordingRelationPersistencePlanner::$collections[0]->getAdded());
+		self::assertSame([$item], RecordingRelationPersistencePlanner::$collections[0]->getItems());
 	}
 
 	public function testRelationRepresentationSyncCanCreateToManyRelationStateThatIsPlannedByRelationPersistencePlanner(): void
@@ -981,8 +981,7 @@ final class FlushExecutorTest extends TestCase
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('title', 'string')->end()
-			->field('user_id', 'int')->end()
-			->end();
+			->field('user_id', 'int')->end();
 		$users = $registry->collection('users')
 			->primaryKey('id')
 			->field('id', 'int')->end()
@@ -1002,8 +1001,7 @@ final class FlushExecutorTest extends TestCase
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('label', 'string')->end()
-			->field('user_id', 'int')->end()
-			->end();
+			->field('user_id', 'int')->end();
 		$users = $registry->collection('users')
 			->primaryKey('id')
 			->field('id', 'int')->end()

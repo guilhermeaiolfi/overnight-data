@@ -446,7 +446,8 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 	private function bindingFor(RecordState $record): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		foreach (array_keys($record->getValues()) as $field) {
+		$fields = array_unique(array_merge(array_keys($record->getValues()), $record->getCollection()->getPrimaryKey()));
+		foreach ($fields as $field) {
 			$field = (string) $field;
 			$binding->addField(new RepresentationFieldBinding($field, RecordFieldRef::forState($record, $field)));
 		}

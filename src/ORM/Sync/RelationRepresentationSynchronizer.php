@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
+use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToManyRelationStore;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Relation\ToOneRelationStore;
-use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationStore;
 

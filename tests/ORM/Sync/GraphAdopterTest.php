@@ -79,7 +79,7 @@ final class GraphAdopterTest extends TestCase
 		$result = $this->adopter()->adopt($root, $representations, $records, new ToManyRelationStore(), new ToOneRelationStore());
 
 		self::assertCount(1, $result);
-		self::assertSame($item, RepresentationStateObjectRegistry::objectFor($result[0]));
+		self::assertSame($representations->get($item), $result[0]);
 		self::assertSame($result[0], $representations->get($item));
 		self::assertTrue($records->getFromRepresentation($result[0])?->isNew());
 	}
@@ -127,7 +127,7 @@ final class GraphAdopterTest extends TestCase
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new ToManyRelationStore(), new ToOneRelationStore());
 
 		self::assertCount(1, $result);
-		self::assertSame($target, RepresentationStateObjectRegistry::objectFor($result[0]));
+		self::assertSame($representations->get($target), $result[0]);
 	}
 
 	public function testOneRelationWithNonObjectNonNullValueThrows(): void
@@ -174,7 +174,7 @@ final class GraphAdopterTest extends TestCase
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new ToManyRelationStore(), new ToOneRelationStore());
 
 		self::assertCount(1, $result);
-		self::assertSame($comment, RepresentationStateObjectRegistry::objectFor($result[0]));
+		self::assertSame($representations->get($comment), $result[0]);
 	}
 
 	public function testRecursiveManyRelationAdoptionWorks(): void
@@ -200,12 +200,12 @@ final class GraphAdopterTest extends TestCase
 
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new ToManyRelationStore(), new ToOneRelationStore());
 
-		self::assertSame([$post, $comment], array_map(static fn (RepresentationState $tracked): object => RepresentationStateObjectRegistry::objectFor($tracked), $result));
+		self::assertSame([$representations->get($post), $representations->get($comment)], $result);
 	}
 
 	public function testRecursiveOneRelationAdoptionWorks(): void
 	{
-		$profile = $this->representation(['user' => $user = $this->representation(['name' => 'Nested'])]);
+		$profile = $this->representation(['label' => 'Profile', 'user' => $user = $this->representation(['name' => 'Nested'])]);
 		$root = $this->representation(['profile' => $profile]);
 		$profileBinding = $this->profileBinding();
 		$profileBinding->addRelation(new RepresentationRelationBinding(
@@ -225,13 +225,13 @@ final class GraphAdopterTest extends TestCase
 
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new ToManyRelationStore(), new ToOneRelationStore());
 
-		self::assertSame([$profile, $user], array_map(static fn (RepresentationState $tracked): object => RepresentationStateObjectRegistry::objectFor($tracked), $result));
+		self::assertSame([$representations->get($profile), $representations->get($user)], $result);
 	}
 
 	public function testCyclicGraphDoesNotInfiniteLoop(): void
 	{
 		$root = $this->representation([]);
-		$item = $this->representation([]);
+		$item = $this->representation(['title' => 'A']);
 		$root->posts = [$item];
 		$item->author = $root;
 		$postBinding = $this->postBinding();
@@ -253,7 +253,7 @@ final class GraphAdopterTest extends TestCase
 		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore(), new ToManyRelationStore(), new ToOneRelationStore());
 
 		self::assertCount(1, $result);
-		self::assertSame($item, RepresentationStateObjectRegistry::objectFor($result[0]));
+		self::assertSame($representations->get($item), $result[0]);
 	}
 
 	public function testRelatedObjectsAreAdoptedUsingGetRelatedBinding(): void

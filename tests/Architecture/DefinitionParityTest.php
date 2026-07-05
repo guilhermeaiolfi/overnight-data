@@ -16,6 +16,10 @@ final class DefinitionParityTest extends TestCase
 		$sourceRoot = dirname(__DIR__, 2) . '/.cache/overnight/src/ORM/Definition';
 		$targetRoot = dirname(__DIR__, 2) . '/src/Definition';
 
+		if (! is_dir($sourceRoot)) {
+			self::markTestSkipped('Overnight source cache is not available.');
+		}
+
 		$sourceFiles = [];
 		$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($sourceRoot));
 		foreach ($iterator as $file) {

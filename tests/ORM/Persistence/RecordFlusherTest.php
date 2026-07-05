@@ -325,8 +325,7 @@ final class RecordFlusherTest extends TestCase
 			->field('id', 'int')->end()
 			->field('label', 'string')->end()
 			->field('tenant_ref', 'int')->end()
-			->field('user_ref', 'int')->end()
-			->end();
+			->field('user_ref', 'int')->end();
 		$owners = $registry->collection('owners')
 			->primaryKey('tenant_id', 'user_id')
 			->field('tenant_id', 'int')->end()

@@ -381,8 +381,7 @@ final class BelongsToPersistencePlannerTest extends TestCase
 		$users = $registry->collection('users')
 			->primaryKey('id')
 			->field('id', 'int')->end()
-			->field('name', 'string')->end()
-			->end();
+			->field('name', 'string')->end();
 		$posts = $registry->collection('posts')
 			->primaryKey('id')
 			->field('id', 'int')->end()
@@ -400,8 +399,7 @@ final class BelongsToPersistencePlannerTest extends TestCase
 		$registry = new Registry();
 		$accounts = $registry->collection('accounts')
 			->primaryKey('uuid')
-			->field('uuid', 'string')->end()
-			->end();
+			->field('uuid', 'string')->end();
 		$posts = $registry->collection('posts')
 			->primaryKey('id')
 			->field('id', 'int')->end()
@@ -420,8 +418,7 @@ final class BelongsToPersistencePlannerTest extends TestCase
 		$users = $registry->collection('users')
 			->primaryKey('tenant_id', 'user_id')
 			->field('tenant_id', 'int')->end()
-			->field('user_id', 'int')->end()
-			->end();
+			->field('user_id', 'int')->end();
 		$posts = $registry->collection('posts')
 			->primaryKey('tenant_ref', 'author_ref')
 			->field('tenant_ref', 'int')->end()

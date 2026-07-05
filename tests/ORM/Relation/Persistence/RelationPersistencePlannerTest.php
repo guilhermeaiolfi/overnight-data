@@ -8,6 +8,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\ORM\Exception\RelationPersistenceException;
+use ON\Data\ORM\Persistence\CommandValueResolver;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Relation\Persistence\RelationPersistencePlanner;
 use ON\Data\ORM\Relation\ToManyRelationState;
@@ -199,6 +200,7 @@ final class RelationPersistencePlannerTest extends TestCase
 		}
 
 		self::assertSame($through, $command->getCollection());
+		(new CommandValueResolver())->assertReady($command);
 		self::assertSame(['user_id' => 10, 'tag_id' => 3], $command->getValues());
 	}
 
@@ -376,8 +378,7 @@ final class RelationPersistencePlannerTest extends TestCase
 		$posts = $registry->collection('posts')
 			->primaryKey('id')
 			->field('id', 'int')->end()
-			->field('user_id', 'int')->end()
-			->end();
+			->field('user_id', 'int')->end();
 		$users = $registry->collection('users')
 			->primaryKey('id')
 			->field('id', 'int')->end();
@@ -394,8 +395,7 @@ final class RelationPersistencePlannerTest extends TestCase
 		$registry = new Registry();
 		$users = $registry->collection('users')
 			->primaryKey('id')
-			->field('id', 'int')->end()
-			->end();
+			->field('id', 'int')->end();
 		$posts = $registry->collection('posts')
 			->primaryKey('id')
 			->field('id', 'int')->end()
@@ -414,8 +414,7 @@ final class RelationPersistencePlannerTest extends TestCase
 		$profiles = $registry->collection('profiles')
 			->primaryKey('id')
 			->field('id', 'int')->end()
-			->field('user_id', 'int')->end()
-			->end();
+			->field('user_id', 'int')->end();
 		$users = $registry->collection('users')
 			->primaryKey('id')
 			->field('id', 'int')->end();
