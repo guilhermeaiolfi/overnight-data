@@ -14,9 +14,10 @@ use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\CommandValueResolver;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
+use ON\Data\ORM\Persistence\TransactionalCommandExecutorInterface;
 use ON\Data\ORM\Persistence\UpdateCommand;
 
-final class CycleCommandExecutor implements CommandExecutorInterface
+final class CycleCommandExecutor implements CommandExecutorInterface, TransactionalCommandExecutorInterface
 {
 	public function __construct(
 		private readonly DatabaseInterface $database,
@@ -38,6 +39,11 @@ final class CycleCommandExecutor implements CommandExecutorInterface
 				$command::class,
 			)),
 		};
+	}
+
+	public function transaction(callable $callback): mixed
+	{
+		return $this->database->transaction(fn (): mixed => $callback());
 	}
 
 	private function insert(InsertCommand $command): CommandResult

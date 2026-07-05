@@ -24,7 +24,18 @@ final class RecordFlusher
 	 */
 	public function flush(RecordStateStore $states): array
 	{
+		return $this->flushRecords($states, false)->getCommandResults();
+	}
+
+	public function flushDeferred(RecordStateStore $states): DeferredRecordFlushResult
+	{
+		return $this->flushRecords($states, true);
+	}
+
+	private function flushRecords(RecordStateStore $states, bool $deferFinalizers): DeferredRecordFlushResult
+	{
 		$results = [];
+		$finalizers = [];
 		$snapshot = $states->getAll();
 		$pending = [];
 
@@ -46,7 +57,9 @@ final class RecordFlusher
 				}
 
 				if ($record->isRemoved() && $record->getKey() === null) {
-					$states->removeState($record);
+					$this->finalize($finalizers, static function () use ($states, $record): void {
+						$states->removeState($record);
+					}, $deferFinalizers);
 					unset($pending[$stateHash]);
 					$progress = true;
 
@@ -61,7 +74,9 @@ final class RecordFlusher
 
 				if ($command === null) {
 					if ($record->isRemoved()) {
-						$states->removeState($record);
+						$this->finalize($finalizers, static function () use ($states, $record): void {
+							$states->removeState($record);
+						}, $deferFinalizers);
 					}
 
 					unset($pending[$stateHash]);
@@ -74,17 +89,13 @@ final class RecordFlusher
 				$results[] = $result;
 
 				if ($command instanceof InsertCommand) {
-					$this->syncInsertedRecord($states, $record, $result);
-					unset($pending[$stateHash]);
-					$progress = true;
-
-					continue;
-				}
-
-				if ($command instanceof UpdateCommand) {
-					$record->markClean($record->getKey());
-					if ($record->hasKey()) {
-						$states->indexKey($record);
+					$this->syncInsertedRecord($record, $result);
+					if ($deferFinalizers) {
+						$finalizers[] = function () use ($states, $record): void {
+							$this->markCleanAndIndex($states, $record);
+						};
+					} else {
+						$this->markCleanAndIndex($states, $record);
 					}
 					unset($pending[$stateHash]);
 					$progress = true;
@@ -92,8 +103,20 @@ final class RecordFlusher
 					continue;
 				}
 
+				if ($command instanceof UpdateCommand) {
+					$this->finalize($finalizers, function () use ($states, $record): void {
+						$this->markCleanAndIndex($states, $record);
+					}, $deferFinalizers);
+					unset($pending[$stateHash]);
+					$progress = true;
+
+					continue;
+				}
+
 				if ($command instanceof DeleteCommand) {
-					$states->removeState($record);
+					$this->finalize($finalizers, static function () use ($states, $record): void {
+						$states->removeState($record);
+					}, $deferFinalizers);
 					unset($pending[$stateHash]);
 					$progress = true;
 				}
@@ -104,7 +127,7 @@ final class RecordFlusher
 			$this->throwBlockedByUnresolvedValueRef($pending);
 		}
 
-		return $results;
+		return new DeferredRecordFlushResult($results, $finalizers);
 	}
 
 	private function isReadyForPlanning(RecordState $record): bool
@@ -200,18 +223,11 @@ final class RecordFlusher
 		return [];
 	}
 
-	private function syncInsertedRecord(RecordStateStore $states, RecordState $record, CommandResult $result): void
+	private function syncInsertedRecord(RecordState $record, CommandResult $result): void
 	{
 		$generatedValues = $result->getGeneratedValues();
 		if ($generatedValues !== []) {
 			$record->setValues($generatedValues);
-		}
-
-		$key = $this->getKeyIfComplete($record);
-		$record->markClean($key);
-
-		if ($record->hasKey()) {
-			$states->indexKey($record);
 		}
 	}
 
@@ -230,5 +246,28 @@ final class RecordFlusher
 		}
 
 		return $collection->getKeyFromRecord($values);
+	}
+
+	/**
+	 * @param list<callable(): void> $finalizers
+	 * @param callable(): void $finalizer
+	 */
+	private function finalize(array &$finalizers, callable $finalizer, bool $defer): void
+	{
+		if ($defer) {
+			$finalizers[] = $finalizer;
+
+			return;
+		}
+
+		$finalizer();
+	}
+
+	private function markCleanAndIndex(RecordStateStore $states, RecordState $record): void
+	{
+		$record->markClean($this->getKeyIfComplete($record) ?? $record->getKey());
+		if ($record->hasKey()) {
+			$states->indexKey($record);
+		}
 	}
 }

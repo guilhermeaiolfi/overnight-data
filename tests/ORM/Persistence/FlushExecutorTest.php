@@ -16,6 +16,7 @@ use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\FlushExecutor;
 use ON\Data\ORM\Persistence\InsertCommand;
+use ON\Data\ORM\Persistence\TransactionalCommandExecutorInterface;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToManyRelationStore;
@@ -136,6 +137,91 @@ final class FlushExecutorTest extends TestCase
 		$this->expectExceptionMessage('executor failed');
 
 		(new FlushExecutor($executor))->flush(new RepresentationStore(), $this->records($record));
+	}
+
+	public function testFlushUsesCommandExecutorTransactionWhenAvailable(): void
+	{
+		$record = RecordState::new($this->users(), ['name' => 'Ada']);
+		$executor = new class () implements CommandExecutorInterface, TransactionalCommandExecutorInterface {
+			public int $transactions = 0;
+
+			/** @var list<CommandInterface> */
+			public array $commands = [];
+
+			public function execute(CommandInterface $command): CommandResult
+			{
+				$this->commands[] = $command;
+
+				return new CommandResult(1);
+			}
+
+			public function transaction(callable $callback): mixed
+			{
+				++$this->transactions;
+
+				return $callback();
+			}
+		};
+
+		(new FlushExecutor($executor))->flush(new RepresentationStore(), $this->records($record));
+
+		self::assertSame(1, $executor->transactions);
+		self::assertCount(1, $executor->commands);
+		self::assertTrue($record->isClean());
+	}
+
+	public function testTransactionalFlushDefersStateCleanupUntilTransactionSucceeds(): void
+	{
+		RecordingRelationPersistencePlanner::$addCommand = true;
+		$users = $this->usersWithPosts();
+		$dirty = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'before']);
+		$dirty->setValue('name', 'dirty');
+		$removed = RecordState::clean($users->getKey(20), ['id' => 20, 'name' => 'removed']);
+		$removed->markRemoved();
+		$records = $this->records($dirty, $removed);
+		$collection = $this->changedToManyRelationState($dirty);
+		$executor = new class () implements CommandExecutorInterface, TransactionalCommandExecutorInterface {
+			public int $transactions = 0;
+
+			/** @var list<CommandInterface> */
+			public array $commands = [];
+
+			public function execute(CommandInterface $command): CommandResult
+			{
+				$this->commands[] = $command;
+				if ($command instanceof TestCommand) {
+					throw new LogicException('relation command failed');
+				}
+
+				return new CommandResult(1);
+			}
+
+			public function transaction(callable $callback): mixed
+			{
+				++$this->transactions;
+
+				return $callback();
+			}
+		};
+
+		$this->expectException(LogicException::class);
+		$this->expectExceptionMessage('relation command failed');
+
+		try {
+			(new FlushExecutor($executor))->flush(
+				new RepresentationStore(),
+				$records,
+				$this->relations($collection)
+			);
+		} finally {
+			self::assertSame(1, $executor->transactions);
+			self::assertCount(3, $executor->commands);
+			self::assertTrue($dirty->isDirty());
+			self::assertSame(['id' => 10, 'name' => 'before'], $dirty->getOriginalValues());
+			self::assertTrue($removed->isRemoved());
+			self::assertSame($removed, $records->getByKey($users->getKey(20)));
+			self::assertTrue($collection->hasChanges());
+		}
 	}
 
 	public function testNewRecordChangedThroughRepresentationSyncIsInsertedWithSynchronizedValues(): void
@@ -921,7 +1007,6 @@ final class FlushExecutorTest extends TestCase
 		self::assertStringNotContainsString('Database', $source);
 		self::assertStringNotContainsString('Sql', $source);
 		self::assertStringNotContainsString('SQL', $source);
-		self::assertStringNotContainsString('Transaction', $source);
 	}
 
 	/**

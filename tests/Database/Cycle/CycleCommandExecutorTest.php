@@ -18,6 +18,7 @@ use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\RecordFlusher;
+use ON\Data\ORM\Persistence\TransactionalCommandExecutorInterface;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
@@ -98,6 +99,27 @@ final class CycleCommandExecutorTest extends TestCase
 			['name' => 'Linus', 'email' => 'linus@example.test'],
 			$this->fetchUser(3),
 		);
+	}
+
+	public function testTransactionRollsBackAndRethrowsWhenCallbackThrows(): void
+	{
+		self::assertInstanceOf(TransactionalCommandExecutorInterface::class, $this->executor);
+
+		$this->expectException(InvalidCommandException::class);
+
+		try {
+			$this->executor()->transaction(function (): void {
+				$this->executor()->execute(new InsertCommand($this->users(), [
+					'id' => 3,
+					'name' => 'Rolled Back',
+					'email' => 'rolled-back@example.test',
+				]));
+
+				throw new InvalidCommandException('rollback');
+			});
+		} finally {
+			self::assertNull($this->fetchUser(3));
+		}
 	}
 
 	public function testInsertCommandReturnsGeneratedAutoIncrementPrimaryKeyValueByFieldName(): void
@@ -413,6 +435,13 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertInstanceOf(CollectionInterface::class, $this->users);
 
 		return $this->users;
+	}
+
+	private function executor(): CycleCommandExecutor
+	{
+		self::assertInstanceOf(CycleCommandExecutor::class, $this->executor);
+
+		return $this->executor;
 	}
 
 	private function memberships(): CollectionInterface

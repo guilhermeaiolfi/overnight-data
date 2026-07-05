@@ -41,6 +41,20 @@ final class FlushExecutor
 	): FlushResult {
 		$relations ??= new ToManyRelationStore();
 		$references ??= new ToOneRelationStore();
+
+		if ($this->executor instanceof TransactionalCommandExecutorInterface) {
+			return $this->flushInTransaction($this->executor, $representations, $records, $relations, $references);
+		}
+
+		return $this->flushImmediately($representations, $records, $relations, $references);
+	}
+
+	private function flushImmediately(
+		RepresentationStore $representations,
+		RecordStateStore $records,
+		ToManyRelationStore $relations,
+		ToOneRelationStore $references,
+	): FlushResult {
 		$syncResult = $this->syncer->sync($representations, $records, $relations, $references);
 		$relationResult = $this->relationPlanner->plan($relations, $references, $records, $representations);
 		$commandResults = $this->flusher->flush($records);
@@ -55,5 +69,49 @@ final class FlushExecutor
 		}
 
 		return new FlushResult($syncResult->getSyncPlans(), $commandResults);
+	}
+
+	private function flushInTransaction(
+		TransactionalCommandExecutorInterface $transactionalExecutor,
+		RepresentationStore $representations,
+		RecordStateStore $records,
+		ToManyRelationStore $relations,
+		ToOneRelationStore $references,
+	): FlushResult {
+		$recordFlush = null;
+		$relationResult = null;
+
+		$result = $transactionalExecutor->transaction(function () use (
+			$representations,
+			$records,
+			$relations,
+			$references,
+			&$recordFlush,
+			&$relationResult,
+		): FlushResult {
+			$syncResult = $this->syncer->sync($representations, $records, $relations, $references);
+			$relationResult = $this->relationPlanner->plan($relations, $references, $records, $representations);
+			$recordFlush = $this->flusher->flushDeferred($records);
+			$commandResults = $recordFlush->getCommandResults();
+
+			foreach ($relationResult->getCommands() as $command) {
+				$this->commandValueResolver->assertReady($command);
+				$commandResults[] = $this->executor->execute($command);
+			}
+
+			return new FlushResult($syncResult->getSyncPlans(), $commandResults);
+		});
+
+		if ($recordFlush instanceof DeferredRecordFlushResult) {
+			$recordFlush->finalize();
+		}
+
+		if ($relationResult !== null) {
+			foreach ($relationResult->getChanges() as $change) {
+				$change->clearChanges();
+			}
+		}
+
+		return $result;
 	}
 }
