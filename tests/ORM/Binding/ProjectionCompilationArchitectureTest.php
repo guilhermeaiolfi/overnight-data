@@ -9,11 +9,21 @@ use ON\Data\ORM\Binding\ProjectionBindingAssembler;
 use ON\Data\ORM\Binding\ProjectionSelectionNormalizer;
 use ON\Data\ORM\Binding\QueryProjectionSourceResolver;
 use ON\Data\ORM\ManualProjection\ManualProjectionBuilder;
+use ON\Data\ORM\ManualProjection\ManualProjectionRelationApplier;
+use ON\Data\ORM\ManualProjection\ManualProjectionRepresentationTracker;
 use ON\Data\ORM\ManualProjection\ManualProjectionSourceResolver;
+use ON\Data\ORM\Relation\RelationStateStore;
+use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\State\RecordState;
+use ON\Data\ORM\State\RecordStateStore;
+use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationRelationCardinality;
+use ON\Data\ORM\State\RepresentationState;
+use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use stdClass;
 
 final class ProjectionCompilationArchitectureTest extends TestCase
 {
@@ -39,6 +49,47 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertSame(ProjectionSelectionNormalizer::class, $parameters[2]->getType()?->getName());
 		self::assertSame(ProjectionBindingAssembler::class, $parameters[3]->getType()?->getName());
 		self::assertSame(ManualProjectionSourceResolver::class, $parameters[4]->getType()?->getName());
+	}
+
+	public function testManualBuilderDoesNotOwnExtractedProjectionInternals(): void
+	{
+		$contents = (string) file_get_contents(dirname(__DIR__, 3) . '/src/ORM/ManualProjection/ManualProjectionBuilder.php');
+
+		self::assertStringNotContainsString('RecordFieldRef', $contents);
+		self::assertStringNotContainsString('RepresentationFieldBinding', $contents);
+		self::assertStringNotContainsString('new ToManyRelationState', $contents);
+		self::assertStringNotContainsString('new ToOneRelationState', $contents);
+		self::assertStringNotContainsString('relationBindingFromPath', $contents);
+		self::assertStringNotContainsString('mergeBindings', $contents);
+	}
+
+	public function testAdapterObjectsAreRegisteredInNormalRepresentationStore(): void
+	{
+		$representations = new RepresentationStore();
+		$tracker = new ManualProjectionRepresentationTracker($representations, new RecordStateStore());
+		$record = RecordState::new($this->registry()->getCollection('users'), ['id' => 10]);
+
+		$adapter = $tracker->trackAdapter($record);
+		$state = $representations->get($adapter);
+
+		self::assertInstanceOf(RepresentationState::class, $state);
+		self::assertSame(10, $adapter->id);
+		self::assertSame('id', $state->getBinding()->getPaths()[0]);
+		self::assertTrue($state->getBinding()->getField('id')->isReadOnly());
+	}
+
+	public function testRelationApplierUsesNormalToManyRelationStore(): void
+	{
+		$toMany = new RelationStateStore();
+		$applier = new ManualProjectionRelationApplier($toMany, new RelationStateStore());
+		$owner = RecordState::new($this->registry()->getCollection('users'), ['id' => 10]);
+		$target = new stdClass();
+
+		$applier->applyTarget($owner, 'posts', RepresentationRelationCardinality::MANY, new RepresentationBinding(), $target);
+		$relation = $toMany->get($owner, 'posts');
+
+		self::assertInstanceOf(ToManyRelationState::class, $relation);
+		self::assertSame([$target], $relation->getAdded());
 	}
 
 	public function testQueryAndManualAliasProjectionUseEquivalentPublicPaths(): void

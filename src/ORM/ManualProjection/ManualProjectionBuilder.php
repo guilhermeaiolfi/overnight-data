@@ -11,14 +11,10 @@ use ON\Data\ORM\Binding\ProjectionBindingAssembler;
 use ON\Data\ORM\Binding\ProjectionSelectionNormalizer;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Session;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
-use ON\Data\ORM\State\RepresentationRelationBinding;
+use ON\Data\ORM\State\RepresentationBindingMerger;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\Query\Expression\AliasedExpression;
@@ -28,7 +24,6 @@ use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\SelectQuery;
-use stdClass;
 
 final class ManualProjectionBuilder
 {
@@ -41,7 +36,20 @@ final class ManualProjectionBuilder
 		private ProjectionSelectionNormalizer $selectionNormalizer = new ProjectionSelectionNormalizer(),
 		private ProjectionBindingAssembler $bindingAssembler = new ProjectionBindingAssembler(),
 		private ManualProjectionSourceResolver $sourceResolver = new ManualProjectionSourceResolver(),
+		private ?ManualProjectionPathResolver $pathResolver = null,
+		private ?ManualProjectionRelationApplier $relationApplier = null,
+		private ?ManualProjectionRepresentationTracker $representationTracker = null,
+		private RepresentationBindingMerger $bindingMerger = new RepresentationBindingMerger(),
 	) {
+		$this->pathResolver ??= new ManualProjectionPathResolver($this->session->getRepresentations());
+		$this->relationApplier ??= new ManualProjectionRelationApplier(
+			$this->session->getToManyRelations(),
+			$this->session->getToOneRelations()
+		);
+		$this->representationTracker ??= new ManualProjectionRepresentationTracker(
+			$this->session->getRepresentations(),
+			$this->session->getRecords()
+		);
 	}
 
 	public function from(CollectionInterface $collection): ProjectionSourceDeclaration
@@ -51,25 +59,16 @@ final class ManualProjectionBuilder
 
 	public function fromPath(object $owner, string $path): ProjectionPathDeclaration
 	{
-		$ownerState = $this->session->getRepresentations()->get($owner);
-		if (! $ownerState instanceof RepresentationState) {
-			throw new SyncException('Cannot use fromPath() because the owner representation is not tracked.');
-		}
-
-		$relationBinding = $this->relationBindingFromPath($ownerState->getBinding(), $path);
-		$relation = $relationBinding->getRelation();
-		if (! $relation->hasState()) {
-			throw new StateException(sprintf("Cannot use fromPath('%s') because the owner relation binding is not bound to a concrete record state.", $path));
-		}
+		$resolution = $this->pathResolver->resolve($owner, $path);
 
 		return new ProjectionPathDeclaration(
 			$this,
-			$owner,
-			$relation->getState(),
-			$path,
-			$relationBinding->getRelationName(),
-			$relationBinding->getCardinality(),
-			$relationBinding->getRelatedBinding()
+			$resolution->getOwnerObject(),
+			$resolution->getOwner(),
+			$resolution->getPath(),
+			$resolution->getRelationName(),
+			$resolution->getCardinality(),
+			$resolution->getRelatedBinding()
 		);
 	}
 
@@ -80,7 +79,7 @@ final class ManualProjectionBuilder
 			throw new SyncException('Cannot use tracked() for a manual projection source because the representation is not tracked.');
 		}
 
-		$matches = $this->recordsForCollection($state, $source->getCollection());
+		$matches = $this->representationTracker->recordsForCollection($state, $source->getCollection());
 		if ($matches === []) {
 			throw new StateException(sprintf(
 				"Cannot use tracked() for collection '%s' because the representation has no matching tracked record state.",
@@ -135,7 +134,7 @@ final class ManualProjectionBuilder
 			$relation->getName(),
 			$this->relationCardinality($relation),
 			new RepresentationBinding(),
-			$this->trackAdapterRepresentation($record)
+			$this->representationTracker->trackAdapter($record)
 		);
 
 		return $relation;
@@ -154,7 +153,7 @@ final class ManualProjectionBuilder
 			$relation->getName(),
 			$this->relationCardinality($relation),
 			new RepresentationBinding(),
-			$this->trackAdapterRepresentation($record)
+			$this->representationTracker->trackAdapter($record)
 		);
 
 		return $relation;
@@ -164,7 +163,7 @@ final class ManualProjectionBuilder
 	{
 		$owner = $this->ownerRecordFor($relation);
 		$target = $object ?? $this->representation;
-		$record = $this->singleRecordForTrackedTarget($target, $relation->getCollection(), sprintf(
+		$record = $this->representationTracker->singleRecordForTrackedTarget($target, $relation->getCollection(), sprintf(
 			"Cannot use tracked() for relation '%s'",
 			implode('.', $relation->getPath())
 		));
@@ -193,7 +192,7 @@ final class ManualProjectionBuilder
 		RepresentationBinding $relatedBinding,
 		array $values = [],
 	): ProjectionPathSource {
-		$collection = $this->collectionFromBinding($relatedBinding);
+		$collection = $this->pathResolver->collectionFromBinding($relatedBinding);
 		$record = $this->session->trackRecord(RecordState::new($collection, $values));
 
 		return $this->pathSource($owner, $ownerObject, $path, $relationName, $cardinality, $relatedBinding, $record);
@@ -212,7 +211,7 @@ final class ManualProjectionBuilder
 		Key|array $key,
 		array $values = [],
 	): ProjectionPathSource {
-		$record = $this->recordForExisting($this->collectionFromBinding($relatedBinding), $key, $values);
+		$record = $this->recordForExisting($this->pathResolver->collectionFromBinding($relatedBinding), $key, $values);
 
 		return $this->pathSource($owner, $ownerObject, $path, $relationName, $cardinality, $relatedBinding, $record);
 	}
@@ -227,7 +226,7 @@ final class ManualProjectionBuilder
 		?object $object = null,
 	): ProjectionPathSource {
 		$target = $object ?? $this->representation;
-		$record = $this->singleRecordForTrackedTarget($target, $this->collectionFromBinding($relatedBinding), sprintf(
+		$record = $this->representationTracker->singleRecordForTrackedTarget($target, $this->pathResolver->collectionFromBinding($relatedBinding), sprintf(
 			"Cannot use tracked() for relation '%s'",
 			$relationName
 		));
@@ -261,7 +260,7 @@ final class ManualProjectionBuilder
 		$state = $this->session->getRepresentations()->get($this->representation);
 
 		if ($state instanceof RepresentationState) {
-			$binding = $this->mergeBindings($state->getBinding(), $manualBinding);
+			$binding = $this->bindingMerger->mergeManualOverlay($state->getBinding(), $manualBinding);
 			$baselineRevisions = $state->getBaselineRevisions();
 		} else {
 			$binding = $manualBinding;
@@ -343,55 +342,11 @@ final class ManualProjectionBuilder
 	): ProjectionPathSource {
 		$source = new SelectQuery($record->getCollection());
 		$this->rememberSource($source, $record);
-		$target ??= $this->targetObjectForPath($record, $relatedBinding);
+		$target ??= $this->representationTracker->targetForPath($record, $relatedBinding, $this->representation);
 		$this->applyRelationTarget($owner, $relationName, $cardinality, $relatedBinding, $target);
 		$this->mirrorRelationTarget($ownerObject, $path, $cardinality, $target);
 
 		return new ProjectionPathSource($this, $source);
-	}
-
-	private function targetObjectForPath(RecordState $record, RepresentationBinding $relatedBinding): object
-	{
-		$target = $this->representation;
-		$state = $this->session->getRepresentations()->get($target);
-		if ($state instanceof RepresentationState) {
-			$existing = $this->session->getRecords()->getFromRepresentation($state);
-			if ($existing !== $record) {
-				$target = new stdClass();
-			}
-		}
-
-		$this->trackTargetRepresentation($target, $record, $relatedBinding);
-
-		return $target;
-	}
-
-	private function trackAdapterRepresentation(RecordState $record): object
-	{
-		$object = new stdClass();
-		$binding = new RepresentationBinding();
-		foreach ($record->getCollection()->getPrimaryKey() as $fieldName) {
-			if ($record->hasValue($fieldName)) {
-				$object->{$fieldName} = $record->getValue($fieldName);
-			}
-
-			$binding->addField(new RepresentationFieldBinding($fieldName, RecordFieldRef::forState($record, $fieldName), writable: false));
-		}
-
-		$this->session->getRepresentations()->add($object, new RepresentationState($binding, [$record->getStateHash() => $record->getRevision()]));
-
-		return $object;
-	}
-
-	private function trackTargetRepresentation(object $target, RecordState $record, RepresentationBinding $relatedBinding): void
-	{
-		$state = $this->session->getRepresentations()->get($target);
-		if ($state instanceof RepresentationState) {
-			return;
-		}
-
-		$binding = $relatedBinding->applyToRecordState($record, skipWhenMissing: true);
-		$this->session->getRepresentations()->add($target, new RepresentationState($binding, [$record->getStateHash() => $record->getRevision()]));
 	}
 
 	private function applyRelationTarget(
@@ -401,23 +356,7 @@ final class ManualProjectionBuilder
 		RepresentationBinding $relatedBinding,
 		object $target,
 	): void {
-		if ($cardinality === RepresentationRelationCardinality::MANY) {
-			$relation = $this->session->getToManyRelations()->get($owner, $relationName);
-			if (! $relation instanceof ToManyRelationState) {
-				$relation = new ToManyRelationState($owner, $relationName, $relatedBinding);
-				$this->session->trackToManyRelation($relation);
-			}
-			$relation->add($target);
-
-			return;
-		}
-
-		$relation = $this->session->getToOneRelations()->get($owner, $relationName);
-		if (! $relation instanceof ToOneRelationState) {
-			$relation = new ToOneRelationState($owner, $relationName, $relatedBinding);
-			$this->session->trackToOneRelation($relation);
-		}
-		$relation->set($target);
+		$this->relationApplier->applyTarget($owner, $relationName, $cardinality, $relatedBinding, $target);
 	}
 
 	private function mirrorRelationTarget(
@@ -463,110 +402,6 @@ final class ManualProjectionBuilder
 		}
 
 		$current->{$last} = $target;
-	}
-
-	private function relationBindingFromPath(RepresentationBinding $binding, string $path): RepresentationRelationBinding
-	{
-		$segments = array_values(array_filter(explode('.', $path), static fn (string $segment): bool => $segment !== ''));
-		if ($segments === []) {
-			throw new InvalidArgumentException('ManualProjectionBuilder::fromPath() requires a non-empty path.');
-		}
-
-		$current = $binding;
-		$relation = null;
-		foreach ($segments as $segment) {
-			$relation = $current->getRelation($segment);
-			$current = $relation->getRelatedBinding();
-		}
-
-		return $relation;
-	}
-
-	private function collectionFromBinding(RepresentationBinding $binding): CollectionInterface
-	{
-		foreach ($binding->getFields() as $fieldBinding) {
-			return $fieldBinding->getField()->getCollection();
-		}
-
-		foreach ($binding->getRelations() as $relationBinding) {
-			return $relationBinding->getRelation()->getCollection();
-		}
-
-		throw new StateException('Cannot resolve relation target collection from an empty related binding.');
-	}
-
-	/**
-	 * @return list<RecordState>
-	 */
-	private function recordsForCollection(RepresentationState $state, CollectionInterface $collection): array
-	{
-		$records = [];
-		foreach ($state->getBinding()->getFields() as $fieldBinding) {
-			$field = $fieldBinding->getField();
-			if ($field->hasState() && $field->getCollectionName() === $collection->getName()) {
-				$record = $field->getState();
-				$records[$record->getStateHash()] = $record;
-			}
-		}
-
-		foreach ($state->getBinding()->getRelations() as $relationBinding) {
-			$relation = $relationBinding->getRelation();
-			if ($relation->hasState() && $relation->getCollectionName() === $collection->getName()) {
-				$record = $relation->getState();
-				$records[$record->getStateHash()] = $record;
-			}
-		}
-
-		return array_values($records);
-	}
-
-	private function singleRecordForTrackedTarget(object $target, CollectionInterface $collection, string $prefix): RecordState
-	{
-		$state = $this->session->getRepresentations()->get($target);
-		if (! $state instanceof RepresentationState) {
-			throw new SyncException($prefix . ' because the target representation is not tracked.');
-		}
-
-		$matches = $this->recordsForCollection($state, $collection);
-		if ($matches === []) {
-			throw new StateException($prefix . ' because the target has no matching tracked record state.');
-		}
-
-		if (count($matches) > 1) {
-			throw new StateException($prefix . ' because the matching target record state is ambiguous.');
-		}
-
-		return $matches[0];
-	}
-
-	private function mergeBindings(RepresentationBinding $existing, RepresentationBinding $manual): RepresentationBinding
-	{
-		$merged = new RepresentationBinding();
-		foreach ($existing->getFields() as $field) {
-			$merged->addField($field);
-		}
-		foreach ($existing->getExpressions() as $expression) {
-			$merged->addExpression($expression);
-		}
-		foreach ($existing->getRelations() as $relation) {
-			$merged->addRelation($relation);
-		}
-
-		foreach ($manual->getFields() as $field) {
-			if ($merged->hasPath($field->getPath())) {
-				throw new StateException(sprintf("Manual projection path '%s' conflicts with an existing representation binding path.", $field->getPath()));
-			}
-			$merged->addField($field);
-		}
-
-		foreach ($manual->getRelations() as $relation) {
-			if ($merged->hasPath($relation->getPath())) {
-				continue;
-			}
-			$merged->addRelation($relation);
-		}
-
-		return $merged;
 	}
 
 	private function rememberSource(QuerySourceInterface $source, RecordState $record): void
