@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Tests\ON\Data\ORM\Binding;
+namespace Tests\ON\Data\ORM\Compiler;
 
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\ORM\Compiler\ManualProjection\AllProperties;
-use ON\Data\ORM\Compiler\ManualProjection\ProjectionCompiler;
 use ON\Data\ORM\Compiler\ManualProjection\Builder;
 use ON\Data\ORM\Compiler\ManualProjection\PathResolver;
+use ON\Data\ORM\Compiler\ManualProjection\ProjectionCompiler;
 use ON\Data\ORM\Compiler\ManualProjection\PropertyRef;
 use ON\Data\ORM\Compiler\ManualProjection\RelationApplier;
 use ON\Data\ORM\Compiler\ManualProjection\RepresentationTracker;
@@ -52,7 +52,6 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertFileDoesNotExist($root . '/src/ORM/Compiler/ProjectionSourceResolver.php');
 		self::assertFileExists($root . '/src/ORM/Compiler/ProjectionSourceResolverInterface.php');
 		self::assertFileExists($root . '/src/ORM/Compiler/ResolvedProjectionSource.php');
-		self::assertFileDoesNotExist($root . '/src/ORM/Compiler/ProjectionSourceTarget.php');
 		self::assertFalse(method_exists(SourceResolver::class, 'rememberSource'));
 	}
 

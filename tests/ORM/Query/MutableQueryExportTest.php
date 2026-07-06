@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Tests\ON\Data\ORM\Binding;
+namespace Tests\ON\Data\ORM\Query;
 
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;

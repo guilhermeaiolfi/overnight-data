@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Tests\ON\Data\ORM\Binding;
+namespace Tests\ON\Data\ORM\Compiler;
 
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompiler;
@@ -13,7 +13,7 @@ use ON\Data\Query\SelectQuery;
 use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 
-final class SelectQueryBindingCompilerTest extends TestCase
+final class SelectQueryProjectionCompilerTest extends TestCase
 {
 	private ProjectionCompiler $compiler;
 
