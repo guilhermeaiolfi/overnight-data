@@ -6,6 +6,7 @@ namespace ON\Data\ORM\Persistence;
 
 use ON\Data\ORM\Relation\Persistence\RelationPersistencePlanner;
 use ON\Data\ORM\SessionContext;
+use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\Sync\RepresentationSyncer;
 
 final class FlushExecutor
@@ -67,27 +68,34 @@ final class FlushExecutor
 	): FlushResult {
 		$flush = null;
 		$relationResult = null;
+		$recordSnapshots = $this->snapshotRecords($context);
 
-		$result = $transactionalExecutor->transaction(function () use (
-			$context,
-			&$flush,
-			&$relationResult,
-		): FlushResult {
-			$records = $context->getRecords();
+		try {
+			$result = $transactionalExecutor->transaction(function () use (
+				$context,
+				&$flush,
+				&$relationResult,
+			): FlushResult {
+				$records = $context->getRecords();
 
-			$syncResult = $this->syncer->sync($context);
-			$relationResult = $this->relationPlanner->plan($context);
-			$flush = $this->scheduler->run(
-				$records,
-				$relationResult->getCommands(),
-				true,
-			);
+				$syncResult = $this->syncer->sync($context);
+				$relationResult = $this->relationPlanner->plan($context);
+				$flush = $this->scheduler->run(
+					$records,
+					$relationResult->getCommands(),
+					true,
+				);
 
-			return new FlushResult(
-				$syncResult->getSyncPlans(),
-				$flush->getCommandResults(),
-			);
-		});
+				return new FlushResult(
+					$syncResult->getSyncPlans(),
+					$flush->getCommandResults(),
+				);
+			});
+		} catch (\Throwable $exception) {
+			$this->restoreRecords($recordSnapshots);
+
+			throw $exception;
+		}
 
 		if ($flush instanceof DeferredFlushResult) {
 			$flush->finalize();
@@ -100,5 +108,40 @@ final class FlushExecutor
 		}
 
 		return $result;
+	}
+
+	/**
+	 * @return list<array{0: RecordState, 1: array{
+	 *     key: \ON\Data\Key|null,
+	 *     lifecycle: \ON\Data\ORM\State\RecordLifecycle,
+	 *     revision: int,
+	 *     originalValues: array<string, mixed>,
+	 *     values: array<string, mixed>
+	 * }}>
+	 */
+	private function snapshotRecords(SessionContext $context): array
+	{
+		$snapshots = [];
+		foreach ($context->getRecords()->getAll() as $record) {
+			$snapshots[] = [$record, $record->createPersistenceSnapshot()];
+		}
+
+		return $snapshots;
+	}
+
+	/**
+	 * @param list<array{0: RecordState, 1: array{
+	 *     key: \ON\Data\Key|null,
+	 *     lifecycle: \ON\Data\ORM\State\RecordLifecycle,
+	 *     revision: int,
+	 *     originalValues: array<string, mixed>,
+	 *     values: array<string, mixed>
+	 * }}> $snapshots
+	 */
+	private function restoreRecords(array $snapshots): void
+	{
+		foreach ($snapshots as [$record, $snapshot]) {
+			$record->restorePersistenceSnapshot($snapshot);
+		}
 	}
 }

@@ -291,6 +291,48 @@ final class RecordState
 	}
 
 	/**
+	 * @internal
+	 *
+	 * @return array{
+	 *     key: Key|null,
+	 *     lifecycle: RecordLifecycle,
+	 *     revision: int,
+	 *     originalValues: array<string, mixed>,
+	 *     values: array<string, mixed>
+	 * }
+	 */
+	public function createPersistenceSnapshot(): array
+	{
+		return [
+			'key' => $this->key,
+			'lifecycle' => $this->lifecycle,
+			'revision' => $this->revision,
+			'originalValues' => $this->originalValues,
+			'values' => $this->values,
+		];
+	}
+
+	/**
+	 * @internal
+	 *
+	 * @param array{
+	 *     key: Key|null,
+	 *     lifecycle: RecordLifecycle,
+	 *     revision: int,
+	 *     originalValues: array<string, mixed>,
+	 *     values: array<string, mixed>
+	 * } $snapshot
+	 */
+	public function restorePersistenceSnapshot(array $snapshot): void
+	{
+		$this->key = $snapshot['key'];
+		$this->lifecycle = $snapshot['lifecycle'];
+		$this->revision = $snapshot['revision'];
+		$this->originalValues = $snapshot['originalValues'];
+		$this->values = $snapshot['values'];
+	}
+
+	/**
 	 * @param array<string, mixed> $values
 	 */
 	private function applyChangedValues(array $values): void

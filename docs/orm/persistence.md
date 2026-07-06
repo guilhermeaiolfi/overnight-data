@@ -155,6 +155,10 @@ Numeric integer strings are normalized to `int`. Generated values remain keyed b
 
 The executor does not support generated values for composite keys, non-auto-increment keys, generated non-primary fields, non-primary database defaults, explicit sequence names, or full row refresh.
 
+Generated values are merged into in-memory record state as soon as the insert command succeeds so later dependent commands in the same flush can resolve concrete foreign-key values. If a non-transactional executor writes an insert successfully and a later command fails, the record remains inspectable with the generated value but is not marked clean. Retrying that state unchanged attempts the insert again.
+
+To recover after verifying the row exists, explicitly accept the generated key state with `RecordState::markClean($key)` and `RecordStateStore::indexKey($state)`, then retry the still-pending relation changes. Transactional executors restore in-memory record state when the transaction callback fails, so rolled-back generated values are not exposed after failure.
+
 ## Small Example
 
 ```php

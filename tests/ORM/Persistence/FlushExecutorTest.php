@@ -287,6 +287,123 @@ final class FlushExecutorTest extends TestCase
 		}
 	}
 
+	public function testNonTransactionalRetryCanExplicitlyAdoptGeneratedKeyBeforeRetryingRelationCommands(): void
+	{
+		[$users, $tags, $through] = $this->usersWithTags();
+		$owner = RecordState::new($users, ['name' => 'Owner']);
+		$target = RecordState::clean($tags->getKey(3), ['id' => 3, 'label' => 'Tag']);
+		$tagRepresentation = $this->representation(['id' => 3, 'label' => 'Tag']);
+		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection->add($tagRepresentation);
+		$records = $this->records($owner, $target);
+		$representations = $this->representations($this->tracked($tagRepresentation, $this->bindingFor($target)));
+		$toManyRelations = $this->toManyRelations($collection);
+		$firstExecutor = new class () implements CommandExecutorInterface {
+			/** @var list<CommandInterface> */
+			public array $commands = [];
+
+			public function execute(CommandInterface $command): CommandResult
+			{
+				$this->commands[] = $command;
+
+				return match (count($this->commands)) {
+					1 => new CommandResult(1, ['id' => 10]),
+					default => throw new LogicException('through insert failed'),
+				};
+			}
+		};
+
+		try {
+			(new FlushExecutor($firstExecutor))->flush($this->context(
+				$representations,
+				$records,
+				$toManyRelations
+			));
+			self::fail('Expected first flush to fail.');
+		} catch (LogicException $exception) {
+			self::assertSame('through insert failed', $exception->getMessage());
+		}
+
+		self::assertSame(10, $owner->getValue('id'));
+		self::assertTrue($owner->isNew());
+		self::assertTrue($collection->hasChanges());
+
+		$owner->markClean($users->getKey(10));
+		$records->indexKey($owner);
+		$retryExecutor = new RecordingCommandExecutor();
+
+		(new FlushExecutor($retryExecutor))->flush($this->context(
+			$representations,
+			$records,
+			$toManyRelations
+		));
+
+		self::assertTrue($owner->isClean());
+		self::assertFalse($collection->hasChanges());
+		self::assertCount(1, $retryExecutor->getCommands());
+		$retryCommand = $retryExecutor->getCommands()[0];
+		if (! $retryCommand instanceof InsertCommand) {
+			self::fail('Expected retry to write only the through insert.');
+		}
+
+		self::assertSame($through, $retryCommand->getCollection());
+		self::assertSame(['user_id' => 10, 'tag_id' => 3], $retryCommand->getValues());
+	}
+
+	public function testTransactionalFailureRestoresGeneratedValuesAndLeavesRelationChangesPending(): void
+	{
+		[$users, $tags] = $this->usersWithTags();
+		$owner = RecordState::new($users, ['name' => 'Owner']);
+		$target = RecordState::clean($tags->getKey(3), ['id' => 3, 'label' => 'Tag']);
+		$tagRepresentation = $this->representation(['id' => 3, 'label' => 'Tag']);
+		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection->add($tagRepresentation);
+		$records = $this->records($owner, $target);
+		$executor = new class () implements CommandExecutorInterface, TransactionalCommandExecutorInterface {
+			public int $transactions = 0;
+
+			/** @var list<CommandInterface> */
+			public array $commands = [];
+
+			public function execute(CommandInterface $command): CommandResult
+			{
+				$this->commands[] = $command;
+
+				return match (count($this->commands)) {
+					1 => new CommandResult(1, ['id' => 10]),
+					default => throw new LogicException('through insert failed'),
+				};
+			}
+
+			public function transaction(callable $callback): mixed
+			{
+				++$this->transactions;
+
+				return $callback();
+			}
+		};
+
+		$this->expectException(LogicException::class);
+		$this->expectExceptionMessage('through insert failed');
+
+		try {
+			(new FlushExecutor($executor))->flush($this->context(
+				$this->representations($this->tracked($tagRepresentation, $this->bindingFor($target))),
+				$records,
+				$this->toManyRelations($collection)
+			));
+		} finally {
+			self::assertSame(1, $executor->transactions);
+			self::assertCount(2, $executor->commands);
+			self::assertTrue($owner->isNew());
+			self::assertFalse($owner->hasValue('id'));
+			self::assertNull($owner->getKey());
+			self::assertSame(['name' => 'Owner'], $owner->getValues());
+			self::assertSame($owner, $records->getAll()[0]);
+			self::assertTrue($collection->hasChanges());
+		}
+	}
+
 	public function testFlushUsesCommandExecutorTransactionWhenAvailable(): void
 	{
 		$record = RecordState::new($this->users(), ['name' => 'Ada']);
