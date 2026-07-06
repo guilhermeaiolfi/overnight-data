@@ -183,55 +183,62 @@ final class ManualProjectionBuilder
 	/**
 	 * @param array<string, mixed> $values
 	 */
-	public function createPathSource(
+	public function createPathTarget(
 		RecordState $owner,
 		object $ownerObject,
-		string $path,
 		string $relationName,
 		RepresentationRelationCardinality $cardinality,
 		RepresentationBinding $relatedBinding,
 		array $values = [],
-	): ProjectionPathSource {
+	): ManualProjectionTarget {
 		$collection = $this->pathResolver->collectionFromBinding($relatedBinding);
 		$record = $this->session->trackRecord(RecordState::new($collection, $values));
 
-		return $this->pathSource($owner, $ownerObject, $path, $relationName, $cardinality, $relatedBinding, $record);
+		return $this->attachPathTarget($owner, $ownerObject, $relationName, $cardinality, $relatedBinding, $record);
 	}
 
 	/**
 	 * @param array<string, mixed> $values
 	 */
-	public function existingPathSource(
+	public function existingPathTarget(
 		RecordState $owner,
 		object $ownerObject,
-		string $path,
 		string $relationName,
 		RepresentationRelationCardinality $cardinality,
 		RepresentationBinding $relatedBinding,
 		Key|array $key,
 		array $values = [],
-	): ProjectionPathSource {
+	): ManualProjectionTarget {
 		$record = $this->recordForExisting($this->pathResolver->collectionFromBinding($relatedBinding), $key, $values);
 
-		return $this->pathSource($owner, $ownerObject, $path, $relationName, $cardinality, $relatedBinding, $record);
+		return $this->attachPathTarget($owner, $ownerObject, $relationName, $cardinality, $relatedBinding, $record);
 	}
 
-	public function trackedPathSource(
+	public function trackedPathTarget(
 		RecordState $owner,
 		object $ownerObject,
-		string $path,
 		string $relationName,
 		RepresentationRelationCardinality $cardinality,
 		RepresentationBinding $relatedBinding,
 		?object $object = null,
-	): ProjectionPathSource {
+	): ManualProjectionTarget {
 		$target = $object ?? $this->representation;
 		$record = $this->representationTracker->singleRecordForTrackedTarget($target, $this->pathResolver->collectionFromBinding($relatedBinding), sprintf(
 			"Cannot use tracked() for relation '%s'",
 			$relationName
 		));
 
-		return $this->pathSource($owner, $ownerObject, $path, $relationName, $cardinality, $relatedBinding, $record, $target);
+		return $this->attachPathTarget($owner, $ownerObject, $relationName, $cardinality, $relatedBinding, $record, $target);
+	}
+
+	public function rememberTargetSelectionSource(ManualProjectionTarget $target, SelectQuery $source): void
+	{
+		$this->rememberSource($source, $target->getTargetRecord());
+	}
+
+	public function finalizeObjectShapedTarget(ManualProjectionTarget $target): object
+	{
+		return $target->getTargetObject();
 	}
 
 	public function select(ValueExpressionInterface|AliasedExpression|StarExpression ...$expressions): self
@@ -291,6 +298,53 @@ final class ManualProjectionBuilder
 		return $this->representation;
 	}
 
+	private function attachPathTarget(
+		RecordState $owner,
+		object $ownerObject,
+		string $relationName,
+		RepresentationRelationCardinality $cardinality,
+		RepresentationBinding $relatedBinding,
+		RecordState $record,
+		?object $explicitTarget = null,
+	): ManualProjectionTarget {
+		$objectShaped = $this->representation !== $ownerObject;
+		$target = $this->resolvePathTargetObject($record, $relatedBinding, $ownerObject, $explicitTarget, $objectShaped);
+		$this->relationApplier->applyTarget($owner, $relationName, $cardinality, $relatedBinding, $target);
+
+		return new ManualProjectionTarget(
+			$this,
+			$owner,
+			$relationName,
+			$cardinality,
+			$relatedBinding,
+			$record,
+			$target,
+			$objectShaped,
+		);
+	}
+
+	private function resolvePathTargetObject(
+		RecordState $record,
+		RepresentationBinding $relatedBinding,
+		object $ownerObject,
+		?object $explicitTarget,
+		bool $objectShaped,
+	): object {
+		if ($explicitTarget !== null) {
+			$this->representationTracker->trackTarget($explicitTarget, $record, $relatedBinding);
+
+			return $explicitTarget;
+		}
+
+		if ($objectShaped) {
+			$this->representationTracker->trackTarget($this->representation, $record, $relatedBinding);
+
+			return $this->representation;
+		}
+
+		return $this->representationTracker->trackFlattenedAdapter($record, $relatedBinding, $ownerObject);
+	}
+
 	private function ownerRecordFor(RelationRef $relation): RecordState
 	{
 		$source = $relation->getParentRelation() ?? $relation->getQuery();
@@ -330,25 +384,6 @@ final class ManualProjectionBuilder
 		return $record;
 	}
 
-	private function pathSource(
-		RecordState $owner,
-		object $ownerObject,
-		string $path,
-		string $relationName,
-		RepresentationRelationCardinality $cardinality,
-		RepresentationBinding $relatedBinding,
-		RecordState $record,
-		?object $target = null,
-	): ProjectionPathSource {
-		$source = new SelectQuery($record->getCollection());
-		$this->rememberSource($source, $record);
-		$target ??= $this->representationTracker->targetForPath($record, $relatedBinding, $this->representation);
-		$this->applyRelationTarget($owner, $relationName, $cardinality, $relatedBinding, $target);
-		$this->mirrorRelationTarget($ownerObject, $path, $cardinality, $target);
-
-		return new ProjectionPathSource($this, $source);
-	}
-
 	private function applyRelationTarget(
 		RecordState $owner,
 		string $relationName,
@@ -357,51 +392,6 @@ final class ManualProjectionBuilder
 		object $target,
 	): void {
 		$this->relationApplier->applyTarget($owner, $relationName, $cardinality, $relatedBinding, $target);
-	}
-
-	private function mirrorRelationTarget(
-		object $owner,
-		string $path,
-		RepresentationRelationCardinality $cardinality,
-		object $target,
-	): void {
-		$segments = array_values(array_filter(explode('.', $path), static fn (string $segment): bool => $segment !== ''));
-		if ($segments === []) {
-			return;
-		}
-
-		$current = $owner;
-		$last = array_pop($segments);
-		foreach ($segments as $segment) {
-			$value = $current->{$segment} ?? null;
-			if (! is_object($value)) {
-				return;
-			}
-
-			$current = $value;
-		}
-
-		if ($cardinality === RepresentationRelationCardinality::MANY) {
-			$items = $current->{$last} ?? [];
-			if (! is_array($items)) {
-				$items = [];
-			}
-
-			foreach ($items as $item) {
-				if ($item === $target) {
-					$current->{$last} = $items;
-
-					return;
-				}
-			}
-
-			$items[] = $target;
-			$current->{$last} = $items;
-
-			return;
-		}
-
-		$current->{$last} = $target;
 	}
 
 	private function rememberSource(QuerySourceInterface $source, RecordState $record): void

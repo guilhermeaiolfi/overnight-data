@@ -25,12 +25,11 @@ final class ProjectionPathDeclaration
 	/**
 	 * @param array<string, mixed> $values
 	 */
-	public function create(array $values = []): ProjectionPathSource
+	public function create(array $values = []): ManualProjectionTarget
 	{
-		return $this->builder->createPathSource(
+		return $this->builder->createPathTarget(
 			$this->owner,
 			$this->ownerObject,
-			$this->path,
 			$this->relationName,
 			$this->cardinality,
 			$this->relatedBinding,
@@ -41,12 +40,11 @@ final class ProjectionPathDeclaration
 	/**
 	 * @param array<string, mixed> $values
 	 */
-	public function existing(Key|array $key, array $values = []): ProjectionPathSource
+	public function existing(Key|array $key, array $values = []): ManualProjectionTarget
 	{
-		return $this->builder->existingPathSource(
+		return $this->builder->existingPathTarget(
 			$this->owner,
 			$this->ownerObject,
-			$this->path,
 			$this->relationName,
 			$this->cardinality,
 			$this->relatedBinding,
@@ -55,12 +53,11 @@ final class ProjectionPathDeclaration
 		);
 	}
 
-	public function tracked(?object $object = null): ProjectionPathSource
+	public function tracked(?object $object = null): ManualProjectionTarget
 	{
-		return $this->builder->trackedPathSource(
+		return $this->builder->trackedPathTarget(
 			$this->owner,
 			$this->ownerObject,
-			$this->path,
 			$this->relationName,
 			$this->cardinality,
 			$this->relatedBinding,

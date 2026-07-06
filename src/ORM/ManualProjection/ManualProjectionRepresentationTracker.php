@@ -24,9 +24,9 @@ final class ManualProjectionRepresentationTracker
 	) {
 	}
 
-	public function targetForPath(RecordState $record, RepresentationBinding $relatedBinding, object $preferredTarget): object
+	public function trackFlattenedAdapter(RecordState $record, RepresentationBinding $relatedBinding, object $ownerObject): object
 	{
-		$target = $preferredTarget;
+		$target = $ownerObject;
 		$state = $this->representations->get($target);
 		if ($state instanceof RepresentationState) {
 			$existing = $this->records->getFromRepresentation($state);

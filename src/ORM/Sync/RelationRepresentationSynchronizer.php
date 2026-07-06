@@ -206,6 +206,11 @@ final class RelationRepresentationSynchronizer
 		}
 
 		$currentIds = [];
+		$addedIds = [];
+		foreach ($relation->getAdded() as $added) {
+			$addedIds[spl_object_id($added)] = true;
+		}
+
 		foreach ($items as $item) {
 			$currentIds[spl_object_id($item)] = true;
 			if (! $relation->contains($item)) {
@@ -214,7 +219,8 @@ final class RelationRepresentationSynchronizer
 		}
 
 		foreach ($relation->getItems() as $known) {
-			if (! array_key_exists(spl_object_id($known), $currentIds)) {
+			$id = spl_object_id($known);
+			if (! array_key_exists($id, $currentIds) && ! array_key_exists($id, $addedIds)) {
 				$relation->remove($known);
 			}
 		}
