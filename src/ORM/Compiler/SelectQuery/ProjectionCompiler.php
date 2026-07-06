@@ -46,7 +46,7 @@ final class ProjectionCompiler
 		return $this->compileResult($query)->getBinding();
 	}
 
-	public function compileResult(SelectQuery $query): BindingCompilation
+	public function compileResult(SelectQuery $query): ProjectionCompilation
 	{
 		$this->internalResultKeyCounter = 0;
 
@@ -60,7 +60,7 @@ final class ProjectionCompiler
 		$this->compileRelationSourcedFlatFields($binding, $query, $sourceResolver, $projectionIdentities);
 		$this->compileRelationSelections($binding, $query);
 
-		return new BindingCompilation($binding, $projectionIdentities);
+		return new ProjectionCompilation($binding, $projectionIdentities);
 	}
 
 	private function compileRootScalarFields(

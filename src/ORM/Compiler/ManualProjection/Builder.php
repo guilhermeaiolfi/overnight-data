@@ -50,7 +50,7 @@ final class Builder
 		);
 		$this->targetFactory = new ProjectionTargetFactory(
 			$this->session,
-			$this,
+			$this->representation,
 			$pathResolver,
 			$relationApplier,
 			$representationTracker,
@@ -155,11 +155,6 @@ final class Builder
 		}
 
 		throw new InvalidArgumentException('Builder::existing() requires from(), fromPath(), or a relation reference.');
-	}
-
-	public function finalizeObjectShapedTarget(Target $target): object
-	{
-		return $target->getTargetObject();
 	}
 
 	public function properties(PropertyRef|AllProperties ...$items): self

@@ -13,7 +13,7 @@ namespace ON\Data\ORM\Compiler\SelectQuery;
  */
 use ON\Data\ORM\State\RepresentationBinding;
 
-final class BindingCompilation
+final class ProjectionCompilation
 {
 	public function __construct(
 		private RepresentationBinding $binding,

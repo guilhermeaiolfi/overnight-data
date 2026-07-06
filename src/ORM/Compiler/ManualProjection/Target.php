@@ -19,7 +19,6 @@ use ON\Data\Query\Exception\UnknownQueryFieldException;
 final class Target implements PropertySource
 {
 	public function __construct(
-		private Builder $builder,
 		private RecordState $owner,
 		private string $relationName,
 		private RepresentationRelationCardinality $cardinality,
@@ -90,7 +89,7 @@ final class Target implements PropertySource
 
 	public function end(): object
 	{
-		return $this->builder->finalizeObjectShapedTarget($this);
+		return $this->targetObject;
 	}
 
 	public function __get(string $name): PropertyRef

@@ -10,6 +10,7 @@ use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
+use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompilation;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompiler;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityMap;
 use ON\Data\ORM\Query\MutableQueryResultTracker;
@@ -626,7 +627,7 @@ final class SelectQuery implements QuerySourceInterface
 		$projectionIdentities = null;
 
 		if ($this->mutable) {
-			$compilation = (new ProjectionCompiler())->compileResult($this);
+			$compilation = $this->compileMutableProjection();
 			$binding = $compilation->getBinding();
 			$projectionIdentities = $compilation->getProjectionIdentities();
 		}
@@ -657,7 +658,7 @@ final class SelectQuery implements QuerySourceInterface
 		$projectionIdentities = null;
 
 		if ($this->mutable) {
-			$compilation = (new ProjectionCompiler())->compileResult($this);
+			$compilation = $this->compileMutableProjection();
 			$binding = $compilation->getBinding();
 			$projectionIdentities = $compilation->getProjectionIdentities();
 		}
@@ -769,6 +770,11 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		return $this->executor;
+	}
+
+	private function compileMutableProjection(): ProjectionCompilation
+	{
+		return (new ProjectionCompiler())->compileResult($this);
 	}
 
 	/**

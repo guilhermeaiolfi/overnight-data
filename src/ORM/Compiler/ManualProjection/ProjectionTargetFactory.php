@@ -25,7 +25,7 @@ final class ProjectionTargetFactory
 {
 	public function __construct(
 		private Session $session,
-		private Builder $builder,
+		private object $rootRepresentation,
 		private PathResolver $pathResolver,
 		private RelationApplier $relationApplier,
 		private RepresentationTracker $representationTracker,
@@ -191,12 +191,11 @@ final class ProjectionTargetFactory
 		RecordState $record,
 		?object $explicitTarget = null,
 	): Target {
-		$objectShaped = $this->builder->getRepresentation() !== $ownerObject;
+		$objectShaped = $this->rootRepresentation !== $ownerObject;
 		$target = $this->resolvePathTargetObject($record, $relatedBinding, $ownerObject, $explicitTarget, $objectShaped);
 		$this->relationApplier->applyTarget($owner, $relationName, $cardinality, $relatedBinding, $target);
 
 		return new Target(
-			$this->builder,
 			$owner,
 			$relationName,
 			$cardinality,
@@ -218,7 +217,6 @@ final class ProjectionTargetFactory
 		$this->relationApplier->applyTarget($owner, $relationName, $cardinality, $relatedBinding, $target);
 
 		return new Target(
-			$this->builder,
 			$owner,
 			$relationName,
 			$cardinality,
@@ -243,9 +241,9 @@ final class ProjectionTargetFactory
 		}
 
 		if ($objectShaped) {
-			$this->representationTracker->trackTarget($this->builder->getRepresentation(), $record, $relatedBinding);
+			$this->representationTracker->trackTarget($this->rootRepresentation, $record, $relatedBinding);
 
-			return $this->builder->getRepresentation();
+			return $this->rootRepresentation;
 		}
 
 		return $this->representationTracker->trackFlattenedAdapter($record, $relatedBinding, $ownerObject);

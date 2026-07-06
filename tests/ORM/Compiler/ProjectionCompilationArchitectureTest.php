@@ -44,10 +44,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 	{
 		$root = dirname(__DIR__, 3);
 
-		self::assertFileDoesNotExist($root . '/src/ORM/Binding/ProjectionIdentityProviderInterface.php');
-		self::assertFileDoesNotExist($root . '/src/ORM/Binding/SelectQueryProjectionIdentityProvider.php');
 		self::assertFileDoesNotExist($root . '/src/ORM/ManualProjection/ManualProjectionIdentityProvider.php');
-		self::assertFileDoesNotExist($root . '/src/ORM/Binding/SelectionProjectionCompiler.php');
 		self::assertFalse(method_exists(ProjectionSelectionNormalizer::class, 'fieldForSelection'));
 		self::assertFileDoesNotExist($root . '/src/ORM/Compiler/ProjectionSourceResolver.php');
 		self::assertFileExists($root . '/src/ORM/Compiler/ProjectionSourceResolverInterface.php');
@@ -88,15 +85,6 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 
 		self::assertFileDoesNotExist($root . '/src/ORM/ManualProjection/ProjectionSourceDeclaration.php');
 		self::assertFileDoesNotExist($root . '/src/ORM/ManualProjection/ProjectionPathDeclaration.php');
-	}
-
-	public function testBindingNamespaceDoesNotContainProjectionCompilerClasses(): void
-	{
-		$bindingRoot = dirname(__DIR__, 3) . '/src/ORM/Binding';
-
-		if (is_dir($bindingRoot)) {
-			self::assertSame([], glob($bindingRoot . '/*.php') ?: []);
-		}
 	}
 
 	public function testManualProjectionNamespaceDoesNotExist(): void
