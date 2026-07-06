@@ -9,6 +9,7 @@ use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
+use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
@@ -1134,6 +1135,143 @@ final class SessionTest extends TestCase
 		self::assertFalse($collection->hasChanges());
 	}
 
+	public function testAddingNewChildToPartiallyLoadedHasManyFlushesWithoutDeletingUnknownChildren(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$newChild = $this->representation(['id' => null, 'title' => 'New child', 'user_id' => null]);
+		$session->adopt($newChild, $this->postTemplateBindingFor($posts), $session->trackNew($posts, ['title' => 'New child', 'user_id' => null]));
+		$collection = $session->trackToManyRelation(new ToManyRelationState($owner, 'posts', $this->postTemplateBindingFor($posts)));
+
+		$collection->add($newChild);
+		$session->flush();
+		$session->flush();
+
+		self::assertTrue($collection->isPartiallyLoaded());
+		self::assertFalse($collection->hasChanges());
+		self::assertCount(1, $executor->getCommands());
+		$command = $executor->getCommands()[0];
+		if (! $command instanceof InsertCommand) {
+			self::fail('Expected an insert command for the new child.');
+		}
+
+		self::assertSame($posts, $command->getCollection());
+		self::assertSame(['title' => 'New child', 'user_id' => 10], $command->getValues());
+	}
+
+	public function testRemovingKnownChildFromPartiallyLoadedHasManyOnlyDetachesThatChild(): void
+	{
+		[$users, $posts] = $this->usersWithNullablePosts();
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$child = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Known child', 'user_id' => 10]);
+		$childRepresentation = $this->representation(['id' => 5, 'title' => 'Known child', 'user_id' => 10]);
+		$session->adopt($childRepresentation, $this->postTemplateBindingFor($posts), $child);
+		$collection = $session->trackToManyRelation(new ToManyRelationState(
+			$owner,
+			'posts',
+			$this->postTemplateBindingFor($posts),
+			[$childRepresentation],
+		));
+
+		$collection->remove($childRepresentation);
+		$session->flush();
+		$session->flush();
+
+		self::assertTrue($collection->isPartiallyLoaded());
+		self::assertFalse($collection->hasChanges());
+		self::assertSame([], $collection->getItems());
+		self::assertCount(1, $executor->getCommands());
+		$command = $executor->getCommands()[0];
+		if (! $command instanceof UpdateCommand) {
+			self::fail('Expected an update command detaching only the known child.');
+		}
+
+		self::assertSame($posts, $command->getCollection());
+		self::assertSame(['id' => 5], $command->getIdentity());
+		self::assertSame(['user_id' => null], $command->getChanges());
+	}
+
+	public function testNewRootWithExistingBelongsToAndMixedManyToManyItemsFlushesInDependencyOrder(): void
+	{
+		[$posts, $users, $tags, $through] = $this->postsWithAuthorAndTags();
+		$executor = new RecordingCommandExecutor(results: [
+			new CommandResult(1, ['id' => 50]),
+			new CommandResult(1, ['id' => 7]),
+			new CommandResult(1),
+			new CommandResult(1),
+		]);
+		$session = new Session($executor);
+		$author = $session->identify($users, ['id' => 10]);
+		$existingTag = $session->identify($tags, ['id' => 3]);
+		$newTag = $this->representation(['id' => null, 'label' => 'New']);
+		$post = $this->representation([
+			'id' => null,
+			'title' => 'Draft',
+			'author_id' => null,
+			'author' => $author,
+			'tags' => [$existingTag, $newTag],
+		]);
+
+		$session->sync($post, $this->postBindingWithAuthorAndTags($posts, $users, $tags));
+		$session->flush();
+
+		self::assertCount(4, $executor->getCommands());
+		$postInsert = $executor->getCommands()[0];
+		$newTagInsert = $executor->getCommands()[1];
+		$existingTagLink = $executor->getCommands()[2];
+		$newTagLink = $executor->getCommands()[3];
+		self::assertInstanceOf(InsertCommand::class, $postInsert);
+		self::assertSame($posts, $postInsert->getCollection());
+		self::assertSame(['title' => 'Draft', 'author_id' => 10], $postInsert->getValues());
+		self::assertInstanceOf(InsertCommand::class, $newTagInsert);
+		self::assertSame($tags, $newTagInsert->getCollection());
+		self::assertSame(['label' => 'New'], $newTagInsert->getValues());
+		self::assertInstanceOf(InsertCommand::class, $existingTagLink);
+		self::assertSame($through, $existingTagLink->getCollection());
+		self::assertSame(['post_id' => 50, 'tag_id' => 3], $existingTagLink->getValues());
+		self::assertInstanceOf(InsertCommand::class, $newTagLink);
+		self::assertSame($through, $newTagLink->getCollection());
+		self::assertSame(['post_id' => 50, 'tag_id' => 7], $newTagLink->getValues());
+	}
+
+	public function testAddingNewChildToPartiallyLoadedCompositeHasManyFlushesWithoutDeletingUnknownChildren(): void
+	{
+		[$owners, $children] = $this->compositeOwnersWithChildren();
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$owner = $session->trackClean($owners->getKey(['tenant_id' => 7, 'user_id' => 10]), [
+			'tenant_id' => 7,
+			'user_id' => 10,
+			'name' => 'Owner',
+		]);
+		$newChild = $this->representation(['label' => 'Composite child', 'tenant_ref' => null, 'user_ref' => null]);
+		$session->adopt($newChild, $this->compositeChildBindingFor($children), $session->trackNew($children, [
+			'label' => 'Composite child',
+			'tenant_ref' => null,
+			'user_ref' => null,
+		]));
+		$collection = $session->trackToManyRelation(new ToManyRelationState($owner, 'children', $this->compositeChildBindingFor($children)));
+
+		$collection->add($newChild);
+		$session->flush();
+		$session->flush();
+
+		self::assertTrue($collection->isPartiallyLoaded());
+		self::assertFalse($collection->hasChanges());
+		self::assertCount(1, $executor->getCommands());
+		$command = $executor->getCommands()[0];
+		if (! $command instanceof InsertCommand) {
+			self::fail('Expected an insert command for the new composite child.');
+		}
+
+		self::assertSame($children, $command->getCollection());
+		self::assertSame(['label' => 'Composite child', 'tenant_ref' => 7, 'user_ref' => 10], $command->getValues());
+	}
+
 	public function testRemovingIdentifiedChildFromUnloadedManyToManyUnlinksWithoutLoadingCollection(): void
 	{
 		[$users, $tags, $through] = $this->usersWithTags();
@@ -1293,6 +1431,42 @@ final class SessionTest extends TestCase
 		return $binding;
 	}
 
+	private function postBindingWithAuthorAndTags(
+		CollectionInterface $posts,
+		CollectionInterface $users,
+		CollectionInterface $tags,
+	): RepresentationBinding {
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($posts, 'id')));
+		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($posts, 'title')));
+		$binding->addField(new RepresentationFieldBinding('author_id', RecordFieldRef::template($posts, 'author_id')));
+		$binding->addRelation(new RepresentationRelationBinding(
+			'author',
+			RecordRelationRef::forCollection($posts, 'author'),
+			RepresentationRelationCardinality::ONE,
+			$this->userTemplateBindingFor($users)
+		));
+		$binding->addRelation(new RepresentationRelationBinding(
+			'tags',
+			RecordRelationRef::forCollection($posts, 'tags'),
+			RepresentationRelationCardinality::MANY,
+			$this->tagTemplateBindingFor($tags),
+			false
+		));
+
+		return $binding;
+	}
+
+	private function compositeChildBindingFor(CollectionInterface $children): RepresentationBinding
+	{
+		$binding = new RepresentationBinding();
+		$binding->addField(new RepresentationFieldBinding('label', RecordFieldRef::template($children, 'label')));
+		$binding->addField(new RepresentationFieldBinding('tenant_ref', RecordFieldRef::template($children, 'tenant_ref')));
+		$binding->addField(new RepresentationFieldBinding('user_ref', RecordFieldRef::template($children, 'user_ref')));
+
+		return $binding;
+	}
+
 	private function usersWithPosts(): CollectionInterface
 	{
 		$registry = new Registry();
@@ -1360,6 +1534,98 @@ final class SessionTest extends TestCase
 		self::assertInstanceOf(CollectionInterface::class, $through);
 
 		return [$users, $tags, $through];
+	}
+
+	/**
+	 * @return array{0: CollectionInterface, 1: CollectionInterface}
+	 */
+	private function usersWithNullablePosts(): array
+	{
+		$registry = new Registry();
+		$registry->collection('posts')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('title', 'string')->end()
+			->field('user_id', 'int')->end()
+			->end();
+		$posts = $registry->getCollection('posts');
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+		self::assertInstanceOf(CollectionInterface::class, $posts);
+		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('user_id')->nullable(true);
+
+		return [$users, $posts];
+	}
+
+	/**
+	 * @return array{0: CollectionInterface, 1: CollectionInterface, 2: CollectionInterface, 3: CollectionInterface}
+	 */
+	private function postsWithAuthorAndTags(): array
+	{
+		$registry = new Registry();
+		$registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end()
+			->end();
+		$registry->collection('tags')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('label', 'string')->end()
+			->end();
+		$registry->collection('post_tag')
+			->field('post_id', 'int')->end()
+			->field('tag_id', 'int')->end()
+			->end();
+		$posts = $registry->collection('posts')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('title', 'string')->end()
+			->field('author_id', 'int')->end();
+		$posts->belongsTo('author', 'users')->innerKey('author_id')->outerKey('id');
+		$relation = $posts->relation('tags', M2MRelation::class)
+			->collection('tags')
+			->innerKey('id')
+			->outerKey('id')
+			->through('post_tag')
+				->innerKey('post_id')
+				->outerKey('tag_id')
+				->end();
+
+		self::assertInstanceOf(M2MRelation::class, $relation);
+		$users = $registry->getCollection('users');
+		$tags = $registry->getCollection('tags');
+		$through = $registry->getCollection('post_tag');
+		self::assertInstanceOf(CollectionInterface::class, $users);
+		self::assertInstanceOf(CollectionInterface::class, $tags);
+		self::assertInstanceOf(CollectionInterface::class, $through);
+
+		return [$posts, $users, $tags, $through];
+	}
+
+	/**
+	 * @return array{0: CollectionInterface, 1: CollectionInterface}
+	 */
+	private function compositeOwnersWithChildren(): array
+	{
+		$registry = new Registry();
+		$children = $registry->collection('children')
+			->primaryKey('tenant_ref', 'user_ref')
+			->field('label', 'string')->end()
+			->field('tenant_ref', 'int')->end()
+			->field('user_ref', 'int')->end();
+		$owners = $registry->collection('owners')
+			->primaryKey('tenant_id', 'user_id')
+			->field('tenant_id', 'int')->end()
+			->field('user_id', 'int')->end()
+			->field('name', 'string')->end();
+		$owners->hasMany('children', 'children')
+			->innerKey(['tenant_id', 'user_id'])
+			->outerKey(['tenant_ref', 'user_ref']);
+
+		return [$owners, $children];
 	}
 
 	/**
