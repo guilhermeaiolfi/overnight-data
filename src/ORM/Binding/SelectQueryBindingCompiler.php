@@ -24,6 +24,12 @@ use ON\Data\Query\SelectQuery;
 final class SelectQueryBindingCompiler
 {
 	private int $internalResultKeyCounter = 0;
+	private SelectionProjectionCompiler $selectionCompiler;
+
+	public function __construct(?SelectionProjectionCompiler $selectionCompiler = null)
+	{
+		$this->selectionCompiler = $selectionCompiler ?? new SelectionProjectionCompiler();
+	}
 
 	public function compile(SelectQuery $query): RepresentationBinding
 	{
@@ -106,28 +112,13 @@ final class SelectQueryBindingCompiler
 		SelectQuery $query,
 		array $selections,
 	): void {
-		foreach ($selections as $selection) {
-			$expression = $selection->getExpression();
-			$path = $selection->getSelectionKey();
-			$fieldRef = $this->resolveRootFieldRef($query, $selection);
-
-			if (! $fieldRef instanceof FieldRef) {
-				continue;
-			}
-
-			if ($expression instanceof AliasedExpression) {
-				$path = $expression->getAlias();
-			}
-
-			$this->addFieldBinding(
-				$binding,
-				new RepresentationFieldBinding(
-					$path,
-					RecordFieldRef::template($collection, $fieldRef->getName()),
-					writable: true,
-				),
-			);
-		}
+		$this->selectionCompiler->compileInto(
+			$binding,
+			$selections,
+			fn (SelectionItem $selection, FieldRef $fieldRef): ?RecordFieldRef => $this->resolveRootFieldRef($query, $selection) instanceof FieldRef
+				? RecordFieldRef::template($collection, $fieldRef->getName())
+				: null,
+		);
 	}
 
 	private function addDefaultFields(RepresentationBinding $binding, CollectionInterface $collection): void
@@ -180,20 +171,10 @@ final class SelectQueryBindingCompiler
 			$fieldRef = $resolved['fieldRef'];
 			$relationRef = $resolved['relationRef'];
 			$targetCollection = $resolved['targetCollection'];
-			$expression = $selection->getExpression();
-			$path = $selection->getSelectionKey();
-
-			if ($expression instanceof AliasedExpression) {
-				$path = $expression->getAlias();
-			}
-
-			$this->addFieldBinding(
+			$this->selectionCompiler->compileInto(
 				$binding,
-				new RepresentationFieldBinding(
-					$path,
-					RecordFieldRef::template($targetCollection, $fieldRef->getName()),
-					writable: true,
-				),
+				[$selection],
+				static fn (): RecordFieldRef => RecordFieldRef::template($targetCollection, $fieldRef->getName()),
 			);
 
 			$relationRefsByPath[json_encode($relationRef->getPath(), JSON_THROW_ON_ERROR)] = $relationRef;

@@ -197,6 +197,67 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 		self::assertSame(['user_id' => 1, 'post_id' => 1], $harness->fetchRow('SELECT user_id, post_id FROM user_post'));
 	}
 
+	public function testFromPathCreatesObjectShapedTargetWithoutSelect(): void
+	{
+		$harness = SqliteMemoryHarness::create();
+		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
+		$harness->exec('CREATE TABLE posts (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT)');
+		$harness->exec('CREATE TABLE user_post (user_id INTEGER, post_id INTEGER)');
+		$harness->exec("INSERT INTO users (id, name) VALUES (1, 'Ada')");
+		[$users] = $this->m2mRegistry();
+		$session = new Session($harness->commandExecutor);
+		$query = $harness->database->query($users);
+		$query->select($query->id, $query->name);
+		$query->posts->fields('id', 'title');
+
+		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		self::assertInstanceOf(stdClass::class, $user);
+
+		$post = new stdClass();
+		$post->title = 'Path-created post';
+		$session
+			->projection($post)
+			->fromPath($user, 'posts')
+			->create()
+			->end();
+
+		$relation = $session->getToManyRelations()->get($session->getRecords()->getFromRepresentation($session->getRepresentations()->get($user)), 'posts');
+		self::assertNotNull($relation);
+		self::assertSame([$post], $relation->getAdded());
+
+		$session->flush();
+
+		self::assertSame(['title' => 'Path-created post'], $harness->fetchRow('SELECT title FROM posts WHERE id = 1'));
+		self::assertSame(['user_id' => 1, 'post_id' => 1], $harness->fetchRow('SELECT user_id, post_id FROM user_post'));
+	}
+
+	public function testFromPathFlattenedAliasSelectionUsesRelatedBinding(): void
+	{
+		$harness = SqliteMemoryHarness::create();
+		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
+		$harness->exec('CREATE TABLE posts (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT)');
+		$harness->exec('CREATE TABLE user_post (user_id INTEGER, post_id INTEGER)');
+		$harness->exec("INSERT INTO users (id, name) VALUES (1, 'Ada')");
+		[$users] = $this->m2mRegistry();
+		$session = new Session($harness->commandExecutor);
+		$query = $harness->database->query($users);
+		$query->select($query->id, $query->name);
+		$query->posts->fields('id', 'title');
+
+		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		self::assertInstanceOf(stdClass::class, $user);
+		$user->newPostTitle = 'Path alias post';
+
+		$p = $session->projection($user);
+		$post = $p->fromPath($user, 'posts')->create();
+		$p->select($post->title->as('newPostTitle'))->end();
+
+		$session->flush();
+
+		self::assertSame(['title' => 'Path alias post'], $harness->fetchRow('SELECT title FROM posts WHERE id = 1'));
+		self::assertSame(['user_id' => 1, 'post_id' => 1], $harness->fetchRow('SELECT user_id, post_id FROM user_post'));
+	}
+
 	/**
 	 * @return array{0: CollectionInterface}
 	 */
