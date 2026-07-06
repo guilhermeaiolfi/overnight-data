@@ -6,13 +6,19 @@ namespace ON\Data\ORM\Query;
 
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\Sync\RepresentationReader;
+use RuntimeException;
 
 final class MutableQueryResultTracker
 {
+	private RepresentationReader $reader;
+
 	public function __construct(
 		private ?ProjectionRepresentationAdopter $projectionAdopter = null,
+		?RepresentationReader $reader = null,
 	) {
 		$this->projectionAdopter ??= new ProjectionRepresentationAdopter();
+		$this->reader = $reader ?? new RepresentationReader();
 	}
 
 	/**
@@ -67,6 +73,7 @@ final class MutableQueryResultTracker
 			return;
 		}
 
+		$this->markLoadedRelatedObjectsExisting($session, $object, $binding);
 		$session->sync($object, $binding);
 	}
 
@@ -79,5 +86,30 @@ final class MutableQueryResultTracker
 		}
 
 		return count($collections) > 1;
+	}
+
+	private function markLoadedRelatedObjectsExisting(
+		Session $session,
+		object $object,
+		RepresentationBinding $binding,
+	): void {
+		foreach ($binding->getRelations() as $relation) {
+			if ($relation->isMany()) {
+				foreach ($this->reader->readItems($object, $relation, static fn (string $message) => new RuntimeException($message)) as $item) {
+					$session->existing($item);
+					$this->markLoadedRelatedObjectsExisting($session, $item, $relation->getRelatedBinding());
+				}
+
+				continue;
+			}
+
+			if ($relation->isSingle()) {
+				$target = $this->reader->readTarget($object, $relation, static fn (string $message) => new RuntimeException($message));
+				if ($target !== null) {
+					$session->existing($target);
+					$this->markLoadedRelatedObjectsExisting($session, $target, $relation->getRelatedBinding());
+				}
+			}
+		}
 	}
 }

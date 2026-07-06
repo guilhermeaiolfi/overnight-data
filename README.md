@@ -25,6 +25,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for release history and [`docs/quickstart.md`
 - Relation loading: structured relation selection for nested results, loader-owned join or separate-query execution, and parser-backed result assembly for built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relations.
 - ORM persistence: `RecordState`-backed scalar insert/update/delete planning, scalar and relation representation synchronization, configured relation persistence planning, `FlushExecutor` / `Session` orchestration, Cycle-backed command execution, affected-row validation, and simple auto-increment primary-key merge after inserts.
 - Query result export: array results by default, read-only `stdClass` and public-property class export, and mutable `stdClass` query export with flat projection provenance.
+- Manual mutable projections: non-executing `Session::projection($object)->from(...)->select(...)->end()` provenance for application-created or manually extended objects.
 
 ## Query shape and persistence source are independent
 
@@ -50,7 +51,7 @@ $session->flush();
 // Updates companies.name.
 ```
 
-Mutable export is `stdClass`-only for now. User-defined classes are supported for read-only export only.
+For objects that did not come from a query, `Session::projection($object)` can declare the same kind of field provenance manually with `from()`, `create()`, `existing()`, `tracked()`, and `select()`. Mutable export is `stdClass`-only for now. User-defined classes are supported for read-only export only.
 
 ## Query result modes
 
@@ -130,7 +131,7 @@ Public-property class export requirements:
 - No full database-default refresh beyond simple auto-increment primary keys.
 - Mutable user-defined class export is not supported yet.
 - Mutable iteration is not supported yet.
-- Flat projection provenance is for mutable `stdClass` query export.
+- Flat projection provenance is available for mutable `stdClass` query export and manual mutable projections.
 
 ## Namespace
 
@@ -181,3 +182,4 @@ composer check
 - `docs/orm/persistence.md` documents the ORM persistence pipeline, affected-row validation, Cycle command executor boundary, generated-key support, relation persistence planning boundary, and write-side limitations.
 - `docs/orm/representation-binding.md` documents representation binding, flat projection adoption, mapper/query/tracking boundaries, and scalar sync guardrails.
 - `docs/orm/mutable-select-query-projections.md` documents mutable `SelectQuery` projection provenance, flattened related-field updates, relation intent from queried objects, and current projection boundaries.
+- `docs/orm/manual-mutable-projections.md` documents manual non-executing `from()` / `select()` projections for objects that need explicit record identities and relation item intent.

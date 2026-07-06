@@ -85,7 +85,19 @@ Object graphs and flat mutable projections use different adoption paths:
 
 For flat projections, the compiler may add hidden identity selections tagged `SelectionTag::INTERNAL`. `ProjectionIdentityMap` maps those internal identity values to record keys during adoption. Internal selections are stripped from public query results, but they are required for mutable flat projection tracking.
 
-Flat projection adoption is currently for mutable `stdClass` query export.
+Flat projection adoption is used by mutable `stdClass` query export. Manual mutable projections use the same binding model, but they supply concrete record identities without executing a query.
+
+Manual projections compile SelectQuery-style selections into concrete `RecordFieldRef` targets:
+
+```text
+Session::projection($object)
+  -> from(collection) supplies the source
+  -> create()/existing()/tracked() supplies the concrete RecordState
+  -> select(FieldRef::as(...)) supplies the public path
+  -> end() merges RepresentationBinding provenance into the object state
+```
+
+For to-many and M2M relations, a selected relation field does not create an item by itself. The projection must first call `create($u->posts)`, `existing($u->posts, $key)`, or `tracked($u->posts, $object)` so relation runtime state has one concrete item to add.
 
 Relation persistence planning then consumes changed `ToManyRelationState` and `ToOneRelationState` instances. Built-in planners cover many-to-many, has-many, belongs-to, and has-one relation definitions.
 
@@ -187,6 +199,8 @@ RepresentationStateResolver      -> already-tracked related objects only
 ```
 
 `MANY` bindings become `ToManyRelationState` runtime state. `ONE` bindings become `ToOneRelationState` runtime state. `Session::sync($object, $binding)` exposes this graph-aware representation sync step directly for plain objects with a single-collection root binding, and `Session::sync($object)` refreshes an already-tracked object graph. `Session::flush()` still runs strict sync automatically before planning and flushing. Expression bindings are ignored by both synchronizers for now. They should survive on the binding model as provenance for later tasks.
+
+Manual projection field and relation bindings may opt into "missing path means no write" behavior because manually extended flat objects often declare optional write paths. Normal graph and query-created bindings remain strict: missing writable scalar paths or malformed relation values still raise through sync.
 
 `Session::flush()` does not adopt newly attached untracked objects. If a new related plain object is attached after the last explicit `sync($object)`, `flush()` raises through the strict relation synchronization path. Call `sync($object)` again to refresh runtime state before flushing.
 

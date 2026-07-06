@@ -25,6 +25,10 @@ final class SyncConflictDetector
 		foreach ($tracked->getBinding()->getWritableFieldBindings() as $binding) {
 			$path = $binding->getPath();
 			if (! array_key_exists($path, $currentValues)) {
+				if ($binding->shouldSkipWhenMissing()) {
+					continue;
+				}
+
 				throw new SyncException(sprintf("Current representation values do not contain path '%s'.", $path));
 			}
 

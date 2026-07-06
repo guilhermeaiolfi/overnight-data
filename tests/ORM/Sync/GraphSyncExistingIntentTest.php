@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Sync;
 
-use ON\Data\Database\Cycle\CycleCommandExecutor;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
@@ -19,13 +18,13 @@ use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
-use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\Sync\ExistingIntent;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\ORM\Support\OrmFixture;
 use Tests\ON\Data\Smoke\Support\SqliteMemoryHarness;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
+use Throwable;
 
 final class GraphSyncExistingIntentTest extends TestCase
 {
@@ -195,7 +194,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 
 		$session->sync($owner, $this->ownerBindingWithPosts($users, $posts));
 
-		$this->expectException(\Throwable::class);
+		$this->expectException(Throwable::class);
 
 		$session->flush();
 	}

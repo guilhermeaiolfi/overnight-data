@@ -74,10 +74,18 @@ final class ScalarRepresentationSynchronizer
 		$values = [];
 
 		foreach ($binding->getWritableFieldBindings() as $fieldBinding) {
-			$values[$fieldBinding->getPath()] = $this->reader->readPath(
-				$representation,
-				$fieldBinding->getPath()
-			);
+			try {
+				$values[$fieldBinding->getPath()] = $this->reader->readPath(
+					$representation,
+					$fieldBinding->getPath()
+				);
+			} catch (SyncException $exception) {
+				if ($fieldBinding->shouldSkipWhenMissing() && str_contains($exception->getMessage(), ' is missing.')) {
+					continue;
+				}
+
+				throw $exception;
+			}
 		}
 
 		return $values;
@@ -105,6 +113,10 @@ final class ScalarRepresentationSynchronizer
 			}
 
 			if (! array_key_exists($path, $currentValues)) {
+				if ($binding->shouldSkipWhenMissing()) {
+					continue;
+				}
+
 				throw new SyncException(sprintf("Current representation values do not contain path '%s'.", $path));
 			}
 

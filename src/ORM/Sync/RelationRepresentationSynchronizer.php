@@ -78,7 +78,16 @@ final class RelationRepresentationSynchronizer
 
 		$owner = $relationRef->getState();
 		$relationName = $relationRef->getRelationName();
-		$items = $this->reader->readItems($representation, $relationBinding, $this->syncError(...));
+
+		try {
+			$items = $this->reader->readItems($representation, $relationBinding, $this->syncError(...));
+		} catch (SyncException $exception) {
+			if (! $relationBinding->shouldSkipWhenMissing() || ! str_contains($exception->getMessage(), ' is missing.')) {
+				throw $exception;
+			}
+
+			return;
+		}
 		foreach ($items as $item) {
 			$this->requireTrackedRepresentation($states, $item, $relationBinding->getPath());
 		}
@@ -118,7 +127,16 @@ final class RelationRepresentationSynchronizer
 
 		$owner = $relationRef->getState();
 		$relationName = $relationRef->getRelationName();
-		$target = $this->reader->readTarget($representation, $relationBinding, $this->syncError(...));
+
+		try {
+			$target = $this->reader->readTarget($representation, $relationBinding, $this->syncError(...));
+		} catch (SyncException $exception) {
+			if (! $relationBinding->shouldSkipWhenMissing() || ! str_contains($exception->getMessage(), ' is missing.')) {
+				throw $exception;
+			}
+
+			return;
+		}
 		if ($target !== null) {
 			$this->requireTrackedRepresentation($states, $target, $relationBinding->getPath());
 		}

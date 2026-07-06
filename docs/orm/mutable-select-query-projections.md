@@ -1,6 +1,6 @@
 # Mutable SelectQuery Projections
 
-Mutable `SelectQuery` export is more than a convenient object shape. When data comes from a mutable query export, the query itself is the field-target declaration. Manual field-target APIs are only needed later for objects that did not come from a query.
+Mutable `SelectQuery` export is more than a convenient object shape. When data comes from a mutable query export, the executed query itself is the field-target declaration. For objects that did not come from a query, use manual mutable projections with `Session::projection($object)`.
 
 This page explains how query selection provenance and hidden internal identity selections let ON Data route public object writes to the correct `RecordState` fields — including flattened related fields, nested relation items, and relation intent created after the query runs.
 
@@ -10,6 +10,7 @@ See also:
 - [`../query/bound-execution.md`](../query/bound-execution.md) — bound execution, result modes, and the neutral database facade
 - [`representation-binding.md`](./representation-binding.md) — recursive `RepresentationBinding` model and flat projection adoption
 - [`persistence.md`](./persistence.md) — scalar sync, relation sync, command planning, and flush orchestration
+- [`manual-mutable-projections.md`](./manual-mutable-projections.md) — non-executing manual projection declarations
 
 ## Core concept
 
@@ -31,7 +32,7 @@ $user->profileName
 
 The public object does not need to expose `profile_id`. The query/runtime may include hidden internal identity selections so the adopter can track the concrete record behind `profileName`. Selections tagged `SelectionTag::INTERNAL` are stripped from public array and object results, but they are required for mutable flat projection tracking.
 
-When a mutable projection is created by `SelectQuery`, the query is the field-target declaration. Manual field-target APIs are only needed later for objects that did not come from a query.
+When a mutable projection is created by `SelectQuery`, the query is the field-target declaration.
 
 Mutable export requirements:
 
@@ -239,14 +240,16 @@ $user->newPostTitle = 'New post';
 $session->sync($user);
 ```
 
-Explanation:
+There is no concrete post item and no relation item identity. Use a manual mutable projection to supply that identity:
 
-```text
-There is no concrete post item and no relation item identity.
-A future manual projection/field-target API may support this, but it is not part of the current SelectQuery projection model.
+```php
+$p = $session->projection($user);
+$u = $p->from($users)->tracked();
+$post = $p->create($u->posts);
+$p->select($post->title->as('newPostTitle'))->end();
 ```
 
-A mutable projection can update fields whose provenance the query declared. It can also admit new related objects through explicit relation bindings on a tracked root. It cannot infer a new related record from a standalone flat scalar that never came from a query selection or relation item.
+A mutable query projection can update fields whose provenance the query declared. It can also admit new related objects through explicit relation bindings on a tracked root. Manual projections cover standalone flat scalars by requiring the developer to create, identify, or reuse the concrete related record item explicitly.
 
 ## Rules
 
@@ -264,7 +267,7 @@ Existing key-only row:
   use identify(collection, key).
 
 Brand-new flat scalar that did not come from a query:
-  not enough information yet; requires future manual field-target/relation-target API.
+  use Session::projection($object) with from(), create()/existing()/tracked(), and select().
 ```
 
 ## Related reading
@@ -273,3 +276,4 @@ Brand-new flat scalar that did not come from a query:
 - [`../query/bound-execution.md`](../query/bound-execution.md)
 - [`representation-binding.md`](./representation-binding.md)
 - [`persistence.md`](./persistence.md)
+- [`manual-mutable-projections.md`](./manual-mutable-projections.md)

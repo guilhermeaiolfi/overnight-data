@@ -8,6 +8,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
+use ON\Data\ORM\ManualProjection\ManualProjectionBuilder;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\FlushExecutor;
 use ON\Data\ORM\Persistence\FlushResult;
@@ -118,6 +119,11 @@ final class Session
 		$this->context->getExistingIntents()->mark($representation);
 
 		return new ExistingIntent($representation);
+	}
+
+	public function projection(object $representation): ManualProjectionBuilder
+	{
+		return new ManualProjectionBuilder($this, $representation);
 	}
 
 	public function identify(

@@ -12,6 +12,7 @@ final class RepresentationFieldBinding
 		private string $path,
 		private RecordFieldRef $field,
 		private bool $writable = true,
+		private bool $skipWhenMissing = false,
 	) {
 		if ($path === '') {
 			throw new StateException('Representation binding path cannot be empty.');
@@ -30,7 +31,7 @@ final class RepresentationFieldBinding
 
 	public function withField(RecordFieldRef $field): self
 	{
-		return new self($this->path, $field, $this->writable);
+		return new self($this->path, $field, $this->writable, $this->skipWhenMissing);
 	}
 
 	public function isWritable(): bool
@@ -41,5 +42,10 @@ final class RepresentationFieldBinding
 	public function isReadOnly(): bool
 	{
 		return ! $this->writable;
+	}
+
+	public function shouldSkipWhenMissing(): bool
+	{
+		return $this->skipWhenMissing;
 	}
 }

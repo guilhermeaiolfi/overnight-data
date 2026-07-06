@@ -14,6 +14,7 @@ final class RepresentationRelationBinding
 		private RepresentationRelationCardinality $cardinality,
 		private RepresentationBinding $relatedBinding,
 		private bool $collectionFullyLoaded = false,
+		private bool $skipWhenMissing = false,
 	) {
 		if ($path === '') {
 			throw new StateException('Representation relation binding path cannot be empty.');
@@ -32,7 +33,7 @@ final class RepresentationRelationBinding
 
 	public function withRelation(RecordRelationRef $relation): self
 	{
-		return new self($this->path, $relation, $this->cardinality, $this->relatedBinding, $this->collectionFullyLoaded);
+		return new self($this->path, $relation, $this->cardinality, $this->relatedBinding, $this->collectionFullyLoaded, $this->skipWhenMissing);
 	}
 
 	public function getRelationName(): string
@@ -63,5 +64,10 @@ final class RepresentationRelationBinding
 	public function isSingle(): bool
 	{
 		return $this->cardinality === RepresentationRelationCardinality::ONE;
+	}
+
+	public function shouldSkipWhenMissing(): bool
+	{
+		return $this->skipWhenMissing;
 	}
 }
