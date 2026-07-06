@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Compiler\SelectQuery;
 
+/**
+ * Maps hidden internal result keys to collection primary-key fields for flat
+ * mutable projection adoption.
+ *
+ * Exists because SelectQuery may inject INTERNAL-tagged identity selections that
+ * must not appear in public results but are required to resolve RecordState keys
+ * during ProjectionRepresentationAdopter::adopt().
+ */
 use ON\Data\Definition\Collection\CollectionInterface;
 
 final class ProjectionIdentityMap

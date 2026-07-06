@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\State;
 
+/**
+ * Read-only representation path backed by a query selection key rather than a
+ * persisted field.
+ *
+ * Exists as a forward-compatible slot in RepresentationBinding for computed or
+ * expression-driven paths; compilers do not populate these yet.
+ */
 use ON\Data\ORM\Exception\StateException;
 
 final class RepresentationExpressionBinding

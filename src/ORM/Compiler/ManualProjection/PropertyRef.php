@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Compiler\ManualProjection;
 
+/**
+ * Declares one manual projection field: source, backing field name, and optional
+ * public path alias via as().
+ *
+ * Exists as the manual equivalent of a normalized ProjectionFieldShape before
+ * Builder collects shapes for BindingCompiler.
+ */
 final class PropertyRef
 {
 	public function __construct(

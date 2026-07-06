@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Compiler\SelectQuery;
 
+/**
+ * Compiles a SelectQuery selection graph into a RepresentationBinding plus
+ * hidden identity metadata for flat mutable projection adoption.
+ *
+ * Exists as the query-side compiler: it normalizes selections, assembles scalar
+ * field bindings, plans relation branches, injects internal PK selections, and
+ * delegates shared field assembly to ProjectionBindingAssembler.
+ */
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Compiler\ProjectionBindingAssembler;

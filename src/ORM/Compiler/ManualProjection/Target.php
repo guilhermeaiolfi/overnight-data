@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Compiler\ManualProjection;
 
+/**
+ * Fluent handle for a concrete relation target during manual projection.
+ *
+ * Exists to expose field()/all()/end() on relation items after create(),
+ * existing(), or tracked(), mirroring query-style ergonomics without being a
+ * query source.
+ */
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;

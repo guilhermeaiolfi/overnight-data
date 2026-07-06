@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Compiler\ManualProjection;
 
+/**
+ * Resolves manual projection field-shape sources (PropertySource, RelationRef)
+ * to collection and concrete RecordState for binding assembly.
+ *
+ * Exists as the manual ProjectionSourceResolverInterface implementation;
+ * enforces that MANY relations and unresolved sources cannot be compiled alone.
+ */
 use ON\Data\ORM\Compiler\ProjectionSourceResolverInterface;
 use ON\Data\ORM\Compiler\ProjectionSourceTarget;
 use ON\Data\ORM\Exception\StateException;

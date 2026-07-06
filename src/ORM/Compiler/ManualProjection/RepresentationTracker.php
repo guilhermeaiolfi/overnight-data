@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Compiler\ManualProjection;
 
+/**
+ * Registers manual projection targets and adapters in RepresentationStore.
+ *
+ * Exists to bridge RecordState identity to PHP objects (including flattened
+ * adapters and private stdClass adapters for relation APIs) without a separate
+ * projection identity system.
+ */
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;

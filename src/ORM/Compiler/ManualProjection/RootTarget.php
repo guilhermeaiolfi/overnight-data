@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Compiler\ManualProjection;
 
+/**
+ * Fluent handle for a root manual projection target bound to one RecordState.
+ *
+ * Exists as the entry point for field(), relation navigation, and all() after
+ * from()->create()/existing()/tracked() on a collection-backed projection.
+ */
 use ON\Data\ORM\State\RecordState;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Exception\UnknownQueryMemberException;

@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Compiler;
 
+/**
+ * Shared final step of projection compilation: turns normalized field shapes into
+ * RepresentationFieldBinding entries on a RepresentationBinding.
+ *
+ * Exists so SelectQuery and manual projection compilers share one place that
+ * resolves sources, chooses template vs concrete RecordFieldRef, and applies
+ * writability / skip-when-missing flags.
+ */
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;

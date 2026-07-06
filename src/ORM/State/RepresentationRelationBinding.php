@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\State;
 
+/**
+ * One relation representation path bound to a RecordRelationRef and a reusable
+ * related RepresentationBinding branch plus load metadata.
+ *
+ * Exists so graph sync and relation runtime state can share one recursive
+ * binding model without duplicating per-child binding templates.
+ */
 use ON\Data\ORM\Exception\StateException;
 
 final class RepresentationRelationBinding

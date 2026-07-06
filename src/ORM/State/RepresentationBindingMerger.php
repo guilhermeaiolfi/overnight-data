@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\State;
 
+/**
+ * Merges a manual projection overlay into an existing tracked binding.
+ *
+ * Exists so Builder::end() can add manual field paths on top of query-created
+ * provenance without recompiling the full binding graph.
+ */
 use ON\Data\ORM\Exception\StateException;
 
 final class RepresentationBindingMerger

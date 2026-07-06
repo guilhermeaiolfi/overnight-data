@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Compiler\ManualProjection;
 
+/**
+ * Attaches manual projection targets to runtime relation state stores.
+ *
+ * Exists so Builder can register created/tracked relation items in
+ * ToManyRelationState / ToOneRelationState without embedding store logic in the
+ * fluent API.
+ */
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;

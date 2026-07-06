@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Compiler\ManualProjection;
 
+/**
+ * Navigable relation reference in the manual projection fluent API.
+ *
+ * Exists to mirror query relation refs for nested field selection and for
+ * create()/existing()/tracked($relation) without depending on SelectQuery types.
+ */
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 

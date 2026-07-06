@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Compiler\SelectQuery;
 
+/**
+ * Resolves query-side projection sources (root SelectQuery or RelationRef) to
+ * collection identity for binding assembly.
+ *
+ * Exists as the SelectQuery-specific ProjectionSourceResolverInterface; it
+ * intentionally does not interpret aliases or build field bindings.
+ */
 use InvalidArgumentException;
 use ON\Data\ORM\Compiler\ProjectionSourceResolverInterface;
 use ON\Data\ORM\Compiler\ProjectionSourceTarget;

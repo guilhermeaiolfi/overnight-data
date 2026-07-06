@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Compiler\SelectQuery;
 
+/**
+ * Converts query SelectionItem / expression nodes into ProjectionFieldShape
+ * values (public path, source, field name).
+ *
+ * Exists to isolate query-expression parsing from binding assembly so manual
+ * projections can build shapes directly without touching selection types.
+ */
 use InvalidArgumentException;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
 use ON\Data\Query\Expression\AliasedExpression;

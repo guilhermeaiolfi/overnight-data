@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Compiler\ManualProjection;
 
+/**
+ * Resolved fromPath() context: owner record, relation metadata, and the related
+ * binding branch to reuse for new relation targets.
+ *
+ * Exists as a small value object so Builder does not re-walk owner bindings
+ * when attaching path-based targets.
+ */
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;

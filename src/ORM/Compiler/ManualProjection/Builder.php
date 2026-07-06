@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Compiler\ManualProjection;
 
+/**
+ * User-facing fluent API for manual mutable projections via Session::projection().
+ *
+ * Exists to orchestrate target creation (from/fromPath/create/existing/tracked),
+ * property declaration collection, relation attachment, representation tracking,
+ * and final binding merge — while delegating actual binding compilation to
+ * BindingCompiler.
+ */
 use InvalidArgumentException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;

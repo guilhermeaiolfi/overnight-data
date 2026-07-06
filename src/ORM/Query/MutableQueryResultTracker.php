@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Query;
 
+/**
+ * Routes mutable query results to the correct adoption path (flat projection vs
+ * entity graph) and triggers session sync.
+ *
+ * Exists as the bridge between SelectQuery mutable export and Session tracking,
+ * keeping SelectQuery itself free of persistence orchestration details.
+ */
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityMap;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RepresentationBinding;

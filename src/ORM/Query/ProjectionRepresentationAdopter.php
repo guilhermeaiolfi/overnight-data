@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Query;
 
+/**
+ * Adopts flat mutable query projections into tracked RepresentationState by
+ * resolving multiple RecordState identities from one result row.
+ *
+ * Exists because flat stdClass projections can span collections via hidden
+ * identity selections; GraphAdopter handles nested object graphs instead.
+ */
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityMap;
 use ON\Data\ORM\Exception\StateException;

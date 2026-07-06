@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\State;
 
+/**
+ * One scalar representation path bound to a RecordFieldRef with writability and
+ * optional skip-when-missing adoption behavior.
+ *
+ * Exists as the leaf node of RepresentationBinding used by scalar sync and flat
+ * projection adoption.
+ */
 use ON\Data\ORM\Exception\StateException;
 
 final class RepresentationFieldBinding

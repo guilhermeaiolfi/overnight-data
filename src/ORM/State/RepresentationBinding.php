@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\State;
 
+/**
+ * Persistence provenance graph for one representation shape: field, expression,
+ * and relation path maps that describe how object properties map to records.
+ *
+ * Exists as the durable ORM model compiled from queries or manual projections
+ * and consumed by sync, adoption, and relation runtime state — separate from
+ * query selections and mapper hydration.
+ */
 use ON\Data\ORM\Exception\StateException;
 
 final class RepresentationBinding

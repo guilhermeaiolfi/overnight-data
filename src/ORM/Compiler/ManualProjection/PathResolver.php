@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Compiler\ManualProjection;
 
+/**
+ * Resolves Builder::fromPath() against an already-tracked owner binding graph.
+ *
+ * Exists to walk RepresentationRelationBinding branches on tracked owners and
+ * return the related binding template used when creating relation targets.
+ */
 use InvalidArgumentException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
