@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Compiler\SelectQuery;
 
 use InvalidArgumentException;
-use ON\Data\ORM\Compiler\ProjectionSourceResolver;
+use ON\Data\ORM\Compiler\ProjectionSourceResolverInterface;
 use ON\Data\ORM\Compiler\ProjectionSourceTarget;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -13,7 +13,7 @@ use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\SelectQuery;
 
-final class QueryProjectionSourceResolver implements ProjectionSourceResolver
+final class QueryProjectionSourceResolver implements ProjectionSourceResolverInterface
 {
 	public function __construct(
 		private SelectQuery $query,

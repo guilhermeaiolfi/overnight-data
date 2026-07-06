@@ -2,13 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\Compiler;
+namespace ON\Data\ORM\Compiler\SelectQuery;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
-use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityMap;
-use ON\Data\ORM\Compiler\SelectQuery\ProjectionSelectionNormalizer;
-use ON\Data\ORM\Compiler\SelectQuery\QueryProjectionSourceResolver;
+use ON\Data\ORM\Compiler\ProjectionBindingAssembler;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -23,7 +21,7 @@ use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 
-final class SelectQueryBindingCompiler
+final class BindingCompiler
 {
 	private int $internalResultKeyCounter = 0;
 	private ProjectionSelectionNormalizer $selectionNormalizer;
@@ -42,7 +40,7 @@ final class SelectQueryBindingCompiler
 		return $this->compileResult($query)->getBinding();
 	}
 
-	public function compileResult(SelectQuery $query): SelectQueryBindingCompilation
+	public function compileResult(SelectQuery $query): BindingCompilation
 	{
 		$this->internalResultKeyCounter = 0;
 
@@ -56,7 +54,7 @@ final class SelectQueryBindingCompiler
 		$this->compileRelationSourcedFlatFields($binding, $query, $sourceResolver, $projectionIdentities);
 		$this->compileRelationSelections($binding, $query);
 
-		return new SelectQueryBindingCompilation($binding, $projectionIdentities);
+		return new BindingCompilation($binding, $projectionIdentities);
 	}
 
 	private function compileRootScalarFields(

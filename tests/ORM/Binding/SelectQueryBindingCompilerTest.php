@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Binding;
 
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Compiler\SelectQueryBindingCompiler;
+use ON\Data\ORM\Compiler\SelectQuery\BindingCompiler;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use function ON\Data\Query\query;
 use ON\Data\Query\Selection\SelectionTag;
@@ -15,11 +15,11 @@ use PHPUnit\Framework\TestCase;
 
 final class SelectQueryBindingCompilerTest extends TestCase
 {
-	private SelectQueryBindingCompiler $compiler;
+	private BindingCompiler $compiler;
 
 	protected function setUp(): void
 	{
-		$this->compiler = new SelectQueryBindingCompiler();
+		$this->compiler = new BindingCompiler();
 	}
 
 	public function testCompilesSelectedRootScalarFields(): void

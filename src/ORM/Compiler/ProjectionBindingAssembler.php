@@ -15,7 +15,7 @@ final class ProjectionBindingAssembler
 	 */
 	public function assemble(
 		array $fieldShapes,
-		ProjectionSourceResolver $resolver,
+		ProjectionSourceResolverInterface $resolver,
 		bool $skipWhenMissing = false,
 	): RepresentationBinding {
 		$binding = new RepresentationBinding();
@@ -30,7 +30,7 @@ final class ProjectionBindingAssembler
 	public function assembleInto(
 		RepresentationBinding $binding,
 		array $fieldShapes,
-		ProjectionSourceResolver $resolver,
+		ProjectionSourceResolverInterface $resolver,
 		bool $skipWhenMissing = false,
 	): void {
 		foreach ($fieldShapes as $shape) {

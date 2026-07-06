@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\ManualProjection;
+namespace ON\Data\ORM\Compiler\ManualProjection;
 
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 
-final class ManualProjectionTarget implements ManualProjectionPropertySource
+final class Target implements PropertySource
 {
 	public function __construct(
-		private ManualProjectionBuilder $builder,
+		private Builder $builder,
 		private RecordState $owner,
 		private string $relationName,
 		private RepresentationRelationCardinality $cardinality,
@@ -66,19 +66,19 @@ final class ManualProjectionTarget implements ManualProjectionPropertySource
 		return [$this->relationName];
 	}
 
-	public function field(string $name): ManualProjectionPropertyRef
+	public function field(string $name): PropertyRef
 	{
 		$collection = $this->targetRecord->getCollection();
 		if (! $collection->hasField($name)) {
 			throw new UnknownQueryFieldException(sprintf("Unknown field '%s' on collection '%s'.", $name, $collection->getName()));
 		}
 
-		return new ManualProjectionPropertyRef($this, $name);
+		return new PropertyRef($this, $name);
 	}
 
-	public function all(): ManualProjectionAllProperties
+	public function all(): AllProperties
 	{
-		return new ManualProjectionAllProperties($this);
+		return new AllProperties($this);
 	}
 
 	public function end(): object
@@ -86,7 +86,7 @@ final class ManualProjectionTarget implements ManualProjectionPropertySource
 		return $this->builder->finalizeObjectShapedTarget($this);
 	}
 
-	public function __get(string $name): ManualProjectionPropertyRef
+	public function __get(string $name): PropertyRef
 	{
 		return $this->field($name);
 	}

@@ -2,16 +2,17 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\Compiler;
+namespace ON\Data\ORM\Compiler\ManualProjection;
 
-use ON\Data\ORM\Compiler\ManualProjection\ManualProjectionSourceResolver;
+use ON\Data\ORM\Compiler\ProjectionBindingAssembler;
+use ON\Data\ORM\Compiler\ProjectionFieldShape;
 use ON\Data\ORM\State\RepresentationBinding;
 
-final class ManualProjectionBindingCompiler
+final class BindingCompiler
 {
 	public function __construct(
 		private ProjectionBindingAssembler $bindingAssembler = new ProjectionBindingAssembler(),
-		private ManualProjectionSourceResolver $sourceResolver = new ManualProjectionSourceResolver(),
+		private SourceResolver $sourceResolver = new SourceResolver(),
 	) {
 	}
 

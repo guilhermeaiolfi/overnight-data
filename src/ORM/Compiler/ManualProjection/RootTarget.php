@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\ManualProjection;
+namespace ON\Data\ORM\Compiler\ManualProjection;
 
 use ON\Data\ORM\State\RecordState;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Exception\UnknownQueryMemberException;
 use ON\Data\Query\Exception\UnknownQueryRelationException;
 
-final class ManualProjectionRootTarget implements ManualProjectionPropertySource
+final class RootTarget implements PropertySource
 {
 	public function __construct(
 		private RecordState $targetRecord,
@@ -29,22 +29,22 @@ final class ManualProjectionRootTarget implements ManualProjectionPropertySource
 		return [];
 	}
 
-	public function field(string $name): ManualProjectionPropertyRef
+	public function field(string $name): PropertyRef
 	{
 		$collection = $this->targetRecord->getCollection();
 		if (! $collection->hasField($name)) {
 			throw new UnknownQueryFieldException(sprintf("Unknown field '%s' on collection '%s'.", $name, $collection->getName()));
 		}
 
-		return new ManualProjectionPropertyRef($this, $name);
+		return new PropertyRef($this, $name);
 	}
 
-	public function all(): ManualProjectionAllProperties
+	public function all(): AllProperties
 	{
-		return new ManualProjectionAllProperties($this);
+		return new AllProperties($this);
 	}
 
-	public function __get(string $name): ManualProjectionPropertyRef|ManualProjectionRelationRef
+	public function __get(string $name): PropertyRef|RelationRef
 	{
 		$collection = $this->targetRecord->getCollection();
 		if ($collection->hasRelation($name)) {
@@ -53,7 +53,7 @@ final class ManualProjectionRootTarget implements ManualProjectionPropertySource
 				throw new UnknownQueryRelationException(sprintf("Unknown relation '%s' on collection '%s'.", $name, $collection->getName()));
 			}
 
-			return new ManualProjectionRelationRef($this, $name, $definition);
+			return new RelationRef($this, $name, $definition);
 		}
 
 		if ($collection->hasField($name)) {

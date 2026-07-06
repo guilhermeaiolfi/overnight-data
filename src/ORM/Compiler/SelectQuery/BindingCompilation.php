@@ -2,12 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\Compiler;
+namespace ON\Data\ORM\Compiler\SelectQuery;
 
-use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityMap;
 use ON\Data\ORM\State\RepresentationBinding;
 
-final class SelectQueryBindingCompilation
+final class BindingCompilation
 {
 	public function __construct(
 		private RepresentationBinding $binding,

@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\ManualProjection;
+namespace ON\Data\ORM\Compiler\ManualProjection;
 
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 
-final class ManualProjectionPathResolution
+final class PathResolution
 {
 	public function __construct(
 		private object $ownerObject,

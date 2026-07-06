@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Compiler;
 
-interface ProjectionSourceResolver
+interface ProjectionSourceResolverInterface
 {
 	public function resolve(object $source): ProjectionSourceTarget;
 }

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\ManualProjection;
+namespace ON\Data\ORM\Compiler\ManualProjection;
 
 use InvalidArgumentException;
 use ON\Data\Definition\Collection\CollectionInterface;
@@ -14,14 +14,14 @@ use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
 
-final class ManualProjectionPathResolver
+final class PathResolver
 {
 	public function __construct(
 		private RepresentationStore $representations,
 	) {
 	}
 
-	public function resolve(object $owner, string $path): ManualProjectionPathResolution
+	public function resolve(object $owner, string $path): PathResolution
 	{
 		$ownerState = $this->representations->get($owner);
 		if (! $ownerState instanceof RepresentationState) {
@@ -34,7 +34,7 @@ final class ManualProjectionPathResolver
 			throw new StateException(sprintf("Cannot use fromPath('%s') because the owner relation binding is not bound to a concrete record state.", $path));
 		}
 
-		return new ManualProjectionPathResolution(
+		return new PathResolution(
 			$owner,
 			$relation->getState(),
 			$path,
@@ -61,7 +61,7 @@ final class ManualProjectionPathResolver
 	{
 		$segments = array_values(array_filter(explode('.', $path), static fn (string $segment): bool => $segment !== ''));
 		if ($segments === []) {
-			throw new InvalidArgumentException('ManualProjectionBuilder::fromPath() requires a non-empty path.');
+			throw new InvalidArgumentException('Builder::fromPath() requires a non-empty path.');
 		}
 
 		$current = $binding;

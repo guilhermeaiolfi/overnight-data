@@ -87,7 +87,7 @@ final class Phase34BindingModelTest extends TestCase
 		self::assertIsString($contents);
 		self::assertStringNotContainsString('ON\\Data\\ORM\\Persistence', $contents);
 		self::assertStringNotContainsString('RecordState', $contents);
-		self::assertStringContainsString('SelectQueryBindingCompiler', $contents);
+		self::assertStringContainsString('SelectQuery\\BindingCompiler', $contents);
 	}
 
 	/**

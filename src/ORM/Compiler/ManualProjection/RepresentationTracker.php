@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\ManualProjection;
+namespace ON\Data\ORM\Compiler\ManualProjection;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
@@ -16,7 +16,7 @@ use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
 use stdClass;
 
-final class ManualProjectionRepresentationTracker
+final class RepresentationTracker
 {
 	public function __construct(
 		private RepresentationStore $representations,

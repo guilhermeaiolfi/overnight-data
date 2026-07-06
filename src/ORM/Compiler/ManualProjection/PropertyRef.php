@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\ManualProjection;
+namespace ON\Data\ORM\Compiler\ManualProjection;
 
-final class ManualProjectionPropertyRef
+final class PropertyRef
 {
 	public function __construct(
-		private ManualProjectionPropertySource|ManualProjectionRelationRef $source,
+		private PropertySource|RelationRef $source,
 		private string $fieldName,
 		private ?string $publicPath = null,
 	) {
 	}
 
-	public function getSource(): ManualProjectionPropertySource|ManualProjectionRelationRef
+	public function getSource(): PropertySource|RelationRef
 	{
 		return $this->source;
 	}

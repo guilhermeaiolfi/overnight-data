@@ -2,21 +2,21 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\ManualProjection;
+namespace ON\Data\ORM\Compiler\ManualProjection;
 
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 
-final class ManualProjectionRelationRef
+final class RelationRef
 {
 	public function __construct(
-		private ManualProjectionPropertySource $owner,
+		private PropertySource $owner,
 		private string $relationName,
 		private RelationInterface $definition,
 	) {
 	}
 
-	public function getOwner(): ManualProjectionPropertySource
+	public function getOwner(): PropertySource
 	{
 		return $this->owner;
 	}
@@ -39,7 +39,7 @@ final class ManualProjectionRelationRef
 		return [...$this->owner->getRelationPath(), $this->relationName];
 	}
 
-	public function field(string $name): ManualProjectionPropertyRef
+	public function field(string $name): PropertyRef
 	{
 		$collection = $this->definition->getCollection();
 		if (! $collection->hasField($name)) {
@@ -50,10 +50,10 @@ final class ManualProjectionRelationRef
 			));
 		}
 
-		return new ManualProjectionPropertyRef($this, $name);
+		return new PropertyRef($this, $name);
 	}
 
-	public function __get(string $name): ManualProjectionPropertyRef
+	public function __get(string $name): PropertyRef
 	{
 		return $this->field($name);
 	}
