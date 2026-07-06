@@ -44,6 +44,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 	{
 		$root = dirname(__DIR__, 3);
 
+		self::assertDirectoryDoesNotExist($root . '/src/ORM/Binding');
 		self::assertFileDoesNotExist($root . '/src/ORM/ManualProjection/ManualProjectionIdentityProvider.php');
 		self::assertFalse(method_exists(ProjectionSelectionNormalizer::class, 'fieldForSelection'));
 		self::assertFileDoesNotExist($root . '/src/ORM/Compiler/ProjectionSourceResolver.php');
