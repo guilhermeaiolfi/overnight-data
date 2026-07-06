@@ -180,3 +180,4 @@ composer check
 - `docs/orm/foundation.md` documents ORM foundation concepts, state primitives, representation lineage, sync conflicts, and relation guardrails.
 - `docs/orm/persistence.md` documents the ORM persistence pipeline, affected-row validation, Cycle command executor boundary, generated-key support, relation persistence planning boundary, and write-side limitations.
 - `docs/orm/representation-binding.md` documents representation binding, flat projection adoption, mapper/query/tracking boundaries, and scalar sync guardrails.
+- `docs/orm/mutable-select-query-projections.md` documents mutable `SelectQuery` projection provenance, flattened related-field updates, relation intent from queried objects, and current projection boundaries.
