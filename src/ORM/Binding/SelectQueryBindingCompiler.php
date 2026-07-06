@@ -24,11 +24,16 @@ use ON\Data\Query\SelectQuery;
 final class SelectQueryBindingCompiler
 {
 	private int $internalResultKeyCounter = 0;
-	private SelectionProjectionCompiler $selectionCompiler;
+	private ProjectionSelectionNormalizer $selectionNormalizer;
+	private ProjectionBindingAssembler $bindingAssembler;
 
-	public function __construct(?SelectionProjectionCompiler $selectionCompiler = null)
+	public function __construct(
+		?ProjectionSelectionNormalizer $selectionNormalizer = null,
+		?ProjectionBindingAssembler $bindingAssembler = null,
+	)
 	{
-		$this->selectionCompiler = $selectionCompiler ?? new SelectionProjectionCompiler();
+		$this->selectionNormalizer = $selectionNormalizer ?? new ProjectionSelectionNormalizer();
+		$this->bindingAssembler = $bindingAssembler ?? new ProjectionBindingAssembler();
 	}
 
 	public function compile(SelectQuery $query): RepresentationBinding
@@ -44,10 +49,10 @@ final class SelectQueryBindingCompiler
 		$binding = new RepresentationBinding();
 		$projectionIdentities = new ProjectionIdentityMap();
 
-		$identityProvider = new SelectQueryProjectionIdentityProvider($query, $projectionIdentities);
+		$sourceResolver = new QueryProjectionSourceResolver($query);
 
-		$this->compileRootScalarFields($binding, $query, $collection, $identityProvider);
-		$this->compileRelationSourcedFlatFields($binding, $query, $projectionIdentities);
+		$this->compileRootScalarFields($binding, $query, $collection, $sourceResolver);
+		$this->compileRelationSourcedFlatFields($binding, $query, $sourceResolver, $projectionIdentities);
 		$this->compileRelationSelections($binding, $query);
 
 		return new SelectQueryBindingCompilation($binding, $projectionIdentities);
@@ -57,7 +62,7 @@ final class SelectQueryBindingCompiler
 		RepresentationBinding $binding,
 		SelectQuery $query,
 		CollectionInterface $collection,
-		SelectQueryProjectionIdentityProvider $identityProvider,
+		QueryProjectionSourceResolver $sourceResolver,
 	): void {
 		$explicitSelections = $query->getSelections()->getExplicit();
 		$selectedFields = $this->getRootExplicitScalarSelections($query);
@@ -65,7 +70,7 @@ final class SelectQueryBindingCompiler
 		if ($explicitSelections === []) {
 			$this->addDefaultFields($binding, $collection);
 		} else {
-			$this->addSelectedFields($binding, $identityProvider, $selectedFields);
+			$this->addSelectedFields($binding, $sourceResolver, $selectedFields);
 		}
 
 		$this->addPrimaryKeyFields($binding, $collection);
@@ -111,13 +116,13 @@ final class SelectQueryBindingCompiler
 	 */
 	private function addSelectedFields(
 		RepresentationBinding $binding,
-		SelectQueryProjectionIdentityProvider $identityProvider,
+		QueryProjectionSourceResolver $sourceResolver,
 		array $selections,
 	): void {
-		$this->selectionCompiler->compileInto(
+		$this->bindingAssembler->assembleInto(
 			$binding,
-			$selections,
-			$identityProvider,
+			$this->selectionNormalizer->normalizeSelections($selections),
+			$sourceResolver,
 		);
 	}
 
@@ -156,6 +161,7 @@ final class SelectQueryBindingCompiler
 	private function compileRelationSourcedFlatFields(
 		RepresentationBinding $binding,
 		SelectQuery $query,
+		QueryProjectionSourceResolver $sourceResolver,
 		ProjectionIdentityMap $projectionIdentities,
 	): void {
 		/** @var array<string, RelationRef> $relationRefsByPath */
@@ -168,13 +174,11 @@ final class SelectQueryBindingCompiler
 				continue;
 			}
 
-			$fieldRef = $resolved['fieldRef'];
 			$relationRef = $resolved['relationRef'];
-			$targetCollection = $resolved['targetCollection'];
-			$this->selectionCompiler->compileInto(
+			$this->bindingAssembler->assembleInto(
 				$binding,
-				[$selection],
-				new SelectQueryProjectionIdentityProvider($query, $projectionIdentities, $targetCollection),
+				$this->selectionNormalizer->normalizeSelections([$selection]),
+				$sourceResolver,
 			);
 
 			$relationRefsByPath[json_encode($relationRef->getPath(), JSON_THROW_ON_ERROR)] = $relationRef;
@@ -186,7 +190,7 @@ final class SelectQueryBindingCompiler
 	}
 
 	/**
-	 * @return array{fieldRef: FieldRef, relationRef: RelationRef, targetCollection: CollectionInterface}|null
+	 * @return array{relationRef: RelationRef}|null
 	 */
 	private function resolveRelationSourcedFieldRef(SelectQuery $query, SelectionItem $selection): ?array
 	{
@@ -211,9 +215,7 @@ final class SelectQueryBindingCompiler
 		}
 
 		return [
-			'fieldRef' => $expression,
 			'relationRef' => $source,
-			'targetCollection' => $source->getCollection(),
 		];
 	}
 

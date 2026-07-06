@@ -7,7 +7,8 @@ namespace ON\Data\ORM\ManualProjection;
 use InvalidArgumentException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
-use ON\Data\ORM\Binding\SelectionProjectionCompiler;
+use ON\Data\ORM\Binding\ProjectionBindingAssembler;
+use ON\Data\ORM\Binding\ProjectionSelectionNormalizer;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\ToManyRelationState;
@@ -37,8 +38,9 @@ final class ManualProjectionBuilder
 	public function __construct(
 		private Session $session,
 		private object $representation,
-		private SelectionProjectionCompiler $selectionCompiler = new SelectionProjectionCompiler(),
-		private ManualProjectionIdentityProvider $identityProvider = new ManualProjectionIdentityProvider(),
+		private ProjectionSelectionNormalizer $selectionNormalizer = new ProjectionSelectionNormalizer(),
+		private ProjectionBindingAssembler $bindingAssembler = new ProjectionBindingAssembler(),
+		private ManualProjectionSourceResolver $sourceResolver = new ManualProjectionSourceResolver(),
 	) {
 	}
 
@@ -246,14 +248,16 @@ final class ManualProjectionBuilder
 
 	public function end(): object
 	{
-		$selectionList = new SelectionList();
-		$selectionList->addExplicit($this->selections);
-		$manualBinding = $this->selectionCompiler->compile(
-			$selectionList->getExplicit(),
-			$this->identityProvider,
-			skipWhenMissing: true,
-			ignoreUnsupported: false
-		);
+		$manualBinding = new RepresentationBinding();
+		if ($this->selections !== []) {
+			$selectionList = new SelectionList();
+			$selectionList->addExplicit($this->selections);
+			$manualBinding = $this->bindingAssembler->assemble(
+				$this->selectionNormalizer->normalizeSelections($selectionList->getExplicit(), ignoreUnsupported: false),
+				$this->sourceResolver,
+				skipWhenMissing: true,
+			);
+		}
 		$state = $this->session->getRepresentations()->get($this->representation);
 
 		if ($state instanceof RepresentationState) {
@@ -283,7 +287,7 @@ final class ManualProjectionBuilder
 		}
 
 		$this->session->getRepresentations()->add($this->representation, new RepresentationState($binding, $baselineRevisions));
-		$this->identityProvider->clear();
+		$this->sourceResolver->clear();
 
 		return $this->representation;
 	}
@@ -291,7 +295,7 @@ final class ManualProjectionBuilder
 	private function ownerRecordFor(RelationRef $relation): RecordState
 	{
 		$source = $relation->getParentRelation() ?? $relation->getQuery();
-		$owner = $this->identityProvider->recordFor($source);
+		$owner = $this->sourceResolver->recordFor($source);
 		if ($owner instanceof RecordState) {
 			return $owner;
 		}
@@ -567,7 +571,7 @@ final class ManualProjectionBuilder
 
 	private function rememberSource(QuerySourceInterface $source, RecordState $record): void
 	{
-		$this->identityProvider->rememberSource($source, $record);
+		$this->sourceResolver->rememberSource($source, $record);
 	}
 
 	private function relationCardinality(RelationRef $relation): RepresentationRelationCardinality
