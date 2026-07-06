@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Binding;
 
+use InvalidArgumentException;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\Query\QuerySourceInterface;
@@ -17,8 +18,12 @@ final class QueryProjectionSourceResolver implements ProjectionSourceResolver
 	) {
 	}
 
-	public function resolve(QuerySourceInterface $source): ProjectionSourceTarget
+	public function resolve(object $source): ProjectionSourceTarget
 	{
+		if (! $source instanceof QuerySourceInterface) {
+			throw new InvalidArgumentException('Query projection source resolver requires a query source.');
+		}
+
 		if ($source === $this->query) {
 			return new ProjectionSourceTarget($this->query->getCollection(), new RepresentationBinding());
 		}

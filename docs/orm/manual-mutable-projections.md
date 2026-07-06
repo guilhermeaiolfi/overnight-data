@@ -1,6 +1,6 @@
 # Manual Mutable Projections
 
-Manual mutable projections let an application attach write provenance to an object without executing a query. They reuse the same `SelectQuery` reference vocabulary: `from()` declares the source collection, `select()` declares public field paths, `as(...)` declares aliases, and relation refs declare relation targets.
+Manual mutable projections let an application attach write provenance to an object without executing a query. They declare representation property provenance over concrete `RecordState` and relation targets: `from()` establishes the root record identity, `properties()` declares public field paths, `as(...)` declares aliases, and relation targets declare relation item intent.
 
 Use this when an object was created or extended by application code and a flat public property needs to write into a concrete record:
 
@@ -13,7 +13,7 @@ $u = $p->from($users)->tracked();
 $post = $p->create($u->posts);
 
 $p
-    ->select(
+    ->properties(
         $post->title->as('newPostTitle'),
     )
     ->end();
@@ -33,9 +33,9 @@ $user.posts         -> add NEW posts record
 
 SelectQuery projections get field targets from executed query provenance.
 
-Manual projections get field targets from SelectQuery-style selections plus manually supplied record identities.
+Manual projections get field targets from explicit property declarations plus manually supplied record identities. Manual projection is not compiling SQL result shape; it is declaring which public properties write to which tracked record fields.
 
-The manual projection builder does not query. It compiles selected `FieldRef` values into concrete `RecordFieldRef` bindings and registers relation intent through the existing `ToOneRelationState` / `ToManyRelationState` stores. Flush still uses the normal scalar sync, relation planners, command planning, and command execution pipeline.
+The manual projection builder does not query. It normalizes manual property refs into `RepresentationFieldBinding` targets and registers relation intent through the existing `ToOneRelationState` / `ToManyRelationState` stores. Flush still uses the normal scalar sync, relation planners, command planning, and command execution pipeline.
 
 ## Root Source
 
@@ -77,17 +77,17 @@ $post = $p->existing($u->posts, ['id' => 'post-1']);
 $post = $p->tracked($u->posts, $postObject);
 ```
 
-The returned relation source exposes normal field refs:
+The returned relation target exposes manual property refs:
 
 ```php
 $post->title
 $profile->name
 ```
 
-For to-many and M2M relations, selecting through the relation path is not enough:
+For to-many and M2M relations, declaring properties through the relation path is not enough:
 
 ```php
-$p->select($u->posts->title->as('newPostTitle')); // throws
+$p->properties($u->posts->title->as('newPostTitle')); // throws
 ```
 
 The developer must first create or identify one concrete item:
@@ -95,18 +95,18 @@ The developer must first create or identify one concrete item:
 ```php
 $post = $p->create($u->posts);
 
-$p->select($post->title->as('newPostTitle'));
+$p->properties($post->title->as('newPostTitle'));
 ```
 
 This keeps to-many item identity explicit.
 
-## Selections
+## Properties
 
-Manual projection `select()` accepts writable `FieldRef` selections and aliases:
+Manual projection `properties()` accepts writable manual property refs and aliases:
 
 ```php
 $p
-    ->select(
+    ->properties(
         $u->name,
         $profile->name->as('profileName'),
         $post->title->as('newPostTitle'),
@@ -114,9 +114,15 @@ $p
     ->end();
 ```
 
-Selected fields without aliases use their normal public path. Aliased fields write from the alias path. Missing manual public properties are ignored; present properties with `null` write `null`.
+Use `$target->all()` to expand every collection field on a target:
 
-Computed expressions, aggregates, subqueries, and arbitrary value expressions are intentionally rejected for manual writable projections.
+```php
+$p->properties($u->all())->end();
+```
+
+Declared fields without aliases use their normal public path. Aliased fields write from the alias path. Missing manual public properties are ignored; present properties with `null` write `null`.
+
+Manual projections do not accept query expressions, aggregates, subqueries, or arbitrary value expressions.
 
 ## Extending Query-Created Objects
 
@@ -134,7 +140,7 @@ $user->newPostTitle = 'New post';
 $p = $session->projection($user);
 $u = $p->from($users)->tracked();
 $post = $p->create($u->posts);
-$p->select($post->title->as('newPostTitle'))->end();
+$p->properties($post->title->as('newPostTitle'))->end();
 
 $session->flush();
 ```
@@ -144,3 +150,5 @@ The existing `id` and `name` provenance stays intact, and the manual projection 
 ## Boundaries
 
 Manual projections do not introduce a second field-target DSL, class-to-binding inference, upsert, lazy loading, repositories, proxies, or SQL changes. They are a manual identity provider for the same representation binding and persistence pipeline used by mutable query projections.
+
+Manual projection does not use `SelectQuery`, `SelectQueryBindingCompiler`, or query selection normalization. Query mutable export still compiles through `SelectQueryBindingCompiler`.

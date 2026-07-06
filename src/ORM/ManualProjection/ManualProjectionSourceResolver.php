@@ -9,40 +9,48 @@ use ON\Data\ORM\Binding\ProjectionSourceTarget;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\Query\QuerySourceInterface;
-use ON\Data\Query\Relation\RelationRef;
 
 final class ManualProjectionSourceResolver implements ProjectionSourceResolver
 {
 	/** @var array<int, RecordState> */
 	private array $sourceRecords = [];
 
-	public function resolve(QuerySourceInterface $source): ProjectionSourceTarget
+	public function resolve(object $source): ProjectionSourceTarget
 	{
+		if ($source instanceof ManualProjectionPropertySource) {
+			$record = $source->getTargetRecord();
+
+			return new ProjectionSourceTarget($record->getCollection(), new RepresentationBinding(), $record);
+		}
+
+		if ($source instanceof ManualProjectionRelationRef) {
+			if ($source->getDefinition()->getCardinality() === 'many') {
+				throw new StateException(sprintf(
+					"Cannot select MANY relation source '%s' without first creating or identifying one concrete relation item.",
+					implode('.', $source->getPath())
+				));
+			}
+
+			return new ProjectionSourceTarget($source->getDefinition()->getCollection(), new RepresentationBinding());
+		}
+
 		$record = $this->recordFor($source);
 		if ($record instanceof RecordState) {
 			return new ProjectionSourceTarget($record->getCollection(), new RepresentationBinding(), $record);
 		}
 
-		if ($source instanceof RelationRef && $source->getDefinition()->getCardinality() === 'many') {
-			throw new StateException(sprintf(
-				"Cannot select MANY relation source '%s' without first creating or identifying one concrete relation item.",
-				implode('.', $source->getPath())
-			));
-		}
-
 		throw new StateException(sprintf(
-			"Cannot select source '%s' because its projection source has no concrete record identity.",
-			implode('.', $source->getPath())
+			"Cannot resolve manual projection source '%s' because it has no concrete record identity.",
+			$this->describeSource($source),
 		));
 	}
 
-	public function rememberSource(QuerySourceInterface $source, RecordState $record): void
+	public function rememberSource(object $source, RecordState $record): void
 	{
 		$this->sourceRecords[spl_object_id($source)] = $record;
 	}
 
-	public function recordFor(QuerySourceInterface $source): ?RecordState
+	public function recordFor(object $source): ?RecordState
 	{
 		return $this->sourceRecords[spl_object_id($source)] ?? null;
 	}
@@ -50,5 +58,14 @@ final class ManualProjectionSourceResolver implements ProjectionSourceResolver
 	public function clear(): void
 	{
 		$this->sourceRecords = [];
+	}
+
+	private function describeSource(object $source): string
+	{
+		if ($source instanceof ManualProjectionRelationRef) {
+			return implode('.', $source->getPath());
+		}
+
+		return $source::class;
 	}
 }

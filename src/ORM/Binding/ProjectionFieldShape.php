@@ -4,16 +4,12 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Binding;
 
-use ON\Data\Query\Expression\FieldRef;
-use ON\Data\Query\QuerySourceInterface;
-
 final class ProjectionFieldShape
 {
 	public function __construct(
 		private string $publicPath,
-		private QuerySourceInterface $source,
+		private object $source,
 		private string $fieldName,
-		private FieldRef $fieldRef,
 		private bool $writable = true,
 	) {
 	}
@@ -23,7 +19,7 @@ final class ProjectionFieldShape
 		return $this->publicPath;
 	}
 
-	public function getSource(): QuerySourceInterface
+	public function getSource(): object
 	{
 		return $this->source;
 	}
@@ -31,11 +27,6 @@ final class ProjectionFieldShape
 	public function getFieldName(): string
 	{
 		return $this->fieldName;
-	}
-
-	public function getFieldRef(): FieldRef
-	{
-		return $this->fieldRef;
 	}
 
 	public function isWritable(): bool

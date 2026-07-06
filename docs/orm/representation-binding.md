@@ -87,17 +87,17 @@ For flat projections, the compiler may add hidden identity selections tagged `Se
 
 Flat projection adoption is used by mutable `stdClass` query export. Manual mutable projections use the same binding model, but they supply concrete record identities without executing a query.
 
-Manual projections compile SelectQuery-style selections into concrete `RecordFieldRef` targets:
+Manual projections normalize manual property declarations into concrete `RecordFieldRef` targets:
 
 ```text
 Session::projection($object)
   -> from(collection) supplies the source
   -> create()/existing()/tracked() supplies the concrete RecordState
-  -> select(FieldRef::as(...)) supplies the public path
+  -> properties($target->field->as(...)) supplies the public path
   -> end() merges RepresentationBinding provenance into the object state
 ```
 
-For to-many and M2M relations, a selected relation field does not create an item by itself. The projection must first call `create($u->posts)`, `existing($u->posts, $key)`, or `tracked($u->posts, $object)` so relation runtime state has one concrete item to add.
+For to-many and M2M relations, a declared relation field does not create an item by itself. The projection must first call `create($u->posts)`, `existing($u->posts, $key)`, or `tracked($u->posts, $object)` so relation runtime state has one concrete item to add.
 
 Relation persistence planning then consumes changed `ToManyRelationState` and `ToOneRelationState` instances. Built-in planners cover many-to-many, has-many, belongs-to, and has-one relation definitions.
 

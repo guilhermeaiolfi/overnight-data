@@ -32,4 +32,4 @@ Start here for the current public documentation. The files linked below are the 
 - [`orm/persistence.md`](./orm/persistence.md): Scalar ORM persistence pipeline, command planning, affected-row validation, Cycle command execution, generated primary-key merge, and write-side limits.
 - [`orm/representation-binding.md`](./orm/representation-binding.md): Recursive `RepresentationBinding` model, flat projection adoption, binding kinds, mapper/query/tracking boundaries, and scalar sync guardrails.
 - [`orm/mutable-select-query-projections.md`](./orm/mutable-select-query-projections.md): Mutable `SelectQuery` projection provenance, flattened related-field updates, relation intent from queried objects, `identify()`, and current projection boundaries.
-- [`orm/manual-mutable-projections.md`](./orm/manual-mutable-projections.md): Manual non-executing `from()` / `select()` projections for objects that need explicit record identities and relation item intent.
+- [`orm/manual-mutable-projections.md`](./orm/manual-mutable-projections.md): Manual non-executing `from()` / `properties()` projections for objects that need explicit record identities and relation item intent.

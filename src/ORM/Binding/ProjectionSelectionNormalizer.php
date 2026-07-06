@@ -67,7 +67,6 @@ final class ProjectionSelectionNormalizer
 			$publicPath,
 			$expression->getSource(),
 			$expression->getName(),
-			$expression,
 		);
 	}
 }

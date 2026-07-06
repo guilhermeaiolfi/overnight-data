@@ -7,14 +7,10 @@ namespace ON\Data\ORM\ManualProjection;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
-use ON\Data\Query\Expression\StarExpression;
-use ON\Data\Query\Expression\ValueExpressionInterface;
-use ON\Data\Query\SelectQuery;
+use ON\Data\Query\Exception\UnknownQueryFieldException;
 
-final class ManualProjectionTarget
+final class ManualProjectionTarget implements ManualProjectionPropertySource
 {
-	private ?SelectQuery $selectionSource = null;
-
 	public function __construct(
 		private ManualProjectionBuilder $builder,
 		private RecordState $owner,
@@ -62,14 +58,27 @@ final class ManualProjectionTarget
 		return $this->objectShaped;
 	}
 
-	public function field(string $name): ValueExpressionInterface
+	/**
+	 * @return list<string>
+	 */
+	public function getRelationPath(): array
 	{
-		return $this->selectionSource()->field($name);
+		return [$this->relationName];
 	}
 
-	public function all(): StarExpression
+	public function field(string $name): ManualProjectionPropertyRef
 	{
-		return $this->selectionSource()->all();
+		$collection = $this->targetRecord->getCollection();
+		if (! $collection->hasField($name)) {
+			throw new UnknownQueryFieldException(sprintf("Unknown field '%s' on collection '%s'.", $name, $collection->getName()));
+		}
+
+		return new ManualProjectionPropertyRef($this, $name);
+	}
+
+	public function all(): ManualProjectionAllProperties
+	{
+		return new ManualProjectionAllProperties($this);
 	}
 
 	public function end(): object
@@ -77,20 +86,8 @@ final class ManualProjectionTarget
 		return $this->builder->finalizeObjectShapedTarget($this);
 	}
 
-	public function __get(string $name): mixed
+	public function __get(string $name): ManualProjectionPropertyRef
 	{
-		return $this->selectionSource()->__get($name);
-	}
-
-	private function selectionSource(): SelectQuery
-	{
-		if ($this->selectionSource instanceof SelectQuery) {
-			return $this->selectionSource;
-		}
-
-		$this->selectionSource = new SelectQuery($this->targetRecord->getCollection());
-		$this->builder->rememberTargetSelectionSource($this, $this->selectionSource);
-
-		return $this->selectionSource;
+		return $this->field($name);
 	}
 }

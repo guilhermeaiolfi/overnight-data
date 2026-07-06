@@ -246,7 +246,7 @@ There is no concrete post item and no relation item identity. Use a manual mutab
 $p = $session->projection($user);
 $u = $p->from($users)->tracked();
 $post = $p->create($u->posts);
-$p->select($post->title->as('newPostTitle'))->end();
+$p->properties($post->title->as('newPostTitle'))->end();
 ```
 
 A mutable query projection can update fields whose provenance the query declared. It can also admit new related objects through explicit relation bindings on a tracked root. Manual projections cover standalone flat scalars by requiring the developer to create, identify, or reuse the concrete related record item explicitly.
@@ -267,7 +267,7 @@ Existing key-only row:
   use identify(collection, key).
 
 Brand-new flat scalar that did not come from a query:
-  use Session::projection($object) with from(), create()/existing()/tracked(), and select().
+  use Session::projection($object) with from(), create()/existing()/tracked(), and properties().
 ```
 
 ## Related reading

@@ -28,7 +28,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 
 		$p = $session->projection($row);
 		$u = $p->from($users)->create();
-		$p->select($u->name)->end();
+		$p->properties($u->name)->end();
 
 		$session->flush();
 
@@ -47,7 +47,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 
 		$p = $session->projection($row);
 		$u = $p->from($users)->existing(['id' => 1], ['id' => 1, 'name' => 'Old']);
-		$p->select($u->name)->end();
+		$p->properties($u->name)->end();
 
 		$session->flush();
 
@@ -65,7 +65,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 
 		$p = $session->projection($row);
 		$u = $p->from($users)->create(['id' => 10]);
-		$p->select($u->name)->end();
+		$p->properties($u->name)->end();
 
 		$session->flush();
 
@@ -84,7 +84,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 
 		$p = $session->projection($row);
 		$u = $p->from($users)->existing(['id' => 1], ['id' => 1, 'name' => 'Old', 'email' => 'old@example.test']);
-		$p->select($u->name, $u->email)->end();
+		$p->properties($u->name, $u->email)->end();
 
 		$session->flush();
 
@@ -102,7 +102,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 
 		$p = $session->projection($row);
 		$u = $p->from($users)->create();
-		$p->select($u->name->as('displayName'))->end();
+		$p->properties($u->name->as('displayName'))->end();
 
 		$session->flush();
 
@@ -116,7 +116,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 		$row = new stdClass();
 		$p = $session->projection($row);
 		$u = $p->from($users)->create(['id' => 1]);
-		$p->select($u->posts->title->as('postTitle'));
+		$p->properties($u->posts->title->as('postTitle'));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('without first creating or identifying one concrete relation item');
@@ -138,7 +138,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 		$p = $session->projection($user);
 		$u = $p->from($users)->existing(['id' => 1], ['id' => 1, 'profile_id' => null, 'name' => 'Ada']);
 		$profile = $p->create($u->profile);
-		$p->select($profile->name->as('profileName'))->end();
+		$p->properties($profile->name->as('profileName'))->end();
 
 		$session->flush();
 
@@ -161,7 +161,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 		$p = $session->projection($user);
 		$u = $p->from($users)->existing(['id' => 1], ['id' => 1, 'name' => 'Ada']);
 		$post = $p->create($u->posts);
-		$p->select($post->title->as('newPostTitle'))->end();
+		$p->properties($post->title->as('newPostTitle'))->end();
 
 		$session->flush();
 
@@ -188,7 +188,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 		$p = $session->projection($user);
 		$u = $p->from($users)->tracked();
 		$post = $p->create($u->posts);
-		$p->select($post->title->as('newPostTitle'))->end();
+		$p->properties($post->title->as('newPostTitle'))->end();
 
 		$session->flush();
 
@@ -250,7 +250,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 
 		$p = $session->projection($user);
 		$post = $p->fromPath($user, 'posts')->create();
-		$p->select($post->title->as('newPostTitle'))->end();
+		$p->properties($post->title->as('newPostTitle'))->end();
 
 		$session->flush();
 

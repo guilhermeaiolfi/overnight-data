@@ -7,11 +7,15 @@ namespace Tests\ON\Data\ORM\Binding;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\ORM\Binding\ProjectionBindingAssembler;
+use ON\Data\ORM\Binding\ProjectionFieldShape;
 use ON\Data\ORM\Binding\ProjectionSelectionNormalizer;
 use ON\Data\ORM\Binding\QueryProjectionSourceResolver;
+use ON\Data\ORM\ManualProjection\ManualProjectionAllProperties;
 use ON\Data\ORM\ManualProjection\ManualProjectionBuilder;
+use ON\Data\ORM\ManualProjection\ManualProjectionPropertyRef;
 use ON\Data\ORM\ManualProjection\ManualProjectionRelationApplier;
 use ON\Data\ORM\ManualProjection\ManualProjectionRepresentationTracker;
+use ON\Data\ORM\ManualProjection\ManualProjectionRootTarget;
 use ON\Data\ORM\ManualProjection\ManualProjectionSourceResolver;
 use ON\Data\ORM\ManualProjection\ManualProjectionTarget;
 use ON\Data\ORM\Relation\RelationStateStore;
@@ -23,6 +27,8 @@ use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\Query\Expression\ValueExpressionInterface;
+use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
@@ -45,16 +51,15 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertFalse(method_exists(ManualProjectionSourceResolver::class, 'fieldForSelection'));
 	}
 
-	public function testManualBuilderUsesSharedSelectionNormalizerAndBindingAssembler(): void
+	public function testManualBuilderUsesSharedBindingAssemblerAndManualSourceResolver(): void
 	{
 		$constructor = (new ReflectionClass(ManualProjectionBuilder::class))->getConstructor();
 		self::assertNotNull($constructor);
 
 		$parameters = $constructor->getParameters();
 
-		self::assertSame(ProjectionSelectionNormalizer::class, $parameters[2]->getType()?->getName());
-		self::assertSame(ProjectionBindingAssembler::class, $parameters[3]->getType()?->getName());
-		self::assertSame(ManualProjectionSourceResolver::class, $parameters[4]->getType()?->getName());
+		self::assertSame(ProjectionBindingAssembler::class, $parameters[2]->getType()?->getName());
+		self::assertSame(ManualProjectionSourceResolver::class, $parameters[3]->getType()?->getName());
 	}
 
 	public function testManualBuilderDoesNotOwnExtractedProjectionInternals(): void
@@ -79,7 +84,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 	}
 
 	#[RequiresPhpExtension('pdo_sqlite')]
-	public function testObjectShapedFromPathCreateDoesNotInstantiateSelectQueryUntilFieldAccess(): void
+	public function testObjectShapedFromPathCreateReturnsManualPropertyRefsWithoutSelectQuery(): void
 	{
 		[$session, $user] = $this->trackedUserWithPostsRelation();
 		$post = new stdClass();
@@ -91,7 +96,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			->create();
 
 		self::assertInstanceOf(ManualProjectionTarget::class, $target);
-		self::assertNull($this->selectionSourceFromTarget($target));
+		self::assertInstanceOf(ManualProjectionPropertyRef::class, $target->title);
 	}
 
 	#[RequiresPhpExtension('pdo_sqlite')]
@@ -166,30 +171,29 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertInstanceOf(stdClass::class, $postTarget->getTargetObject());
 	}
 
-	public function testFlattenedAliasProjectionStillUsesSharedSelectionCompiler(): void
+	public function testManualBuilderBuildsProjectionFieldShapesDirectly(): void
 	{
 		$contents = (string) file_get_contents(dirname(__DIR__, 3) . '/src/ORM/ManualProjection/ManualProjectionBuilder.php');
 
-		self::assertStringContainsString('ProjectionSelectionNormalizer', $contents);
-		self::assertStringContainsString('ProjectionBindingAssembler', $contents);
-		self::assertStringContainsString('normalizeSelections', $contents);
+		self::assertStringContainsString('ProjectionFieldShape', $contents);
 		self::assertStringContainsString('bindingAssembler->assemble', $contents);
+		self::assertStringNotContainsString('ProjectionSelectionNormalizer', $contents);
+		self::assertStringNotContainsString('SelectQueryBindingCompiler', $contents);
 	}
 
 	#[RequiresPhpExtension('pdo_sqlite')]
-	public function testFlattenedAliasFromPathRegistersSelectionSourceOnlyWhenFieldAccessed(): void
+	public function testFlattenedAliasFromPathUsesManualPropertyRefs(): void
 	{
 		[$session, $user] = $this->trackedUserWithPostsRelation();
 		$user->newPostTitle = 'Alias';
 
 		$p = $session->projection($user);
 		$postTarget = $p->fromPath($user, 'posts')->create();
+		$property = $postTarget->title->as('newPostTitle');
 
-		self::assertNull($this->selectionSourceFromTarget($postTarget));
-
-		$p->select($postTarget->title->as('newPostTitle'));
-
-		self::assertInstanceOf(SelectQuery::class, $this->selectionSourceFromTarget($postTarget));
+		self::assertInstanceOf(ManualProjectionPropertyRef::class, $property);
+		self::assertSame('newPostTitle', $property->getPublicPath());
+		self::assertSame('title', $property->getFieldName());
 	}
 
 	public function testAdapterObjectsAreRegisteredInNormalRepresentationStore(): void
@@ -235,12 +239,12 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			new QueryProjectionSourceResolver($query),
 		);
 
-		$manualSource = new SelectQuery($users);
 		$record = RecordState::new($users);
+		$rootTarget = new ManualProjectionRootTarget($record);
 		$manualResolver = new ManualProjectionSourceResolver();
-		$manualResolver->rememberSource($manualSource, $record);
+		$manualResolver->rememberSource($rootTarget, $record);
 		$manualBinding = $assembler->assemble(
-			$normalizer->normalizeExpressions([$manualSource->name->as('display_name')], ignoreUnsupported: false),
+			[new ProjectionFieldShape('display_name', $rootTarget, 'name')],
 			$manualResolver,
 			skipWhenMissing: true,
 		);
@@ -295,6 +299,75 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			self::assertStringNotContainsString('SelectionTag::INTERNAL', $contents, $path);
 			self::assertStringNotContainsString('generateInternalResultKey', $contents, $path);
 		}
+	}
+
+	public function testManualProjectionNamespaceDoesNotImportSelectQuery(): void
+	{
+		$manualRoot = dirname(__DIR__, 3) . '/src/ORM/ManualProjection';
+
+		foreach (glob($manualRoot . '/*.php') ?: [] as $path) {
+			$contents = (string) file_get_contents($path);
+
+			self::assertStringNotContainsString('ON\Data\Query\SelectQuery', $contents, $path);
+			self::assertStringNotContainsString('SelectQueryBindingCompiler', $contents, $path);
+			self::assertStringNotContainsString('ProjectionSelectionNormalizer', $contents, $path);
+		}
+	}
+
+	public function testManualProjectionTargetDoesNotImplementQuerySourceInterface(): void
+	{
+		self::assertFalse(is_subclass_of(ManualProjectionTarget::class, QuerySourceInterface::class));
+		self::assertFalse(is_subclass_of(ManualProjectionRootTarget::class, QuerySourceInterface::class));
+	}
+
+	public function testManualPropertyRefsDoNotImplementQueryExpressionInterfaces(): void
+	{
+		self::assertFalse(is_subclass_of(ManualProjectionPropertyRef::class, ValueExpressionInterface::class));
+		self::assertFalse(is_subclass_of(ManualProjectionAllProperties::class, ValueExpressionInterface::class));
+	}
+
+	#[RequiresPhpExtension('pdo_sqlite')]
+	public function testManualRootPropertiesExpandAllCollectionFields(): void
+	{
+		$harness = SqliteMemoryHarness::create();
+		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT)');
+		$registry = new Registry();
+		$users = $registry->collection('users')
+			->table('users')
+			->primaryKey('id')
+			->field('id', 'int')->autoIncrement(true)->end()
+			->field('name', 'string')->end()
+			->field('email', 'string')->end();
+		$session = new Session($harness->commandExecutor);
+		$row = new stdClass();
+		$row->name = 'Ada';
+		$row->email = 'ada@example.test';
+
+		$p = $session->projection($row);
+		$u = $p->from($users)->create();
+		$p->properties($u->all())->end();
+
+		$state = $session->getRepresentations()->get($row);
+		self::assertInstanceOf(RepresentationState::class, $state);
+		self::assertSame(['name', 'email'], array_values(array_filter(
+			$state->getBinding()->getPaths(),
+			static fn (string $path): bool => $path !== 'id',
+		)));
+	}
+
+	#[RequiresPhpExtension('pdo_sqlite')]
+	public function testFromPathResolvesTrackedBindingWithoutSelectQuery(): void
+	{
+		[$session, $user] = $this->trackedUserWithPostsRelation();
+		$builder = $session->projection(new stdClass());
+		$property = new ReflectionProperty(ManualProjectionBuilder::class, 'pathResolver');
+		$property->setAccessible(true);
+		$pathResolver = $property->getValue($builder);
+
+		$resolved = $pathResolver->resolve($user, 'posts');
+
+		self::assertSame('posts', $resolved->getPath());
+		self::assertSame('posts', $resolved->getRelationName());
 	}
 
 	public function testManualProjectionDoesNotAddDurableProjectionStores(): void
@@ -372,14 +445,5 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertInstanceOf(stdClass::class, $user);
 
 		return [$session, $user];
-	}
-
-	private function selectionSourceFromTarget(ManualProjectionTarget $target): ?SelectQuery
-	{
-		$property = new ReflectionProperty(ManualProjectionTarget::class, 'selectionSource');
-		$property->setAccessible(true);
-		$value = $property->getValue($target);
-
-		return $value instanceof SelectQuery ? $value : null;
 	}
 }
