@@ -401,7 +401,7 @@ final class SessionTest extends TestCase
 		self::assertCount(1, $result->getRelationChanges());
 	}
 
-	public function testSyncUntrackedRootWithBindingTracksManyRelatedObjectWithCompleteKeyAsCleanExisting(): void
+	public function testSyncUntrackedRootWithBindingTracksManyRelatedObjectWithCompleteKeyAsNew(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session(new RecordingCommandExecutor());
@@ -414,8 +414,8 @@ final class SessionTest extends TestCase
 		self::assertInstanceOf(RepresentationState::class, $trackedPost);
 		$post = $session->getRecords()->getFromRepresentation($trackedPost);
 		self::assertInstanceOf(RecordState::class, $post);
-		self::assertTrue($post->isClean());
-		self::assertSame(5, $post->getKey()?->getFieldValue('id'));
+		self::assertTrue($post->isNew());
+		self::assertSame(5, $post->getValue('id'));
 	}
 
 	public function testSyncUntrackedRootWithBindingTracksManyRelatedObjectWithoutCompleteKeyAsNew(): void
@@ -1035,6 +1035,7 @@ final class SessionTest extends TestCase
 		$session = new Session($executor);
 		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Existing title', 'user_id' => 10]);
+		$session->existing($postRepresentation);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
 		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
 

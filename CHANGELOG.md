@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Preserve internal mutable-projection identity columns in Cycle query results so flat related-field export can adopt and flush updates against a real database executor.
+
+### Documentation
+
+- Clarified v1.0 wording in `docs/orm/foundation.md` and fixed a formatting issue in `README.md`.
+- Added smoke tests that mirror `docs/quickstart.md`, ORM persistence, and mutable `stdClass` projection examples.
+
 ## [1.0.0] - 2026-07-05
 
 First stable public release of `guilhermeaiolfi/overnight-data`.

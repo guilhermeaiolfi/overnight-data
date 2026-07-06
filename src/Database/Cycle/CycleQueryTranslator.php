@@ -187,6 +187,10 @@ final class CycleQueryTranslator
 
 			if ($root || $aliased) {
 				if ($root && $selection->isImplicit()) {
+					if ($aliased) {
+						$logicalName = $selection->getSelectionKey();
+					}
+
 					$backendName = $this->allocateImplicitAlias($usedNames, $implicitCounter);
 				}
 

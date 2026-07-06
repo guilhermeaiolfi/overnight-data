@@ -111,7 +111,7 @@ final class GraphAdopterTest extends TestCase
 		self::assertTrue($records->getFromRepresentation($result[0])?->isNew());
 	}
 
-	public function testManyRelationWithCompleteKeyAdoptsUntrackedItemAsCleanExisting(): void
+	public function testManyRelationWithCompleteKeyAdoptsUntrackedItemAsNew(): void
 	{
 		$item = $this->representation(['id' => 5, 'title' => 'A']);
 		$root = $this->representation(['posts' => [$item]]);
@@ -123,8 +123,8 @@ final class GraphAdopterTest extends TestCase
 		self::assertCount(1, $result);
 		$record = $records->getFromRepresentation($result[0]);
 		self::assertInstanceOf(RecordState::class, $record);
-		self::assertTrue($record->isClean());
-		self::assertSame(5, $record->getKey()?->getFieldValue('id'));
+		self::assertTrue($record->isNew());
+		self::assertSame(5, $record->getValue('id'));
 	}
 
 	public function testManyRelationWithoutCompleteKeyAdoptsUntrackedItemAsNew(): void

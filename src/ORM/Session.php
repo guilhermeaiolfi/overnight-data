@@ -22,6 +22,7 @@ use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\Sync\AdoptionRecordResolver;
+use ON\Data\ORM\Sync\ExistingIntent;
 use ON\Data\ORM\Sync\GraphAdopter;
 use ON\Data\ORM\Sync\RepresentationAdopter;
 use ON\Data\ORM\Sync\RepresentationSyncer;
@@ -44,7 +45,7 @@ final class Session
 	) {
 		$this->context = new SessionContext();
 		$this->adopter = new RepresentationAdopter($this->getRecords(), $this->getRepresentations());
-		$this->recordResolver = new AdoptionRecordResolver();
+		$this->recordResolver = new AdoptionRecordResolver(existingIntents: $this->context->getExistingIntents());
 		$this->graphAdopter = new GraphAdopter(records: $this->recordResolver);
 		$this->syncer = $syncer ?? new RepresentationSyncer();
 		$this->flusher = $flusher ?? new FlushExecutor($executor, $this->syncer);
@@ -110,6 +111,13 @@ final class Session
 	public function trackClean(Key $key, array $values): RecordState
 	{
 		return $this->trackRecord(RecordState::clean($key, $values));
+	}
+
+	public function existing(object $representation): ExistingIntent
+	{
+		$this->context->getExistingIntents()->mark($representation);
+
+		return new ExistingIntent($representation);
 	}
 
 	public function identify(

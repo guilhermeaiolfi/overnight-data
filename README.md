@@ -167,7 +167,8 @@ composer check
 - [`docs/quickstart.md`](docs/quickstart.md) is the recommended first walkthrough.
 - [`CHANGELOG.md`](CHANGELOG.md) lists release history.
 - [`UPGRADE.md`](UPGRADE.md) documents the 1.x compatibility policy.
-- `docs/README.md` is the full documentation index.- `docs/definition-api.md` documents the canonical registry and definition API.
+- `docs/README.md` is the full documentation index.
+- `docs/definition-api.md` documents the canonical registry and definition API.
 - `docs/definition-extension-guide.md` documents supported definition extension points and storage rules.
 - `docs/mapper-runtime-guide.md` documents the mapper runtime, conversion system, and runtime registration surface.
 - `docs/recursive-mapping-behavior.md` documents recursive mapping behavior and runtime traversal rules.

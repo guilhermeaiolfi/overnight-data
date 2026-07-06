@@ -31,6 +31,19 @@ final class AdoptionRecordResolverTest extends TestCase
 		self::assertFalse($record->hasKey());
 	}
 
+	public function testCreatesNewRecordStateWhenRelatedBindingHasCompletePrimaryKey(): void
+	{
+		$representation = $this->representation(['id' => 10, 'name' => 'Ada']);
+		$records = new RecordStateStore();
+
+		$record = $this->resolver()->resolve($representation, $this->userBindingWithId(), $records, false);
+
+		self::assertTrue($record->isNew());
+		self::assertFalse($record->hasKey());
+		self::assertSame(10, $record->getValue('id'));
+		self::assertSame('Ada', $record->getValue('name'));
+	}
+
 	public function testCreatesCleanRecordStateWhenPrimaryKeyCanBeCompleted(): void
 	{
 		$representation = $this->representation(['id' => 10, 'name' => 'Ada']);

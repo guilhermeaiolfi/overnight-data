@@ -15,10 +15,14 @@ use ON\Data\ORM\State\RepresentationBinding;
 final class AdoptionRecordResolver
 {
 	private RepresentationReader $reader;
+	private ?ExistingIntentStore $existingIntents;
 
-	public function __construct(?RepresentationReader $reader = null)
-	{
+	public function __construct(
+		?RepresentationReader $reader = null,
+		?ExistingIntentStore $existingIntents = null,
+	) {
 		$this->reader = $reader ?? new RepresentationReader();
+		$this->existingIntents = $existingIntents;
 	}
 
 	public function resolve(
@@ -32,6 +36,13 @@ final class AdoptionRecordResolver
 		$keyValues = $this->completeKeyValues($representation, $binding, $collection);
 
 		if ($keyValues === null) {
+			if ($this->hasExistingIntent($representation)) {
+				throw new StateException(sprintf(
+					"Cannot adopt existing representation for collection '%s' because its primary key cannot be read through the binding.",
+					$collection->getName()
+				));
+			}
+
 			return RecordState::new($collection, $values);
 		}
 
@@ -49,7 +60,11 @@ final class AdoptionRecordResolver
 			return $record;
 		}
 
-		return RecordState::clean($key, $values);
+		if ($this->hasExistingIntent($representation) || $isRoot) {
+			return RecordState::clean($key, $values);
+		}
+
+		return RecordState::new($collection, $values);
 	}
 
 	/**
@@ -187,5 +202,11 @@ final class AdoptionRecordResolver
 		}
 
 		return $values;
+	}
+
+	private function hasExistingIntent(object $representation): bool
+	{
+		return $this->existingIntents instanceof ExistingIntentStore
+			&& $this->existingIntents->isMarked($representation);
 	}
 }

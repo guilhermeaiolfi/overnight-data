@@ -211,7 +211,7 @@ map/hydrate each row to User
 track one root RecordState per row when ORM tracking is active
 ```
 
-The first implementation can define root default fields as all normal root scalar fields. Later this may become smarter based on target representation requirements, but do not implement that in Phase 0.
+The current v1.0 implementation defines root default fields as all normal root scalar fields. Later releases may become smarter based on target representation requirements.
 
 Default root selection is root-only. It must not auto-load relations; explicit relation loading still goes through the existing `RelationRef` / `select()` model:
 
@@ -353,7 +353,7 @@ Partial explicit selections must not overwrite missing fields during sync. A ful
 
 ## Lazy Loading
 
-Lazy loading is dangerous and is not implemented in Phase 0. The documented default is:
+Lazy loading is dangerous and is not implemented in v1.0. The documented default is:
 
 ```php
 LazyLoadingPolicy::PREVENT
@@ -456,7 +456,7 @@ ON\Data\ORM\Relation
 ON\Data\ORM\Exception
 ```
 
-Do not create them in Phase 0 unless a later test stub needs them.
+These namespaces ship in v1.0.
 
 ## Phase 1A State Primitives
 
