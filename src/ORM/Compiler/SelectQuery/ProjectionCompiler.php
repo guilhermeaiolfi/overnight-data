@@ -15,10 +15,8 @@ namespace ON\Data\ORM\Compiler\SelectQuery;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Compiler\ProjectionBindingAssembler;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\Query\Expression\AliasedExpression;
@@ -29,7 +27,7 @@ use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 
-final class BindingCompiler
+final class ProjectionCompiler
 {
 	private int $internalResultKeyCounter = 0;
 	private ProjectionSelectionNormalizer $selectionNormalizer;
@@ -75,12 +73,12 @@ final class BindingCompiler
 		$selectedFields = $this->getRootExplicitScalarSelections($query);
 
 		if ($explicitSelections === []) {
-			$this->addDefaultFields($binding, $collection);
+			$this->bindingAssembler->addDefaultCollectionFields($binding, $collection);
 		} else {
 			$this->addSelectedFields($binding, $sourceResolver, $selectedFields);
 		}
 
-		$this->addPrimaryKeyFields($binding, $collection);
+		$this->bindingAssembler->addPrimaryKeyFields($binding, $collection);
 	}
 
 	/**
@@ -131,38 +129,6 @@ final class BindingCompiler
 			$this->selectionNormalizer->normalizeSelections($selections),
 			$sourceResolver,
 		);
-	}
-
-	private function addDefaultFields(RepresentationBinding $binding, CollectionInterface $collection): void
-	{
-		foreach ($collection->getFields() as $field) {
-			$this->addFieldBinding(
-				$binding,
-				new RepresentationFieldBinding(
-					$field->getName(),
-					RecordFieldRef::template($collection, $field->getName()),
-					writable: true,
-				),
-			);
-		}
-	}
-
-	private function addPrimaryKeyFields(RepresentationBinding $binding, CollectionInterface $collection): void
-	{
-		foreach ($collection->getPrimaryKey() as $fieldName) {
-			if ($this->hasFieldBindingFor($binding, $collection, $fieldName)) {
-				continue;
-			}
-
-			$this->addFieldBinding(
-				$binding,
-				new RepresentationFieldBinding(
-					$fieldName,
-					RecordFieldRef::template($collection, $fieldName),
-					writable: false,
-				),
-			);
-		}
 	}
 
 	private function compileRelationSourcedFlatFields(
@@ -235,7 +201,7 @@ final class BindingCompiler
 		$targetCollection = $relationRef->getCollection();
 
 		foreach ($targetCollection->getPrimaryKey() as $fieldName) {
-			if ($this->hasFieldBindingFor($binding, $targetCollection, $fieldName)) {
+			if ($this->bindingAssembler->hasTemplateFieldFor($binding, $targetCollection, $fieldName)) {
 				continue;
 			}
 
@@ -326,19 +292,12 @@ final class BindingCompiler
 
 		if ($explicitFields !== null) {
 			foreach ($explicitFields as $fieldName) {
-				$this->addFieldBinding(
-					$binding,
-					new RepresentationFieldBinding(
-						$fieldName,
-						RecordFieldRef::template($targetCollection, $fieldName),
-						writable: true,
-					),
-				);
+				$this->bindingAssembler->addTemplateField($binding, $targetCollection, $fieldName, $fieldName);
 			}
 
-			$this->addPrimaryKeyFields($binding, $targetCollection);
+			$this->bindingAssembler->addPrimaryKeyFields($binding, $targetCollection);
 		} else {
-			$this->addDefaultFields($binding, $targetCollection);
+			$this->bindingAssembler->addDefaultCollectionFields($binding, $targetCollection);
 		}
 
 		return $binding;
@@ -371,31 +330,5 @@ final class BindingCompiler
 		}
 
 		return $selection->isLoaded();
-	}
-
-	private function hasFieldBindingFor(
-		RepresentationBinding $binding,
-		CollectionInterface $collection,
-		string $fieldName,
-	): bool {
-		foreach ($binding->getFields() as $fieldBinding) {
-			if (
-				$fieldBinding->getField()->getCollectionName() === $collection->getName()
-				&& $fieldBinding->getField()->getFieldName() === $fieldName
-			) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	private function addFieldBinding(RepresentationBinding $binding, RepresentationFieldBinding $fieldBinding): void
-	{
-		if ($binding->hasField($fieldBinding->getPath())) {
-			return;
-		}
-
-		$binding->addField($fieldBinding);
 	}
 }

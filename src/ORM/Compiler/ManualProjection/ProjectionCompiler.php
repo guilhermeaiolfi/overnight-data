@@ -8,14 +8,14 @@ namespace ON\Data\ORM\Compiler\ManualProjection;
  * Manual projection compiler: assembles RepresentationBinding from pre-built
  * ProjectionFieldShape values using the manual SourceResolver.
  *
- * Exists as the thin manual counterpart to the query-side binding compiler; it
+ * Exists as the thin manual counterpart to the query-side projection compiler; it
  * reuses ProjectionBindingAssembler and enables skip-when-missing for overlays.
  */
 use ON\Data\ORM\Compiler\ProjectionBindingAssembler;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
 use ON\Data\ORM\State\RepresentationBinding;
 
-final class BindingCompiler
+final class ProjectionCompiler
 {
 	public function __construct(
 		private ProjectionBindingAssembler $bindingAssembler = new ProjectionBindingAssembler(),

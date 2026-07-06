@@ -13,5 +13,5 @@ namespace ON\Data\ORM\Compiler;
  */
 interface ProjectionSourceResolverInterface
 {
-	public function resolve(object $source): ProjectionSourceTarget;
+	public function resolve(object $source): ResolvedProjectionSource;
 }

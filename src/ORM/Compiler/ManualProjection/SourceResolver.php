@@ -12,18 +12,17 @@ namespace ON\Data\ORM\Compiler\ManualProjection;
  * enforces that MANY relations and unresolved sources cannot be compiled alone.
  */
 use ON\Data\ORM\Compiler\ProjectionSourceResolverInterface;
-use ON\Data\ORM\Compiler\ProjectionSourceTarget;
+use ON\Data\ORM\Compiler\ResolvedProjectionSource;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RepresentationBinding;
 
 final class SourceResolver implements ProjectionSourceResolverInterface
 {
-	public function resolve(object $source): ProjectionSourceTarget
+	public function resolve(object $source): ResolvedProjectionSource
 	{
 		if ($source instanceof PropertySource) {
 			$record = $source->getTargetRecord();
 
-			return new ProjectionSourceTarget($record->getCollection(), new RepresentationBinding(), $record);
+			return new ResolvedProjectionSource($record->getCollection(), $record);
 		}
 
 		if ($source instanceof RelationRef) {
@@ -34,7 +33,7 @@ final class SourceResolver implements ProjectionSourceResolverInterface
 				));
 			}
 
-			return new ProjectionSourceTarget($source->getDefinition()->getCollection(), new RepresentationBinding());
+			return new ResolvedProjectionSource($source->getDefinition()->getCollection());
 		}
 
 		throw new StateException(sprintf(

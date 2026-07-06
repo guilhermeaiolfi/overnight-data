@@ -9,7 +9,7 @@ namespace ON\Data\ORM\Compiler\ManualProjection;
  * public path alias via as().
  *
  * Exists as the manual equivalent of a normalized ProjectionFieldShape before
- * Builder collects shapes for BindingCompiler.
+ * Builder collects shapes for ProjectionCompiler.
  */
 final class PropertyRef
 {

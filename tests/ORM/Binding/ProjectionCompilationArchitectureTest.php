@@ -7,8 +7,9 @@ namespace Tests\ON\Data\ORM\Binding;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\ORM\Compiler\ManualProjection\AllProperties;
-use ON\Data\ORM\Compiler\ManualProjection\BindingCompiler;
+use ON\Data\ORM\Compiler\ManualProjection\ProjectionCompiler;
 use ON\Data\ORM\Compiler\ManualProjection\Builder;
+use ON\Data\ORM\Compiler\ManualProjection\PathResolver;
 use ON\Data\ORM\Compiler\ManualProjection\PropertyRef;
 use ON\Data\ORM\Compiler\ManualProjection\RelationApplier;
 use ON\Data\ORM\Compiler\ManualProjection\RepresentationTracker;
@@ -34,7 +35,6 @@ use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
-use ReflectionProperty;
 use stdClass;
 use Tests\ON\Data\Smoke\Support\SqliteMemoryHarness;
 
@@ -51,17 +51,19 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertFalse(method_exists(ProjectionSelectionNormalizer::class, 'fieldForSelection'));
 		self::assertFileDoesNotExist($root . '/src/ORM/Compiler/ProjectionSourceResolver.php');
 		self::assertFileExists($root . '/src/ORM/Compiler/ProjectionSourceResolverInterface.php');
+		self::assertFileExists($root . '/src/ORM/Compiler/ResolvedProjectionSource.php');
+		self::assertFileDoesNotExist($root . '/src/ORM/Compiler/ProjectionSourceTarget.php');
 		self::assertFalse(method_exists(SourceResolver::class, 'rememberSource'));
 	}
 
-	public function testManualBuilderUsesBindingCompilerNotAssemblerDirectly(): void
+	public function testManualBuilderUsesProjectionCompilerNotAssemblerDirectly(): void
 	{
 		$constructor = (new ReflectionClass(Builder::class))->getConstructor();
 		self::assertNotNull($constructor);
 
 		$parameters = $constructor->getParameters();
 
-		self::assertSame(BindingCompiler::class, $parameters[2]->getType()?->getName());
+		self::assertSame(ProjectionCompiler::class, $parameters[2]->getType()?->getName());
 	}
 
 	public function testManualBuilderDoesNotOwnExtractedProjectionInternals(): void
@@ -76,6 +78,9 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertStringNotContainsString('mergeBindings', $contents);
 		self::assertStringNotContainsString('mirrorRelationTarget', $contents);
 		self::assertStringNotContainsString('bindingAssembler->assemble', $contents);
+		self::assertStringNotContainsString('attachPathTarget', $contents);
+		self::assertStringNotContainsString('attachRelationTarget', $contents);
+		self::assertStringNotContainsString('recordForExisting', $contents);
 	}
 
 	public function testDeclarationWrapperClassesDoNotExist(): void
@@ -124,7 +129,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			self::assertStringNotContainsString('QuerySourceInterface', $contents, $path);
 		}
 
-		$compilerContents = (string) file_get_contents(dirname(__DIR__, 3) . '/src/ORM/Compiler/ManualProjection/BindingCompiler.php');
+		$compilerContents = (string) file_get_contents(dirname(__DIR__, 3) . '/src/ORM/Compiler/ManualProjection/ProjectionCompiler.php');
 		self::assertStringNotContainsString('ON\Data\Query\SelectQuery', $compilerContents);
 		self::assertStringNotContainsString('QuerySourceInterface', $compilerContents);
 	}
@@ -230,9 +235,9 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		$contents = (string) file_get_contents(dirname(__DIR__, 3) . '/src/ORM/Compiler/ManualProjection/Builder.php');
 
 		self::assertStringContainsString('ProjectionFieldShape', $contents);
-		self::assertStringContainsString('bindingCompiler->compile', $contents);
+		self::assertStringContainsString('projectionCompiler->compile', $contents);
 		self::assertStringNotContainsString('ProjectionSelectionNormalizer', $contents);
-		self::assertStringNotContainsString('SelectQuery\\BindingCompiler', $contents);
+		self::assertStringNotContainsString('SelectQuery\\ProjectionCompiler', $contents);
 	}
 
 	#[RequiresPhpExtension('pdo_sqlite')]
@@ -295,7 +300,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 
 		$record = RecordState::new($users);
 		$rootTarget = new RootTarget($record);
-		$manualBinding = (new BindingCompiler())->compile(
+		$manualBinding = (new ProjectionCompiler())->compile(
 			[new ProjectionFieldShape('display_name', $rootTarget, 'name')],
 		);
 
@@ -330,6 +335,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			$root . '/src/ORM/Compiler/ProjectionFieldShape.php',
 			$root . '/src/ORM/Compiler/SelectQuery/QueryProjectionSourceResolver.php',
 			$root . '/src/ORM/Compiler/ManualProjection/SourceResolver.php',
+			$root . '/src/ORM/Compiler/SelectQuery/ProjectionCompiler.php',
 		] as $path) {
 			self::assertStringNotContainsString('RecordFieldRef', (string) file_get_contents($path), $path);
 		}
@@ -359,7 +365,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			$contents = (string) file_get_contents($path);
 
 			self::assertStringNotContainsString('ON\Data\Query\SelectQuery', $contents, $path);
-			self::assertStringNotContainsString('SelectQuery\\BindingCompiler', $contents, $path);
+			self::assertStringNotContainsString('SelectQuery\\ProjectionCompiler', $contents, $path);
 			self::assertStringNotContainsString('ProjectionSelectionNormalizer', $contents, $path);
 		}
 	}
@@ -409,10 +415,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 	public function testFromPathResolvesTrackedBindingWithoutSelectQuery(): void
 	{
 		[$session, $user] = $this->trackedUserWithPostsRelation();
-		$builder = $session->projection(new stdClass());
-		$property = new ReflectionProperty(Builder::class, 'pathResolver');
-		$property->setAccessible(true);
-		$pathResolver = $property->getValue($builder);
+		$pathResolver = new PathResolver($session->getRepresentations());
 
 		$resolved = $pathResolver->resolve($user, 'posts');
 
