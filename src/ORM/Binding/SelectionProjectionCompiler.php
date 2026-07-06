@@ -18,28 +18,26 @@ final class SelectionProjectionCompiler
 {
 	/**
 	 * @param list<SelectionItem> $selections
-	 * @param callable(SelectionItem, FieldRef): ?RecordFieldRef $fieldResolver
 	 */
 	public function compile(
 		array $selections,
-		callable $fieldResolver,
+		ProjectionIdentityProviderInterface $identities,
 		bool $skipWhenMissing = false,
 		bool $ignoreUnsupported = true,
 	): RepresentationBinding {
 		$binding = new RepresentationBinding();
-		$this->compileInto($binding, $selections, $fieldResolver, $skipWhenMissing, $ignoreUnsupported);
+		$this->compileInto($binding, $selections, $identities, $skipWhenMissing, $ignoreUnsupported);
 
 		return $binding;
 	}
 
 	/**
 	 * @param list<SelectionItem> $selections
-	 * @param callable(SelectionItem, FieldRef): ?RecordFieldRef $fieldResolver
 	 */
 	public function compileInto(
 		RepresentationBinding $binding,
 		array $selections,
-		callable $fieldResolver,
+		ProjectionIdentityProviderInterface $identities,
 		bool $skipWhenMissing = false,
 		bool $ignoreUnsupported = true,
 	): void {
@@ -49,7 +47,7 @@ final class SelectionProjectionCompiler
 				continue;
 			}
 
-			$field = $fieldResolver($selection, $fieldRef);
+			$field = $identities->fieldForSelection($selection, $fieldRef);
 			if (! $field instanceof RecordFieldRef) {
 				continue;
 			}

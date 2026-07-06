@@ -34,6 +34,11 @@ final class RepresentationFieldBinding
 		return new self($this->path, $field, $this->writable, $this->skipWhenMissing);
 	}
 
+	public function withSkipWhenMissing(bool $skipWhenMissing): self
+	{
+		return new self($this->path, $this->field, $this->writable, $skipWhenMissing);
+	}
+
 	public function isWritable(): bool
 	{
 		return $this->writable;

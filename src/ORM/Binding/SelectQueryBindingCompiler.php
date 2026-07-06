@@ -44,7 +44,9 @@ final class SelectQueryBindingCompiler
 		$binding = new RepresentationBinding();
 		$projectionIdentities = new ProjectionIdentityMap();
 
-		$this->compileRootScalarFields($binding, $query, $collection);
+		$identityProvider = new SelectQueryProjectionIdentityProvider($query, $projectionIdentities);
+
+		$this->compileRootScalarFields($binding, $query, $collection, $identityProvider);
 		$this->compileRelationSourcedFlatFields($binding, $query, $projectionIdentities);
 		$this->compileRelationSelections($binding, $query);
 
@@ -55,6 +57,7 @@ final class SelectQueryBindingCompiler
 		RepresentationBinding $binding,
 		SelectQuery $query,
 		CollectionInterface $collection,
+		SelectQueryProjectionIdentityProvider $identityProvider,
 	): void {
 		$explicitSelections = $query->getSelections()->getExplicit();
 		$selectedFields = $this->getRootExplicitScalarSelections($query);
@@ -62,7 +65,7 @@ final class SelectQueryBindingCompiler
 		if ($explicitSelections === []) {
 			$this->addDefaultFields($binding, $collection);
 		} else {
-			$this->addSelectedFields($binding, $collection, $query, $selectedFields);
+			$this->addSelectedFields($binding, $identityProvider, $selectedFields);
 		}
 
 		$this->addPrimaryKeyFields($binding, $collection);
@@ -108,16 +111,13 @@ final class SelectQueryBindingCompiler
 	 */
 	private function addSelectedFields(
 		RepresentationBinding $binding,
-		CollectionInterface $collection,
-		SelectQuery $query,
+		SelectQueryProjectionIdentityProvider $identityProvider,
 		array $selections,
 	): void {
 		$this->selectionCompiler->compileInto(
 			$binding,
 			$selections,
-			fn (SelectionItem $selection, FieldRef $fieldRef): ?RecordFieldRef => $this->resolveRootFieldRef($query, $selection) instanceof FieldRef
-				? RecordFieldRef::template($collection, $fieldRef->getName())
-				: null,
+			$identityProvider,
 		);
 	}
 
@@ -174,7 +174,7 @@ final class SelectQueryBindingCompiler
 			$this->selectionCompiler->compileInto(
 				$binding,
 				[$selection],
-				static fn (): RecordFieldRef => RecordFieldRef::template($targetCollection, $fieldRef->getName()),
+				new SelectQueryProjectionIdentityProvider($query, $projectionIdentities, $targetCollection),
 			);
 
 			$relationRefsByPath[json_encode($relationRef->getPath(), JSON_THROW_ON_ERROR)] = $relationRef;

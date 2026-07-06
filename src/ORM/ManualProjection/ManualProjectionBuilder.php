@@ -14,7 +14,6 @@ use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RecordFieldRef;
-use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
@@ -22,12 +21,10 @@ use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\Query\Expression\AliasedExpression;
-use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\RelationRef;
-use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\SelectQuery;
 use stdClass;
@@ -37,13 +34,11 @@ final class ManualProjectionBuilder
 	/** @var list<ValueExpressionInterface|AliasedExpression|StarExpression> */
 	private array $selections = [];
 
-	/** @var array<int, RecordState> */
-	private array $sourceStates = [];
-
 	public function __construct(
 		private Session $session,
 		private object $representation,
 		private SelectionProjectionCompiler $selectionCompiler = new SelectionProjectionCompiler(),
+		private ManualProjectionIdentityProvider $identityProvider = new ManualProjectionIdentityProvider(),
 	) {
 	}
 
@@ -251,7 +246,14 @@ final class ManualProjectionBuilder
 
 	public function end(): object
 	{
-		$manualBinding = $this->compileBinding();
+		$selectionList = new SelectionList();
+		$selectionList->addExplicit($this->selections);
+		$manualBinding = $this->selectionCompiler->compile(
+			$selectionList->getExplicit(),
+			$this->identityProvider,
+			skipWhenMissing: true,
+			ignoreUnsupported: false
+		);
 		$state = $this->session->getRepresentations()->get($this->representation);
 
 		if ($state instanceof RepresentationState) {
@@ -281,51 +283,15 @@ final class ManualProjectionBuilder
 		}
 
 		$this->session->getRepresentations()->add($this->representation, new RepresentationState($binding, $baselineRevisions));
-		$this->sourceStates = [];
+		$this->identityProvider->clear();
 
 		return $this->representation;
-	}
-
-	private function compileBinding(): RepresentationBinding
-	{
-		$selectionList = new SelectionList();
-		$selectionList->addExplicit($this->selections);
-
-		return $this->selectionCompiler->compile(
-			$selectionList->getExplicit(),
-			fn (SelectionItem $selection, FieldRef $fieldRef): RecordFieldRef => RecordFieldRef::forState(
-				$this->recordForSource($fieldRef->getSource(), $fieldRef),
-				$fieldRef->getName()
-			),
-			skipWhenMissing: true,
-			ignoreUnsupported: false
-		);
-	}
-
-	private function recordForSource(QuerySourceInterface $source, FieldRef $fieldRef): RecordState
-	{
-		$record = $this->sourceStates[spl_object_id($source)] ?? null;
-		if ($record instanceof RecordState) {
-			return $record;
-		}
-
-		if ($source instanceof RelationRef && $source->getDefinition()->getCardinality() === 'many') {
-			throw new StateException(sprintf(
-				"Cannot select MANY relation field '%s' without first creating or identifying one concrete relation item.",
-				implode('.', $fieldRef->getPath())
-			));
-		}
-
-		throw new StateException(sprintf(
-			"Cannot select field '%s' because its projection source has no concrete record identity.",
-			implode('.', $fieldRef->getPath())
-		));
 	}
 
 	private function ownerRecordFor(RelationRef $relation): RecordState
 	{
 		$source = $relation->getParentRelation() ?? $relation->getQuery();
-		$owner = $this->sourceStates[spl_object_id($source)] ?? null;
+		$owner = $this->identityProvider->recordFor($source);
 		if ($owner instanceof RecordState) {
 			return $owner;
 		}
@@ -420,59 +386,8 @@ final class ManualProjectionBuilder
 			return;
 		}
 
-		$binding = $this->applyRelatedBindingForManualTarget($relatedBinding, $record);
+		$binding = $relatedBinding->applyToRecordState($record, skipWhenMissing: true);
 		$this->session->getRepresentations()->add($target, new RepresentationState($binding, [$record->getStateHash() => $record->getRevision()]));
-	}
-
-	private function applyRelatedBindingForManualTarget(RepresentationBinding $relatedBinding, RecordState $record): RepresentationBinding
-	{
-		$binding = new RepresentationBinding();
-		foreach ($relatedBinding->getFields() as $fieldBinding) {
-			$field = $fieldBinding->getField();
-			if (! $field->isTemplate()) {
-				throw new StateException(sprintf("Representation binding path '%s' already targets a concrete record.", $fieldBinding->getPath()));
-			}
-
-			if ($field->getCollectionName() !== $record->getCollection()->getName()) {
-				throw new StateException(sprintf(
-					"Representation binding path '%s' targets collection '%s', not '%s'.",
-					$fieldBinding->getPath(),
-					$field->getCollectionName(),
-					$record->getCollection()->getName()
-				));
-			}
-
-			$binding->addField(new RepresentationFieldBinding(
-				$fieldBinding->getPath(),
-				RecordFieldRef::forState($record, $field->getFieldName()),
-				writable: $fieldBinding->isWritable(),
-				skipWhenMissing: true
-			));
-		}
-
-		foreach ($relatedBinding->getExpressions() as $expressionBinding) {
-			$binding->addExpression($expressionBinding);
-		}
-
-		foreach ($relatedBinding->getRelations() as $relationBinding) {
-			$relation = $relationBinding->getRelation();
-			if (! $relation->isTemplate()) {
-				throw new StateException(sprintf("Representation binding path '%s' already targets a concrete record.", $relationBinding->getPath()));
-			}
-
-			if ($relation->getCollectionName() !== $record->getCollection()->getName()) {
-				throw new StateException(sprintf(
-					"Representation binding path '%s' targets collection '%s', not '%s'.",
-					$relationBinding->getPath(),
-					$relation->getCollectionName(),
-					$record->getCollection()->getName()
-				));
-			}
-
-			$binding->addRelation($relationBinding->withRelation(RecordRelationRef::forState($record, $relation->getRelationName())));
-		}
-
-		return $binding;
 	}
 
 	private function applyRelationTarget(
@@ -652,7 +567,7 @@ final class ManualProjectionBuilder
 
 	private function rememberSource(QuerySourceInterface $source, RecordState $record): void
 	{
-		$this->sourceStates[spl_object_id($source)] = $record;
+		$this->identityProvider->rememberSource($source, $record);
 	}
 
 	private function relationCardinality(RelationRef $relation): RepresentationRelationCardinality

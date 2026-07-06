@@ -145,7 +145,7 @@ final class RepresentationBinding
 		return $this->paths;
 	}
 
-	public function applyToRecordState(RecordState $state): self
+	public function applyToRecordState(RecordState $state, bool $skipWhenMissing = false): self
 	{
 		$applied = new self();
 		foreach ($this->getFields() as $binding) {
@@ -163,7 +163,9 @@ final class RepresentationBinding
 				));
 			}
 
-			$applied->addField($binding->withField(RecordFieldRef::forState($state, $field->getFieldName())));
+			$applied->addField($binding
+				->withField(RecordFieldRef::forState($state, $field->getFieldName()))
+				->withSkipWhenMissing($skipWhenMissing || $binding->shouldSkipWhenMissing()));
 		}
 
 		foreach ($this->getExpressions() as $binding) {
