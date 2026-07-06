@@ -8,6 +8,7 @@ use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
+use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
@@ -138,6 +139,152 @@ final class FlushExecutorTest extends TestCase
 		$this->expectExceptionMessage('executor failed');
 
 		(new FlushExecutor($executor))->flush($this->context(new RepresentationStore(), $this->records($record)));
+	}
+
+	public function testFailedFlushDoesNotExecuteLaterDependentCommands(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$owner = RecordState::new($users, ['name' => 'Owner']);
+		$child = RecordState::new($posts, [
+			'title' => 'Post',
+			'user_id' => ValueRef::field($owner, 'id'),
+		]);
+		$executor = new class () implements CommandExecutorInterface {
+			/** @var list<CommandInterface> */
+			public array $commands = [];
+
+			public function execute(CommandInterface $command): CommandResult
+			{
+				$this->commands[] = $command;
+
+				throw new LogicException('owner insert failed');
+			}
+		};
+
+		$this->expectException(LogicException::class);
+		$this->expectExceptionMessage('owner insert failed');
+
+		try {
+			(new FlushExecutor($executor))->flush($this->context(
+				new RepresentationStore(),
+				$this->records($owner, $child)
+			));
+		} finally {
+			self::assertCount(1, $executor->commands);
+			self::assertSame($users, $executor->commands[0]->getCollection());
+			self::assertTrue($owner->isNew());
+			self::assertTrue($child->isNew());
+		}
+	}
+
+	public function testGeneratedKeyIsMergedBeforeDependentCommandExecutes(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$owner = RecordState::new($users, ['name' => 'Owner']);
+		$child = RecordState::new($posts, [
+			'title' => 'Post',
+			'user_id' => ValueRef::field($owner, 'id'),
+		]);
+		$executor = new class () implements CommandExecutorInterface {
+			/** @var list<CommandInterface> */
+			public array $commands = [];
+
+			public function execute(CommandInterface $command): CommandResult
+			{
+				$this->commands[] = $command;
+
+				if (count($this->commands) === 1) {
+					return new CommandResult(1, ['id' => 10]);
+				}
+
+				if (! $command instanceof InsertCommand) {
+					throw new LogicException('Expected child insert.');
+				}
+
+				if ($command->getValues()['user_id'] !== 10) {
+					throw new LogicException('Dependent command executed before generated key merge.');
+				}
+
+				return new CommandResult(1, ['id' => 5]);
+			}
+		};
+
+		(new FlushExecutor($executor))->flush($this->context(
+			new RepresentationStore(),
+			$this->records($owner, $child)
+		));
+
+		self::assertSame(10, $owner->getValue('id'));
+		self::assertCount(2, $executor->commands);
+		self::assertFalse($this->commandContainsValueRef($executor->commands[1]));
+	}
+
+	public function testManyToManyThroughRowWithUnresolvedValuesFailsBeforeWritingThroughRow(): void
+	{
+		[$users, $tags, $through] = $this->usersWithTags();
+		$owner = RecordState::new($users, ['name' => 'Owner']);
+		$target = RecordState::clean($tags->getKey(3), ['id' => 3, 'label' => 'Tag']);
+		$tagRepresentation = $this->representation(['id' => 3, 'label' => 'Tag']);
+		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection->add($tagRepresentation);
+		$executor = new RecordingCommandExecutor(new CommandResult(1));
+
+		$this->expectException(InvalidCommandException::class);
+
+		try {
+			(new FlushExecutor($executor))->flush($this->context(
+				$this->representations($this->tracked($tagRepresentation, $this->bindingFor($target))),
+				$this->records($owner, $target),
+				$this->toManyRelations($collection)
+			));
+		} finally {
+			self::assertCount(1, $executor->getCommands());
+			self::assertSame($users, $executor->getCommands()[0]->getCollection());
+			self::assertNotSame($through, $executor->getCommands()[0]->getCollection());
+			self::assertTrue($collection->hasChanges());
+		}
+	}
+
+	public function testFailedFlushLeavesRecordAndRelationStateInspectableWithoutMarkingSuccess(): void
+	{
+		[$users, $tags] = $this->usersWithTags();
+		$owner = RecordState::new($users, ['name' => 'Owner']);
+		$target = RecordState::clean($tags->getKey(3), ['id' => 3, 'label' => 'Tag']);
+		$tagRepresentation = $this->representation(['id' => 3, 'label' => 'Tag']);
+		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection->add($tagRepresentation);
+		$records = $this->records($owner, $target);
+		$executor = new class () implements CommandExecutorInterface {
+			/** @var list<CommandInterface> */
+			public array $commands = [];
+
+			public function execute(CommandInterface $command): CommandResult
+			{
+				$this->commands[] = $command;
+
+				return match (count($this->commands)) {
+					1 => new CommandResult(1, ['id' => 10]),
+					default => throw new LogicException('through insert failed'),
+				};
+			}
+		};
+
+		$this->expectException(LogicException::class);
+		$this->expectExceptionMessage('through insert failed');
+
+		try {
+			(new FlushExecutor($executor))->flush($this->context(
+				$this->representations($this->tracked($tagRepresentation, $this->bindingFor($target))),
+				$records,
+				$this->toManyRelations($collection)
+			));
+		} finally {
+			self::assertSame(10, $owner->getValue('id'));
+			self::assertTrue($owner->isNew());
+			self::assertSame($owner, $records->getAll()[0]);
+			self::assertTrue($collection->hasChanges());
+			self::assertCount(2, $executor->commands);
+		}
 	}
 
 	public function testFlushUsesCommandExecutorTransactionWhenAvailable(): void

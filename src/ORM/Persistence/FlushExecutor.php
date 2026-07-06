@@ -46,8 +46,10 @@ final class FlushExecutor
 		$flush = $this->scheduler->run(
 			$records,
 			$relationResult->getCommands(),
-			false,
+			true,
 		);
+
+		$flush->finalize();
 
 		foreach ($relationResult->getChanges() as $change) {
 			$change->clearChanges();
