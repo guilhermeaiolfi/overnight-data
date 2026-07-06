@@ -16,16 +16,19 @@ use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\DeleteCommand;
+use ON\Data\ORM\Persistence\FlushExecutor;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\RecordFlusher;
 use ON\Data\ORM\Persistence\TransactionalCommandExecutorInterface;
 use ON\Data\ORM\Persistence\UpdateCommand;
+use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use PDO;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use Throwable;
 
 #[RequiresPhpExtension('pdo_sqlite')]
 final class CycleCommandExecutorTest extends TestCase
@@ -192,6 +195,55 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertSame($record, $states->getByKey($key));
 	}
 
+	public function testFlushExecutorUsesCycleExecutorTransactionAndRollsBackFailedFlush(): void
+	{
+		$users = $this->users();
+		$first = RecordState::new($users, [
+			'name' => 'Rolled Back',
+			'email' => 'rolled-back@example.test',
+		]);
+		$duplicate = RecordState::new($users, [
+			'id' => 1,
+			'name' => 'Duplicate',
+			'email' => 'duplicate@example.test',
+		]);
+		$states = new RecordStateStore();
+		$states->add($first);
+		$states->add($duplicate);
+
+		try {
+			(new FlushExecutor($this->executor()))->flush(new SessionContext($states));
+			self::fail('Expected duplicate primary key insert to fail.');
+		} catch (Throwable) {
+			self::assertNull($this->fetchUser(3));
+			self::assertTrue($first->isNew());
+			self::assertSame([
+				'name' => 'Rolled Back',
+				'email' => 'rolled-back@example.test',
+			], $first->getValues());
+		}
+	}
+
+	public function testFlushExecutorMergesGeneratedAutoIncrementPrimaryKeyValue(): void
+	{
+		$users = $this->users();
+		$record = RecordState::new($users, [
+			'name' => 'Dorothy',
+			'email' => 'dorothy@example.test',
+		]);
+		$states = new RecordStateStore();
+		$states->add($record);
+
+		$result = (new FlushExecutor($this->executor()))->flush(new SessionContext($states));
+
+		$key = $users->getKey(3);
+		self::assertCount(1, $result->getCommandResults());
+		self::assertSame(['id' => 3], $result->getCommandResults()[0]->getGeneratedValues());
+		self::assertTrue($record->isClean());
+		self::assertSame(['name' => 'Dorothy', 'email' => 'dorothy@example.test', 'id' => 3], $record->getValues());
+		self::assertSame($record, $states->getByKey($key));
+	}
+
 	public function testUpdateCommandUsesCollectionTableAndMapsChangedFieldsToColumns(): void
 	{
 		$result = $this->executor->execute(new UpdateCommand($this->users(), ['id' => 1], [
@@ -219,6 +271,15 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertSame('Ada', $this->fetchUser(1)['name']);
 	}
 
+	public function testUpdateCommandReturnsZeroAffectedRowsWhenNoRowMatches(): void
+	{
+		$result = $this->executor->execute(new UpdateCommand($this->users(), ['id' => 999], [
+			'name' => 'Nobody',
+		]));
+
+		self::assertSame(0, $result->getAffectedRows());
+	}
+
 	public function testUpdateCommandMapsCompositeIdentityFieldsToCustomPrimaryKeyColumns(): void
 	{
 		$result = $this->executor->execute(new UpdateCommand($this->memberships(), [
@@ -242,6 +303,13 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertSame(1, $result->getAffectedRows());
 		self::assertNull($this->fetchUser(2));
 		self::assertNotNull($this->fetchUser(1));
+	}
+
+	public function testDeleteCommandReturnsZeroAffectedRowsWhenNoRowMatches(): void
+	{
+		$result = $this->executor->execute(new DeleteCommand($this->users(), ['id' => 999]));
+
+		self::assertSame(0, $result->getAffectedRows());
 	}
 
 	public function testDeleteCommandMapsCompositeIdentityFieldsToCustomPrimaryKeyColumns(): void
@@ -397,6 +465,17 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertStringNotContainsString('INSERT ', $source);
 		self::assertStringNotContainsString('UPDATE ', $source);
 		self::assertStringNotContainsString('DELETE ', $source);
+	}
+
+	public function testNonIntegerCycleAffectedRowsResultIsTreatedAsZero(): void
+	{
+		$reflection = new ReflectionClass(CycleCommandExecutor::class);
+		$method = $reflection->getMethod('affectedRows');
+
+		self::assertSame(0, $method->invoke($this->executor(), false));
+		self::assertSame(0, $method->invoke($this->executor(), '1'));
+		self::assertSame(0, $method->invoke($this->executor(), -1));
+		self::assertSame(2, $method->invoke($this->executor(), 2));
 	}
 
 	/**
