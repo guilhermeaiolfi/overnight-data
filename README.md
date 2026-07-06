@@ -124,7 +124,7 @@ Public-property class export requirements:
 - Structured relation loading supports the built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relation types.
 - Built-in `FirstOfMany` loading is separate-query-only, uses windowed ranking on supported SQL backends, and requires deterministic relation-level `orderBy` metadata; JOIN loading is intentionally unsupported.
 - No automatic relation cascade writes or broad orphan-removal policy unless explicitly implemented by a relation planner.
-- `Session::flush()` runs inside a database transaction when the command executor implements `TransactionalCommandExecutorInterface` (including `CycleCommandExecutor`). There is no separate transaction API on `Session`.
+- `Session::flush()` runs inside a database transaction when the command executor implements `TransactionalCommandExecutorInterface` (including `CycleCommandExecutor`). Production database executors should implement that interface. The non-transactional path remains an unsafe fallback for tests, in-memory executors, and adapters without transaction support. There is no separate transaction API on `Session`.
 - No optimistic locking or stale-row revision conflict handling beyond representation sync baseline checks.
 - No lazy loading.
 - No repositories, `EntityManager`, `UnitOfWork`, events, proxies, or generated model layer.

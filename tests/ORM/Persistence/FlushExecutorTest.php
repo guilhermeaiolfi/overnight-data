@@ -404,17 +404,23 @@ final class FlushExecutorTest extends TestCase
 		}
 	}
 
-	public function testFlushUsesCommandExecutorTransactionWhenAvailable(): void
+	public function testFlushPrefersTransactionalPathWheneverExecutorSupportsTransactions(): void
 	{
 		$record = RecordState::new($this->users(), ['name' => 'Ada']);
 		$executor = new class () implements CommandExecutorInterface, TransactionalCommandExecutorInterface {
 			public int $transactions = 0;
+
+			public bool $insideTransaction = false;
 
 			/** @var list<CommandInterface> */
 			public array $commands = [];
 
 			public function execute(CommandInterface $command): CommandResult
 			{
+				if (! $this->insideTransaction) {
+					throw new LogicException('FlushExecutor used the non-transactional path.');
+				}
+
 				$this->commands[] = $command;
 
 				return new CommandResult(1);
@@ -424,7 +430,13 @@ final class FlushExecutorTest extends TestCase
 			{
 				++$this->transactions;
 
-				return $callback();
+				$this->insideTransaction = true;
+
+				try {
+					return $callback();
+				} finally {
+					$this->insideTransaction = false;
+				}
 			}
 		};
 

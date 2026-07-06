@@ -34,10 +34,10 @@ final class FlushExecutor
 			return $this->flushInTransaction($this->executor, $context);
 		}
 
-		return $this->flushImmediately($context);
+		return $this->flushWithoutTransaction($context);
 	}
 
-	private function flushImmediately(SessionContext $context): FlushResult
+	private function flushWithoutTransaction(SessionContext $context): FlushResult
 	{
 		$records = $context->getRecords();
 

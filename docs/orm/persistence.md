@@ -2,7 +2,7 @@
 
 The current ORM persistence layer writes scalar record fields and plans configured relation changes. It is intentionally small: representations synchronize into `RecordState` and relation state, dirty/new/removed records become neutral commands, configured relation planners can mutate scalar record state or add commands, and an adapter executes those commands against a backend.
 
-It is not a full entity manager, unit of work, automatic relation cascade writer, or transaction coordinator. `Session::flush()` does use executor-backed transactions when the command executor implements `TransactionalCommandExecutorInterface`.
+It is not a full entity manager, unit of work, automatic relation cascade writer, or public transaction coordinator. Production database command executors should implement `TransactionalCommandExecutorInterface`; `Session::flush()` uses that executor-backed transaction path whenever it is available.
 
 ## Flow
 
@@ -132,6 +132,8 @@ Unknown command field names are rejected with `InvalidCommandException`; they ar
 
 `CycleCommandExecutor` defensively calls `CommandValueResolver::assertReady()` before using query builders. A `ValueRef` that cannot be resolved is rejected with `InvalidCommandException` instead of being bound into SQL. The executor does not build raw SQL strings. When used through `FlushExecutor`, it participates in flush-scoped transactions through `TransactionalCommandExecutorInterface`.
 
+Production database executors should follow the same pattern and implement `TransactionalCommandExecutorInterface`. `FlushExecutor` treats transaction support as the default database path and runs the whole command wave inside one executor transaction when the interface is present.
+
 ## Affected-row validation
 
 `FlushScheduler` validates affected rows after each command executes. Insert, update, and delete commands default to expecting exactly one affected row. Commands can carry an explicit `ExpectedAffectedRows` policy when a different result is valid.
@@ -158,6 +160,8 @@ The executor does not support generated values for composite keys, non-auto-incr
 Generated values are merged into in-memory record state as soon as the insert command succeeds so later dependent commands in the same flush can resolve concrete foreign-key values. If a non-transactional executor writes an insert successfully and a later command fails, the record remains inspectable with the generated value but is not marked clean. Retrying that state unchanged attempts the insert again.
 
 To recover after verifying the row exists, explicitly accept the generated key state with `RecordState::markClean($key)` and `RecordStateStore::indexKey($state)`, then retry the still-pending relation changes. Transactional executors restore in-memory record state when the transaction callback fails, so rolled-back generated values are not exposed after failure.
+
+The non-transactional flush path remains available as a fallback for tests, in-memory executors, and adapters that cannot provide transaction support. It is unsafe for production database writes that span multiple dependent commands because a later command failure can leave earlier database writes committed.
 
 ## Small Example
 
@@ -204,7 +208,7 @@ Generated ids are currently supported only for simple auto-increment primary key
 
 This is deliberately not an `EntityManager`. There is no repository API, object proxy system, lifecycle event system, generated model layer, or relation cascade writer. `sync($object)` is graph synchronization only; it is not a cascade policy, orphan-removal policy, generated-key dependency sorter, or transaction boundary. `remove($object)` only removes an already-tracked representation that maps to one concrete record.
 
-`Session::flush()` runs inside a database transaction when the command executor implements `TransactionalCommandExecutorInterface` (including `CycleCommandExecutor`). There is no separate transaction API on `Session`.
+`Session::flush()` runs inside a database transaction when the command executor implements `TransactionalCommandExecutorInterface` (including `CycleCommandExecutor`). Production database executors should implement that interface. The non-transactional path is a fallback for tests, in-memory executors, and adapters without transaction support; it is not the recommended production database mode. There is no separate transaction API on `Session`.
 
 ## Current Limits
 
@@ -215,7 +219,8 @@ This is deliberately not an `EntityManager`. There is no repository API, object 
 - `sync()` accepts object roots only; array input is not supported yet.
 - No automatic relation cascade writes.
 - No automatic graph adoption from `flush()`.
-- `Session::flush()` uses executor-backed transactions when available; there is no separate transaction API on `Session`.
+- `Session::flush()` uses executor-backed transactions when available, and production database executors should implement `TransactionalCommandExecutorInterface`; there is no separate transaction API on `Session`.
+- Non-transactional flush remains as an unsafe fallback for tests, in-memory executors, and adapters without transaction support.
 - No optimistic locking or stale-row revision conflict handling beyond representation sync baseline checks.
 - No lazy loading.
 - No repositories, `EntityManager`, `UnitOfWork`, lifecycle events, proxies, or generated model layer.
