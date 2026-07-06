@@ -2,19 +2,17 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\ManualProjection;
+namespace ON\Data\ORM\Compiler\ManualProjection;
 
-use ON\Data\ORM\Binding\ProjectionSourceResolver;
-use ON\Data\ORM\Binding\ProjectionSourceTarget;
+use ON\Data\ORM\Compiler\ProjectionSourceResolver;
+use ON\Data\ORM\Compiler\ProjectionSourceTarget;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RecordState;
+use ON\Data\ORM\ManualProjection\ManualProjectionPropertySource;
+use ON\Data\ORM\ManualProjection\ManualProjectionRelationRef;
 use ON\Data\ORM\State\RepresentationBinding;
 
 final class ManualProjectionSourceResolver implements ProjectionSourceResolver
 {
-	/** @var array<int, RecordState> */
-	private array $sourceRecords = [];
-
 	public function resolve(object $source): ProjectionSourceTarget
 	{
 		if ($source instanceof ManualProjectionPropertySource) {
@@ -34,38 +32,11 @@ final class ManualProjectionSourceResolver implements ProjectionSourceResolver
 			return new ProjectionSourceTarget($source->getDefinition()->getCollection(), new RepresentationBinding());
 		}
 
-		$record = $this->recordFor($source);
-		if ($record instanceof RecordState) {
-			return new ProjectionSourceTarget($record->getCollection(), new RepresentationBinding(), $record);
-		}
-
 		throw new StateException(sprintf(
 			"Cannot resolve manual projection source '%s' because it has no concrete record identity.",
-			$this->describeSource($source),
+			$source instanceof ManualProjectionRelationRef
+				? implode('.', $source->getPath())
+				: $source::class,
 		));
-	}
-
-	public function rememberSource(object $source, RecordState $record): void
-	{
-		$this->sourceRecords[spl_object_id($source)] = $record;
-	}
-
-	public function recordFor(object $source): ?RecordState
-	{
-		return $this->sourceRecords[spl_object_id($source)] ?? null;
-	}
-
-	public function clear(): void
-	{
-		$this->sourceRecords = [];
-	}
-
-	private function describeSource(object $source): string
-	{
-		if ($source instanceof ManualProjectionRelationRef) {
-			return implode('.', $source->getPath());
-		}
-
-		return $source::class;
 	}
 }

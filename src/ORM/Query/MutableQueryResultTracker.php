@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Query;
 
+use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityMap;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\Sync\RepresentationReader;

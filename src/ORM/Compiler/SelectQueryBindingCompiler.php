@@ -2,11 +2,13 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\Binding;
+namespace ON\Data\ORM\Compiler;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
-use ON\Data\ORM\Query\ProjectionIdentityMap;
+use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityMap;
+use ON\Data\ORM\Compiler\SelectQuery\ProjectionSelectionNormalizer;
+use ON\Data\ORM\Compiler\SelectQuery\QueryProjectionSourceResolver;
 use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -30,8 +32,7 @@ final class SelectQueryBindingCompiler
 	public function __construct(
 		?ProjectionSelectionNormalizer $selectionNormalizer = null,
 		?ProjectionBindingAssembler $bindingAssembler = null,
-	)
-	{
+	) {
 		$this->selectionNormalizer = $selectionNormalizer ?? new ProjectionSelectionNormalizer();
 		$this->bindingAssembler = $bindingAssembler ?? new ProjectionBindingAssembler();
 	}

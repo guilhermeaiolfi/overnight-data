@@ -7,7 +7,7 @@ namespace Tests\ON\Data\ORM\Query;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Query\ProjectionIdentityMap;
+use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityMap;
 use ON\Data\ORM\Query\ProjectionRepresentationAdopter;
 use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordFieldRef;

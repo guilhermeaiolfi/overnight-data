@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\Binding;
+namespace ON\Data\ORM\Compiler;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\State\RecordState;

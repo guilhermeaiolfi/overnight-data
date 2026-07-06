@@ -182,4 +182,4 @@ composer check
 - `docs/orm/persistence.md` documents the ORM persistence pipeline, affected-row validation, Cycle command executor boundary, generated-key support, relation persistence planning boundary, and write-side limitations.
 - `docs/orm/representation-binding.md` documents representation binding, flat projection adoption, mapper/query/tracking boundaries, and scalar sync guardrails.
 - `docs/orm/mutable-select-query-projections.md` documents mutable `SelectQuery` projection provenance, flattened related-field updates, relation intent from queried objects, and current projection boundaries.
-- `docs/orm/manual-mutable-projections.md` documents manual non-executing `from()` / `select()` projections for objects that need explicit record identities and relation item intent.
+- `docs/orm/manual-mutable-projections.md` documents manual non-executing `from()` / `properties()` projections for objects that need explicit record identities and relation item intent.

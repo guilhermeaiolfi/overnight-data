@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Query;
 
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityMap;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\SessionContext;

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\Binding;
+namespace ON\Data\ORM\Compiler;
 
 interface ProjectionSourceResolver
 {

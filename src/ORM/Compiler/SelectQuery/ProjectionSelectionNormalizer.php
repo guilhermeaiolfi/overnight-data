@@ -2,9 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\Binding;
+namespace ON\Data\ORM\Compiler\SelectQuery;
 
 use InvalidArgumentException;
+use ON\Data\ORM\Compiler\ProjectionFieldShape;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;

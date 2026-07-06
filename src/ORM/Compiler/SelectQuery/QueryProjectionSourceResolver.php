@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\Binding;
+namespace ON\Data\ORM\Compiler\SelectQuery;
 
 use InvalidArgumentException;
+use ON\Data\ORM\Compiler\ProjectionSourceResolver;
+use ON\Data\ORM\Compiler\ProjectionSourceTarget;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\Query\QuerySourceInterface;
