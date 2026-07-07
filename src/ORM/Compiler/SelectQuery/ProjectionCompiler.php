@@ -49,7 +49,7 @@ final class ProjectionCompiler
 		$this->internalResultKeyCounter = 0;
 
 		$collection = $query->getCollection();
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($collection);
 		$projectionIdentities = new ProjectionIdentityMap();
 
 		$sourceResolver = new QueryProjectionSourceResolver($query);
@@ -284,7 +284,7 @@ final class ProjectionCompiler
 	private function compileRelationBinding(RelationSelection $selection): RepresentationBinding
 	{
 		$targetCollection = $this->relationTargetCollection($selection->getRelationRef()->getDefinition());
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($targetCollection);
 		$explicitFields = $selection->getFields();
 
 		if ($explicitFields !== null) {

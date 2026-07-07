@@ -15,7 +15,7 @@ final class RepresentationRelationBindingTest extends TestCase
 	public function testExposesStructuralRelationData(): void
 	{
 		$users = $this->users();
-		$relatedBinding = new RepresentationBinding();
+		$relatedBinding = $this->related();
 		$binding = new RepresentationRelationBinding('posts', $users, 'posts', $relatedBinding, true);
 
 		self::assertSame('posts', $binding->getPath());
@@ -30,21 +30,21 @@ final class RepresentationRelationBindingTest extends TestCase
 	{
 		$this->expectException(StateException::class);
 
-		new RepresentationRelationBinding('', $this->users(), 'posts', new RepresentationBinding());
+		new RepresentationRelationBinding('', $this->users(), 'posts', $this->related());
 	}
 
 	public function testRejectsEmptyRelationName(): void
 	{
 		$this->expectException(StateException::class);
 
-		new RepresentationRelationBinding('posts', $this->users(), '', new RepresentationBinding());
+		new RepresentationRelationBinding('posts', $this->users(), '', $this->related());
 	}
 
 	public function testDerivesCardinalityFromRelationDefinition(): void
 	{
 		$users = $this->users();
-		$posts = new RepresentationRelationBinding('posts', $users, 'posts', new RepresentationBinding());
-		$profile = new RepresentationRelationBinding('profile', $users, 'profile', new RepresentationBinding());
+		$posts = new RepresentationRelationBinding('posts', $users, 'posts', $this->related());
+		$profile = new RepresentationRelationBinding('profile', $users, 'profile', $this->related());
 
 		self::assertTrue($posts->isMany());
 		self::assertFalse($posts->isSingle());
@@ -60,5 +60,13 @@ final class RepresentationRelationBindingTest extends TestCase
 		$users->hasOne('profile', 'profiles');
 
 		return $users;
+	}
+
+	private function related(): RepresentationBinding
+	{
+		$registry = new Registry();
+		$related = $registry->collection('posts')->primaryKey('id')->field('id')->end();
+
+		return new RepresentationBinding($related);
 	}
 }

@@ -81,14 +81,12 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 			'company_id' => 5,
 		], $context);
 
-		$idField = $state->getBinding()->getField('id')->getField();
-		$nameField = $state->getBinding()->getField('name')->getField();
+		$idItem = $state->getFieldItem('id');
+		$nameItem = $state->getFieldItem('name');
 
-		self::assertTrue($idField->hasState());
-		self::assertTrue($nameField->hasState());
-		self::assertSame('users', $idField->getCollectionName());
-		self::assertSame('companies', $nameField->getCollectionName());
-		self::assertNotSame($idField->getRecordHash(), $nameField->getRecordHash());
+		self::assertSame('users', $idItem->getRecord()->getCollection()->getName());
+		self::assertSame('companies', $nameItem->getRecord()->getCollection()->getName());
+		self::assertNotSame($idItem->getRecord()->getStateHash(), $nameItem->getRecord()->getStateHash());
 	}
 
 	public function testBaselineRevisionsIncludeBothRecordHashes(): void
@@ -111,8 +109,12 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 
 		self::assertInstanceOf(RecordState::class, $userRecord);
 		self::assertInstanceOf(RecordState::class, $companyRecord);
-		self::assertTrue($state->hasBaselineRevision($userRecord->getStateHash()));
-		self::assertTrue($state->hasBaselineRevision($companyRecord->getStateHash()));
+		$idItem = $state->getFieldItem('id');
+		$nameItem = $state->getFieldItem('name');
+		self::assertSame($userRecord->getStateHash(), $idItem->getRecord()->getStateHash());
+		self::assertSame($companyRecord->getStateHash(), $nameItem->getRecord()->getStateHash());
+		self::assertSame($userRecord->getRevision(), $idItem->getBaselineRevision());
+		self::assertSame($companyRecord->getRevision(), $nameItem->getBaselineRevision());
 	}
 
 	public function testHiddenIdentityValuesAreReadThroughProjectionIdentityMap(): void
@@ -199,7 +201,7 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$binding->addRelation(new RepresentationRelationBinding(
 			'company',
 			$users, 'company',
-			new RepresentationBinding(),
+			new RepresentationBinding($registry->getCollection('companies')),
 		));
 		$context = new SessionContext();
 		$projectionIdentities = $this->companyIdProjectionIdentities($registry->getCollection('companies'), 'company_id');
@@ -261,7 +263,7 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		CollectionInterface $users,
 		CollectionInterface $companies,
 	): RepresentationBinding {
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($users);
 		$binding->addField(new RepresentationFieldBinding('id', $users, 'id', writable: false));
 		$binding->addField(new RepresentationFieldBinding('name', $companies, 'name', writable: true));
 

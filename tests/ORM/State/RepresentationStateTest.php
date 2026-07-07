@@ -19,7 +19,7 @@ final class RepresentationStateTest extends TestCase
 
 	public function testExposesBindingWithoutRepresentationObject(): void
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($this->users());
 		$tracked = new RepresentationState($binding, []);
 
 		self::assertSame($binding, $tracked->getBinding());
@@ -39,10 +39,55 @@ final class RepresentationStateTest extends TestCase
 
 	public function testMissingFieldItemThrows(): void
 	{
-		$state = new RepresentationState(new RepresentationBinding(), []);
+		$state = new RepresentationState(new RepresentationBinding($this->users()), []);
 
 		$this->expectException(StateException::class);
 		$state->getFieldItem('missing');
+	}
+
+	public function testGetRootRecordResolvesRecordMatchingBindingRootCollection(): void
+	{
+		[$binding, $item] = $this->stateParts();
+		$state = new RepresentationState($binding, [$item]);
+
+		self::assertSame($item->getRecord(), $state->getRootRecord());
+		self::assertSame($item->getRecord(), $state->requireRootRecord());
+	}
+
+	public function testGetRootRecordReturnsNullWhenNoRootItemAttached(): void
+	{
+		$state = new RepresentationState(new RepresentationBinding($this->users()), []);
+
+		self::assertNull($state->getRootRecord());
+	}
+
+	public function testRequireRootRecordThrowsWhenNoRootItemAttached(): void
+	{
+		$state = new RepresentationState(new RepresentationBinding($this->users()), []);
+
+		$this->expectException(StateException::class);
+		$state->requireRootRecord();
+	}
+
+	public function testGetRootRecordIgnoresFieldItemsTargetingNonRootCollection(): void
+	{
+		$users = $this->users();
+		$posts = $this->posts();
+		$rootRecord = RecordState::new($users, ['name' => 'A1']);
+		$foreignRecord = RecordState::new($posts, ['title' => 'T']);
+
+		$binding = new RepresentationBinding($users);
+		$rootField = new RepresentationFieldBinding('name', $users, 'name');
+		$foreignField = new RepresentationFieldBinding('companyTitle', $posts, 'title');
+		$binding->addField($foreignField);
+		$binding->addField($rootField);
+
+		$state = new RepresentationState($binding, [
+			new RepresentationFieldStateItem($foreignField, $foreignRecord, 'title', $foreignRecord->getRevision()),
+			new RepresentationFieldStateItem($rootField, $rootRecord, 'name', $rootRecord->getRevision()),
+		]);
+
+		self::assertSame($rootRecord, $state->getRootRecord());
 	}
 
 	public function testAcceptSyncedRecordsAdvancesOnlyTouchedItemBaselines(): void
@@ -70,7 +115,7 @@ final class RepresentationStateTest extends TestCase
 	private function stateParts(): array
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($record->getCollection());
 		$field = new RepresentationFieldBinding('name', $record->getCollection(), 'name');
 		$binding->addField($field);
 

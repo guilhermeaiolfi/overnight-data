@@ -88,7 +88,7 @@ final class ProjectionRepresentationAdopter
 
 		foreach ($this->groupFieldBindingsByCollection($binding) as $collectionName => $fieldBindings) {
 			$collection = $fieldBindings[0]->getCollection();
-			$collectionBinding = $this->bindingForFields($binding, $fieldBindings);
+			$collectionBinding = $this->bindingForFields($binding, $fieldBindings, $collection);
 			$resolved[$collectionName] = $this->resolveRecord(
 				$representation,
 				$collectionBinding,
@@ -149,14 +149,14 @@ final class ProjectionRepresentationAdopter
 	/**
 	 * @param list<RepresentationFieldBinding> $fieldBindings
 	 */
-	private function bindingForFields(RepresentationBinding $binding, array $fieldBindings): RepresentationBinding
+	private function bindingForFields(RepresentationBinding $binding, array $fieldBindings, CollectionInterface $collection): RepresentationBinding
 	{
 		$paths = [];
 		foreach ($fieldBindings as $fieldBinding) {
 			$paths[$fieldBinding->getPath()] = true;
 		}
 
-		$collectionBinding = new RepresentationBinding();
+		$collectionBinding = new RepresentationBinding($collection);
 
 		foreach ($binding->getFields() as $fieldBinding) {
 			if (isset($paths[$fieldBinding->getPath()])) {

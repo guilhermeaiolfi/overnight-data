@@ -62,7 +62,7 @@ final class TrackedRecordResolverTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$child = RecordState::clean($posts->getKey(5), ['id' => 5]);
 		$item = new stdClass();
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($posts);
 		$binding->addField(new RepresentationFieldBinding('id', $posts, 'id'));
 		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
 		$context = new PersistenceContext(
@@ -103,7 +103,7 @@ final class TrackedRecordResolverTest extends TestCase
 
 	private function bindingFor(RecordState $record): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($record->getCollection());
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
 			$binding->addField(new RepresentationFieldBinding($field, $record->getCollection(), $field));

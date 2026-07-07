@@ -478,7 +478,7 @@ final class RelationPersistencePlannerTest extends TestCase
 
 	private function bindingFor(RecordState $record): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($record->getCollection());
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
 			$binding->addField(new RepresentationFieldBinding($field, $record->getCollection(), $field));

@@ -268,7 +268,7 @@ final class Session
 
 	private function keyOnlyBinding(CollectionInterface $collection): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($collection);
 		foreach ($collection->getPrimaryKey() as $fieldName) {
 			$binding->addField(new RepresentationFieldBinding($fieldName, $collection, $fieldName));
 		}

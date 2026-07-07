@@ -20,7 +20,7 @@ final class RelationChangeInterfaceTest extends TestCase
 	{
 		self::assertInstanceOf(
 			RelationChangeInterface::class,
-			new ToManyRelationState(RecordState::new($this->users()), 'posts', new RepresentationBinding())
+			new ToManyRelationState(RecordState::new($this->users()), 'posts', new RepresentationBinding($this->users()))
 		);
 	}
 
@@ -28,7 +28,7 @@ final class RelationChangeInterfaceTest extends TestCase
 	{
 		self::assertInstanceOf(
 			RelationChangeInterface::class,
-			new ToOneRelationState(RecordState::new($this->users()), 'author', new RepresentationBinding())
+			new ToOneRelationState(RecordState::new($this->users()), 'author', new RepresentationBinding($this->users()))
 		);
 	}
 }

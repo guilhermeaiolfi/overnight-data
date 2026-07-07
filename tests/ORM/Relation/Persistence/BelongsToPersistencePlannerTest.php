@@ -121,7 +121,7 @@ final class BelongsToPersistencePlannerTest extends TestCase
 		$item = new stdClass();
 		$reference = new ToOneRelationState($owner, 'author', $this->bindingFor($target));
 		$reference->set($item);
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($users);
 		$binding->addField(new RepresentationFieldBinding('id', $users, 'id'));
 		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
 
@@ -201,7 +201,7 @@ final class BelongsToPersistencePlannerTest extends TestCase
 		$users = $registry->collection('users')->primaryKey('id')->field('id', 'int')->end();
 		$relation = $users->hasMany('posts', 'posts')->innerKey('id')->outerKey('user_id');
 		self::assertInstanceOf(HasManyRelation::class, $relation);
-		$reference = new ToOneRelationState(RecordState::new($users, ['id' => 10]), 'posts', new RepresentationBinding());
+		$reference = new ToOneRelationState(RecordState::new($users, ['id' => 10]), 'posts', new RepresentationBinding($users));
 		$reference->set(new stdClass());
 
 		$this->expectException(RelationPersistenceException::class);
@@ -217,7 +217,7 @@ final class BelongsToPersistencePlannerTest extends TestCase
 	public function testPassingToManyRelationStateChangeThrows(): void
 	{
 		[$relation, $posts] = $this->singleKeyModel();
-		$collection = new ToManyRelationState(RecordState::new($posts, ['author_id' => 10]), 'author', new RepresentationBinding());
+		$collection = new ToManyRelationState(RecordState::new($posts, ['author_id' => 10]), 'author', new RepresentationBinding($posts));
 		$collection->add(new stdClass());
 
 		$this->expectException(RelationPersistenceException::class);
@@ -282,7 +282,7 @@ final class BelongsToPersistencePlannerTest extends TestCase
 	private function planClear(BelongsToRelation $relation, RecordState $owner): void
 	{
 		$baseline = new stdClass();
-		$reference = new ToOneRelationState($owner, $relation->getName(), new RepresentationBinding(), $baseline);
+		$reference = new ToOneRelationState($owner, $relation->getName(), new RepresentationBinding($owner->getCollection()), $baseline);
 		$reference->clear();
 
 		$this->plan($relation, $reference, $this->records($owner), new RepresentationStore());
@@ -323,7 +323,7 @@ final class BelongsToPersistencePlannerTest extends TestCase
 
 	private function bindingFor(RecordState $record): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($record->getCollection());
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
 			$binding->addField(new RepresentationFieldBinding($field, $record->getCollection(), $field));

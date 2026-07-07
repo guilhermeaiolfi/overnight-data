@@ -31,6 +31,44 @@ final class RepresentationState
 		return $this->binding;
 	}
 
+	/**
+	 * Resolves the record this representation is rooted at: the concrete record
+	 * whose collection matches the binding root collection.
+	 *
+	 * Returns null when no root item has been attached yet.
+	 */
+	public function getRootRecord(): ?RecordState
+	{
+		$rootCollectionName = $this->binding->getCollectionName();
+
+		foreach ($this->fieldItems as $item) {
+			if ($item->getBinding()->getCollectionName() === $rootCollectionName) {
+				return $item->getRecord();
+			}
+		}
+
+		foreach ($this->relationItems as $item) {
+			if ($item->getBinding()->getOwnerCollectionName() === $rootCollectionName) {
+				return $item->getOwnerRecord();
+			}
+		}
+
+		return null;
+	}
+
+	public function requireRootRecord(): RecordState
+	{
+		$record = $this->getRootRecord();
+		if (! $record instanceof RecordState) {
+			throw new StateException(sprintf(
+				"Representation state has no root record for collection '%s'.",
+				$this->binding->getCollectionName()
+			));
+		}
+
+		return $record;
+	}
+
 	public function hasFieldItem(string $path): bool
 	{
 		return array_key_exists($path, $this->fieldItems);

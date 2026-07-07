@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\State;
 
+use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationState;
@@ -13,10 +14,17 @@ use stdClass;
 
 final class RepresentationStoreTest extends TestCase
 {
+	private function emptyState(): RepresentationState
+	{
+		$users = (new Registry())->collection('users')->primaryKey('id')->field('id')->end();
+
+		return new RepresentationState(new RepresentationBinding($users), []);
+	}
+
 	public function testAddAndGetByObjectIdentity(): void
 	{
 		$object = new stdClass();
-		$tracked = new RepresentationState(new RepresentationBinding(), []);
+		$tracked = $this->emptyState();
 		$map = new RepresentationStore();
 
 		$map->add($object, $tracked);
@@ -36,7 +44,7 @@ final class RepresentationStoreTest extends TestCase
 	public function testSameObjectDuplicateWithSameRepresentationStateIsNoOp(): void
 	{
 		$object = new stdClass();
-		$tracked = new RepresentationState(new RepresentationBinding(), []);
+		$tracked = $this->emptyState();
 		$map = new RepresentationStore();
 
 		$map->add($object, $tracked);
@@ -49,16 +57,16 @@ final class RepresentationStoreTest extends TestCase
 	{
 		$object = new stdClass();
 		$map = new RepresentationStore();
-		$map->add($object, new RepresentationState(new RepresentationBinding(), []));
+		$map->add($object, $this->emptyState());
 
 		$this->expectException(StateException::class);
-		$map->add($object, new RepresentationState(new RepresentationBinding(), []));
+		$map->add($object, $this->emptyState());
 	}
 
 	public function testRemoveWorks(): void
 	{
 		$object = new stdClass();
-		$tracked = new RepresentationState(new RepresentationBinding(), []);
+		$tracked = $this->emptyState();
 		$map = new RepresentationStore();
 		$map->add($object, $tracked);
 
@@ -71,7 +79,7 @@ final class RepresentationStoreTest extends TestCase
 	{
 		$object = new stdClass();
 		$map = new RepresentationStore();
-		$map->add($object, new RepresentationState(new RepresentationBinding(), []));
+		$map->add($object, $this->emptyState());
 
 		$map->clear();
 
@@ -82,7 +90,7 @@ final class RepresentationStoreTest extends TestCase
 	{
 		$map = new RepresentationStore();
 		$object = new stdClass();
-		$map->add($object, new RepresentationState(new RepresentationBinding(), []));
+		$map->add($object, $this->emptyState());
 
 		self::assertTrue($map->has($object));
 

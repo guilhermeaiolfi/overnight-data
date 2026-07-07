@@ -28,6 +28,7 @@ use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
+use ON\Data\ORM\State\RepresentationRelationStateItem;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\ORM\State\ValueRef;
@@ -777,7 +778,7 @@ final class FlushExecutorTest extends TestCase
 		$item = new stdClass();
 		$tracked = $this->tracked($this->representation(['name' => 'after', 'posts' => [$item]]), $this->ownerBindingWithPosts($record));
 
-		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->context($this->representations($tracked, $this->tracked($item, new RepresentationBinding())), $this->records($record), new RelationStateStore()));
+		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->context($this->representations($tracked, $this->tracked($item, new RepresentationBinding($this->posts()))), $this->records($record), new RelationStateStore()));
 
 		self::assertSame(['after'], RecordingRelationPersistencePlanner::$observedOwnerValues);
 		self::assertCount(1, RecordingRelationPersistencePlanner::$collections);
@@ -794,7 +795,7 @@ final class FlushExecutorTest extends TestCase
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->context(
 			$this->representations(
 				$this->tracked($this->representation(['name' => 'Owner', 'posts' => [$item]]), $this->ownerBindingWithPosts($record)),
-				$this->tracked($item, new RepresentationBinding())
+				$this->tracked($item, new RepresentationBinding($this->posts()))
 			),
 			$this->records($record),
 			$toManyRelations
@@ -816,7 +817,7 @@ final class FlushExecutorTest extends TestCase
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->context(
 			$this->representations(
 				$this->tracked($this->representation(['name' => 'Owner', 'profile' => $target]), $this->ownerBindingWithProfile($record)),
-				$this->tracked($target, new RepresentationBinding())
+				$this->tracked($target, new RepresentationBinding($this->profiles()))
 			),
 			$this->records($record),
 			new RelationStateStore(),
@@ -861,7 +862,7 @@ final class FlushExecutorTest extends TestCase
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->context(
 			$this->representations(
 				$this->tracked($this->representation(['name' => 'Owner', 'posts' => [$item]]), $this->ownerBindingWithPosts($record)),
-				$this->tracked($item, new RepresentationBinding())
+				$this->tracked($item, new RepresentationBinding($this->posts()))
 			),
 			$this->records($record),
 			$toManyRelations
@@ -1356,7 +1357,8 @@ final class FlushExecutorTest extends TestCase
 	 */
 	private function binding(array $fields): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$first = reset($fields);
+		$binding = new RepresentationBinding($first[0]->getCollection());
 		$records = [];
 		foreach ($fields as $path => [$record, $fieldName]) {
 			$binding->addField(new RepresentationFieldBinding((string) $path, $record->getCollection(), $fieldName));
@@ -1369,9 +1371,10 @@ final class FlushExecutorTest extends TestCase
 
 	private function tracked(object $representation, RepresentationBinding $binding): RepresentationState
 	{
+		$records = $this->recordsByBindingId[spl_object_id($binding)] ?? [];
 		$fieldItems = [];
 		foreach ($binding->getFields() as $fieldBinding) {
-			foreach ($this->recordsByBindingId[spl_object_id($binding)] ?? [] as $record) {
+			foreach ($records as $record) {
 				if ($record->getCollection()->getName() !== $fieldBinding->getCollectionName()) {
 					continue;
 				}
@@ -1381,9 +1384,21 @@ final class FlushExecutorTest extends TestCase
 			}
 		}
 
+		$relationItems = [];
+		foreach ($binding->getRelations() as $relationBinding) {
+			foreach ($records as $record) {
+				if ($record->getCollection()->getName() !== $relationBinding->getOwnerCollectionName()) {
+					continue;
+				}
+
+				$relationItems[] = new RepresentationRelationStateItem($relationBinding, $record, $relationBinding->getRelationName());
+				break;
+			}
+		}
+
 		return RepresentationStateObjectRegistry::remember(
 			$representation,
-			new RepresentationState($binding, $fieldItems)
+			new RepresentationState($binding, $fieldItems, $relationItems)
 		);
 	}
 
@@ -1426,26 +1441,28 @@ final class FlushExecutorTest extends TestCase
 
 	private function ownerBindingWithPosts(RecordState $record): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($record->getCollection());
 		$binding->addField(new RepresentationFieldBinding('name', $record->getCollection(), 'name'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
 			$record->getCollection(), 'posts',
 			$this->postBinding()
 		));
+		$this->recordsByBindingId[spl_object_id($binding)] = [$record];
 
 		return $binding;
 	}
 
 	private function ownerBindingWithProfile(RecordState $record): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($record->getCollection());
 		$binding->addField(new RepresentationFieldBinding('name', $record->getCollection(), 'name'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'profile',
 			$record->getCollection(), 'profile',
 			$this->postBinding()
 		));
+		$this->recordsByBindingId[spl_object_id($binding)] = [$record];
 
 		return $binding;
 	}
@@ -1548,11 +1565,12 @@ final class FlushExecutorTest extends TestCase
 
 	private function bindingFor(RecordState $record): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($record->getCollection());
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
 			$binding->addField(new RepresentationFieldBinding($field, $record->getCollection(), $field));
 		}
+		$this->recordsByBindingId[spl_object_id($binding)] = [$record];
 
 		return $binding;
 	}

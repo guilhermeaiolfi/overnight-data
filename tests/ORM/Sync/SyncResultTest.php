@@ -33,7 +33,7 @@ final class SyncResultTest extends TestCase
 	public function testHasChangesIsTrueWhenRelationChangeHasChanges(): void
 	{
 		$record = RecordState::new((new Registry())->collection('users')->field('id', 'int')->end());
-		$reference = new ToOneRelationState($record, 'profile', new RepresentationBinding());
+		$reference = new ToOneRelationState($record, 'profile', new RepresentationBinding($record->getCollection()));
 		$reference->set(new stdClass());
 
 		self::assertTrue((new SyncResult([], [$reference]))->hasChanges());

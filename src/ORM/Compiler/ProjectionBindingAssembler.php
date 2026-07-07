@@ -23,9 +23,10 @@ final class ProjectionBindingAssembler
 	public function assemble(
 		array $fieldShapes,
 		ProjectionSourceResolverInterface $resolver,
+		CollectionInterface $collection,
 		bool $skipWhenMissing = false,
 	): RepresentationBinding {
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($collection);
 		$this->assembleInto($binding, $fieldShapes, $resolver, $skipWhenMissing);
 
 		return $binding;

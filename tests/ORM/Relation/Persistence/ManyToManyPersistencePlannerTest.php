@@ -236,7 +236,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$item = new stdClass();
 		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
 		$collection->add($item);
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($tags);
 		$binding->addField(new RepresentationFieldBinding('id', $tags, 'id'));
 		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
 
@@ -297,7 +297,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$users = $registry->collection('users')->primaryKey('id')->field('id', 'int')->end();
 		$relation = $users->hasMany('posts', 'posts')->innerKey('id')->outerKey('id');
 		self::assertInstanceOf(HasManyRelation::class, $relation);
-		$collection = new ToManyRelationState(RecordState::new($users, ['id' => 10]), 'posts', new RepresentationBinding());
+		$collection = new ToManyRelationState(RecordState::new($users, ['id' => 10]), 'posts', new RepresentationBinding($users));
 
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('must be a many-to-many relation');
@@ -433,7 +433,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 
 	private function bindingFor(RecordState $record): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($record->getCollection());
 		$fields = array_unique(array_merge(array_keys($record->getValues()), $record->getCollection()->getPrimaryKey()));
 		foreach ($fields as $field) {
 			$field = (string) $field;

@@ -126,57 +126,63 @@ trait OrmFixture
 
 	protected function userBinding(): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
+		$users = $this->users();
+		$binding = new RepresentationBinding($users);
+		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
 
 		return $binding;
 	}
 
 	protected function userBindingWithId(): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', $this->users(), 'id'));
-		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
+		$users = $this->users();
+		$binding = new RepresentationBinding($users);
+		$binding->addField(new RepresentationFieldBinding('id', $users, 'id'));
+		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
 
 		return $binding;
 	}
 
 	protected function postBinding(): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('title', $this->posts(), 'title'));
+		$posts = $this->posts();
+		$binding = new RepresentationBinding($posts);
+		$binding->addField(new RepresentationFieldBinding('title', $posts, 'title'));
 
 		return $binding;
 	}
 
 	protected function postBindingWithId(): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', $this->posts(), 'id'));
-		$binding->addField(new RepresentationFieldBinding('title', $this->posts(), 'title'));
+		$posts = $this->posts();
+		$binding = new RepresentationBinding($posts);
+		$binding->addField(new RepresentationFieldBinding('id', $posts, 'id'));
+		$binding->addField(new RepresentationFieldBinding('title', $posts, 'title'));
 
 		return $binding;
 	}
 
 	protected function profileBinding(): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('label', $this->profiles(), 'label'));
+		$profiles = $this->profiles();
+		$binding = new RepresentationBinding($profiles);
+		$binding->addField(new RepresentationFieldBinding('label', $profiles, 'label'));
 
 		return $binding;
 	}
 
 	protected function commentBinding(): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('body', $this->comments(), 'body'));
+		$comments = $this->comments();
+		$binding = new RepresentationBinding($comments);
+		$binding->addField(new RepresentationFieldBinding('body', $comments, 'body'));
 
 		return $binding;
 	}
 
 	protected function userBindingFor(RecordState $record): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($record->getCollection());
 		$binding->addField(new RepresentationFieldBinding('name', $record->getCollection(), 'name'));
 
 		return $binding;
@@ -184,7 +190,7 @@ trait OrmFixture
 
 	protected function postBindingFor(RecordState $record): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($record->getCollection());
 		$binding->addField(new RepresentationFieldBinding('title', $record->getCollection(), 'title'));
 
 		return $binding;

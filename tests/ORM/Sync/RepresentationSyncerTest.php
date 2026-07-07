@@ -39,7 +39,7 @@ final class RepresentationSyncerTest extends TestCase
 
 		$result = $this->syncer()->sync(
 			$this->context(
-				$this->representations($this->tracked($this->representation(['name' => 'A2']), $this->userBindingFor($record))),
+				$this->representations($this->tracked($this->representation(['name' => 'A2']), $this->userBindingFor($record), [$record])),
 				$this->records($record)
 			)
 		);
@@ -58,8 +58,8 @@ final class RepresentationSyncerTest extends TestCase
 		$this->syncer()->sync(
 			$this->context(
 				$this->representations(
-					$this->tracked($firstRepresentation, $this->userBindingFor($first)),
-					$this->tracked($secondRepresentation, $this->userBindingFor($second))
+					$this->tracked($firstRepresentation, $this->userBindingFor($first), [$first]),
+					$this->tracked($secondRepresentation, $this->userBindingFor($second), [$second])
 				),
 				$this->records($first, $second)
 			),
@@ -87,8 +87,8 @@ final class RepresentationSyncerTest extends TestCase
 		$this->syncer()->sync(
 			$this->context(
 				$this->representations(
-					$this->tracked($this->representation(['name' => 'Owner', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner)),
-					$this->tracked($item, new RepresentationBinding())
+					$this->tracked($this->representation(['name' => 'Owner', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner), [$owner]),
+					$this->tracked($item, new RepresentationBinding($this->posts()))
 				),
 				$this->records($owner),
 				$toManyRelations
@@ -109,8 +109,8 @@ final class RepresentationSyncerTest extends TestCase
 		$this->syncer()->sync(
 			$this->context(
 				$this->representations(
-					$this->tracked($this->representation(['name' => 'Owner', 'profile' => $target]), $this->ownerBindingWithProfile($owner)),
-					$this->tracked($target, new RepresentationBinding())
+					$this->tracked($this->representation(['name' => 'Owner', 'profile' => $target]), $this->ownerBindingWithProfile($owner), [$owner]),
+					$this->tracked($target, new RepresentationBinding($this->profiles()))
 				),
 				$this->records($owner),
 				toOneRelations: $toOneRelations
@@ -130,8 +130,8 @@ final class RepresentationSyncerTest extends TestCase
 		$result = $this->syncer()->sync(
 			$this->context(
 				$this->representations(
-					$this->tracked($this->representation(['name' => 'Changed', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner)),
-					$this->tracked($item, new RepresentationBinding())
+					$this->tracked($this->representation(['name' => 'Changed', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner), [$owner]),
+					$this->tracked($item, new RepresentationBinding($this->posts()))
 				),
 				$this->records($owner)
 			),
@@ -152,8 +152,8 @@ final class RepresentationSyncerTest extends TestCase
 		$this->syncer()->sync(
 			$this->context(
 				$this->representations(
-					$this->tracked($this->representation(['name' => 'Changed', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner)),
-					$this->tracked($item, new RepresentationBinding())
+					$this->tracked($this->representation(['name' => 'Changed', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner), [$owner]),
+					$this->tracked($item, new RepresentationBinding($this->posts()))
 				),
 				$this->records($owner),
 				$toManyRelations
@@ -180,21 +180,13 @@ final class RepresentationSyncerTest extends TestCase
 		self::assertStringNotContainsString('CommandInterface', $source);
 	}
 
-	private function tracked(object $representation, RepresentationBinding $binding): RepresentationState
-	{
-		return RepresentationStateObjectRegistry::remember(
-			$representation,
-			new RepresentationState($binding, $this->baselineRevisions($binding))
-		);
-	}
-
 	private function ownerBindingWithPosts(RecordState $record): RepresentationBinding
 	{
 		$binding = $this->userBindingFor($record);
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
 			$record->getCollection(), 'posts',
-			new RepresentationBinding()
+			$this->postBinding()
 		));
 
 		return $binding;
@@ -206,7 +198,7 @@ final class RepresentationSyncerTest extends TestCase
 		$binding->addRelation(new RepresentationRelationBinding(
 			'profile',
 			$record->getCollection(), 'profile',
-			new RepresentationBinding()
+			$this->profileBinding()
 		));
 
 		return $binding;

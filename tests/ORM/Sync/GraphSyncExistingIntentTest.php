@@ -257,10 +257,10 @@ final class GraphSyncExistingIntentTest extends TestCase
 
 	private function compositeOwnerBindingWithPosts(CollectionInterface $users, CollectionInterface $posts): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($users);
 		$binding->addField(new RepresentationFieldBinding('tenant_id', $users, 'tenant_id'));
 		$binding->addField(new RepresentationFieldBinding('user_id', $users, 'user_id'));
-		$postBinding = new RepresentationBinding();
+		$postBinding = new RepresentationBinding($posts);
 		$postBinding->addField(new RepresentationFieldBinding('tenant_ref', $posts, 'tenant_ref'));
 		$postBinding->addField(new RepresentationFieldBinding('user_ref', $posts, 'user_ref'));
 		$postBinding->addField(new RepresentationFieldBinding('title', $posts, 'title'));
@@ -276,7 +276,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 
 	private function ownerBindingWithPosts(CollectionInterface $users, CollectionInterface $posts): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($users);
 		$binding->addField(new RepresentationFieldBinding('id', $users, 'id'));
 		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
 		$binding->addRelation(new RepresentationRelationBinding(
@@ -291,7 +291,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 
 	private function postBindingWithIdFor(CollectionInterface $posts): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($posts);
 		$binding->addField(new RepresentationFieldBinding('id', $posts, 'id'));
 		$binding->addField(new RepresentationFieldBinding('title', $posts, 'title'));
 		$binding->addField(new RepresentationFieldBinding('user_id', $posts, 'user_id'));
@@ -301,7 +301,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 
 	private function postKeyOnlyBindingFor(CollectionInterface $posts): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($posts);
 		$binding->addField(new RepresentationFieldBinding('id', $posts, 'id'));
 
 		return $binding;
@@ -309,7 +309,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 
 	private function ownerBindingWithPostsKeyOnlyChild(CollectionInterface $users, CollectionInterface $posts): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($users);
 		$binding->addField(new RepresentationFieldBinding('id', $users, 'id'));
 		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
 		$binding->addRelation(new RepresentationRelationBinding(

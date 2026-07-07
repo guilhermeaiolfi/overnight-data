@@ -5,8 +5,14 @@ declare(strict_types=1);
 namespace ON\Data\ORM\State;
 
 /**
- * Persistence provenance graph for one representation shape: field, expression,
- * and relation path maps that describe how object properties map to records.
+ * Persistence provenance graph for one representation shape: a root collection
+ * plus field and relation path maps that describe how object properties map to
+ * records.
+ *
+ * The root collection means this representation branch is rooted at that
+ * collection. Individual field properties may still target other collections in
+ * flat heterogeneous projections, and nested relation bindings carry related
+ * bindings rooted at the related collection.
  *
  * Exists as the durable ORM model compiled from queries or manual projections
  * and consumed by sync, adoption, and relation runtime state — separate from
@@ -19,12 +25,25 @@ final class RepresentationBinding
 {
 	/** @var array<string, RepresentationFieldBinding> */
 	private array $fields = [];
-	/** @var array<string, RepresentationExpressionBinding> */
-	private array $expressions = [];
 	/** @var array<string, RepresentationRelationBinding> */
 	private array $relations = [];
 	/** @var list<string> */
 	private array $paths = [];
+
+	public function __construct(
+		private CollectionInterface $collection,
+	) {
+	}
+
+	public function getCollection(): CollectionInterface
+	{
+		return $this->collection;
+	}
+
+	public function getCollectionName(): string
+	{
+		return $this->collection->getName();
+	}
 
 	public function addField(RepresentationFieldBinding $binding): void
 	{
@@ -99,37 +118,6 @@ final class RepresentationBinding
 		return $this->getFieldFor($collection, $fieldName) instanceof RepresentationFieldBinding;
 	}
 
-	public function addExpression(RepresentationExpressionBinding $binding): void
-	{
-		$path = $binding->getPath();
-		$this->assertPathIsAvailable($path);
-
-		$this->expressions[$path] = $binding;
-		$this->paths[] = $path;
-	}
-
-	public function hasExpression(string $path): bool
-	{
-		return array_key_exists($path, $this->expressions);
-	}
-
-	public function getExpression(string $path): RepresentationExpressionBinding
-	{
-		if (! array_key_exists($path, $this->expressions)) {
-			throw new StateException(sprintf("Representation binding does not contain expression path '%s'.", $path));
-		}
-
-		return $this->expressions[$path];
-	}
-
-	/**
-	 * @return list<RepresentationExpressionBinding>
-	 */
-	public function getExpressions(): array
-	{
-		return array_values($this->expressions);
-	}
-
 	public function addRelation(RepresentationRelationBinding $binding): void
 	{
 		$path = $binding->getPath();
@@ -163,7 +151,7 @@ final class RepresentationBinding
 
 	public function hasPath(string $path): bool
 	{
-		return $this->hasField($path) || $this->hasExpression($path) || $this->hasRelation($path);
+		return $this->hasField($path) || $this->hasRelation($path);
 	}
 
 	/**

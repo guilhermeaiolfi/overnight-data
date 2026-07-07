@@ -15,8 +15,12 @@ use InvalidArgumentException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Session;
+use ON\Data\ORM\State\RecordState;
+use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationBindingMerger;
+use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
 
@@ -173,8 +177,12 @@ final class Builder
 
 	public function end(): object
 	{
-		$manualBinding = $this->projectionCompiler->compile($this->propertyShapes);
 		$state = $this->session->getRepresentations()->get($this->representation);
+		$fallbackCollection = $state instanceof RepresentationState
+			? $state->getBinding()->getCollection()
+			: null;
+		$manualBinding = $this->projectionCompiler->compile($this->propertyShapes, $fallbackCollection);
+		$recordsByPath = $this->recordsByPathFromShapes();
 
 		if ($state instanceof RepresentationState) {
 			$binding = $this->bindingMerger->mergeManualOverlay($state->getBinding(), $manualBinding);
@@ -191,19 +199,13 @@ final class Builder
 				continue;
 			}
 
-			foreach ($this->session->getRecords()->getAll() as $record) {
-				if ($record->getCollection()->getName() !== $fieldBinding->getCollectionName()) {
-					continue;
-				}
-
-				$fieldItems[] = new RepresentationFieldStateItem(
-					$fieldBinding,
-					$record,
-					$fieldBinding->getFieldName(),
-					$record->getRevision()
-				);
-				break;
-			}
+			$record = $this->resolveRecordForNewField($state, $binding, $fieldBinding, $recordsByPath);
+			$fieldItems[] = new RepresentationFieldStateItem(
+				$fieldBinding,
+				$record,
+				$fieldBinding->getFieldName(),
+				$record->getRevision()
+			);
 		}
 
 		if ($state instanceof RepresentationState) {
@@ -214,6 +216,72 @@ final class Builder
 		$this->propertyShapes = [];
 
 		return $this->representation;
+	}
+
+	/**
+	 * Resolves the concrete record a newly added manual field item attaches to.
+	 *
+	 * Root-collection fields attach to the representation root record. Fields
+	 * targeting a non-root collection must have been explicitly resolved to a
+	 * concrete record through their declaration source; otherwise this throws
+	 * rather than guessing from the session record store.
+	 *
+	 * @param array<string, RecordState> $recordsByPath
+	 */
+	private function resolveRecordForNewField(
+		?RepresentationState $state,
+		RepresentationBinding $binding,
+		RepresentationFieldBinding $fieldBinding,
+		array $recordsByPath,
+	): RecordState {
+		if (
+			$state instanceof RepresentationState
+			&& $fieldBinding->getCollectionName() === $binding->getCollectionName()
+		) {
+			$rootRecord = $state->getRootRecord();
+			if ($rootRecord instanceof RecordState) {
+				return $rootRecord;
+			}
+		}
+
+		$explicit = $recordsByPath[$fieldBinding->getPath()] ?? null;
+		if ($explicit instanceof RecordState) {
+			if ($explicit->getCollection()->getName() !== $fieldBinding->getCollectionName()) {
+				throw new StateException(sprintf(
+					"Manual projection field '%s' resolved to a record of collection '%s' but the binding targets collection '%s'.",
+					$fieldBinding->getPath(),
+					$explicit->getCollection()->getName(),
+					$fieldBinding->getCollectionName(),
+				));
+			}
+
+			return $explicit;
+		}
+
+		throw new StateException(sprintf(
+			"Cannot attach manual projection field '%s' because no concrete record state for collection '%s' could be resolved.",
+			$fieldBinding->getPath(),
+			$fieldBinding->getCollectionName(),
+		));
+	}
+
+	/**
+	 * Maps each declared manual field path to the concrete record its source
+	 * resolves to, so field attachment never scans all session records.
+	 *
+	 * @return array<string, RecordState>
+	 */
+	private function recordsByPathFromShapes(): array
+	{
+		$records = [];
+		foreach ($this->propertyShapes as $shape) {
+			$source = $shape->getSource();
+			if ($source instanceof PropertySource) {
+				$records[$shape->getPublicPath()] = $source->getTargetRecord();
+			}
+		}
+
+		return $records;
 	}
 
 	/**

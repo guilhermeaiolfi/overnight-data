@@ -16,12 +16,9 @@ final class RepresentationBindingMerger
 {
 	public function mergeManualOverlay(RepresentationBinding $existing, RepresentationBinding $manual): RepresentationBinding
 	{
-		$merged = new RepresentationBinding();
+		$merged = new RepresentationBinding($existing->getCollection());
 		foreach ($existing->getFields() as $field) {
 			$merged->addField($field);
-		}
-		foreach ($existing->getExpressions() as $expression) {
-			$merged->addExpression($expression);
 		}
 		foreach ($existing->getRelations() as $relation) {
 			$merged->addRelation($relation);

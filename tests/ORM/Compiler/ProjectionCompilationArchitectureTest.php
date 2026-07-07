@@ -68,7 +68,6 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		$contents = (string) file_get_contents(dirname(__DIR__, 3) . '/src/ORM/Compiler/ManualProjection/Builder.php');
 
 		self::assertStringNotContainsString('RecordFieldRef', $contents);
-		self::assertStringNotContainsString('RepresentationFieldBinding', $contents);
 		self::assertStringNotContainsString('new ToManyRelationState', $contents);
 		self::assertStringNotContainsString('new ToOneRelationState', $contents);
 		self::assertStringNotContainsString('relationBindingFromPath', $contents);
@@ -265,7 +264,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		$owner = RecordState::new($this->registry()->getCollection('users'), ['id' => 10]);
 		$target = new stdClass();
 
-		$applier->applyTarget($owner, 'posts', RepresentationRelationCardinality::MANY, new RepresentationBinding(), $target);
+		$applier->applyTarget($owner, 'posts', RepresentationRelationCardinality::MANY, new RepresentationBinding($owner->getCollection()), $target);
 		$relation = $toMany->get($owner, 'posts');
 
 		self::assertInstanceOf(ToManyRelationState::class, $relation);
@@ -284,6 +283,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		$queryBinding = $assembler->assemble(
 			$normalizer->normalizeSelections($query->getSelections()->getExplicit()),
 			new QueryProjectionSourceResolver($query),
+			$users,
 		);
 
 		$record = RecordState::new($users);
@@ -296,7 +296,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertSame('display_name', $queryBinding->getPaths()[0]);
 		self::assertSame('name', $queryBinding->getField('display_name')->getFieldName());
 		self::assertSame('name', $manualBinding->getField('display_name')->getFieldName());
-		self::assertTrue($manualBinding->getField('display_name')->getField()->hasState());
+		self::assertSame('users', $manualBinding->getField('display_name')->getCollectionName());
 	}
 
 	public function testSourceResolversDoNotInspectAliasesOrBuildFieldBindings(): void
@@ -314,7 +314,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		}
 	}
 
-	public function testCompiledFieldShapeRecordFieldRefsAreCreatedByBindingAssembler(): void
+	public function testProjectionFieldBindingsAreCreatedByBindingAssembler(): void
 	{
 		$root = dirname(__DIR__, 3);
 
@@ -326,10 +326,12 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			$root . '/src/ORM/Compiler/SelectQuery/ProjectionCompiler.php',
 		] as $path) {
 			self::assertStringNotContainsString('RecordFieldRef', (string) file_get_contents($path), $path);
+			self::assertStringNotContainsString('new RepresentationFieldBinding', (string) file_get_contents($path), $path);
 		}
 
-		self::assertStringContainsString('RecordFieldRef::template', (string) file_get_contents($root . '/src/ORM/Compiler/ProjectionBindingAssembler.php'));
-		self::assertStringContainsString('RecordFieldRef::forState', (string) file_get_contents($root . '/src/ORM/Compiler/ProjectionBindingAssembler.php'));
+		$assembler = (string) file_get_contents($root . '/src/ORM/Compiler/ProjectionBindingAssembler.php');
+		self::assertStringNotContainsString('RecordFieldRef', $assembler);
+		self::assertStringContainsString('new RepresentationFieldBinding', $assembler);
 	}
 
 	public function testHiddenIdentityPlanningRemainsOutsideManualProjectionPath(): void

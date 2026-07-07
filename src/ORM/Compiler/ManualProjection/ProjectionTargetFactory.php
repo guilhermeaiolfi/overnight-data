@@ -77,7 +77,7 @@ final class ProjectionTargetFactory
 			$owner,
 			$relation->getName(),
 			$this->relationCardinality($relation),
-			new RepresentationBinding(),
+			new RepresentationBinding($relation->getDefinition()->getCollection()),
 			$record,
 			$this->representationTracker->trackAdapter($record),
 		);
@@ -111,7 +111,7 @@ final class ProjectionTargetFactory
 			$owner,
 			$relation->getName(),
 			$this->relationCardinality($relation),
-			new RepresentationBinding(),
+			new RepresentationBinding($relation->getDefinition()->getCollection()),
 			$record,
 			$this->representationTracker->trackAdapter($record),
 		);
@@ -176,7 +176,7 @@ final class ProjectionTargetFactory
 			$owner,
 			$relation->getName(),
 			$this->relationCardinality($relation),
-			new RepresentationBinding(),
+			new RepresentationBinding($relation->getDefinition()->getCollection()),
 			$record,
 			$target,
 		);

@@ -75,7 +75,7 @@ final class PathResolver
 		$lastIndex = count($segments) - 1;
 		foreach ($segments as $index => $segment) {
 			if (! $current->hasRelation($segment)) {
-				if ($current->hasField($segment) || $current->hasExpression($segment)) {
+				if ($current->hasField($segment)) {
 					throw new StateException(sprintf("Cannot use fromPath('%s') because path segment '%s' is a scalar projection path, not a relation.", $path, $segment));
 				}
 

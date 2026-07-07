@@ -169,6 +169,38 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 		self::assertSame(['user_id' => 1, 'post_id' => 1], $harness->fetchRow('SELECT user_id, post_id FROM user_post'));
 	}
 
+	public function testManualOverlayAttachesRootFieldToOwnRecordNotAnotherSameCollectionRecord(): void
+	{
+		$harness = SqliteMemoryHarness::create();
+		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)');
+		$harness->exec("INSERT INTO users (id, name, email) VALUES (1, 'Ada', 'ada@old.test')");
+		$harness->exec("INSERT INTO users (id, name, email) VALUES (2, 'Bob', 'bob@old.test')");
+		[$users] = $this->flatRegistry(autoIncrement: false);
+		$session = new Session($harness->commandExecutor);
+
+		$ada = new stdClass();
+		$ada->name = 'Ada';
+		$pa = $session->projection($ada);
+		$a = $pa->from($users)->existing(['id' => 1], ['id' => 1, 'name' => 'Ada', 'email' => 'ada@old.test']);
+		$pa->properties($a->name)->end();
+
+		$bob = new stdClass();
+		$bob->name = 'Bob';
+		$pb = $session->projection($bob);
+		$b = $pb->from($users)->existing(['id' => 2], ['id' => 2, 'name' => 'Bob', 'email' => 'bob@old.test']);
+		$pb->properties($b->name)->end();
+
+		$bob->email = 'bob@new.test';
+		$overlay = $session->projection($bob);
+		$u = $overlay->from($users)->tracked();
+		$overlay->properties($u->email)->end();
+
+		$session->flush();
+
+		self::assertSame(['email' => 'bob@new.test'], $harness->fetchRow('SELECT email FROM users WHERE id = 2'));
+		self::assertSame(['email' => 'ada@old.test'], $harness->fetchRow('SELECT email FROM users WHERE id = 1'));
+	}
+
 	public function testManualProjectionExtendsQueryCreatedMutableObject(): void
 	{
 		$harness = SqliteMemoryHarness::create();

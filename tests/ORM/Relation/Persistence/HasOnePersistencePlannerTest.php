@@ -137,7 +137,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$item = new stdClass();
 		$reference = new ToOneRelationState($owner, 'profile', $this->bindingFor($target));
 		$reference->set($item);
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($profiles);
 		$binding->addField(new RepresentationFieldBinding('id', $profiles, 'id'));
 		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
 
@@ -213,7 +213,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$posts = $registry->collection('posts')->primaryKey('id')->field('id', 'int')->end()->field('user_id', 'int')->end();
 		$relation = $posts->belongsTo('author', 'users')->innerKey('user_id')->outerKey('id');
 		self::assertInstanceOf(BelongsToRelation::class, $relation);
-		$reference = new ToOneRelationState(RecordState::new($posts, ['user_id' => null]), 'author', new RepresentationBinding());
+		$reference = new ToOneRelationState(RecordState::new($posts, ['user_id' => null]), 'author', new RepresentationBinding($posts));
 		$reference->set(new stdClass());
 
 		$this->expectException(RelationPersistenceException::class);
@@ -229,7 +229,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 	public function testPassingToManyRelationStateChangeThrows(): void
 	{
 		[$relation, $users] = $this->singleKeyModel();
-		$collection = new ToManyRelationState(RecordState::new($users, ['id' => 10]), 'profile', new RepresentationBinding());
+		$collection = new ToManyRelationState(RecordState::new($users, ['id' => 10]), 'profile', new RepresentationBinding($users));
 		$collection->add(new stdClass());
 
 		$this->expectException(RelationPersistenceException::class);
@@ -354,7 +354,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 
 	private function bindingFor(RecordState $record): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($record->getCollection());
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
 			$binding->addField(new RepresentationFieldBinding($field, $record->getCollection(), $field));

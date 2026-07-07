@@ -71,7 +71,7 @@ final class RepresentationTracker
 	{
 		// Private adapter for object-based relation state APIs; it is not a second identity system.
 		$object = new stdClass();
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($record->getCollection());
 		foreach ($record->getCollection()->getPrimaryKey() as $fieldName) {
 			if ($record->hasValue($fieldName)) {
 				$object->{$fieldName} = $record->getValue($fieldName);

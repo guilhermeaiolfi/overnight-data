@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Sync;
 
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
@@ -50,7 +51,7 @@ final class RepresentationAdopter
 		$items = [];
 		foreach ($binding->getFields() as $fieldBinding) {
 			if ($fieldBinding->getCollectionName() !== $record->getCollection()->getName()) {
-				throw new SyncException(sprintf(
+				throw new StateException(sprintf(
 					"Representation binding path '%s' targets collection '%s', not '%s'.",
 					$fieldBinding->getPath(),
 					$fieldBinding->getCollectionName(),
@@ -77,7 +78,7 @@ final class RepresentationAdopter
 		$items = [];
 		foreach ($binding->getRelations() as $relationBinding) {
 			if ($relationBinding->getOwnerCollectionName() !== $record->getCollection()->getName()) {
-				throw new SyncException(sprintf(
+				throw new StateException(sprintf(
 					"Representation relation path '%s' targets collection '%s', not '%s'.",
 					$relationBinding->getPath(),
 					$relationBinding->getOwnerCollectionName(),

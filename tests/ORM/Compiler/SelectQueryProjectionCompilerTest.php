@@ -280,7 +280,6 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 
 		self::assertTrue($binding->hasField('name'));
 		self::assertFalse($binding->hasField('post_count'));
-		self::assertSame([], $binding->getExpressions());
 	}
 
 	public function testExpressionOnlyRootSelectionDoesNotFallbackToDefaultFields(): void
@@ -295,7 +294,6 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		self::assertTrue($binding->getField('id')->isReadOnly());
 
 		self::assertFalse($binding->hasField('name'));
-		self::assertSame([], $binding->getExpressions());
 	}
 
 	public function testReturnsNewRepresentationBindingEachTime(): void

@@ -126,7 +126,7 @@ final class SyncConflictDetectorTest extends TestCase
 
 	private function tracked(RecordState $record, int $revision, bool $writable = true): RepresentationState
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($record->getCollection());
 		$field = new RepresentationFieldBinding('name', $record->getCollection(), 'name', $writable);
 		$binding->addField($field);
 

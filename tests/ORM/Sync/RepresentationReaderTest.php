@@ -168,7 +168,7 @@ final class RepresentationReaderTest extends TestCase
 		$row = new stdClass();
 		$row->name = 'Ada';
 		$row->upperName = 'ADA';
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($this->users());
 		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
 		$binding->addField(new RepresentationFieldBinding('upperName', $this->users(), 'name', false));
 
@@ -183,7 +183,7 @@ final class RepresentationReaderTest extends TestCase
 		$row = new stdClass();
 		$row->email = 'ada@example.test';
 		$row->name = 'Ada';
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($this->users());
 		$binding->addField(new RepresentationFieldBinding('email', $this->users(), 'email'));
 		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
 
@@ -239,7 +239,7 @@ final class RepresentationReaderTest extends TestCase
 
 	private function fieldBinding(string $path): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($this->users());
 		$binding->addField(new RepresentationFieldBinding($path, $this->users(), 'name'));
 
 		return $binding;

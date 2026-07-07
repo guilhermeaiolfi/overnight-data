@@ -120,7 +120,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$item = new stdClass();
 		$collection = new ToManyRelationState($owner, 'posts', $this->bindingFor($child));
 		$collection->add($item);
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($posts);
 		$binding->addField(new RepresentationFieldBinding('id', $posts, 'id'));
 		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
 
@@ -218,7 +218,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$posts = $registry->collection('posts')->primaryKey('id')->field('id', 'int')->end()->field('user_id', 'int')->end();
 		$relation = $posts->belongsTo('author', 'users')->innerKey('user_id')->outerKey('id');
 		self::assertInstanceOf(BelongsToRelation::class, $relation);
-		$collection = new ToManyRelationState(RecordState::new($posts, ['user_id' => 10]), 'author', new RepresentationBinding());
+		$collection = new ToManyRelationState(RecordState::new($posts, ['user_id' => 10]), 'author', new RepresentationBinding($posts));
 
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('must be a has-many relation');
@@ -320,7 +320,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 
 	private function bindingFor(RecordState $record): RepresentationBinding
 	{
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($record->getCollection());
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
 			$binding->addField(new RepresentationFieldBinding($field, $record->getCollection(), $field));

@@ -27,7 +27,7 @@ final class RepresentationAdopterTest extends TestCase
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
 		$tracked = $this->adopter()->adopt(new stdClass(), $this->postBinding(), $record);
 
-		self::assertSame($record, $tracked->getBinding()->getField('title')->getField()->getState());
+		self::assertSame($record, $tracked->getFieldItem('title')->getRecord());
 	}
 
 	public function testAdoptAddsRecordToRecordStateStore(): void
@@ -68,10 +68,10 @@ final class RepresentationAdopterTest extends TestCase
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
 		$tracked = $this->adopter()->adopt(new stdClass(), $this->postBinding(), $record);
 
-		$field = $tracked->getBinding()->getField('title')->getField();
+		$item = $tracked->getFieldItem('title');
 
-		self::assertFalse($field->isTemplate());
-		self::assertSame($record->getStateHash(), $field->getRecordHash());
+		self::assertSame($record, $item->getRecord());
+		self::assertSame($record->getStateHash(), $item->getRecord()->getStateHash());
 	}
 
 	public function testBaselineRevisionUsesRecordsCurrentRevision(): void
@@ -81,41 +81,44 @@ final class RepresentationAdopterTest extends TestCase
 
 		$tracked = $this->adopter()->adopt(new stdClass(), $this->postBinding(), $record);
 
-		self::assertSame([$record->getStateHash() => 2], $tracked->getBaselineRevisions());
+		self::assertSame(2, $tracked->getFieldItem('title')->getBaselineRevision());
 	}
 
 	public function testMultipleFieldsForSameRecordProduceOneBaselineRevision(): void
 	{
 		$record = RecordState::new($this->posts(), ['title' => 'A1', 'body' => 'Body']);
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($this->posts());
 		$binding->addField(new RepresentationFieldBinding('title', $this->posts(), 'title'));
 		$binding->addField(new RepresentationFieldBinding('body', $this->posts(), 'body'));
 
 		$tracked = $this->adopter()->adopt(new stdClass(), $binding, $record);
 
-		self::assertSame([$record->getStateHash() => 1], $tracked->getBaselineRevisions());
+		self::assertSame(1, $tracked->getFieldItem('title')->getBaselineRevision());
+		self::assertSame(1, $tracked->getFieldItem('body')->getBaselineRevision());
+		self::assertSame($tracked->getFieldItem('title')->getRecord(), $tracked->getFieldItem('body')->getRecord());
 	}
 
 	public function testReadOnlyFieldsContributeBaselineRecordRevision(): void
 	{
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
-		$binding = new RepresentationBinding();
+		$binding = new RepresentationBinding($this->posts());
 		$binding->addField(new RepresentationFieldBinding('titleLabel', $this->posts(), 'title', false));
 
 		$tracked = $this->adopter()->adopt(new stdClass(), $binding, $record);
 
-		self::assertSame([$record->getStateHash() => 1], $tracked->getBaselineRevisions());
+		self::assertSame(1, $tracked->getFieldItem('titleLabel')->getBaselineRevision());
+		self::assertSame($record, $tracked->getFieldItem('titleLabel')->getRecord());
 	}
 
 	public function testInputTemplateBindingIsNotMutated(): void
 	{
 		$template = $this->postBinding();
-		$templateField = $template->getField('title')->getField();
+		$templateField = $template->getField('title');
 
 		$this->adopter()->adopt(new stdClass(), $template, RecordState::new($this->posts(), ['title' => 'A1']));
 
-		self::assertSame($templateField, $template->getField('title')->getField());
-		self::assertTrue($template->getField('title')->getField()->isTemplate());
+		self::assertSame($templateField, $template->getField('title'));
+		self::assertSame('posts', $template->getField('title')->getCollectionName());
 	}
 
 	public function testAdoptingBindingFromDifferentCollectionThrowsThroughStateValidation(): void
@@ -166,7 +169,7 @@ final class RepresentationAdopterTest extends TestCase
 			$record
 		);
 
-		self::assertSame($record, $tracked->getBinding()->getField('title')->getField()->getState());
+		self::assertSame($record, $tracked->getFieldItem('title')->getRecord());
 		self::assertSame($tracked, $representations->get($item));
 		self::assertSame([$item], $collection->getAdded());
 	}

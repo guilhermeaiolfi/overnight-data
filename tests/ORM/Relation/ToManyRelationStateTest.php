@@ -319,7 +319,7 @@ final class ToManyRelationStateTest extends TestCase
 
 		self::assertSame($binding, $collection->getChildBinding());
 		self::assertSame($binding, $collection->getRelatedBinding());
-		self::assertTrue($binding->getField('title')->getField()->isTemplate());
+		self::assertSame('posts', $binding->getField('title')->getCollectionName());
 	}
 
 	/**
