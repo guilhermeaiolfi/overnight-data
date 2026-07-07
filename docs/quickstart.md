@@ -72,14 +72,14 @@ The same registry metadata drives SQL mapping during query execution.
 
 ## 4. Connect and run a bound query
 
-`DataRuntime::connect()` returns an ON\Data runtime backed by the built-in Cycle Database adapter.
+`CycleRuntimeFactory::connect()` returns an ON\Data runtime backed by the built-in Cycle Database adapter.
 
 ```php
-use ON\Data\Database\ConnectionConfig;
-use ON\Data\DataRuntime;
+use ON\Data\Database\Cycle\ConnectionConfig;
+use ON\Data\Database\Cycle\CycleRuntimeFactory;
 use function ON\Data\Query\x;
 
-$runtime = DataRuntime::connect(ConnectionConfig::dsn('sqlite', 'sqlite::memory:'));
+$runtime = (new CycleRuntimeFactory())->connect(ConnectionConfig::dsn('sqlite', 'sqlite::memory:'));
 
 $query = $runtime->query($users);
 

@@ -27,14 +27,22 @@ $u = new SelectQuery($users, $executor);
 Or use a runtime backed by the built-in Cycle adapter:
 
 ```php
-use ON\Data\Database\ConnectionConfig;
-use ON\Data\DataRuntime;
+use ON\Data\Database\Cycle\ConnectionConfig;
+use ON\Data\Database\Cycle\CycleRuntimeFactory;
 
-$runtime = DataRuntime::connect(ConnectionConfig::dsn('sqlite', 'sqlite::memory:'));
+$runtime = (new CycleRuntimeFactory())->connect(ConnectionConfig::dsn('sqlite', 'sqlite::memory:'));
 $u = $runtime->query($users);
 ```
 
-`DataRuntime::connect()` creates Cycle connection infrastructure internally, then wires ON\Data query and command executors from that connection.
+`CycleRuntimeFactory::connect()` creates Cycle connection infrastructure internally, then wires ON\Data query and command executors from that connection.
+
+If you already have a configured Cycle database, build the runtime from that adapter connection:
+
+```php
+use ON\Data\Database\Cycle\CycleRuntimeFactory;
+
+$runtime = (new CycleRuntimeFactory())->create($cycleDatabase);
+```
 
 ## Result modes
 

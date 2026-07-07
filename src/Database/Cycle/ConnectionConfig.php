@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\Database;
+namespace ON\Data\Database\Cycle;
 
 final class ConnectionConfig
 {

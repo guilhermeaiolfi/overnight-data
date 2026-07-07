@@ -574,6 +574,7 @@ final class QueryArchitectureTest extends TestCase
 		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Database/Database.php');
 		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Database/DatabaseInterface.php');
 		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Database/DataRuntime.php');
+		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Database/ConnectionConfig.php');
 		self::assertFileExists(dirname(__DIR__, 2) . '/src/DataRuntime.php');
 	}
 

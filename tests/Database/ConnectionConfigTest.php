@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Database;
 
-use ON\Data\Database\ConnectionConfig;
+use ON\Data\Database\Cycle\ConnectionConfig;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
@@ -16,6 +16,7 @@ final class ConnectionConfigTest extends TestCase
 
 		self::assertFalse($reflection->hasProperty('sqliteMemory'));
 		self::assertFalse($reflection->hasMethod('sqliteMemory'));
+		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Database/ConnectionConfig.php');
 	}
 
 	public function testDsnConstructorKeepsGenericConnectionFields(): void

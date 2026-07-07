@@ -7,7 +7,7 @@ namespace Tests\ON\Data\Database\Cycle;
 use Cycle\Database\DatabaseInterface;
 use Cycle\Database\DatabaseManager;
 use InvalidArgumentException;
-use ON\Data\Database\ConnectionConfig;
+use ON\Data\Database\Cycle\ConnectionConfig;
 use ON\Data\Database\Cycle\CycleConnectionFactory;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;

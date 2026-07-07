@@ -16,7 +16,6 @@ use Cycle\Database\Config\SQLServerDriverConfig;
 use Cycle\Database\DatabaseInterface;
 use Cycle\Database\DatabaseManager;
 use InvalidArgumentException;
-use ON\Data\Database\ConnectionConfig;
 
 final class CycleConnectionFactory
 {

@@ -6,7 +6,8 @@ namespace Tests\ON\Data\Database\Cycle;
 
 use Closure;
 use Cycle\Database\Query\QueryParameters;
-use ON\Data\Database\ConnectionConfig;
+use ON\Data\Database\Cycle\ConnectionConfig;
+use ON\Data\Database\Cycle\CycleRuntimeFactory;
 use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\DataRuntime;
@@ -50,7 +51,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$this->dsn = 'sqlite:' . str_replace('\\', '/', $this->databasePath);
 		$this->registry = $this->makeRegistry();
 		$this->seedDatabase();
-		$this->database = DataRuntime::connect(ConnectionConfig::dsn('sqlite', $this->dsn));
+		$this->database = (new CycleRuntimeFactory())->connect(ConnectionConfig::dsn('sqlite', $this->dsn));
 	}
 
 	protected function tearDown(): void

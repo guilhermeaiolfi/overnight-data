@@ -6,7 +6,8 @@ namespace Tests\ON\Data\Database\Cycle;
 
 use Cycle\Database\Query\QueryParameters;
 use DateTimeImmutable;
-use ON\Data\Database\ConnectionConfig;
+use ON\Data\Database\Cycle\ConnectionConfig;
+use ON\Data\Database\Cycle\CycleRuntimeFactory;
 use ON\Data\Database\Exception\QueryExecutionException;
 use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\DataRuntime;
@@ -40,7 +41,7 @@ final class CycleQueryExecutionTest extends TestCase
 
 		$this->seedDatabase();
 
-		$this->database = DataRuntime::connect(ConnectionConfig::dsn('sqlite', $this->dsn));
+		$this->database = (new CycleRuntimeFactory())->connect(ConnectionConfig::dsn('sqlite', $this->dsn));
 	}
 
 	protected function tearDown(): void

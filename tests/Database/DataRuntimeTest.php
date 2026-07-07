@@ -4,109 +4,112 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Database;
 
-use Cycle\Database\Config\DatabaseConfig;
-use Cycle\Database\Config\SQLite\MemoryConnectionConfig;
-use Cycle\Database\Config\SQLiteDriverConfig;
-use Cycle\Database\DatabaseInterface;
-use Cycle\Database\DatabaseManager;
-use ON\Data\Database\ConnectionConfig;
-use ON\Data\Database\Cycle\CycleCommandExecutor;
-use ON\Data\Database\Cycle\CycleQueryExecutor;
+use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\DataRuntime;
 use ON\Data\Definition\Registry;
-use PHPUnit\Framework\Attributes\RequiresPhpExtension;
+use ON\Data\ORM\Persistence\CommandExecutorInterface;
+use ON\Data\ORM\Persistence\CommandInterface;
+use ON\Data\ORM\Persistence\CommandResult;
+use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
-use ReflectionProperty;
 
-#[RequiresPhpExtension('pdo_sqlite')]
 final class DataRuntimeTest extends TestCase
 {
-	public function testConnectWithSqliteMemoryAllowsQuerying(): void
+	public function testQueryUsesInjectedQueryExecutor(): void
 	{
-		$runtime = DataRuntime::connect(ConnectionConfig::dsn('sqlite', 'sqlite::memory:'));
-		self::assertInstanceOf(CycleCommandExecutor::class, $runtime->getCommandExecutor());
-
-		$database = $this->databaseFromRuntimeExecutor($runtime, 'commandExecutor');
-		$database->execute('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
-		$database->execute("INSERT INTO users (id, name) VALUES (1, 'Ada')");
-
+		$executor = new RecordingQueryExecutor([['id' => 1, 'name' => 'Ada']]);
+		$commandExecutor = new RecordingRuntimeCommandExecutor();
+		$runtime = new DataRuntime($executor, $commandExecutor);
 		$users = (new Registry())
 			->collection('users')
-			->table('users')
-			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('name', 'string')->end();
 
 		$query = $runtime->query($users);
+		$rows = $query->select($query->id, $query->name)->fetchAll();
 
-		self::assertSame(
-			[['id' => 1, 'name' => 'Ada']],
-			$query->select($query->id, $query->name)->fetchAll(),
-		);
+		self::assertSame([['id' => 1, 'name' => 'Ada']], $rows);
+		self::assertSame($query, $executor->lastQuery);
 	}
 
-	public function testFromCycleUsesExactDatabaseForQueryExecution(): void
+	public function testGetCommandExecutorReturnsInjectedExecutor(): void
 	{
-		$database = $this->cycleDatabase();
-		$runtime = DataRuntime::fromCycle($database);
-		$queryExecutor = $this->runtimeProperty($runtime, 'queryExecutor');
+		$queryExecutor = new RecordingQueryExecutor();
+		$commandExecutor = new RecordingRuntimeCommandExecutor();
+		$runtime = new DataRuntime($queryExecutor, $commandExecutor);
 
-		self::assertInstanceOf(CycleQueryExecutor::class, $queryExecutor);
-		self::assertSame($database, $this->executorDatabase($queryExecutor));
+		self::assertSame($commandExecutor, $runtime->getCommandExecutor());
 	}
 
-	public function testFromCycleWiresCommandExecutorFromSameDatabase(): void
+	public function testSourceDoesNotReferenceAdapterNamespaces(): void
 	{
-		$database = $this->cycleDatabase();
-		$runtime = DataRuntime::fromCycle($database);
-		$commandExecutor = $runtime->getCommandExecutor();
+		$reflection = new ReflectionClass(DataRuntime::class);
+		$fileName = $reflection->getFileName();
 
-		self::assertInstanceOf(CycleCommandExecutor::class, $commandExecutor);
-		self::assertSame($database, $this->executorDatabase($commandExecutor));
+		self::assertIsString($fileName);
+		$source = (string) file_get_contents($fileName);
+
+		foreach ([
+			'Cycle\\',
+			'Doctrine\\',
+			'ConnectionConfig',
+			'CycleConnectionFactory',
+			'CycleQueryExecutor',
+			'CycleCommandExecutor',
+			'DoctrineQueryExecutor',
+			'DoctrineCommandExecutor',
+		] as $forbidden) {
+			self::assertStringNotContainsString($forbidden, $source);
+		}
+
+		self::assertFalse(method_exists(DataRuntime::class, 'connect'));
+		self::assertFalse(method_exists(DataRuntime::class, 'fromCycle'));
+	}
+}
+
+final class RecordingQueryExecutor implements QueryExecutorInterface
+{
+	public ?SelectQuery $lastQuery = null;
+
+	/**
+	 * @param list<array<string, mixed>> $rows
+	 */
+	public function __construct(
+		private readonly array $rows = [],
+	) {
 	}
 
-	private function cycleDatabase(): DatabaseInterface
+	public function fetchAll(SelectQuery $query): array
 	{
-		$manager = new DatabaseManager(new DatabaseConfig([
-			'default' => 'default',
-			'databases' => [
-				'default' => ['connection' => 'sqlite'],
-			],
-			'connections' => [
-				'sqlite' => new SQLiteDriverConfig(
-					connection: new MemoryConnectionConfig(),
-				),
-			],
-		]));
+		$this->lastQuery = $query;
 
-		return $manager->database('default');
+		return $this->rows;
 	}
 
-	private function databaseFromRuntimeExecutor(DataRuntime $runtime, string $property): DatabaseInterface
+	public function fetchOne(SelectQuery $query): ?array
 	{
-		$executor = $this->runtimeProperty($runtime, $property);
+		$this->lastQuery = $query;
 
-		return $this->executorDatabase($executor);
+		return $this->rows[0] ?? null;
 	}
 
-	private function runtimeProperty(DataRuntime $runtime, string $property): object
+	public function iterate(SelectQuery $query): iterable
 	{
-		$reflection = new ReflectionClass($runtime);
-		$value = $reflection->getProperty($property)->getValue($runtime);
+		$this->lastQuery = $query;
 
-		self::assertIsObject($value);
-
-		return $value;
+		return $this->rows;
 	}
+}
 
-	private function executorDatabase(object $executor): DatabaseInterface
+final class RecordingRuntimeCommandExecutor implements CommandExecutorInterface
+{
+	public ?CommandInterface $lastCommand = null;
+
+	public function execute(CommandInterface $command): CommandResult
 	{
-		$property = new ReflectionProperty($executor, 'database');
-		$database = $property->getValue($executor);
+		$this->lastCommand = $command;
 
-		self::assertInstanceOf(DatabaseInterface::class, $database);
-
-		return $database;
+		return new CommandResult(1);
 	}
 }
