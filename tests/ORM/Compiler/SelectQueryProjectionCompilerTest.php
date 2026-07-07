@@ -114,11 +114,11 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		self::assertCount(1, $internalSelections);
 		self::assertTrue($internalSelections[0]->hasTag(SelectionTag::INTERNAL));
 
-		$projectionIdentities = $compilation->getProjectionIdentities();
-		self::assertNotNull($projectionIdentities->get(['company'], 'id'));
+		$identityColumns = $compilation->getIdentityColumns();
+		self::assertNotNull($identityColumns->get(['company'], 'id'));
 		self::assertSame(
 			$internalSelections[0]->getSelectionKey(),
-			$projectionIdentities->get(['company'], 'id'),
+			$identityColumns->get(['company'], 'id'),
 		);
 	}
 
@@ -166,7 +166,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		$compilation = $this->compiler->compileResult($resultQuery);
 
 		self::assertCount(1, $resultQuery->getSelections()->getByTag(SelectionTag::INTERNAL));
-		self::assertNotNull($compilation->getProjectionIdentities()->get(['company'], 'id'));
+		self::assertNotNull($compilation->getIdentityColumns()->get(['company'], 'id'));
 	}
 
 	public function testCompileResultReturnsProjectionCompilationWithSourcePathKeyedIdentities(): void
@@ -180,8 +180,8 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 
 		self::assertInstanceOf(ProjectionCompilation::class, $compilation);
 		self::assertTrue($compilation->getBinding()->getField('name')->getSourcePath() === ['company']);
-		self::assertNotNull($compilation->getProjectionIdentities()->get(['company'], 'id'));
-		self::assertNull($compilation->getProjectionIdentities()->get([], 'id'));
+		self::assertNotNull($compilation->getIdentityColumns()->get(['company'], 'id'));
+		self::assertNull($compilation->getIdentityColumns()->get([], 'id'));
 	}
 
 	public function testSameTerminalCollectionFlatProjectionKeepsDistinctSourcePaths(): void
@@ -199,7 +199,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		self::assertSame([], $binding->getField('name')->getSourcePath());
 		self::assertSame(['manager'], $binding->getField('managerName')->getSourcePath());
 
-		$identities = $compilation->getProjectionIdentities();
+		$identities = $compilation->getIdentityColumns();
 		self::assertNull($identities->get([], 'id'));
 		self::assertNotNull($identities->get(['manager'], 'id'));
 
@@ -220,7 +220,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 
 		self::assertTrue($binding->hasField('company_name'));
 		self::assertFalse($binding->hasField('company.id'));
-		self::assertNotNull($compilation->getProjectionIdentities()->get(['company'], 'id'));
+		self::assertNotNull($compilation->getIdentityColumns()->get(['company'], 'id'));
 	}
 
 	public function testCompilesSelectedRootRelation(): void

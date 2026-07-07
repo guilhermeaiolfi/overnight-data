@@ -10,8 +10,8 @@ namespace ON\Data\ORM\Compiler\SelectQuery;
  * Given a compiled structural RepresentationBinding and its SelectQuery, this
  * ensures the query result carries enough primary-key data to adopt every
  * source path represented by flat projected fields. It may mutate the query by
- * adding INTERNAL-tagged selections and returns a ProjectionIdentityMap keyed by
- * source path + primary-key field.
+ * adding INTERNAL-tagged selections and returns ProjectionIdentityColumns keyed
+ * by source path + primary-key field.
  *
  * Exists to separate identity planning from structural binding compilation: it
  * never creates field bindings, relation bindings, or normalizes selections.
@@ -32,16 +32,16 @@ final class ProjectionIdentityPlanner
 	public function plan(
 		SelectQuery $query,
 		RepresentationBinding $binding,
-	): ProjectionIdentityMap {
+	): ProjectionIdentityColumns {
 		$this->internalResultKeyCounter = 0;
 
-		$identities = new ProjectionIdentityMap();
+		$identityColumns = new ProjectionIdentityColumns();
 
 		foreach ($this->collectProjectedSourceFields($binding) as $sourceField) {
-			$this->ensureIdentitySelections($query, $binding, $sourceField, $identities);
+			$this->ensureIdentitySelections($query, $binding, $sourceField, $identityColumns);
 		}
 
-		return $identities;
+		return $identityColumns;
 	}
 
 	/**
@@ -67,7 +67,7 @@ final class ProjectionIdentityPlanner
 		SelectQuery $query,
 		RepresentationBinding $binding,
 		RepresentationFieldBinding $sourceField,
-		ProjectionIdentityMap $identities,
+		ProjectionIdentityColumns $identityColumns,
 	): void {
 		$sourcePath = $sourceField->getSourcePath();
 		$collection = $sourceField->getCollection();
@@ -77,7 +77,7 @@ final class ProjectionIdentityPlanner
 				continue;
 			}
 
-			if ($identities->get($sourcePath, $fieldName) !== null) {
+			if ($identityColumns->get($sourcePath, $fieldName) !== null) {
 				continue;
 			}
 
@@ -87,7 +87,7 @@ final class ProjectionIdentityPlanner
 				$fieldRef->as($resultKey),
 				SelectionTag::INTERNAL,
 			);
-			$identities->add($sourcePath, $fieldName, $resultKey);
+			$identityColumns->add($sourcePath, $fieldName, $resultKey);
 		}
 	}
 

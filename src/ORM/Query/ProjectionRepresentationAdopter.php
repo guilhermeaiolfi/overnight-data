@@ -12,7 +12,7 @@ namespace ON\Data\ORM\Query;
  * identity selections; GraphAdopter handles nested object graphs instead.
  */
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityMap;
+use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityColumns;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\SessionContext;
@@ -38,7 +38,7 @@ final class ProjectionRepresentationAdopter
 	public function adopt(
 		object $representation,
 		RepresentationBinding $binding,
-		ProjectionIdentityMap $projectionIdentities,
+		ProjectionIdentityColumns $identityColumns,
 		array $sourceRow,
 		SessionContext $context,
 	): RepresentationState {
@@ -56,7 +56,7 @@ final class ProjectionRepresentationAdopter
 		$recordsBySourcePath = $this->resolveRecordsBySourcePath(
 			$representation,
 			$binding,
-			$projectionIdentities,
+			$identityColumns,
 			$records,
 			$sourceRow,
 		);
@@ -80,7 +80,7 @@ final class ProjectionRepresentationAdopter
 	private function resolveRecordsBySourcePath(
 		object $representation,
 		RepresentationBinding $binding,
-		ProjectionIdentityMap $projectionIdentities,
+		ProjectionIdentityColumns $identityColumns,
 		RecordStateStore $records,
 		array $sourceRow,
 	): array {
@@ -95,7 +95,7 @@ final class ProjectionRepresentationAdopter
 				$sourceBinding,
 				$collection,
 				$sourcePath,
-				$projectionIdentities,
+				$identityColumns,
 				$records,
 				$sourceRow,
 			);
@@ -112,12 +112,12 @@ final class ProjectionRepresentationAdopter
 		RepresentationBinding $binding,
 		CollectionInterface $collection,
 		array $sourcePath,
-		ProjectionIdentityMap $projectionIdentities,
+		ProjectionIdentityColumns $identityColumns,
 		RecordStateStore $records,
 		array $sourceRow,
 	): RecordState {
 		$values = $this->initialValues($representation, $binding, $collection, $sourceRow);
-		$keyValues = $this->completeKeyValues($representation, $binding, $collection, $sourcePath, $projectionIdentities, $sourceRow);
+		$keyValues = $this->completeKeyValues($representation, $binding, $collection, $sourcePath, $identityColumns, $sourceRow);
 		$key = $collection->getKey($keyValues);
 		$record = $records->getByKey($key);
 
@@ -175,7 +175,7 @@ final class ProjectionRepresentationAdopter
 		RepresentationBinding $binding,
 		CollectionInterface $collection,
 		array $sourcePath,
-		ProjectionIdentityMap $projectionIdentities,
+		ProjectionIdentityColumns $identityColumns,
 		array $sourceRow,
 	): array {
 		$pathsByField = [];
@@ -193,7 +193,7 @@ final class ProjectionRepresentationAdopter
 				: null;
 
 			if ($value === null) {
-				$resultKey = $projectionIdentities->get($sourcePath, $fieldName);
+				$resultKey = $identityColumns->get($sourcePath, $fieldName);
 
 				if ($resultKey === null) {
 					throw new StateException(sprintf(

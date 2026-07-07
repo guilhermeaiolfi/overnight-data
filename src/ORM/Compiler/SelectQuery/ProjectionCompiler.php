@@ -63,9 +63,9 @@ final class ProjectionCompiler
 	public function compileResult(SelectQuery $query): ProjectionCompilation
 	{
 		$binding = $this->compileBinding($query);
-		$projectionIdentities = $this->identityPlanner->plan($query, $binding);
+		$identityColumns = $this->identityPlanner->plan($query, $binding);
 
-		return new ProjectionCompilation($binding, $projectionIdentities);
+		return new ProjectionCompilation($binding, $identityColumns);
 	}
 
 	private function compileRootScalarFields(

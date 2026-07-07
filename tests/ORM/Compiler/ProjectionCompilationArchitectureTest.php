@@ -341,7 +341,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		foreach (glob($manualRoot . '/*.php') ?: [] as $path) {
 			$contents = (string) file_get_contents($path);
 
-			self::assertStringNotContainsString('ProjectionIdentityMap', $contents, $path);
+			self::assertStringNotContainsString('ProjectionIdentityColumns', $contents, $path);
 			self::assertStringNotContainsString('SelectionTag::INTERNAL', $contents, $path);
 			self::assertStringNotContainsString('generateInternalResultKey', $contents, $path);
 		}

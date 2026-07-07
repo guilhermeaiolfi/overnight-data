@@ -11,7 +11,7 @@ namespace ON\Data\ORM\Query;
  * Exists as the bridge between SelectQuery mutable export and Session tracking,
  * keeping SelectQuery itself free of persistence orchestration details.
  */
-use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityMap;
+use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityColumns;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\Sync\RepresentationReader;
@@ -36,12 +36,12 @@ final class MutableQueryResultTracker
 	public function trackAll(
 		Session $session,
 		RepresentationBinding $binding,
-		ProjectionIdentityMap $projectionIdentities,
+		ProjectionIdentityColumns $identityColumns,
 		array $objects,
 		array $sourceRows,
 	): void {
 		foreach ($objects as $index => $object) {
-			$this->trackObject($session, $object, $binding, $projectionIdentities, $sourceRows[$index] ?? []);
+			$this->trackObject($session, $object, $binding, $identityColumns, $sourceRows[$index] ?? []);
 		}
 	}
 
@@ -51,11 +51,11 @@ final class MutableQueryResultTracker
 	public function trackOne(
 		Session $session,
 		RepresentationBinding $binding,
-		ProjectionIdentityMap $projectionIdentities,
+		ProjectionIdentityColumns $identityColumns,
 		object $object,
 		array $sourceRow,
 	): void {
-		$this->trackObject($session, $object, $binding, $projectionIdentities, $sourceRow);
+		$this->trackObject($session, $object, $binding, $identityColumns, $sourceRow);
 	}
 
 	/**
@@ -65,14 +65,14 @@ final class MutableQueryResultTracker
 		Session $session,
 		object $object,
 		RepresentationBinding $binding,
-		ProjectionIdentityMap $projectionIdentities,
+		ProjectionIdentityColumns $identityColumns,
 		array $sourceRow,
 	): void {
 		if ($this->isProjectionBinding($binding)) {
 			$this->projectionAdopter->adopt(
 				$object,
 				$binding,
-				$projectionIdentities,
+				$identityColumns,
 				$sourceRow,
 				$session->getContext(),
 			);

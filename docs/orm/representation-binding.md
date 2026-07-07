@@ -83,7 +83,7 @@ Object graphs and flat mutable projections use different adoption paths:
 - `GraphAdopter` handles object graphs: one representation object resolves to nested related objects, each with its own binding branch.
 - `ProjectionRepresentationAdopter` handles flat mutable projections: one representation object can be backed by multiple `RecordState` objects when root field bindings reference more than one collection.
 
-For flat projections, the compiler may add hidden identity selections tagged `SelectionTag::INTERNAL`. `ProjectionIdentityMap` maps those internal identity values to record keys during adoption. Internal selections are stripped from public query results, but they are required for mutable flat projection tracking.
+For flat projections, the compiler may add hidden identity selections tagged `SelectionTag::INTERNAL`. `ProjectionIdentityColumns` maps those internal identity values to record keys during adoption. Internal selections are stripped from public query results, but they are required for mutable flat projection tracking.
 
 Flat projection adoption is used by mutable `stdClass` query export. Manual mutable projections use the same binding model, but they supply concrete record identities without executing a query.
 

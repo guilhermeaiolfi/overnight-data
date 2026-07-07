@@ -6,7 +6,7 @@ namespace ON\Data\ORM\Compiler\SelectQuery;
 
 /**
  * Query compilation result pairing the public RepresentationBinding with the
- * ProjectionIdentityMap needed to adopt flat mutable query rows.
+ * ProjectionIdentityColumns needed to adopt flat mutable query rows.
  *
  * Exists because mutable SelectQuery export must pass identity metadata to
  * ProjectionRepresentationAdopter separately from the user-visible binding.
@@ -17,7 +17,7 @@ final class ProjectionCompilation
 {
 	public function __construct(
 		private RepresentationBinding $binding,
-		private ProjectionIdentityMap $projectionIdentities,
+		private ProjectionIdentityColumns $identityColumns,
 	) {
 	}
 
@@ -26,8 +26,8 @@ final class ProjectionCompilation
 		return $this->binding;
 	}
 
-	public function getProjectionIdentities(): ProjectionIdentityMap
+	public function getIdentityColumns(): ProjectionIdentityColumns
 	{
-		return $this->projectionIdentities;
+		return $this->identityColumns;
 	}
 }

@@ -5,16 +5,20 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Compiler\SelectQuery;
 
 /**
- * Maps hidden internal result keys to primary-key fields for flat mutable
- * projection adoption, keyed by the source path that reaches the owning record.
+ * Maps projected source-path primary-key fields to result row keys. It is used
+ * during projection adoption to read hidden or public identity values from the
+ * source row before resolving records through RecordStateStore.
  *
- * Exists because SelectQuery may inject INTERNAL-tagged identity selections that
- * must not appear in public results but are required to resolve RecordState keys
- * during ProjectionRepresentationAdopter::adopt(). Keying by source path (rather
- * than collection name) lets root and related sources share a terminal
- * collection while remaining distinct records.
+ * This is NOT the session RecordState identity map: it does not hold RecordState
+ * objects. It is compiled query/result-row metadata describing where identity
+ * columns can be found, keyed by source path + primary-key field. SelectQuery may
+ * inject INTERNAL-tagged identity selections that must not appear in public
+ * results but are required to resolve RecordState keys during
+ * ProjectionRepresentationAdopter::adopt(). Keying by source path (rather than
+ * collection name) lets root and related sources share a terminal collection
+ * while remaining distinct records.
  */
-final class ProjectionIdentityMap
+final class ProjectionIdentityColumns
 {
 	/**
 	 * @var array<string, array<string, string>>
