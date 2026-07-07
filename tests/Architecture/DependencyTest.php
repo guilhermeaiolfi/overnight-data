@@ -18,8 +18,10 @@ final class DependencyTest extends TestCase
 		$forbiddenPatterns = [
 			'Cycle\\',
 			'Doctrine\\',
+			'ON\\DB\\',
 			'ON\\ORM\\',
 			'ON\\RestApi\\',
+			'Overnight',
 			'Definition\\Collection\\PrimaryKeyDefinition',
 			'Definition\\Collection\\PrimaryKeyValue',
 		];
@@ -39,7 +41,7 @@ final class DependencyTest extends TestCase
 					$pattern === 'Cycle\\'
 					&& (
 						str_contains($normalizedPath, '/src/Database/Cycle/')
-						|| str_ends_with($normalizedPath, '/src/Database/Database.php')
+						|| str_ends_with($normalizedPath, '/src/Database/DataRuntime.php')
 					)
 				) {
 					continue;

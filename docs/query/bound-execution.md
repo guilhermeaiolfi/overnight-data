@@ -24,17 +24,17 @@ use ON\Data\Query\SelectQuery;
 $u = new SelectQuery($users, $executor);
 ```
 
-Or use the neutral database facade:
+Or use a runtime backed by the built-in Cycle adapter:
 
 ```php
 use ON\Data\Database\ConnectionConfig;
-use ON\Data\Database\Database;
+use ON\Data\Database\DataRuntime;
 
-$database = Database::connect(ConnectionConfig::sqliteMemory());
-$u = $database->query($users);
+$runtime = DataRuntime::connect(ConnectionConfig::sqliteMemory());
+$u = $runtime->query($users);
 ```
 
-`Database::connect()` currently delegates to the built-in Cycle backend, but the public surface remains `ON\Data\Database`.
+`DataRuntime::connect()` creates Cycle connection infrastructure internally, then wires ON\Data query and command executors from that connection.
 
 ## Result modes
 

@@ -7,7 +7,7 @@ This page explains how query selection provenance and hidden internal identity s
 See also:
 
 - [`../query/query-model.md`](../query/query-model.md) — query construction, selections, aliases, and result export
-- [`../query/bound-execution.md`](../query/bound-execution.md) — bound execution, result modes, and the neutral database facade
+- [`../query/bound-execution.md`](../query/bound-execution.md) — bound execution, result modes, and the data runtime
 - [`representation-binding.md`](./representation-binding.md) — recursive `RepresentationBinding` model and flat projection adoption
 - [`persistence.md`](./persistence.md) — scalar sync, relation sync, command planning, and flush orchestration
 - [`manual-mutable-projections.md`](./manual-mutable-projections.md) — non-executing manual projection declarations

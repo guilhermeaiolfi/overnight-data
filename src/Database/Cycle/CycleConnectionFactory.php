@@ -14,19 +14,16 @@ use Cycle\Database\Config\SQLite\MemoryConnectionConfig;
 use Cycle\Database\Config\SQLiteDriverConfig;
 use Cycle\Database\Config\SQLServer\DsnConnectionConfig as SqlServerDsnConnectionConfig;
 use Cycle\Database\Config\SQLServerDriverConfig;
+use Cycle\Database\DatabaseInterface;
 use Cycle\Database\DatabaseManager;
 use InvalidArgumentException;
 use ON\Data\Database\ConnectionConfig;
-use ON\Data\Database\Database;
-use ON\Data\Mapper\ConversionGateway;
 
-final class CycleDatabaseFactory
+final class CycleConnectionFactory
 {
-	public function create(
-		ConnectionConfig $config,
-		?ConversionGateway $gateway = null,
-	): Database {
-		$manager = new DatabaseManager(new DatabaseConfig([
+	public function createManager(ConnectionConfig $config): DatabaseManager
+	{
+		return new DatabaseManager(new DatabaseConfig([
 			'default' => $config->databaseName,
 			'databases' => [
 				$config->databaseName => [
@@ -38,11 +35,11 @@ final class CycleDatabaseFactory
 				$config->connectionName => $this->driverConfig($config),
 			],
 		]));
+	}
 
-		return new Database(new CycleQueryExecutor(
-			$manager->database($config->databaseName),
-			$gateway ?? ConversionGateway::createDefault(),
-		));
+	public function create(ConnectionConfig $config): DatabaseInterface
+	{
+		return $this->createManager($config)->database($config->databaseName);
 	}
 
 	private function driverConfig(ConnectionConfig $config): SQLiteDriverConfig|MySQLDriverConfig|PostgresDriverConfig|SQLServerDriverConfig

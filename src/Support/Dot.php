@@ -13,7 +13,7 @@ use ReturnTypeWillChange;
 use Traversable;
 
 /**
- * Minimal dot-path array helper extracted from Overnight's Config support.
+ * Minimal dot-path array helper for nested array access.
  *
  * @phpstan-consistent-constructor
  * @implements ArrayAccess<array-key, mixed>

@@ -72,16 +72,16 @@ The same registry metadata drives SQL mapping during query execution.
 
 ## 4. Connect and run a bound query
 
-`Database::connect()` returns a neutral facade. The built-in backend currently delegates to Cycle Database.
+`DataRuntime::connect()` returns an ON\Data runtime backed by the built-in Cycle Database adapter.
 
 ```php
 use ON\Data\Database\ConnectionConfig;
-use ON\Data\Database\Database;
+use ON\Data\Database\DataRuntime;
 use function ON\Data\Query\x;
 
-$database = Database::connect(ConnectionConfig::sqliteMemory());
+$runtime = DataRuntime::connect(ConnectionConfig::sqliteMemory());
 
-$query = $database->query($users);
+$query = $runtime->query($users);
 
 $rows = $query
     ->select($query->id, $query->name)
@@ -97,7 +97,7 @@ This example assumes matching SQLite tables already exist for the definitions ab
 Relation loading is configured on cached relation refs, separate from root `select()`.
 
 ```php
-$query = $database->query($users);
+$query = $runtime->query($users);
 
 $query
     ->posts
@@ -130,7 +130,7 @@ final class UserRow
     public string $name;
 }
 
-$userQuery = $database->query($users);
+$userQuery = $runtime->query($users);
 
 $objects = $userQuery
     ->select($userQuery->id, $userQuery->name)

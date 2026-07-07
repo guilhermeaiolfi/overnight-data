@@ -63,7 +63,7 @@ final class QueryArchitectureTest extends TestCase
 		}
 	}
 
-	public function testNeutralDatabaseSurfaceDoesNotExposeCycleNamespacesOutsideBackendFolder(): void
+	public function testNeutralDatabaseSurfaceDoesNotExposeCycleNamespacesOutsideRuntimeBridgeAndBackendFolder(): void
 	{
 		$root = dirname(__DIR__, 2) . '/src/Database';
 		$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root));
@@ -78,7 +78,7 @@ final class QueryArchitectureTest extends TestCase
 
 			if (
 				str_contains($normalizedPath, '/src/Database/Cycle/')
-				|| str_ends_with($normalizedPath, '/src/Database/Database.php')
+				|| str_ends_with($normalizedPath, '/src/Database/DataRuntime.php')
 			) {
 				continue;
 			}
@@ -568,6 +568,12 @@ final class QueryArchitectureTest extends TestCase
 			],
 			'Query/backend infrastructure leaked relation-specific coupling "%s" into %s',
 		);
+	}
+
+	public function testLegacyDatabaseFacadeDoesNotExist(): void
+	{
+		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Database/Database.php');
+		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Database/DatabaseInterface.php');
 	}
 
 	public function testNeutralDefinitionInfrastructureDoesNotInterpretRelationExecutionSemantics(): void

@@ -7,7 +7,7 @@ namespace Tests\ON\Data\Database\Cycle;
 use Cycle\Database\Query\QueryParameters;
 use DateTimeImmutable;
 use ON\Data\Database\ConnectionConfig;
-use ON\Data\Database\Database;
+use ON\Data\Database\DataRuntime;
 use ON\Data\Database\Exception\QueryExecutionException;
 use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\Definition\Registry;
@@ -30,7 +30,7 @@ final class CycleQueryExecutionTest extends TestCase
 
 	private ?Registry $registry = null;
 
-	private ?Database $database = null;
+	private ?DataRuntime $database = null;
 
 	protected function setUp(): void
 	{
@@ -40,7 +40,7 @@ final class CycleQueryExecutionTest extends TestCase
 
 		$this->seedDatabase();
 
-		$this->database = Database::connect(ConnectionConfig::dsn('sqlite', $this->dsn));
+		$this->database = DataRuntime::connect(ConnectionConfig::dsn('sqlite', $this->dsn));
 	}
 
 	protected function tearDown(): void
@@ -743,7 +743,7 @@ final class CycleQueryExecutionTest extends TestCase
 	private function compileSql(SelectQuery $query): string
 	{
 		$databaseReflection = new ReflectionClass($this->database);
-		$executorProperty = $databaseReflection->getProperty('executor');
+		$executorProperty = $databaseReflection->getProperty('queryExecutor');
 		$executor = $executorProperty->getValue($this->database);
 
 		$executorReflection = new ReflectionClass($executor);

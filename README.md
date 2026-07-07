@@ -176,7 +176,7 @@ composer check
 - `docs/query/query-model.md` documents the current query model, result export, and reference types.
 - `docs/query/expressions-and-conditions.md` documents query expressions, aliases, and condition building.
 - `docs/query/grouping-ordering-pagination.md` documents grouping, ordering, and pagination.
-- `docs/query/bound-execution.md` documents bound execution, result modes, and the neutral database facade.
+- `docs/query/bound-execution.md` documents bound execution, result modes, and the data runtime.
 - `docs/query/relation-loading.md` documents relation selection, nested loading, and loader ownership boundaries.
 - `docs/orm/foundation.md` documents ORM foundation concepts, state primitives, representation lineage, sync conflicts, and relation guardrails.
 - `docs/orm/persistence.md` documents the ORM persistence pipeline, affected-row validation, Cycle command executor boundary, generated-key support, relation persistence planning boundary, and write-side limitations.

@@ -7,7 +7,7 @@ namespace Tests\ON\Data\Database\Cycle;
 use Closure;
 use Cycle\Database\Query\QueryParameters;
 use ON\Data\Database\ConnectionConfig;
-use ON\Data\Database\Database;
+use ON\Data\Database\DataRuntime;
 use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
@@ -31,6 +31,7 @@ use PDO;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use Tests\ON\Data\Support\RecordingCommandExecutor;
 
 #[RequiresPhpExtension('pdo_sqlite')]
 final class CycleJoinExecutionTest extends TestCase
@@ -41,7 +42,7 @@ final class CycleJoinExecutionTest extends TestCase
 
 	private ?Registry $registry = null;
 
-	private ?Database $database = null;
+	private ?DataRuntime $database = null;
 
 	protected function setUp(): void
 	{
@@ -49,7 +50,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$this->dsn = 'sqlite:' . str_replace('\\', '/', $this->databasePath);
 		$this->registry = $this->makeRegistry();
 		$this->seedDatabase();
-		$this->database = Database::connect(ConnectionConfig::dsn('sqlite', $this->dsn));
+		$this->database = DataRuntime::connect(ConnectionConfig::dsn('sqlite', $this->dsn));
 	}
 
 	protected function tearDown(): void
@@ -518,7 +519,7 @@ final class CycleJoinExecutionTest extends TestCase
 			$executor,
 			fn (SelectQuery $query): string => $this->compileSqlWithExecutor($executor, $query),
 		);
-		$database = new Database($recording);
+		$database = $this->runtimeForExecutor($recording);
 		$users = $database->query($this->registry->getCollection('users'));
 		$users->posts
 			->fields('id', 'title')
@@ -1043,7 +1044,7 @@ final class CycleJoinExecutionTest extends TestCase
 			$executor,
 			fn (SelectQuery $query): string => $this->compileSqlWithExecutor($executor, $query),
 		);
-		$database = new Database($recording);
+		$database = $this->runtimeForExecutor($recording);
 		$users = $database->query($this->registry->getCollection('users'));
 		$users->latestPost->fields('id', 'title', 'createdAt');
 
@@ -1076,7 +1077,7 @@ final class CycleJoinExecutionTest extends TestCase
 
 	public function testFirstOfManyRequiresExecutorSupportForDerivedWindowedQuery(): void
 	{
-		$database = new Database(new FirstOfManyFallbackExecutor());
+		$database = $this->runtimeForExecutor(new FirstOfManyFallbackExecutor());
 		$users = $database->query($this->registry->getCollection('users'));
 		$users->latestPost->fields('id', 'title');
 
@@ -1126,7 +1127,7 @@ final class CycleJoinExecutionTest extends TestCase
 			$executor,
 			fn (SelectQuery $query): string => $this->compileSqlWithExecutor($executor, $query),
 		);
-		$database = new Database($recording);
+		$database = $this->runtimeForExecutor($recording);
 		$users = $database->query($this->registry->getCollection('users'));
 		$users->latestPost->author->fields('id', 'name');
 
@@ -1154,7 +1155,7 @@ final class CycleJoinExecutionTest extends TestCase
 			$executor,
 			fn (SelectQuery $query): string => $this->compileSqlWithExecutor($executor, $query),
 		);
-		$database = new Database($recording);
+		$database = $this->runtimeForExecutor($recording);
 		$users = $database->query($this->registry->getCollection('users'));
 		$users->latestPost->fields('id', 'title', 'authorId')->author->fields('id', 'name');
 
@@ -1755,12 +1756,17 @@ final class CycleJoinExecutionTest extends TestCase
 		$pdo->exec("INSERT INTO departments (id, company_id, name) VALUES (1, 1, 'Engineering'), (2, 2, 'Archive')");
 	}
 
-	private function executorFromDatabase(Database $database): QueryExecutorInterface
+	private function executorFromDatabase(DataRuntime $database): QueryExecutorInterface
 	{
 		$reflection = new ReflectionClass($database);
-		$property = $reflection->getProperty('executor');
+		$property = $reflection->getProperty('queryExecutor');
 
 		return $property->getValue($database);
+	}
+
+	private function runtimeForExecutor(QueryExecutorInterface $executor): DataRuntime
+	{
+		return new DataRuntime($executor, new RecordingCommandExecutor());
 	}
 
 	private function compileSqlWithExecutor(QueryExecutorInterface $executor, SelectQuery $query): string
