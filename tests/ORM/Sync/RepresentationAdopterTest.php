@@ -7,7 +7,6 @@ namespace Tests\ON\Data\ORM\Sync;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -89,8 +88,8 @@ final class RepresentationAdopterTest extends TestCase
 	{
 		$record = RecordState::new($this->posts(), ['title' => 'A1', 'body' => 'Body']);
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
-		$binding->addField(new RepresentationFieldBinding('body', RecordFieldRef::template($this->posts(), 'body')));
+		$binding->addField(new RepresentationFieldBinding('title', $this->posts(), 'title'));
+		$binding->addField(new RepresentationFieldBinding('body', $this->posts(), 'body'));
 
 		$tracked = $this->adopter()->adopt(new stdClass(), $binding, $record);
 
@@ -101,7 +100,7 @@ final class RepresentationAdopterTest extends TestCase
 	{
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('titleLabel', RecordFieldRef::template($this->posts(), 'title'), false));
+		$binding->addField(new RepresentationFieldBinding('titleLabel', $this->posts(), 'title', false));
 
 		$tracked = $this->adopter()->adopt(new stdClass(), $binding, $record);
 

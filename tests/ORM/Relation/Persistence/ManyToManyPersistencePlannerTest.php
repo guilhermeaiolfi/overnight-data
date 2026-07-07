@@ -18,7 +18,6 @@ use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\ManyToManyPersistencePlanner;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -238,7 +237,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
 		$collection->add($item);
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($tags, 'id')));
+		$binding->addField(new RepresentationFieldBinding('id', $tags, 'id'));
 		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
 
 		$this->expectException(RelationPersistenceException::class);
@@ -428,9 +427,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 	{
 		return RepresentationStateObjectRegistry::remember(
 			$representation,
-			new RepresentationState($this->bindingFor($record), [
-				$record->getStateHash() => $record->getRevision(),
-			])
+			new RepresentationState($binding = $this->bindingFor($record), $this->fieldItemsFor($binding, [$record]))
 		);
 	}
 
@@ -440,7 +437,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$fields = array_unique(array_merge(array_keys($record->getValues()), $record->getCollection()->getPrimaryKey()));
 		foreach ($fields as $field) {
 			$field = (string) $field;
-			$binding->addField(new RepresentationFieldBinding($field, RecordFieldRef::forState($record, $field)));
+			$binding->addField(new RepresentationFieldBinding($field, $record->getCollection(), $field));
 		}
 
 		return $binding;

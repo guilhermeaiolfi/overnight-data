@@ -11,8 +11,6 @@ use ON\Data\ORM\Persistence\CommandPlanner;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\Session;
-use ON\Data\ORM\State\RecordFieldRef;
-use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
@@ -260,16 +258,15 @@ final class GraphSyncExistingIntentTest extends TestCase
 	private function compositeOwnerBindingWithPosts(CollectionInterface $users, CollectionInterface $posts): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('tenant_id', RecordFieldRef::template($users, 'tenant_id')));
-		$binding->addField(new RepresentationFieldBinding('user_id', RecordFieldRef::template($users, 'user_id')));
+		$binding->addField(new RepresentationFieldBinding('tenant_id', $users, 'tenant_id'));
+		$binding->addField(new RepresentationFieldBinding('user_id', $users, 'user_id'));
 		$postBinding = new RepresentationBinding();
-		$postBinding->addField(new RepresentationFieldBinding('tenant_ref', RecordFieldRef::template($posts, 'tenant_ref')));
-		$postBinding->addField(new RepresentationFieldBinding('user_ref', RecordFieldRef::template($posts, 'user_ref')));
-		$postBinding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($posts, 'title')));
+		$postBinding->addField(new RepresentationFieldBinding('tenant_ref', $posts, 'tenant_ref'));
+		$postBinding->addField(new RepresentationFieldBinding('user_ref', $posts, 'user_ref'));
+		$postBinding->addField(new RepresentationFieldBinding('title', $posts, 'title'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			RecordRelationRef::forCollection($users, 'posts'),
-			RepresentationRelationCardinality::MANY,
+			$users, 'posts',
 			$postBinding,
 			false
 		));
@@ -280,12 +277,11 @@ final class GraphSyncExistingIntentTest extends TestCase
 	private function ownerBindingWithPosts(CollectionInterface $users, CollectionInterface $posts): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($users, 'id')));
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($users, 'name')));
+		$binding->addField(new RepresentationFieldBinding('id', $users, 'id'));
+		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			RecordRelationRef::forCollection($users, 'posts'),
-			RepresentationRelationCardinality::MANY,
+			$users, 'posts',
 			$this->postBindingWithIdFor($posts),
 			false
 		));
@@ -296,9 +292,9 @@ final class GraphSyncExistingIntentTest extends TestCase
 	private function postBindingWithIdFor(CollectionInterface $posts): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($posts, 'id')));
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($posts, 'title')));
-		$binding->addField(new RepresentationFieldBinding('user_id', RecordFieldRef::template($posts, 'user_id')));
+		$binding->addField(new RepresentationFieldBinding('id', $posts, 'id'));
+		$binding->addField(new RepresentationFieldBinding('title', $posts, 'title'));
+		$binding->addField(new RepresentationFieldBinding('user_id', $posts, 'user_id'));
 
 		return $binding;
 	}
@@ -306,7 +302,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 	private function postKeyOnlyBindingFor(CollectionInterface $posts): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($posts, 'id')));
+		$binding->addField(new RepresentationFieldBinding('id', $posts, 'id'));
 
 		return $binding;
 	}
@@ -314,12 +310,11 @@ final class GraphSyncExistingIntentTest extends TestCase
 	private function ownerBindingWithPostsKeyOnlyChild(CollectionInterface $users, CollectionInterface $posts): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($users, 'id')));
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($users, 'name')));
+		$binding->addField(new RepresentationFieldBinding('id', $users, 'id'));
+		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			RecordRelationRef::forCollection($users, 'posts'),
-			RepresentationRelationCardinality::MANY,
+			$users, 'posts',
 			$this->postKeyOnlyBindingFor($posts),
 			false
 		));

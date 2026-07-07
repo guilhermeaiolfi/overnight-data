@@ -13,7 +13,6 @@ use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\HasManyPersistencePlanner;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -122,7 +121,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$collection = new ToManyRelationState($owner, 'posts', $this->bindingFor($child));
 		$collection->add($item);
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($posts, 'id')));
+		$binding->addField(new RepresentationFieldBinding('id', $posts, 'id'));
 		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
 
 		$this->expectException(RelationPersistenceException::class);
@@ -315,9 +314,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 	{
 		return RepresentationStateObjectRegistry::remember(
 			$representation,
-			new RepresentationState($this->bindingFor($record), [
-				$record->getStateHash() => $record->getRevision(),
-			])
+			new RepresentationState($binding = $this->bindingFor($record), $this->fieldItemsFor($binding, [$record]))
 		);
 	}
 
@@ -326,7 +323,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$binding = new RepresentationBinding();
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
-			$binding->addField(new RepresentationFieldBinding($field, RecordFieldRef::forState($record, $field)));
+			$binding->addField(new RepresentationFieldBinding($field, $record->getCollection(), $field));
 		}
 
 		return $binding;

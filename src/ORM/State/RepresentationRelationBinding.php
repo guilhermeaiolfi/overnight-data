@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\State;
 
+use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\Relation\RelationInterface;
+
 /**
- * One relation representation path bound to a RecordRelationRef and a reusable
- * related RepresentationBinding branch plus load metadata.
+ * One structural relation representation path bound to an owner collection,
+ * relation name, and reusable related RepresentationBinding branch.
  *
  * Exists so graph sync and relation runtime state can share one recursive
  * binding model without duplicating per-child binding templates.
@@ -17,14 +20,17 @@ final class RepresentationRelationBinding
 {
 	public function __construct(
 		private string $path,
-		private RecordRelationRef $relation,
-		private RepresentationRelationCardinality $cardinality,
+		private CollectionInterface $ownerCollection,
+		private string $relationName,
 		private RepresentationBinding $relatedBinding,
-		private bool $collectionFullyLoaded = false,
 		private bool $skipWhenMissing = false,
 	) {
 		if ($path === '') {
 			throw new StateException('Representation relation binding path cannot be empty.');
+		}
+
+		if ($relationName === '') {
+			throw new StateException('Representation relation binding relation name cannot be empty.');
 		}
 	}
 
@@ -33,24 +39,24 @@ final class RepresentationRelationBinding
 		return $this->path;
 	}
 
-	public function getRelation(): RecordRelationRef
+	public function getOwnerCollection(): CollectionInterface
 	{
-		return $this->relation;
+		return $this->ownerCollection;
 	}
 
-	public function withRelation(RecordRelationRef $relation): self
+	public function getOwnerCollectionName(): string
 	{
-		return new self($this->path, $relation, $this->cardinality, $this->relatedBinding, $this->collectionFullyLoaded, $this->skipWhenMissing);
+		return $this->ownerCollection->getName();
 	}
 
 	public function getRelationName(): string
 	{
-		return $this->relation->getRelationName();
+		return $this->relationName;
 	}
 
-	public function getCardinality(): RepresentationRelationCardinality
+	public function getDefinition(): RelationInterface
 	{
-		return $this->cardinality;
+		return $this->ownerCollection->getRelations()->get($this->relationName);
 	}
 
 	public function getRelatedBinding(): RepresentationBinding
@@ -58,19 +64,14 @@ final class RepresentationRelationBinding
 		return $this->relatedBinding;
 	}
 
-	public function isCollectionFullyLoaded(): bool
-	{
-		return $this->collectionFullyLoaded;
-	}
-
 	public function isMany(): bool
 	{
-		return $this->cardinality === RepresentationRelationCardinality::MANY;
+		return $this->getDefinition()->getCardinality() === 'many';
 	}
 
 	public function isSingle(): bool
 	{
-		return $this->cardinality === RepresentationRelationCardinality::ONE;
+		return $this->getDefinition()->getCardinality() === 'single';
 	}
 
 	public function shouldSkipWhenMissing(): bool

@@ -9,7 +9,7 @@ use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\State\RepresentationRelationBinding;
+use ON\Data\ORM\State\RepresentationRelationStateItem;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
 
@@ -39,15 +39,16 @@ final class RelationRepresentationSynchronizer
 		$states ??= $representations;
 
 		foreach ($representations->getAll() as $representation => $state) {
-			foreach ($state->getBinding()->getRelations() as $relationBinding) {
+			foreach ($state->getRelationItems() as $relationItem) {
+				$relationBinding = $relationItem->getBinding();
 				if ($relationBinding->isMany()) {
-					$this->syncMany($representation, $relationBinding, $toManyRelations, $states, $touched, $touchedIds);
+					$this->syncMany($representation, $relationItem, $toManyRelations, $states, $touched, $touchedIds);
 
 					continue;
 				}
 
 				if ($relationBinding->isSingle()) {
-					$this->syncOne($representation, $relationBinding, $toOneRelations, $states, $touched, $touchedIds);
+					$this->syncOne($representation, $relationItem, $toOneRelations, $states, $touched, $touchedIds);
 				}
 			}
 		}
@@ -62,22 +63,15 @@ final class RelationRepresentationSynchronizer
 	 */
 	private function syncMany(
 		object $representation,
-		RepresentationRelationBinding $relationBinding,
+		RepresentationRelationStateItem $relationItem,
 		RelationStateStore $toManyRelations,
 		RepresentationStore $states,
 		array &$touched,
 		array &$touchedIds,
 	): void {
-		$relationRef = $relationBinding->getRelation();
-		if ($relationRef->isTemplate()) {
-			throw new SyncException(sprintf(
-				"Representation relation path '%s' must target a concrete record before graph synchronization.",
-				$relationBinding->getPath()
-			));
-		}
-
-		$owner = $relationRef->getState();
-		$relationName = $relationRef->getRelationName();
+		$relationBinding = $relationItem->getBinding();
+		$owner = $relationItem->getOwnerRecord();
+		$relationName = $relationItem->getRelationName();
 
 		try {
 			$items = $this->reader->readItems($representation, $relationBinding, $this->syncError(...));
@@ -94,9 +88,7 @@ final class RelationRepresentationSynchronizer
 
 		$relation = $toManyRelations->get($owner, $relationName);
 		if (! $relation instanceof ToManyRelationState) {
-			$relation = $relationBinding->isCollectionFullyLoaded()
-				? ToManyRelationState::full($owner, $relationName, $relationBinding->getRelatedBinding())
-				: new ToManyRelationState($owner, $relationName, $relationBinding->getRelatedBinding());
+			$relation = new ToManyRelationState($owner, $relationName, $relationBinding->getRelatedBinding());
 			$toManyRelations->add($relation);
 		}
 
@@ -111,22 +103,15 @@ final class RelationRepresentationSynchronizer
 	 */
 	private function syncOne(
 		object $representation,
-		RepresentationRelationBinding $relationBinding,
+		RepresentationRelationStateItem $relationItem,
 		RelationStateStore $toOneRelations,
 		RepresentationStore $states,
 		array &$touched,
 		array &$touchedIds,
 	): void {
-		$relationRef = $relationBinding->getRelation();
-		if ($relationRef->isTemplate()) {
-			throw new SyncException(sprintf(
-				"Representation relation path '%s' must target a concrete record before graph synchronization.",
-				$relationBinding->getPath()
-			));
-		}
-
-		$owner = $relationRef->getState();
-		$relationName = $relationRef->getRelationName();
+		$relationBinding = $relationItem->getBinding();
+		$owner = $relationItem->getOwnerRecord();
+		$relationName = $relationItem->getRelationName();
 
 		try {
 			$target = $this->reader->readTarget($representation, $relationBinding, $this->syncError(...));

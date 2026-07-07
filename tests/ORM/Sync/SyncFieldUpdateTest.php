@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\Sync\SyncFieldUpdate;
@@ -19,7 +18,7 @@ final class SyncFieldUpdateTest extends TestCase
 	public function testExposesRecordFieldValueAndBinding(): void
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
-		$binding = new RepresentationFieldBinding('name', RecordFieldRef::forState($record, 'name'));
+		$binding = new RepresentationFieldBinding('name', $record->getCollection(), 'name');
 		$update = new SyncFieldUpdate($record, 'name', 'A2', $binding);
 
 		self::assertSame($record, $update->getRecord());
@@ -31,7 +30,7 @@ final class SyncFieldUpdateTest extends TestCase
 	public function testRejectsEmptyField(): void
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
-		$binding = new RepresentationFieldBinding('name', RecordFieldRef::forState($record, 'name'));
+		$binding = new RepresentationFieldBinding('name', $record->getCollection(), 'name');
 
 		$this->expectException(SyncException::class);
 		new SyncFieldUpdate($record, '', 'A2', $binding);
@@ -40,7 +39,7 @@ final class SyncFieldUpdateTest extends TestCase
 	public function testDoesNotMutateRecord(): void
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
-		$binding = new RepresentationFieldBinding('name', RecordFieldRef::forState($record, 'name'));
+		$binding = new RepresentationFieldBinding('name', $record->getCollection(), 'name');
 
 		new SyncFieldUpdate($record, 'name', 'A2', $binding);
 

@@ -9,8 +9,6 @@ use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\State\RecordFieldRef;
-use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
@@ -37,7 +35,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 	{
 		$owner = RecordState::new($this->users());
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::forState($owner, 'name')));
+		$binding->addField(new RepresentationFieldBinding('name', $owner->getCollection(), 'name'));
 		$toManyRelations = new RelationStateStore();
 
 		$touched = $this->sync(
@@ -76,8 +74,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$binding = new RepresentationBinding();
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			RecordRelationRef::forCollection($this->users(), 'posts'),
-			RepresentationRelationCardinality::ONE,
+			$this->users(), 'posts',
 			$this->postBinding()
 		));
 
@@ -139,8 +136,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$binding->addRelation($this->relationBinding($owner, RepresentationRelationCardinality::MANY));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'author',
-			RecordRelationRef::forState($owner, 'author'),
-			RepresentationRelationCardinality::ONE,
+			$this->posts(), 'author',
 			$this->postBinding()
 		));
 
@@ -175,8 +171,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$binding = new RepresentationBinding();
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			RecordRelationRef::forCollection($this->users(), 'posts'),
-			RepresentationRelationCardinality::MANY,
+			$this->users(), 'posts',
 			$this->postBinding()
 		));
 
@@ -335,8 +330,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$binding = new RepresentationBinding();
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			RecordRelationRef::forState($owner, 'posts'),
-			RepresentationRelationCardinality::MANY,
+			$owner->getCollection(), 'posts',
 			$relatedBinding
 		));
 
@@ -396,8 +390,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$binding = new RepresentationBinding();
 		$binding->addRelation(new RepresentationRelationBinding(
 			'author.profile',
-			RecordRelationRef::forState($owner, 'author'),
-			RepresentationRelationCardinality::ONE,
+			$this->posts(), 'author',
 			$this->profileBinding()
 		));
 
@@ -458,7 +451,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$binding = new RepresentationBinding();
 		$binding->addRelation($this->relationBinding($owner, RepresentationRelationCardinality::MANY, $fullyLoaded));
 
-		return $this->tracked($this->representation($values), $binding);
+		return $this->tracked($this->representation($values), $binding, [$owner]);
 	}
 
 	/**
@@ -469,7 +462,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$binding = new RepresentationBinding();
 		$binding->addRelation($this->relationBinding($owner, RepresentationRelationCardinality::ONE));
 
-		return $this->tracked($this->representation($values), $binding);
+		return $this->tracked($this->representation($values), $binding, [$owner]);
 	}
 
 	private function relationBinding(
@@ -479,10 +472,9 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 	): RepresentationRelationBinding {
 		return new RepresentationRelationBinding(
 			'posts',
-			RecordRelationRef::forState($owner, 'posts'),
-			$cardinality,
+			$owner->getCollection(),
+			$cardinality === RepresentationRelationCardinality::ONE ? 'author' : 'posts',
 			$this->postBinding(),
-			$fullyLoaded
 		);
 	}
 

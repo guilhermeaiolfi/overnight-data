@@ -8,11 +8,12 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\SessionContext;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationFieldStateItem;
+use ON\Data\ORM\State\RepresentationRelationStateItem;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
 use stdClass;
@@ -68,7 +69,8 @@ trait OrmFixture
 
 	protected function users(): CollectionInterface
 	{
-		return (new Registry())
+		$registry = new Registry();
+		$users = $registry
 			->collection('users')
 			->primaryKey('id')
 			->field('tenant_id', 'int')->end()
@@ -77,26 +79,40 @@ trait OrmFixture
 			->field('email', 'string')->end()
 			->field('user_id', 'int')->end()
 			->field('manager_id', 'int')->end();
+		$users->hasMany('posts', 'posts');
+		$users->hasOne('profile', 'profiles');
+
+		return $users;
 	}
 
 	protected function posts(): CollectionInterface
 	{
-		return (new Registry())
+		$registry = new Registry();
+		$posts = $registry
 			->collection('posts')
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('title', 'string')->end()
 			->field('body', 'string')->end()
 			->field('user_id', 'int')->end();
+		$posts->belongsTo('author', 'users');
+		$posts->hasMany('comments', 'comments');
+		$posts->hasMany('tags', 'tags');
+
+		return $posts;
 	}
 
 	protected function profiles(): CollectionInterface
 	{
-		return (new Registry())
+		$registry = new Registry();
+		$profiles = $registry
 			->collection('profiles')
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('label', 'string')->end();
+		$profiles->belongsTo('user', 'users');
+
+		return $profiles;
 	}
 
 	protected function comments(): CollectionInterface
@@ -111,7 +127,7 @@ trait OrmFixture
 	protected function userBinding(): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
+		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
 
 		return $binding;
 	}
@@ -119,8 +135,8 @@ trait OrmFixture
 	protected function userBindingWithId(): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($this->users(), 'id')));
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
+		$binding->addField(new RepresentationFieldBinding('id', $this->users(), 'id'));
+		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
 
 		return $binding;
 	}
@@ -128,7 +144,7 @@ trait OrmFixture
 	protected function postBinding(): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
+		$binding->addField(new RepresentationFieldBinding('title', $this->posts(), 'title'));
 
 		return $binding;
 	}
@@ -136,8 +152,8 @@ trait OrmFixture
 	protected function postBindingWithId(): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($this->posts(), 'id')));
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
+		$binding->addField(new RepresentationFieldBinding('id', $this->posts(), 'id'));
+		$binding->addField(new RepresentationFieldBinding('title', $this->posts(), 'title'));
 
 		return $binding;
 	}
@@ -145,7 +161,7 @@ trait OrmFixture
 	protected function profileBinding(): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('label', RecordFieldRef::template($this->profiles(), 'label')));
+		$binding->addField(new RepresentationFieldBinding('label', $this->profiles(), 'label'));
 
 		return $binding;
 	}
@@ -153,7 +169,7 @@ trait OrmFixture
 	protected function commentBinding(): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('body', RecordFieldRef::template($this->comments(), 'body')));
+		$binding->addField(new RepresentationFieldBinding('body', $this->comments(), 'body'));
 
 		return $binding;
 	}
@@ -161,7 +177,7 @@ trait OrmFixture
 	protected function userBindingFor(RecordState $record): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::forState($record, 'name')));
+		$binding->addField(new RepresentationFieldBinding('name', $record->getCollection(), 'name'));
 
 		return $binding;
 	}
@@ -169,35 +185,73 @@ trait OrmFixture
 	protected function postBindingFor(RecordState $record): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::forState($record, 'title')));
+		$binding->addField(new RepresentationFieldBinding('title', $record->getCollection(), 'title'));
 
 		return $binding;
 	}
 
 	/**
-	 * @param array<string, int> $baselineRevisions
+	 * @param list<RecordState> $records
 	 */
 	protected function tracked(
 		object $representation,
 		RepresentationBinding $binding,
-		array $baselineRevisions = [],
+		array $records = [],
 	): RepresentationState {
 		return RepresentationStateObjectRegistry::remember(
 			$representation,
-			new RepresentationState($binding, $baselineRevisions)
+			new RepresentationState($binding, $this->fieldItemsFor($binding, $records), $this->relationItemsFor($binding, $records))
 		);
 	}
 
 	/**
-	 * @return array<string, int>
+	 * @param list<RecordState> $records
+	 * @return list<RepresentationFieldStateItem>
 	 */
-	protected function baselineRevisions(RepresentationBinding $binding): array
+	protected function fieldItemsFor(RepresentationBinding $binding, array $records): array
 	{
-		$baselineRevisions = [];
+		$items = [];
 		foreach ($binding->getFields() as $fieldBinding) {
-			$baselineRevisions[$fieldBinding->getField()->getRecordHash()] = 1;
+			foreach ($records as $record) {
+				if ($record->getCollection()->getName() !== $fieldBinding->getCollectionName()) {
+					continue;
+				}
+
+				$items[] = new RepresentationFieldStateItem(
+					$fieldBinding,
+					$record,
+					$fieldBinding->getFieldName(),
+					$record->getRevision()
+				);
+				break;
+			}
 		}
 
-		return $baselineRevisions;
+		return $items;
+	}
+
+	/**
+	 * @param list<RecordState> $records
+	 * @return list<RepresentationRelationStateItem>
+	 */
+	protected function relationItemsFor(RepresentationBinding $binding, array $records): array
+	{
+		$items = [];
+		foreach ($binding->getRelations() as $relationBinding) {
+			foreach ($records as $record) {
+				if ($record->getCollection()->getName() !== $relationBinding->getOwnerCollectionName()) {
+					continue;
+				}
+
+				$items[] = new RepresentationRelationStateItem(
+					$relationBinding,
+					$record,
+					$relationBinding->getRelationName()
+				);
+				break;
+			}
+		}
+
+		return $items;
 	}
 }

@@ -77,7 +77,7 @@ final class AdoptionRecordResolver
 	): array {
 		$values = $key->getValues();
 		foreach ($binding->getFields() as $fieldBinding) {
-			$fieldName = $fieldBinding->getField()->getFieldName();
+			$fieldName = $fieldBinding->getFieldName();
 
 			try {
 				$values[$fieldName] = $this->reader->readPath($representation, $fieldBinding->getPath());
@@ -92,13 +92,11 @@ final class AdoptionRecordResolver
 	{
 		$collection = null;
 		foreach ($binding->getFields() as $fieldBinding) {
-			$field = $fieldBinding->getField();
-			$collection = $this->mergeCollection($collection, $field->getCollection(), $fieldBinding->getPath(), $isRoot);
+			$collection = $this->mergeCollection($collection, $fieldBinding->getCollection(), $fieldBinding->getPath(), $isRoot);
 		}
 
 		foreach ($binding->getRelations() as $relationBinding) {
-			$relation = $relationBinding->getRelation();
-			$collection = $this->mergeCollection($collection, $relation->getCollection(), $relationBinding->getPath(), $isRoot);
+			$collection = $this->mergeCollection($collection, $relationBinding->getOwnerCollection(), $relationBinding->getPath(), $isRoot);
 		}
 
 		if (! $collection instanceof CollectionInterface) {
@@ -122,9 +120,8 @@ final class AdoptionRecordResolver
 	): ?array {
 		$pathsByField = [];
 		foreach ($binding->getFields() as $fieldBinding) {
-			$field = $fieldBinding->getField();
-			if ($field->getCollectionName() === $collection->getName()) {
-				$pathsByField[$field->getFieldName()] = $fieldBinding->getPath();
+			if ($fieldBinding->getCollectionName() === $collection->getName()) {
+				$pathsByField[$fieldBinding->getFieldName()] = $fieldBinding->getPath();
 			}
 		}
 
@@ -186,7 +183,7 @@ final class AdoptionRecordResolver
 		$values = [];
 		$primaryKey = array_flip($collection->getPrimaryKey());
 		foreach ($binding->getFields() as $fieldBinding) {
-			$fieldName = $fieldBinding->getField()->getFieldName();
+			$fieldName = $fieldBinding->getFieldName();
 
 			try {
 				$value = $this->reader->readPath($representation, $fieldBinding->getPath());

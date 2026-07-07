@@ -12,6 +12,7 @@ namespace ON\Data\ORM\State;
  * and consumed by sync, adoption, and relation runtime state — separate from
  * query selections and mapper hydration.
  */
+use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
 
 final class RepresentationBinding
@@ -76,6 +77,26 @@ final class RepresentationBinding
 			$this->fields,
 			static fn (RepresentationFieldBinding $binding): bool => $binding->isReadOnly()
 		));
+	}
+
+	public function getFieldFor(
+		CollectionInterface|string $collection,
+		string $fieldName,
+	): ?RepresentationFieldBinding {
+		$collectionName = $collection instanceof CollectionInterface ? $collection->getName() : $collection;
+
+		foreach ($this->fields as $field) {
+			if ($field->getCollectionName() === $collectionName && $field->getFieldName() === $fieldName) {
+				return $field;
+			}
+		}
+
+		return null;
+	}
+
+	public function hasFieldFor(CollectionInterface|string $collection, string $fieldName): bool
+	{
+		return $this->getFieldFor($collection, $fieldName) instanceof RepresentationFieldBinding;
 	}
 
 	public function addExpression(RepresentationExpressionBinding $binding): void
@@ -151,54 +172,6 @@ final class RepresentationBinding
 	public function getPaths(): array
 	{
 		return $this->paths;
-	}
-
-	public function applyToRecordState(RecordState $state, bool $skipWhenMissing = false): self
-	{
-		$applied = new self();
-		foreach ($this->getFields() as $binding) {
-			$field = $binding->getField();
-			if (! $field->isTemplate()) {
-				throw new StateException(sprintf("Representation binding path '%s' already targets a concrete record.", $binding->getPath()));
-			}
-
-			if ($field->getCollectionName() !== $state->getCollection()->getName()) {
-				throw new StateException(sprintf(
-					"Representation binding path '%s' targets collection '%s', not '%s'.",
-					$binding->getPath(),
-					$field->getCollectionName(),
-					$state->getCollection()->getName()
-				));
-			}
-
-			$applied->addField($binding
-				->withField(RecordFieldRef::forState($state, $field->getFieldName()))
-				->withSkipWhenMissing($skipWhenMissing || $binding->shouldSkipWhenMissing()));
-		}
-
-		foreach ($this->getExpressions() as $binding) {
-			$applied->addExpression($binding);
-		}
-
-		foreach ($this->getRelations() as $binding) {
-			$relation = $binding->getRelation();
-			if (! $relation->isTemplate()) {
-				throw new StateException(sprintf("Representation binding path '%s' already targets a concrete record.", $binding->getPath()));
-			}
-
-			if ($relation->getCollectionName() !== $state->getCollection()->getName()) {
-				throw new StateException(sprintf(
-					"Representation binding path '%s' targets collection '%s', not '%s'.",
-					$binding->getPath(),
-					$relation->getCollectionName(),
-					$state->getCollection()->getName()
-				));
-			}
-
-			$applied->addRelation($binding->withRelation(RecordRelationRef::forState($state, $relation->getRelationName())));
-		}
-
-		return $applied;
 	}
 
 	private function assertPathIsAvailable(string $path): void

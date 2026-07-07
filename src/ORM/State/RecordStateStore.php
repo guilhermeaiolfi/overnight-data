@@ -87,29 +87,11 @@ final class RecordStateStore
 		$this->statesByKeyHash[$hash] = $state;
 	}
 
-	public function getForField(RecordFieldRef $field): ?RecordState
-	{
-		if ($field->hasState()) {
-			return $field->getState();
-		}
-
-		$key = $field->getKey();
-		if ($key instanceof Key) {
-			return $this->getByKey($key);
-		}
-
-		return null;
-	}
-
 	public function getFromRepresentation(RepresentationState $state): ?RecordState
 	{
 		$record = null;
-		foreach ($state->getBinding()->getFields() as $binding) {
-			$resolved = $this->getForField($binding->getField());
-			if (! $resolved instanceof RecordState) {
-				continue;
-			}
-
+		foreach ($state->getFieldItems() as $item) {
+			$resolved = $item->getRecord();
 			if ($record === null) {
 				$record = $resolved;
 
@@ -121,13 +103,8 @@ final class RecordStateStore
 			}
 		}
 
-		foreach ($state->getBinding()->getRelations() as $binding) {
-			$relation = $binding->getRelation();
-			if (! $relation->hasState()) {
-				continue;
-			}
-
-			$resolved = $relation->getState();
+		foreach ($state->getRelationItems() as $item) {
+			$resolved = $item->getOwnerRecord();
 			if ($record === null) {
 				$record = $resolved;
 
@@ -140,16 +117,6 @@ final class RecordStateStore
 		}
 
 		return $record;
-	}
-
-	public function requireForField(RecordFieldRef $field): RecordState
-	{
-		$state = $this->getForField($field);
-		if ($state instanceof RecordState) {
-			return $state;
-		}
-
-		throw new StateException(sprintf("Record state store cannot resolve record state for field '%s.%s'.", $field->getCollectionName(), $field->getFieldName()));
 	}
 
 	public function remove(Key $key): void

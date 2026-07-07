@@ -6,7 +6,6 @@ namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
@@ -26,7 +25,7 @@ final class SyncResultTest extends TestCase
 	public function testHasChangesIsTrueWhenScalarPlanHasUpdates(): void
 	{
 		$record = RecordState::new((new Registry())->collection('users')->field('name', 'string')->end());
-		$binding = new RepresentationFieldBinding('name', RecordFieldRef::forState($record, 'name'));
+		$binding = new RepresentationFieldBinding('name', $record->getCollection(), 'name');
 
 		self::assertTrue((new SyncResult([new SyncPlan([new SyncFieldUpdate($record, 'name', 'Ada', $binding)], [])], []))->hasChanges());
 	}

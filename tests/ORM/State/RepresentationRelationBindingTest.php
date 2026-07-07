@@ -6,95 +6,59 @@ namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
-use ON\Data\ORM\State\RepresentationRelationCardinality;
 use PHPUnit\Framework\TestCase;
 
 final class RepresentationRelationBindingTest extends TestCase
 {
-	public function testStoresPathRelationNameCardinalityRelatedBindingAndCollectionState(): void
+	public function testExposesStructuralRelationData(): void
 	{
+		$users = $this->users();
 		$relatedBinding = new RepresentationBinding();
-		$relation = RecordRelationRef::forCollection((new Registry())->collection('users'), 'posts');
-		$binding = new RepresentationRelationBinding(
-			'posts',
-			$relation,
-			RepresentationRelationCardinality::MANY,
-			$relatedBinding,
-			true
-		);
+		$binding = new RepresentationRelationBinding('posts', $users, 'posts', $relatedBinding, true);
 
 		self::assertSame('posts', $binding->getPath());
-		self::assertSame($relation, $binding->getRelation());
+		self::assertSame($users, $binding->getOwnerCollection());
+		self::assertSame('users', $binding->getOwnerCollectionName());
 		self::assertSame('posts', $binding->getRelationName());
-		self::assertSame(RepresentationRelationCardinality::MANY, $binding->getCardinality());
 		self::assertSame($relatedBinding, $binding->getRelatedBinding());
-		self::assertSame(true, $binding->isCollectionFullyLoaded());
+		self::assertTrue($binding->shouldSkipWhenMissing());
 	}
 
 	public function testRejectsEmptyPath(): void
 	{
 		$this->expectException(StateException::class);
-		$this->expectExceptionMessage('path');
 
-		new RepresentationRelationBinding('', $this->relation('posts'), RepresentationRelationCardinality::MANY, new RepresentationBinding());
+		new RepresentationRelationBinding('', $this->users(), 'posts', new RepresentationBinding());
 	}
 
-	public function testManyCardinalityUsesRelatedBindingAsReusableItemShape(): void
+	public function testRejectsEmptyRelationName(): void
 	{
-		$relatedBinding = new RepresentationBinding();
-		$binding = new RepresentationRelationBinding(
-			'posts',
-			$this->relation('posts'),
-			RepresentationRelationCardinality::MANY,
-			$relatedBinding
-		);
+		$this->expectException(StateException::class);
 
-		self::assertTrue($binding->isMany());
-		self::assertFalse($binding->isSingle());
-		self::assertSame($relatedBinding, $binding->getRelatedBinding());
+		new RepresentationRelationBinding('posts', $this->users(), '', new RepresentationBinding());
 	}
 
-	public function testOneCardinalityUsesRelatedBindingAsReusableTargetShape(): void
+	public function testDerivesCardinalityFromRelationDefinition(): void
 	{
-		$relatedBinding = new RepresentationBinding();
-		$binding = new RepresentationRelationBinding(
-			'author',
-			$this->relation('author'),
-			RepresentationRelationCardinality::ONE,
-			$relatedBinding
-		);
+		$users = $this->users();
+		$posts = new RepresentationRelationBinding('posts', $users, 'posts', new RepresentationBinding());
+		$profile = new RepresentationRelationBinding('profile', $users, 'profile', new RepresentationBinding());
 
-		self::assertFalse($binding->isMany());
-		self::assertTrue($binding->isSingle());
-		self::assertSame($relatedBinding, $binding->getRelatedBinding());
+		self::assertTrue($posts->isMany());
+		self::assertFalse($posts->isSingle());
+		self::assertTrue($profile->isSingle());
+		self::assertFalse($profile->isMany());
 	}
 
-	public function testWithRelationReturnsCopyWithNewRelationRef(): void
+	private function users(): \ON\Data\Definition\Collection\CollectionInterface
 	{
-		$binding = new RepresentationRelationBinding(
-			'posts',
-			$this->relation('posts'),
-			RepresentationRelationCardinality::MANY,
-			new RepresentationBinding(),
-			false
-		);
-		$nextRelation = RecordRelationRef::forCollection((new Registry())->collection('companies'), 'posts');
+		$registry = new Registry();
+		$users = $registry->collection('users')->primaryKey('id')->field('id')->end();
+		$users->hasMany('posts', 'posts');
+		$users->hasOne('profile', 'profiles');
 
-		$next = $binding->withRelation($nextRelation);
-
-		self::assertNotSame($binding, $next);
-		self::assertSame($nextRelation, $next->getRelation());
-		self::assertSame($binding->getPath(), $next->getPath());
-		self::assertSame($binding->getCardinality(), $next->getCardinality());
-		self::assertSame($binding->getRelatedBinding(), $next->getRelatedBinding());
-		self::assertSame($binding->isCollectionFullyLoaded(), $next->isCollectionFullyLoaded());
-	}
-
-	private function relation(string $relationName): RecordRelationRef
-	{
-		return RecordRelationRef::forCollection((new Registry())->collection('users'), $relationName);
+		return $users;
 	}
 }

@@ -6,7 +6,6 @@ namespace Tests\ON\Data\ORM\Compiler;
 
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompiler;
-use ON\Data\ORM\State\RepresentationRelationCardinality;
 use function ON\Data\Query\query;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
@@ -32,7 +31,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 
 		self::assertTrue($binding->hasField('name'));
 		self::assertTrue($binding->getField('name')->isWritable());
-		self::assertSame('name', $binding->getField('name')->getField()->getFieldName());
+		self::assertSame('name', $binding->getField('name')->getFieldName());
 	}
 
 	public function testUsesAliasAsRepresentationPathWhenSelectedFieldIsAliased(): void
@@ -45,7 +44,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 
 		self::assertTrue($binding->hasField('display_name'));
 		self::assertFalse($binding->hasField('name'));
-		self::assertSame('name', $binding->getField('display_name')->getField()->getFieldName());
+		self::assertSame('name', $binding->getField('display_name')->getFieldName());
 	}
 
 	public function testIncludesMissingPrimaryKeyFieldsAsReadOnly(): void
@@ -103,9 +102,9 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 
 		self::assertTrue($binding->hasField('id'));
 		self::assertTrue($binding->hasField('name'));
-		self::assertSame('users', $binding->getField('id')->getField()->getCollectionName());
-		self::assertSame('companies', $binding->getField('name')->getField()->getCollectionName());
-		self::assertSame('name', $binding->getField('name')->getField()->getFieldName());
+		self::assertSame('users', $binding->getField('id')->getCollectionName());
+		self::assertSame('companies', $binding->getField('name')->getCollectionName());
+		self::assertSame('name', $binding->getField('name')->getFieldName());
 
 		$internalSelections = $query->getSelections()->getByTag(SelectionTag::INTERNAL);
 		self::assertCount(1, $internalSelections);
@@ -147,10 +146,9 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		$posts = $binding->getRelation('posts');
 
 		self::assertSame('posts', $posts->getPath());
-		self::assertSame('users', $posts->getRelation()->getCollectionName());
-		self::assertSame('posts', $posts->getRelation()->getRelationName());
-		self::assertSame(RepresentationRelationCardinality::MANY, $posts->getCardinality());
-		self::assertTrue($posts->isCollectionFullyLoaded());
+		self::assertSame('users', $posts->getOwnerCollectionName());
+		self::assertSame('posts', $posts->getRelationName());
+		self::assertTrue($posts->isMany());
 		self::assertTrue($posts->getRelatedBinding()->hasField('title'));
 		self::assertTrue($posts->getRelatedBinding()->hasField('id'));
 		self::assertTrue($posts->getRelatedBinding()->getField('id')->isReadOnly());
@@ -174,7 +172,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		self::assertTrue($posts->getField('title')->isWritable());
 	}
 
-	public function testRelationLoadWithoutLimitIsCollectionFullyLoadedForToManyRelations(): void
+	public function testRelationLoadCompilesStructuralToManyRelation(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
@@ -185,10 +183,10 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 
 		$binding = $this->compiler->compile($query);
 
-		self::assertTrue($binding->getRelation('posts')->isCollectionFullyLoaded());
+		self::assertTrue($binding->getRelation('posts')->isMany());
 	}
 
-	public function testRelationWithLimitIsNotCollectionFullyLoaded(): void
+	public function testRelationWithLimitStillCompilesStructuralRelation(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
@@ -200,10 +198,10 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 
 		$binding = $this->compiler->compile($query);
 
-		self::assertFalse($binding->getRelation('posts')->isCollectionFullyLoaded());
+		self::assertTrue($binding->getRelation('posts')->isMany());
 	}
 
-	public function testRelationWithOffsetIsNotCollectionFullyLoaded(): void
+	public function testRelationWithOffsetStillCompilesStructuralRelation(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
@@ -215,10 +213,10 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 
 		$binding = $this->compiler->compile($query);
 
-		self::assertFalse($binding->getRelation('posts')->isCollectionFullyLoaded());
+		self::assertTrue($binding->getRelation('posts')->isMany());
 	}
 
-	public function testRelationWithConditionsIsNotCollectionFullyLoaded(): void
+	public function testRelationWithConditionsStillCompilesStructuralRelation(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
@@ -229,10 +227,10 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 
 		$binding = $this->compiler->compile($query);
 
-		self::assertFalse($binding->getRelation('posts')->isCollectionFullyLoaded());
+		self::assertTrue($binding->getRelation('posts')->isMany());
 	}
 
-	public function testToOneRelationDoesNotUseCollectionFullyLoadedSemantics(): void
+	public function testToOneRelationDerivesSingleCardinalityFromDefinition(): void
 	{
 		$registry = $this->makeRegistryWithProfile();
 		$users = $registry->getCollection('users');
@@ -244,8 +242,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		$binding = $this->compiler->compile($query);
 		$profile = $binding->getRelation('profile');
 
-		self::assertSame(RepresentationRelationCardinality::ONE, $profile->getCardinality());
-		self::assertFalse($profile->isCollectionFullyLoaded());
+		self::assertTrue($profile->isSingle());
 	}
 
 	public function testNestedRelationCompilesIntoNestedRelatedBindingNotFlattenedRootPaths(): void

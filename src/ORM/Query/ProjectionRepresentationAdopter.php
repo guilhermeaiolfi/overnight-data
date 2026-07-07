@@ -16,11 +16,11 @@ use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityMap;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\SessionContext;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\Sync\RepresentationReader;
 
@@ -60,10 +60,9 @@ final class ProjectionRepresentationAdopter
 			$records,
 			$sourceRow,
 		);
-		$appliedBinding = $this->applyProjectionBinding($binding, $recordsByCollection);
 		$state = new RepresentationState(
-			$appliedBinding,
-			$this->buildBaselineRevisions($appliedBinding, $recordsByCollection),
+			$binding,
+			$this->buildFieldItems($binding, $recordsByCollection),
 		);
 
 		foreach ($recordsByCollection as $record) {
@@ -73,45 +72,6 @@ final class ProjectionRepresentationAdopter
 		$representations->add($representation, $state);
 
 		return $state;
-	}
-
-	/**
-	 * @param array<string, RecordState> $recordsByCollection
-	 */
-	private function applyProjectionBinding(
-		RepresentationBinding $binding,
-		array $recordsByCollection,
-	): RepresentationBinding {
-		$applied = new RepresentationBinding();
-
-		foreach ($binding->getFields() as $fieldBinding) {
-			$field = $fieldBinding->getField();
-
-			if (! $field->isTemplate()) {
-				throw new StateException(sprintf(
-					"Representation binding path '%s' already targets a concrete record.",
-					$fieldBinding->getPath(),
-				));
-			}
-
-			$record = $recordsByCollection[$field->getCollectionName()] ?? null;
-
-			if (! $record instanceof RecordState) {
-				throw new SyncException(sprintf(
-					'Cannot adopt projection representation because field path "%s" targets unresolved collection "%s".',
-					$fieldBinding->getPath(),
-					$field->getCollectionName(),
-				));
-			}
-
-			$applied->addField($fieldBinding->withField(RecordFieldRef::forState($record, $field->getFieldName())));
-		}
-
-		foreach ($binding->getExpressions() as $expressionBinding) {
-			$applied->addExpression($expressionBinding);
-		}
-
-		return $applied;
 	}
 
 	/**
@@ -127,7 +87,7 @@ final class ProjectionRepresentationAdopter
 		$resolved = [];
 
 		foreach ($this->groupFieldBindingsByCollection($binding) as $collectionName => $fieldBindings) {
-			$collection = $fieldBindings[0]->getField()->getCollection();
+			$collection = $fieldBindings[0]->getCollection();
 			$collectionBinding = $this->bindingForFields($binding, $fieldBindings);
 			$resolved[$collectionName] = $this->resolveRecord(
 				$representation,
@@ -179,7 +139,7 @@ final class ProjectionRepresentationAdopter
 		$grouped = [];
 
 		foreach ($binding->getFields() as $fieldBinding) {
-			$collectionName = $fieldBinding->getField()->getCollectionName();
+			$collectionName = $fieldBinding->getCollectionName();
 			$grouped[$collectionName][] = $fieldBinding;
 		}
 
@@ -220,10 +180,8 @@ final class ProjectionRepresentationAdopter
 		$pathsByField = [];
 
 		foreach ($binding->getFields() as $fieldBinding) {
-			$field = $fieldBinding->getField();
-
-			if ($field->getCollectionName() === $collection->getName()) {
-				$pathsByField[$field->getFieldName()] = $fieldBinding->getPath();
+			if ($fieldBinding->getCollectionName() === $collection->getName()) {
+				$pathsByField[$fieldBinding->getFieldName()] = $fieldBinding->getPath();
 			}
 		}
 
@@ -286,13 +244,11 @@ final class ProjectionRepresentationAdopter
 		$primaryKey = array_flip($collection->getPrimaryKey());
 
 		foreach ($binding->getFields() as $fieldBinding) {
-			$field = $fieldBinding->getField();
-
-			if ($field->getCollectionName() !== $collection->getName()) {
+			if ($fieldBinding->getCollectionName() !== $collection->getName()) {
 				continue;
 			}
 
-			$fieldName = $field->getFieldName();
+			$fieldName = $fieldBinding->getFieldName();
 			$value = $this->readValue($representation, $fieldBinding->getPath(), $sourceRow);
 
 			if ($value === null && array_key_exists($fieldName, $primaryKey)) {
@@ -325,26 +281,33 @@ final class ProjectionRepresentationAdopter
 	/**
 	 * @param array<string, RecordState> $recordsByCollection
 	 *
-	 * @return array<string, int>
+	 * @return list<RepresentationFieldStateItem>
 	 */
-	private function buildBaselineRevisions(
+	private function buildFieldItems(
 		RepresentationBinding $binding,
 		array $recordsByCollection,
 	): array {
-		$baselineRevisions = [];
+		$items = [];
 
 		foreach ($binding->getFields() as $fieldBinding) {
-			$recordHash = $fieldBinding->getField()->getRecordHash();
+			$record = $recordsByCollection[$fieldBinding->getCollectionName()] ?? null;
 
-			if (! array_key_exists($recordHash, $baselineRevisions)) {
-				$baselineRevisions[$recordHash] = $fieldBinding->getField()->getState()->getRevision();
+			if (! $record instanceof RecordState) {
+				throw new SyncException(sprintf(
+					'Cannot adopt projection representation because field path "%s" targets unresolved collection "%s".',
+					$fieldBinding->getPath(),
+					$fieldBinding->getCollectionName(),
+				));
 			}
+
+			$items[] = new RepresentationFieldStateItem(
+				$fieldBinding,
+				$record,
+				$fieldBinding->getFieldName(),
+				$record->getRevision()
+			);
 		}
 
-		foreach ($recordsByCollection as $record) {
-			$baselineRevisions[$record->getStateHash()] ??= $record->getRevision();
-		}
-
-		return $baselineRevisions;
+		return $items;
 	}
 }

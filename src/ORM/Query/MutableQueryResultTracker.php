@@ -90,7 +90,7 @@ final class MutableQueryResultTracker
 		$collections = [];
 
 		foreach ($binding->getFields() as $fieldBinding) {
-			$collections[$fieldBinding->getField()->getCollectionName()] = true;
+			$collections[$fieldBinding->getCollectionName()] = true;
 		}
 
 		return count($collections) > 1;

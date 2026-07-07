@@ -10,8 +10,6 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityMap;
 use ON\Data\ORM\Query\ProjectionRepresentationAdopter;
 use ON\Data\ORM\SessionContext;
-use ON\Data\ORM\State\RecordFieldRef;
-use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -200,8 +198,7 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$binding = $this->projectionBinding($users, $registry->getCollection('companies'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'company',
-			RecordRelationRef::forCollection($users, 'company'),
-			RepresentationRelationCardinality::ONE,
+			$users, 'company',
 			new RepresentationBinding(),
 		));
 		$context = new SessionContext();
@@ -265,8 +262,8 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		CollectionInterface $companies,
 	): RepresentationBinding {
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($users, 'id'), writable: false));
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($companies, 'name'), writable: true));
+		$binding->addField(new RepresentationFieldBinding('id', $users, 'id', writable: false));
+		$binding->addField(new RepresentationFieldBinding('name', $companies, 'name', writable: true));
 
 		return $binding;
 	}

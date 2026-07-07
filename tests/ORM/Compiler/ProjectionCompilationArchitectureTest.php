@@ -294,8 +294,8 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 
 		self::assertSame($queryBinding->getPaths(), $manualBinding->getPaths());
 		self::assertSame('display_name', $queryBinding->getPaths()[0]);
-		self::assertSame('name', $queryBinding->getField('display_name')->getField()->getFieldName());
-		self::assertSame('name', $manualBinding->getField('display_name')->getField()->getFieldName());
+		self::assertSame('name', $queryBinding->getField('display_name')->getFieldName());
+		self::assertSame('name', $manualBinding->getField('display_name')->getFieldName());
 		self::assertTrue($manualBinding->getField('display_name')->getField()->hasState());
 	}
 

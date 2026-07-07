@@ -6,8 +6,6 @@ namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\State\RecordFieldRef;
-use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
@@ -171,8 +169,8 @@ final class RepresentationReaderTest extends TestCase
 		$row->name = 'Ada';
 		$row->upperName = 'ADA';
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
-		$binding->addField(new RepresentationFieldBinding('upperName', RecordFieldRef::template($this->users(), 'name'), false));
+		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
+		$binding->addField(new RepresentationFieldBinding('upperName', $this->users(), 'name', false));
 
 		self::assertSame(
 			['name' => 'Ada', 'upperName' => 'ADA'],
@@ -186,8 +184,8 @@ final class RepresentationReaderTest extends TestCase
 		$row->email = 'ada@example.test';
 		$row->name = 'Ada';
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('email', RecordFieldRef::template($this->users(), 'email')));
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
+		$binding->addField(new RepresentationFieldBinding('email', $this->users(), 'email'));
+		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
 
 		self::assertSame(
 			['email' => 'ada@example.test', 'name' => 'Ada'],
@@ -242,7 +240,7 @@ final class RepresentationReaderTest extends TestCase
 	private function fieldBinding(string $path): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding($path, RecordFieldRef::template($this->users(), 'name')));
+		$binding->addField(new RepresentationFieldBinding($path, $this->users(), 'name'));
 
 		return $binding;
 	}
@@ -251,8 +249,7 @@ final class RepresentationReaderTest extends TestCase
 	{
 		return new RepresentationRelationBinding(
 			'posts',
-			RecordRelationRef::forState(RecordState::new($this->users()), 'posts'),
-			RepresentationRelationCardinality::MANY,
+			$this->users(), 'posts',
 			$this->postBinding()
 		);
 	}
@@ -261,8 +258,7 @@ final class RepresentationReaderTest extends TestCase
 	{
 		return new RepresentationRelationBinding(
 			'profile',
-			RecordRelationRef::forState(RecordState::new($this->users()), 'profile'),
-			RepresentationRelationCardinality::ONE,
+			$this->users(), 'profile',
 			$this->profileBinding()
 		);
 	}

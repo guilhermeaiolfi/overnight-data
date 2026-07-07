@@ -35,17 +35,17 @@ final class PathResolver
 		}
 
 		$relationBinding = $this->relationBindingFromPath($ownerState->getBinding(), $path);
-		$relation = $relationBinding->getRelation();
-		if (! $relation->hasState()) {
-			throw new StateException(sprintf("Cannot use fromPath('%s') because the owner relation binding is not bound to a concrete record state.", $path));
+		if (! $ownerState->hasRelationItem($relationBinding->getPath())) {
+			throw new StateException(sprintf("Cannot use fromPath('%s') because the owner relation path is not attached to a concrete record state.", $path));
 		}
+		$relationItem = $ownerState->getRelationItem($relationBinding->getPath());
 
 		return new PathResolution(
 			$owner,
-			$relation->getState(),
+			$relationItem->getOwnerRecord(),
 			$path,
 			$relationBinding->getRelationName(),
-			$relationBinding->getCardinality(),
+			$relationBinding->isMany() ? RepresentationRelationCardinality::MANY : RepresentationRelationCardinality::ONE,
 			$relationBinding->getRelatedBinding()
 		);
 	}
@@ -53,11 +53,11 @@ final class PathResolver
 	public function collectionFromBinding(RepresentationBinding $binding): CollectionInterface
 	{
 		foreach ($binding->getFields() as $fieldBinding) {
-			return $fieldBinding->getField()->getCollection();
+			return $fieldBinding->getCollection();
 		}
 
 		foreach ($binding->getRelations() as $relationBinding) {
-			return $relationBinding->getRelation()->getCollection();
+			return $relationBinding->getOwnerCollection();
 		}
 
 		throw new StateException('Cannot resolve relation target collection from an empty related binding.');
@@ -83,7 +83,7 @@ final class PathResolver
 			}
 
 			$relation = $current->getRelation($segment);
-			if ($relation->getCardinality() === RepresentationRelationCardinality::MANY && $index !== $lastIndex) {
+			if ($relation->isMany() && $index !== $lastIndex) {
 				throw new StateException(sprintf("Cannot use fromPath('%s') through MANY relation segment '%s' without a concrete relation item.", $path, $segment));
 			}
 

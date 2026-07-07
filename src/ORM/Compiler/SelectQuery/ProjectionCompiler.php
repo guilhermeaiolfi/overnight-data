@@ -15,10 +15,8 @@ namespace ON\Data\ORM\Compiler\SelectQuery;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Compiler\ProjectionBindingAssembler;
-use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
-use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Relation\RelationRef;
@@ -254,10 +252,9 @@ final class ProjectionCompiler
 
 			$parentBinding->addRelation(new RepresentationRelationBinding(
 				$relationName,
-				RecordRelationRef::forCollection($ownerCollection, $relationName),
-				$this->relationCardinality($relationDefinition),
+				$ownerCollection,
+				$relationName,
 				$relatedBinding,
-				$this->isCollectionFullyLoaded($selection, $relationDefinition),
 			));
 
 			$bindingsByPath[$pathKey] = $relatedBinding;
@@ -308,27 +305,4 @@ final class ProjectionCompiler
 		return $relation->getCollection();
 	}
 
-	private function relationCardinality(RelationInterface $relation): RepresentationRelationCardinality
-	{
-		return $relation->getCardinality() === 'many'
-			? RepresentationRelationCardinality::MANY
-			: RepresentationRelationCardinality::ONE;
-	}
-
-	private function isCollectionFullyLoaded(RelationSelection $selection, RelationInterface $relation): bool
-	{
-		if ($this->relationCardinality($relation) === RepresentationRelationCardinality::ONE) {
-			return false;
-		}
-
-		if ($selection->getLimit() !== null || $selection->hasOffset()) {
-			return false;
-		}
-
-		if ($selection->getConditions() !== []) {
-			return false;
-		}
-
-		return $selection->isLoaded();
-	}
 }

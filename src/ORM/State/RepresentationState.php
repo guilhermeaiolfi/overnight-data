@@ -8,17 +8,22 @@ use ON\Data\ORM\Exception\StateException;
 
 final class RepresentationState
 {
-	/** @var array<string, int> */
-	private array $baselineRevisions;
+	/** @var array<string, RepresentationFieldStateItem> */
+	private array $fieldItems = [];
+	/** @var array<string, RepresentationRelationStateItem> */
+	private array $relationItems = [];
 
 	/**
-	 * @param array<string, int> $baselineRevisions
+	 * @param array<string, RepresentationFieldStateItem>|list<RepresentationFieldStateItem> $fieldItems
+	 * @param array<string, RepresentationRelationStateItem>|list<RepresentationRelationStateItem> $relationItems
 	 */
 	public function __construct(
 		private RepresentationBinding $binding,
-		array $baselineRevisions,
+		array $fieldItems,
+		array $relationItems = [],
 	) {
-		$this->baselineRevisions = $this->normalizeBaselineRevisions($baselineRevisions);
+		$this->fieldItems = $this->normalizeFieldItems($fieldItems);
+		$this->relationItems = $this->normalizeRelationItems($relationItems);
 	}
 
 	public function getBinding(): RepresentationBinding
@@ -26,57 +31,111 @@ final class RepresentationState
 		return $this->binding;
 	}
 
-	/**
-	 * @return array<string, int>
-	 */
-	public function getBaselineRevisions(): array
+	public function hasFieldItem(string $path): bool
 	{
-		return $this->baselineRevisions;
+		return array_key_exists($path, $this->fieldItems);
 	}
 
-	public function hasBaselineRevision(string $recordHash): bool
+	public function getFieldItem(string $path): RepresentationFieldStateItem
 	{
-		return array_key_exists($recordHash, $this->baselineRevisions);
-	}
-
-	public function getBaselineRevision(string $recordHash): int
-	{
-		if (! array_key_exists($recordHash, $this->baselineRevisions)) {
-			throw new StateException(sprintf("Representation state has no baseline revision for record '%s'.", $recordHash));
+		if (! array_key_exists($path, $this->fieldItems)) {
+			throw new StateException(sprintf("Representation state does not contain field item path '%s'.", $path));
 		}
 
-		return $this->baselineRevisions[$recordHash];
-	}
-
-	public function getBaselineRevisionFor(RecordFieldRef $field): int
-	{
-		return $this->getBaselineRevision($field->getRecordHash());
+		return $this->fieldItems[$path];
 	}
 
 	/**
-	 * @param array<string, int> $baselineRevisions
+	 * @return list<RepresentationFieldStateItem>
 	 */
-	public function replaceBaselineRevisions(array $baselineRevisions): void
+	public function getFieldItems(): array
 	{
-		$this->baselineRevisions = $this->normalizeBaselineRevisions($baselineRevisions);
+		return array_values($this->fieldItems);
 	}
 
 	/**
-	 * @param array<string, int> $baselineRevisions
-	 * @return array<string, int>
+	 * @return list<RepresentationFieldStateItem>
 	 */
-	private function normalizeBaselineRevisions(array $baselineRevisions): array
+	public function getWritableFieldItems(): array
 	{
-		foreach ($baselineRevisions as $recordHash => $revision) {
-			if (! is_string($recordHash) || $recordHash === '') {
-				throw new StateException('Representation state baseline revision record hashes must be non-empty strings.');
-			}
+		return array_values(array_filter(
+			$this->fieldItems,
+			static fn (RepresentationFieldStateItem $item): bool => $item->getBinding()->isWritable()
+		));
+	}
 
-			if ($revision < 1) {
-				throw new StateException(sprintf("Representation state baseline revision for record '%s' must be positive.", $recordHash));
-			}
+	public function hasRelationItem(string $path): bool
+	{
+		return array_key_exists($path, $this->relationItems);
+	}
+
+	public function getRelationItem(string $path): RepresentationRelationStateItem
+	{
+		if (! array_key_exists($path, $this->relationItems)) {
+			throw new StateException(sprintf("Representation state does not contain relation item path '%s'.", $path));
 		}
 
-		return $baselineRevisions;
+		return $this->relationItems[$path];
+	}
+
+	/**
+	 * @return list<RepresentationRelationStateItem>
+	 */
+	public function getRelationItems(): array
+	{
+		return array_values($this->relationItems);
+	}
+
+	/**
+	 * Deliberate post-sync acknowledgement only.
+	 *
+	 * @param array<string, RecordState> $touchedRecords
+	 */
+	public function acceptSyncedRecords(array $touchedRecords): void
+	{
+		foreach ($this->fieldItems as $path => $item) {
+			$record = $item->getRecord();
+			if (! array_key_exists($record->getStateHash(), $touchedRecords)) {
+				continue;
+			}
+
+			$this->fieldItems[$path] = $item->withBaselineRevision($record->getRevision());
+		}
+	}
+
+	/**
+	 * @param array<string, RepresentationFieldStateItem>|list<RepresentationFieldStateItem> $items
+	 * @return array<string, RepresentationFieldStateItem>
+	 */
+	private function normalizeFieldItems(array $items): array
+	{
+		$normalized = [];
+		foreach ($items as $item) {
+			if (! $item instanceof RepresentationFieldStateItem) {
+				throw new StateException('Representation state field items must be RepresentationFieldStateItem instances.');
+			}
+
+			$normalized[$item->getPath()] = $item;
+		}
+
+		return $normalized;
+	}
+
+	/**
+	 * @param array<string, RepresentationRelationStateItem>|list<RepresentationRelationStateItem> $items
+	 * @return array<string, RepresentationRelationStateItem>
+	 */
+	private function normalizeRelationItems(array $items): array
+	{
+		$normalized = [];
+		foreach ($items as $item) {
+			if (! $item instanceof RepresentationRelationStateItem) {
+				throw new StateException('Representation state relation items must be RepresentationRelationStateItem instances.');
+			}
+
+			$normalized[$item->getPath()] = $item;
+		}
+
+		return $normalized;
 	}
 }

@@ -6,14 +6,12 @@ namespace ON\Data\ORM\Compiler;
 
 /**
  * Shared final step of projection compilation: turns normalized field shapes and
- * template scalar declarations into RepresentationFieldBinding entries.
+ * template scalar declarations into structural RepresentationFieldBinding entries.
  *
  * Exists so SelectQuery and manual projection compilers share one place that
- * resolves sources, chooses template vs concrete RecordFieldRef, and applies
- * writability / skip-when-missing flags.
+ * resolves sources and applies writability / skip-when-missing flags.
  */
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 
@@ -48,14 +46,10 @@ final class ProjectionBindingAssembler
 			}
 
 			$resolved = $resolver->resolve($shape->getSource());
-			$record = $resolved->getRecordState();
-			$recordField = $record === null
-				? RecordFieldRef::template($resolved->getCollection(), $shape->getFieldName())
-				: RecordFieldRef::forState($record, $shape->getFieldName());
-
 			$binding->addField(new RepresentationFieldBinding(
 				$shape->getPublicPath(),
-				$recordField,
+				$resolved->getCollection(),
+				$shape->getFieldName(),
 				writable: $shape->isWritable(),
 				skipWhenMissing: $skipWhenMissing,
 			));
@@ -106,7 +100,8 @@ final class ProjectionBindingAssembler
 
 		$binding->addField(new RepresentationFieldBinding(
 			$publicPath,
-			RecordFieldRef::template($collection, $fieldName),
+			$collection,
+			$fieldName,
 			writable: $writable,
 			skipWhenMissing: $skipWhenMissing,
 		));
@@ -117,15 +112,6 @@ final class ProjectionBindingAssembler
 		CollectionInterface $collection,
 		string $fieldName,
 	): bool {
-		foreach ($binding->getFields() as $fieldBinding) {
-			if (
-				$fieldBinding->getField()->getCollectionName() === $collection->getName()
-				&& $fieldBinding->getField()->getFieldName() === $fieldName
-			) {
-				return true;
-			}
-		}
-
-		return false;
+		return $binding->hasFieldFor($collection, $fieldName);
 	}
 }

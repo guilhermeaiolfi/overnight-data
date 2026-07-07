@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Sync;
 
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\Sync\SyncConflict;
@@ -74,7 +73,7 @@ final class SyncPlanTest extends TestCase
 	private function update(string $field, mixed $value): SyncFieldUpdate
 	{
 		$record = RecordState::new($this->users(), [$field => 'A1']);
-		$binding = new RepresentationFieldBinding($field, RecordFieldRef::forState($record, $field));
+		$binding = new RepresentationFieldBinding($field, $record->getCollection(), $field);
 
 		return new SyncFieldUpdate($record, $field, $value, $binding);
 	}

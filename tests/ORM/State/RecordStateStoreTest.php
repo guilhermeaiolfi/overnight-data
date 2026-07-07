@@ -7,8 +7,6 @@ namespace Tests\ON\Data\ORM\State;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RecordFieldRef;
-use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -158,7 +156,7 @@ final class RecordStateStoreTest extends TestCase
 		$state = RecordState::new($this->users(), ['name' => 'A1']);
 		$map = new RecordStateStore();
 
-		self::assertSame($state, $map->getForField(RecordFieldRef::forState($state, 'name')));
+		self::assertSame($state, $map->getForField($state->getCollection(), 'name'));
 	}
 
 	public function testGetForFieldResolvesKeyedRefThroughKeyIndex(): void
@@ -176,7 +174,7 @@ final class RecordStateStoreTest extends TestCase
 	{
 		$map = new RecordStateStore();
 
-		self::assertNull($map->getForField(RecordFieldRef::template($this->users(), 'name')));
+		self::assertNull($map->getForField($this->users(), 'name'));
 	}
 
 	public function testRequireForFieldThrowsForUnresolvableRef(): void
@@ -185,13 +183,13 @@ final class RecordStateStoreTest extends TestCase
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("field 'users.name'");
-		$map->requireForField(RecordFieldRef::template($this->users(), 'name'));
+		$map->requireForField($this->users(), 'name');
 	}
 
 	public function testGetFromRepresentationReturnsNullWhenNoFieldsResolveToRecordState(): void
 	{
 		$tracked = $this->tracked($this->binding([
-			'name' => RecordFieldRef::template($this->users(), 'name'),
+			'name' => $this->users(), 'name',
 		]));
 
 		self::assertNull((new RecordStateStore())->getFromRepresentation($tracked));
@@ -201,7 +199,7 @@ final class RecordStateStoreTest extends TestCase
 	{
 		$state = RecordState::new($this->users(), ['name' => 'A1']);
 		$tracked = $this->tracked($this->binding([
-			'name' => RecordFieldRef::forState($state, 'name'),
+			'name' => $state->getCollection(), 'name',
 		]));
 
 		self::assertSame($state, (new RecordStateStore())->getFromRepresentation($tracked));
@@ -211,8 +209,8 @@ final class RecordStateStoreTest extends TestCase
 	{
 		$state = RecordState::new($this->users(), ['id' => 10, 'name' => 'A1']);
 		$tracked = $this->tracked($this->binding([
-			'id' => RecordFieldRef::forState($state, 'id'),
-			'name' => RecordFieldRef::forState($state, 'name'),
+			'id' => $state->getCollection(), 'id',
+			'name' => $state->getCollection(), 'name',
 		]));
 
 		self::assertSame($state, (new RecordStateStore())->getFromRepresentation($tracked));
@@ -224,8 +222,8 @@ final class RecordStateStoreTest extends TestCase
 		$first = RecordState::new($users, ['name' => 'A1']);
 		$second = RecordState::new($users, ['name' => 'A2']);
 		$tracked = $this->tracked($this->binding([
-			'first' => RecordFieldRef::forState($first, 'name'),
-			'second' => RecordFieldRef::forState($second, 'name'),
+			'first' => $first->getCollection(), 'name',
+			'second' => $second->getCollection(), 'name',
 		]));
 
 		$this->expectException(StateException::class);
@@ -251,13 +249,12 @@ final class RecordStateStoreTest extends TestCase
 	{
 		$state = RecordState::new($this->users(), ['id' => 10, 'name' => 'A1']);
 		$binding = $this->binding([
-			'name' => RecordFieldRef::forState($state, 'name'),
+			'name' => $state->getCollection(), 'name',
 		]);
 		$binding->addExpression(new RepresentationExpressionBinding('postCount', 'post_count'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			RecordRelationRef::forCollection($this->users(), 'posts'),
-			RepresentationRelationCardinality::MANY,
+			$state->getCollection(), 'posts',
 			new RepresentationBinding()
 		));
 		$tracked = $this->tracked($binding);

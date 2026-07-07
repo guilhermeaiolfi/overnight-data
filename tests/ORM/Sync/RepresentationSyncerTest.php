@@ -11,7 +11,6 @@ use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\SessionContext;
-use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
@@ -194,8 +193,7 @@ final class RepresentationSyncerTest extends TestCase
 		$binding = $this->userBindingFor($record);
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			RecordRelationRef::forState($record, 'posts'),
-			RepresentationRelationCardinality::MANY,
+			$record->getCollection(), 'posts',
 			new RepresentationBinding()
 		));
 
@@ -207,8 +205,7 @@ final class RepresentationSyncerTest extends TestCase
 		$binding = $this->userBindingFor($record);
 		$binding->addRelation(new RepresentationRelationBinding(
 			'profile',
-			RecordRelationRef::forState($record, 'profile'),
-			RepresentationRelationCardinality::ONE,
+			$record->getCollection(), 'profile',
 			new RepresentationBinding()
 		));
 

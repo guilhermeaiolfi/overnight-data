@@ -11,7 +11,6 @@ use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\TrackedRecordResolver;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
@@ -64,7 +63,7 @@ final class TrackedRecordResolverTest extends TestCase
 		$child = RecordState::clean($posts->getKey(5), ['id' => 5]);
 		$item = new stdClass();
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($posts, 'id')));
+		$binding->addField(new RepresentationFieldBinding('id', $posts, 'id'));
 		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
 		$context = new PersistenceContext(
 			$this->context($this->representations($tracked), $this->records($owner, $child)),
@@ -98,9 +97,7 @@ final class TrackedRecordResolverTest extends TestCase
 	{
 		return RepresentationStateObjectRegistry::remember(
 			$representation,
-			new RepresentationState($this->bindingFor($record), [
-				$record->getStateHash() => $record->getRevision(),
-			])
+			new RepresentationState($binding = $this->bindingFor($record), $this->fieldItemsFor($binding, [$record]))
 		);
 	}
 
@@ -109,7 +106,7 @@ final class TrackedRecordResolverTest extends TestCase
 		$binding = new RepresentationBinding();
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
-			$binding->addField(new RepresentationFieldBinding($field, RecordFieldRef::forState($record, $field)));
+			$binding->addField(new RepresentationFieldBinding($field, $record->getCollection(), $field));
 		}
 
 		return $binding;

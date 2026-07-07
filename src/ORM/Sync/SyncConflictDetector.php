@@ -5,25 +5,22 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\State\RecordFieldRef;
-use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationState;
 
 final class SyncConflictDetector
 {
 	/**
 	 * @param array<string, mixed> $currentValues
-	 * @param callable(RecordFieldRef): RecordState $recordStateResolver
 	 * @return list<SyncConflict>
 	 */
 	public function detect(
 		RepresentationState $tracked,
 		array $currentValues,
-		callable $recordStateResolver,
 	): array {
 		$conflicts = [];
-		foreach ($tracked->getBinding()->getWritableFieldBindings() as $binding) {
-			$path = $binding->getPath();
+		foreach ($tracked->getWritableFieldItems() as $item) {
+			$binding = $item->getBinding();
+			$path = $item->getPath();
 			if (! array_key_exists($path, $currentValues)) {
 				if ($binding->shouldSkipWhenMissing()) {
 					continue;
@@ -32,20 +29,15 @@ final class SyncConflictDetector
 				throw new SyncException(sprintf("Current representation values do not contain path '%s'.", $path));
 			}
 
-			$field = $binding->getField();
-			$recordState = $field->hasState() ? $field->getState() : $recordStateResolver($field);
-			if (! $recordState instanceof RecordState) {
-				throw new SyncException(sprintf("Record state resolver did not return a RecordState for path '%s'.", $path));
-			}
-
-			$fieldName = $field->getFieldName();
-			$baselineRevision = $tracked->getBaselineRevisionFor($field);
-			if (! $recordState->getHistory()->hasValue($baselineRevision, $fieldName)) {
+			$recordState = $item->getRecord();
+			$fieldName = $item->getFieldName();
+			$baselineRevision = $item->getBaselineRevision();
+			if (! $item->hasBaselineValue()) {
 				continue;
 			}
 
-			$baselineValue = $recordState->getHistory()->getValue($baselineRevision, $fieldName);
-			$recordValue = $recordState->getValue($fieldName);
+			$baselineValue = $item->getBaselineValue();
+			$recordValue = $item->getCurrentRecordValue();
 			$representationValue = $currentValues[$path];
 
 			if ($representationValue === $baselineValue) {

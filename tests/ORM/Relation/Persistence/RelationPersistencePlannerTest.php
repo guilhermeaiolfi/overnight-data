@@ -15,7 +15,6 @@ use ON\Data\ORM\Relation\Persistence\RelationPersistenceResult;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -473,9 +472,7 @@ final class RelationPersistencePlannerTest extends TestCase
 	{
 		return RepresentationStateObjectRegistry::remember(
 			$representation,
-			new RepresentationState($this->bindingFor($record), [
-				$record->getStateHash() => $record->getRevision(),
-			])
+			new RepresentationState($binding = $this->bindingFor($record), $this->fieldItemsFor($binding, [$record]))
 		);
 	}
 
@@ -484,7 +481,7 @@ final class RelationPersistencePlannerTest extends TestCase
 		$binding = new RepresentationBinding();
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
-			$binding->addField(new RepresentationFieldBinding($field, RecordFieldRef::forState($record, $field)));
+			$binding->addField(new RepresentationFieldBinding($field, $record->getCollection(), $field));
 		}
 
 		return $binding;

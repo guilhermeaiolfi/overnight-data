@@ -7,8 +7,7 @@ namespace ON\Data\ORM\Sync;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
 
@@ -53,11 +52,10 @@ final class ScalarRepresentationSynchronizer
 		RepresentationState $state,
 		RecordStateStore $records,
 	): SyncPlan {
-		$currentValues = $this->readWritableValues($representation, $state->getBinding());
+		$currentValues = $this->readWritableValues($representation, $state);
 		$conflicts = $this->conflicts->detect(
 			$state,
 			$currentValues,
-			$records->requireForField(...)
 		);
 
 		return new SyncPlan(
@@ -69,15 +67,16 @@ final class ScalarRepresentationSynchronizer
 	/**
 	 * @return array<string, mixed>
 	 */
-	private function readWritableValues(object $representation, RepresentationBinding $binding): array
+	private function readWritableValues(object $representation, RepresentationState $state): array
 	{
 		$values = [];
 
-		foreach ($binding->getWritableFieldBindings() as $fieldBinding) {
+		foreach ($state->getWritableFieldItems() as $item) {
+			$fieldBinding = $item->getBinding();
 			try {
-				$values[$fieldBinding->getPath()] = $this->reader->readPath(
+				$values[$item->getPath()] = $this->reader->readPath(
 					$representation,
-					$fieldBinding->getPath()
+					$item->getPath()
 				);
 			} catch (SyncException $exception) {
 				if ($fieldBinding->shouldSkipWhenMissing() && str_contains($exception->getMessage(), ' is missing.')) {
@@ -106,8 +105,9 @@ final class ScalarRepresentationSynchronizer
 		$updates = [];
 		$updatesByTarget = [];
 
-		foreach ($state->getBinding()->getWritableFieldBindings() as $binding) {
-			$path = $binding->getPath();
+		foreach ($state->getWritableFieldItems() as $item) {
+			$binding = $item->getBinding();
+			$path = $item->getPath();
 			if (isset($conflictPaths[$path])) {
 				continue;
 			}
@@ -120,26 +120,24 @@ final class ScalarRepresentationSynchronizer
 				throw new SyncException(sprintf("Current representation values do not contain path '%s'.", $path));
 			}
 
-			$record = $this->recordFor($binding, $records);
-			$field = $binding->getField();
-			$fieldName = $field->getFieldName();
-			$baselineRevision = $state->getBaselineRevisionFor($field);
+			$record = $item->getRecord();
+			$fieldName = $item->getFieldName();
 			$currentValue = $currentValues[$path];
-			if (! $record->getHistory()->hasValue($baselineRevision, $fieldName)) {
-				if ($currentValue === null && ! $record->hasValue($fieldName)) {
+			if (! $item->hasBaselineValue()) {
+				if ($currentValue === null && ! $item->hasCurrentRecordValue()) {
 					continue;
 				}
 
 				$baselineValue = null;
 			} else {
-				$baselineValue = $record->getHistory()->getValue($baselineRevision, $fieldName);
+				$baselineValue = $item->getBaselineValue();
 			}
 
 			if ($currentValue === $baselineValue) {
 				continue;
 			}
 
-			$target = $field->getRecordHash() . "\0" . $fieldName;
+			$target = $record->getStateHash() . "\0" . $fieldName;
 			if (array_key_exists($target, $updatesByTarget)) {
 				$this->assertDuplicateTargetHasSameValue($updatesByTarget[$target], $currentValue, $path);
 
@@ -152,11 +150,6 @@ final class ScalarRepresentationSynchronizer
 		}
 
 		return $updates;
-	}
-
-	private function recordFor(RepresentationFieldBinding $binding, RecordStateStore $records): RecordState
-	{
-		return $records->requireForField($binding->getField());
 	}
 
 	private function assertDuplicateTargetHasSameValue(SyncFieldUpdate $existing, mixed $currentValue, string $path): void
@@ -225,23 +218,6 @@ final class ScalarRepresentationSynchronizer
 			$touchedRecords[$record->getStateHash()] = $record;
 		}
 
-		$this->refreshBaselineRevisions($state, $touchedRecords);
-	}
-
-	/**
-	 * @param array<string, RecordState> $touchedRecords
-	 */
-	private function refreshBaselineRevisions(RepresentationState $state, array $touchedRecords): void
-	{
-		if ($touchedRecords === []) {
-			return;
-		}
-
-		$baselineRevisions = $state->getBaselineRevisions();
-		foreach ($touchedRecords as $recordHash => $record) {
-			$baselineRevisions[$recordHash] = $record->getRevision();
-		}
-
-		$state->replaceBaselineRevisions($baselineRevisions);
+		$state->acceptSyncedRecords($touchedRecords);
 	}
 }

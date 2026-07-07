@@ -14,11 +14,11 @@ namespace ON\Data\ORM\Compiler\ManualProjection;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
 use stdClass;
@@ -54,8 +54,17 @@ final class RepresentationTracker
 			return;
 		}
 
-		$binding = $relatedBinding->applyToRecordState($record, skipWhenMissing: true);
-		$this->representations->add($target, new RepresentationState($binding, [$record->getStateHash() => $record->getRevision()]));
+		$fieldItems = [];
+		foreach ($relatedBinding->getFields() as $fieldBinding) {
+			$fieldItems[] = new RepresentationFieldStateItem(
+				$fieldBinding->withSkipWhenMissing(true),
+				$record,
+				$fieldBinding->getFieldName(),
+				$record->getRevision()
+			);
+		}
+
+		$this->representations->add($target, new RepresentationState($relatedBinding, $fieldItems));
 	}
 
 	public function trackAdapter(RecordState $record): object
@@ -68,10 +77,20 @@ final class RepresentationTracker
 				$object->{$fieldName} = $record->getValue($fieldName);
 			}
 
-			$binding->addField(new RepresentationFieldBinding($fieldName, RecordFieldRef::forState($record, $fieldName), writable: false));
+			$binding->addField(new RepresentationFieldBinding($fieldName, $record->getCollection(), $fieldName, writable: false));
 		}
 
-		$this->representations->add($object, new RepresentationState($binding, [$record->getStateHash() => $record->getRevision()]));
+		$fieldItems = [];
+		foreach ($binding->getFields() as $fieldBinding) {
+			$fieldItems[] = new RepresentationFieldStateItem(
+				$fieldBinding,
+				$record,
+				$fieldBinding->getFieldName(),
+				$record->getRevision()
+			);
+		}
+
+		$this->representations->add($object, new RepresentationState($binding, $fieldItems));
 
 		return $object;
 	}
@@ -82,18 +101,16 @@ final class RepresentationTracker
 	public function recordsForCollection(RepresentationState $state, CollectionInterface $collection): array
 	{
 		$records = [];
-		foreach ($state->getBinding()->getFields() as $fieldBinding) {
-			$field = $fieldBinding->getField();
-			if ($field->hasState() && $field->getCollectionName() === $collection->getName()) {
-				$record = $field->getState();
+		foreach ($state->getFieldItems() as $fieldItem) {
+			if ($fieldItem->getBinding()->getCollectionName() === $collection->getName()) {
+				$record = $fieldItem->getRecord();
 				$records[$record->getStateHash()] = $record;
 			}
 		}
 
-		foreach ($state->getBinding()->getRelations() as $relationBinding) {
-			$relation = $relationBinding->getRelation();
-			if ($relation->hasState() && $relation->getCollectionName() === $collection->getName()) {
-				$record = $relation->getState();
+		foreach ($state->getRelationItems() as $relationItem) {
+			if ($relationItem->getBinding()->getOwnerCollectionName() === $collection->getName()) {
+				$record = $relationItem->getOwnerRecord();
 				$records[$record->getStateHash()] = $record;
 			}
 		}

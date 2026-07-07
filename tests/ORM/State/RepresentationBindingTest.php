@@ -5,14 +5,10 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RecordFieldRef;
-use ON\Data\ORM\State\RecordRelationRef;
-use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationExpressionBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
-use ON\Data\ORM\State\RepresentationRelationCardinality;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\ORM\Support\OrmFixture;
 
@@ -165,140 +161,30 @@ final class RepresentationBindingTest extends TestCase
 		self::assertSame([$name, $email], $binding->getFields());
 	}
 
-	public function testApplyToRecordStateReturnsNewBindingWithoutMutatingTemplate(): void
+	public function testFindsStructuralFieldForCollectionAndField(): void
 	{
 		$users = $this->users();
-		$template = new RepresentationBinding();
-		$templateName = new RepresentationFieldBinding('name', RecordFieldRef::template($users, 'name'));
-		$templateUpper = new RepresentationFieldBinding('upperName', RecordFieldRef::template($users, 'name'), false);
-		$template->addField($templateName);
-		$template->addField($templateUpper);
-		$state = RecordState::new($users, ['name' => 'A1']);
+		$field = new RepresentationFieldBinding('displayName', $users, 'name');
+		$binding = new RepresentationBinding();
+		$binding->addField($field);
 
-		$applied = $template->applyToRecordState($state);
-
-		self::assertNotSame($template, $applied);
-		self::assertSame($templateName, $template->getField('name'));
-		self::assertTrue($template->getField('name')->getField()->isTemplate());
-		self::assertSame($state, $applied->getField('name')->getField()->getState());
-		self::assertSame($state, $applied->getField('upperName')->getField()->getState());
-		self::assertSame('name', $applied->getField('name')->getPath());
-		self::assertSame('upperName', $applied->getField('upperName')->getPath());
-		self::assertTrue($applied->getField('name')->isWritable());
-		self::assertTrue($applied->getField('upperName')->isReadOnly());
-	}
-
-	public function testApplyToRecordStatePreservesExpressionAndAppliesRelationOwnerRefs(): void
-	{
-		$users = $this->users();
-		$template = new RepresentationBinding();
-		$field = new RepresentationFieldBinding('name', RecordFieldRef::template($users, 'name'));
-		$expression = new RepresentationExpressionBinding('postCount', 'post_count');
-		$relation = $this->relationBinding('posts');
-		$template->addField($field);
-		$template->addExpression($expression);
-		$template->addRelation($relation);
-
-		$state = RecordState::new($users, ['name' => 'A1']);
-		$applied = $template->applyToRecordState($state);
-
-		self::assertNotSame($template, $applied);
-		self::assertNotSame($field, $applied->getField('name'));
-		self::assertSame($expression, $applied->getExpression('postCount'));
-		self::assertNotSame($relation, $applied->getRelation('posts'));
-		self::assertSame($state, $applied->getRelation('posts')->getRelation()->getState());
-		self::assertSame('posts', $applied->getRelation('posts')->getRelationName());
-		self::assertSame($relation->getRelatedBinding(), $applied->getRelation('posts')->getRelatedBinding());
-		self::assertSame($relation->isCollectionFullyLoaded(), $applied->getRelation('posts')->isCollectionFullyLoaded());
-		self::assertSame(['name', 'postCount', 'posts'], $applied->getPaths());
-	}
-
-	public function testApplyToRecordStateWithFieldFromAnotherCollectionThrows(): void
-	{
-		$template = new RepresentationBinding();
-		$template->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
-
-		$this->expectException(StateException::class);
-		$template->applyToRecordState(RecordState::new($this->users()));
-	}
-
-	public function testApplyToRecordStateWithAlreadyKeyedFieldThrows(): void
-	{
-		$users = $this->users();
-		$template = new RepresentationBinding();
-		$template->addField(new RepresentationFieldBinding('name', RecordFieldRef::forKey($users->getKey(10), 'name')));
-
-		$this->expectException(StateException::class);
-		$template->applyToRecordState(RecordState::new($users));
-	}
-
-	public function testApplyToRecordStateWithAlreadyStateTargetedFieldThrows(): void
-	{
-		$users = $this->users();
-		$template = new RepresentationBinding();
-		$template->addField(new RepresentationFieldBinding('name', RecordFieldRef::forState(RecordState::new($users), 'name')));
-
-		$this->expectException(StateException::class);
-		$template->applyToRecordState(RecordState::new($users));
-	}
-
-	public function testApplyToRecordStateWithRelationFromAnotherCollectionThrows(): void
-	{
-		$template = new RepresentationBinding();
-		$template->addRelation(new RepresentationRelationBinding(
-			'posts',
-			RecordRelationRef::forCollection($this->posts(), 'comments'),
-			RepresentationRelationCardinality::MANY,
-			new RepresentationBinding()
-		));
-
-		$this->expectException(StateException::class);
-		$template->applyToRecordState(RecordState::new($this->users()));
-	}
-
-	public function testApplyToRecordStateWithAlreadyStateTargetedRelationThrows(): void
-	{
-		$users = $this->users();
-		$template = new RepresentationBinding();
-		$template->addRelation(new RepresentationRelationBinding(
-			'posts',
-			RecordRelationRef::forState(RecordState::new($users), 'posts'),
-			RepresentationRelationCardinality::MANY,
-			new RepresentationBinding()
-		));
-
-		$this->expectException(StateException::class);
-		$template->applyToRecordState(RecordState::new($users));
-	}
-
-	public function testTwoApplicationsToTwoNewStatesProduceDifferentRecordHashes(): void
-	{
-		$users = $this->users();
-		$template = new RepresentationBinding();
-		$template->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($users, 'name')));
-
-		$first = $template->applyToRecordState(RecordState::new($users, ['name' => 'A1']));
-		$second = $template->applyToRecordState(RecordState::new($users, ['name' => 'A2']));
-
-		self::assertNotSame(
-			$first->getField('name')->getField()->getRecordHash(),
-			$second->getField('name')->getField()->getRecordHash()
-		);
+		self::assertSame($field, $binding->getFieldFor($users, 'name'));
+		self::assertSame($field, $binding->getFieldFor('users', 'name'));
+		self::assertTrue($binding->hasFieldFor($users, 'name'));
+		self::assertFalse($binding->hasFieldFor($users, 'email'));
 	}
 
 	private function fieldBinding(string $path, bool $writable = true): RepresentationFieldBinding
 	{
-		return new RepresentationFieldBinding($path, new RecordFieldRef($this->users(), $path), $writable);
+		return new RepresentationFieldBinding($path, $this->users(), $path, $writable);
 	}
 
 	private function relationBinding(string $path): RepresentationRelationBinding
 	{
 		return new RepresentationRelationBinding(
 			$path,
-			RecordRelationRef::forCollection($this->users(), $path),
-			RepresentationRelationCardinality::MANY,
+			$this->users(), $path,
 			new RepresentationBinding(),
-			false
 		);
 	}
 }

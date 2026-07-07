@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -100,8 +99,8 @@ final class AdoptionRecordResolverTest extends TestCase
 	public function testRejectsBindingTargetingMultipleCollectionNames(): void
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
+		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
+		$binding->addField(new RepresentationFieldBinding('title', $this->posts(), 'title'));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("path 'title' targets collection 'posts' after 'users'");
@@ -112,8 +111,8 @@ final class AdoptionRecordResolverTest extends TestCase
 	public function testIgnoresMissingNonKeyPathsWhenBuildingInitialValues(): void
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($this->users(), 'id')));
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
+		$binding->addField(new RepresentationFieldBinding('id', $this->users(), 'id'));
+		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
 		$representation = $this->representation(['id' => 10]);
 
 		$record = $this->resolver()->resolve($representation, $binding, new RecordStateStore(), true);
@@ -126,7 +125,7 @@ final class AdoptionRecordResolverTest extends TestCase
 	{
 		$representation = $this->representation(['name' => 'Ada']);
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
+		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
 
 		$record = $this->resolver()->resolve($representation, $binding, new RecordStateStore(), true);
 
@@ -169,8 +168,8 @@ final class AdoptionRecordResolverTest extends TestCase
 	public function testRelatedBindingRejectsMultipleCollectionNames(): void
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($this->posts(), 'title')));
+		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
+		$binding->addField(new RepresentationFieldBinding('title', $this->posts(), 'title'));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("related binding path 'title' targets collection 'posts' after 'users'");

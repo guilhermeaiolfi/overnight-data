@@ -17,6 +17,7 @@ use ON\Data\Key;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RepresentationBindingMerger;
+use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
 
 final class Builder
@@ -177,23 +178,31 @@ final class Builder
 
 		if ($state instanceof RepresentationState) {
 			$binding = $this->bindingMerger->mergeManualOverlay($state->getBinding(), $manualBinding);
-			$baselineRevisions = $state->getBaselineRevisions();
+			$fieldItems = $state->getFieldItems();
+			$relationItems = $state->getRelationItems();
 		} else {
 			$binding = $manualBinding;
-			$baselineRevisions = [];
+			$fieldItems = [];
+			$relationItems = [];
 		}
 
 		foreach ($binding->getFields() as $fieldBinding) {
-			$field = $fieldBinding->getField();
-			if ($field->hasState()) {
-				$baselineRevisions[$field->getRecordHash()] ??= $field->getState()->getRevision();
+			if ($this->hasFieldItem($fieldItems, $fieldBinding->getPath())) {
+				continue;
 			}
-		}
 
-		foreach ($binding->getRelations() as $relationBinding) {
-			$relation = $relationBinding->getRelation();
-			if ($relation->hasState()) {
-				$baselineRevisions[$relation->getRecordHash()] ??= $relation->getState()->getRevision();
+			foreach ($this->session->getRecords()->getAll() as $record) {
+				if ($record->getCollection()->getName() !== $fieldBinding->getCollectionName()) {
+					continue;
+				}
+
+				$fieldItems[] = new RepresentationFieldStateItem(
+					$fieldBinding,
+					$record,
+					$fieldBinding->getFieldName(),
+					$record->getRevision()
+				);
+				break;
 			}
 		}
 
@@ -201,10 +210,24 @@ final class Builder
 			$this->session->getRepresentations()->remove($this->representation);
 		}
 
-		$this->session->getRepresentations()->add($this->representation, new RepresentationState($binding, $baselineRevisions));
+		$this->session->getRepresentations()->add($this->representation, new RepresentationState($binding, $fieldItems, $relationItems));
 		$this->propertyShapes = [];
 
 		return $this->representation;
+	}
+
+	/**
+	 * @param list<RepresentationFieldStateItem> $items
+	 */
+	private function hasFieldItem(array $items, string $path): bool
+	{
+		foreach ($items as $item) {
+			if ($item->getPath() === $path) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private function clearPending(): void

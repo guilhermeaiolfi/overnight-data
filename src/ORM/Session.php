@@ -15,7 +15,6 @@ use ON\Data\ORM\Persistence\FlushResult;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -236,22 +235,14 @@ final class Session
 	private function resolveSingleRecordForRemoval(RepresentationState $state): RecordState
 	{
 		$records = [];
-		$binding = $state->getBinding();
-
-		foreach ($binding->getFields() as $fieldBinding) {
-			$field = $fieldBinding->getField();
-			if ($field->hasState()) {
-				$record = $field->getState();
-				$records[$record->getStateHash()] = $record;
-			}
+		foreach ($state->getFieldItems() as $fieldItem) {
+			$record = $fieldItem->getRecord();
+			$records[$record->getStateHash()] = $record;
 		}
 
-		foreach ($binding->getRelations() as $relationBinding) {
-			$relation = $relationBinding->getRelation();
-			if ($relation->hasState()) {
-				$record = $relation->getState();
-				$records[$record->getStateHash()] = $record;
-			}
+		foreach ($state->getRelationItems() as $relationItem) {
+			$record = $relationItem->getOwnerRecord();
+			$records[$record->getStateHash()] = $record;
 		}
 
 		if ($records === []) {
@@ -279,7 +270,7 @@ final class Session
 	{
 		$binding = new RepresentationBinding();
 		foreach ($collection->getPrimaryKey() as $fieldName) {
-			$binding->addField(new RepresentationFieldBinding($fieldName, RecordFieldRef::template($collection, $fieldName)));
+			$binding->addField(new RepresentationFieldBinding($fieldName, $collection, $fieldName));
 		}
 
 		return $binding;

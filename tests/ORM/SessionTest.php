@@ -16,8 +16,6 @@ use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Session;
-use ON\Data\ORM\State\RecordFieldRef;
-use ON\Data\ORM\State\RecordRelationRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
@@ -443,8 +441,7 @@ final class SessionTest extends TestCase
 		$binding = new RepresentationBinding();
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			RecordRelationRef::forCollection($users, 'posts'),
-			RepresentationRelationCardinality::MANY,
+			$users, 'posts',
 			$this->postTemplateBindingFor($posts),
 			true
 		));
@@ -484,8 +481,8 @@ final class SessionTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 		$representation = $this->representation(['name' => 'Owner', 'title' => 'Post']);
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($users, 'name')));
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($posts, 'title')));
+		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
+		$binding->addField(new RepresentationFieldBinding('title', $posts, 'title'));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('untracked root sync needs a binding targeting one collection');
@@ -499,11 +496,10 @@ final class SessionTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 		$representation = $this->representation(['name' => 'Owner', 'author' => null]);
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($users, 'name')));
+		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'author',
-			RecordRelationRef::forCollection($posts, 'author'),
-			RepresentationRelationCardinality::ONE,
+			$posts, 'author',
 			$this->userTemplateBindingFor($users)
 		));
 
@@ -531,8 +527,8 @@ final class SessionTest extends TestCase
 		$postRecord = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Original', 'user_id' => null]);
 		$representation = $this->representation(['name' => 'Owner Updated', 'title' => 'Post Updated']);
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::forState($userRecord, 'name')));
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::forState($postRecord, 'title')));
+		$binding->addField(new RepresentationFieldBinding('name', $userRecord->getCollection(), 'name'));
+		$binding->addField(new RepresentationFieldBinding('title', $postRecord->getCollection(), 'title'));
 		$session->getRepresentations()->add($representation, new RepresentationState(
 			$binding,
 			[
@@ -640,8 +636,8 @@ final class SessionTest extends TestCase
 		$postRecord = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'user_id' => 10]);
 		$representation = $this->representation(['name' => 'Owner', 'title' => 'Post']);
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::forState($userRecord, 'name')));
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::forState($postRecord, 'title')));
+		$binding->addField(new RepresentationFieldBinding('name', $userRecord->getCollection(), 'name'));
+		$binding->addField(new RepresentationFieldBinding('title', $postRecord->getCollection(), 'title'));
 		$session->getRepresentations()->add($representation, new RepresentationState($binding, [
 			$userRecord->getStateHash() => $userRecord->getRevision(),
 			$postRecord->getStateHash() => $postRecord->getRevision(),
@@ -1318,7 +1314,7 @@ final class SessionTest extends TestCase
 	private function templateBinding(): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($this->users(), 'name')));
+		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
 
 		return $binding;
 	}
@@ -1326,11 +1322,10 @@ final class SessionTest extends TestCase
 	private function ownerTemplateBindingWithPosts(CollectionInterface $users, CollectionInterface $posts): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($users, 'name')));
+		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			RecordRelationRef::forCollection($users, 'posts'),
-			RepresentationRelationCardinality::MANY,
+			$users, 'posts',
 			$this->postTemplateBindingFor($posts),
 			false
 		));
@@ -1341,11 +1336,10 @@ final class SessionTest extends TestCase
 	private function ownerTemplateBindingWithProfile(CollectionInterface $users, CollectionInterface $profiles): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($users, 'name')));
+		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'profile',
-			RecordRelationRef::forCollection($users, 'profile'),
-			RepresentationRelationCardinality::ONE,
+			$users, 'profile',
 			$this->profileTemplateBindingFor($profiles)
 		));
 
@@ -1355,11 +1349,10 @@ final class SessionTest extends TestCase
 	private function postTemplateBindingWithAuthor(CollectionInterface $posts, CollectionInterface $users): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($posts, 'title')));
+		$binding->addField(new RepresentationFieldBinding('title', $posts, 'title'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'author',
-			RecordRelationRef::forCollection($posts, 'author'),
-			RepresentationRelationCardinality::ONE,
+			$posts, 'author',
 			$this->userTemplateBindingFor($users)
 		));
 
@@ -1369,8 +1362,8 @@ final class SessionTest extends TestCase
 	private function userTemplateBindingFor(CollectionInterface $users): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($users, 'id')));
-		$binding->addField(new RepresentationFieldBinding('name', RecordFieldRef::template($users, 'name')));
+		$binding->addField(new RepresentationFieldBinding('id', $users, 'id'));
+		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
 
 		return $binding;
 	}
@@ -1378,9 +1371,9 @@ final class SessionTest extends TestCase
 	private function postTemplateBindingFor(CollectionInterface $posts): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($posts, 'id')));
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($posts, 'title')));
-		$binding->addField(new RepresentationFieldBinding('user_id', RecordFieldRef::template($posts, 'user_id')));
+		$binding->addField(new RepresentationFieldBinding('id', $posts, 'id'));
+		$binding->addField(new RepresentationFieldBinding('title', $posts, 'title'));
+		$binding->addField(new RepresentationFieldBinding('user_id', $posts, 'user_id'));
 
 		return $binding;
 	}
@@ -1388,9 +1381,9 @@ final class SessionTest extends TestCase
 	private function profileTemplateBindingFor(CollectionInterface $profiles): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($profiles, 'id')));
-		$binding->addField(new RepresentationFieldBinding('label', RecordFieldRef::template($profiles, 'label')));
-		$binding->addField(new RepresentationFieldBinding('user_id', RecordFieldRef::template($profiles, 'user_id')));
+		$binding->addField(new RepresentationFieldBinding('id', $profiles, 'id'));
+		$binding->addField(new RepresentationFieldBinding('label', $profiles, 'label'));
+		$binding->addField(new RepresentationFieldBinding('user_id', $profiles, 'user_id'));
 
 		return $binding;
 	}
@@ -1416,7 +1409,7 @@ final class SessionTest extends TestCase
 		$binding = new RepresentationBinding();
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
-			$binding->addField(new RepresentationFieldBinding($field, RecordFieldRef::forState($record, $field)));
+			$binding->addField(new RepresentationFieldBinding($field, $record->getCollection(), $field));
 		}
 
 		return $binding;
@@ -1425,8 +1418,8 @@ final class SessionTest extends TestCase
 	private function tagTemplateBindingFor(CollectionInterface $tags): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($tags, 'id')));
-		$binding->addField(new RepresentationFieldBinding('label', RecordFieldRef::template($tags, 'label')));
+		$binding->addField(new RepresentationFieldBinding('id', $tags, 'id'));
+		$binding->addField(new RepresentationFieldBinding('label', $tags, 'label'));
 
 		return $binding;
 	}
@@ -1437,19 +1430,17 @@ final class SessionTest extends TestCase
 		CollectionInterface $tags,
 	): RepresentationBinding {
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('id', RecordFieldRef::template($posts, 'id')));
-		$binding->addField(new RepresentationFieldBinding('title', RecordFieldRef::template($posts, 'title')));
-		$binding->addField(new RepresentationFieldBinding('author_id', RecordFieldRef::template($posts, 'author_id')));
+		$binding->addField(new RepresentationFieldBinding('id', $posts, 'id'));
+		$binding->addField(new RepresentationFieldBinding('title', $posts, 'title'));
+		$binding->addField(new RepresentationFieldBinding('author_id', $posts, 'author_id'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'author',
-			RecordRelationRef::forCollection($posts, 'author'),
-			RepresentationRelationCardinality::ONE,
+			$posts, 'author',
 			$this->userTemplateBindingFor($users)
 		));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'tags',
-			RecordRelationRef::forCollection($posts, 'tags'),
-			RepresentationRelationCardinality::MANY,
+			$posts, 'tags',
 			$this->tagTemplateBindingFor($tags),
 			false
 		));
@@ -1460,9 +1451,9 @@ final class SessionTest extends TestCase
 	private function compositeChildBindingFor(CollectionInterface $children): RepresentationBinding
 	{
 		$binding = new RepresentationBinding();
-		$binding->addField(new RepresentationFieldBinding('label', RecordFieldRef::template($children, 'label')));
-		$binding->addField(new RepresentationFieldBinding('tenant_ref', RecordFieldRef::template($children, 'tenant_ref')));
-		$binding->addField(new RepresentationFieldBinding('user_ref', RecordFieldRef::template($children, 'user_ref')));
+		$binding->addField(new RepresentationFieldBinding('label', $children, 'label'));
+		$binding->addField(new RepresentationFieldBinding('tenant_ref', $children, 'tenant_ref'));
+		$binding->addField(new RepresentationFieldBinding('user_ref', $children, 'user_ref'));
 
 		return $binding;
 	}

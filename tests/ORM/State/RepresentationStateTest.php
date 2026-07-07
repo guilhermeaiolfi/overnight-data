@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RecordFieldRef;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\ORM\Support\OrmFixture;
@@ -25,69 +26,54 @@ final class RepresentationStateTest extends TestCase
 		self::assertFalse(method_exists($tracked, 'getRepresentation'));
 	}
 
-	public function testStoresBaselineRevisionsByRecordHash(): void
+	public function testStoresPathKeyedFieldItems(): void
 	{
-		$hash = $this->users()->getKey(10)->getHash();
-		$tracked = new RepresentationState(new RepresentationBinding(), [$hash => 4]);
+		[$binding, $item] = $this->stateParts();
+		$state = new RepresentationState($binding, [$item]);
 
-		self::assertTrue($tracked->hasBaselineRevision($hash));
-		self::assertSame(4, $tracked->getBaselineRevision($hash));
-		self::assertSame([$hash => 4], $tracked->getBaselineRevisions());
+		self::assertTrue($state->hasFieldItem('name'));
+		self::assertSame($item, $state->getFieldItem('name'));
+		self::assertSame([$item], $state->getFieldItems());
+		self::assertSame([$item], $state->getWritableFieldItems());
 	}
 
-	public function testGetsBaselineRevisionForRecordFieldRef(): void
+	public function testMissingFieldItemThrows(): void
 	{
-		$users = $this->users();
-		$field = new RecordFieldRef($users, 'name', $users->getKey(10));
-		$tracked = new RepresentationState(new RepresentationBinding(), [$field->getRecordHash() => 2]);
-
-		self::assertSame(2, $tracked->getBaselineRevisionFor($field));
-	}
-
-	public function testStoresBaselineRevisionForStateTargetedNewRecordHash(): void
-	{
-		$field = RecordFieldRef::forState(RecordState::new($this->users(), ['name' => 'A1']), 'name');
-		$tracked = new RepresentationState(new RepresentationBinding(), [$field->getRecordHash() => 1]);
-
-		self::assertTrue($tracked->hasBaselineRevision($field->getRecordHash()));
-		self::assertSame(1, $tracked->getBaselineRevisionFor($field));
-	}
-
-	public function testMissingBaselineRevisionThrows(): void
-	{
-		$tracked = new RepresentationState(new RepresentationBinding(), []);
+		$state = new RepresentationState(new RepresentationBinding(), []);
 
 		$this->expectException(StateException::class);
-		$tracked->getBaselineRevision('missing');
+		$state->getFieldItem('missing');
 	}
 
-	public function testFieldWithoutKeyThrowsWhenAskingBaselineRevision(): void
+	public function testAcceptSyncedRecordsAdvancesOnlyTouchedItemBaselines(): void
 	{
-		$tracked = new RepresentationState(new RepresentationBinding(), []);
+		[$binding, $name] = $this->stateParts();
+		$emailBinding = new RepresentationFieldBinding('email', $this->users(), 'email');
+		$emailRecord = RecordState::new($this->users(), ['email' => 'a@example.test']);
+		$binding->addField($emailBinding);
+		$state = new RepresentationState($binding, [
+			$name,
+			new RepresentationFieldStateItem($emailBinding, $emailRecord, 'email', $emailRecord->getRevision()),
+		]);
 
-		$this->expectException(StateException::class);
-		$tracked->getBaselineRevisionFor(new RecordFieldRef($this->users(), 'name'));
+		$name->getRecord()->setValue('name', 'A2');
+		$emailRecord->setValue('email', 'b@example.test');
+		$state->acceptSyncedRecords([$name->getRecord()->getStateHash() => $name->getRecord()]);
+
+		self::assertSame(2, $state->getFieldItem('name')->getBaselineRevision());
+		self::assertSame(1, $state->getFieldItem('email')->getBaselineRevision());
 	}
 
-	public function testMissingBaselineForStateTargetedRefThrows(): void
+	/**
+	 * @return array{RepresentationBinding, RepresentationFieldStateItem}
+	 */
+	private function stateParts(): array
 	{
-		$field = RecordFieldRef::forState(RecordState::new($this->users(), ['name' => 'A1']), 'name');
-		$tracked = new RepresentationState(new RepresentationBinding(), []);
+		$record = RecordState::new($this->users(), ['name' => 'A1']);
+		$binding = new RepresentationBinding();
+		$field = new RepresentationFieldBinding('name', $record->getCollection(), 'name');
+		$binding->addField($field);
 
-		$this->expectException(StateException::class);
-		$tracked->getBaselineRevisionFor($field);
-	}
-
-	public function testReplacingBaselineRevisionsWorks(): void
-	{
-		$users = $this->users();
-		$first = $users->getKey(10)->getHash();
-		$second = $users->getKey(11)->getHash();
-		$tracked = new RepresentationState(new RepresentationBinding(), [$first => 1]);
-
-		$tracked->replaceBaselineRevisions([$second => 3]);
-
-		self::assertFalse($tracked->hasBaselineRevision($first));
-		self::assertSame(3, $tracked->getBaselineRevision($second));
+		return [$binding, new RepresentationFieldStateItem($field, $record, 'name', $record->getRevision())];
 	}
 }
