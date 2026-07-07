@@ -6,7 +6,7 @@ namespace ON\Data\ORM\Compiler\ManualProjection;
 
 /**
  * Resolves manual projection field-shape sources (PropertySource, RelationRef)
- * to collection and concrete RecordState for binding assembly.
+ * to collection and source path for binding assembly.
  *
  * Exists as the manual ProjectionSourceResolverInterface implementation;
  * enforces that MANY relations and unresolved sources cannot be compiled alone.
@@ -22,7 +22,7 @@ final class SourceResolver implements ProjectionSourceResolverInterface
 		if ($source instanceof PropertySource) {
 			$record = $source->getTargetRecord();
 
-			return new ResolvedProjectionSource($record->getCollection(), $record, $source->getRelationPath());
+			return new ResolvedProjectionSource($record->getCollection(), $source->getRelationPath());
 		}
 
 		if ($source instanceof RelationRef) {

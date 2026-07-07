@@ -12,11 +12,13 @@ namespace ON\Data\ORM\Compiler\ManualProjection;
  * projection identity system.
  */
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\ORM\Compiler\ProjectionFieldShape;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationBindingMerger;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
@@ -29,6 +31,49 @@ final class RepresentationTracker
 		private RepresentationStore $representations,
 		private RecordStateStore $records,
 	) {
+	}
+
+	/**
+	 * @param list<ProjectionFieldShape> $propertyShapes
+	 */
+	public function applyManualProjection(
+		object $representation,
+		RepresentationBinding $manualBinding,
+		array $propertyShapes,
+		RepresentationBindingMerger $bindingMerger,
+	): void {
+		$state = $this->representations->get($representation);
+		$recordsByPath = $this->recordsByPathFromShapes($propertyShapes);
+
+		if ($state instanceof RepresentationState) {
+			$binding = $bindingMerger->mergeManualOverlay($state->getBinding(), $manualBinding);
+			$fieldItems = $state->getFieldItems();
+			$relationItems = $state->getRelationItems();
+		} else {
+			$binding = $manualBinding;
+			$fieldItems = [];
+			$relationItems = [];
+		}
+
+		foreach ($binding->getFields() as $fieldBinding) {
+			if ($this->hasFieldItem($fieldItems, $fieldBinding->getPath())) {
+				continue;
+			}
+
+			$record = $this->resolveRecordForNewField($state, $fieldBinding, $recordsByPath);
+			$fieldItems[] = new RepresentationFieldStateItem(
+				$fieldBinding,
+				$record,
+				$fieldBinding->getFieldName(),
+				$record->getRevision()
+			);
+		}
+
+		if ($state instanceof RepresentationState) {
+			$this->representations->remove($representation);
+		}
+
+		$this->representations->add($representation, new RepresentationState($binding, $fieldItems, $relationItems));
 	}
 
 	public function trackFlattenedAdapter(RecordState $record, RepresentationBinding $relatedBinding, object $ownerObject): object
@@ -135,5 +180,91 @@ final class RepresentationTracker
 		}
 
 		return $matches[0];
+	}
+
+	/**
+	 * @param array<string, RecordState> $recordsByPath
+	 */
+	private function resolveRecordForNewField(
+		?RepresentationState $state,
+		RepresentationFieldBinding $fieldBinding,
+		array $recordsByPath,
+	): RecordState {
+		if ($state instanceof RepresentationState) {
+			$resolved = $this->resolveRecordForFieldBinding($state, $fieldBinding);
+			if ($resolved instanceof RecordState) {
+				return $resolved;
+			}
+		}
+
+		$explicit = $recordsByPath[$fieldBinding->getPath()] ?? null;
+		if ($explicit instanceof RecordState) {
+			if ($explicit->getCollection()->getName() !== $fieldBinding->getCollectionName()) {
+				throw new StateException(sprintf(
+					"Manual projection field '%s' resolved to a record of collection '%s' but the binding targets collection '%s'.",
+					$fieldBinding->getPath(),
+					$explicit->getCollection()->getName(),
+					$fieldBinding->getCollectionName(),
+				));
+			}
+
+			return $explicit;
+		}
+
+		throw new StateException(sprintf(
+			"Cannot attach manual projection field '%s' because no concrete record state for source path '%s' could be resolved.",
+			$fieldBinding->getPath(),
+			$fieldBinding->getSourcePathKey(),
+		));
+	}
+
+	private function resolveRecordForFieldBinding(
+		RepresentationState $state,
+		RepresentationFieldBinding $fieldBinding,
+	): ?RecordState {
+		if ($fieldBinding->isRootSource()) {
+			return $state->getRootRecord();
+		}
+
+		$sourceKey = $fieldBinding->getSourcePathKey();
+		foreach ($state->getFieldItems() as $item) {
+			if ($item->getBinding()->getSourcePathKey() === $sourceKey) {
+				return $item->getRecord();
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * @param list<ProjectionFieldShape> $propertyShapes
+	 *
+	 * @return array<string, RecordState>
+	 */
+	private function recordsByPathFromShapes(array $propertyShapes): array
+	{
+		$records = [];
+		foreach ($propertyShapes as $shape) {
+			$source = $shape->getSource();
+			if ($source instanceof PropertySource) {
+				$records[$shape->getPublicPath()] = $source->getTargetRecord();
+			}
+		}
+
+		return $records;
+	}
+
+	/**
+	 * @param list<RepresentationFieldStateItem> $items
+	 */
+	private function hasFieldItem(array $items, string $path): bool
+	{
+		foreach ($items as $item) {
+			if ($item->getPath() === $path) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

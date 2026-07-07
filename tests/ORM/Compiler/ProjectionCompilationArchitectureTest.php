@@ -18,14 +18,19 @@ use ON\Data\ORM\Compiler\ManualProjection\SourceResolver;
 use ON\Data\ORM\Compiler\ManualProjection\Target;
 use ON\Data\ORM\Compiler\ProjectionBindingAssembler;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
+use ON\Data\ORM\Compiler\ResolvedProjectionSource;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionSelectionNormalizer;
 use ON\Data\ORM\Compiler\SelectQuery\QueryProjectionSourceResolver;
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationBindingMerger;
+use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
@@ -37,6 +42,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use stdClass;
 use Tests\ON\Data\Smoke\Support\SqliteMemoryHarness;
+use Tests\ON\Data\Support\RecordingCommandExecutor;
 
 final class ProjectionCompilationArchitectureTest extends TestCase
 {
@@ -51,6 +57,8 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertFileExists($root . '/src/ORM/Compiler/ProjectionSourceResolverInterface.php');
 		self::assertFileExists($root . '/src/ORM/Compiler/ResolvedProjectionSource.php');
 		self::assertFalse(method_exists(SourceResolver::class, 'rememberSource'));
+		self::assertFalse(method_exists(ResolvedProjectionSource::class, 'getRecordState'));
+		self::assertFalse(method_exists(PathResolver::class, 'collectionFromBinding'));
 	}
 
 	public function testManualBuilderUsesProjectionCompilerNotAssemblerDirectly(): void
@@ -77,6 +85,8 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertStringNotContainsString('attachPathTarget', $contents);
 		self::assertStringNotContainsString('attachRelationTarget', $contents);
 		self::assertStringNotContainsString('recordForExisting', $contents);
+		self::assertStringNotContainsString('new RepresentationFieldStateItem', $contents);
+		self::assertStringNotContainsString('resolveRecordForNewField', $contents);
 	}
 
 	public function testDeclarationWrapperClassesDoNotExist(): void
@@ -399,6 +409,109 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			$state->getBinding()->getPaths(),
 			static fn (string $path): bool => $path !== 'id',
 		)));
+	}
+
+	public function testManualBuilderEndReturnsRepresentationAndClearsPropertyShapes(): void
+	{
+		$users = $this->registry()->getCollection('users');
+		$session = new Session(new RecordingCommandExecutor());
+		$row = new stdClass();
+		$row->name = 'Ada';
+
+		$builder = $session->projection($row);
+		$target = $builder->from($users)->create(['id' => 10]);
+
+		self::assertSame($row, $builder->properties($target->name)->end());
+		self::assertSame($row, $builder->end());
+		self::assertSame(['name'], $session->getRepresentations()->get($row)->getBinding()->getPaths());
+	}
+
+	public function testManualProjectionAttachmentAddsRootFieldToExistingRootRecord(): void
+	{
+		$users = $this->registry()->getCollection('users');
+		$record = RecordState::new($users, ['id' => 10]);
+		$representation = new stdClass();
+		$representations = new RepresentationStore();
+		$rootBinding = new RepresentationBinding($users);
+		$id = new RepresentationFieldBinding('id', $users, 'id');
+		$rootBinding->addField($id);
+		$representations->add($representation, new RepresentationState($rootBinding, [
+			new RepresentationFieldStateItem($id, $record, 'id', $record->getRevision()),
+		]));
+
+		$manualBinding = new RepresentationBinding($users);
+		$manualBinding->addField(new RepresentationFieldBinding('name', $users, 'name'));
+
+		(new RepresentationTracker($representations, new RecordStateStore()))->applyManualProjection(
+			$representation,
+			$manualBinding,
+			[new ProjectionFieldShape('name', new RootTarget($record), 'name')],
+			new RepresentationBindingMerger(),
+		);
+
+		$state = $representations->get($representation);
+		self::assertInstanceOf(RepresentationState::class, $state);
+		self::assertSame($record, $state->getFieldItem('name')->getRecord());
+	}
+
+	public function testManualProjectionAttachmentUsesSourcePathWhenCollectionsMatch(): void
+	{
+		$users = $this->registry()->getCollection('users');
+		$rootRecord = RecordState::new($users, ['id' => 10]);
+		$managerRecord = RecordState::new($users, ['id' => 20]);
+		$representation = new stdClass();
+		$representations = new RepresentationStore();
+		$existingBinding = new RepresentationBinding($users);
+		$rootField = new RepresentationFieldBinding('name', $users, 'name');
+		$managerField = new RepresentationFieldBinding('managerName', $users, 'name', sourcePath: ['manager']);
+		$existingBinding->addField($rootField);
+		$existingBinding->addField($managerField);
+		$representations->add($representation, new RepresentationState($existingBinding, [
+			new RepresentationFieldStateItem($rootField, $rootRecord, 'name', $rootRecord->getRevision()),
+			new RepresentationFieldStateItem($managerField, $managerRecord, 'name', $managerRecord->getRevision()),
+		]));
+
+		$manualBinding = new RepresentationBinding($users);
+		$manualBinding->addField(new RepresentationFieldBinding('managerEmail', $users, 'email', sourcePath: ['manager']));
+
+		(new RepresentationTracker($representations, new RecordStateStore()))->applyManualProjection(
+			$representation,
+			$manualBinding,
+			[],
+			new RepresentationBindingMerger(),
+		);
+
+		$state = $representations->get($representation);
+		self::assertInstanceOf(RepresentationState::class, $state);
+		self::assertSame($managerRecord, $state->getFieldItem('managerEmail')->getRecord());
+		self::assertNotSame($rootRecord, $state->getFieldItem('managerEmail')->getRecord());
+	}
+
+	public function testManualProjectionAttachmentThrowsWhenSourcePathCannotResolve(): void
+	{
+		$users = $this->registry()->getCollection('users');
+		$record = RecordState::new($users, ['id' => 10]);
+		$representation = new stdClass();
+		$representations = new RepresentationStore();
+		$existingBinding = new RepresentationBinding($users);
+		$rootField = new RepresentationFieldBinding('name', $users, 'name');
+		$existingBinding->addField($rootField);
+		$representations->add($representation, new RepresentationState($existingBinding, [
+			new RepresentationFieldStateItem($rootField, $record, 'name', $record->getRevision()),
+		]));
+
+		$manualBinding = new RepresentationBinding($users);
+		$manualBinding->addField(new RepresentationFieldBinding('managerEmail', $users, 'email', sourcePath: ['manager']));
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage("Cannot attach manual projection field 'managerEmail'");
+
+		(new RepresentationTracker($representations, new RecordStateStore()))->applyManualProjection(
+			$representation,
+			$manualBinding,
+			[],
+			new RepresentationBindingMerger(),
+		);
 	}
 
 	#[RequiresPhpExtension('pdo_sqlite')]

@@ -15,12 +15,8 @@ use InvalidArgumentException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
-use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Session;
-use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBindingMerger;
-use ON\Data\ORM\State\RepresentationFieldBinding;
-use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
 
 final class Builder
@@ -33,6 +29,7 @@ final class Builder
 	private ?PathResolution $pendingPath = null;
 
 	private ProjectionTargetFactory $targetFactory;
+	private RepresentationTracker $representationTracker;
 
 	public function __construct(
 		private Session $session,
@@ -52,6 +49,7 @@ final class Builder
 			$this->session->getRepresentations(),
 			$this->session->getRecords()
 		);
+		$this->representationTracker = $representationTracker;
 		$this->targetFactory = new ProjectionTargetFactory(
 			$this->session,
 			$this->representation,
@@ -181,140 +179,15 @@ final class Builder
 			? $state->getBinding()->getCollection()
 			: null;
 		$manualBinding = $this->projectionCompiler->compile($this->propertyShapes, $fallbackCollection);
-		$recordsByPath = $this->recordsByPathFromShapes();
-
-		if ($state instanceof RepresentationState) {
-			$binding = $this->bindingMerger->mergeManualOverlay($state->getBinding(), $manualBinding);
-			$fieldItems = $state->getFieldItems();
-			$relationItems = $state->getRelationItems();
-		} else {
-			$binding = $manualBinding;
-			$fieldItems = [];
-			$relationItems = [];
-		}
-
-		foreach ($binding->getFields() as $fieldBinding) {
-			if ($this->hasFieldItem($fieldItems, $fieldBinding->getPath())) {
-				continue;
-			}
-
-			$record = $this->resolveRecordForNewField($state, $fieldBinding, $recordsByPath);
-			$fieldItems[] = new RepresentationFieldStateItem(
-				$fieldBinding,
-				$record,
-				$fieldBinding->getFieldName(),
-				$record->getRevision()
-			);
-		}
-
-		if ($state instanceof RepresentationState) {
-			$this->session->getRepresentations()->remove($this->representation);
-		}
-
-		$this->session->getRepresentations()->add($this->representation, new RepresentationState($binding, $fieldItems, $relationItems));
+		$this->representationTracker->applyManualProjection(
+			$this->representation,
+			$manualBinding,
+			$this->propertyShapes,
+			$this->bindingMerger,
+		);
 		$this->propertyShapes = [];
 
 		return $this->representation;
-	}
-
-	/**
-	 * Resolves the concrete record a newly added manual field item attaches to.
-	 *
-	 * Resolution is by source path, never by collection name: root-source fields
-	 * ([]) attach to the representation's root record, and relation-sourced fields
-	 * attach to the record already bound for that source path. Fields declared
-	 * through their own source (create()/existing()/tracked()) fall back to that
-	 * explicit record; otherwise this throws rather than guessing from the session
-	 * record store.
-	 *
-	 * @param array<string, RecordState> $recordsByPath
-	 */
-	private function resolveRecordForNewField(
-		?RepresentationState $state,
-		RepresentationFieldBinding $fieldBinding,
-		array $recordsByPath,
-	): RecordState {
-		if ($state instanceof RepresentationState) {
-			$resolved = $this->resolveRecordForFieldBinding($state, $fieldBinding);
-			if ($resolved instanceof RecordState) {
-				return $resolved;
-			}
-		}
-
-		$explicit = $recordsByPath[$fieldBinding->getPath()] ?? null;
-		if ($explicit instanceof RecordState) {
-			if ($explicit->getCollection()->getName() !== $fieldBinding->getCollectionName()) {
-				throw new StateException(sprintf(
-					"Manual projection field '%s' resolved to a record of collection '%s' but the binding targets collection '%s'.",
-					$fieldBinding->getPath(),
-					$explicit->getCollection()->getName(),
-					$fieldBinding->getCollectionName(),
-				));
-			}
-
-			return $explicit;
-		}
-
-		throw new StateException(sprintf(
-			"Cannot attach manual projection field '%s' because no concrete record state for source path '%s' could be resolved.",
-			$fieldBinding->getPath(),
-			$fieldBinding->getSourcePathKey(),
-		));
-	}
-
-	/**
-	 * Resolves the concrete record for a field binding from an existing tracked
-	 * representation state by its source path, never by collection name.
-	 */
-	private function resolveRecordForFieldBinding(
-		RepresentationState $state,
-		RepresentationFieldBinding $fieldBinding,
-	): ?RecordState {
-		if ($fieldBinding->isRootSource()) {
-			return $state->getRootRecord();
-		}
-
-		$sourceKey = $fieldBinding->getSourcePathKey();
-		foreach ($state->getFieldItems() as $item) {
-			if ($item->getBinding()->getSourcePathKey() === $sourceKey) {
-				return $item->getRecord();
-			}
-		}
-
-		return null;
-	}
-
-	/**
-	 * Maps each declared manual field path to the concrete record its source
-	 * resolves to, so field attachment never scans all session records.
-	 *
-	 * @return array<string, RecordState>
-	 */
-	private function recordsByPathFromShapes(): array
-	{
-		$records = [];
-		foreach ($this->propertyShapes as $shape) {
-			$source = $shape->getSource();
-			if ($source instanceof PropertySource) {
-				$records[$shape->getPublicPath()] = $source->getTargetRecord();
-			}
-		}
-
-		return $records;
-	}
-
-	/**
-	 * @param list<RepresentationFieldStateItem> $items
-	 */
-	private function hasFieldItem(array $items, string $path): bool
-	{
-		foreach ($items as $item) {
-			if ($item->getPath() === $path) {
-				return true;
-			}
-		}
-
-		return false;
 	}
 
 	private function clearPending(): void

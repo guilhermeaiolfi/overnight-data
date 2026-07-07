@@ -11,7 +11,6 @@ namespace ON\Data\ORM\Compiler\ManualProjection;
  * return the related binding template used when creating relation targets.
  */
 use InvalidArgumentException;
-use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -48,19 +47,6 @@ final class PathResolver
 			$relationBinding->isMany() ? RepresentationRelationCardinality::MANY : RepresentationRelationCardinality::ONE,
 			$relationBinding->getRelatedBinding()
 		);
-	}
-
-	public function collectionFromBinding(RepresentationBinding $binding): CollectionInterface
-	{
-		foreach ($binding->getFields() as $fieldBinding) {
-			return $fieldBinding->getCollection();
-		}
-
-		foreach ($binding->getRelations() as $relationBinding) {
-			return $relationBinding->getOwnerCollection();
-		}
-
-		throw new StateException('Cannot resolve relation target collection from an empty related binding.');
 	}
 
 	private function relationBindingFromPath(RepresentationBinding $binding, string $path): RepresentationRelationBinding

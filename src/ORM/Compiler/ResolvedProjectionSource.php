@@ -6,14 +6,13 @@ namespace ON\Data\ORM\Compiler;
 
 /**
  * Resolved compile-time identity for one projection field shape: collection plus
- * optional concrete RecordState.
+ * source path.
  *
  * Exists as the return type of ProjectionSourceResolverInterface so the assembler
- * can choose template vs concrete RecordFieldRef without knowing whether the
- * source came from a query or a manual projection target.
+ * can create structural field bindings without knowing whether the source came
+ * from a query or a manual projection target.
  */
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\ORM\State\RecordState;
 
 final class ResolvedProjectionSource
 {
@@ -26,7 +25,6 @@ final class ResolvedProjectionSource
 	 */
 	public function __construct(
 		private CollectionInterface $collection,
-		private ?RecordState $recordState = null,
 		array $sourcePath = [],
 	) {
 		$this->sourcePath = array_values($sourcePath);
@@ -37,16 +35,16 @@ final class ResolvedProjectionSource
 		return $this->collection;
 	}
 
-	public function getRecordState(): ?RecordState
-	{
-		return $this->recordState;
-	}
-
 	/**
 	 * @return list<string>
 	 */
 	public function getSourcePath(): array
 	{
 		return $this->sourcePath;
+	}
+
+	public function getSourcePathKey(): string
+	{
+		return implode('.', $this->sourcePath);
 	}
 }

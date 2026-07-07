@@ -52,7 +52,7 @@ final class ProjectionTargetFactory
 	 */
 	public function createAtPath(PathResolution $path, array $values): Target
 	{
-		$collection = $this->pathResolver->collectionFromBinding($path->getRelatedBinding());
+		$collection = $path->getRelatedBinding()->getCollection();
 		$record = $this->session->trackRecord(RecordState::new($collection, $values));
 
 		return $this->attachPathTarget(
@@ -90,7 +90,7 @@ final class ProjectionTargetFactory
 
 	public function existingAtPath(PathResolution $path, Key|array $key, array $seedValues): Target
 	{
-		$record = $this->recordForExisting($this->pathResolver->collectionFromBinding($path->getRelatedBinding()), $key, $seedValues);
+		$record = $this->recordForExisting($path->getRelatedBinding()->getCollection(), $key, $seedValues);
 
 		return $this->attachPathTarget(
 			$path->getOwner(),
@@ -147,7 +147,7 @@ final class ProjectionTargetFactory
 		$target ??= $representation;
 		$record = $this->representationTracker->singleRecordForTrackedTarget(
 			$target,
-			$this->pathResolver->collectionFromBinding($path->getRelatedBinding()),
+			$path->getRelatedBinding()->getCollection(),
 			sprintf("Cannot use tracked() for relation '%s'", $path->getRelationName())
 		);
 

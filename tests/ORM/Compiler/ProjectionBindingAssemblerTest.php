@@ -132,6 +132,17 @@ final class ProjectionBindingAssemblerTest extends TestCase
 		self::assertTrue($binding->getField('name')->isWritable());
 	}
 
+	public function testResolvedProjectionSourceIsStructuralOnly(): void
+	{
+		$users = $this->makeRegistry()->getCollection('users');
+		$source = new ResolvedProjectionSource($users, ['manager']);
+
+		self::assertSame($users, $source->getCollection());
+		self::assertSame(['manager'], $source->getSourcePath());
+		self::assertSame('manager', $source->getSourcePathKey());
+		self::assertFalse(method_exists($source, 'getRecordState'));
+	}
+
 	private function resolver(
 		object $rootSource,
 		CollectionInterface $rootCollection,
@@ -139,7 +150,7 @@ final class ProjectionBindingAssemblerTest extends TestCase
 		CollectionInterface $relationCollection,
 		array $relationSourcePath,
 	): ProjectionSourceResolverInterface {
-		return new class($rootSource, $rootCollection, $relationSource, $relationCollection, $relationSourcePath) implements ProjectionSourceResolverInterface {
+		return new class ($rootSource, $rootCollection, $relationSource, $relationCollection, $relationSourcePath) implements ProjectionSourceResolverInterface {
 			/**
 			 * @param list<string> $relationSourcePath
 			 */
