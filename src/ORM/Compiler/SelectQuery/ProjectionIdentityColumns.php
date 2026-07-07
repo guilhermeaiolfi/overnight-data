@@ -41,19 +41,6 @@ final class ProjectionIdentityColumns
 		return $this->entries[$this->sourcePathKey($sourcePath)][$fieldName] ?? null;
 	}
 
-	public function isEmpty(): bool
-	{
-		return $this->entries === [];
-	}
-
-	/**
-	 * @return array<string, array<string, string>>
-	 */
-	public function all(): array
-	{
-		return $this->entries;
-	}
-
 	/**
 	 * @param list<string> $sourcePath
 	 */

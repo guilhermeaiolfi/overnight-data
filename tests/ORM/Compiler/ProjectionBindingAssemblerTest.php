@@ -139,7 +139,6 @@ final class ProjectionBindingAssemblerTest extends TestCase
 
 		self::assertSame($users, $source->getCollection());
 		self::assertSame(['manager'], $source->getSourcePath());
-		self::assertSame('manager', $source->getSourcePathKey());
 		self::assertFalse(method_exists($source, 'getRecordState'));
 	}
 

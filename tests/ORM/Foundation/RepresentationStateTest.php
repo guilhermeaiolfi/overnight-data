@@ -32,14 +32,14 @@ final class RepresentationStateTest extends TestCase
 	public function testRepresentationStateIsConcreteAndNotATemplate(): void
 	{
 		self::markTestIncomplete(
-			'Phase 0 skeleton: RepresentationState means concrete object/value plus applied binding plus baseline record revisions; it must not be used as a reusable child or relation item template.'
+			'Phase 0 skeleton: RepresentationState means concrete object/value plus field/relation state items and baseline record revisions; it must not be used as a reusable child or relation item template.'
 		);
 	}
 
-	public function testAppliedBindingsMayNeedLocalRecordHandlesForNewChildren(): void
+	public function testRepresentationStateItemsMayNeedLocalRecordHandlesForNewChildren(): void
 	{
 		self::markTestIncomplete(
-			'Phase 0 skeleton: applied bindings for multiple new relation children use state-targeted RecordFieldRef instances because repeated template refs such as posts.title are ambiguous.'
+			'Phase 0 skeleton: state items for multiple new relation children attach to concrete RecordState instances because repeated structural paths such as posts.title are ambiguous.'
 		);
 	}
 }

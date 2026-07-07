@@ -40,7 +40,9 @@ The mapper does not by itself know persistence provenance. It should not become 
 
 `RepresentationBinding` describes what a representation object shape means for ORM provenance.
 
-It is the persistence provenance graph for one representation shape. It can be used as a root binding or as a related binding branch. It owns three path maps:
+It is the structure-only persistence provenance graph for one representation shape. It can be used as a root binding or as a related binding branch. It stores collection, field, relation, path, source-path, writability, and related-branch metadata. It does not store `RecordState`, `RecordFieldRef`, or `RecordRelationRef`.
+
+It owns three path maps:
 
 - field bindings
 - expression bindings
@@ -50,14 +52,15 @@ A path can exist in only one of those maps. Scalar representation sync reads onl
 
 ### RepresentationState
 
-`RepresentationState` describes the applied binding state for one object instance. The object itself is held as the weak key in `RepresentationStore`, not inside `RepresentationState`.
+`RepresentationState` describes concrete runtime attachment for one object instance. The object itself is held as the weak key in `RepresentationStore`, not inside `RepresentationState`.
 
 It stores:
 
 - the `RepresentationBinding`
-- baseline record revisions
+- `RepresentationFieldStateItem` entries that attach field bindings to concrete `RecordState` objects and baseline record revisions
+- `RepresentationRelationStateItem` entries that attach relation bindings to concrete owner `RecordState` objects
 
-It is not a binding template. Multiple object instances may share the same reusable representation binding shape, while each representation state stores instance-specific baseline revisions.
+It is not a binding template. Multiple object instances may share the same reusable representation binding shape, while each representation state stores instance-specific runtime attachments and baseline revisions.
 
 ### ToManyRelationState / ToOneRelationState
 
@@ -87,7 +90,7 @@ For flat projections, the compiler may add hidden identity selections tagged `Se
 
 Flat projection adoption is used by mutable `stdClass` query export. Manual mutable projections use the same binding model, but they supply concrete record identities without executing a query.
 
-Manual projections normalize manual property declarations into concrete `RecordFieldRef` targets:
+Manual projections normalize manual property declarations into `RepresentationFieldBinding` entries with `sourcePath` metadata, then attach them to concrete `RecordState` objects through `RepresentationFieldStateItem` entries:
 
 ```text
 Session::projection($object)
@@ -105,14 +108,14 @@ Relation persistence planning then consumes changed `ToManyRelationState` and `T
 
 ### Field Binding
 
-A field binding maps a representation path to a `RecordFieldRef`.
+A field binding maps a representation path to a collection field plus a `sourcePath`.
 
 ```text
-object.id   -> users.id
-object.name -> users.name
+object.id          -> RepresentationFieldBinding(path: id, collection: users, field: id, sourcePath: [])
+object.companyName -> RepresentationFieldBinding(path: companyName, collection: companies, field: name, sourcePath: [company])
 ```
 
-`RecordFieldRef` can be a collection-template ref or a concrete `RecordState` ref. Writable field bindings can be synchronized back into `RecordState`. Read-only field bindings remain scalar field provenance, but scalar sync ignores them for updates.
+`RepresentationFieldBinding` is structural only. Writable field bindings can be synchronized back into the concrete `RecordState` named by the corresponding `RepresentationFieldStateItem`. Read-only field bindings remain scalar field provenance, but scalar sync ignores them for updates.
 
 ### Expression Binding
 
@@ -126,23 +129,21 @@ Expression bindings can model aliases, aggregates, computed values, or query exp
 
 ### Relation Binding
 
-A relation binding maps one representation path to one owner-aware `RecordRelationRef` and one reusable related binding.
+A relation binding maps one representation path to an owner collection, relation name, and one reusable related binding.
 
 ```text
-object.posts -> RecordRelationRef(users.posts) MANY
+object.posts -> RepresentationRelationBinding(path: posts, owner: users, relation: posts) MANY
     related binding:
         object.posts[].id    -> posts.id
         object.posts[].title -> posts.title
 ```
 
-A relation path such as `posts` does not merely mean a relation named `posts`. It means the specific relation carried by `RecordRelationRef`, including the owning collection or record state. This keeps aliases and mixed representations safe:
+A relation path such as `posts` does not merely mean a relation named `posts`. It means the specific relation carried by `RepresentationRelationBinding`, including the owning collection. Concrete runtime ownership lives in `RepresentationRelationStateItem`. This keeps aliases and mixed representations safe:
 
 ```text
-object.name  -> RecordFieldRef(companies.name)
-object.posts -> RecordRelationRef(users.posts)
+object.name  -> RepresentationFieldBinding(collection: companies, field: name, sourcePath: [company])
+object.posts -> RepresentationRelationBinding(owner: users, relation: posts)
 ```
-
-Like field refs, relation refs can start as collection-template refs and become concrete when a root binding is applied to a `RecordState`.
 
 For a `MANY` relation, `getRelatedBinding()` is the item shape. The same related binding is reused for every child object in that representation shape. Do not create one binding object per child instance.
 
@@ -165,19 +166,15 @@ object.author -> relation posts.author ONE
 
 Use `getRelatedBinding()` for both cardinalities. Do not introduce separate `getItemBinding()` or `getTargetBinding()` names.
 
-## Applying Bindings
+## Attaching Bindings
 
-`RepresentationBinding::applyToRecordState($state)` applies root field and relation owner refs to the provided record state:
+`RepresentationBinding` stays structure-only. It is attached to concrete runtime state by services that create `RepresentationState` items:
 
-- template field refs for the state's collection become concrete state-targeted refs
-- concrete field refs are rejected
-- mismatched template collections are rejected
-- expression bindings are copied unchanged
-- template relation refs for the state's collection become concrete state-targeted refs
-- concrete relation refs are rejected
-- mismatched relation owner collections are rejected
+- `RepresentationAdopter` builds field and relation state items for graph-shaped objects.
+- `ProjectionRepresentationAdopter` resolves flat projection identities through `ProjectionIdentityColumns` and builds field state items per `sourcePath`.
+- Manual projection tracking merges structural overlays and attaches new fields to concrete records from manual sources.
 
-It does not recursively apply related bindings by itself. `Session::sync($object, $binding)` is the explicit API that chooses related objects from relation path values, then uses each relation binding's `getRelatedBinding()` with the existing adoption path. Binding application still does not infer relations from objects or plan relation persistence.
+These attachment steps do not mutate the reusable binding shape. `Session::sync($object, $binding)` is the explicit API that chooses related objects from relation path values, then uses each relation binding's `getRelatedBinding()` with the existing adoption path. Binding attachment still does not infer relations from objects or plan relation persistence.
 
 ## Current Sync Boundaries
 

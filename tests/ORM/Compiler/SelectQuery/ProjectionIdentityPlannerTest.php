@@ -32,7 +32,6 @@ final class ProjectionIdentityPlannerTest extends TestCase
 
 		$identities = $this->planner->plan($query, $binding);
 
-		self::assertTrue($identities->isEmpty());
 		self::assertNull($identities->get([], 'id'));
 		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
 	}
@@ -96,7 +95,8 @@ final class ProjectionIdentityPlannerTest extends TestCase
 
 		$identities = $this->planner->plan($query, $binding);
 
-		self::assertTrue($identities->isEmpty());
+		self::assertNull($identities->get([], 'id'));
+		self::assertNull($identities->get(['manager'], 'id'));
 		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
 	}
 

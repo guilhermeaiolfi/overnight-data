@@ -40,7 +40,7 @@ It stores:
 
 Identity is first-class through the existing `ON\Data\Key` type. It includes the collection name, primary-key values in definition key order, composite-key support, and canonical PHP values.
 
-Each `RecordState` also has a stable ORM record target hash via `getStateHash()`. For clean persisted records this can be the `Key` hash. For new unsaved records it is a local in-memory tracking hash that stays stable if the record later receives a database key through `markClean($key)`. This hash is not database identity, persistence state, or optimistic locking; it exists so applied bindings can distinguish multiple unsaved records in the same PHP process/session.
+Each `RecordState` also has a stable ORM record target hash via `getStateHash()`. For clean persisted records this can be the `Key` hash. For new unsaved records it is a local in-memory tracking hash that stays stable if the record later receives a database key through `markClean($key)`. This hash is not database identity, persistence state, or optimistic locking; it exists so runtime state items can distinguish multiple unsaved records in the same PHP process/session.
 
 ## Representation
 
@@ -54,10 +54,10 @@ A `RepresentationState` is concrete runtime state for an applied `Representation
 
 It stores:
 
-- the applied representation binding;
-- baseline record revisions captured when it was created, attached, or last synced/refreshed;
-- field lineage from representation paths/properties to record field references;
-- writable/read-only flags per mapped slot;
+- the structure-only `RepresentationBinding`;
+- `RepresentationFieldStateItem` entries that attach structural field bindings to concrete `RecordState` objects and baseline record revisions;
+- `RepresentationRelationStateItem` entries that attach structural relation bindings to concrete owner `RecordState` objects;
+- writable/read-only flags per mapped slot through field bindings;
 - relation collection loaded state later.
 
 It does not store baseline field values. When sync needs an old value, it asks the owning `RecordState` history for the value at the tracked baseline revision.
@@ -169,11 +169,11 @@ weak representation object -> RepresentationState
 
 Classic ORMs usually map identity to entity object. This ORM maps identity to record state, then allows many representations over that state.
 
-`RecordStateStore` is the record-state registry. It indexes each known state by its stable local state hash and, when available, by its database `ON\Data\Key` hash. A new record keeps its local state hash after it receives a generated database key through `RecordState::markClean($key)`; the state hash must not be rewritten to the key hash, because existing state-targeted bindings use that stable local handle.
+`RecordStateStore` is the record-state registry. It indexes each known state by its stable local state hash and, when available, by its database `ON\Data\Key` hash. A new record keeps its local state hash after it receives a generated database key through `RecordState::markClean($key)`; the state hash must not be rewritten to the key hash, because existing runtime state items use that stable local handle.
 
 The store is responsible for aliasing both handles to the same `RecordState`. Scalar insert/flush logic calls `RecordStateStore::indexKey($state)` after assigning a generated key so keyed references can resolve the same state that was previously known only by local state hash.
 
-`RecordFieldRef` resolution should first use a direct state target, then fall back to key lookup through `RecordStateStore`. Template refs have no concrete record to resolve until a binding is applied to a state.
+Flat projection identity resolution first uses visible field values, then falls back to `ProjectionIdentityColumns` for hidden primary-key result columns. Structural bindings have no concrete record to resolve until adoption creates `RepresentationFieldStateItem` or `RepresentationRelationStateItem` entries.
 
 `RecordStateStore` is not an object identity store. It strongly owns record state for the current session/unit of work. `ToManyRelationStore` and `ToOneRelationStore` also strongly own relation runtime state for the session.
 
@@ -304,25 +304,23 @@ RepresentationBinding
     reusable mapping shape
 
 RepresentationState
-    concrete object + applied binding + baseline record revisions
+    concrete object + field/relation state items + baseline record revisions
 ```
 
-An applied binding may need local record state that is more precise than `RecordFieldRef` with an optional `Key`. A keyed field reference works for persisted records, and a keyless reference is useful for template-like shapes, but it is ambiguous for multiple new child records:
+Concrete runtime attachment may need local record state that is more precise than collection + field + `sourcePath`. A structure-only binding is reusable, but it is ambiguous for multiple new child records:
 
 ```text
 posts[no-key].title
 posts[no-key].title
 ```
 
-`RecordFieldRef` therefore has three modes:
+`RepresentationBinding` therefore remains structural only:
 
-- template: collection + field, with no concrete record yet;
-- keyed: collection + field + `Key`;
-- state-targeted: collection + field + `RecordState`.
+- field bindings store representation path, collection, field, writability, and `sourcePath`;
+- relation bindings store representation path, owner collection, relation name, and the reusable related binding;
+- concrete records live in `RepresentationFieldStateItem` and `RepresentationRelationStateItem`.
 
-Template refs describe reusable mapping shapes. Keyed refs point to persisted records. State-targeted refs point to a concrete in-memory `RecordState`, including a new unsaved record before any database key exists. Their record hash is the `RecordState::getStateHash()` value; keyed refs use `Key::getHash()`.
-
-`RepresentationBinding::applyToRecordState($state)` turns a reusable same-collection template binding into a new applied binding whose fields and relation owners target that concrete `RecordState`. It preserves paths and writable/read-only flags, and it does not mutate the reusable binding.
+State items point to concrete in-memory `RecordState` objects, including new unsaved records before any database key exists. Their stable local handle is `RecordState::getStateHash()`.
 
 Sources of binding information:
 
@@ -466,7 +464,6 @@ Phase 1A introduces the first production ORM state primitives only:
 - `RecordHistory`
 - `RecordState`
 - `RecordStateStore`
-- `RecordFieldRef`
 - `RepresentationFieldBinding`
 - `RepresentationBinding`
 - `RepresentationState`
@@ -490,7 +487,7 @@ Future ORM runtime will apply the child binding to child `RecordState` instances
 
 Phase 1E introduces `ON\Data\ORM\Sync\RepresentationAdopter` as the small bridge between reusable child binding templates and concrete ORM tracking.
 
-`RepresentationAdopter::adopt()` applies a reusable `RepresentationBinding` template to a concrete child `RecordState`, registers that record in `RecordStateStore`, captures baseline record revisions from the applied binding, and registers the child object as a `RepresentationState` in `RepresentationStore`. Future relation runtime can use a `ToManyRelationState` child's binding with `RepresentationAdopter::adopt()` around flows such as adding a post object to a user's `ToManyRelationState`.
+`RepresentationAdopter::adopt()` attaches a reusable `RepresentationBinding` template to a concrete child `RecordState`, registers that record in `RecordStateStore`, captures baseline record revisions in `RepresentationFieldStateItem` entries, and registers the child object as a `RepresentationState` in `RepresentationStore`. Future relation runtime can use a `ToManyRelationState` child's binding with `RepresentationAdopter::adopt()` around flows such as adding a post object to a user's `ToManyRelationState`.
 
 `ToManyRelationState` still owns relation add/remove intent. Adoption only tracks the child representation; it does not add the item to the relation collection, inspect relation loaded state, sync representation values, persist, flush, write SQL, or mutate the child binding template.
 

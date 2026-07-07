@@ -72,7 +72,6 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 	{
 		$contents = (string) file_get_contents(dirname(__DIR__, 3) . '/src/ORM/Compiler/ManualProjection/Builder.php');
 
-		self::assertStringNotContainsString('RecordFieldRef', $contents);
 		self::assertStringNotContainsString('new ToManyRelationState', $contents);
 		self::assertStringNotContainsString('new ToOneRelationState', $contents);
 		self::assertStringNotContainsString('relationBindingFromPath', $contents);
@@ -320,7 +319,6 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			self::assertStringNotContainsString('AliasedExpression', $contents, $path);
 			self::assertStringNotContainsString('SelectionItem', $contents, $path);
 			self::assertStringNotContainsString('RepresentationFieldBinding', $contents, $path);
-			self::assertStringNotContainsString('RecordFieldRef', $contents, $path);
 		}
 	}
 
@@ -335,12 +333,10 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			$root . '/src/ORM/Compiler/ManualProjection/SourceResolver.php',
 			$root . '/src/ORM/Compiler/SelectQuery/ProjectionCompiler.php',
 		] as $path) {
-			self::assertStringNotContainsString('RecordFieldRef', (string) file_get_contents($path), $path);
 			self::assertStringNotContainsString('new RepresentationFieldBinding', (string) file_get_contents($path), $path);
 		}
 
 		$assembler = (string) file_get_contents($root . '/src/ORM/Compiler/ProjectionBindingAssembler.php');
-		self::assertStringNotContainsString('RecordFieldRef', $assembler);
 		self::assertStringContainsString('new RepresentationFieldBinding', $assembler);
 	}
 
@@ -519,7 +515,6 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 
 		$resolved = $pathResolver->resolve($user, 'posts');
 
-		self::assertSame('posts', $resolved->getPath());
 		self::assertSame('posts', $resolved->getRelationName());
 	}
 

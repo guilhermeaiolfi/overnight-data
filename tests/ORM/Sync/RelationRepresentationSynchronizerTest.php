@@ -271,7 +271,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		self::assertSame($existing, $toManyRelations->get($owner, 'posts'));
 	}
 
-	public function testCreatedToManyRelationStateUsesOwnerStateFromRecordRelationRef(): void
+	public function testCreatedToManyRelationStateUsesOwnerStateFromRepresentationRelationStateItem(): void
 	{
 		$owner = RecordState::new($this->users());
 		$touched = $this->syncOne($owner, []);
@@ -279,7 +279,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		self::assertSame($owner, $touched[0]->getOwner());
 	}
 
-	public function testCreatedToManyRelationStateUsesRelationNameFromRecordRelationRef(): void
+	public function testCreatedToManyRelationStateUsesRelationNameFromRepresentationRelationBinding(): void
 	{
 		$touched = $this->syncOne(RecordState::new($this->users()), []);
 
@@ -293,7 +293,8 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$binding = new RepresentationBinding($this->users());
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			$owner->getCollection(), 'posts',
+			$owner->getCollection(),
+			'posts',
 			$relatedBinding
 		));
 
@@ -346,7 +347,8 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$binding = new RepresentationBinding($this->posts());
 		$binding->addRelation(new RepresentationRelationBinding(
 			'author.profile',
-			$this->posts(), 'author',
+			$this->posts(),
+			'author',
 			$this->profileBinding()
 		));
 

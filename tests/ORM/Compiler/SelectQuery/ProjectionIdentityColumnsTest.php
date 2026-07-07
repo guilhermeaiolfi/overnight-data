@@ -9,9 +9,9 @@ use PHPUnit\Framework\TestCase;
 
 final class ProjectionIdentityColumnsTest extends TestCase
 {
-	public function testIsEmptyByDefault(): void
+	public function testReturnsNullByDefault(): void
 	{
-		self::assertTrue((new ProjectionIdentityColumns())->isEmpty());
+		self::assertNull((new ProjectionIdentityColumns())->get([], 'id'));
 	}
 
 	public function testStoresAndRetrievesBySourcePath(): void
@@ -20,7 +20,6 @@ final class ProjectionIdentityColumnsTest extends TestCase
 		$columns->add([], 'id', 'root_id');
 		$columns->add(['company'], 'id', 'company_id');
 
-		self::assertFalse($columns->isEmpty());
 		self::assertSame('root_id', $columns->get([], 'id'));
 		self::assertSame('company_id', $columns->get(['company'], 'id'));
 		self::assertNull($columns->get(['manager'], 'id'));
@@ -45,17 +44,5 @@ final class ProjectionIdentityColumnsTest extends TestCase
 
 		self::assertSame('company_id', $columns->get(['company'], 'id'));
 		self::assertSame('owner_id', $columns->get(['company', 'owner'], 'id'));
-	}
-
-	public function testAllExposesEntriesKeyedBySourcePath(): void
-	{
-		$columns = new ProjectionIdentityColumns();
-		$columns->add([], 'id', 'root_id');
-		$columns->add(['manager'], 'id', 'manager_id');
-
-		self::assertSame([
-			'' => ['id' => 'root_id'],
-			'manager' => ['id' => 'manager_id'],
-		], $columns->all());
 	}
 }

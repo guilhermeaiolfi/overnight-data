@@ -65,7 +65,7 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		self::assertNotSame($userRecord, $companyRecord);
 	}
 
-	public function testAppliedBindingHasConcreteRecordFieldRefTargetsForBothCollections(): void
+	public function testRepresentationStateItemsAttachFieldsToBothCollections(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');

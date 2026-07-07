@@ -204,7 +204,6 @@ final class ProjectionCompiler
 				: $bindingsByPath[$parentPathKey];
 			$ownerCollection = $this->resolveOwnerCollection($query, $path);
 			$relationName = $selection->getName();
-			$relationDefinition = $selection->getRelationRef()->getDefinition();
 			$relatedBinding = $this->compileRelationBinding($selection);
 
 			$parentBinding->addRelation(new RepresentationRelationBinding(
@@ -240,7 +239,7 @@ final class ProjectionCompiler
 
 	private function compileRelationBinding(RelationSelection $selection): RepresentationBinding
 	{
-		$targetCollection = $this->relationTargetCollection($selection->getRelationRef()->getDefinition());
+		$targetCollection = $selection->getRelationRef()->getDefinition()->getCollection();
 		$binding = new RepresentationBinding($targetCollection);
 		$sourceResolver = new RootSourceResolver($targetCollection);
 		$explicitFields = $selection->getFields();
@@ -268,10 +267,5 @@ final class ProjectionCompiler
 		}
 
 		return $shapes;
-	}
-
-	private function relationTargetCollection(RelationInterface $relation): CollectionInterface
-	{
-		return $relation->getCollection();
 	}
 }

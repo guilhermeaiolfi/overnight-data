@@ -42,7 +42,6 @@ final class PathResolver
 		return new PathResolution(
 			$owner,
 			$relationItem->getOwnerRecord(),
-			$path,
 			$relationBinding->getRelationName(),
 			$relationBinding->isMany() ? RepresentationRelationCardinality::MANY : RepresentationRelationCardinality::ONE,
 			$relationBinding->getRelatedBinding()

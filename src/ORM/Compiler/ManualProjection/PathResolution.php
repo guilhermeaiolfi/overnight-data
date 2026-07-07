@@ -20,7 +20,6 @@ final class PathResolution
 	public function __construct(
 		private object $ownerObject,
 		private RecordState $owner,
-		private string $path,
 		private string $relationName,
 		private RepresentationRelationCardinality $cardinality,
 		private RepresentationBinding $relatedBinding,
@@ -35,11 +34,6 @@ final class PathResolution
 	public function getOwner(): RecordState
 	{
 		return $this->owner;
-	}
-
-	public function getPath(): string
-	{
-		return $this->path;
 	}
 
 	public function getRelationName(): string

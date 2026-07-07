@@ -42,9 +42,4 @@ final class ResolvedProjectionSource
 	{
 		return $this->sourcePath;
 	}
-
-	public function getSourcePathKey(): string
-	{
-		return implode('.', $this->sourcePath);
-	}
 }
