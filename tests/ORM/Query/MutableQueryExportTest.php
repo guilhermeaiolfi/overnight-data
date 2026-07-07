@@ -63,6 +63,42 @@ final class MutableQueryExportTest extends TestCase
 		self::assertSame(2, $rows[1]->id);
 	}
 
+	public function testComputedProjectionExpressionHydratesWithoutBindingOrStateTracking(): void
+	{
+		$session = $this->session();
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = new SelectQuery(
+			$users,
+			new MutableExportRecordingExecutor(
+				fetchAllRows: [
+					['id' => 1, 'name' => 'Ada', 'postCount' => 2],
+				],
+				fetchOneRow: ['id' => 1, 'name' => 'Ada', 'postCount' => 2],
+			),
+		);
+		$query->select($query->id, $query->name, $query->id->count()->as('postCount'));
+
+		$row = $query->to(stdClass::class)->mutable($session)->fetchOne();
+
+		self::assertInstanceOf(stdClass::class, $row);
+		self::assertSame(1, $row->id);
+		self::assertSame('Ada', $row->name);
+		self::assertSame(2, $row->postCount);
+
+		$state = $session->getRepresentations()->get($row);
+		self::assertInstanceOf(RepresentationState::class, $state);
+
+		$binding = $state->getBinding();
+		self::assertTrue($binding->hasFieldForSource([], 'id'));
+		self::assertTrue($binding->hasFieldForSource([], 'name'));
+		self::assertFalse($binding->hasField('postCount'));
+
+		self::assertTrue($state->hasFieldItem('id'));
+		self::assertTrue($state->hasFieldItem('name'));
+		self::assertFalse($state->hasFieldItem('postCount'));
+	}
+
 	public function testMutableFetchAllTracksAllRootObjectsWithEquivalentBindings(): void
 	{
 		$session = $this->session();
