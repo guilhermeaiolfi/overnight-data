@@ -28,7 +28,6 @@ use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationBindingMerger;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
@@ -87,6 +86,23 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertStringNotContainsString('recordForExisting', $contents);
 		self::assertStringNotContainsString('new RepresentationFieldStateItem', $contents);
 		self::assertStringNotContainsString('resolveRecordForNewField', $contents);
+		self::assertStringNotContainsString('RepresentationBindingMerger', $contents);
+		self::assertStringNotContainsString('bindingMerger', $contents);
+	}
+
+	public function testManualBuilderDelegatesProjectionApplicationWithoutBindingMerger(): void
+	{
+		$method = (new ReflectionClass(RepresentationTracker::class))->getMethod('applyManualProjection');
+		$parameterTypes = array_map(
+			static fn ($parameter): ?string => $parameter->getType()?->getName(),
+			$method->getParameters()
+		);
+
+		self::assertSame([
+			'object',
+			RepresentationBinding::class,
+			'array',
+		], $parameterTypes);
 	}
 
 	public function testDeclarationWrapperClassesDoNotExist(): void
@@ -446,7 +462,6 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			$representation,
 			$manualBinding,
 			[new ProjectionFieldShape('name', new RootTarget($record), 'name')],
-			new RepresentationBindingMerger(),
 		);
 
 		$state = $representations->get($representation);
@@ -478,7 +493,6 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			$representation,
 			$manualBinding,
 			[],
-			new RepresentationBindingMerger(),
 		);
 
 		$state = $representations->get($representation);
@@ -510,7 +524,6 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			$representation,
 			$manualBinding,
 			[],
-			new RepresentationBindingMerger(),
 		);
 	}
 

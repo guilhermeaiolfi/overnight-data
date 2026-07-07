@@ -30,6 +30,7 @@ final class RepresentationTracker
 	public function __construct(
 		private RepresentationStore $representations,
 		private RecordStateStore $records,
+		private RepresentationBindingMerger $bindingMerger = new RepresentationBindingMerger(),
 	) {
 	}
 
@@ -40,13 +41,12 @@ final class RepresentationTracker
 		object $representation,
 		RepresentationBinding $manualBinding,
 		array $propertyShapes,
-		RepresentationBindingMerger $bindingMerger,
 	): void {
 		$state = $this->representations->get($representation);
 		$recordsByPath = $this->recordsByPathFromShapes($propertyShapes);
 
 		if ($state instanceof RepresentationState) {
-			$binding = $bindingMerger->mergeManualOverlay($state->getBinding(), $manualBinding);
+			$binding = $this->bindingMerger->mergeManualOverlay($state->getBinding(), $manualBinding);
 			$fieldItems = $state->getFieldItems();
 			$relationItems = $state->getRelationItems();
 		} else {

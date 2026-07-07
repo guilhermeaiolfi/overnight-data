@@ -8,15 +8,14 @@ namespace ON\Data\ORM\Compiler\ManualProjection;
  * User-facing fluent API for manual mutable projections via Session::projection().
  *
  * Exists to orchestrate target creation (from/fromPath/create/existing/tracked),
- * property declaration collection, representation tracking, and final binding
- * merge — while delegating target lifecycle and binding compilation elsewhere.
+ * property declaration collection, representation tracking, and binding
+ * compilation while delegating target lifecycle elsewhere.
  */
 use InvalidArgumentException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
 use ON\Data\ORM\Session;
-use ON\Data\ORM\State\RepresentationBindingMerger;
 use ON\Data\ORM\State\RepresentationState;
 
 final class Builder
@@ -38,7 +37,6 @@ final class Builder
 		?PathResolver $pathResolver = null,
 		?RelationApplier $relationApplier = null,
 		?RepresentationTracker $representationTracker = null,
-		private RepresentationBindingMerger $bindingMerger = new RepresentationBindingMerger(),
 	) {
 		$pathResolver ??= new PathResolver($this->session->getRepresentations());
 		$relationApplier ??= new RelationApplier(
@@ -183,7 +181,6 @@ final class Builder
 			$this->representation,
 			$manualBinding,
 			$this->propertyShapes,
-			$this->bindingMerger,
 		);
 		$this->propertyShapes = [];
 
