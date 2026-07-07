@@ -34,7 +34,7 @@ The query graph is read-side intent and result-shaping information. It may later
 
 `map($source)->to(...)` converts a data shape into an object shape. It hydrates arrays, `stdClass`, DTOs, and entity-like classes according to mapper rules.
 
-The mapper does not by itself know persistence provenance. It should not become the binding declaration API. Mapper metadata such as source/target names can help shape values, but persistence also needs collection, field, identity, writability, expressions, relation provenance, and loaded relation state.
+The mapper does not by itself know persistence provenance. It should not become the binding declaration API. Mapper metadata such as source/target names can help shape values, but persistence also needs collection, field, identity, writability, relation provenance, and loaded relation state.
 
 ### RepresentationBinding
 
@@ -42,13 +42,12 @@ The mapper does not by itself know persistence provenance. It should not become 
 
 It is the structure-only persistence provenance graph for one representation shape. It can be used as a root binding or as a related binding branch. It stores collection, field, relation, path, source-path, writability, and related-branch metadata. It does not store `RecordState`, `RecordFieldRef`, or `RecordRelationRef`.
 
-It owns three path maps:
+It owns two path maps:
 
 - field bindings
-- expression bindings
 - relation bindings
 
-A path can exist in only one of those maps. Scalar representation sync reads only field bindings. Relation representation sync reads only relation bindings. Expression bindings are modeled now so later work can reason about them without changing the shape of `RepresentationBinding`.
+A path can exist in only one of those maps. Scalar representation sync reads only field bindings. Relation representation sync reads only relation bindings.
 
 ### RepresentationState
 
@@ -116,16 +115,6 @@ object.companyName -> RepresentationFieldBinding(path: companyName, collection: 
 ```
 
 `RepresentationFieldBinding` is structural only. Writable field bindings can be synchronized back into the concrete `RecordState` named by the corresponding `RepresentationFieldStateItem`. Read-only field bindings remain scalar field provenance, but scalar sync ignores them for updates.
-
-### Expression Binding
-
-An expression binding represents a selected value that is not writable by default.
-
-```text
-object.postCount -> count(posts.id) as post_count
-```
-
-Expression bindings can model aliases, aggregates, computed values, or query expressions. They do not store query expression objects yet, and scalar sync does not write them back.
 
 ### Relation Binding
 
@@ -195,7 +184,7 @@ RelationRepresentationSynchronizer -> ToManyRelationState / ToOneRelationState
 RepresentationStateResolver      -> already-tracked related objects only
 ```
 
-`MANY` bindings become `ToManyRelationState` runtime state. `ONE` bindings become `ToOneRelationState` runtime state. `Session::sync($object, $binding)` exposes this graph-aware representation sync step directly for plain objects with a single-collection root binding, and `Session::sync($object)` refreshes an already-tracked object graph. `Session::flush()` still runs strict sync automatically before planning and flushing. Expression bindings are ignored by both synchronizers for now. They should survive on the binding model as provenance for later tasks.
+`MANY` bindings become `ToManyRelationState` runtime state. `ONE` bindings become `ToOneRelationState` runtime state. `Session::sync($object, $binding)` exposes this graph-aware representation sync step directly for plain objects with a single-collection root binding, and `Session::sync($object)` refreshes an already-tracked object graph. `Session::flush()` still runs strict sync automatically before planning and flushing.
 
 Manual projection field and relation bindings may opt into "missing path means no write" behavior because manually extended flat objects often declare optional write paths. Normal graph and query-created bindings remain strict: missing writable scalar paths or malformed relation values still raise through sync.
 
