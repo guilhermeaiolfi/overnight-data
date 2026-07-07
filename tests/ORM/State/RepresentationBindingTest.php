@@ -160,26 +160,42 @@ final class RepresentationBindingTest extends TestCase
 		$companies = $this->posts();
 		$binding = new RepresentationBinding($users);
 		$root = new RepresentationFieldBinding('name', $users, 'name');
-		$foreign = new RepresentationFieldBinding('companyName', $companies, 'title');
+		$foreign = new RepresentationFieldBinding('companyName', $companies, 'title', sourcePath: ['company']);
 		$binding->addField($root);
 		$binding->addField($foreign);
 
 		self::assertSame('users', $binding->getCollectionName());
-		self::assertSame($root, $binding->getFieldFor('users', 'name'));
-		self::assertSame($foreign, $binding->getFieldFor('posts', 'title'));
+		self::assertSame($root, $binding->getFieldForSource([], 'name'));
+		self::assertSame($foreign, $binding->getFieldForSource(['company'], 'title'));
 	}
 
-	public function testFindsStructuralFieldForCollectionAndField(): void
+	public function testFindsStructuralFieldForSourcePathAndField(): void
 	{
 		$users = $this->users();
 		$field = new RepresentationFieldBinding('displayName', $users, 'name');
 		$binding = new RepresentationBinding($users);
 		$binding->addField($field);
 
-		self::assertSame($field, $binding->getFieldFor($users, 'name'));
-		self::assertSame($field, $binding->getFieldFor('users', 'name'));
-		self::assertTrue($binding->hasFieldFor($users, 'name'));
-		self::assertFalse($binding->hasFieldFor($users, 'email'));
+		self::assertSame($field, $binding->getFieldForSource([], 'name'));
+		self::assertTrue($binding->hasFieldForSource([], 'name'));
+		self::assertFalse($binding->hasFieldForSource([], 'email'));
+	}
+
+	public function testSameTerminalCollectionFieldsStayDistinctBySourcePath(): void
+	{
+		$users = $this->users();
+		$binding = new RepresentationBinding($users);
+		$rootName = new RepresentationFieldBinding('name', $users, 'name');
+		$managerName = new RepresentationFieldBinding('managerName', $users, 'name', sourcePath: ['manager']);
+		$binding->addField($rootName);
+		$binding->addField($managerName);
+
+		self::assertSame($rootName, $binding->getFieldForSource([], 'name'));
+		self::assertSame($managerName, $binding->getFieldForSource(['manager'], 'name'));
+		self::assertNotSame(
+			$binding->getFieldForSource([], 'name'),
+			$binding->getFieldForSource(['manager'], 'name'),
+		);
 	}
 
 	private function fieldBinding(string $path, bool $writable = true): RepresentationFieldBinding

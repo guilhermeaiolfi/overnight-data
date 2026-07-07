@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Compiler;
 
 use ON\Data\Definition\Registry;
+use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompilation;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompiler;
 use function ON\Data\Query\query;
 use ON\Data\Query\Selection\SelectionTag;
@@ -118,6 +119,45 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 			$internalSelections[0]->getSelectionKey(),
 			$projectionIdentities->get(['company'], 'id'),
 		);
+	}
+
+	public function testCompileResultReturnsProjectionCompilationWithSourcePathKeyedIdentities(): void
+	{
+		$registry = $this->makeRegistryWithCompany();
+		$users = $registry->getCollection('users');
+		$query = query($users, fn (SelectQuery $query) => $query
+			->select($query->id, $query->company->name->as('name')));
+
+		$compilation = $this->compiler->compileResult($query);
+
+		self::assertInstanceOf(ProjectionCompilation::class, $compilation);
+		self::assertTrue($compilation->getBinding()->getField('name')->getSourcePath() === ['company']);
+		self::assertNotNull($compilation->getProjectionIdentities()->get(['company'], 'id'));
+		self::assertNull($compilation->getProjectionIdentities()->get([], 'id'));
+	}
+
+	public function testSameTerminalCollectionFlatProjectionKeepsDistinctSourcePaths(): void
+	{
+		$registry = $this->makeRegistryWithManager();
+		$users = $registry->getCollection('users');
+		$query = query($users, fn (SelectQuery $query) => $query
+			->select($query->name, $query->manager->name->as('managerName')));
+
+		$compilation = $this->compiler->compileResult($query);
+		$binding = $compilation->getBinding();
+
+		self::assertSame('users', $binding->getField('name')->getCollectionName());
+		self::assertSame('users', $binding->getField('managerName')->getCollectionName());
+		self::assertSame([], $binding->getField('name')->getSourcePath());
+		self::assertSame(['manager'], $binding->getField('managerName')->getSourcePath());
+
+		$identities = $compilation->getProjectionIdentities();
+		self::assertNull($identities->get([], 'id'));
+		self::assertNotNull($identities->get(['manager'], 'id'));
+
+		$internal = $query->getSelections()->getByTag(SelectionTag::INTERNAL);
+		self::assertCount(1, $internal);
+		self::assertSame($internal[0]->getSelectionKey(), $identities->get(['manager'], 'id'));
 	}
 
 	public function testInternalIdentityFieldPathsDoNotCollideWithVisibleAliases(): void
@@ -365,6 +405,17 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 
 		$users = $registry->getCollection('users');
 		$users->hasOne('profile', 'profiles')->innerKey('id')->outerKey('user_id');
+
+		return $registry;
+	}
+
+	private function makeRegistryWithManager(): Registry
+	{
+		$registry = $this->makeRegistry();
+
+		$users = $registry->getCollection('users');
+		$users->field('manager_id', 'int')->end();
+		$users->belongsTo('manager', 'users')->innerKey('manager_id')->outerKey('id');
 
 		return $registry;
 	}

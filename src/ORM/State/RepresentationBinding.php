@@ -98,26 +98,6 @@ final class RepresentationBinding
 		));
 	}
 
-	public function getFieldFor(
-		CollectionInterface|string $collection,
-		string $fieldName,
-	): ?RepresentationFieldBinding {
-		$collectionName = $collection instanceof CollectionInterface ? $collection->getName() : $collection;
-
-		foreach ($this->fields as $field) {
-			if ($field->getCollectionName() === $collectionName && $field->getFieldName() === $fieldName) {
-				return $field;
-			}
-		}
-
-		return null;
-	}
-
-	public function hasFieldFor(CollectionInterface|string $collection, string $fieldName): bool
-	{
-		return $this->getFieldFor($collection, $fieldName) instanceof RepresentationFieldBinding;
-	}
-
 	/**
 	 * @param list<string> $sourcePath
 	 */
