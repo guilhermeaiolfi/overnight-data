@@ -12,7 +12,7 @@ use Cycle\Database\DatabaseManager;
 use ON\Data\Database\ConnectionConfig;
 use ON\Data\Database\Cycle\CycleCommandExecutor;
 use ON\Data\Database\Cycle\CycleQueryExecutor;
-use ON\Data\Database\DataRuntime;
+use ON\Data\DataRuntime;
 use ON\Data\Definition\Registry;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
@@ -24,8 +24,8 @@ final class DataRuntimeTest extends TestCase
 {
 	public function testConnectWithSqliteMemoryAllowsQuerying(): void
 	{
-		$runtime = DataRuntime::connect(ConnectionConfig::sqliteMemory());
-		$runtime->getCommandExecutor();
+		$runtime = DataRuntime::connect(ConnectionConfig::dsn('sqlite', 'sqlite::memory:'));
+		self::assertInstanceOf(CycleCommandExecutor::class, $runtime->getCommandExecutor());
 
 		$database = $this->databaseFromRuntimeExecutor($runtime, 'commandExecutor');
 		$database->execute('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');

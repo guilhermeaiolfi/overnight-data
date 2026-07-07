@@ -9,12 +9,12 @@ use Cycle\Database\StatementInterface;
 use ON\Data\Database\ConnectionConfig;
 use ON\Data\Database\Cycle\CycleCommandExecutor;
 use ON\Data\Database\Cycle\CycleConnectionFactory;
-use ON\Data\Database\DataRuntime;
+use ON\Data\DataRuntime;
 
 /**
  * Shared in-memory SQLite setup for smoke tests.
  *
- * Uses the same ConnectionConfig::sqliteMemory() path as DataRuntime::connect().
+ * Uses the same ConnectionConfig::dsn('sqlite', 'sqlite::memory:') path as DataRuntime::connect().
  */
 final class SqliteMemoryHarness
 {
@@ -27,12 +27,12 @@ final class SqliteMemoryHarness
 
 	public static function create(): self
 	{
-		return self::fromConnectionConfig(ConnectionConfig::sqliteMemory());
+		return self::fromConnectionConfig(ConnectionConfig::dsn('sqlite', 'sqlite::memory:'));
 	}
 
 	public static function fromConnectionConfig(ConnectionConfig $config): self
 	{
-		$cycleDatabase = (new CycleConnectionFactory())->create($config);
+		$cycleDatabase = (new CycleConnectionFactory())->createDatabase($config);
 
 		return new self(
 			$cycleDatabase,

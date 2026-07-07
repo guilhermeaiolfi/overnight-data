@@ -18,24 +18,9 @@ final class ConnectionConfig
 		public readonly ?string $dsn = null,
 		public readonly ?string $username = null,
 		public readonly ?string $password = null,
-		public readonly bool $sqliteMemory = false,
 		public readonly array $options = [],
 		public readonly array $schema = ['public'],
 	) {
-	}
-
-	public static function sqliteMemory(
-		string $databaseName = 'default',
-		string $connectionName = 'default',
-		string $tablePrefix = '',
-	): self {
-		return new self(
-			driver: 'sqlite',
-			databaseName: $databaseName,
-			connectionName: $connectionName,
-			tablePrefix: $tablePrefix,
-			sqliteMemory: true,
-		);
 	}
 
 	public static function dsn(

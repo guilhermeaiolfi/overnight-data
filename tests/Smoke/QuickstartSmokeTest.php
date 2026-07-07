@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Smoke;
 
 use ON\Data\Database\ConnectionConfig;
-use ON\Data\Database\DataRuntime;
+use ON\Data\DataRuntime;
 use ON\Data\Definition\Registry;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Representation\WireRepresentation;
@@ -19,7 +19,7 @@ final class QuickstartSmokeTest extends TestCase
 {
 	public function testDocumentedQuickstartFlow(): void
 	{
-		self::assertInstanceOf(DataRuntime::class, DataRuntime::connect(ConnectionConfig::sqliteMemory()));
+		self::assertInstanceOf(DataRuntime::class, DataRuntime::connect(ConnectionConfig::dsn('sqlite', 'sqlite::memory:')));
 
 		$registry = new Registry();
 

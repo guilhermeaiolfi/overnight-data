@@ -44,7 +44,7 @@ final class MapperArchitectureTest extends TestCase
 					$pattern === 'Cycle\\'
 					&& (
 						str_contains($normalizedPath, '/src/Database/Cycle/')
-						|| str_ends_with($normalizedPath, '/src/Database/DataRuntime.php')
+						|| str_ends_with($normalizedPath, '/src/DataRuntime.php')
 					)
 				) {
 					continue;

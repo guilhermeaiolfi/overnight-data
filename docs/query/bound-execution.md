@@ -28,9 +28,9 @@ Or use a runtime backed by the built-in Cycle adapter:
 
 ```php
 use ON\Data\Database\ConnectionConfig;
-use ON\Data\Database\DataRuntime;
+use ON\Data\DataRuntime;
 
-$runtime = DataRuntime::connect(ConnectionConfig::sqliteMemory());
+$runtime = DataRuntime::connect(ConnectionConfig::dsn('sqlite', 'sqlite::memory:'));
 $u = $runtime->query($users);
 ```
 

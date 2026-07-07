@@ -17,11 +17,17 @@ final class DependencyTest extends TestCase
 		$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root));
 		$forbiddenPatterns = [
 			'Cycle\\',
+			'Cycle\\ORM',
+			'Cycle\\Schema',
 			'Doctrine\\',
+			'Clockwork\\',
+			'EntityManager',
 			'ON\\DB\\',
 			'ON\\ORM\\',
 			'ON\\RestApi\\',
 			'Overnight',
+			'Psr\\Container',
+			'Symfony\\Component\\Console',
 			'Definition\\Collection\\PrimaryKeyDefinition',
 			'Definition\\Collection\\PrimaryKeyValue',
 		];
@@ -41,7 +47,7 @@ final class DependencyTest extends TestCase
 					$pattern === 'Cycle\\'
 					&& (
 						str_contains($normalizedPath, '/src/Database/Cycle/')
-						|| str_ends_with($normalizedPath, '/src/Database/DataRuntime.php')
+						|| str_ends_with($normalizedPath, '/src/DataRuntime.php')
 					)
 				) {
 					continue;

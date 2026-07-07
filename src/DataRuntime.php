@@ -2,12 +2,14 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\Database;
+namespace ON\Data;
 
 use Cycle\Database\DatabaseInterface as CycleDatabaseInterface;
+use ON\Data\Database\ConnectionConfig;
 use ON\Data\Database\Cycle\CycleCommandExecutor;
 use ON\Data\Database\Cycle\CycleConnectionFactory;
 use ON\Data\Database\Cycle\CycleQueryExecutor;
+use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
@@ -27,7 +29,7 @@ final class DataRuntime
 		?ConversionGateway $gateway = null,
 		?CommandValueResolver $commandValueResolver = null,
 	): self {
-		$database = (new CycleConnectionFactory())->create($config);
+		$database = (new CycleConnectionFactory())->createDatabase($config);
 
 		return self::fromCycle($database, $gateway, $commandValueResolver);
 	}

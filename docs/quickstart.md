@@ -76,10 +76,10 @@ The same registry metadata drives SQL mapping during query execution.
 
 ```php
 use ON\Data\Database\ConnectionConfig;
-use ON\Data\Database\DataRuntime;
+use ON\Data\DataRuntime;
 use function ON\Data\Query\x;
 
-$runtime = DataRuntime::connect(ConnectionConfig::sqliteMemory());
+$runtime = DataRuntime::connect(ConnectionConfig::dsn('sqlite', 'sqlite::memory:'));
 
 $query = $runtime->query($users);
 

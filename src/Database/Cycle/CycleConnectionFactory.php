@@ -10,7 +10,6 @@ use Cycle\Database\Config\MySQLDriverConfig;
 use Cycle\Database\Config\Postgres\DsnConnectionConfig as PostgresDsnConnectionConfig;
 use Cycle\Database\Config\PostgresDriverConfig;
 use Cycle\Database\Config\SQLite\DsnConnectionConfig as SqliteDsnConnectionConfig;
-use Cycle\Database\Config\SQLite\MemoryConnectionConfig;
 use Cycle\Database\Config\SQLiteDriverConfig;
 use Cycle\Database\Config\SQLServer\DsnConnectionConfig as SqlServerDsnConnectionConfig;
 use Cycle\Database\Config\SQLServerDriverConfig;
@@ -37,7 +36,7 @@ final class CycleConnectionFactory
 		]));
 	}
 
-	public function create(ConnectionConfig $config): DatabaseInterface
+	public function createDatabase(ConnectionConfig $config): DatabaseInterface
 	{
 		return $this->createManager($config)->database($config->databaseName);
 	}
@@ -48,9 +47,7 @@ final class CycleConnectionFactory
 
 		return match ($driver) {
 			'sqlite' => new SQLiteDriverConfig(
-				connection: $config->sqliteMemory
-					? new MemoryConnectionConfig()
-					: new SqliteDsnConnectionConfig($this->requireDsn($config)),
+				connection: new SqliteDsnConnectionConfig($this->requireDsn($config)),
 				options: $config->options,
 			),
 			'mysql' => new MySQLDriverConfig(

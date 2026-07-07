@@ -63,7 +63,7 @@ final class QueryArchitectureTest extends TestCase
 		}
 	}
 
-	public function testNeutralDatabaseSurfaceDoesNotExposeCycleNamespacesOutsideRuntimeBridgeAndBackendFolder(): void
+	public function testNeutralDatabaseSurfaceDoesNotExposeCycleNamespacesOutsideBackendFolder(): void
 	{
 		$root = dirname(__DIR__, 2) . '/src/Database';
 		$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root));
@@ -78,7 +78,6 @@ final class QueryArchitectureTest extends TestCase
 
 			if (
 				str_contains($normalizedPath, '/src/Database/Cycle/')
-				|| str_ends_with($normalizedPath, '/src/Database/DataRuntime.php')
 			) {
 				continue;
 			}
@@ -574,6 +573,8 @@ final class QueryArchitectureTest extends TestCase
 	{
 		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Database/Database.php');
 		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Database/DatabaseInterface.php');
+		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Database/DataRuntime.php');
+		self::assertFileExists(dirname(__DIR__, 2) . '/src/DataRuntime.php');
 	}
 
 	public function testNeutralDefinitionInfrastructureDoesNotInterpretRelationExecutionSemantics(): void
