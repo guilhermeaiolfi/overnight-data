@@ -53,6 +53,7 @@ final class ProjectionBindingAssembler
 				$shape->getFieldName(),
 				writable: $shape->isWritable(),
 				skipWhenMissing: $skipWhenMissing,
+				sourcePath: $resolved->getSourcePath(),
 			));
 		}
 	}
@@ -73,7 +74,7 @@ final class ProjectionBindingAssembler
 	public function addPrimaryKeyFields(RepresentationBinding $binding, CollectionInterface $collection): void
 	{
 		foreach ($collection->getPrimaryKey() as $fieldName) {
-			if ($this->hasTemplateFieldFor($binding, $collection, $fieldName)) {
+			if ($this->hasTemplateFieldFor($binding, [], $fieldName)) {
 				continue;
 			}
 
@@ -108,11 +109,14 @@ final class ProjectionBindingAssembler
 		));
 	}
 
+	/**
+	 * @param list<string> $sourcePath
+	 */
 	public function hasTemplateFieldFor(
 		RepresentationBinding $binding,
-		CollectionInterface $collection,
+		array $sourcePath,
 		string $fieldName,
 	): bool {
-		return $binding->hasFieldFor($collection, $fieldName);
+		return $binding->hasFieldForSource($sourcePath, $fieldName);
 	}
 }

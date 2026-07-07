@@ -69,7 +69,7 @@ final class RepresentationStateTest extends TestCase
 		$state->requireRootRecord();
 	}
 
-	public function testGetRootRecordIgnoresFieldItemsTargetingNonRootCollection(): void
+	public function testGetRootRecordIgnoresFieldItemsFromNonRootSourcePath(): void
 	{
 		$users = $this->users();
 		$posts = $this->posts();
@@ -78,7 +78,7 @@ final class RepresentationStateTest extends TestCase
 
 		$binding = new RepresentationBinding($users);
 		$rootField = new RepresentationFieldBinding('name', $users, 'name');
-		$foreignField = new RepresentationFieldBinding('companyTitle', $posts, 'title');
+		$foreignField = new RepresentationFieldBinding('companyTitle', $posts, 'title', sourcePath: ['company']);
 		$binding->addField($foreignField);
 		$binding->addField($rootField);
 
@@ -88,6 +88,27 @@ final class RepresentationStateTest extends TestCase
 		]);
 
 		self::assertSame($rootRecord, $state->getRootRecord());
+	}
+
+	public function testGetRootRecordThrowsWhenRootSourceItemsDisagree(): void
+	{
+		$users = $this->users();
+		$recordOne = RecordState::new($users, ['name' => 'A1']);
+		$recordTwo = RecordState::new($users, ['name' => 'A2']);
+
+		$binding = new RepresentationBinding($users);
+		$fieldOne = new RepresentationFieldBinding('name', $users, 'name');
+		$fieldTwo = new RepresentationFieldBinding('nickname', $users, 'name');
+		$binding->addField($fieldOne);
+		$binding->addField($fieldTwo);
+
+		$state = new RepresentationState($binding, [
+			new RepresentationFieldStateItem($fieldOne, $recordOne, 'name', $recordOne->getRevision()),
+			new RepresentationFieldStateItem($fieldTwo, $recordTwo, 'name', $recordTwo->getRevision()),
+		]);
+
+		$this->expectException(StateException::class);
+		$state->getRootRecord();
 	}
 
 	public function testAcceptSyncedRecordsAdvancesOnlyTouchedItemBaselines(): void

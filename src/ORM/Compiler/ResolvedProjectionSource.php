@@ -17,10 +17,19 @@ use ON\Data\ORM\State\RecordState;
 
 final class ResolvedProjectionSource
 {
+	/** @var list<string> */
+	private array $sourcePath;
+
+	/**
+	 * @param list<string> $sourcePath relation path from the binding root to the
+	 *                                  record that owns the resolved field
+	 */
 	public function __construct(
 		private CollectionInterface $collection,
 		private ?RecordState $recordState = null,
+		array $sourcePath = [],
 	) {
+		$this->sourcePath = array_values($sourcePath);
 	}
 
 	public function getCollection(): CollectionInterface
@@ -31,5 +40,13 @@ final class ResolvedProjectionSource
 	public function getRecordState(): ?RecordState
 	{
 		return $this->recordState;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	public function getSourcePath(): array
+	{
+		return $this->sourcePath;
 	}
 }

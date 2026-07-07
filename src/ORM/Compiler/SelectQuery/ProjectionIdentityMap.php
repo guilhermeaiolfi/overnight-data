@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Compiler\SelectQuery;
 
 /**
- * Maps hidden internal result keys to collection primary-key fields for flat
- * mutable projection adoption.
+ * Maps hidden internal result keys to primary-key fields for flat mutable
+ * projection adoption, keyed by the source path that reaches the owning record.
  *
  * Exists because SelectQuery may inject INTERNAL-tagged identity selections that
  * must not appear in public results but are required to resolve RecordState keys
- * during ProjectionRepresentationAdopter::adopt().
+ * during ProjectionRepresentationAdopter::adopt(). Keying by source path (rather
+ * than collection name) lets root and related sources share a terminal
+ * collection while remaining distinct records.
  */
-use ON\Data\Definition\Collection\CollectionInterface;
-
 final class ProjectionIdentityMap
 {
 	/**
@@ -21,14 +21,20 @@ final class ProjectionIdentityMap
 	 */
 	private array $entries = [];
 
-	public function add(CollectionInterface $collection, string $fieldName, string $resultKey): void
+	/**
+	 * @param list<string> $sourcePath
+	 */
+	public function add(array $sourcePath, string $fieldName, string $resultKey): void
 	{
-		$this->entries[$collection->getName()][$fieldName] = $resultKey;
+		$this->entries[$this->sourcePathKey($sourcePath)][$fieldName] = $resultKey;
 	}
 
-	public function get(CollectionInterface $collection, string $fieldName): ?string
+	/**
+	 * @param list<string> $sourcePath
+	 */
+	public function get(array $sourcePath, string $fieldName): ?string
 	{
-		return $this->entries[$collection->getName()][$fieldName] ?? null;
+		return $this->entries[$this->sourcePathKey($sourcePath)][$fieldName] ?? null;
 	}
 
 	public function isEmpty(): bool
@@ -42,5 +48,13 @@ final class ProjectionIdentityMap
 	public function all(): array
 	{
 		return $this->entries;
+	}
+
+	/**
+	 * @param list<string> $sourcePath
+	 */
+	private function sourcePathKey(array $sourcePath): string
+	{
+		return implode('.', $sourcePath);
 	}
 }

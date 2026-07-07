@@ -33,27 +33,34 @@ final class RepresentationState
 
 	/**
 	 * Resolves the record this representation is rooted at: the concrete record
-	 * whose collection matches the binding root collection.
+	 * owned by root source path [], never a same-collection related record.
 	 *
-	 * Returns null when no root item has been attached yet.
+	 * Returns null when no root-source item has been attached yet. Throws when
+	 * root-source field items disagree on which record they own, which signals an
+	 * inconsistent state.
 	 */
 	public function getRootRecord(): ?RecordState
 	{
-		$rootCollectionName = $this->binding->getCollectionName();
+		$rootRecord = null;
 
 		foreach ($this->fieldItems as $item) {
-			if ($item->getBinding()->getCollectionName() === $rootCollectionName) {
-				return $item->getRecord();
+			if (! $item->getBinding()->isRootSource()) {
+				continue;
 			}
+
+			$record = $item->getRecord();
+
+			if ($rootRecord instanceof RecordState && $rootRecord->getStateHash() !== $record->getStateHash()) {
+				throw new StateException(sprintf(
+					"Representation state has inconsistent root records for collection '%s'.",
+					$this->binding->getCollectionName()
+				));
+			}
+
+			$rootRecord = $record;
 		}
 
-		foreach ($this->relationItems as $item) {
-			if ($item->getBinding()->getOwnerCollectionName() === $rootCollectionName) {
-				return $item->getOwnerRecord();
-			}
-		}
-
-		return null;
+		return $rootRecord;
 	}
 
 	public function requireRootRecord(): RecordState

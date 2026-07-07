@@ -59,4 +59,45 @@ final class MutableProjectionSmokeTest extends TestCase
 		$row = $harness->fetchRow('SELECT name FROM companies WHERE id = 5');
 		self::assertSame(['name' => 'Dell'], $row);
 	}
+
+	public function testMutableSameCollectionFlatProjectionUpdatesTheCorrectRecord(): void
+	{
+		$harness = SqliteMemoryHarness::create();
+		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, manager_id INTEGER, name TEXT)');
+		$harness->exec("INSERT INTO users (id, manager_id, name) VALUES (9, NULL, 'Boss')");
+		$harness->exec("INSERT INTO users (id, manager_id, name) VALUES (1, 9, 'Ada')");
+
+		$registry = new Registry();
+
+		$registry->collection('users')
+			->table('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('manager_id', 'int')->end()
+			->field('name', 'string')->end();
+
+		$registry->getCollection('users')
+			->belongsTo('manager', 'users')
+			->innerKey('manager_id')
+			->outerKey('id');
+
+		$users = $registry->getCollection('users');
+		$session = new Session($harness->commandExecutor);
+		$query = $harness->database->query($users);
+		$query->select($query->id, $query->name, $query->manager->name->as('managerName'));
+
+		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+
+		self::assertInstanceOf(stdClass::class, $user);
+		self::assertSame('Ada', $user->name);
+		self::assertSame('Boss', $user->managerName);
+
+		$user->name = 'Ada Lovelace';
+		$user->managerName = 'Big Boss';
+		$session->sync($user);
+		$session->flush();
+
+		self::assertSame(['name' => 'Ada Lovelace'], $harness->fetchRow('SELECT name FROM users WHERE id = 1'));
+		self::assertSame(['name' => 'Big Boss'], $harness->fetchRow('SELECT name FROM users WHERE id = 9'));
+	}
 }

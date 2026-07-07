@@ -105,16 +105,18 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		self::assertSame('users', $binding->getField('id')->getCollectionName());
 		self::assertSame('companies', $binding->getField('name')->getCollectionName());
 		self::assertSame('name', $binding->getField('name')->getFieldName());
+		self::assertTrue($binding->getField('id')->isRootSource());
+		self::assertSame(['company'], $binding->getField('name')->getSourcePath());
 
 		$internalSelections = $query->getSelections()->getByTag(SelectionTag::INTERNAL);
 		self::assertCount(1, $internalSelections);
 		self::assertTrue($internalSelections[0]->hasTag(SelectionTag::INTERNAL));
 
 		$projectionIdentities = $compilation->getProjectionIdentities();
-		self::assertNotNull($projectionIdentities->get($companies, 'id'));
+		self::assertNotNull($projectionIdentities->get(['company'], 'id'));
 		self::assertSame(
 			$internalSelections[0]->getSelectionKey(),
-			$projectionIdentities->get($companies, 'id'),
+			$projectionIdentities->get(['company'], 'id'),
 		);
 	}
 
@@ -130,7 +132,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 
 		self::assertTrue($binding->hasField('company_name'));
 		self::assertFalse($binding->hasField('company.id'));
-		self::assertNotNull($compilation->getProjectionIdentities()->get($registry->getCollection('companies'), 'id'));
+		self::assertNotNull($compilation->getProjectionIdentities()->get(['company'], 'id'));
 	}
 
 	public function testCompilesSelectedRootRelation(): void

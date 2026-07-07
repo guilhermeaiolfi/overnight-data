@@ -216,6 +216,77 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		], $context);
 	}
 
+	public function testSameCollectionFlatProjectionAttachesFieldsToDistinctRecords(): void
+	{
+		$registry = $this->makeSelfRelationRegistry();
+		$users = $registry->getCollection('users');
+		$binding = new RepresentationBinding($users);
+		$binding->addField(new RepresentationFieldBinding('id', $users, 'id', writable: false));
+		$binding->addField(new RepresentationFieldBinding('name', $users, 'name', writable: true));
+		$binding->addField(new RepresentationFieldBinding('managerName', $users, 'name', writable: true, sourcePath: ['manager']));
+
+		$object = new stdClass();
+		$object->id = 1;
+		$object->name = 'Root';
+		$object->managerName = 'Boss';
+
+		$context = new SessionContext();
+		$identities = new ProjectionIdentityMap();
+		$identities->add(['manager'], 'id', 'manager_id');
+
+		$state = $this->adopter()->adopt($object, $binding, $identities, [
+			'id' => 1,
+			'name' => 'Root',
+			'managerName' => 'Boss',
+			'manager_id' => 9,
+		], $context);
+
+		$rootRecord = $context->getRecords()->getByKey($users->getKey(1));
+		$managerRecord = $context->getRecords()->getByKey($users->getKey(9));
+
+		self::assertInstanceOf(RecordState::class, $rootRecord);
+		self::assertInstanceOf(RecordState::class, $managerRecord);
+		self::assertNotSame($rootRecord->getStateHash(), $managerRecord->getStateHash());
+
+		$nameItem = $state->getFieldItem('name');
+		$managerItem = $state->getFieldItem('managerName');
+
+		self::assertSame('users', $nameItem->getRecord()->getCollection()->getName());
+		self::assertSame('users', $managerItem->getRecord()->getCollection()->getName());
+		self::assertSame($rootRecord->getStateHash(), $nameItem->getRecord()->getStateHash());
+		self::assertSame($managerRecord->getStateHash(), $managerItem->getRecord()->getStateHash());
+	}
+
+	public function testGroupsFieldBindingsBySourcePathNotTerminalCollection(): void
+	{
+		$registry = $this->makeSelfRelationRegistry();
+		$users = $registry->getCollection('users');
+		$binding = new RepresentationBinding($users);
+		$binding->addField(new RepresentationFieldBinding('id', $users, 'id', writable: false));
+		$binding->addField(new RepresentationFieldBinding('managerName', $users, 'name', writable: true, sourcePath: ['manager']));
+
+		$object = new stdClass();
+		$object->id = 1;
+		$object->managerName = 'Boss';
+
+		$context = new SessionContext();
+		$identities = new ProjectionIdentityMap();
+		$identities->add(['manager'], 'id', 'manager_id');
+
+		$state = $this->adopter()->adopt($object, $binding, $identities, [
+			'id' => 1,
+			'managerName' => 'Boss',
+			'manager_id' => 9,
+		], $context);
+
+		$idItem = $state->getFieldItem('id');
+		$managerItem = $state->getFieldItem('managerName');
+
+		self::assertNotSame($idItem->getRecord()->getStateHash(), $managerItem->getRecord()->getStateHash());
+		self::assertTrue($idItem->getBinding()->isRootSource());
+		self::assertSame(['manager'], $managerItem->getBinding()->getSourcePath());
+	}
+
 	public function testReusesExistingTrackedRecordState(): void
 	{
 		$registry = $this->makeRegistry();
@@ -254,7 +325,7 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 	private function companyIdProjectionIdentities(CollectionInterface $companies, string $resultKey): ProjectionIdentityMap
 	{
 		$map = new ProjectionIdentityMap();
-		$map->add($companies, 'id', $resultKey);
+		$map->add(['company'], 'id', $resultKey);
 
 		return $map;
 	}
@@ -265,9 +336,27 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 	): RepresentationBinding {
 		$binding = new RepresentationBinding($users);
 		$binding->addField(new RepresentationFieldBinding('id', $users, 'id', writable: false));
-		$binding->addField(new RepresentationFieldBinding('name', $companies, 'name', writable: true));
+		$binding->addField(new RepresentationFieldBinding('name', $companies, 'name', writable: true, sourcePath: ['company']));
 
 		return $binding;
+	}
+
+	private function makeSelfRelationRegistry(): Registry
+	{
+		$registry = new Registry();
+
+		$registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('manager_id', 'int')->end()
+			->field('name', 'string')->end();
+
+		$registry->getCollection('users')
+			->belongsTo('manager', 'users')
+			->innerKey('manager_id')
+			->outerKey('id');
+
+		return $registry;
 	}
 
 	private function makeRegistry(): Registry

@@ -22,7 +22,7 @@ final class SourceResolver implements ProjectionSourceResolverInterface
 		if ($source instanceof PropertySource) {
 			$record = $source->getTargetRecord();
 
-			return new ResolvedProjectionSource($record->getCollection(), $record);
+			return new ResolvedProjectionSource($record->getCollection(), $record, $source->getRelationPath());
 		}
 
 		if ($source instanceof RelationRef) {
@@ -33,7 +33,7 @@ final class SourceResolver implements ProjectionSourceResolverInterface
 				));
 			}
 
-			return new ResolvedProjectionSource($source->getDefinition()->getCollection());
+			return new ResolvedProjectionSource($source->getDefinition()->getCollection(), sourcePath: $source->getPath());
 		}
 
 		throw new StateException(sprintf(

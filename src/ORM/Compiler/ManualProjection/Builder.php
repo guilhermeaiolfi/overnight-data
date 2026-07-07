@@ -18,7 +18,6 @@ use ON\Data\ORM\Compiler\ProjectionFieldShape;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationBindingMerger;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
@@ -199,7 +198,7 @@ final class Builder
 				continue;
 			}
 
-			$record = $this->resolveRecordForNewField($state, $binding, $fieldBinding, $recordsByPath);
+			$record = $this->resolveRecordForNewField($state, $fieldBinding, $recordsByPath);
 			$fieldItems[] = new RepresentationFieldStateItem(
 				$fieldBinding,
 				$record,
@@ -221,26 +220,24 @@ final class Builder
 	/**
 	 * Resolves the concrete record a newly added manual field item attaches to.
 	 *
-	 * Root-collection fields attach to the representation root record. Fields
-	 * targeting a non-root collection must have been explicitly resolved to a
-	 * concrete record through their declaration source; otherwise this throws
-	 * rather than guessing from the session record store.
+	 * Resolution is by source path, never by collection name: root-source fields
+	 * ([]) attach to the representation's root record, and relation-sourced fields
+	 * attach to the record already bound for that source path. Fields declared
+	 * through their own source (create()/existing()/tracked()) fall back to that
+	 * explicit record; otherwise this throws rather than guessing from the session
+	 * record store.
 	 *
 	 * @param array<string, RecordState> $recordsByPath
 	 */
 	private function resolveRecordForNewField(
 		?RepresentationState $state,
-		RepresentationBinding $binding,
 		RepresentationFieldBinding $fieldBinding,
 		array $recordsByPath,
 	): RecordState {
-		if (
-			$state instanceof RepresentationState
-			&& $fieldBinding->getCollectionName() === $binding->getCollectionName()
-		) {
-			$rootRecord = $state->getRootRecord();
-			if ($rootRecord instanceof RecordState) {
-				return $rootRecord;
+		if ($state instanceof RepresentationState) {
+			$resolved = $this->resolveRecordForFieldBinding($state, $fieldBinding);
+			if ($resolved instanceof RecordState) {
+				return $resolved;
 			}
 		}
 
@@ -259,10 +256,32 @@ final class Builder
 		}
 
 		throw new StateException(sprintf(
-			"Cannot attach manual projection field '%s' because no concrete record state for collection '%s' could be resolved.",
+			"Cannot attach manual projection field '%s' because no concrete record state for source path '%s' could be resolved.",
 			$fieldBinding->getPath(),
-			$fieldBinding->getCollectionName(),
+			$fieldBinding->getSourcePathKey(),
 		));
+	}
+
+	/**
+	 * Resolves the concrete record for a field binding from an existing tracked
+	 * representation state by its source path, never by collection name.
+	 */
+	private function resolveRecordForFieldBinding(
+		RepresentationState $state,
+		RepresentationFieldBinding $fieldBinding,
+	): ?RecordState {
+		if ($fieldBinding->isRootSource()) {
+			return $state->getRootRecord();
+		}
+
+		$sourceKey = $fieldBinding->getSourcePathKey();
+		foreach ($state->getFieldItems() as $item) {
+			if ($item->getBinding()->getSourcePathKey() === $sourceKey) {
+				return $item->getRecord();
+			}
+		}
+
+		return null;
 	}
 
 	/**

@@ -118,6 +118,30 @@ final class RepresentationBinding
 		return $this->getFieldFor($collection, $fieldName) instanceof RepresentationFieldBinding;
 	}
 
+	/**
+	 * @param list<string> $sourcePath
+	 */
+	public function getFieldForSource(array $sourcePath, string $fieldName): ?RepresentationFieldBinding
+	{
+		$sourceKey = implode('.', $sourcePath);
+
+		foreach ($this->fields as $field) {
+			if ($field->getSourcePathKey() === $sourceKey && $field->getFieldName() === $fieldName) {
+				return $field;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * @param list<string> $sourcePath
+	 */
+	public function hasFieldForSource(array $sourcePath, string $fieldName): bool
+	{
+		return $this->getFieldForSource($sourcePath, $fieldName) instanceof RepresentationFieldBinding;
+	}
+
 	public function addRelation(RepresentationRelationBinding $binding): void
 	{
 		$path = $binding->getPath();

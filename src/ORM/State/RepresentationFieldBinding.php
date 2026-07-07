@@ -17,12 +17,20 @@ use ON\Data\ORM\Exception\StateException;
 
 final class RepresentationFieldBinding
 {
+	/** @var list<string> */
+	private array $sourcePath;
+
+	/**
+	 * @param list<string> $sourcePath relation path from the binding root to the
+	 *                                  record that owns this field ([] for root)
+	 */
 	public function __construct(
 		private string $path,
 		private CollectionInterface $collection,
 		private string $fieldName,
 		private bool $writable = true,
 		private bool $skipWhenMissing = false,
+		array $sourcePath = [],
 	) {
 		if ($path === '') {
 			throw new StateException('Representation binding path cannot be empty.');
@@ -31,6 +39,8 @@ final class RepresentationFieldBinding
 		if ($fieldName === '') {
 			throw new StateException('Representation binding field name cannot be empty.');
 		}
+
+		$this->sourcePath = array_values($sourcePath);
 	}
 
 	public function getPath(): string
@@ -53,9 +63,27 @@ final class RepresentationFieldBinding
 		return $this->fieldName;
 	}
 
+	/**
+	 * @return list<string>
+	 */
+	public function getSourcePath(): array
+	{
+		return $this->sourcePath;
+	}
+
+	public function getSourcePathKey(): string
+	{
+		return implode('.', $this->sourcePath);
+	}
+
+	public function isRootSource(): bool
+	{
+		return $this->sourcePath === [];
+	}
+
 	public function withSkipWhenMissing(bool $skipWhenMissing): self
 	{
-		return new self($this->path, $this->collection, $this->fieldName, $this->writable, $skipWhenMissing);
+		return new self($this->path, $this->collection, $this->fieldName, $this->writable, $skipWhenMissing, $this->sourcePath);
 	}
 
 	public function isWritable(): bool

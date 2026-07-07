@@ -197,13 +197,14 @@ final class ProjectionCompiler
 		ProjectionIdentityMap $projectionIdentities,
 	): void {
 		$targetCollection = $relationRef->getCollection();
+		$sourcePath = $relationRef->getPath();
 
 		foreach ($targetCollection->getPrimaryKey() as $fieldName) {
-			if ($this->bindingAssembler->hasTemplateFieldFor($binding, $targetCollection, $fieldName)) {
+			if ($this->bindingAssembler->hasTemplateFieldFor($binding, $sourcePath, $fieldName)) {
 				continue;
 			}
 
-			if ($projectionIdentities->get($targetCollection, $fieldName) !== null) {
+			if ($projectionIdentities->get($sourcePath, $fieldName) !== null) {
 				continue;
 			}
 
@@ -213,7 +214,7 @@ final class ProjectionCompiler
 				$fieldRef->as($resultKey),
 				SelectionTag::INTERNAL,
 			);
-			$projectionIdentities->add($targetCollection, $fieldName, $resultKey);
+			$projectionIdentities->add($sourcePath, $fieldName, $resultKey);
 		}
 	}
 

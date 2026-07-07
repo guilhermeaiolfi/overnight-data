@@ -87,13 +87,13 @@ final class MutableQueryResultTracker
 
 	private function isProjectionBinding(RepresentationBinding $binding): bool
 	{
-		$collections = [];
+		$sourcePaths = [];
 
 		foreach ($binding->getFields() as $fieldBinding) {
-			$collections[$fieldBinding->getCollectionName()] = true;
+			$sourcePaths[$fieldBinding->getSourcePathKey()] = true;
 		}
 
-		return count($collections) > 1;
+		return count($sourcePaths) > 1;
 	}
 
 	private function markLoadedRelatedObjectsExisting(
