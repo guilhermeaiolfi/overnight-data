@@ -11,7 +11,6 @@ use ON\Data\ORM\Compiler\ManualProjection\Builder;
 use ON\Data\ORM\Compiler\ManualProjection\PathResolver;
 use ON\Data\ORM\Compiler\ManualProjection\ProjectionCompiler;
 use ON\Data\ORM\Compiler\ManualProjection\PropertyRef;
-use ON\Data\ORM\Compiler\ManualProjection\RelationApplier;
 use ON\Data\ORM\Compiler\ManualProjection\RepresentationTracker;
 use ON\Data\ORM\Compiler\ManualProjection\RootTarget;
 use ON\Data\ORM\Compiler\ManualProjection\SourceResolver;
@@ -22,7 +21,6 @@ use ON\Data\ORM\Compiler\ResolvedProjectionSource;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionSelectionNormalizer;
 use ON\Data\ORM\Compiler\SelectQuery\QueryProjectionSourceResolver;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RecordState;
@@ -30,7 +28,6 @@ use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
-use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStore;
 use ON\Data\Query\Expression\ValueExpressionInterface;
@@ -53,6 +50,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertFileDoesNotExist($root . '/src/ORM/ManualProjection/ManualProjectionIdentityProvider.php');
 		self::assertFalse(method_exists(ProjectionSelectionNormalizer::class, 'fieldForSelection'));
 		self::assertFileDoesNotExist($root . '/src/ORM/Compiler/ProjectionSourceResolver.php');
+		self::assertFileDoesNotExist($root . '/src/ORM/Compiler/ManualProjection/RelationApplier.php');
 		self::assertFileExists($root . '/src/ORM/Compiler/ProjectionSourceResolverInterface.php');
 		self::assertFileExists($root . '/src/ORM/Compiler/ResolvedProjectionSource.php');
 		self::assertFalse(method_exists(SourceResolver::class, 'rememberSource'));
@@ -281,20 +279,6 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertSame(10, $adapter->id);
 		self::assertSame('id', $state->getBinding()->getPaths()[0]);
 		self::assertTrue($state->getBinding()->getField('id')->isReadOnly());
-	}
-
-	public function testRelationApplierUsesNormalToManyRelationStore(): void
-	{
-		$toMany = new RelationStateStore();
-		$applier = new RelationApplier($toMany, new RelationStateStore());
-		$owner = RecordState::new($this->registry()->getCollection('users'), ['id' => 10]);
-		$target = new stdClass();
-
-		$applier->applyTarget($owner, 'posts', RepresentationRelationCardinality::MANY, new RepresentationBinding($owner->getCollection()), $target);
-		$relation = $toMany->get($owner, 'posts');
-
-		self::assertInstanceOf(ToManyRelationState::class, $relation);
-		self::assertSame([$target], $relation->getAdded());
 	}
 
 	public function testQueryAndManualAliasProjectionUseEquivalentPublicPaths(): void

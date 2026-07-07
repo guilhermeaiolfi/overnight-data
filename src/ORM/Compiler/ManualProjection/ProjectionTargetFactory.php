@@ -15,6 +15,8 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
+use ON\Data\ORM\Relation\ToManyRelationState;
+use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -27,7 +29,6 @@ final class ProjectionTargetFactory
 		private Session $session,
 		private object $rootRepresentation,
 		private PathResolver $pathResolver,
-		private RelationApplier $relationApplier,
 		private RepresentationTracker $representationTracker,
 	) {
 	}
@@ -193,7 +194,7 @@ final class ProjectionTargetFactory
 	): Target {
 		$objectShaped = $this->rootRepresentation !== $ownerObject;
 		$target = $this->resolvePathTargetObject($record, $relatedBinding, $ownerObject, $explicitTarget, $objectShaped);
-		$this->relationApplier->applyTarget($owner, $relationName, $cardinality, $relatedBinding, $target);
+		$this->applyRelationTarget($owner, $relationName, $cardinality, $relatedBinding, $target);
 
 		return new Target(
 			$owner,
@@ -214,7 +215,7 @@ final class ProjectionTargetFactory
 		RecordState $record,
 		object $target,
 	): Target {
-		$this->relationApplier->applyTarget($owner, $relationName, $cardinality, $relatedBinding, $target);
+		$this->applyRelationTarget($owner, $relationName, $cardinality, $relatedBinding, $target);
 
 		return new Target(
 			$owner,
@@ -247,6 +248,52 @@ final class ProjectionTargetFactory
 		}
 
 		return $this->representationTracker->trackFlattenedAdapter($record, $relatedBinding, $ownerObject);
+	}
+
+	private function applyRelationTarget(
+		RecordState $owner,
+		string $relationName,
+		RepresentationRelationCardinality $cardinality,
+		RepresentationBinding $relatedBinding,
+		object $target,
+	): void {
+		if ($cardinality === RepresentationRelationCardinality::MANY) {
+			$this->applyToManyRelationTarget($owner, $relationName, $relatedBinding, $target);
+
+			return;
+		}
+
+		$this->applyToOneRelationTarget($owner, $relationName, $relatedBinding, $target);
+	}
+
+	private function applyToManyRelationTarget(
+		RecordState $owner,
+		string $relationName,
+		RepresentationBinding $relatedBinding,
+		object $target,
+	): void {
+		$relation = $this->session->getToManyRelations()->get($owner, $relationName);
+		if (! $relation instanceof ToManyRelationState) {
+			$relation = new ToManyRelationState($owner, $relationName, $relatedBinding);
+			$this->session->getToManyRelations()->add($relation);
+		}
+
+		$relation->add($target);
+	}
+
+	private function applyToOneRelationTarget(
+		RecordState $owner,
+		string $relationName,
+		RepresentationBinding $relatedBinding,
+		object $target,
+	): void {
+		$relation = $this->session->getToOneRelations()->get($owner, $relationName);
+		if (! $relation instanceof ToOneRelationState) {
+			$relation = new ToOneRelationState($owner, $relationName, $relatedBinding);
+			$this->session->getToOneRelations()->add($relation);
+		}
+
+		$relation->set($target);
 	}
 
 	/**

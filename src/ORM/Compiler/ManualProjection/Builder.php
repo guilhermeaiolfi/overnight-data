@@ -35,14 +35,9 @@ final class Builder
 		private object $representation,
 		private ProjectionCompiler $projectionCompiler = new ProjectionCompiler(),
 		?PathResolver $pathResolver = null,
-		?RelationApplier $relationApplier = null,
 		?RepresentationTracker $representationTracker = null,
 	) {
 		$pathResolver ??= new PathResolver($this->session->getRepresentations());
-		$relationApplier ??= new RelationApplier(
-			$this->session->getToManyRelations(),
-			$this->session->getToOneRelations()
-		);
 		$representationTracker ??= new RepresentationTracker(
 			$this->session->getRepresentations(),
 			$this->session->getRecords()
@@ -52,7 +47,6 @@ final class Builder
 			$this->session,
 			$this->representation,
 			$pathResolver,
-			$relationApplier,
 			$representationTracker,
 		);
 	}
