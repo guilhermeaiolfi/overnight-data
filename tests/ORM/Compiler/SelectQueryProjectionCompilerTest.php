@@ -7,6 +7,7 @@ namespace Tests\ON\Data\ORM\Compiler;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompilation;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompiler;
+use ON\Data\ORM\State\RepresentationBinding;
 use function ON\Data\Query\query;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
@@ -119,6 +120,53 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 			$internalSelections[0]->getSelectionKey(),
 			$projectionIdentities->get(['company'], 'id'),
 		);
+	}
+
+	public function testCompileBindingReturnsRepresentationBindingWithoutInternalSelections(): void
+	{
+		$registry = $this->makeRegistryWithCompany();
+		$users = $registry->getCollection('users');
+		$query = query($users, fn (SelectQuery $query) => $query
+			->select($query->id, $query->company->name->as('name')));
+
+		$binding = $this->compiler->compileBinding($query);
+
+		self::assertInstanceOf(RepresentationBinding::class, $binding);
+		self::assertTrue($binding->hasField('id'));
+		self::assertTrue($binding->hasField('name'));
+		self::assertSame(['company'], $binding->getField('name')->getSourcePath());
+		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
+	}
+
+	public function testCompileBindingBehavesLikeCompileNotCompileResult(): void
+	{
+		$registry = $this->makeRegistryWithCompany();
+		$users = $registry->getCollection('users');
+		$query = query($users, fn (SelectQuery $query) => $query
+			->select($query->id, $query->company->name->as('name')));
+
+		$binding = $this->compiler->compile($query);
+
+		self::assertInstanceOf(RepresentationBinding::class, $binding);
+		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
+	}
+
+	public function testCompileResultAddsInternalIdentitySelectionsWhenBindingWouldNot(): void
+	{
+		$registry = $this->makeRegistryWithCompany();
+		$users = $registry->getCollection('users');
+
+		$bindingQuery = query($users, fn (SelectQuery $query) => $query
+			->select($query->id, $query->company->name->as('name')));
+		$this->compiler->compileBinding($bindingQuery);
+		self::assertCount(0, $bindingQuery->getSelections()->getByTag(SelectionTag::INTERNAL));
+
+		$resultQuery = query($users, fn (SelectQuery $query) => $query
+			->select($query->id, $query->company->name->as('name')));
+		$compilation = $this->compiler->compileResult($resultQuery);
+
+		self::assertCount(1, $resultQuery->getSelections()->getByTag(SelectionTag::INTERNAL));
+		self::assertNotNull($compilation->getProjectionIdentities()->get(['company'], 'id'));
 	}
 
 	public function testCompileResultReturnsProjectionCompilationWithSourcePathKeyedIdentities(): void

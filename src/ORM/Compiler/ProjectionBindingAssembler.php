@@ -6,7 +6,7 @@ namespace ON\Data\ORM\Compiler;
 
 /**
  * Shared final step of projection compilation: turns normalized field shapes and
- * template scalar declarations into structural RepresentationFieldBinding entries.
+ * scalar field declarations into structural RepresentationFieldBinding entries.
  *
  * Exists so SelectQuery and manual projection compilers share one place that
  * resolves sources and applies writability / skip-when-missing flags.
@@ -61,7 +61,7 @@ final class ProjectionBindingAssembler
 	public function addDefaultCollectionFields(RepresentationBinding $binding, CollectionInterface $collection): void
 	{
 		foreach ($collection->getFields() as $field) {
-			$this->addTemplateField(
+			$this->addField(
 				$binding,
 				$collection,
 				$field->getName(),
@@ -74,11 +74,11 @@ final class ProjectionBindingAssembler
 	public function addPrimaryKeyFields(RepresentationBinding $binding, CollectionInterface $collection): void
 	{
 		foreach ($collection->getPrimaryKey() as $fieldName) {
-			if ($this->hasTemplateFieldFor($binding, [], $fieldName)) {
+			if ($this->hasFieldForSource($binding, [], $fieldName)) {
 				continue;
 			}
 
-			$this->addTemplateField(
+			$this->addField(
 				$binding,
 				$collection,
 				$fieldName,
@@ -88,7 +88,7 @@ final class ProjectionBindingAssembler
 		}
 	}
 
-	public function addTemplateField(
+	public function addField(
 		RepresentationBinding $binding,
 		CollectionInterface $collection,
 		string $publicPath,
@@ -112,7 +112,7 @@ final class ProjectionBindingAssembler
 	/**
 	 * @param list<string> $sourcePath
 	 */
-	public function hasTemplateFieldFor(
+	public function hasFieldForSource(
 		RepresentationBinding $binding,
 		array $sourcePath,
 		string $fieldName,

@@ -43,10 +43,10 @@ final class ProjectionCompiler
 
 	public function compile(SelectQuery $query): RepresentationBinding
 	{
-		return $this->compileResult($query)->getBinding();
+		return $this->compileBinding($query);
 	}
 
-	public function compileResult(SelectQuery $query): ProjectionCompilation
+	public function compileBinding(SelectQuery $query): RepresentationBinding
 	{
 		$collection = $query->getCollection();
 		$binding = new RepresentationBinding($collection);
@@ -57,6 +57,12 @@ final class ProjectionCompiler
 		$this->compileRelationSourcedFlatFields($binding, $query, $sourceResolver);
 		$this->compileRelationSelections($binding, $query);
 
+		return $binding;
+	}
+
+	public function compileResult(SelectQuery $query): ProjectionCompilation
+	{
+		$binding = $this->compileBinding($query);
 		$projectionIdentities = $this->identityPlanner->plan($query, $binding);
 
 		return new ProjectionCompilation($binding, $projectionIdentities);
@@ -232,7 +238,7 @@ final class ProjectionCompiler
 
 		if ($explicitFields !== null) {
 			foreach ($explicitFields as $fieldName) {
-				$this->bindingAssembler->addTemplateField($binding, $targetCollection, $fieldName, $fieldName);
+				$this->bindingAssembler->addField($binding, $targetCollection, $fieldName, $fieldName);
 			}
 
 			$this->bindingAssembler->addPrimaryKeyFields($binding, $targetCollection);

@@ -37,8 +37,8 @@ final class ProjectionIdentityPlanner
 
 		$identities = new ProjectionIdentityMap();
 
-		foreach ($this->collectProjectedSources($binding) as $source) {
-			$this->ensureIdentitySelections($query, $binding, $source, $identities);
+		foreach ($this->collectProjectedSourceFields($binding) as $sourceField) {
+			$this->ensureIdentitySelections($query, $binding, $sourceField, $identities);
 		}
 
 		return $identities;
@@ -47,30 +47,30 @@ final class ProjectionIdentityPlanner
 	/**
 	 * @return list<RepresentationFieldBinding>
 	 */
-	private function collectProjectedSources(RepresentationBinding $binding): array
+	private function collectProjectedSourceFields(RepresentationBinding $binding): array
 	{
-		/** @var array<string, RepresentationFieldBinding> $sources */
-		$sources = [];
+		/** @var array<string, RepresentationFieldBinding> $fieldsBySourcePath */
+		$fieldsBySourcePath = [];
 
 		foreach ($binding->getFields() as $field) {
 			$sourceKey = $field->getSourcePathKey();
 
-			if (! array_key_exists($sourceKey, $sources)) {
-				$sources[$sourceKey] = $field;
+			if (! array_key_exists($sourceKey, $fieldsBySourcePath)) {
+				$fieldsBySourcePath[$sourceKey] = $field;
 			}
 		}
 
-		return array_values($sources);
+		return array_values($fieldsBySourcePath);
 	}
 
 	private function ensureIdentitySelections(
 		SelectQuery $query,
 		RepresentationBinding $binding,
-		RepresentationFieldBinding $source,
+		RepresentationFieldBinding $sourceField,
 		ProjectionIdentityMap $identities,
 	): void {
-		$sourcePath = $source->getSourcePath();
-		$collection = $source->getCollection();
+		$sourcePath = $sourceField->getSourcePath();
+		$collection = $sourceField->getCollection();
 
 		foreach ($collection->getPrimaryKey() as $fieldName) {
 			if ($binding->hasFieldForSource($sourcePath, $fieldName)) {
