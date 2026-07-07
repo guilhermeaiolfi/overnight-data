@@ -386,6 +386,63 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		self::assertFalse($binding->hasField('name'));
 	}
 
+	public function testShapeBasedRootAndFlatFieldsPreserveWritabilityAndSourcePaths(): void
+	{
+		$registry = $this->makeRegistryWithManager();
+		$users = $registry->getCollection('users');
+		$query = query($users, fn (SelectQuery $query) => $query
+			->select($query->name, $query->manager->name->as('managerName')));
+
+		$binding = $this->compiler->compileBinding($query);
+
+		self::assertTrue($binding->getField('name')->isWritable());
+		self::assertSame([], $binding->getField('name')->getSourcePath());
+		self::assertSame('users', $binding->getField('name')->getCollectionName());
+
+		self::assertTrue($binding->getField('managerName')->isWritable());
+		self::assertSame(['manager'], $binding->getField('managerName')->getSourcePath());
+		self::assertSame('users', $binding->getField('managerName')->getCollectionName());
+		self::assertSame('name', $binding->getField('managerName')->getFieldName());
+
+		self::assertTrue($binding->getField('id')->isReadOnly());
+		self::assertSame([], $binding->getField('id')->getSourcePath());
+	}
+
+	public function testNestedDefaultRelationFieldsKeepPrimaryKeyWritable(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = query($users, fn (SelectQuery $query) => $query
+			->select($query->name)
+			->posts
+			->load());
+
+		$binding = $this->compiler->compile($query);
+		$posts = $binding->getRelation('posts')->getRelatedBinding();
+
+		self::assertTrue($posts->getField('id')->isWritable());
+		self::assertSame([], $posts->getField('id')->getSourcePath());
+		self::assertSame('posts', $posts->getField('id')->getCollectionName());
+	}
+
+	public function testNestedExplicitRelationFieldsAddPrimaryKeyAsReadOnly(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = query($users, fn (SelectQuery $query) => $query
+			->select($query->name)
+			->posts
+			->fields('title'));
+
+		$binding = $this->compiler->compile($query);
+		$posts = $binding->getRelation('posts')->getRelatedBinding();
+
+		self::assertTrue($posts->getField('title')->isWritable());
+		self::assertTrue($posts->getField('id')->isReadOnly());
+		self::assertSame([], $posts->getField('title')->getSourcePath());
+		self::assertSame([], $posts->getField('id')->getSourcePath());
+	}
+
 	public function testReturnsNewRepresentationBindingEachTime(): void
 	{
 		$registry = $this->makeRegistry();

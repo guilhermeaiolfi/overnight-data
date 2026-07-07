@@ -16,6 +16,8 @@ namespace ON\Data\ORM\Compiler\SelectQuery;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Compiler\ProjectionBindingAssembler;
+use ON\Data\ORM\Compiler\ProjectionFieldShape;
+use ON\Data\ORM\Compiler\ProjectionSourceResolverInterface;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\Query\Expression\AliasedExpression;
@@ -74,16 +76,37 @@ final class ProjectionCompiler
 		CollectionInterface $collection,
 		QueryProjectionSourceResolver $sourceResolver,
 	): void {
-		$explicitSelections = $query->getSelections()->getExplicit();
-		$selectedFields = $this->getRootExplicitScalarSelections($query);
+		$shapes = $query->getSelections()->getExplicit() === []
+			? $this->bindingAssembler->defaultFieldShapes($collection, $query)
+			: $this->selectionNormalizer->normalizeSelections($this->getRootExplicitScalarSelections($query));
 
-		if ($explicitSelections === []) {
-			$this->bindingAssembler->addDefaultCollectionFields($binding, $collection);
-		} else {
-			$this->addSelectedFields($binding, $sourceResolver, $selectedFields);
+		$this->bindingAssembler->assembleInto($binding, $shapes, $sourceResolver);
+
+		$this->assemblePrimaryKeyFields($binding, $collection, $query, $sourceResolver);
+	}
+
+	/**
+	 * Adds primary-key field shapes that are not already bound for the root source
+	 * ([]). Dedup is by source path + field name so an explicit primary key
+	 * selection (including an aliased one) is not shadowed by a read-only copy.
+	 */
+	private function assemblePrimaryKeyFields(
+		RepresentationBinding $binding,
+		CollectionInterface $collection,
+		object $source,
+		ProjectionSourceResolverInterface $sourceResolver,
+	): void {
+		$shapes = [];
+
+		foreach ($this->bindingAssembler->primaryKeyFieldShapes($collection, $source) as $shape) {
+			if ($binding->hasFieldForSource([], $shape->getFieldName())) {
+				continue;
+			}
+
+			$shapes[] = $shape;
 		}
 
-		$this->bindingAssembler->addPrimaryKeyFields($binding, $collection);
+		$this->bindingAssembler->assembleInto($binding, $shapes, $sourceResolver);
 	}
 
 	/**
@@ -119,21 +142,6 @@ final class ProjectionCompiler
 		}
 
 		return $expression;
-	}
-
-	/**
-	 * @param list<SelectionItem> $selections
-	 */
-	private function addSelectedFields(
-		RepresentationBinding $binding,
-		QueryProjectionSourceResolver $sourceResolver,
-		array $selections,
-	): void {
-		$this->bindingAssembler->assembleInto(
-			$binding,
-			$this->selectionNormalizer->normalizeSelections($selections),
-			$sourceResolver,
-		);
 	}
 
 	private function compileRelationSourcedFlatFields(
@@ -234,19 +242,32 @@ final class ProjectionCompiler
 	{
 		$targetCollection = $this->relationTargetCollection($selection->getRelationRef()->getDefinition());
 		$binding = new RepresentationBinding($targetCollection);
+		$sourceResolver = new RootSourceResolver($targetCollection);
 		$explicitFields = $selection->getFields();
 
-		if ($explicitFields !== null) {
-			foreach ($explicitFields as $fieldName) {
-				$this->bindingAssembler->addField($binding, $targetCollection, $fieldName, $fieldName);
-			}
+		$shapes = $explicitFields !== null
+			? $this->explicitFieldShapes($explicitFields, $targetCollection)
+			: $this->bindingAssembler->defaultFieldShapes($targetCollection, $targetCollection);
 
-			$this->bindingAssembler->addPrimaryKeyFields($binding, $targetCollection);
-		} else {
-			$this->bindingAssembler->addDefaultCollectionFields($binding, $targetCollection);
-		}
+		$this->bindingAssembler->assembleInto($binding, $shapes, $sourceResolver);
+		$this->assemblePrimaryKeyFields($binding, $targetCollection, $targetCollection, $sourceResolver);
 
 		return $binding;
+	}
+
+	/**
+	 * @param list<string> $fieldNames
+	 * @return list<ProjectionFieldShape>
+	 */
+	private function explicitFieldShapes(array $fieldNames, object $source): array
+	{
+		$shapes = [];
+
+		foreach ($fieldNames as $fieldName) {
+			$shapes[] = new ProjectionFieldShape($fieldName, $source, $fieldName);
+		}
+
+		return $shapes;
 	}
 
 	private function relationTargetCollection(RelationInterface $relation): CollectionInterface

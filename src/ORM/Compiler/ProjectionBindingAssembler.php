@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Compiler;
 
 /**
- * Shared final step of projection compilation: turns normalized field shapes and
- * scalar field declarations into structural RepresentationFieldBinding entries.
+ * Shared structural binding creation for projection compilation: turns normalized
+ * ProjectionFieldShape values into RepresentationFieldBinding entries, and offers
+ * default/primary-key shape factories so root, default, and PK fields flow
+ * through the same shape path as explicit selections.
  *
- * Exists so SelectQuery and manual projection compilers share one place that
- * resolves sources and applies writability / skip-when-missing flags.
+ * Exists so SelectQuery and manual projection compilers share one query-agnostic,
+ * manual-projection-agnostic place that resolves sources and applies writability
+ * / skip-when-missing flags.
  */
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\State\RepresentationBinding;
@@ -58,65 +61,50 @@ final class ProjectionBindingAssembler
 		}
 	}
 
-	public function addDefaultCollectionFields(RepresentationBinding $binding, CollectionInterface $collection): void
+	/**
+	 * Builds one writable scalar field shape per collection field, all rooted at
+	 * the given source. Callers pair this with a resolver that maps $source to the
+	 * collection so default field bindings flow through the same shape path as
+	 * explicit selections.
+	 *
+	 * @return list<ProjectionFieldShape>
+	 */
+	public function defaultFieldShapes(CollectionInterface $collection, object $source): array
 	{
+		$shapes = [];
+
 		foreach ($collection->getFields() as $field) {
-			$this->addField(
-				$binding,
-				$collection,
+			$shapes[] = new ProjectionFieldShape(
 				$field->getName(),
+				$source,
 				$field->getName(),
 				writable: true,
 			);
 		}
-	}
 
-	public function addPrimaryKeyFields(RepresentationBinding $binding, CollectionInterface $collection): void
-	{
-		foreach ($collection->getPrimaryKey() as $fieldName) {
-			if ($this->hasFieldForSource($binding, [], $fieldName)) {
-				continue;
-			}
-
-			$this->addField(
-				$binding,
-				$collection,
-				$fieldName,
-				$fieldName,
-				writable: false,
-			);
-		}
-	}
-
-	public function addField(
-		RepresentationBinding $binding,
-		CollectionInterface $collection,
-		string $publicPath,
-		string $fieldName,
-		bool $writable = true,
-		bool $skipWhenMissing = false,
-	): void {
-		if ($binding->hasField($publicPath)) {
-			return;
-		}
-
-		$binding->addField(new RepresentationFieldBinding(
-			$publicPath,
-			$collection,
-			$fieldName,
-			writable: $writable,
-			skipWhenMissing: $skipWhenMissing,
-		));
+		return $shapes;
 	}
 
 	/**
-	 * @param list<string> $sourcePath
+	 * Builds one field shape per primary-key field, rooted at the given source.
+	 * Primary keys default to read-only so adoption can carry identity without
+	 * marking them writable.
+	 *
+	 * @return list<ProjectionFieldShape>
 	 */
-	public function hasFieldForSource(
-		RepresentationBinding $binding,
-		array $sourcePath,
-		string $fieldName,
-	): bool {
-		return $binding->hasFieldForSource($sourcePath, $fieldName);
+	public function primaryKeyFieldShapes(CollectionInterface $collection, object $source, bool $writable = false): array
+	{
+		$shapes = [];
+
+		foreach ($collection->getPrimaryKey() as $fieldName) {
+			$shapes[] = new ProjectionFieldShape(
+				$fieldName,
+				$source,
+				$fieldName,
+				writable: $writable,
+			);
+		}
+
+		return $shapes;
 	}
 }
