@@ -24,8 +24,8 @@ final class Phase34BindingModelTest extends TestCase
 		self::assertStringContainsString('RepresentationState', $contents);
 		self::assertStringContainsString('ToManyRelationState / ToOneRelationState', $contents);
 		self::assertStringContainsString('field bindings', $contents);
-		self::assertStringContainsString('expression bindings', $contents);
 		self::assertStringContainsString('relation bindings', $contents);
+		self::assertStringContainsString('It owns two path maps', $contents);
 		self::assertStringContainsString('getRelatedBinding()', $contents);
 		self::assertStringContainsString('Do not create one binding object per child instance.', $contents);
 		self::assertStringContainsString('Scalar representation sync uses field bindings only', $contents);

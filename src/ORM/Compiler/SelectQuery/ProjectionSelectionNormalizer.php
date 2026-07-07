@@ -15,8 +15,6 @@ use InvalidArgumentException;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
-use ON\Data\Query\Expression\StarExpression;
-use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Selection\SelectionItem;
 
 final class ProjectionSelectionNormalizer
@@ -37,20 +35,6 @@ final class ProjectionSelectionNormalizer
 		}
 
 		return $shapes;
-	}
-
-	/**
-	 * @param list<ValueExpressionInterface|AliasedExpression|StarExpression> $expressions
-	 * @return list<ProjectionFieldShape>
-	 */
-	public function normalizeExpressions(array $expressions, bool $ignoreUnsupported = true): array
-	{
-		$selections = [];
-		foreach ($expressions as $expression) {
-			$selections[] = new SelectionItem($expression, explicit: true);
-		}
-
-		return $this->normalizeSelections($selections, $ignoreUnsupported);
 	}
 
 	private function shapeFromSelection(SelectionItem $selection, bool $ignoreUnsupported): ?ProjectionFieldShape
