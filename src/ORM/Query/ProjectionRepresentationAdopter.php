@@ -53,7 +53,7 @@ final class ProjectionRepresentationAdopter
 			throw new SyncException('Cannot adopt representation because it is already tracked.');
 		}
 
-		$recordsBySourcePath = $this->resolveRecordsBySourcePath(
+		$recordsBySourceKey = $this->resolveSourceRecords(
 			$representation,
 			$compilation->getSources(),
 			$compilation->getIdentityColumns(),
@@ -62,10 +62,10 @@ final class ProjectionRepresentationAdopter
 		);
 		$state = new RepresentationState(
 			$binding,
-			$this->buildFieldItems($compilation->getSources(), $recordsBySourcePath),
+			$this->buildFieldItems($compilation->getSources(), $recordsBySourceKey),
 		);
 
-		foreach ($recordsBySourcePath as $record) {
+		foreach ($recordsBySourceKey as $record) {
 			$records->add($record);
 		}
 
@@ -79,7 +79,7 @@ final class ProjectionRepresentationAdopter
 	 *
 	 * @return array<string, RecordState>
 	 */
-	private function resolveRecordsBySourcePath(
+	private function resolveSourceRecords(
 		object $representation,
 		array $sources,
 		ProjectionIdentityColumns $identityColumns,
@@ -89,7 +89,7 @@ final class ProjectionRepresentationAdopter
 		$resolved = [];
 
 		foreach ($sources as $source) {
-			$resolved[$source->getPathKey()] = $this->resolveRecord(
+			$resolved[$source->getPathKey()] = $this->resolveSourceRecord(
 				$representation,
 				$source,
 				$identityColumns,
@@ -101,7 +101,7 @@ final class ProjectionRepresentationAdopter
 		return $resolved;
 	}
 
-	private function resolveRecord(
+	private function resolveSourceRecord(
 		object $representation,
 		ProjectionSource $source,
 		ProjectionIdentityColumns $identityColumns,
@@ -230,18 +230,18 @@ final class ProjectionRepresentationAdopter
 
 	/**
 	 * @param list<ProjectionSource> $sources
-	 * @param array<string, RecordState> $recordsBySourcePath
+	 * @param array<string, RecordState> $recordsBySourceKey
 	 *
 	 * @return list<RepresentationFieldStateItem>
 	 */
 	private function buildFieldItems(
 		array $sources,
-		array $recordsBySourcePath,
+		array $recordsBySourceKey,
 	): array {
 		$items = [];
 
 		foreach ($sources as $source) {
-			$record = $recordsBySourcePath[$source->getPathKey()] ?? null;
+			$record = $recordsBySourceKey[$source->getPathKey()] ?? null;
 
 			if (! $record instanceof RecordState) {
 				throw new SyncException(sprintf(

@@ -6,7 +6,8 @@ namespace ON\Data\ORM\Compiler\SelectQuery;
 
 /**
  * Query compilation result pairing the public RepresentationBinding with the
- * ProjectionIdentityColumns needed to adopt flat mutable query rows.
+ * compiled structural ProjectionSource entries and ProjectionIdentityColumns
+ * needed to adopt flat mutable query rows.
  *
  * Exists because mutable SelectQuery export must pass identity metadata to
  * ProjectionRepresentationAdopter separately from the user-visible binding.

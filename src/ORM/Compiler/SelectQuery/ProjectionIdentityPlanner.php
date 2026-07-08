@@ -7,9 +7,9 @@ namespace ON\Data\ORM\Compiler\SelectQuery;
 /**
  * Plans hidden identity selections for flat mutable projection adoption.
  *
- * Given a compiled structural RepresentationBinding and its SelectQuery, this
+ * Given compiled structural ProjectionSource entries and a SelectQuery, this
  * ensures the query result carries enough primary-key data to adopt every
- * source path represented by flat projected fields. It may mutate the query by
+ * projection source represented by flat projected fields. It may mutate the query by
  * adding INTERNAL-tagged selections and returns ProjectionIdentityColumns keyed
  * by source path + primary-key field.
  *

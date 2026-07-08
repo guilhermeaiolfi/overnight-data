@@ -7,9 +7,7 @@ namespace Tests\ON\Data\ORM\Compiler\SelectQuery;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Compiler\ProjectionSource;
-use ON\Data\ORM\Compiler\ProjectionSourceBuilder;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityPlanner;
-use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
@@ -28,11 +26,16 @@ final class ProjectionIdentityPlannerTest extends TestCase
 	{
 		$users = $this->registry()->getCollection('users');
 		$query = new SelectQuery($users);
-		$binding = new RepresentationBinding($users);
-		$binding->addField(new RepresentationFieldBinding('id', $users, 'id', writable: false));
-		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
+		$sources = [
+			$this->source(
+				$users,
+				[],
+				new RepresentationFieldBinding('id', $users, 'id', writable: false),
+				new RepresentationFieldBinding('name', $users, 'name'),
+			),
+		];
 
-		$identities = $this->planner->plan($query, $this->sources($binding));
+		$identities = $this->planner->plan($query, $sources);
 
 		self::assertNull($identities->get([], 'id'));
 		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
@@ -42,10 +45,15 @@ final class ProjectionIdentityPlannerTest extends TestCase
 	{
 		$users = $this->registry()->getCollection('users');
 		$query = new SelectQuery($users);
-		$binding = new RepresentationBinding($users);
-		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
+		$sources = [
+			$this->source(
+				$users,
+				[],
+				new RepresentationFieldBinding('name', $users, 'name'),
+			),
+		];
 
-		$identities = $this->planner->plan($query, $this->sources($binding));
+		$identities = $this->planner->plan($query, $sources);
 
 		$internal = $query->getSelections()->getByTag(SelectionTag::INTERNAL);
 		self::assertCount(1, $internal);
@@ -57,12 +65,21 @@ final class ProjectionIdentityPlannerTest extends TestCase
 	{
 		$users = $this->registryWithManager()->getCollection('users');
 		$query = new SelectQuery($users);
-		$binding = new RepresentationBinding($users);
-		$binding->addField(new RepresentationFieldBinding('id', $users, 'id', writable: false));
-		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
-		$binding->addField(new RepresentationFieldBinding('managerName', $users, 'name', sourcePath: ['manager']));
+		$sources = [
+			$this->source(
+				$users,
+				[],
+				new RepresentationFieldBinding('id', $users, 'id', writable: false),
+				new RepresentationFieldBinding('name', $users, 'name'),
+			),
+			$this->source(
+				$users,
+				['manager'],
+				new RepresentationFieldBinding('managerName', $users, 'name', sourcePath: ['manager']),
+			),
+		];
 
-		$identities = $this->planner->plan($query, $this->sources($binding));
+		$identities = $this->planner->plan($query, $sources);
 
 		$internal = $query->getSelections()->getByTag(SelectionTag::INTERNAL);
 		self::assertCount(1, $internal);
@@ -75,12 +92,21 @@ final class ProjectionIdentityPlannerTest extends TestCase
 	{
 		$users = $this->registryWithManager()->getCollection('users');
 		$query = new SelectQuery($users);
-		$binding = new RepresentationBinding($users);
-		$binding->addField(new RepresentationFieldBinding('id', $users, 'id', writable: false));
-		$binding->addField(new RepresentationFieldBinding('managerName', $users, 'name', sourcePath: ['manager']));
-		$binding->addField(new RepresentationFieldBinding('managerRef', $users, 'manager_id', sourcePath: ['manager']));
+		$sources = [
+			$this->source(
+				$users,
+				[],
+				new RepresentationFieldBinding('id', $users, 'id', writable: false),
+			),
+			$this->source(
+				$users,
+				['manager'],
+				new RepresentationFieldBinding('managerName', $users, 'name', sourcePath: ['manager']),
+				new RepresentationFieldBinding('managerRef', $users, 'manager_id', sourcePath: ['manager']),
+			),
+		];
 
-		$identities = $this->planner->plan($query, $this->sources($binding));
+		$identities = $this->planner->plan($query, $sources);
 
 		self::assertCount(1, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
 		self::assertNotNull($identities->get(['manager'], 'id'));
@@ -90,12 +116,21 @@ final class ProjectionIdentityPlannerTest extends TestCase
 	{
 		$users = $this->registryWithManager()->getCollection('users');
 		$query = new SelectQuery($users);
-		$binding = new RepresentationBinding($users);
-		$binding->addField(new RepresentationFieldBinding('id', $users, 'id', writable: false));
-		$binding->addField(new RepresentationFieldBinding('managerId', $users, 'id', sourcePath: ['manager']));
-		$binding->addField(new RepresentationFieldBinding('managerName', $users, 'name', sourcePath: ['manager']));
+		$sources = [
+			$this->source(
+				$users,
+				[],
+				new RepresentationFieldBinding('id', $users, 'id', writable: false),
+			),
+			$this->source(
+				$users,
+				['manager'],
+				new RepresentationFieldBinding('managerId', $users, 'id', sourcePath: ['manager']),
+				new RepresentationFieldBinding('managerName', $users, 'name', sourcePath: ['manager']),
+			),
+		];
 
-		$identities = $this->planner->plan($query, $this->sources($binding));
+		$identities = $this->planner->plan($query, $sources);
 
 		self::assertNull($identities->get([], 'id'));
 		self::assertNull($identities->get(['manager'], 'id'));
@@ -106,11 +141,20 @@ final class ProjectionIdentityPlannerTest extends TestCase
 	{
 		$users = $this->registryWithManager()->getCollection('users');
 		$query = new SelectQuery($users);
-		$binding = new RepresentationBinding($users);
-		$binding->addField(new RepresentationFieldBinding('id', $users, 'id', writable: false));
-		$binding->addField(new RepresentationFieldBinding('grandName', $users, 'name', sourcePath: ['manager', 'manager']));
+		$sources = [
+			$this->source(
+				$users,
+				[],
+				new RepresentationFieldBinding('id', $users, 'id', writable: false),
+			),
+			$this->source(
+				$users,
+				['manager', 'manager'],
+				new RepresentationFieldBinding('grandName', $users, 'name', sourcePath: ['manager', 'manager']),
+			),
+		];
 
-		$identities = $this->planner->plan($query, $this->sources($binding));
+		$identities = $this->planner->plan($query, $sources);
 
 		self::assertCount(1, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
 		self::assertNotNull($identities->get(['manager', 'manager'], 'id'));
@@ -128,11 +172,14 @@ final class ProjectionIdentityPlannerTest extends TestCase
 	}
 
 	/**
-	 * @return list<ProjectionSource>
+	 * @param list<string> $path
 	 */
-	private function sources(RepresentationBinding $binding): array
-	{
-		return (new ProjectionSourceBuilder())->build($binding);
+	private function source(
+		CollectionInterface $collection,
+		array $path,
+		RepresentationFieldBinding ...$fields,
+	): ProjectionSource {
+		return new ProjectionSource($path, $collection, $fields);
 	}
 
 	private function registryWithManager(): Registry
