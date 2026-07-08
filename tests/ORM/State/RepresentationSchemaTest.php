@@ -6,9 +6,9 @@ namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationRelationSchema;
+use ON\Data\ORM\State\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\ORM\Support\OrmFixture;
 
@@ -19,197 +19,197 @@ final class RepresentationSchemaTest extends TestCase
 	public function testRequiresRootCollection(): void
 	{
 		$users = $this->users();
-		$binding = new RepresentationSchema($users);
+		$schema = new RepresentationSchema($users);
 
-		self::assertSame($users, $binding->getCollection());
-		self::assertSame('users', $binding->getCollectionName());
+		self::assertSame($users, $schema->getCollection());
+		self::assertSame('users', $schema->getCollectionName());
 	}
 
 	public function testAddFieldAndGetFieldByPath(): void
 	{
-		$binding = new RepresentationSchema($this->users());
-		$fieldSchema = $this->fieldBinding('name');
+		$schema = new RepresentationSchema($this->users());
+		$fieldSchema = $this->fieldSchema('name');
 
-		$binding->addField($fieldSchema);
+		$schema->addField($fieldSchema);
 
-		self::assertTrue($binding->hasField('name'));
-		self::assertSame($fieldSchema, $binding->getField('name'));
-		self::assertSame([$fieldSchema], $binding->getFields());
+		self::assertTrue($schema->hasField('name'));
+		self::assertSame($fieldSchema, $schema->getField('name'));
+		self::assertSame([$fieldSchema], $schema->getFields());
 	}
 
 	public function testAddRelationAndGetRelationByPath(): void
 	{
-		$binding = new RepresentationSchema($this->users());
-		$relation = $this->relationBinding('posts');
+		$schema = new RepresentationSchema($this->users());
+		$relation = $this->relationSchema('posts');
 
-		$binding->addRelation($relation);
+		$schema->addRelation($relation);
 
-		self::assertTrue($binding->hasRelation('posts'));
-		self::assertSame($relation, $binding->getRelation('posts'));
-		self::assertSame([$relation], $binding->getRelations());
+		self::assertTrue($schema->hasRelation('posts'));
+		self::assertSame($relation, $schema->getRelation('posts'));
+		self::assertSame([$relation], $schema->getRelations());
 	}
 
-	public function testRelatedBindingIsRootedAtRelatedCollection(): void
+	public function testRelatedSchemaIsRootedAtRelatedCollection(): void
 	{
-		$binding = new RepresentationSchema($this->users());
-		$relation = $this->relationBinding('posts');
-		$binding->addRelation($relation);
+		$schema = new RepresentationSchema($this->users());
+		$relation = $this->relationSchema('posts');
+		$schema->addRelation($relation);
 
 		self::assertSame('posts', $relation->getRelatedSchema()->getCollectionName());
 	}
 
 	public function testHasPathWorksAcrossFieldsAndRelations(): void
 	{
-		$binding = new RepresentationSchema($this->users());
-		$binding->addField($this->fieldBinding('name'));
-		$binding->addRelation($this->relationBinding('posts'));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addField($this->fieldSchema('name'));
+		$schema->addRelation($this->relationSchema('posts'));
 
-		self::assertTrue($binding->hasPath('name'));
-		self::assertTrue($binding->hasPath('posts'));
-		self::assertFalse($binding->hasPath('missing'));
+		self::assertTrue($schema->hasPath('name'));
+		self::assertTrue($schema->hasPath('posts'));
+		self::assertFalse($schema->hasPath('missing'));
 	}
 
 	public function testGetPathsPreservesInsertionOrderForFieldsAndRelations(): void
 	{
-		$binding = new RepresentationSchema($this->users());
-		$binding->addField($this->fieldBinding('name'));
-		$binding->addRelation($this->relationBinding('posts'));
-		$binding->addField($this->fieldBinding('email'));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addField($this->fieldSchema('name'));
+		$schema->addRelation($this->relationSchema('posts'));
+		$schema->addField($this->fieldSchema('email'));
 
-		self::assertSame(['name', 'posts', 'email'], $binding->getPaths());
+		self::assertSame(['name', 'posts', 'email'], $schema->getPaths());
 	}
 
 	public function testDuplicateFieldPathThrows(): void
 	{
-		$binding = new RepresentationSchema($this->users());
-		$binding->addField($this->fieldBinding('name'));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addField($this->fieldSchema('name'));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('name');
-		$binding->addField($this->fieldBinding('name'));
+		$schema->addField($this->fieldSchema('name'));
 	}
 
 	public function testDuplicateRelationPathThrows(): void
 	{
-		$binding = new RepresentationSchema($this->users());
-		$binding->addRelation($this->relationBinding('posts'));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addRelation($this->relationSchema('posts'));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('posts');
-		$binding->addRelation($this->relationBinding('posts'));
+		$schema->addRelation($this->relationSchema('posts'));
 	}
 
 	public function testDuplicatePathAcrossFieldAndRelationThrows(): void
 	{
-		$binding = new RepresentationSchema($this->users());
-		$binding->addField($this->fieldBinding('posts'));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addField($this->fieldSchema('posts'));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('posts');
-		$binding->addRelation($this->relationBinding('posts'));
+		$schema->addRelation($this->relationSchema('posts'));
 	}
 
 	public function testWritableFilterWorks(): void
 	{
-		$binding = new RepresentationSchema($this->users());
-		$writable = $this->fieldBinding('name');
-		$binding->addField($writable);
-		$binding->addField($this->fieldBinding('upperName', false));
+		$schema = new RepresentationSchema($this->users());
+		$writable = $this->fieldSchema('name');
+		$schema->addField($writable);
+		$schema->addField($this->fieldSchema('upperName', false));
 
-		self::assertSame([$writable], $binding->getWritableFieldSchemas());
+		self::assertSame([$writable], $schema->getWritableFieldSchemas());
 	}
 
 	public function testReadOnlyFilterWorks(): void
 	{
-		$binding = new RepresentationSchema($this->users());
-		$binding->addField($this->fieldBinding('name'));
-		$readOnly = $this->fieldBinding('upperName', false);
-		$binding->addField($readOnly);
+		$schema = new RepresentationSchema($this->users());
+		$schema->addField($this->fieldSchema('name'));
+		$readOnly = $this->fieldSchema('upperName', false);
+		$schema->addField($readOnly);
 
-		self::assertSame([$readOnly], $binding->getReadOnlyFieldSchemas());
+		self::assertSame([$readOnly], $schema->getReadOnlyFieldSchemas());
 	}
 
-	public function testRelationBindingsAreNotReturnedByFieldFilters(): void
+	public function testRelationSchemasAreNotReturnedByFieldFilters(): void
 	{
-		$binding = new RepresentationSchema($this->users());
-		$writable = $this->fieldBinding('name');
-		$readOnly = $this->fieldBinding('upperName', false);
-		$binding->addField($writable);
-		$binding->addField($readOnly);
-		$binding->addRelation($this->relationBinding('posts'));
+		$schema = new RepresentationSchema($this->users());
+		$writable = $this->fieldSchema('name');
+		$readOnly = $this->fieldSchema('upperName', false);
+		$schema->addField($writable);
+		$schema->addField($readOnly);
+		$schema->addRelation($this->relationSchema('posts'));
 
-		self::assertSame([$writable], $binding->getWritableFieldSchemas());
-		self::assertSame([$readOnly], $binding->getReadOnlyFieldSchemas());
+		self::assertSame([$writable], $schema->getWritableFieldSchemas());
+		self::assertSame([$readOnly], $schema->getReadOnlyFieldSchemas());
 	}
 
 	public function testFieldInsertionOrderIsPreserved(): void
 	{
-		$binding = new RepresentationSchema($this->users());
-		$name = $this->fieldBinding('name');
-		$email = $this->fieldBinding('email');
+		$schema = new RepresentationSchema($this->users());
+		$name = $this->fieldSchema('name');
+		$email = $this->fieldSchema('email');
 
-		$binding->addField($name);
-		$binding->addField($email);
+		$schema->addField($name);
+		$schema->addField($email);
 
-		self::assertSame([$name, $email], $binding->getFields());
+		self::assertSame([$name, $email], $schema->getFields());
 	}
 
 	public function testFlatHeterogeneousFieldsCanTargetCollectionsOtherThanRoot(): void
 	{
 		$users = $this->users();
 		$companies = $this->posts();
-		$binding = new RepresentationSchema($users);
+		$schema = new RepresentationSchema($users);
 		$root = new RepresentationFieldSchema('name', $users, 'name');
 		$foreign = new RepresentationFieldSchema('companyName', $companies, 'title', sourcePath: ['company']);
-		$binding->addField($root);
-		$binding->addField($foreign);
+		$schema->addField($root);
+		$schema->addField($foreign);
 
-		self::assertSame('users', $binding->getCollectionName());
-		self::assertSame($root, $binding->getFieldForSource([], 'name'));
-		self::assertSame($foreign, $binding->getFieldForSource(['company'], 'title'));
+		self::assertSame('users', $schema->getCollectionName());
+		self::assertSame($root, $schema->getFieldForSource([], 'name'));
+		self::assertSame($foreign, $schema->getFieldForSource(['company'], 'title'));
 	}
 
 	public function testFindsStructuralFieldForSourcePathAndField(): void
 	{
 		$users = $this->users();
 		$field = new RepresentationFieldSchema('displayName', $users, 'name');
-		$binding = new RepresentationSchema($users);
-		$binding->addField($field);
+		$schema = new RepresentationSchema($users);
+		$schema->addField($field);
 
-		self::assertSame($field, $binding->getFieldForSource([], 'name'));
-		self::assertTrue($binding->hasFieldForSource([], 'name'));
-		self::assertFalse($binding->hasFieldForSource([], 'email'));
+		self::assertSame($field, $schema->getFieldForSource([], 'name'));
+		self::assertTrue($schema->hasFieldForSource([], 'name'));
+		self::assertFalse($schema->hasFieldForSource([], 'email'));
 	}
 
 	public function testSameTerminalCollectionFieldsStayDistinctBySourcePath(): void
 	{
 		$users = $this->users();
-		$binding = new RepresentationSchema($users);
+		$schema = new RepresentationSchema($users);
 		$rootName = new RepresentationFieldSchema('name', $users, 'name');
 		$managerName = new RepresentationFieldSchema('managerName', $users, 'name', sourcePath: ['manager']);
-		$binding->addField($rootName);
-		$binding->addField($managerName);
+		$schema->addField($rootName);
+		$schema->addField($managerName);
 
-		self::assertSame($rootName, $binding->getFieldForSource([], 'name'));
-		self::assertSame($managerName, $binding->getFieldForSource(['manager'], 'name'));
+		self::assertSame($rootName, $schema->getFieldForSource([], 'name'));
+		self::assertSame($managerName, $schema->getFieldForSource(['manager'], 'name'));
 		self::assertNotSame(
-			$binding->getFieldForSource([], 'name'),
-			$binding->getFieldForSource(['manager'], 'name'),
+			$schema->getFieldForSource([], 'name'),
+			$schema->getFieldForSource(['manager'], 'name'),
 		);
 	}
 
-	public function testFieldBindingSourcePathKeyUsesSharedEncoder(): void
+	public function testFieldSchemaSourcePathKeyUsesSharedEncoder(): void
 	{
 		self::assertSame('', RepresentationFieldSchema::sourcePathKey([]));
 		self::assertSame('manager.profile', RepresentationFieldSchema::sourcePathKey(['manager', 'profile']));
 	}
 
-	private function fieldBinding(string $path, bool $writable = true): RepresentationFieldSchema
+	private function fieldSchema(string $path, bool $writable = true): RepresentationFieldSchema
 	{
 		return new RepresentationFieldSchema($path, $this->users(), $path, $writable);
 	}
 
-	private function relationBinding(string $path): RepresentationRelationSchema
+	private function relationSchema(string $path): RepresentationRelationSchema
 	{
 		return new RepresentationRelationSchema(
 			$path,

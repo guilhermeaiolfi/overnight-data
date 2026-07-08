@@ -62,7 +62,7 @@ final class MutableQueryExportTest extends TestCase
 		self::assertSame(2, $rows[1]->id);
 	}
 
-	public function testComputedProjectionExpressionHydratesWithoutBindingOrStateTracking(): void
+	public function testComputedProjectionExpressionHydratesWithoutSchemaOrStateTracking(): void
 	{
 		$session = $this->session();
 		$registry = $this->makeRegistry();
@@ -88,17 +88,17 @@ final class MutableQueryExportTest extends TestCase
 		$state = $session->getRepresentations()->get($row);
 		self::assertInstanceOf(RepresentationState::class, $state);
 
-		$binding = $state->getSchema();
-		self::assertTrue($binding->hasFieldForSource([], 'id'));
-		self::assertTrue($binding->hasFieldForSource([], 'name'));
-		self::assertFalse($binding->hasField('postCount'));
+		$schema = $state->getSchema();
+		self::assertTrue($schema->hasFieldForSource([], 'id'));
+		self::assertTrue($schema->hasFieldForSource([], 'name'));
+		self::assertFalse($schema->hasField('postCount'));
 
 		self::assertTrue($state->hasFieldItem('id'));
 		self::assertTrue($state->hasFieldItem('name'));
 		self::assertFalse($state->hasFieldItem('postCount'));
 	}
 
-	public function testMutableFetchAllTracksAllRootObjectsWithEquivalentBindings(): void
+	public function testMutableFetchAllTracksAllRootObjectsWithEquivalentSchemas(): void
 	{
 		$session = $this->session();
 		$query = new SelectQuery(
@@ -272,7 +272,7 @@ final class MutableQueryExportTest extends TestCase
 
 final class MutableQueryResultTrackerTest extends TestCase
 {
-	public function testTrackAllReusesCompiledTemplateForRelatedBindings(): void
+	public function testTrackAllReusesCompiledTemplateForRelatedSchemas(): void
 	{
 		$registry = $this->makeRegistryWithPosts();
 		$users = $registry->getCollection('users');
@@ -330,7 +330,7 @@ final class MutableQueryResultTrackerTest extends TestCase
 		self::assertNotSame($firstState, $secondState);
 	}
 
-	public function testTrackOneTracksObjectWithPrecompiledBinding(): void
+	public function testTrackOneTracksObjectWithPrecompiledSchema(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');

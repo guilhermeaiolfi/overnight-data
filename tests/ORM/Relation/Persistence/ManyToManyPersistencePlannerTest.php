@@ -20,8 +20,8 @@ use ON\Data\ORM\Relation\Persistence\ManyToManyPersistencePlanner;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\State\ValueRef;
@@ -40,7 +40,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$target = RecordState::clean($tags->getKey(3), ['id' => 3]);
 		$item = new stdClass();
-		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($item);
 
 		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->representations(
@@ -59,7 +59,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$target = RecordState::clean($tags->getKey(3), ['id' => 3]);
 		$item = new stdClass();
-		$collection = ToManyRelationState::full($owner, 'tags', $this->bindingFor($target), [$item]);
+		$collection = ToManyRelationState::full($owner, 'tags', $this->schemaFor($target), [$item]);
 		$collection->remove($item);
 
 		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->representations(
@@ -88,7 +88,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$collection = ToManyRelationState::full(
 			$owner,
 			'tags',
-			$this->bindingFor($addOne),
+			$this->schemaFor($addOne),
 			[$removeOneItem, $removeTwoItem],
 		);
 		$collection->add($addOneItem);
@@ -125,7 +125,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$target = RecordState::clean($tags->getKey(3), ['id' => 3]);
 		$item = new stdClass();
-		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($item);
 
 		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->representations(
@@ -181,7 +181,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$owner = RecordState::clean($accounts->getKey(10), ['id' => 10]);
 		$target = RecordState::clean($roles->getKey(3), ['id' => 3]);
 		$item = new stdClass();
-		$collection = new ToManyRelationState($owner, 'roles', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'roles', $this->schemaFor($target));
 		$collection->add($item);
 
 		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->representations(
@@ -198,7 +198,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$owner = RecordState::clean($users->getKey([5, 10]), ['tenant_id' => 5, 'user_id' => 10]);
 		$target = RecordState::clean($roles->getKey([6, 3]), ['tenant_id' => 6, 'role_id' => 3]);
 		$item = new stdClass();
-		$collection = new ToManyRelationState($owner, 'roles', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'roles', $this->schemaFor($target));
 		$collection->add($item);
 
 		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->representations(
@@ -219,7 +219,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		[$relation, $users, $tags] = $this->singleKeyModel();
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$target = RecordState::clean($tags->getKey(3), ['id' => 3]);
-		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add(new stdClass());
 
 		$this->expectException(RelationPersistenceException::class);
@@ -234,11 +234,11 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$target = RecordState::clean($tags->getKey(3), ['id' => 3]);
 		$item = new stdClass();
-		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($item);
-		$binding = new RepresentationSchema($tags);
-		$binding->addField(new RepresentationFieldSchema('id', $tags, 'id'));
-		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
+		$schema = new RepresentationSchema($tags);
+		$schema->addField(new RepresentationFieldSchema('id', $tags, 'id'));
+		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($schema, []));
 
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('cannot be resolved to a record state');
@@ -315,7 +315,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$target = RecordState::clean($tags->getKey(3), ['id' => 3]);
 		$item = new stdClass();
-		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($item);
 
 		$this->plan($relation, $collection, $this->records($owner, $target), $this->representations(
@@ -394,7 +394,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 	private function planSingleAddAndReturnInsert(M2MRelation $relation, RecordState $owner, RecordState $target): InsertCommand
 	{
 		$item = new stdClass();
-		$collection = new ToManyRelationState($owner, $relation->getName(), $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, $relation->getName(), $this->schemaFor($target));
 		$collection->add($item);
 
 		$commands = $this->plan($relation, $collection, $this->records($owner, $target), $this->representations(
@@ -427,20 +427,20 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 	{
 		return RepresentationStateObjectRegistry::remember(
 			$representation,
-			new RepresentationState($binding = $this->bindingFor($record), $this->fieldItemsFor($binding, [$record]))
+			new RepresentationState($schema = $this->schemaFor($record), $this->fieldItemsFor($schema, [$record]))
 		);
 	}
 
-	private function bindingFor(RecordState $record): RepresentationSchema
+	private function schemaFor(RecordState $record): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($record->getCollection());
+		$schema = new RepresentationSchema($record->getCollection());
 		$fields = array_unique(array_merge(array_keys($record->getValues()), $record->getCollection()->getPrimaryKey()));
 		foreach ($fields as $field) {
 			$field = (string) $field;
-			$binding->addField(new RepresentationFieldSchema($field, $record->getCollection(), $field));
+			$schema->addField(new RepresentationFieldSchema($field, $record->getCollection(), $field));
 		}
 
-		return $binding;
+		return $schema;
 	}
 
 	/**

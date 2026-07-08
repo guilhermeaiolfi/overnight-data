@@ -23,19 +23,19 @@ final class AdoptionRecordResolverTest extends TestCase
 		$representation = $this->representation(['id' => null, 'name' => 'Ada']);
 		$records = new RecordStateStore();
 
-		$record = $this->resolver()->resolve($representation, $this->userBindingWithId(), $records, true);
+		$record = $this->resolver()->resolve($representation, $this->userSchemaWithId(), $records, true);
 
 		self::assertTrue($record->isNew());
 		self::assertSame('Ada', $record->getValue('name'));
 		self::assertFalse($record->hasKey());
 	}
 
-	public function testCreatesNewRecordStateWhenRelatedBindingHasCompletePrimaryKey(): void
+	public function testCreatesNewRecordStateWhenRelatedSchemaHasCompletePrimaryKey(): void
 	{
 		$representation = $this->representation(['id' => 10, 'name' => 'Ada']);
 		$records = new RecordStateStore();
 
-		$record = $this->resolver()->resolve($representation, $this->userBindingWithId(), $records, false);
+		$record = $this->resolver()->resolve($representation, $this->userSchemaWithId(), $records, false);
 
 		self::assertTrue($record->isNew());
 		self::assertFalse($record->hasKey());
@@ -48,7 +48,7 @@ final class AdoptionRecordResolverTest extends TestCase
 		$representation = $this->representation(['id' => 10, 'name' => 'Ada']);
 		$records = new RecordStateStore();
 
-		$record = $this->resolver()->resolve($representation, $this->userBindingWithId(), $records, true);
+		$record = $this->resolver()->resolve($representation, $this->userSchemaWithId(), $records, true);
 
 		self::assertTrue($record->isClean());
 		self::assertSame(10, $record->getKey()?->getFieldValue('id'));
@@ -61,7 +61,7 @@ final class AdoptionRecordResolverTest extends TestCase
 		$existing = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'Existing']);
 		$records = $this->records($existing);
 
-		$record = $this->resolver()->resolve($representation, $this->userBindingWithId(), $records, true);
+		$record = $this->resolver()->resolve($representation, $this->userSchemaWithId(), $records, true);
 
 		self::assertSame($existing, $record);
 		self::assertSame('Existing', $record->getValue('name'));
@@ -77,10 +77,10 @@ final class AdoptionRecordResolverTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("Cannot adopt representation for collection 'users' because key 'users#id=10' is already tracked as removed.");
 
-		$this->resolver()->resolve($representation, $this->userBindingWithId(), $records, true);
+		$this->resolver()->resolve($representation, $this->userSchemaWithId(), $records, true);
 	}
 
-	public function testRejectsRootBindingWithNoTargetCollection(): void
+	public function testRejectsRootSchemaWithNoTargetCollection(): void
 	{
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('untracked root sync needs a schema targeting one collection');
@@ -88,7 +88,7 @@ final class AdoptionRecordResolverTest extends TestCase
 		$this->resolver()->resolve(new stdClass(), new RepresentationSchema($this->users()), new RecordStateStore(), true);
 	}
 
-	public function testRejectsRelatedBindingWithNoTargetCollection(): void
+	public function testRejectsRelatedSchemaWithNoTargetCollection(): void
 	{
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('related schema does not target a collection');
@@ -96,26 +96,26 @@ final class AdoptionRecordResolverTest extends TestCase
 		$this->resolver()->resolve(new stdClass(), new RepresentationSchema($this->users()), new RecordStateStore(), false);
 	}
 
-	public function testRejectsBindingTargetingMultipleCollectionNames(): void
+	public function testRejectsSchemaTargetingMultipleCollectionNames(): void
 	{
-		$binding = new RepresentationSchema($this->users());
-		$binding->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
-		$binding->addField(new RepresentationFieldSchema('title', $this->posts(), 'title'));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
+		$schema->addField(new RepresentationFieldSchema('title', $this->posts(), 'title'));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("path 'title' targets collection 'posts' after 'users'");
 
-		$this->resolver()->resolve(new stdClass(), $binding, new RecordStateStore(), true);
+		$this->resolver()->resolve(new stdClass(), $schema, new RecordStateStore(), true);
 	}
 
 	public function testIgnoresMissingNonKeyPathsWhenBuildingInitialValues(): void
 	{
-		$binding = new RepresentationSchema($this->users());
-		$binding->addField(new RepresentationFieldSchema('id', $this->users(), 'id'));
-		$binding->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addField(new RepresentationFieldSchema('id', $this->users(), 'id'));
+		$schema->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
 		$representation = $this->representation(['id' => 10]);
 
-		$record = $this->resolver()->resolve($representation, $binding, new RecordStateStore(), true);
+		$record = $this->resolver()->resolve($representation, $schema, new RecordStateStore(), true);
 
 		self::assertTrue($record->isClean());
 		self::assertSame(['id' => 10], $record->getValues());
@@ -124,10 +124,10 @@ final class AdoptionRecordResolverTest extends TestCase
 	public function testTreatsMissingKeyPathAsIncompleteKey(): void
 	{
 		$representation = $this->representation(['name' => 'Ada']);
-		$binding = new RepresentationSchema($this->users());
-		$binding->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
 
-		$record = $this->resolver()->resolve($representation, $binding, new RecordStateStore(), true);
+		$record = $this->resolver()->resolve($representation, $schema, new RecordStateStore(), true);
 
 		self::assertTrue($record->isNew());
 		self::assertFalse($record->hasKey());
@@ -137,7 +137,7 @@ final class AdoptionRecordResolverTest extends TestCase
 	{
 		$representation = $this->representation(['id' => null, 'name' => 'Ada']);
 
-		$record = $this->resolver()->resolve($representation, $this->userBindingWithId(), new RecordStateStore(), true);
+		$record = $this->resolver()->resolve($representation, $this->userSchemaWithId(), new RecordStateStore(), true);
 
 		self::assertTrue($record->isNew());
 		self::assertSame('Ada', $record->getValue('name'));
@@ -147,9 +147,9 @@ final class AdoptionRecordResolverTest extends TestCase
 	{
 		$key = $this->posts()->getKey(['id' => 123]);
 		$representation = $this->representation(['id' => 123, 'title' => 'Draft']);
-		$binding = $this->postBindingWithId();
+		$schema = $this->postSchemaWithId();
 
-		$values = $this->resolver()->initialValuesForKey($representation, $binding, $key);
+		$values = $this->resolver()->initialValuesForKey($representation, $schema, $key);
 
 		self::assertSame(['id' => 123, 'title' => 'Draft'], $values);
 	}
@@ -158,23 +158,23 @@ final class AdoptionRecordResolverTest extends TestCase
 	{
 		$key = $this->posts()->getKey(['id' => 123]);
 		$representation = $this->representation(['id' => 123]);
-		$binding = $this->postBindingWithId();
+		$schema = $this->postSchemaWithId();
 
-		$values = $this->resolver()->initialValuesForKey($representation, $binding, $key);
+		$values = $this->resolver()->initialValuesForKey($representation, $schema, $key);
 
 		self::assertSame(['id' => 123], $values);
 	}
 
-	public function testRelatedBindingRejectsMultipleCollectionNames(): void
+	public function testRelatedSchemaRejectsMultipleCollectionNames(): void
 	{
-		$binding = new RepresentationSchema($this->users());
-		$binding->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
-		$binding->addField(new RepresentationFieldSchema('title', $this->posts(), 'title'));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
+		$schema->addField(new RepresentationFieldSchema('title', $this->posts(), 'title'));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("related schema path 'title' targets collection 'posts' after 'users'");
 
-		$this->resolver()->resolve(new stdClass(), $binding, new RecordStateStore(), false);
+		$this->resolver()->resolve(new stdClass(), $schema, new RecordStateStore(), false);
 	}
 
 	private function resolver(): AdoptionRecordResolver

@@ -6,10 +6,9 @@ namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationRelationSchema;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\Sync\RepresentationReader;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -24,16 +23,16 @@ final class RepresentationReaderTest extends TestCase
 		$row = new stdClass();
 		$row->name = 'A1';
 
-		self::assertSame(['name' => 'A1'], $this->reader()->read($row, $this->fieldBinding('name')));
+		self::assertSame(['name' => 'A1'], $this->reader()->read($row, $this->fieldSchema('name')));
 
 		$dto = new PublicPropertyUser();
 		$dto->name = 'A1';
 
-		self::assertSame(['name' => 'A1'], $this->reader()->read($dto, $this->fieldBinding('name')));
+		self::assertSame(['name' => 'A1'], $this->reader()->read($dto, $this->fieldSchema('name')));
 
 		$row->name = null;
 
-		self::assertSame(['name' => null], $this->reader()->read($row, $this->fieldBinding('name')));
+		self::assertSame(['name' => null], $this->reader()->read($row, $this->fieldSchema('name')));
 	}
 
 	public function testReadsNestedPath(): void
@@ -42,13 +41,13 @@ final class RepresentationReaderTest extends TestCase
 		$row->author = new stdClass();
 		$row->author->name = 'Ada';
 
-		self::assertSame(['author.name' => 'Ada'], $this->reader()->read($row, $this->fieldBinding('author.name')));
+		self::assertSame(['author.name' => 'Ada'], $this->reader()->read($row, $this->fieldSchema('author.name')));
 
 		$post = new PublicPropertyPost();
 		$post->author = new PublicPropertyUser();
 		$post->author->name = 'Ada';
 
-		self::assertSame(['author.name' => 'Ada'], $this->reader()->read($post, $this->fieldBinding('author.name')));
+		self::assertSame(['author.name' => 'Ada'], $this->reader()->read($post, $this->fieldSchema('author.name')));
 
 		$row = new stdClass();
 		$row->posts = [];
@@ -57,7 +56,7 @@ final class RepresentationReaderTest extends TestCase
 
 		self::assertSame(
 			['posts.0.title' => 'Hello'],
-			$this->reader()->read($row, $this->fieldBinding('posts.0.title'))
+			$this->reader()->read($row, $this->fieldSchema('posts.0.title'))
 		);
 	}
 
@@ -66,7 +65,7 @@ final class RepresentationReaderTest extends TestCase
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('name');
 
-		$this->reader()->read(new stdClass(), $this->fieldBinding('name'));
+		$this->reader()->read(new stdClass(), $this->fieldSchema('name'));
 	}
 
 	public function testRejectsMissingNestedPathSegment(): void
@@ -77,7 +76,7 @@ final class RepresentationReaderTest extends TestCase
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('author.name');
 
-		$this->reader()->read($row, $this->fieldBinding('author.name'));
+		$this->reader()->read($row, $this->fieldSchema('author.name'));
 	}
 
 	public function testRejectsIntermediateNonObjectPathSegment(): void
@@ -88,7 +87,7 @@ final class RepresentationReaderTest extends TestCase
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('author.name');
 
-		$this->reader()->read($row, $this->fieldBinding('author.name'));
+		$this->reader()->read($row, $this->fieldSchema('author.name'));
 	}
 
 	public function testReadsManyRelationItems(): void
@@ -96,14 +95,14 @@ final class RepresentationReaderTest extends TestCase
 		$item = new stdClass();
 		$representation = $this->representation(['posts' => [$item]]);
 
-		self::assertSame([$item], $this->reader()->readItems($representation, $this->postsRelationBinding(), $this->syncError(...)));
+		self::assertSame([$item], $this->reader()->readItems($representation, $this->postsRelationSchema(), $this->syncError(...)));
 	}
 
 	public function testTreatsNullManyRelationAsEmptyList(): void
 	{
 		$representation = $this->representation(['posts' => null]);
 
-		self::assertSame([], $this->reader()->readItems($representation, $this->postsRelationBinding(), $this->syncError(...)));
+		self::assertSame([], $this->reader()->readItems($representation, $this->postsRelationSchema(), $this->syncError(...)));
 	}
 
 	public function testRejectsNonIterableManyRelationValue(): void
@@ -114,7 +113,7 @@ final class RepresentationReaderTest extends TestCase
 		$this->expectExceptionMessage('posts');
 		$this->expectExceptionMessage('iterable');
 
-		$this->reader()->readItems($representation, $this->postsRelationBinding(), $this->syncError(...));
+		$this->reader()->readItems($representation, $this->postsRelationSchema(), $this->syncError(...));
 	}
 
 	public function testRejectsNonObjectManyRelationItem(): void
@@ -125,7 +124,7 @@ final class RepresentationReaderTest extends TestCase
 		$this->expectExceptionMessage('posts');
 		$this->expectExceptionMessage('only contain objects');
 
-		$this->reader()->readItems($representation, $this->postsRelationBinding(), $this->syncError(...));
+		$this->reader()->readItems($representation, $this->postsRelationSchema(), $this->syncError(...));
 	}
 
 	public function testReadsSingleRelationTarget(): void
@@ -133,19 +132,19 @@ final class RepresentationReaderTest extends TestCase
 		$target = new stdClass();
 		$representation = $this->representation(['profile' => $target]);
 
-		self::assertSame($target, $this->reader()->readTarget($representation, $this->profileRelationBinding(), $this->syncError(...)));
+		self::assertSame($target, $this->reader()->readTarget($representation, $this->profileRelationSchema(), $this->syncError(...)));
 	}
 
 	public function testTreatsNullSingleRelationAsNull(): void
 	{
 		$representation = $this->representation(['profile' => null]);
 
-		self::assertNull($this->reader()->readTarget($representation, $this->profileRelationBinding(), $this->syncError(...)));
+		self::assertNull($this->reader()->readTarget($representation, $this->profileRelationSchema(), $this->syncError(...)));
 	}
 
 	public function testRejectsInvalidSingleRelationTarget(): void
 	{
-		$binding = $this->profileRelationBinding();
+		$schema = $this->profileRelationSchema();
 
 		foreach ([
 			['profile' => 123],
@@ -153,7 +152,7 @@ final class RepresentationReaderTest extends TestCase
 			['profile' => ['bad']],
 		] as $values) {
 			try {
-				$this->reader()->readTarget($this->representation($values), $binding, $this->syncError(...));
+				$this->reader()->readTarget($this->representation($values), $schema, $this->syncError(...));
 				self::fail('Expected SyncException for invalid single relation target.');
 			} catch (SyncException $exception) {
 				self::assertStringContainsString('profile', $exception->getMessage());
@@ -162,33 +161,33 @@ final class RepresentationReaderTest extends TestCase
 		}
 	}
 
-	public function testReadsWritableAndReadOnlyBindings(): void
+	public function testReadsWritableAndReadOnlySchemas(): void
 	{
 		$row = new stdClass();
 		$row->name = 'Ada';
 		$row->upperName = 'ADA';
-		$binding = new RepresentationSchema($this->users());
-		$binding->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
-		$binding->addField(new RepresentationFieldSchema('upperName', $this->users(), 'name', false));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
+		$schema->addField(new RepresentationFieldSchema('upperName', $this->users(), 'name', false));
 
 		self::assertSame(
 			['name' => 'Ada', 'upperName' => 'ADA'],
-			$this->reader()->read($row, $binding)
+			$this->reader()->read($row, $schema)
 		);
 	}
 
-	public function testPreservesBindingInsertionOrder(): void
+	public function testPreservesSchemaInsertionOrder(): void
 	{
 		$row = new stdClass();
 		$row->email = 'ada@example.test';
 		$row->name = 'Ada';
-		$binding = new RepresentationSchema($this->users());
-		$binding->addField(new RepresentationFieldSchema('email', $this->users(), 'email'));
-		$binding->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addField(new RepresentationFieldSchema('email', $this->users(), 'email'));
+		$schema->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
 
 		self::assertSame(
 			['email' => 'ada@example.test', 'name' => 'Ada'],
-			$this->reader()->read($row, $binding)
+			$this->reader()->read($row, $schema)
 		);
 	}
 
@@ -198,7 +197,7 @@ final class RepresentationReaderTest extends TestCase
 		$row->name = 'Ada';
 		$before = clone $row;
 
-		$this->reader()->read($row, $this->fieldBinding('name'));
+		$this->reader()->read($row, $this->fieldSchema('name'));
 
 		self::assertEquals($before, $row);
 	}
@@ -212,7 +211,7 @@ final class RepresentationReaderTest extends TestCase
 		$this->expectExceptionMessage('iterable');
 		$this->expectExceptionMessage('during graph adoption');
 
-		$this->reader()->readItems($representation, $this->postsRelationBinding(), $this->adoptionError(...));
+		$this->reader()->readItems($representation, $this->postsRelationSchema(), $this->adoptionError(...));
 	}
 
 	private function reader(): RepresentationReader
@@ -236,29 +235,31 @@ final class RepresentationReaderTest extends TestCase
 		return new StateException(rtrim($message, '.') . ' during graph adoption.');
 	}
 
-	private function fieldBinding(string $path): RepresentationSchema
+	private function fieldSchema(string $path): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($this->users());
-		$binding->addField(new RepresentationFieldSchema($path, $this->users(), 'name'));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addField(new RepresentationFieldSchema($path, $this->users(), 'name'));
 
-		return $binding;
+		return $schema;
 	}
 
-	private function postsRelationBinding(): RepresentationRelationSchema
+	private function postsRelationSchema(): RepresentationRelationSchema
 	{
 		return new RepresentationRelationSchema(
 			'posts',
-			$this->users(), 'posts',
-			$this->postBinding()
+			$this->users(),
+			'posts',
+			$this->postSchema()
 		);
 	}
 
-	private function profileRelationBinding(): RepresentationRelationSchema
+	private function profileRelationSchema(): RepresentationRelationSchema
 	{
 		return new RepresentationRelationSchema(
 			'profile',
-			$this->users(), 'profile',
-			$this->profileBinding()
+			$this->users(),
+			'profile',
+			$this->profileSchema()
 		);
 	}
 }

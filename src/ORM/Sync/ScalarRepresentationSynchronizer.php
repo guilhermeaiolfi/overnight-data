@@ -105,14 +105,14 @@ final class ScalarRepresentationSynchronizer
 		$updatesByTarget = [];
 
 		foreach ($state->getWritableFieldItems() as $item) {
-			$binding = $item->getSchema();
+			$fieldSchema = $item->getSchema();
 			$path = $item->getPath();
 			if (isset($conflictPaths[$path])) {
 				continue;
 			}
 
 			if (! array_key_exists($path, $currentValues)) {
-				if ($binding->shouldSkipWhenMissing()) {
+				if ($fieldSchema->shouldSkipWhenMissing()) {
 					continue;
 				}
 
@@ -143,7 +143,7 @@ final class ScalarRepresentationSynchronizer
 				continue;
 			}
 
-			$update = new SyncFieldUpdate($record, $fieldName, $currentValue, $binding);
+			$update = new SyncFieldUpdate($record, $fieldName, $currentValue, $fieldSchema);
 			$updates[] = $update;
 			$updatesByTarget[$target] = $update;
 		}

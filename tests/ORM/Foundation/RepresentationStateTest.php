@@ -25,7 +25,7 @@ final class RepresentationStateTest extends TestCase
 	public function testRepresentationSchemaMayBeReusedAsChildOrRelationItemTemplate(): void
 	{
 		self::markTestIncomplete(
-			'Phase 0 skeleton: RepresentationSchema is the reusable mapping shape for root, child, and relation item bindings; do not add a separate child template unless implementation proves it necessary.'
+			'Phase 0 skeleton: RepresentationSchema is the reusable mapping shape for root, child, and relation item schemas; do not add a separate child template unless implementation proves it necessary.'
 		);
 	}
 

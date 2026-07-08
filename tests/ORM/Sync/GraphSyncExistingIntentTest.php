@@ -34,7 +34,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$post = $this->representation(['title' => 'Draft']);
 		$owner = $this->representation(['id' => 10, 'name' => 'Owner', 'posts' => [$post]]);
 
-		$session->sync($owner, $this->ownerBindingWithPosts($users, $posts));
+		$session->sync($owner, $this->ownerSchemaWithPosts($users, $posts));
 
 		$record = $session->getRecords()->getFromRepresentation($session->getRepresentations()->get($post));
 		self::assertInstanceOf(RecordState::class, $record);
@@ -50,7 +50,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$post = $this->representation(['id' => 99, 'title' => 'Draft', 'user_id' => null]);
 		$owner = $this->representation(['id' => 10, 'name' => 'Owner', 'posts' => [$post]]);
 
-		$session->sync($owner, $this->ownerBindingWithPosts($users, $posts));
+		$session->sync($owner, $this->ownerSchemaWithPosts($users, $posts));
 		$session->flush();
 
 		self::assertCount(1, $executor->getCommands());
@@ -67,7 +67,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$post = $this->representation(['tenant_ref' => 7, 'user_ref' => 10, 'title' => 'Draft']);
 		$owner = $this->representation(['tenant_id' => 7, 'user_id' => 10, 'posts' => [$post]]);
 
-		$session->sync($owner, $this->compositeOwnerBindingWithPosts($users, $posts));
+		$session->sync($owner, $this->compositeOwnerSchemaWithPosts($users, $posts));
 
 		$record = $session->getRecords()->getFromRepresentation($session->getRepresentations()->get($post));
 		self::assertInstanceOf(RecordState::class, $record);
@@ -94,7 +94,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 		self::assertInstanceOf(ExistingIntent::class, $intent);
 		self::assertSame($post, $intent->getRepresentation());
 
-		$session->sync($owner, $this->ownerBindingWithPosts($users, $posts));
+		$session->sync($owner, $this->ownerSchemaWithPosts($users, $posts));
 		$session->flush();
 
 		$record = $session->getRecords()->getFromRepresentation($session->getRepresentations()->get($post));
@@ -113,9 +113,9 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
 		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
-		$post = $session->identify($posts, ['id' => 5], schema: $this->postKeyOnlyBindingFor($posts));
+		$post = $session->identify($posts, ['id' => 5], schema: $this->postKeyOnlySchemaFor($posts));
 		$ownerRepresentation = $this->representation(['id' => 10, 'name' => 'Owner', 'posts' => [$post]]);
-		$session->adopt($ownerRepresentation, $this->ownerBindingWithPostsKeyOnlyChild($users, $posts), $owner);
+		$session->adopt($ownerRepresentation, $this->ownerSchemaWithPostsKeyOnlyChild($users, $posts), $owner);
 
 		$session->sync($ownerRepresentation);
 		$session->flush();
@@ -137,8 +137,8 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$child = $session->trackNew($posts, ['id' => 5, 'title' => 'Draft', 'user_id' => null]);
 		$post = $this->representation(['id' => 5, 'title' => 'Draft', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['id' => 10, 'name' => 'Owner', 'posts' => [$post]]);
-		$session->adopt($ownerRepresentation, $this->ownerBindingWithPosts($users, $posts), $owner);
-		$session->adopt($post, $this->postBindingWithIdFor($posts), $child);
+		$session->adopt($ownerRepresentation, $this->ownerSchemaWithPosts($users, $posts), $owner);
+		$session->adopt($post, $this->postSchemaWithIdFor($posts), $child);
 
 		$session->sync($ownerRepresentation);
 
@@ -154,7 +154,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$post = $this->representation(['id' => 99, 'title' => 'Draft', 'user_id' => null]);
 		$owner = $this->representation(['id' => 10, 'name' => 'Owner', 'posts' => [$post]]);
 
-		$session->sync($owner, $this->ownerBindingWithPosts($users, $posts));
+		$session->sync($owner, $this->ownerSchemaWithPosts($users, $posts));
 
 		$record = $session->getRecords()->getFromRepresentation($session->getRepresentations()->get($post));
 		self::assertInstanceOf(RecordState::class, $record);
@@ -189,7 +189,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$post = $this->representation(['id' => 99, 'title' => 'Duplicate', 'user_id' => null]);
 		$owner = $this->representation(['id' => 10, 'name' => 'Owner', 'posts' => [$post]]);
 
-		$session->sync($owner, $this->ownerBindingWithPosts($users, $posts));
+		$session->sync($owner, $this->ownerSchemaWithPosts($users, $posts));
 
 		$this->expectException(Throwable::class);
 
@@ -207,7 +207,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('Cannot adopt existing representation');
 
-		$session->sync($owner, $this->ownerBindingWithPosts($users, $posts));
+		$session->sync($owner, $this->ownerSchemaWithPosts($users, $posts));
 	}
 
 	/**
@@ -254,73 +254,73 @@ final class GraphSyncExistingIntentTest extends TestCase
 		return [$users, $posts];
 	}
 
-	private function compositeOwnerBindingWithPosts(CollectionInterface $users, CollectionInterface $posts): RepresentationSchema
+	private function compositeOwnerSchemaWithPosts(CollectionInterface $users, CollectionInterface $posts): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($users);
-		$binding->addField(new RepresentationFieldSchema('tenant_id', $users, 'tenant_id'));
-		$binding->addField(new RepresentationFieldSchema('user_id', $users, 'user_id'));
-		$postBinding = new RepresentationSchema($posts);
-		$postBinding->addField(new RepresentationFieldSchema('tenant_ref', $posts, 'tenant_ref'));
-		$postBinding->addField(new RepresentationFieldSchema('user_ref', $posts, 'user_ref'));
-		$postBinding->addField(new RepresentationFieldSchema('title', $posts, 'title'));
-		$binding->addRelation(new RepresentationRelationSchema(
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('tenant_id', $users, 'tenant_id'));
+		$schema->addField(new RepresentationFieldSchema('user_id', $users, 'user_id'));
+		$postSchema = new RepresentationSchema($posts);
+		$postSchema->addField(new RepresentationFieldSchema('tenant_ref', $posts, 'tenant_ref'));
+		$postSchema->addField(new RepresentationFieldSchema('user_ref', $posts, 'user_ref'));
+		$postSchema->addField(new RepresentationFieldSchema('title', $posts, 'title'));
+		$schema->addRelation(new RepresentationRelationSchema(
 			'posts',
 			$users,
 			'posts',
-			$postBinding,
+			$postSchema,
 			false
 		));
 
-		return $binding;
+		return $schema;
 	}
 
-	private function ownerBindingWithPosts(CollectionInterface $users, CollectionInterface $posts): RepresentationSchema
+	private function ownerSchemaWithPosts(CollectionInterface $users, CollectionInterface $posts): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($users);
-		$binding->addField(new RepresentationFieldSchema('id', $users, 'id'));
-		$binding->addField(new RepresentationFieldSchema('name', $users, 'name'));
-		$binding->addRelation(new RepresentationRelationSchema(
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('id', $users, 'id'));
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$schema->addRelation(new RepresentationRelationSchema(
 			'posts',
 			$users,
 			'posts',
-			$this->postBindingWithIdFor($posts),
+			$this->postSchemaWithIdFor($posts),
 			false
 		));
 
-		return $binding;
+		return $schema;
 	}
 
-	private function postBindingWithIdFor(CollectionInterface $posts): RepresentationSchema
+	private function postSchemaWithIdFor(CollectionInterface $posts): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($posts);
-		$binding->addField(new RepresentationFieldSchema('id', $posts, 'id'));
-		$binding->addField(new RepresentationFieldSchema('title', $posts, 'title'));
-		$binding->addField(new RepresentationFieldSchema('user_id', $posts, 'user_id'));
+		$schema = new RepresentationSchema($posts);
+		$schema->addField(new RepresentationFieldSchema('id', $posts, 'id'));
+		$schema->addField(new RepresentationFieldSchema('title', $posts, 'title'));
+		$schema->addField(new RepresentationFieldSchema('user_id', $posts, 'user_id'));
 
-		return $binding;
+		return $schema;
 	}
 
-	private function postKeyOnlyBindingFor(CollectionInterface $posts): RepresentationSchema
+	private function postKeyOnlySchemaFor(CollectionInterface $posts): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($posts);
-		$binding->addField(new RepresentationFieldSchema('id', $posts, 'id'));
+		$schema = new RepresentationSchema($posts);
+		$schema->addField(new RepresentationFieldSchema('id', $posts, 'id'));
 
-		return $binding;
+		return $schema;
 	}
 
-	private function ownerBindingWithPostsKeyOnlyChild(CollectionInterface $users, CollectionInterface $posts): RepresentationSchema
+	private function ownerSchemaWithPostsKeyOnlyChild(CollectionInterface $users, CollectionInterface $posts): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($users);
-		$binding->addField(new RepresentationFieldSchema('id', $users, 'id'));
-		$binding->addField(new RepresentationFieldSchema('name', $users, 'name'));
-		$binding->addRelation(new RepresentationRelationSchema(
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('id', $users, 'id'));
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$schema->addRelation(new RepresentationRelationSchema(
 			'posts',
 			$users,
 			'posts',
-			$this->postKeyOnlyBindingFor($posts),
+			$this->postKeyOnlySchemaFor($posts),
 			false
 		));
 
-		return $binding;
+		return $schema;
 	}
 }

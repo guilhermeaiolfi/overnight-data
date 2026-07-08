@@ -35,7 +35,7 @@ final class ToManyRelationState implements RelationChangeInterface
 	public function __construct(
 		private readonly RecordState $owner,
 		private readonly string $relationName,
-		private readonly RepresentationSchema $childBinding,
+		private readonly RepresentationSchema $childSchema,
 		array $items = [],
 	) {
 		if (trim($relationName) === '') {
@@ -65,10 +65,10 @@ final class ToManyRelationState implements RelationChangeInterface
 	public static function full(
 		RecordState $owner,
 		string $relationName,
-		RepresentationSchema $childBinding,
+		RepresentationSchema $childSchema,
 		array $items = [],
 	): self {
-		$state = new self($owner, $relationName, $childBinding, $items);
+		$state = new self($owner, $relationName, $childSchema, $items);
 		$state->markFullyLoaded();
 
 		return $state;
@@ -84,14 +84,9 @@ final class ToManyRelationState implements RelationChangeInterface
 		return $this->relationName;
 	}
 
-	public function getChildBinding(): RepresentationSchema
-	{
-		return $this->childBinding;
-	}
-
 	public function getRelatedSchema(): RepresentationSchema
 	{
-		return $this->childBinding;
+		return $this->childSchema;
 	}
 
 	public function isUnloaded(): bool

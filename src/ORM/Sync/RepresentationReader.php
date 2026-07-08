@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationRelationSchema;
+use ON\Data\ORM\State\RepresentationSchema;
 use Throwable;
 
 final class RepresentationReader
@@ -14,10 +14,10 @@ final class RepresentationReader
 	/**
 	 * @return array<string, mixed>
 	 */
-	public function read(object $representation, RepresentationSchema $binding): array
+	public function read(object $representation, RepresentationSchema $schema): array
 	{
 		$values = [];
-		foreach ($binding->getFields() as $fieldSchema) {
+		foreach ($schema->getFields() as $fieldSchema) {
 			$path = $fieldSchema->getPath();
 			$values[$path] = $this->readPath($representation, $path);
 		}
@@ -47,10 +47,10 @@ final class RepresentationReader
 	 */
 	public function readItems(
 		object $representation,
-		RepresentationRelationSchema $binding,
+		RepresentationRelationSchema $schema,
 		callable $error,
 	): array {
-		$value = $this->readPath($representation, $binding->getPath());
+		$value = $this->readPath($representation, $schema->getPath());
 		if ($value === null) {
 			return [];
 		}
@@ -58,7 +58,7 @@ final class RepresentationReader
 		if (! is_iterable($value)) {
 			throw $error(sprintf(
 				"Representation relation path '%s' must contain an iterable value or null.",
-				$binding->getPath()
+				$schema->getPath()
 			));
 		}
 
@@ -67,7 +67,7 @@ final class RepresentationReader
 			if (! is_object($item)) {
 				throw $error(sprintf(
 					"Representation relation path '%s' can only contain objects.",
-					$binding->getPath()
+					$schema->getPath()
 				));
 			}
 
@@ -82,17 +82,17 @@ final class RepresentationReader
 	 */
 	public function readTarget(
 		object $representation,
-		RepresentationRelationSchema $binding,
+		RepresentationRelationSchema $schema,
 		callable $error,
 	): ?object {
-		$value = $this->readPath($representation, $binding->getPath());
+		$value = $this->readPath($representation, $schema->getPath());
 		if ($value === null || is_object($value)) {
 			return $value;
 		}
 
 		throw $error(sprintf(
 			"Representation relation path '%s' must contain an object value or null.",
-			$binding->getPath()
+			$schema->getPath()
 		));
 	}
 

@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationRelationSchema;
 use ON\Data\ORM\State\RepresentationRelationStateItem;
+use ON\Data\ORM\State\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
@@ -16,26 +16,26 @@ final class RepresentationRelationStateItemTest extends TestCase
 {
 	use OrmFixture;
 
-	public function testExposesBindingOwnerRecordAndRelationName(): void
+	public function testExposesSchemaOwnerRecordAndRelationName(): void
 	{
 		$users = $this->users();
 		$owner = RecordState::new($users, ['name' => 'Ada']);
-		$binding = new RepresentationRelationSchema(
+		$schema = new RepresentationRelationSchema(
 			'posts',
 			$users,
 			'posts',
 			new RepresentationSchema($this->posts()),
 		);
 
-		$item = new RepresentationRelationStateItem($binding, $owner, 'posts');
+		$item = new RepresentationRelationStateItem($schema, $owner, 'posts');
 
 		self::assertSame('posts', $item->getPath());
-		self::assertSame($binding, $item->getSchema());
+		self::assertSame($schema, $item->getSchema());
 		self::assertSame($owner, $item->getOwnerRecord());
 		self::assertSame('posts', $item->getRelationName());
 	}
 
-	public function testItemOnlyCarriesBindingOwnerRecordAndRelationName(): void
+	public function testItemOnlyCarriesSchemaOwnerRecordAndRelationName(): void
 	{
 		$reflection = new ReflectionClass(RepresentationRelationStateItem::class);
 		$constructor = $reflection->getConstructor();

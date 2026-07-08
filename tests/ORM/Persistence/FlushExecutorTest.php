@@ -23,11 +23,11 @@ use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationRelationSchema;
 use ON\Data\ORM\State\RepresentationRelationStateItem;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\State\ValueRef;
@@ -44,7 +44,7 @@ final class FlushExecutorTest extends TestCase
 	use OrmFixture;
 
 	/** @var array<int, list<RecordState>> */
-	private array $recordsByBindingId = [];
+	private array $recordsBySchemaId = [];
 
 	protected function setUp(): void
 	{
@@ -55,7 +55,7 @@ final class FlushExecutorTest extends TestCase
 	{
 		$users = $this->users();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$tracked = $this->tracked($this->representation(['name' => 'A2']), $this->binding([
+		$tracked = $this->tracked($this->representation(['name' => 'A2']), $this->schema([
 			'name' => [$record, 'name'],
 		]));
 		$executor = new RecordingCommandExecutor();
@@ -74,7 +74,7 @@ final class FlushExecutorTest extends TestCase
 	public function testFlushReturnsSyncPlansAndCommandResults(): void
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
-		$tracked = $this->tracked($this->representation(['name' => 'A2']), $this->binding([
+		$tracked = $this->tracked($this->representation(['name' => 'A2']), $this->schema([
 			'name' => [$record, 'name'],
 		]));
 		$commandResult = new CommandResult(1, ['id' => 10]);
@@ -111,7 +111,7 @@ final class FlushExecutorTest extends TestCase
 	public function testSyncExceptionPreventsCommandExecution(): void
 	{
 		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$tracked = $this->tracked($this->representation(['name' => 'A3']), $this->binding([
+		$tracked = $this->tracked($this->representation(['name' => 'A3']), $this->schema([
 			'name' => [$record, 'name'],
 		]));
 		$record->setValue('name', 'A2');
@@ -227,7 +227,7 @@ final class FlushExecutorTest extends TestCase
 		$owner = RecordState::new($users, ['name' => 'Owner']);
 		$target = RecordState::clean($tags->getKey(3), ['id' => 3, 'label' => 'Tag']);
 		$tagRepresentation = $this->representation(['id' => 3, 'label' => 'Tag']);
-		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($tagRepresentation);
 		$executor = new RecordingCommandExecutor(new CommandResult(1));
 
@@ -235,7 +235,7 @@ final class FlushExecutorTest extends TestCase
 
 		try {
 			(new FlushExecutor($executor))->flush($this->context(
-				$this->representations($this->tracked($tagRepresentation, $this->bindingFor($target))),
+				$this->representations($this->tracked($tagRepresentation, $this->schemaFor($target))),
 				$this->records($owner, $target),
 				$this->toManyRelations($collection)
 			));
@@ -253,7 +253,7 @@ final class FlushExecutorTest extends TestCase
 		$owner = RecordState::new($users, ['name' => 'Owner']);
 		$target = RecordState::clean($tags->getKey(3), ['id' => 3, 'label' => 'Tag']);
 		$tagRepresentation = $this->representation(['id' => 3, 'label' => 'Tag']);
-		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($tagRepresentation);
 		$records = $this->records($owner, $target);
 		$executor = new class () implements CommandExecutorInterface {
@@ -276,7 +276,7 @@ final class FlushExecutorTest extends TestCase
 
 		try {
 			(new FlushExecutor($executor))->flush($this->context(
-				$this->representations($this->tracked($tagRepresentation, $this->bindingFor($target))),
+				$this->representations($this->tracked($tagRepresentation, $this->schemaFor($target))),
 				$records,
 				$this->toManyRelations($collection)
 			));
@@ -295,10 +295,10 @@ final class FlushExecutorTest extends TestCase
 		$owner = RecordState::new($users, ['name' => 'Owner']);
 		$target = RecordState::clean($tags->getKey(3), ['id' => 3, 'label' => 'Tag']);
 		$tagRepresentation = $this->representation(['id' => 3, 'label' => 'Tag']);
-		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($tagRepresentation);
 		$records = $this->records($owner, $target);
-		$representations = $this->representations($this->tracked($tagRepresentation, $this->bindingFor($target)));
+		$representations = $this->representations($this->tracked($tagRepresentation, $this->schemaFor($target)));
 		$toManyRelations = $this->toManyRelations($collection);
 		$firstExecutor = new class () implements CommandExecutorInterface {
 			/** @var list<CommandInterface> */
@@ -358,7 +358,7 @@ final class FlushExecutorTest extends TestCase
 		$owner = RecordState::new($users, ['name' => 'Owner']);
 		$target = RecordState::clean($tags->getKey(3), ['id' => 3, 'label' => 'Tag']);
 		$tagRepresentation = $this->representation(['id' => 3, 'label' => 'Tag']);
-		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($tagRepresentation);
 		$records = $this->records($owner, $target);
 		$executor = new class () implements CommandExecutorInterface, TransactionalCommandExecutorInterface {
@@ -390,7 +390,7 @@ final class FlushExecutorTest extends TestCase
 
 		try {
 			(new FlushExecutor($executor))->flush($this->context(
-				$this->representations($this->tracked($tagRepresentation, $this->bindingFor($target))),
+				$this->representations($this->tracked($tagRepresentation, $this->schemaFor($target))),
 				$records,
 				$this->toManyRelations($collection)
 			));
@@ -455,7 +455,7 @@ final class FlushExecutorTest extends TestCase
 		$owner = RecordState::new($users, ['name' => 'Owner']);
 		$target = RecordState::new($tags, ['label' => 'Tag']);
 		$tagRepresentation = $this->representation(['label' => 'Tag']);
-		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($tagRepresentation);
 		$records = $this->records($owner, $target);
 		$executor = new class () implements CommandExecutorInterface, TransactionalCommandExecutorInterface {
@@ -492,7 +492,7 @@ final class FlushExecutorTest extends TestCase
 		};
 
 		(new FlushExecutor($executor))->flush($this->context(
-			$this->representations($this->tracked($tagRepresentation, $this->bindingFor($target))),
+			$this->representations($this->tracked($tagRepresentation, $this->schemaFor($target))),
 			$records,
 			$this->toManyRelations($collection)
 		));
@@ -569,7 +569,7 @@ final class FlushExecutorTest extends TestCase
 	public function testNewRecordChangedThroughRepresentationSyncIsInsertedWithSynchronizedValues(): void
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
-		$tracked = $this->tracked($this->representation(['name' => 'A2']), $this->binding([
+		$tracked = $this->tracked($this->representation(['name' => 'A2']), $this->schema([
 			'name' => [$record, 'name'],
 		]));
 		$executor = new RecordingCommandExecutor();
@@ -588,7 +588,7 @@ final class FlushExecutorTest extends TestCase
 	{
 		$users = $this->users();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$tracked = $this->tracked($this->representation(['name' => 'A2']), $this->binding([
+		$tracked = $this->tracked($this->representation(['name' => 'A2']), $this->schema([
 			'name' => [$record, 'name'],
 		]));
 		$executor = new RecordingCommandExecutor();
@@ -671,12 +671,12 @@ final class FlushExecutorTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$target = RecordState::clean($tags->getKey(5), ['id' => 5, 'label' => 'Tag']);
 		$item = $this->representation(['id' => 5, 'label' => 'Tag']);
-		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($item);
 		$executor = new RecordingCommandExecutor();
 		$flusher = new FlushExecutor($executor);
 
-		$tracked = $this->tracked($item, $this->bindingFor($target));
+		$tracked = $this->tracked($item, $this->schemaFor($target));
 		$representations = $this->representations($tracked);
 		$records = $this->records($owner, $target);
 		$toManyRelations = $this->toManyRelations($collection);
@@ -697,9 +697,9 @@ final class FlushExecutorTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$target = RecordState::clean($tags->getKey(5), ['id' => 5, 'label' => 'Tag']);
 		$item = $this->representation(['id' => 5, 'label' => 'Tag']);
-		$collection = ToManyRelationState::full($owner, 'tags', $this->bindingFor($target), [$item]);
+		$collection = ToManyRelationState::full($owner, 'tags', $this->schemaFor($target), [$item]);
 		$collection->remove($item);
-		$tracked = $this->tracked($item, $this->bindingFor($target));
+		$tracked = $this->tracked($item, $this->schemaFor($target));
 		$representations = $this->representations($tracked);
 		$records = $this->records($owner, $target);
 		$toManyRelations = $this->toManyRelations($collection);
@@ -722,9 +722,9 @@ final class FlushExecutorTest extends TestCase
 		$owner = RecordState::clean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'author_id' => null]);
 		$target = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Author']);
 		$targetObject = $this->representation(['id' => 10, 'name' => 'Author']);
-		$reference = new ToOneRelationState($owner, 'author', $this->bindingFor($target));
+		$reference = new ToOneRelationState($owner, 'author', $this->schemaFor($target));
 		$reference->set($targetObject);
-		$tracked = $this->tracked($targetObject, $this->bindingFor($target));
+		$tracked = $this->tracked($targetObject, $this->schemaFor($target));
 		$executor = new RecordingCommandExecutor();
 		$flusher = new FlushExecutor($executor);
 
@@ -742,9 +742,9 @@ final class FlushExecutorTest extends TestCase
 		$owner = RecordState::clean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'author_id' => 10]);
 		$target = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Author']);
 		$baselineObject = $this->representation(['id' => 10, 'name' => 'Author']);
-		$reference = new ToOneRelationState($owner, 'author', $this->bindingFor($target), $baselineObject);
+		$reference = new ToOneRelationState($owner, 'author', $this->schemaFor($target), $baselineObject);
 		$reference->clear();
-		$tracked = $this->tracked($baselineObject, $this->bindingFor($target));
+		$tracked = $this->tracked($baselineObject, $this->schemaFor($target));
 		$executor = new RecordingCommandExecutor();
 		$flusher = new FlushExecutor($executor);
 
@@ -760,7 +760,7 @@ final class FlushExecutorTest extends TestCase
 	{
 		$users = $this->usersWithPosts();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'before']);
-		$tracked = $this->tracked($this->representation(['name' => 'after']), $this->binding([
+		$tracked = $this->tracked($this->representation(['name' => 'after']), $this->schema([
 			'name' => [$record, 'name'],
 		]));
 		$toManyRelations = $this->toManyRelations($this->changedToManyRelationState($record));
@@ -775,7 +775,7 @@ final class FlushExecutorTest extends TestCase
 		$users = $this->usersWithPosts();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'before']);
 		$item = new stdClass();
-		$tracked = $this->tracked($this->representation(['name' => 'after', 'posts' => [$item]]), $this->ownerBindingWithPosts($record));
+		$tracked = $this->tracked($this->representation(['name' => 'after', 'posts' => [$item]]), $this->ownerSchemaWithPosts($record));
 
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->context($this->representations($tracked, $this->tracked($item, new RepresentationSchema($this->posts()))), $this->records($record), new RelationStateStore()));
 
@@ -793,7 +793,7 @@ final class FlushExecutorTest extends TestCase
 
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->context(
 			$this->representations(
-				$this->tracked($this->representation(['name' => 'Owner', 'posts' => [$item]]), $this->ownerBindingWithPosts($record)),
+				$this->tracked($this->representation(['name' => 'Owner', 'posts' => [$item]]), $this->ownerSchemaWithPosts($record)),
 				$this->tracked($item, new RepresentationSchema($this->posts()))
 			),
 			$this->records($record),
@@ -815,7 +815,7 @@ final class FlushExecutorTest extends TestCase
 
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->context(
 			$this->representations(
-				$this->tracked($this->representation(['name' => 'Owner', 'profile' => $target]), $this->ownerBindingWithProfile($record)),
+				$this->tracked($this->representation(['name' => 'Owner', 'profile' => $target]), $this->ownerSchemaWithProfile($record)),
 				$this->tracked($target, new RepresentationSchema($this->profiles()))
 			),
 			$this->records($record),
@@ -840,7 +840,7 @@ final class FlushExecutorTest extends TestCase
 
 		try {
 			(new FlushExecutor($executor))->flush($this->context(
-				$this->representations($this->tracked($this->representation(['name' => 'after', 'posts' => 'bad']), $this->ownerBindingWithPosts($record))),
+				$this->representations($this->tracked($this->representation(['name' => 'after', 'posts' => 'bad']), $this->ownerSchemaWithPosts($record))),
 				$this->records($record),
 				new RelationStateStore()
 			));
@@ -860,7 +860,7 @@ final class FlushExecutorTest extends TestCase
 
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->context(
 			$this->representations(
-				$this->tracked($this->representation(['name' => 'Owner', 'posts' => [$item]]), $this->ownerBindingWithPosts($record)),
+				$this->tracked($this->representation(['name' => 'Owner', 'posts' => [$item]]), $this->ownerSchemaWithPosts($record)),
 				$this->tracked($item, new RepresentationSchema($this->posts()))
 			),
 			$this->records($record),
@@ -978,7 +978,7 @@ final class FlushExecutorTest extends TestCase
 
 		try {
 			(new FlushExecutor($executor))->flush($this->context(
-				$this->representations($this->tracked($this->representation(['name' => 'after', 'profile' => 'bad']), $this->ownerBindingWithProfile($record))),
+				$this->representations($this->tracked($this->representation(['name' => 'after', 'profile' => 'bad']), $this->ownerSchemaWithProfile($record))),
 				$this->records($record),
 				new RelationStateStore(),
 				$this->toOneRelations($reference)
@@ -1017,12 +1017,12 @@ final class FlushExecutorTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$child = RecordState::clean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$item = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
-		$collection = new ToManyRelationState($owner, 'posts', $this->bindingFor($child));
+		$collection = new ToManyRelationState($owner, 'posts', $this->schemaFor($child));
 		$collection->add($item);
 		$executor = new RecordingCommandExecutor();
 
 		(new FlushExecutor($executor))->flush($this->context(
-			$this->representations($this->tracked($item, $this->bindingFor($child))),
+			$this->representations($this->tracked($item, $this->schemaFor($child))),
 			$this->records($owner, $child),
 			$this->toManyRelations($collection)
 		));
@@ -1046,7 +1046,7 @@ final class FlushExecutorTest extends TestCase
 		$owner = RecordState::new($users, ['name' => 'Owner']);
 		$child = RecordState::new($posts, ['title' => 'Post']);
 		$postRepresentation = $this->representation(['title' => 'Post']);
-		$collection = new ToManyRelationState($owner, 'posts', $this->bindingFor($child));
+		$collection = new ToManyRelationState($owner, 'posts', $this->schemaFor($child));
 		$collection->add($postRepresentation);
 		$executor = new RecordingCommandExecutor(results: [
 			new CommandResult(1, ['id' => 10]),
@@ -1054,7 +1054,7 @@ final class FlushExecutorTest extends TestCase
 		]);
 
 		(new FlushExecutor($executor))->flush($this->context(
-			$this->representations($this->tracked($postRepresentation, $this->bindingFor($child))),
+			$this->representations($this->tracked($postRepresentation, $this->schemaFor($child))),
 			$this->records($owner, $child),
 			$this->toManyRelations($collection)
 		));
@@ -1083,7 +1083,7 @@ final class FlushExecutorTest extends TestCase
 		$owner = RecordState::new($users, ['name' => 'Owner']);
 		$target = RecordState::new($tags, ['label' => 'Tag']);
 		$tagRepresentation = $this->representation(['label' => 'Tag']);
-		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($tagRepresentation);
 		$executor = new RecordingCommandExecutor(results: [
 			new CommandResult(1, ['id' => 10]),
@@ -1092,7 +1092,7 @@ final class FlushExecutorTest extends TestCase
 		]);
 
 		(new FlushExecutor($executor))->flush($this->context(
-			$this->representations($this->tracked($tagRepresentation, $this->bindingFor($target))),
+			$this->representations($this->tracked($tagRepresentation, $this->schemaFor($target))),
 			$this->records($owner, $target),
 			$this->toManyRelations($collection)
 		));
@@ -1119,7 +1119,7 @@ final class FlushExecutorTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$target = RecordState::new($tags, ['label' => 'Tag']);
 		$tagRepresentation = $this->representation(['label' => 'Tag']);
-		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($tagRepresentation);
 		$executor = new RecordingCommandExecutor(results: [
 			new CommandResult(1, ['id' => 3]),
@@ -1127,7 +1127,7 @@ final class FlushExecutorTest extends TestCase
 		]);
 
 		(new FlushExecutor($executor))->flush($this->context(
-			$this->representations($this->tracked($tagRepresentation, $this->bindingFor($target))),
+			$this->representations($this->tracked($tagRepresentation, $this->schemaFor($target))),
 			$this->records($owner, $target),
 			$this->toManyRelations($collection)
 		));
@@ -1149,7 +1149,7 @@ final class FlushExecutorTest extends TestCase
 		$owner = RecordState::new($users, ['name' => 'Owner']);
 		$target = RecordState::clean($tags->getKey(3), ['id' => 3, 'label' => 'Tag']);
 		$tagRepresentation = $this->representation(['id' => 3, 'label' => 'Tag']);
-		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($tagRepresentation);
 		$executor = new RecordingCommandExecutor(results: [
 			new CommandResult(1, ['id' => 10]),
@@ -1157,7 +1157,7 @@ final class FlushExecutorTest extends TestCase
 		]);
 
 		(new FlushExecutor($executor))->flush($this->context(
-			$this->representations($this->tracked($tagRepresentation, $this->bindingFor($target))),
+			$this->representations($this->tracked($tagRepresentation, $this->schemaFor($target))),
 			$this->records($owner, $target),
 			$this->toManyRelations($collection)
 		));
@@ -1179,12 +1179,12 @@ final class FlushExecutorTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$child = RecordState::clean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'user_id' => 10]);
 		$item = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => 10]);
-		$collection = ToManyRelationState::full($owner, 'posts', $this->bindingFor($child), [$item]);
+		$collection = ToManyRelationState::full($owner, 'posts', $this->schemaFor($child), [$item]);
 		$collection->remove($item);
 		$executor = new RecordingCommandExecutor();
 
 		(new FlushExecutor($executor))->flush($this->context(
-			$this->representations($this->tracked($item, $this->bindingFor($child))),
+			$this->representations($this->tracked($item, $this->schemaFor($child))),
 			$this->records($owner, $child),
 			$this->toManyRelations($collection)
 		));
@@ -1213,8 +1213,8 @@ final class FlushExecutorTest extends TestCase
 
 		(new FlushExecutor($executor))->flush($this->context(
 			$this->representations(
-				$this->tracked($profileRepresentation, $this->bindingFor($target)),
-				$this->tracked($ownerRepresentation, $this->ownerBindingWithProfile($owner))
+				$this->tracked($profileRepresentation, $this->schemaFor($target)),
+				$this->tracked($ownerRepresentation, $this->ownerSchemaWithProfile($owner))
 			),
 			$this->records($owner, $target),
 			new RelationStateStore(),
@@ -1354,25 +1354,25 @@ final class FlushExecutorTest extends TestCase
 	/**
 	 * @param array<string, array{RecordState, string}> $fields
 	 */
-	private function binding(array $fields): RepresentationSchema
+	private function schema(array $fields): RepresentationSchema
 	{
 		$first = reset($fields);
-		$binding = new RepresentationSchema($first[0]->getCollection());
+		$schema = new RepresentationSchema($first[0]->getCollection());
 		$records = [];
 		foreach ($fields as $path => [$record, $fieldName]) {
-			$binding->addField(new RepresentationFieldSchema((string) $path, $record->getCollection(), $fieldName));
+			$schema->addField(new RepresentationFieldSchema((string) $path, $record->getCollection(), $fieldName));
 			$records[$record->getStateHash()] = $record;
 		}
-		$this->recordsByBindingId[spl_object_id($binding)] = array_values($records);
+		$this->recordsBySchemaId[spl_object_id($schema)] = array_values($records);
 
-		return $binding;
+		return $schema;
 	}
 
-	private function tracked(object $representation, RepresentationSchema $binding): RepresentationState
+	private function tracked(object $representation, RepresentationSchema $schema): RepresentationState
 	{
-		$records = $this->recordsByBindingId[spl_object_id($binding)] ?? [];
+		$records = $this->recordsBySchemaId[spl_object_id($schema)] ?? [];
 		$fieldItems = [];
-		foreach ($binding->getFields() as $fieldSchema) {
+		foreach ($schema->getFields() as $fieldSchema) {
 			foreach ($records as $record) {
 				if ($record->getCollection()->getName() !== $fieldSchema->getCollectionName()) {
 					continue;
@@ -1385,7 +1385,7 @@ final class FlushExecutorTest extends TestCase
 		}
 
 		$relationItems = [];
-		foreach ($binding->getRelations() as $relationSchema) {
+		foreach ($schema->getRelations() as $relationSchema) {
 			foreach ($records as $record) {
 				if ($record->getCollection()->getName() !== $relationSchema->getOwnerCollectionName()) {
 					continue;
@@ -1399,7 +1399,7 @@ final class FlushExecutorTest extends TestCase
 
 		return RepresentationStateObjectRegistry::remember(
 			$representation,
-			new RepresentationState($binding, $fieldItems, $relationItems)
+			new RepresentationState($schema, $fieldItems, $relationItems)
 		);
 	}
 
@@ -1425,7 +1425,7 @@ final class FlushExecutorTest extends TestCase
 
 	private function changedToManyRelationState(RecordState $owner): ToManyRelationState
 	{
-		$collection = new ToManyRelationState($owner, 'posts', $this->postBinding());
+		$collection = new ToManyRelationState($owner, 'posts', $this->postSchema());
 		$collection->add(new stdClass());
 
 		return $collection;
@@ -1433,40 +1433,40 @@ final class FlushExecutorTest extends TestCase
 
 	private function changedToOneRelationState(RecordState $owner): ToOneRelationState
 	{
-		$reference = new ToOneRelationState($owner, 'profile', $this->postBinding());
+		$reference = new ToOneRelationState($owner, 'profile', $this->postSchema());
 		$reference->set(new stdClass());
 
 		return $reference;
 	}
 
-	private function ownerBindingWithPosts(RecordState $record): RepresentationSchema
+	private function ownerSchemaWithPosts(RecordState $record): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($record->getCollection());
-		$binding->addField(new RepresentationFieldSchema('name', $record->getCollection(), 'name'));
-		$binding->addRelation(new RepresentationRelationSchema(
+		$schema = new RepresentationSchema($record->getCollection());
+		$schema->addField(new RepresentationFieldSchema('name', $record->getCollection(), 'name'));
+		$schema->addRelation(new RepresentationRelationSchema(
 			'posts',
 			$record->getCollection(),
 			'posts',
-			$this->postBinding()
+			$this->postSchema()
 		));
-		$this->recordsByBindingId[spl_object_id($binding)] = [$record];
+		$this->recordsBySchemaId[spl_object_id($schema)] = [$record];
 
-		return $binding;
+		return $schema;
 	}
 
-	private function ownerBindingWithProfile(RecordState $record): RepresentationSchema
+	private function ownerSchemaWithProfile(RecordState $record): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($record->getCollection());
-		$binding->addField(new RepresentationFieldSchema('name', $record->getCollection(), 'name'));
-		$binding->addRelation(new RepresentationRelationSchema(
+		$schema = new RepresentationSchema($record->getCollection());
+		$schema->addField(new RepresentationFieldSchema('name', $record->getCollection(), 'name'));
+		$schema->addRelation(new RepresentationRelationSchema(
 			'profile',
 			$record->getCollection(),
 			'profile',
-			$this->postBinding()
+			$this->postSchema()
 		));
-		$this->recordsByBindingId[spl_object_id($binding)] = [$record];
+		$this->recordsBySchemaId[spl_object_id($schema)] = [$record];
 
-		return $binding;
+		return $schema;
 	}
 
 	private function usersWithPosts(bool $withPlanner = true): CollectionInterface
@@ -1565,16 +1565,16 @@ final class FlushExecutorTest extends TestCase
 		return [$posts, $users];
 	}
 
-	private function bindingFor(RecordState $record): RepresentationSchema
+	private function schemaFor(RecordState $record): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($record->getCollection());
+		$schema = new RepresentationSchema($record->getCollection());
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
-			$binding->addField(new RepresentationFieldSchema($field, $record->getCollection(), $field));
+			$schema->addField(new RepresentationFieldSchema($field, $record->getCollection(), $field));
 		}
-		$this->recordsByBindingId[spl_object_id($binding)] = [$record];
+		$this->recordsBySchemaId[spl_object_id($schema)] = [$record];
 
-		return $binding;
+		return $schema;
 	}
 
 	/**

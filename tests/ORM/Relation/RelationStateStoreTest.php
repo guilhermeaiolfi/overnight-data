@@ -148,11 +148,11 @@ final class RelationStateStoreTest extends TestCase
 
 	private function relatedCollection(RecordState $owner, string $relationName): ToManyRelationState
 	{
-		return new ToManyRelationState($owner, $relationName, $this->postBinding());
+		return new ToManyRelationState($owner, $relationName, $this->postSchema());
 	}
 
 	private function relatedReference(RecordState $owner, string $relationName): ToOneRelationState
 	{
-		return new ToOneRelationState($owner, $relationName, $this->postBinding());
+		return new ToOneRelationState($owner, $relationName, $this->postSchema());
 	}
 }

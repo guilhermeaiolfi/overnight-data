@@ -9,11 +9,11 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationRelationSchema;
 use ON\Data\ORM\State\RepresentationRelationStateItem;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
@@ -180,12 +180,12 @@ final class RecordStateStoreTest extends TestCase
 		$first = RecordState::new($users, ['name' => 'A1']);
 		$second = RecordState::new($users, ['name' => 'A2']);
 
-		$binding = new RepresentationSchema($users);
+		$schema = new RepresentationSchema($users);
 		$firstField = new RepresentationFieldSchema('first', $users, 'name');
 		$secondField = new RepresentationFieldSchema('second', $users, 'name');
-		$binding->addField($firstField);
-		$binding->addField($secondField);
-		$tracked = new RepresentationState($binding, [
+		$schema->addField($firstField);
+		$schema->addField($secondField);
+		$tracked = new RepresentationState($schema, [
 			new RepresentationFieldStateItem($firstField, $first, 'name', $first->getRevision()),
 			new RepresentationFieldStateItem($secondField, $second, 'name', $second->getRevision()),
 		]);
@@ -201,14 +201,14 @@ final class RecordStateStoreTest extends TestCase
 		$users = $this->users();
 		$state = RecordState::new($users, ['id' => 10, 'name' => 'A1']);
 
-		$binding = new RepresentationSchema($users);
+		$schema = new RepresentationSchema($users);
 		$nameField = new RepresentationFieldSchema('name', $users, 'name');
-		$binding->addField($nameField);
+		$schema->addField($nameField);
 		$relationSchema = new RepresentationRelationSchema('posts', $users, 'posts', new RepresentationSchema($this->posts()));
-		$binding->addRelation($relationSchema);
+		$schema->addRelation($relationSchema);
 
 		$tracked = new RepresentationState(
-			$binding,
+			$schema,
 			[new RepresentationFieldStateItem($nameField, $state, 'name', $state->getRevision())],
 			[new RepresentationRelationStateItem($relationSchema, $state, 'posts')],
 		);
@@ -274,14 +274,14 @@ final class RecordStateStoreTest extends TestCase
 	 */
 	private function trackedFor(RecordState $record, array $fieldNames): RepresentationState
 	{
-		$binding = new RepresentationSchema($record->getCollection());
+		$schema = new RepresentationSchema($record->getCollection());
 		$items = [];
 		foreach ($fieldNames as $fieldName) {
 			$fieldSchema = new RepresentationFieldSchema($fieldName, $record->getCollection(), $fieldName);
-			$binding->addField($fieldSchema);
+			$schema->addField($fieldSchema);
 			$items[] = new RepresentationFieldStateItem($fieldSchema, $record, $fieldName, $record->getRevision());
 		}
 
-		return new RepresentationState($binding, $items);
+		return new RepresentationState($schema, $items);
 	}
 }

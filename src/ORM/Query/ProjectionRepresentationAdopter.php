@@ -41,9 +41,9 @@ final class ProjectionRepresentationAdopter
 		array $sourceRow,
 		SessionContext $context,
 	): RepresentationState {
-		$binding = $compilation->getSchema();
+		$schema = $compilation->getSchema();
 
-		if ($binding->getRelations() !== []) {
+		if ($schema->getRelations() !== []) {
 			throw new StateException('Cannot adopt flat projection representation because the schema contains relation schemas.');
 		}
 
@@ -62,7 +62,7 @@ final class ProjectionRepresentationAdopter
 			$sourceRow,
 		);
 		$state = $this->stateFactory->fromSourceRecords(
-			$binding,
+			$schema,
 			$compilation->getSources(),
 			$recordsBySourceKey,
 		);

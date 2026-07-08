@@ -12,14 +12,12 @@ use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationRelationSchema;
-use ON\Data\ORM\State\RepresentationState;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\Sync\RepresentationSyncer;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
-use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
 use Tests\ON\Data\Support\Relation\RecordingRelationPersistencePlanner;
 
@@ -38,7 +36,7 @@ final class RepresentationSyncerTest extends TestCase
 
 		$result = $this->syncer()->sync(
 			$this->context(
-				$this->representations($this->tracked($this->representation(['name' => 'A2']), $this->userBindingFor($record), [$record])),
+				$this->representations($this->tracked($this->representation(['name' => 'A2']), $this->userSchemaFor($record), [$record])),
 				$this->records($record)
 			)
 		);
@@ -57,8 +55,8 @@ final class RepresentationSyncerTest extends TestCase
 		$this->syncer()->sync(
 			$this->context(
 				$this->representations(
-					$this->tracked($firstRepresentation, $this->userBindingFor($first), [$first]),
-					$this->tracked($secondRepresentation, $this->userBindingFor($second), [$second])
+					$this->tracked($firstRepresentation, $this->userSchemaFor($first), [$first]),
+					$this->tracked($secondRepresentation, $this->userSchemaFor($second), [$second])
 				),
 				$this->records($first, $second)
 			),
@@ -86,7 +84,7 @@ final class RepresentationSyncerTest extends TestCase
 		$this->syncer()->sync(
 			$this->context(
 				$this->representations(
-					$this->tracked($this->representation(['name' => 'Owner', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner), [$owner]),
+					$this->tracked($this->representation(['name' => 'Owner', 'posts' => [$item]]), $this->ownerSchemaWithPosts($owner), [$owner]),
 					$this->tracked($item, new RepresentationSchema($this->posts()))
 				),
 				$this->records($owner),
@@ -108,7 +106,7 @@ final class RepresentationSyncerTest extends TestCase
 		$this->syncer()->sync(
 			$this->context(
 				$this->representations(
-					$this->tracked($this->representation(['name' => 'Owner', 'profile' => $target]), $this->ownerBindingWithProfile($owner), [$owner]),
+					$this->tracked($this->representation(['name' => 'Owner', 'profile' => $target]), $this->ownerSchemaWithProfile($owner), [$owner]),
 					$this->tracked($target, new RepresentationSchema($this->profiles()))
 				),
 				$this->records($owner),
@@ -129,7 +127,7 @@ final class RepresentationSyncerTest extends TestCase
 		$result = $this->syncer()->sync(
 			$this->context(
 				$this->representations(
-					$this->tracked($this->representation(['name' => 'Changed', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner), [$owner]),
+					$this->tracked($this->representation(['name' => 'Changed', 'posts' => [$item]]), $this->ownerSchemaWithPosts($owner), [$owner]),
 					$this->tracked($item, new RepresentationSchema($this->posts()))
 				),
 				$this->records($owner)
@@ -151,7 +149,7 @@ final class RepresentationSyncerTest extends TestCase
 		$this->syncer()->sync(
 			$this->context(
 				$this->representations(
-					$this->tracked($this->representation(['name' => 'Changed', 'posts' => [$item]]), $this->ownerBindingWithPosts($owner), [$owner]),
+					$this->tracked($this->representation(['name' => 'Changed', 'posts' => [$item]]), $this->ownerSchemaWithPosts($owner), [$owner]),
 					$this->tracked($item, new RepresentationSchema($this->posts()))
 				),
 				$this->records($owner),
@@ -179,28 +177,30 @@ final class RepresentationSyncerTest extends TestCase
 		self::assertStringNotContainsString('CommandInterface', $source);
 	}
 
-	private function ownerBindingWithPosts(RecordState $record): RepresentationSchema
+	private function ownerSchemaWithPosts(RecordState $record): RepresentationSchema
 	{
-		$binding = $this->userBindingFor($record);
-		$binding->addRelation(new RepresentationRelationSchema(
+		$schema = $this->userSchemaFor($record);
+		$schema->addRelation(new RepresentationRelationSchema(
 			'posts',
-			$record->getCollection(), 'posts',
-			$this->postBinding()
+			$record->getCollection(),
+			'posts',
+			$this->postSchema()
 		));
 
-		return $binding;
+		return $schema;
 	}
 
-	private function ownerBindingWithProfile(RecordState $record): RepresentationSchema
+	private function ownerSchemaWithProfile(RecordState $record): RepresentationSchema
 	{
-		$binding = $this->userBindingFor($record);
-		$binding->addRelation(new RepresentationRelationSchema(
+		$schema = $this->userSchemaFor($record);
+		$schema->addRelation(new RepresentationRelationSchema(
 			'profile',
-			$record->getCollection(), 'profile',
-			$this->profileBinding()
+			$record->getCollection(),
+			'profile',
+			$this->profileSchema()
 		));
 
-		return $binding;
+		return $schema;
 	}
 
 	private function syncer(): RepresentationSyncer

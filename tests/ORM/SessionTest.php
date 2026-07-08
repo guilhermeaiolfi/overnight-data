@@ -125,7 +125,7 @@ final class SessionTest extends TestCase
 		$posts = $this->posts();
 		$post = $this->representation(['id' => 123, 'title' => 'Existing']);
 
-		$result = $session->identify($posts, ['id' => 123], $post, $this->postTemplateBindingFor($posts));
+		$result = $session->identify($posts, ['id' => 123], $post, $this->postTemplateSchemaFor($posts));
 
 		self::assertSame($post, $result);
 		$tracked = $session->getRepresentations()->get($post);
@@ -144,7 +144,7 @@ final class SessionTest extends TestCase
 		$post = $this->representation(['id' => 123, 'title' => 'Existing']);
 
 		try {
-			$session->identify($posts, $key, $post, $this->templateBinding());
+			$session->identify($posts, $key, $post, $this->templateSchema());
 			self::fail('Expected identify to reject a schema targeting the wrong collection.');
 		} catch (StateException) {
 		}
@@ -175,7 +175,7 @@ final class SessionTest extends TestCase
 		$record->setValue('title', 'Dirty');
 		$post = $this->representation(['id' => 123, 'title' => 'Object']);
 
-		$session->identify($posts, ['id' => 123], $post, $this->postTemplateBindingFor($posts));
+		$session->identify($posts, ['id' => 123], $post, $this->postTemplateSchemaFor($posts));
 
 		$tracked = $session->getRepresentations()->get($post);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
@@ -201,7 +201,7 @@ final class SessionTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 		$posts = $this->posts();
 		$post = $this->representation(['id' => 123, 'title' => 'Existing']);
-		$session->identify($posts, ['id' => 123], $post, $this->postTemplateBindingFor($posts));
+		$session->identify($posts, ['id' => 123], $post, $this->postTemplateSchemaFor($posts));
 
 		self::assertSame($post, $session->identify($posts, ['id' => 123], $post));
 
@@ -217,7 +217,7 @@ final class SessionTest extends TestCase
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
 		$representation = $this->representation(['name' => 'A1']);
 
-		$tracked = $session->adopt($representation, $this->templateBinding(), $record);
+		$tracked = $session->adopt($representation, $this->templateSchema(), $record);
 
 		self::assertSame($tracked, $session->getRepresentations()->get($representation));
 		self::assertSame($record, $session->getRecords()->getByStateHash($record->getStateHash()));
@@ -236,7 +236,7 @@ final class SessionTest extends TestCase
 		$post = $this->representation(['id' => 123, 'title' => 'Existing']);
 
 		try {
-			$session->adopt($post, $this->templateBinding(), $record);
+			$session->adopt($post, $this->templateSchema(), $record);
 			self::fail('Expected adopt to reject a schema targeting the wrong collection.');
 		} catch (StateException) {
 		}
@@ -251,12 +251,12 @@ final class SessionTest extends TestCase
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
 		$representation = $this->representation(['name' => 'A1']);
 
-		$session->adopt($representation, $this->templateBinding(), $record);
+		$session->adopt($representation, $this->templateSchema(), $record);
 
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('already tracked');
 
-		$session->adopt($representation, $this->templateBinding(), $record);
+		$session->adopt($representation, $this->templateSchema(), $record);
 	}
 
 	public function testSyncTrackedRootAdoptsUntrackedRelatedManyItems(): void
@@ -266,7 +266,7 @@ final class SessionTest extends TestCase
 		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		$result = $session->sync($ownerRepresentation);
 
@@ -282,7 +282,7 @@ final class SessionTest extends TestCase
 		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$profileRepresentation = $this->representation(['id' => 5, 'label' => 'Profile', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'profile' => $profileRepresentation]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithProfile($users, $profiles), $owner);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithProfile($users, $profiles), $owner);
 
 		$result = $session->sync($ownerRepresentation);
 
@@ -299,8 +299,8 @@ final class SessionTest extends TestCase
 		$second = $session->trackClean($users->getKey(20), ['id' => 20, 'name' => 'B1']);
 		$firstRepresentation = $this->representation(['name' => 'A2']);
 		$secondRepresentation = $this->representation(['name' => 'B2']);
-		$session->adopt($firstRepresentation, $this->templateBinding(), $first);
-		$session->adopt($secondRepresentation, $this->templateBinding(), $second);
+		$session->adopt($firstRepresentation, $this->templateSchema(), $first);
+		$session->adopt($secondRepresentation, $this->templateSchema(), $second);
 
 		$result = $session->sync($firstRepresentation);
 
@@ -325,9 +325,9 @@ final class SessionTest extends TestCase
 		$other = $session->trackClean($users->getKey(20), ['id' => 20, 'name' => 'B1']);
 		$rootRepresentation = $this->representation(['id' => 10, 'name' => 'A2']);
 		$otherRepresentation = $this->representation(['name' => 'B2']);
-		$session->adopt($otherRepresentation, $this->templateBinding(), $other);
+		$session->adopt($otherRepresentation, $this->templateSchema(), $other);
 
-		$result = $session->sync($rootRepresentation, $this->userTemplateBindingFor($users));
+		$result = $session->sync($rootRepresentation, $this->userTemplateSchemaFor($users));
 
 		self::assertCount(1, $result->getSyncPlans());
 		self::assertSame('A2', $root->getValue('name'));
@@ -348,7 +348,7 @@ final class SessionTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 		$representation = $this->representation(['name' => 'New User']);
 
-		$result = $session->sync($representation, $this->templateBinding());
+		$result = $session->sync($representation, $this->templateSchema());
 
 		$tracked = $session->getRepresentations()->get($representation);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
@@ -361,7 +361,7 @@ final class SessionTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 		$representation = $this->representation(['id' => 10, 'name' => 'Existing User']);
 
-		$result = $session->sync($representation, $this->userTemplateBindingFor($this->users()));
+		$result = $session->sync($representation, $this->userTemplateSchemaFor($this->users()));
 
 		$tracked = $session->getRepresentations()->get($representation);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
@@ -376,7 +376,7 @@ final class SessionTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 		$representation = $this->representation(['id' => null, 'name' => 'New User']);
 
-		$session->sync($representation, $this->userTemplateBindingFor($this->users()));
+		$session->sync($representation, $this->userTemplateSchemaFor($this->users()));
 
 		$tracked = $session->getRepresentations()->get($representation);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
@@ -392,7 +392,7 @@ final class SessionTest extends TestCase
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
 
-		$result = $session->sync($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts));
+		$result = $session->sync($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts));
 
 		$trackedOwner = $session->getRepresentations()->get($ownerRepresentation);
 		self::assertInstanceOf(RepresentationState::class, $trackedOwner);
@@ -410,7 +410,7 @@ final class SessionTest extends TestCase
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
 
-		$session->sync($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts));
+		$session->sync($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts));
 
 		$trackedPost = $session->getRepresentations()->get($postRepresentation);
 		self::assertInstanceOf(RepresentationState::class, $trackedPost);
@@ -427,7 +427,7 @@ final class SessionTest extends TestCase
 		$postRepresentation = $this->representation(['id' => null, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
 
-		$session->sync($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts));
+		$session->sync($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts));
 
 		$trackedPost = $session->getRepresentations()->get($postRepresentation);
 		self::assertInstanceOf(RepresentationState::class, $trackedPost);
@@ -436,21 +436,21 @@ final class SessionTest extends TestCase
 		self::assertTrue($post->isNew());
 	}
 
-	public function testSyncUntrackedRootWithRelationOnlySingleCollectionBindingSucceeds(): void
+	public function testSyncUntrackedRootWithRelationOnlySingleCollectionSchemaSucceeds(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session(new RecordingCommandExecutor());
 		$ownerRepresentation = $this->representation(['posts' => []]);
-		$binding = new RepresentationSchema($users);
-		$binding->addRelation(new RepresentationRelationSchema(
+		$schema = new RepresentationSchema($users);
+		$schema->addRelation(new RepresentationRelationSchema(
 			'posts',
 			$users,
 			'posts',
-			$this->postTemplateBindingFor($posts),
+			$this->postTemplateSchemaFor($posts),
 			true
 		));
 
-		$result = $session->sync($ownerRepresentation, $binding);
+		$result = $session->sync($ownerRepresentation, $schema);
 
 		$trackedOwner = $session->getRepresentations()->get($ownerRepresentation);
 		self::assertInstanceOf(RepresentationState::class, $trackedOwner);
@@ -468,7 +468,7 @@ final class SessionTest extends TestCase
 		$profileRepresentation = $this->representation(['id' => 5, 'label' => 'Profile', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'profile' => $profileRepresentation]);
 
-		$result = $session->sync($ownerRepresentation, $this->ownerTemplateBindingWithProfile($users, $profiles));
+		$result = $session->sync($ownerRepresentation, $this->ownerTemplateSchemaWithProfile($users, $profiles));
 
 		$trackedOwner = $session->getRepresentations()->get($ownerRepresentation);
 		self::assertInstanceOf(RepresentationState::class, $trackedOwner);
@@ -484,14 +484,14 @@ final class SessionTest extends TestCase
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session(new RecordingCommandExecutor());
 		$representation = $this->representation(['name' => 'Owner', 'title' => 'Post']);
-		$binding = new RepresentationSchema($users);
-		$binding->addField(new RepresentationFieldSchema('name', $users, 'name'));
-		$binding->addField(new RepresentationFieldSchema('title', $posts, 'title'));
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$schema->addField(new RepresentationFieldSchema('title', $posts, 'title'));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('untracked root sync needs a schema targeting one collection');
 
-		$session->sync($representation, $binding);
+		$session->sync($representation, $schema);
 	}
 
 	public function testSyncUntrackedRootWithMixedFieldAndRelationOwnerCollectionsThrows(): void
@@ -499,22 +499,22 @@ final class SessionTest extends TestCase
 		[$posts, $users] = $this->postsWithDefaultBelongsToAuthor();
 		$session = new Session(new RecordingCommandExecutor());
 		$representation = $this->representation(['name' => 'Owner', 'author' => null]);
-		$binding = new RepresentationSchema($users);
-		$binding->addField(new RepresentationFieldSchema('name', $users, 'name'));
-		$binding->addRelation(new RepresentationRelationSchema(
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$schema->addRelation(new RepresentationRelationSchema(
 			'author',
 			$posts,
 			'author',
-			$this->userTemplateBindingFor($users)
+			$this->userTemplateSchemaFor($users)
 		));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('untracked root sync needs a schema targeting one collection');
 
-		$session->sync($representation, $binding);
+		$session->sync($representation, $schema);
 	}
 
-	public function testSyncUntrackedRootWithEmptyBindingThrows(): void
+	public function testSyncUntrackedRootWithEmptySchemaThrows(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 
@@ -524,21 +524,21 @@ final class SessionTest extends TestCase
 		$session->sync(new stdClass(), new RepresentationSchema($this->users()));
 	}
 
-	public function testSyncAlreadyRepresentationStateWithMixedBindingIsNotAffectedByUntrackedRootGuard(): void
+	public function testSyncAlreadyRepresentationStateWithMixedSchemaIsNotAffectedByUntrackedRootGuard(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session(new RecordingCommandExecutor());
 		$userRecord = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$postRecord = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Original', 'user_id' => null]);
 		$representation = $this->representation(['name' => 'Owner Updated', 'title' => 'Post Updated']);
-		$binding = new RepresentationSchema($userRecord->getCollection());
-		$binding->addField(new RepresentationFieldSchema('name', $userRecord->getCollection(), 'name'));
-		$binding->addField(new RepresentationFieldSchema('title', $postRecord->getCollection(), 'title'));
+		$schema = new RepresentationSchema($userRecord->getCollection());
+		$schema->addField(new RepresentationFieldSchema('name', $userRecord->getCollection(), 'name'));
+		$schema->addField(new RepresentationFieldSchema('title', $postRecord->getCollection(), 'title'));
 		$session->getRepresentations()->add($representation, new RepresentationState(
-			$binding,
+			$schema,
 			[
-				new RepresentationFieldStateItem($binding->getField('name'), $userRecord, 'name', $userRecord->getRevision()),
-				new RepresentationFieldStateItem($binding->getField('title'), $postRecord, 'title', $postRecord->getRevision()),
+				new RepresentationFieldStateItem($schema->getField('name'), $userRecord, 'name', $userRecord->getRevision()),
+				new RepresentationFieldStateItem($schema->getField('title'), $postRecord, 'title', $postRecord->getRevision()),
 			]
 		));
 
@@ -558,7 +558,7 @@ final class SessionTest extends TestCase
 		$owner->setValue('name', 'Owner Updated');
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner Updated', 'posts' => [$postRepresentation]]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		$session->sync($ownerRepresentation);
 
@@ -604,7 +604,7 @@ final class SessionTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
 		$representation = $this->representation(['name' => 'A1']);
-		$session->adopt($representation, $this->templateBinding(), $record);
+		$session->adopt($representation, $this->templateSchema(), $record);
 
 		$session->remove($representation);
 
@@ -621,7 +621,7 @@ final class SessionTest extends TestCase
 		$session->remove(new stdClass());
 	}
 
-	public function testRemoveObjectThrowsWhenBindingHasNoConcreteRecordState(): void
+	public function testRemoveObjectThrowsWhenSchemaHasNoConcreteRecordState(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$representation = new stdClass();
@@ -633,19 +633,19 @@ final class SessionTest extends TestCase
 		$session->remove($representation);
 	}
 
-	public function testRemoveObjectThrowsForMixedProjectionBinding(): void
+	public function testRemoveObjectThrowsForMixedProjectionSchema(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session(new RecordingCommandExecutor());
 		$userRecord = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$postRecord = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'user_id' => 10]);
 		$representation = $this->representation(['name' => 'Owner', 'title' => 'Post']);
-		$binding = new RepresentationSchema($userRecord->getCollection());
-		$binding->addField(new RepresentationFieldSchema('name', $userRecord->getCollection(), 'name'));
-		$binding->addField(new RepresentationFieldSchema('title', $postRecord->getCollection(), 'title'));
-		$session->getRepresentations()->add($representation, new RepresentationState($binding, [
-			new RepresentationFieldStateItem($binding->getField('name'), $userRecord, 'name', $userRecord->getRevision()),
-			new RepresentationFieldStateItem($binding->getField('title'), $postRecord, 'title', $postRecord->getRevision()),
+		$schema = new RepresentationSchema($userRecord->getCollection());
+		$schema->addField(new RepresentationFieldSchema('name', $userRecord->getCollection(), 'name'));
+		$schema->addField(new RepresentationFieldSchema('title', $postRecord->getCollection(), 'title'));
+		$session->getRepresentations()->add($representation, new RepresentationState($schema, [
+			new RepresentationFieldStateItem($schema->getField('name'), $userRecord, 'name', $userRecord->getRevision()),
+			new RepresentationFieldStateItem($schema->getField('title'), $postRecord, 'title', $postRecord->getRevision()),
 		]));
 
 		$this->expectException(StateException::class);
@@ -696,7 +696,7 @@ final class SessionTest extends TestCase
 		$session = new Session($executor);
 		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
 		$representation = $this->representation(['name' => 'A1']);
-		$session->adopt($representation, $this->templateBinding(), $record);
+		$session->adopt($representation, $this->templateSchema(), $record);
 		$representation->name = 'A2';
 
 		$result = $session->flush();
@@ -759,7 +759,7 @@ final class SessionTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
 		$representation = $this->representation(['name' => 'A1']);
-		$tracked = $session->adopt($representation, $this->templateBinding(), $record);
+		$tracked = $session->adopt($representation, $this->templateSchema(), $record);
 		$representation->name = 'A2';
 
 		$session->flush();
@@ -772,7 +772,7 @@ final class SessionTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 		$record = $session->trackNew($this->users(), ['name' => 'A1']);
 		$representation = $this->representation(['name' => 'A1']);
-		$session->adopt($representation, $this->templateBinding(), $record);
+		$session->adopt($representation, $this->templateSchema(), $record);
 		$session->trackToManyRelation(new ToManyRelationState($record, 'posts', new RepresentationSchema($record->getCollection())));
 		$session->trackToOneRelation(new ToOneRelationState($record, 'profile', new RepresentationSchema($record->getCollection())));
 
@@ -844,8 +844,8 @@ final class SessionTest extends TestCase
 		$owner->setValue('name', 'Ada Lovelace');
 		$target = $session->trackClean($tags->getKey(3), ['id' => 3, 'label' => 'math']);
 		$item = $this->representation(['id' => 3, 'label' => 'math']);
-		$session->adopt($item, $this->tagTemplateBindingFor($tags), $target);
-		$collection = new ToManyRelationState($owner, 'tags', $this->bindingFor($target));
+		$session->adopt($item, $this->tagTemplateSchemaFor($tags), $target);
+		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($item);
 		$session->trackToManyRelation($collection);
 
@@ -872,8 +872,8 @@ final class SessionTest extends TestCase
 		$child = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
-		$session->adopt($postRepresentation, $this->postTemplateBindingFor($posts), $child);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$session->adopt($postRepresentation, $this->postTemplateSchemaFor($posts), $child);
 
 		$session->flush();
 
@@ -902,8 +902,8 @@ final class SessionTest extends TestCase
 		$target = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Ada']);
 		$authorRepresentation = $this->representation(['id' => 10, 'name' => 'Ada']);
 		$ownerRepresentation = $this->representation(['title' => 'Post', 'author' => $authorRepresentation]);
-		$session->adopt($authorRepresentation, $this->userTemplateBindingFor($users), $target);
-		$session->adopt($ownerRepresentation, $this->postTemplateBindingWithAuthor($posts, $users), $owner);
+		$session->adopt($authorRepresentation, $this->userTemplateSchemaFor($users), $target);
+		$session->adopt($ownerRepresentation, $this->postTemplateSchemaWithAuthor($posts, $users), $owner);
 
 		$session->flush();
 
@@ -931,8 +931,8 @@ final class SessionTest extends TestCase
 		$owner = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'author_id' => 10]);
 		$baselineAuthor = new stdClass();
 		$ownerRepresentation = $this->representation(['title' => 'Post', 'author' => null]);
-		$session->adopt($ownerRepresentation, $this->postTemplateBindingWithAuthor($posts, $users), $owner);
-		$session->trackToOneRelation(new ToOneRelationState($owner, 'author', $this->userTemplateBindingFor($users), $baselineAuthor));
+		$session->adopt($ownerRepresentation, $this->postTemplateSchemaWithAuthor($posts, $users), $owner);
+		$session->trackToOneRelation(new ToOneRelationState($owner, 'author', $this->userTemplateSchemaFor($users), $baselineAuthor));
 
 		$session->flush();
 
@@ -961,8 +961,8 @@ final class SessionTest extends TestCase
 		$target = $session->trackClean($profiles->getKey(5), ['id' => 5, 'label' => 'Profile', 'user_id' => null]);
 		$profileRepresentation = $this->representation(['id' => 5, 'label' => 'Profile', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'profile' => $profileRepresentation]);
-		$session->adopt($profileRepresentation, $this->profileTemplateBindingFor($profiles), $target);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithProfile($users, $profiles), $owner);
+		$session->adopt($profileRepresentation, $this->profileTemplateSchemaFor($profiles), $target);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithProfile($users, $profiles), $owner);
 
 		$session->flush();
 
@@ -988,7 +988,7 @@ final class SessionTest extends TestCase
 		$session = new Session($executor);
 		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
 		$representation = $this->representation(['name' => 'A2']);
-		$session->adopt($representation, $this->templateBinding(), $record);
+		$session->adopt($representation, $this->templateSchema(), $record);
 
 		$result = $session->sync();
 
@@ -1005,7 +1005,7 @@ final class SessionTest extends TestCase
 		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		$result = $session->sync($ownerRepresentation);
 
@@ -1021,7 +1021,7 @@ final class SessionTest extends TestCase
 		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$postRepresentation = $this->representation(['id' => null, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		$session->sync($ownerRepresentation);
 		$session->flush();
@@ -1039,7 +1039,7 @@ final class SessionTest extends TestCase
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Existing title', 'user_id' => 10]);
 		$session->existing($postRepresentation);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		$session->sync($ownerRepresentation);
 		$session->remove($postRepresentation);
@@ -1055,19 +1055,19 @@ final class SessionTest extends TestCase
 		self::assertSame(['id' => 5], $command->getIdentity());
 	}
 
-	public function testSyncRepresentationStateWorksWithoutBinding(): void
+	public function testSyncRepresentationStateWorksWithoutSchema(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$first = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
 		$firstRepresentation = $this->representation(['name' => 'A2']);
-		$session->adopt($firstRepresentation, $this->templateBinding(), $first);
+		$session->adopt($firstRepresentation, $this->templateSchema(), $first);
 
 		$session->sync($firstRepresentation);
 
 		self::assertSame('A2', $first->getValue('name'));
 	}
 
-	public function testSyncUnRepresentationStateWithoutBindingThrowsSyncException(): void
+	public function testSyncUnRepresentationStateWithoutSchemaThrowsSyncException(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 
@@ -1083,7 +1083,7 @@ final class SessionTest extends TestCase
 		$session = new Session($executor);
 		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
 		$representation = $this->representation(['name' => 'A2']);
-		$session->adopt($representation, $this->templateBinding(), $record);
+		$session->adopt($representation, $this->templateSchema(), $record);
 
 		$session->flush();
 
@@ -1098,7 +1098,7 @@ final class SessionTest extends TestCase
 		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		try {
 			$session->sync();
@@ -1122,8 +1122,8 @@ final class SessionTest extends TestCase
 		$child = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateBindingWithPosts($users, $posts), $owner);
-		$session->adopt($postRepresentation, $this->postTemplateBindingFor($posts), $child);
+		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$session->adopt($postRepresentation, $this->postTemplateSchemaFor($posts), $child);
 
 		$syncResult = $session->sync();
 		$session->flush();
@@ -1143,8 +1143,8 @@ final class SessionTest extends TestCase
 		$session = new Session($executor);
 		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$newChild = $this->representation(['id' => null, 'title' => 'New child', 'user_id' => null]);
-		$session->adopt($newChild, $this->postTemplateBindingFor($posts), $session->trackNew($posts, ['title' => 'New child', 'user_id' => null]));
-		$collection = $session->trackToManyRelation(new ToManyRelationState($owner, 'posts', $this->postTemplateBindingFor($posts)));
+		$session->adopt($newChild, $this->postTemplateSchemaFor($posts), $session->trackNew($posts, ['title' => 'New child', 'user_id' => null]));
+		$collection = $session->trackToManyRelation(new ToManyRelationState($owner, 'posts', $this->postTemplateSchemaFor($posts)));
 
 		$collection->add($newChild);
 		$session->flush();
@@ -1170,11 +1170,11 @@ final class SessionTest extends TestCase
 		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$child = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Known child', 'user_id' => 10]);
 		$childRepresentation = $this->representation(['id' => 5, 'title' => 'Known child', 'user_id' => 10]);
-		$session->adopt($childRepresentation, $this->postTemplateBindingFor($posts), $child);
+		$session->adopt($childRepresentation, $this->postTemplateSchemaFor($posts), $child);
 		$collection = $session->trackToManyRelation(new ToManyRelationState(
 			$owner,
 			'posts',
-			$this->postTemplateBindingFor($posts),
+			$this->postTemplateSchemaFor($posts),
 			[$childRepresentation],
 		));
 
@@ -1217,7 +1217,7 @@ final class SessionTest extends TestCase
 			'tags' => [$existingTag, $newTag],
 		]);
 
-		$session->sync($post, $this->postBindingWithAuthorAndTags($posts, $users, $tags));
+		$session->sync($post, $this->postSchemaWithAuthorAndTags($posts, $users, $tags));
 		$session->flush();
 
 		self::assertCount(4, $executor->getCommands());
@@ -1250,12 +1250,12 @@ final class SessionTest extends TestCase
 			'name' => 'Owner',
 		]);
 		$newChild = $this->representation(['label' => 'Composite child', 'tenant_ref' => null, 'user_ref' => null]);
-		$session->adopt($newChild, $this->compositeChildBindingFor($children), $session->trackNew($children, [
+		$session->adopt($newChild, $this->compositeChildSchemaFor($children), $session->trackNew($children, [
 			'label' => 'Composite child',
 			'tenant_ref' => null,
 			'user_ref' => null,
 		]));
-		$collection = $session->trackToManyRelation(new ToManyRelationState($owner, 'children', $this->compositeChildBindingFor($children)));
+		$collection = $session->trackToManyRelation(new ToManyRelationState($owner, 'children', $this->compositeChildSchemaFor($children)));
 
 		$collection->add($newChild);
 		$session->flush();
@@ -1280,7 +1280,7 @@ final class SessionTest extends TestCase
 		$session = new Session($executor);
 		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$tag = $session->identify($tags, ['id' => 3]);
-		$collection = $session->trackToManyRelation(new ToManyRelationState($owner, 'tags', $this->tagTemplateBindingFor($tags)));
+		$collection = $session->trackToManyRelation(new ToManyRelationState($owner, 'tags', $this->tagTemplateSchemaFor($tags)));
 
 		$collection->remove($tag);
 		$session->flush();
@@ -1316,89 +1316,89 @@ final class SessionTest extends TestCase
 		self::assertFalse(method_exists(Session::class, 'adoptGraph'));
 	}
 
-	private function templateBinding(): RepresentationSchema
+	private function templateSchema(): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($this->users());
-		$binding->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
 
-		return $binding;
+		return $schema;
 	}
 
-	private function ownerTemplateBindingWithPosts(CollectionInterface $users, CollectionInterface $posts): RepresentationSchema
+	private function ownerTemplateSchemaWithPosts(CollectionInterface $users, CollectionInterface $posts): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($users);
-		$binding->addField(new RepresentationFieldSchema('name', $users, 'name'));
-		$binding->addRelation(new RepresentationRelationSchema(
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$schema->addRelation(new RepresentationRelationSchema(
 			'posts',
 			$users,
 			'posts',
-			$this->postTemplateBindingFor($posts),
+			$this->postTemplateSchemaFor($posts),
 			false
 		));
 
-		return $binding;
+		return $schema;
 	}
 
-	private function ownerTemplateBindingWithProfile(CollectionInterface $users, CollectionInterface $profiles): RepresentationSchema
+	private function ownerTemplateSchemaWithProfile(CollectionInterface $users, CollectionInterface $profiles): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($users);
-		$binding->addField(new RepresentationFieldSchema('name', $users, 'name'));
-		$binding->addRelation(new RepresentationRelationSchema(
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$schema->addRelation(new RepresentationRelationSchema(
 			'profile',
 			$users,
 			'profile',
-			$this->profileTemplateBindingFor($profiles)
+			$this->profileTemplateSchemaFor($profiles)
 		));
 
-		return $binding;
+		return $schema;
 	}
 
-	private function postTemplateBindingWithAuthor(CollectionInterface $posts, CollectionInterface $users): RepresentationSchema
+	private function postTemplateSchemaWithAuthor(CollectionInterface $posts, CollectionInterface $users): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($posts);
-		$binding->addField(new RepresentationFieldSchema('title', $posts, 'title'));
-		$binding->addRelation(new RepresentationRelationSchema(
+		$schema = new RepresentationSchema($posts);
+		$schema->addField(new RepresentationFieldSchema('title', $posts, 'title'));
+		$schema->addRelation(new RepresentationRelationSchema(
 			'author',
 			$posts,
 			'author',
-			$this->userTemplateBindingFor($users)
+			$this->userTemplateSchemaFor($users)
 		));
 
-		return $binding;
+		return $schema;
 	}
 
-	private function userTemplateBindingFor(CollectionInterface $users): RepresentationSchema
+	private function userTemplateSchemaFor(CollectionInterface $users): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($users);
-		$binding->addField(new RepresentationFieldSchema('id', $users, 'id'));
-		$binding->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('id', $users, 'id'));
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
 
-		return $binding;
+		return $schema;
 	}
 
-	private function postTemplateBindingFor(CollectionInterface $posts): RepresentationSchema
+	private function postTemplateSchemaFor(CollectionInterface $posts): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($posts);
-		$binding->addField(new RepresentationFieldSchema('id', $posts, 'id'));
-		$binding->addField(new RepresentationFieldSchema('title', $posts, 'title'));
-		$binding->addField(new RepresentationFieldSchema('user_id', $posts, 'user_id'));
+		$schema = new RepresentationSchema($posts);
+		$schema->addField(new RepresentationFieldSchema('id', $posts, 'id'));
+		$schema->addField(new RepresentationFieldSchema('title', $posts, 'title'));
+		$schema->addField(new RepresentationFieldSchema('user_id', $posts, 'user_id'));
 
-		return $binding;
+		return $schema;
 	}
 
-	private function profileTemplateBindingFor(CollectionInterface $profiles): RepresentationSchema
+	private function profileTemplateSchemaFor(CollectionInterface $profiles): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($profiles);
-		$binding->addField(new RepresentationFieldSchema('id', $profiles, 'id'));
-		$binding->addField(new RepresentationFieldSchema('label', $profiles, 'label'));
-		$binding->addField(new RepresentationFieldSchema('user_id', $profiles, 'user_id'));
+		$schema = new RepresentationSchema($profiles);
+		$schema->addField(new RepresentationFieldSchema('id', $profiles, 'id'));
+		$schema->addField(new RepresentationFieldSchema('label', $profiles, 'label'));
+		$schema->addField(new RepresentationFieldSchema('user_id', $profiles, 'user_id'));
 
-		return $binding;
+		return $schema;
 	}
 
 	private function changedToManyRelationState(RecordState $owner): ToManyRelationState
 	{
-		$collection = new ToManyRelationState($owner, 'posts', $this->postBinding());
+		$collection = new ToManyRelationState($owner, 'posts', $this->postSchema());
 		$collection->add(new stdClass());
 
 		return $collection;
@@ -1406,66 +1406,66 @@ final class SessionTest extends TestCase
 
 	private function changedToOneRelationState(RecordState $owner): ToOneRelationState
 	{
-		$reference = new ToOneRelationState($owner, 'profile', $this->postBinding());
+		$reference = new ToOneRelationState($owner, 'profile', $this->postSchema());
 		$reference->set(new stdClass());
 
 		return $reference;
 	}
 
-	private function bindingFor(RecordState $record): RepresentationSchema
+	private function schemaFor(RecordState $record): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($record->getCollection());
+		$schema = new RepresentationSchema($record->getCollection());
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
-			$binding->addField(new RepresentationFieldSchema($field, $record->getCollection(), $field));
+			$schema->addField(new RepresentationFieldSchema($field, $record->getCollection(), $field));
 		}
 
-		return $binding;
+		return $schema;
 	}
 
-	private function tagTemplateBindingFor(CollectionInterface $tags): RepresentationSchema
+	private function tagTemplateSchemaFor(CollectionInterface $tags): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($tags);
-		$binding->addField(new RepresentationFieldSchema('id', $tags, 'id'));
-		$binding->addField(new RepresentationFieldSchema('label', $tags, 'label'));
+		$schema = new RepresentationSchema($tags);
+		$schema->addField(new RepresentationFieldSchema('id', $tags, 'id'));
+		$schema->addField(new RepresentationFieldSchema('label', $tags, 'label'));
 
-		return $binding;
+		return $schema;
 	}
 
-	private function postBindingWithAuthorAndTags(
+	private function postSchemaWithAuthorAndTags(
 		CollectionInterface $posts,
 		CollectionInterface $users,
 		CollectionInterface $tags,
 	): RepresentationSchema {
-		$binding = new RepresentationSchema($posts);
-		$binding->addField(new RepresentationFieldSchema('id', $posts, 'id'));
-		$binding->addField(new RepresentationFieldSchema('title', $posts, 'title'));
-		$binding->addField(new RepresentationFieldSchema('author_id', $posts, 'author_id'));
-		$binding->addRelation(new RepresentationRelationSchema(
+		$schema = new RepresentationSchema($posts);
+		$schema->addField(new RepresentationFieldSchema('id', $posts, 'id'));
+		$schema->addField(new RepresentationFieldSchema('title', $posts, 'title'));
+		$schema->addField(new RepresentationFieldSchema('author_id', $posts, 'author_id'));
+		$schema->addRelation(new RepresentationRelationSchema(
 			'author',
 			$posts,
 			'author',
-			$this->userTemplateBindingFor($users)
+			$this->userTemplateSchemaFor($users)
 		));
-		$binding->addRelation(new RepresentationRelationSchema(
+		$schema->addRelation(new RepresentationRelationSchema(
 			'tags',
 			$posts,
 			'tags',
-			$this->tagTemplateBindingFor($tags),
+			$this->tagTemplateSchemaFor($tags),
 			false
 		));
 
-		return $binding;
+		return $schema;
 	}
 
-	private function compositeChildBindingFor(CollectionInterface $children): RepresentationSchema
+	private function compositeChildSchemaFor(CollectionInterface $children): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($children);
-		$binding->addField(new RepresentationFieldSchema('label', $children, 'label'));
-		$binding->addField(new RepresentationFieldSchema('tenant_ref', $children, 'tenant_ref'));
-		$binding->addField(new RepresentationFieldSchema('user_ref', $children, 'user_ref'));
+		$schema = new RepresentationSchema($children);
+		$schema->addField(new RepresentationFieldSchema('label', $children, 'label'));
+		$schema->addField(new RepresentationFieldSchema('tenant_ref', $children, 'tenant_ref'));
+		$schema->addField(new RepresentationFieldSchema('user_ref', $children, 'user_ref'));
 
-		return $binding;
+		return $schema;
 	}
 
 	private function usersWithPosts(): CollectionInterface

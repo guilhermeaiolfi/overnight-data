@@ -7,9 +7,9 @@ namespace Tests\ON\Data\ORM\Sync;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\Sync\SyncConflictDetector;
 use PHPUnit\Framework\TestCase;
@@ -69,7 +69,7 @@ final class SyncConflictDetectorTest extends TestCase
 		self::assertSame([], (new SyncConflictDetector())->detect($tracked, ['name' => 'A2']));
 	}
 
-	public function testReadOnlyBindingIsIgnored(): void
+	public function testReadOnlySchemaIsIgnored(): void
 	{
 		$record = RecordState::clean($this->users()->getKey(10), ['name' => 'A1']);
 		$tracked = $this->tracked($record, 1, writable: false);
@@ -126,11 +126,11 @@ final class SyncConflictDetectorTest extends TestCase
 
 	private function tracked(RecordState $record, int $revision, bool $writable = true): RepresentationState
 	{
-		$binding = new RepresentationSchema($record->getCollection());
+		$schema = new RepresentationSchema($record->getCollection());
 		$field = new RepresentationFieldSchema('name', $record->getCollection(), 'name', $writable);
-		$binding->addField($field);
+		$schema->addField($field);
 
-		return new RepresentationState($binding, [
+		return new RepresentationState($schema, [
 			new RepresentationFieldStateItem($field, $record, 'name', $revision),
 		]);
 	}

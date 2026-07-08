@@ -73,8 +73,8 @@ final class SyncPlanTest extends TestCase
 	private function update(string $field, mixed $value): SyncFieldUpdate
 	{
 		$record = RecordState::new($this->users(), [$field => 'A1']);
-		$binding = new RepresentationFieldSchema($field, $record->getCollection(), $field);
+		$schema = new RepresentationFieldSchema($field, $record->getCollection(), $field);
 
-		return new SyncFieldUpdate($record, $field, $value, $binding);
+		return new SyncFieldUpdate($record, $field, $value, $schema);
 	}
 }

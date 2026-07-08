@@ -9,7 +9,7 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
-final class Phase34BindingModelTest extends TestCase
+final class RepresentationArchitectureTest extends TestCase
 {
 	public function testRepresentationSchemaDocumentationNamesTheModelBoundaries(): void
 	{
@@ -63,7 +63,7 @@ final class Phase34BindingModelTest extends TestCase
 		}
 	}
 
-	public function testScalarSyncStillUsesExplicitFieldBindingsOnly(): void
+	public function testScalarSyncStillUsesExplicitFieldSchemasOnly(): void
 	{
 		$sources = [
 			dirname(__DIR__, 3) . '/src/ORM/Sync/RepresentationReader.php' => 'getFields()',
@@ -80,7 +80,7 @@ final class Phase34BindingModelTest extends TestCase
 		}
 	}
 
-	public function testSelectQueryMutableExportMayCompileBindingsButAvoidsPersistenceCoupling(): void
+	public function testSelectQueryMutableExportMayCompileSchemasButAvoidsPersistenceCoupling(): void
 	{
 		$contents = file_get_contents(dirname(__DIR__, 3) . '/src/Query/SelectQuery.php');
 

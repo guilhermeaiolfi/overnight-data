@@ -124,7 +124,7 @@ final class RepresentationStateFactoryTest extends TestCase
 		]);
 	}
 
-	public function testProjectionSourceRecordsRejectRelationBindings(): void
+	public function testProjectionSourceRecordsRejectRelationSchemas(): void
 	{
 		$registry = $this->registry();
 		$users = $registry->getCollection('users');

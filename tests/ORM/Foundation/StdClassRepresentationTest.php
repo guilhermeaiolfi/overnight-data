@@ -18,7 +18,7 @@ final class StdClassRepresentationTest extends TestCase
 	public function testStdClassWithoutLineageIsOnlyAProjectionUnlessAttached(): void
 	{
 		self::markTestIncomplete(
-			'Phase 0 skeleton: a random stdClass has no persistence authority unless explicitly attached with enough binding information.'
+			'Phase 0 skeleton: a random stdClass has no persistence authority unless explicitly attached with enough schema information.'
 		);
 	}
 }

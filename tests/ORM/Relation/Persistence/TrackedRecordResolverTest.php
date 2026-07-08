@@ -12,8 +12,8 @@ use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\Persistence\TrackedRecordResolver;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 use PHPUnit\Framework\TestCase;
@@ -62,9 +62,9 @@ final class TrackedRecordResolverTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$child = RecordState::clean($posts->getKey(5), ['id' => 5]);
 		$item = new stdClass();
-		$binding = new RepresentationSchema($posts);
-		$binding->addField(new RepresentationFieldSchema('id', $posts, 'id'));
-		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
+		$schema = new RepresentationSchema($posts);
+		$schema->addField(new RepresentationFieldSchema('id', $posts, 'id'));
+		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($schema, []));
 		$context = new PersistenceContext(
 			$this->context($this->representations($tracked), $this->records($owner, $child)),
 			new CommandBuffer(),
@@ -97,18 +97,18 @@ final class TrackedRecordResolverTest extends TestCase
 	{
 		return RepresentationStateObjectRegistry::remember(
 			$representation,
-			new RepresentationState($binding = $this->bindingFor($record), $this->fieldItemsFor($binding, [$record]))
+			new RepresentationState($schema = $this->schemaFor($record), $this->fieldItemsFor($schema, [$record]))
 		);
 	}
 
-	private function bindingFor(RecordState $record): RepresentationSchema
+	private function schemaFor(RecordState $record): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($record->getCollection());
+		$schema = new RepresentationSchema($record->getCollection());
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
-			$binding->addField(new RepresentationFieldSchema($field, $record->getCollection(), $field));
+			$schema->addField(new RepresentationFieldSchema($field, $record->getCollection(), $field));
 		}
 
-		return $binding;
+		return $schema;
 	}
 }

@@ -24,21 +24,20 @@ final class ToManyRelationStateTest extends TestCase
 		self::assertFalse($collection->isFullyLoaded());
 	}
 
-	public function testExposesOwnerRelationNameChildBindingAndState(): void
+	public function testExposesOwnerRelationNameRelatedSchemaAndState(): void
 	{
 		$owner = RecordState::new($this->users());
-		$binding = $this->postBinding();
+		$schema = $this->postSchema();
 
 		$collection = ToManyRelationState::full(
 			$owner,
 			'posts',
-			$binding
+			$schema
 		);
 
 		self::assertSame($owner, $collection->getOwner());
 		self::assertSame('posts', $collection->getRelationName());
-		self::assertSame($binding, $collection->getChildBinding());
-		self::assertSame($binding, $collection->getRelatedSchema());
+		self::assertSame($schema, $collection->getRelatedSchema());
 		self::assertTrue($collection->isFullyLoaded());
 	}
 
@@ -46,7 +45,7 @@ final class ToManyRelationStateTest extends TestCase
 	{
 		$this->expectException(StateException::class);
 
-		new ToManyRelationState(RecordState::new($this->users()), '', $this->postBinding());
+		new ToManyRelationState(RecordState::new($this->users()), '', $this->postSchema());
 	}
 
 	public function testConstructorRejectsNonObjectItems(): void
@@ -56,7 +55,7 @@ final class ToManyRelationStateTest extends TestCase
 		new ToManyRelationState(
 			RecordState::new($this->users()),
 			'posts',
-			$this->postBinding(),
+			$this->postSchema(),
 			['not-an-object']
 		);
 	}
@@ -110,7 +109,7 @@ final class ToManyRelationStateTest extends TestCase
 		$collection = new ToManyRelationState(
 			RecordState::new($this->users()),
 			'posts',
-			$this->postBinding(),
+			$this->postSchema(),
 			[$existing],
 		);
 
@@ -308,18 +307,17 @@ final class ToManyRelationStateTest extends TestCase
 		self::assertTrue($collection->isEmptyKnown());
 	}
 
-	public function testGetChildBindingReturnsReusableTemplateAndIsNotMutatedByAddOrRemove(): void
+	public function testRelatedSchemaReturnsReusableTemplateAndIsNotMutatedByAddOrRemove(): void
 	{
-		$binding = $this->postBinding();
+		$schema = $this->postSchema();
 		$item = new stdClass();
-		$collection = new ToManyRelationState(RecordState::new($this->users()), 'posts', $binding);
+		$collection = new ToManyRelationState(RecordState::new($this->users()), 'posts', $schema);
 
 		$collection->add($item);
 		$collection->remove($item);
 
-		self::assertSame($binding, $collection->getChildBinding());
-		self::assertSame($binding, $collection->getRelatedSchema());
-		self::assertSame('posts', $binding->getField('title')->getCollectionName());
+		self::assertSame($schema, $collection->getRelatedSchema());
+		self::assertSame('posts', $schema->getField('title')->getCollectionName());
 	}
 
 	/**
@@ -330,9 +328,9 @@ final class ToManyRelationStateTest extends TestCase
 		array $items = [],
 	): ToManyRelationState {
 		if ($fullyLoaded) {
-			return ToManyRelationState::full(RecordState::new($this->users()), 'posts', $this->postBinding(), $items);
+			return ToManyRelationState::full(RecordState::new($this->users()), 'posts', $this->postSchema(), $items);
 		}
 
-		return new ToManyRelationState(RecordState::new($this->users()), 'posts', $this->postBinding(), $items);
+		return new ToManyRelationState(RecordState::new($this->users()), 'posts', $this->postSchema(), $items);
 	}
 }

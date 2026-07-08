@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Sync;
 
+use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationRelationSchema;
-use ON\Data\Definition\Relation\RelationCardinality;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\Sync\RelationRepresentationSynchronizer;
@@ -31,15 +31,15 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		self::assertSame([], $this->sync(new RepresentationStateStore()));
 	}
 
-	public function testIgnoresBindingsWithNoRelationBindings(): void
+	public function testIgnoresSchemasWithNoRelationSchemas(): void
 	{
 		$owner = RecordState::new($this->users());
-		$binding = new RepresentationSchema($this->users());
-		$binding->addField(new RepresentationFieldSchema('name', $owner->getCollection(), 'name'));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addField(new RepresentationFieldSchema('name', $owner->getCollection(), 'name'));
 		$toManyRelations = new RelationStateStore();
 
 		$touched = $this->sync(
-			$this->representations($this->tracked($this->representation(['name' => 'Ada']), $binding)),
+			$this->representations($this->tracked($this->representation(['name' => 'Ada']), $schema)),
 			$toManyRelations
 		);
 
@@ -50,13 +50,13 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 	public function testOneRelationWithNullValueCreatesTouchedReferenceWithNoTarget(): void
 	{
 		$owner = RecordState::new($this->users());
-		$binding = new RepresentationSchema($this->users());
-		$binding->addRelation($this->relationBinding($owner, RelationCardinality::SINGLE));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addRelation($this->relationSchema($owner, RelationCardinality::SINGLE));
 		$toManyRelations = new RelationStateStore();
 		$toOneRelations = new RelationStateStore();
 
 		$touched = $this->sync(
-			$this->representations($this->tracked($this->representation(['profile' => null]), $binding, [$owner])),
+			$this->representations($this->tracked($this->representation(['profile' => null]), $schema, [$owner])),
 			$toManyRelations,
 			$toOneRelations
 		);
@@ -99,7 +99,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 	{
 		$owner = RecordState::new($this->users());
 		$target = new stdClass();
-		$existing = new ToOneRelationState($owner, 'profile', $this->profileBinding());
+		$existing = new ToOneRelationState($owner, 'profile', $this->profileSchema());
 		$toOneRelations = $this->toOneRelations($existing);
 
 		$touched = $this->sync(
@@ -117,14 +117,14 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$owner = RecordState::new($this->users());
 		$item = new stdClass();
 		$target = new stdClass();
-		$binding = new RepresentationSchema($this->users());
-		$binding->addRelation($this->relationBinding($owner, RelationCardinality::MANY));
-		$binding->addRelation($this->relationBinding($owner, RelationCardinality::SINGLE));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addRelation($this->relationSchema($owner, RelationCardinality::MANY));
+		$schema->addRelation($this->relationSchema($owner, RelationCardinality::SINGLE));
 
 		$touched = $this->sync(
 			$this->trackedMapWithRelated(
-				$this->tracked($this->representation(['posts' => [$item], 'profile' => $target]), $binding, [$owner]),
-				$this->tracked($this->representation(['posts' => [$item], 'profile' => $target]), $binding, [$owner]),
+				$this->tracked($this->representation(['posts' => [$item], 'profile' => $target]), $schema, [$owner]),
+				$this->tracked($this->representation(['posts' => [$item], 'profile' => $target]), $schema, [$owner]),
 				$item,
 				$target
 			)
@@ -210,7 +210,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$known = new stdClass();
 		$added = new stdClass();
 		$owner = RecordState::new($this->users());
-		$collection = ToManyRelationState::full($owner, 'posts', $this->postBinding(), [$known]);
+		$collection = ToManyRelationState::full($owner, 'posts', $this->postSchema(), [$known]);
 		$toManyRelations = $this->toManyRelations($collection);
 
 		$this->sync(
@@ -228,7 +228,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$kept = new stdClass();
 		$removed = new stdClass();
 		$owner = RecordState::new($this->users());
-		$collection = ToManyRelationState::full($owner, 'posts', $this->postBinding(), [$kept, $removed]);
+		$collection = ToManyRelationState::full($owner, 'posts', $this->postSchema(), [$kept, $removed]);
 
 		$this->sync(
 			$this->trackedMapWithRelated($this->trackedWithRelation($owner, ['posts' => [$kept]], true), $kept),
@@ -244,7 +244,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 	{
 		$known = new stdClass();
 		$owner = RecordState::new($this->users());
-		$collection = ToManyRelationState::full($owner, 'posts', $this->postBinding(), [$known]);
+		$collection = ToManyRelationState::full($owner, 'posts', $this->postSchema(), [$known]);
 
 		$this->sync(
 			$this->trackedMapWithRelated($this->trackedWithRelation($owner, ['posts' => [$known]], true), $known),
@@ -259,7 +259,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 	public function testExistingToManyRelationStateInMapIsReused(): void
 	{
 		$owner = RecordState::new($this->users());
-		$existing = new ToManyRelationState($owner, 'posts', $this->postBinding());
+		$existing = new ToManyRelationState($owner, 'posts', $this->postSchema());
 		$toManyRelations = $this->toManyRelations($existing);
 
 		$touched = $this->sync(
@@ -286,12 +286,12 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		self::assertSame('posts', $touched[0]->getRelationName());
 	}
 
-	public function testCreatedToManyRelationStateUsesRelatedBindingFromRepresentationRelationSchema(): void
+	public function testCreatedToManyRelationStateUsesRelatedSchemaFromRepresentationRelationSchema(): void
 	{
 		$owner = RecordState::new($this->users());
-		$relatedSchema = $this->postBinding();
-		$binding = new RepresentationSchema($this->users());
-		$binding->addRelation(new RepresentationRelationSchema(
+		$relatedSchema = $this->postSchema();
+		$schema = new RepresentationSchema($this->users());
+		$schema->addRelation(new RepresentationRelationSchema(
 			'posts',
 			$owner->getCollection(),
 			'posts',
@@ -299,7 +299,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		));
 
 		$touched = $this->sync(
-			$this->representations($this->tracked($this->representation(['posts' => []]), $binding, [$owner])),
+			$this->representations($this->tracked($this->representation(['posts' => []]), $schema, [$owner])),
 			new RelationStateStore()
 		);
 
@@ -344,18 +344,18 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$author->profile = $target;
 		$representation = new stdClass();
 		$representation->author = $author;
-		$binding = new RepresentationSchema($this->posts());
-		$binding->addRelation(new RepresentationRelationSchema(
+		$schema = new RepresentationSchema($this->posts());
+		$schema->addRelation(new RepresentationRelationSchema(
 			'author.profile',
 			$this->posts(),
 			'author',
-			$this->profileBinding()
+			$this->profileSchema()
 		));
 
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('author.profile');
 
-		$this->sync($this->representations($this->tracked($representation, $binding, [$post])));
+		$this->sync($this->representations($this->tracked($representation, $schema, [$post])));
 	}
 
 	public function testUntrackedRelatedObjectDoesNotAutoAdoptRepresentationStates(): void
@@ -406,10 +406,10 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		array $values,
 		bool $fullyLoaded = false,
 	): RepresentationState {
-		$binding = new RepresentationSchema($this->users());
-		$binding->addRelation($this->relationBinding($owner, RelationCardinality::MANY, $fullyLoaded));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addRelation($this->relationSchema($owner, RelationCardinality::MANY, $fullyLoaded));
 
-		return $this->tracked($this->representation($values), $binding, [$owner]);
+		return $this->tracked($this->representation($values), $schema, [$owner]);
 	}
 
 	/**
@@ -417,13 +417,13 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 	 */
 	private function trackedWithOneRelation(RecordState $owner, array $values): RepresentationState
 	{
-		$binding = new RepresentationSchema($this->users());
-		$binding->addRelation($this->relationBinding($owner, RelationCardinality::SINGLE));
+		$schema = new RepresentationSchema($this->users());
+		$schema->addRelation($this->relationSchema($owner, RelationCardinality::SINGLE));
 
-		return $this->tracked($this->representation($values), $binding, [$owner]);
+		return $this->tracked($this->representation($values), $schema, [$owner]);
 	}
 
-	private function relationBinding(
+	private function relationSchema(
 		RecordState $owner,
 		RelationCardinality $cardinality,
 		bool $fullyLoaded = false,
@@ -433,7 +433,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 				'profile',
 				$owner->getCollection(),
 				'profile',
-				$this->profileBinding(),
+				$this->profileSchema(),
 			);
 		}
 
@@ -441,7 +441,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 			'posts',
 			$owner->getCollection(),
 			'posts',
-			$this->postBinding(),
+			$this->postSchema(),
 		);
 	}
 

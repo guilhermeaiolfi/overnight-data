@@ -15,17 +15,17 @@ final class ToOneRelationStateTest extends TestCase
 {
 	use OrmFixture;
 
-	public function testConstructorStoresOwnerRelationNameRelatedBindingBaselineTargetAndCurrentTarget(): void
+	public function testConstructorStoresOwnerRelationNameRelatedSchemaBaselineTargetAndCurrentTarget(): void
 	{
 		$owner = RecordState::new($this->users());
-		$binding = $this->postBinding();
+		$schema = $this->postSchema();
 		$target = new stdClass();
 
-		$reference = new ToOneRelationState($owner, 'author', $binding, $target);
+		$reference = new ToOneRelationState($owner, 'author', $schema, $target);
 
 		self::assertSame($owner, $reference->getOwner());
 		self::assertSame('author', $reference->getRelationName());
-		self::assertSame($binding, $reference->getRelatedSchema());
+		self::assertSame($schema, $reference->getRelatedSchema());
 		self::assertSame($target, $reference->getBaselineTarget());
 		self::assertSame($target, $reference->getTarget());
 	}
@@ -34,7 +34,7 @@ final class ToOneRelationStateTest extends TestCase
 	{
 		$this->expectException(StateException::class);
 
-		new ToOneRelationState(RecordState::new($this->users()), '', $this->postBinding());
+		new ToOneRelationState(RecordState::new($this->users()), '', $this->postSchema());
 	}
 
 	public function testSetChangesCurrentTarget(): void
@@ -118,15 +118,15 @@ final class ToOneRelationStateTest extends TestCase
 		self::assertFalse($reference->hasChanges());
 	}
 
-	public function testGetRelatedBindingReturnsExactBindingInstance(): void
+	public function testGetRelatedSchemaReturnsExactSchemaInstance(): void
 	{
-		$binding = $this->postBinding();
+		$schema = $this->postSchema();
 
-		self::assertSame($binding, (new ToOneRelationState(RecordState::new($this->users()), 'author', $binding))->getRelatedSchema());
+		self::assertSame($schema, (new ToOneRelationState(RecordState::new($this->users()), 'author', $schema))->getRelatedSchema());
 	}
 
 	private function reference(?object $target = null): ToOneRelationState
 	{
-		return new ToOneRelationState(RecordState::new($this->users()), 'author', $this->postBinding(), $target);
+		return new ToOneRelationState(RecordState::new($this->users()), 'author', $this->postSchema(), $target);
 	}
 }

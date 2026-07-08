@@ -16,8 +16,8 @@ use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\State\ValueRef;
@@ -120,7 +120,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		[$relation, $users, $profiles] = $this->singleKeyModel();
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$target = RecordState::clean($profiles->getKey(5), ['id' => 5]);
-		$reference = new ToOneRelationState($owner, 'profile', $this->bindingFor($target));
+		$reference = new ToOneRelationState($owner, 'profile', $this->schemaFor($target));
 		$reference->set(new stdClass());
 
 		$this->expectException(RelationPersistenceException::class);
@@ -135,11 +135,11 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$target = RecordState::clean($profiles->getKey(5), ['id' => 5]);
 		$item = new stdClass();
-		$reference = new ToOneRelationState($owner, 'profile', $this->bindingFor($target));
+		$reference = new ToOneRelationState($owner, 'profile', $this->schemaFor($target));
 		$reference->set($item);
-		$binding = new RepresentationSchema($profiles);
-		$binding->addField(new RepresentationFieldSchema('id', $profiles, 'id'));
-		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
+		$schema = new RepresentationSchema($profiles);
+		$schema->addField(new RepresentationFieldSchema('id', $profiles, 'id'));
+		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($schema, []));
 
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('cannot be resolved to a record state');
@@ -294,7 +294,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 	private function planClear(HasOneRelation $relation, RecordState $owner, RecordState $baseline): void
 	{
 		$baselineObject = new stdClass();
-		$reference = new ToOneRelationState($owner, $relation->getName(), $this->bindingFor($baseline), $baselineObject);
+		$reference = new ToOneRelationState($owner, $relation->getName(), $this->schemaFor($baseline), $baselineObject);
 		$reference->clear();
 
 		$this->plan($relation, $reference, $this->records($owner, $baseline), $this->representations(
@@ -310,7 +310,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 	): void {
 		$oldObject = new stdClass();
 		$newObject = new stdClass();
-		$reference = new ToOneRelationState($owner, $relation->getName(), $this->bindingFor($newTarget), $oldObject);
+		$reference = new ToOneRelationState($owner, $relation->getName(), $this->schemaFor($newTarget), $oldObject);
 		$reference->set($newObject);
 
 		$this->plan($relation, $reference, $this->records($owner, $oldTarget, $newTarget), $this->representations(
@@ -322,7 +322,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 	private function changedReference(HasOneRelation $relation, RecordState $owner, RecordState $target): ToOneRelationState
 	{
 		$targetObject = new stdClass();
-		$reference = new ToOneRelationState($owner, $relation->getName(), $this->bindingFor($target));
+		$reference = new ToOneRelationState($owner, $relation->getName(), $this->schemaFor($target));
 		$reference->set($targetObject);
 
 		return $reference;
@@ -348,19 +348,19 @@ final class HasOnePersistencePlannerTest extends TestCase
 	{
 		return RepresentationStateObjectRegistry::remember(
 			$representation,
-			new RepresentationState($binding = $this->bindingFor($record), $this->fieldItemsFor($binding, [$record]))
+			new RepresentationState($schema = $this->schemaFor($record), $this->fieldItemsFor($schema, [$record]))
 		);
 	}
 
-	private function bindingFor(RecordState $record): RepresentationSchema
+	private function schemaFor(RecordState $record): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($record->getCollection());
+		$schema = new RepresentationSchema($record->getCollection());
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
-			$binding->addField(new RepresentationFieldSchema($field, $record->getCollection(), $field));
+			$schema->addField(new RepresentationFieldSchema($field, $record->getCollection(), $field));
 		}
 
-		return $binding;
+		return $schema;
 	}
 
 	/**

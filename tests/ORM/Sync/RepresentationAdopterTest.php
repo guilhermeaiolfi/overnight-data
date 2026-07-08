@@ -9,8 +9,8 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\Sync\RepresentationAdopter;
@@ -22,10 +22,10 @@ final class RepresentationAdopterTest extends TestCase
 {
 	use OrmFixture;
 
-	public function testAdoptAppliesTemplateBindingToRecordState(): void
+	public function testAdoptAppliesTemplateSchemaToRecordState(): void
 	{
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
-		$tracked = $this->adopter()->adopt(new stdClass(), $this->postBinding(), $record);
+		$tracked = $this->adopter()->adopt(new stdClass(), $this->postSchema(), $record);
 
 		self::assertSame($record, $tracked->getFieldItem('title')->getRecord());
 	}
@@ -35,7 +35,7 @@ final class RepresentationAdopterTest extends TestCase
 		$records = new RecordStateStore();
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
 
-		$this->adopter($records)->adopt(new stdClass(), $this->postBinding(), $record);
+		$this->adopter($records)->adopt(new stdClass(), $this->postSchema(), $record);
 
 		self::assertSame($record, $records->getByStateHash($record->getStateHash()));
 	}
@@ -46,7 +46,7 @@ final class RepresentationAdopterTest extends TestCase
 		$representation = new stdClass();
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
 
-		$tracked = $this->adopter(representations: $representations)->adopt($representation, $this->postBinding(), $record);
+		$tracked = $this->adopter(representations: $representations)->adopt($representation, $this->postSchema(), $record);
 
 		self::assertSame($tracked, $representations->get($representation));
 	}
@@ -57,16 +57,16 @@ final class RepresentationAdopterTest extends TestCase
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
 		$representations = new RepresentationStateStore();
 
-		$tracked = $this->adopter(representations: $representations)->adopt($representation, $this->postBinding(), $record);
+		$tracked = $this->adopter(representations: $representations)->adopt($representation, $this->postSchema(), $record);
 
 		self::assertInstanceOf(RepresentationState::class, $tracked);
 		self::assertSame($tracked, $representations->get($representation));
 	}
 
-	public function testAppliedBindingFieldsTargetConcreteRecordState(): void
+	public function testAppliedSchemaFieldsTargetConcreteRecordState(): void
 	{
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
-		$tracked = $this->adopter()->adopt(new stdClass(), $this->postBinding(), $record);
+		$tracked = $this->adopter()->adopt(new stdClass(), $this->postSchema(), $record);
 
 		$item = $tracked->getFieldItem('title');
 
@@ -79,7 +79,7 @@ final class RepresentationAdopterTest extends TestCase
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
 		$record->setValue('title', 'A2');
 
-		$tracked = $this->adopter()->adopt(new stdClass(), $this->postBinding(), $record);
+		$tracked = $this->adopter()->adopt(new stdClass(), $this->postSchema(), $record);
 
 		self::assertSame(2, $tracked->getFieldItem('title')->getBaselineRevision());
 	}
@@ -87,11 +87,11 @@ final class RepresentationAdopterTest extends TestCase
 	public function testMultipleFieldsForSameRecordProduceOneBaselineRevision(): void
 	{
 		$record = RecordState::new($this->posts(), ['title' => 'A1', 'body' => 'Body']);
-		$binding = new RepresentationSchema($this->posts());
-		$binding->addField(new RepresentationFieldSchema('title', $this->posts(), 'title'));
-		$binding->addField(new RepresentationFieldSchema('body', $this->posts(), 'body'));
+		$schema = new RepresentationSchema($this->posts());
+		$schema->addField(new RepresentationFieldSchema('title', $this->posts(), 'title'));
+		$schema->addField(new RepresentationFieldSchema('body', $this->posts(), 'body'));
 
-		$tracked = $this->adopter()->adopt(new stdClass(), $binding, $record);
+		$tracked = $this->adopter()->adopt(new stdClass(), $schema, $record);
 
 		self::assertSame(1, $tracked->getFieldItem('title')->getBaselineRevision());
 		self::assertSame(1, $tracked->getFieldItem('body')->getBaselineRevision());
@@ -101,18 +101,18 @@ final class RepresentationAdopterTest extends TestCase
 	public function testReadOnlyFieldsContributeBaselineRecordRevision(): void
 	{
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
-		$binding = new RepresentationSchema($this->posts());
-		$binding->addField(new RepresentationFieldSchema('titleLabel', $this->posts(), 'title', false));
+		$schema = new RepresentationSchema($this->posts());
+		$schema->addField(new RepresentationFieldSchema('titleLabel', $this->posts(), 'title', false));
 
-		$tracked = $this->adopter()->adopt(new stdClass(), $binding, $record);
+		$tracked = $this->adopter()->adopt(new stdClass(), $schema, $record);
 
 		self::assertSame(1, $tracked->getFieldItem('titleLabel')->getBaselineRevision());
 		self::assertSame($record, $tracked->getFieldItem('titleLabel')->getRecord());
 	}
 
-	public function testInputTemplateBindingIsNotMutated(): void
+	public function testInputTemplateSchemaIsNotMutated(): void
 	{
-		$template = $this->postBinding();
+		$template = $this->postSchema();
 		$templateField = $template->getField('title');
 
 		$this->adopter()->adopt(new stdClass(), $template, RecordState::new($this->posts(), ['title' => 'A1']));
@@ -121,11 +121,11 @@ final class RepresentationAdopterTest extends TestCase
 		self::assertSame('posts', $template->getField('title')->getCollectionName());
 	}
 
-	public function testAdoptingBindingFromDifferentCollectionThrowsThroughStateValidation(): void
+	public function testAdoptingSchemaFromDifferentCollectionThrowsThroughStateValidation(): void
 	{
 		$this->expectException(StateException::class);
 
-		$this->adopter()->adopt(new stdClass(), $this->postBinding(), RecordState::new($this->users()));
+		$this->adopter()->adopt(new stdClass(), $this->postSchema(), RecordState::new($this->users()));
 	}
 
 	public function testAdoptingAlreadyRepresentationStateThrows(): void
@@ -135,11 +135,11 @@ final class RepresentationAdopterTest extends TestCase
 		$representations = new RepresentationStateStore();
 		$adopter = $this->adopter($records, $representations);
 
-		$adopter->adopt($representation, $this->postBinding(), RecordState::new($this->posts(), ['title' => 'A1']));
+		$adopter->adopt($representation, $this->postSchema(), RecordState::new($this->posts(), ['title' => 'A1']));
 
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('already tracked');
-		$adopter->adopt($representation, $this->postBinding(), RecordState::new($this->posts(), ['title' => 'A2']));
+		$adopter->adopt($representation, $this->postSchema(), RecordState::new($this->posts(), ['title' => 'A2']));
 	}
 
 	public function testAdoptingSameRepresentationTwiceThrowsInsteadOfComparingContexts(): void
@@ -148,24 +148,24 @@ final class RepresentationAdopterTest extends TestCase
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
 		$adopter = $this->adopter();
 
-		$adopter->adopt($representation, $this->postBinding(), $record);
+		$adopter->adopt($representation, $this->postSchema(), $record);
 
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('already tracked');
-		$adopter->adopt($representation, $this->postBinding(), $record);
+		$adopter->adopt($representation, $this->postSchema(), $record);
 	}
 
-	public function testRelationItemCanBeAdoptedThroughPlainAdoptWithChildBinding(): void
+	public function testRelationItemCanBeAdoptedThroughPlainAdoptWithChildSchema(): void
 	{
 		$representations = new RepresentationStateStore();
 		$item = new stdClass();
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
-		$collection = new ToManyRelationState(RecordState::new($this->users()), 'posts', $this->postBinding());
+		$collection = new ToManyRelationState(RecordState::new($this->users()), 'posts', $this->postSchema());
 
 		$collection->add($item);
 		$tracked = $this->adopter(representations: $representations)->adopt(
 			$item,
-			$collection->getChildBinding(),
+			$collection->getRelatedSchema(),
 			$record
 		);
 

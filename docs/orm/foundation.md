@@ -275,7 +275,7 @@ Relation loading must keep using `RelationRef` and `select()` / relation branch 
 
 Relations remain class-based and pluggable. Relation definitions remain the source of relation intent; ORM write behavior is implemented by relation persistence planners that interpret those definitions.
 
-## Binding Metadata
+## Schema Metadata
 
 Do not create a heavy `EntityMetadataRegistry`. Avoid duplicated metadata that redefines fields, field types, relations, storage names, or primary keys already known by collection definitions.
 
@@ -495,7 +495,7 @@ Phase 1E introduces `ON\Data\ORM\Sync\RepresentationAdopter` as the small bridge
 
 Phase 1F introduces `ON\Data\ORM\Sync\RepresentationReader` as the small service that reads current values from object and `stdClass` representations using `RepresentationSchema` paths.
 
-The reader distinguishes a missing public property from a present `null` value, preserves binding insertion order, and supports simple dot paths through public properties. Numeric path segments can read array offsets for straightforward cases such as `posts.0.title`.
+The reader distinguishes a missing public property from a present `null` value, preserves schema insertion order, and supports simple dot paths through public properties. Numeric path segments can read array offsets for straightforward cases such as `posts.0.title`.
 
 It only reads current representation values. It does not sync values into `RecordState`, convert values, mutate representations, persist, flush, call getters/setters, inspect private properties, or write SQL. Future mapper/property-access integration can expand this beyond public properties and simple paths.
 
@@ -503,7 +503,7 @@ It only reads current representation values. It does not sync values into `Recor
 
 Phase 1G introduces `SyncPlan` and `SyncFieldUpdate` as the planning layer between tracked representations and sync application. Scalar sync planning and apply now live in `ScalarRepresentationSynchronizer`.
 
-`ScalarRepresentationSynchronizer` reads current representation values through `RepresentationReader`, detects conflicts, and produces a `SyncPlan` containing path-specific conflicts plus planned field updates. Read-only bindings are ignored for updates, conflicted paths are not planned as updates, and duplicate target updates with conflicting values are rejected instead of implying last-write-wins.
+`ScalarRepresentationSynchronizer` reads current representation values through `RepresentationReader`, detects conflicts, and produces a `SyncPlan` containing path-specific conflicts plus planned field updates. Read-only schemas are ignored for updates, conflicted paths are not planned as updates, and duplicate target updates with conflicting values are rejected instead of implying last-write-wins.
 
 Different fields on the same `RecordState` remain separate `SyncFieldUpdate` entries. Later scalar sync and flush runtime aggregate them through the dirty `RecordState`; current relation persistence planning is described in [`persistence.md`](./persistence.md).
 
