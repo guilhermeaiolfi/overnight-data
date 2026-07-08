@@ -103,7 +103,7 @@ final class RepresentationBinding
 	 */
 	public function getFieldForSource(array $sourcePath, string $fieldName): ?RepresentationFieldBinding
 	{
-		$sourceKey = implode('.', $sourcePath);
+		$sourceKey = RepresentationFieldBinding::sourcePathKey($sourcePath);
 
 		foreach ($this->fields as $field) {
 			if ($field->getSourcePathKey() === $sourceKey && $field->getFieldName() === $fieldName) {

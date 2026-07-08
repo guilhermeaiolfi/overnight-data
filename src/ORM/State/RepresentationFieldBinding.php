@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\ORM\State;
 
 use ON\Data\Definition\Collection\CollectionInterface;
-
 /**
  * One structural scalar representation path with writability and optional
  * skip-when-missing adoption behavior.
@@ -73,7 +72,15 @@ final class RepresentationFieldBinding
 
 	public function getSourcePathKey(): string
 	{
-		return implode('.', $this->sourcePath);
+		return self::sourcePathKey($this->sourcePath);
+	}
+
+	/**
+	 * @param list<string> $sourcePath
+	 */
+	public static function sourcePathKey(array $sourcePath): string
+	{
+		return implode('.', $sourcePath);
 	}
 
 	public function isRootSource(): bool

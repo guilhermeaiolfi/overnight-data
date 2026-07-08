@@ -198,6 +198,12 @@ final class RepresentationBindingTest extends TestCase
 		);
 	}
 
+	public function testFieldBindingSourcePathKeyUsesSharedEncoder(): void
+	{
+		self::assertSame('', RepresentationFieldBinding::sourcePathKey([]));
+		self::assertSame('manager.profile', RepresentationFieldBinding::sourcePathKey(['manager', 'profile']));
+	}
+
 	private function fieldBinding(string $path, bool $writable = true): RepresentationFieldBinding
 	{
 		return new RepresentationFieldBinding($path, $this->users(), $path, $writable);

@@ -18,6 +18,8 @@ namespace ON\Data\ORM\Compiler\SelectQuery;
  * collection name) lets root and related sources share a terminal collection
  * while remaining distinct records.
  */
+use ON\Data\ORM\State\RepresentationFieldBinding;
+
 final class ProjectionIdentityColumns
 {
 	/**
@@ -46,6 +48,6 @@ final class ProjectionIdentityColumns
 	 */
 	private function sourcePathKey(array $sourcePath): string
 	{
-		return implode('.', $sourcePath);
+		return RepresentationFieldBinding::sourcePathKey($sourcePath);
 	}
 }

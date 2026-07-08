@@ -43,7 +43,7 @@ final class ProjectionSource
 
 	public function getPathKey(): string
 	{
-		return implode('.', $this->path);
+		return RepresentationFieldBinding::sourcePathKey($this->path);
 	}
 
 	public function getCollection(): CollectionInterface
