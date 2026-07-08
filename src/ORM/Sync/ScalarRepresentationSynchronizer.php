@@ -5,11 +5,9 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 
 final class ScalarRepresentationSynchronizer
 {
@@ -27,7 +25,7 @@ final class ScalarRepresentationSynchronizer
 	/**
 	 * @return list<SyncPlan>
 	 */
-	public function sync(RepresentationStore $representations, RecordStateStore $records): array
+	public function sync(RepresentationStateStore $representations, RecordStateStore $records): array
 	{
 		$states = $representations->getAll();
 		$plans = [];
@@ -73,6 +71,7 @@ final class ScalarRepresentationSynchronizer
 
 		foreach ($state->getWritableFieldItems() as $item) {
 			$fieldBinding = $item->getBinding();
+
 			try {
 				$values[$item->getPath()] = $this->reader->readPath(
 					$representation,

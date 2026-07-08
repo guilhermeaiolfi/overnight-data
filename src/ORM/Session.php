@@ -20,7 +20,7 @@ use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\Sync\AdoptionRecordResolver;
 use ON\Data\ORM\Sync\ExistingIntent;
 use ON\Data\ORM\Sync\GraphAdopter;
@@ -56,7 +56,7 @@ final class Session
 		return $this->context->getRecords();
 	}
 
-	public function getRepresentations(): RepresentationStore
+	public function getRepresentations(): RepresentationStateStore
 	{
 		return $this->context->getRepresentations();
 	}

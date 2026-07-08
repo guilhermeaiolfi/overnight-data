@@ -21,7 +21,6 @@ use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationRelationBinding;
-use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\Sync\RepresentationSyncer;
 use PHPUnit\Framework\TestCase;
@@ -445,7 +444,8 @@ final class SessionTest extends TestCase
 		$binding = new RepresentationBinding($users);
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			$users, 'posts',
+			$users,
+			'posts',
 			$this->postTemplateBindingFor($posts),
 			true
 		));
@@ -503,7 +503,8 @@ final class SessionTest extends TestCase
 		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'author',
-			$posts, 'author',
+			$posts,
+			'author',
 			$this->userTemplateBindingFor($users)
 		));
 
@@ -1329,7 +1330,8 @@ final class SessionTest extends TestCase
 		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			$users, 'posts',
+			$users,
+			'posts',
 			$this->postTemplateBindingFor($posts),
 			false
 		));
@@ -1343,7 +1345,8 @@ final class SessionTest extends TestCase
 		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'profile',
-			$users, 'profile',
+			$users,
+			'profile',
 			$this->profileTemplateBindingFor($profiles)
 		));
 
@@ -1356,7 +1359,8 @@ final class SessionTest extends TestCase
 		$binding->addField(new RepresentationFieldBinding('title', $posts, 'title'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'author',
-			$posts, 'author',
+			$posts,
+			'author',
 			$this->userTemplateBindingFor($users)
 		));
 
@@ -1439,12 +1443,14 @@ final class SessionTest extends TestCase
 		$binding->addField(new RepresentationFieldBinding('author_id', $posts, 'author_id'));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'author',
-			$posts, 'author',
+			$posts,
+			'author',
 			$this->userTemplateBindingFor($users)
 		));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'tags',
-			$posts, 'tags',
+			$posts,
+			'tags',
 			$this->tagTemplateBindingFor($tags),
 			false
 		));

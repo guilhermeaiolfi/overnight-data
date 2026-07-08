@@ -15,7 +15,7 @@ use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationRelationStateItem;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 use stdClass;
 
 trait OrmFixture
@@ -33,9 +33,9 @@ trait OrmFixture
 		return $representation;
 	}
 
-	protected function representations(RepresentationState ...$states): RepresentationStore
+	protected function representations(RepresentationState ...$states): RepresentationStateStore
 	{
-		$store = new RepresentationStore();
+		$store = new RepresentationStateStore();
 		foreach ($states as $state) {
 			RepresentationStateObjectRegistry::addTo($store, $state);
 		}
@@ -54,7 +54,7 @@ trait OrmFixture
 	}
 
 	protected function context(
-		?RepresentationStore $representations = null,
+		?RepresentationStateStore $representations = null,
 		?RecordStateStore $records = null,
 		?RelationStateStore $toManyRelations = null,
 		?RelationStateStore $toOneRelations = null,
@@ -229,6 +229,7 @@ trait OrmFixture
 					$fieldBinding->getFieldName(),
 					$record->getRevision()
 				);
+
 				break;
 			}
 		}
@@ -254,6 +255,7 @@ trait OrmFixture
 					$record,
 					$relationBinding->getRelationName()
 				);
+
 				break;
 			}
 		}

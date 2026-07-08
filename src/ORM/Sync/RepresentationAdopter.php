@@ -9,13 +9,13 @@ use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 
 final class RepresentationAdopter
 {
 	public function __construct(
 		private RecordStateStore $records,
-		private RepresentationStore $representations,
+		private RepresentationStateStore $representations,
 		private RepresentationStateFactory $stateFactory = new RepresentationStateFactory(),
 	) {
 	}

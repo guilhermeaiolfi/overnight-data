@@ -8,13 +8,13 @@ use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\Sync\ExistingIntentStore;
 
 final class SessionContext
 {
 	private RecordStateStore $records;
-	private RepresentationStore $representations;
+	private RepresentationStateStore $representations;
 	private ExistingIntentStore $existingIntents;
 
 	/** @var RelationStateStore<ToManyRelationState> */
@@ -29,12 +29,12 @@ final class SessionContext
 	 */
 	public function __construct(
 		?RecordStateStore $records = null,
-		?RepresentationStore $representations = null,
+		?RepresentationStateStore $representations = null,
 		?RelationStateStore $toManyRelations = null,
 		?RelationStateStore $toOneRelations = null,
 	) {
 		$this->records = $records ?? new RecordStateStore();
-		$this->representations = $representations ?? new RepresentationStore();
+		$this->representations = $representations ?? new RepresentationStateStore();
 		$this->existingIntents = new ExistingIntentStore();
 		$this->toManyRelations = $toManyRelations ?? new RelationStateStore();
 		$this->toOneRelations = $toOneRelations ?? new RelationStateStore();
@@ -50,7 +50,7 @@ final class SessionContext
 		return $this->records;
 	}
 
-	public function getRepresentations(): RepresentationStore
+	public function getRepresentations(): RepresentationStateStore
 	{
 		return $this->representations;
 	}

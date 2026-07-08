@@ -6,7 +6,7 @@ namespace Tests\ON\Data\ORM\Support;
 
 use LogicException;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 
 final class RepresentationStateObjectRegistry
 {
@@ -20,7 +20,7 @@ final class RepresentationStateObjectRegistry
 		return $state;
 	}
 
-	public static function addTo(RepresentationStore $store, RepresentationState $state): void
+	public static function addTo(RepresentationStateStore $store, RepresentationState $state): void
 	{
 		$store->add(self::objectFor($state), $state);
 	}

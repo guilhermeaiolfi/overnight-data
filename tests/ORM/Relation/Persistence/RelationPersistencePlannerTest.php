@@ -20,7 +20,7 @@ use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Fixture\CustomRelation;
@@ -82,7 +82,7 @@ final class RelationPersistencePlannerTest extends TestCase
 		$toManyRelations = new RelationStateStore();
 		$toManyRelations->add($collection);
 		$records = new RecordStateStore();
-		$representations = new RepresentationStore();
+		$representations = new RepresentationStateStore();
 
 		$toOneRelations = new RelationStateStore();
 
@@ -320,7 +320,7 @@ final class RelationPersistencePlannerTest extends TestCase
 		?RelationStateStore $toManyRelations = null,
 		?RelationStateStore $toOneRelations = null,
 		?RecordStateStore $records = null,
-		?RepresentationStore $representations = null,
+		?RepresentationStateStore $representations = null,
 	): RelationPersistenceResult {
 		return (new RelationPersistencePlanner())->plan($this->context(
 			$representations,

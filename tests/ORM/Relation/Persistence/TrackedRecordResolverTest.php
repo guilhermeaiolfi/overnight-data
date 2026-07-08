@@ -15,7 +15,7 @@ use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
@@ -46,7 +46,7 @@ final class TrackedRecordResolverTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
 		$child = RecordState::clean($posts->getKey(5), ['id' => 5]);
 		$context = new PersistenceContext(
-			$this->context(new RepresentationStore(), $this->records($owner, $child)),
+			$this->context(new RepresentationStateStore(), $this->records($owner, $child)),
 			new CommandBuffer(),
 		);
 

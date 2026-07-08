@@ -15,7 +15,7 @@ use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationStateItem;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\Sync\ScalarRepresentationSynchronizer;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -28,7 +28,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 
 	public function testSyncReturnsEmptyListWhenThereAreNoRepresentationStates(): void
 	{
-		self::assertSame([], $this->synchronizer()->sync(new RepresentationStore(), new RecordStateStore()));
+		self::assertSame([], $this->synchronizer()->sync(new RepresentationStateStore(), new RecordStateStore()));
 	}
 
 	public function testUnchangedRepresentationStateProducesEmptyPlanAndDoesNotMutateRecordState(): void
@@ -112,7 +112,8 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 		$binding = $this->binding($nameField);
 		$relationBinding = new RepresentationRelationBinding(
 			'posts',
-			$record->getCollection(), 'posts',
+			$record->getCollection(),
+			'posts',
 			$this->postBinding(),
 			true
 		);
@@ -351,6 +352,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 				}
 
 				$items[] = new RepresentationFieldStateItem($fieldBinding, $record, $fieldBinding->getFieldName(), $record->getRevision());
+
 				break;
 			}
 		}

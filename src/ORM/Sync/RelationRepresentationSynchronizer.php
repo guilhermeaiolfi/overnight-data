@@ -11,7 +11,7 @@ use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RepresentationRelationStateItem;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 
 final class RelationRepresentationSynchronizer
 {
@@ -29,10 +29,10 @@ final class RelationRepresentationSynchronizer
 	 * @param RelationStateStore<ToOneRelationState> $toOneRelations
 	 */
 	public function sync(
-		RepresentationStore $representations,
+		RepresentationStateStore $representations,
 		RelationStateStore $toManyRelations,
 		RelationStateStore $toOneRelations,
-		?RepresentationStore $states = null,
+		?RepresentationStateStore $states = null,
 	): array {
 		$touched = [];
 		$touchedIds = [];
@@ -65,7 +65,7 @@ final class RelationRepresentationSynchronizer
 		object $representation,
 		RepresentationRelationStateItem $relationItem,
 		RelationStateStore $toManyRelations,
-		RepresentationStore $states,
+		RepresentationStateStore $states,
 		array &$touched,
 		array &$touchedIds,
 	): void {
@@ -105,7 +105,7 @@ final class RelationRepresentationSynchronizer
 		object $representation,
 		RepresentationRelationStateItem $relationItem,
 		RelationStateStore $toOneRelations,
-		RepresentationStore $states,
+		RepresentationStateStore $states,
 		array &$touched,
 		array &$touchedIds,
 	): void {
@@ -141,7 +141,7 @@ final class RelationRepresentationSynchronizer
 	}
 
 	private function requireTrackedRepresentation(
-		RepresentationStore $states,
+		RepresentationStateStore $states,
 		object $object,
 		string $path,
 	): RepresentationState {

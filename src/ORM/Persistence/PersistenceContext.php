@@ -9,7 +9,7 @@ use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 
 final class PersistenceContext
 {
@@ -29,7 +29,7 @@ final class PersistenceContext
 		return $this->session->getRecords();
 	}
 
-	public function getRepresentations(): RepresentationStore
+	public function getRepresentations(): RepresentationStateStore
 	{
 		return $this->session->getRepresentations();
 	}

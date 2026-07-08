@@ -15,7 +15,7 @@ use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\Sync\RelationRepresentationSynchronizer;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -28,7 +28,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 
 	public function testReturnsEmptyListWhenNoRepresentationStatesExist(): void
 	{
-		self::assertSame([], $this->sync(new RepresentationStore()));
+		self::assertSame([], $this->sync(new RepresentationStateStore()));
 	}
 
 	public function testIgnoresBindingsWithNoRelationBindings(): void
@@ -445,9 +445,9 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		);
 	}
 
-	private function trackedMapWithRelated(object ...$entries): RepresentationStore
+	private function trackedMapWithRelated(object ...$entries): RepresentationStateStore
 	{
-		$map = new RepresentationStore();
+		$map = new RepresentationStateStore();
 		foreach ($entries as $entry) {
 			if ($entry instanceof RepresentationState) {
 				RepresentationStateObjectRegistry::addTo($map, $entry);
@@ -492,7 +492,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 	 * @return list<RelationChangeInterface>
 	 */
 	private function sync(
-		RepresentationStore $representations,
+		RepresentationStateStore $representations,
 		?RelationStateStore $toManyRelations = null,
 		?RelationStateStore $toOneRelations = null,
 	): array {

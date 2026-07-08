@@ -29,7 +29,7 @@ use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
@@ -265,9 +265,9 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertSame('title', $property->getFieldName());
 	}
 
-	public function testAdapterObjectsAreRegisteredInNormalRepresentationStore(): void
+	public function testAdapterObjectsAreRegisteredInNormalRepresentationStateStore(): void
 	{
-		$representations = new RepresentationStore();
+		$representations = new RepresentationStateStore();
 		$tracker = new RepresentationTracker($representations, new RecordStateStore());
 		$record = RecordState::new($this->registry()->getCollection('users'), ['id' => 10]);
 
@@ -427,7 +427,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		$users = $this->registry()->getCollection('users');
 		$record = RecordState::new($users, ['id' => 10]);
 		$representation = new stdClass();
-		$representations = new RepresentationStore();
+		$representations = new RepresentationStateStore();
 		$rootBinding = new RepresentationBinding($users);
 		$id = new RepresentationFieldBinding('id', $users, 'id');
 		$rootBinding->addField($id);
@@ -455,7 +455,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		$rootRecord = RecordState::new($users, ['id' => 10]);
 		$managerRecord = RecordState::new($users, ['id' => 20]);
 		$representation = new stdClass();
-		$representations = new RepresentationStore();
+		$representations = new RepresentationStateStore();
 		$existingBinding = new RepresentationBinding($users);
 		$rootField = new RepresentationFieldBinding('name', $users, 'name');
 		$managerField = new RepresentationFieldBinding('managerName', $users, 'name', sourcePath: ['manager']);
@@ -486,7 +486,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		$users = $this->registry()->getCollection('users');
 		$record = RecordState::new($users, ['id' => 10]);
 		$representation = new stdClass();
-		$representations = new RepresentationStore();
+		$representations = new RepresentationStateStore();
 		$existingBinding = new RepresentationBinding($users);
 		$rootField = new RepresentationFieldBinding('name', $users, 'name');
 		$existingBinding->addField($rootField);

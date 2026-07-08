@@ -8,9 +8,8 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationRelationBinding;
-use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\Sync\GraphAdopter;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -34,7 +33,7 @@ final class GraphAdopterTest extends TestCase
 	{
 		$root = $this->representation(['name' => 'Root']);
 		$records = new RecordStateStore();
-		$representations = new RepresentationStore();
+		$representations = new RepresentationStateStore();
 
 		$result = $this->adopter()->adopt($root, $representations, $records, $this->userBinding());
 
@@ -49,7 +48,7 @@ final class GraphAdopterTest extends TestCase
 	{
 		$root = $this->representation(['id' => 10, 'name' => 'Root']);
 		$records = new RecordStateStore();
-		$representations = new RepresentationStore();
+		$representations = new RepresentationStateStore();
 
 		$this->adopter()->adopt($root, $representations, $records, $this->userBindingWithId());
 
@@ -66,7 +65,7 @@ final class GraphAdopterTest extends TestCase
 	{
 		$root = $this->representation(['id' => null, 'name' => 'Root']);
 		$records = new RecordStateStore();
-		$representations = new RepresentationStore();
+		$representations = new RepresentationStateStore();
 
 		$this->adopter()->adopt($root, $representations, $records, $this->userBindingWithId());
 
@@ -82,7 +81,7 @@ final class GraphAdopterTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('root binding');
 
-		$this->adopter()->adopt(new stdClass(), new RepresentationStore(), new RecordStateStore());
+		$this->adopter()->adopt(new stdClass(), new RepresentationStateStore(), new RecordStateStore());
 	}
 
 	public function testManyRelationWithNullValueAdoptsNothing(): void
@@ -222,7 +221,8 @@ final class GraphAdopterTest extends TestCase
 		$postBinding = $this->postBindingFor(RecordState::new($this->posts()));
 		$postBinding->addRelation(new RepresentationRelationBinding(
 			'comments',
-			$this->posts(), 'comments',
+			$this->posts(),
+			'comments',
 			$this->commentBinding()
 		));
 		$representations = $this->representations($this->trackedRootWithPosts($root), $this->tracked($post, $postBinding));
@@ -242,12 +242,14 @@ final class GraphAdopterTest extends TestCase
 		$postBinding = $this->postBinding();
 		$postBinding->addRelation(new RepresentationRelationBinding(
 			'comments',
-			$this->posts(), 'comments',
+			$this->posts(),
+			'comments',
 			$this->commentBinding()
 		));
 		$rootBinding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			$this->users(), 'posts',
+			$this->users(),
+			'posts',
 			$postBinding
 		));
 		$representations = $this->representations($this->tracked($root, $rootBinding));
@@ -264,13 +266,15 @@ final class GraphAdopterTest extends TestCase
 		$profileBinding = $this->profileBinding();
 		$profileBinding->addRelation(new RepresentationRelationBinding(
 			'user',
-			$this->profiles(), 'user',
+			$this->profiles(),
+			'user',
 			$this->userBinding()
 		));
 		$rootBinding = $this->userBindingFor(RecordState::new($this->users()));
 		$rootBinding->addRelation(new RepresentationRelationBinding(
 			'profile',
-			$this->users(), 'profile',
+			$this->users(),
+			'profile',
 			$profileBinding
 		));
 		$representations = $this->representations($this->tracked($root, $rootBinding));
@@ -289,13 +293,15 @@ final class GraphAdopterTest extends TestCase
 		$postBinding = $this->postBinding();
 		$postBinding->addRelation(new RepresentationRelationBinding(
 			'author',
-			$this->posts(), 'author',
+			$this->posts(),
+			'author',
 			$this->userBinding()
 		));
 		$rootBinding = $this->userBindingFor(RecordState::new($this->users()));
 		$rootBinding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			$this->users(), 'posts',
+			$this->users(),
+			'posts',
 			$postBinding
 		));
 		$representations = $this->representations($this->tracked($root, $rootBinding));
@@ -339,7 +345,8 @@ final class GraphAdopterTest extends TestCase
 		$binding = $this->userBindingFor(RecordState::new($this->users()));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			$this->users(), 'posts',
+			$this->users(),
+			'posts',
 			$this->postBinding()
 		));
 
@@ -351,7 +358,8 @@ final class GraphAdopterTest extends TestCase
 		$binding = $this->userBindingFor(RecordState::new($this->users()));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'posts',
-			$this->users(), 'posts',
+			$this->users(),
+			'posts',
 			$this->postBindingWithId()
 		));
 
@@ -363,7 +371,8 @@ final class GraphAdopterTest extends TestCase
 		$binding = $this->userBindingFor(RecordState::new($this->users()));
 		$binding->addRelation(new RepresentationRelationBinding(
 			'profile',
-			$this->users(), 'profile',
+			$this->users(),
+			'profile',
 			$this->profileBinding()
 		));
 

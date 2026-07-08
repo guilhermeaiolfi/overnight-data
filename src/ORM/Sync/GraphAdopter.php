@@ -8,7 +8,7 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 
 final class GraphAdopter
 {
@@ -28,7 +28,7 @@ final class GraphAdopter
 	 */
 	public function adopt(
 		object $root,
-		RepresentationStore $representations,
+		RepresentationStateStore $representations,
 		RecordStateStore $records,
 		?RepresentationBinding $rootBinding = null,
 	): array {
@@ -59,7 +59,7 @@ final class GraphAdopter
 	 */
 	private function walk(
 		object $representation,
-		RepresentationStore $representations,
+		RepresentationStateStore $representations,
 		RecordStateStore $records,
 		RepresentationAdopter $adopter,
 		array &$visited,
@@ -101,7 +101,7 @@ final class GraphAdopter
 	private function adoptAndWalk(
 		object $representation,
 		RepresentationBinding $binding,
-		RepresentationStore $representations,
+		RepresentationStateStore $representations,
 		RecordStateStore $records,
 		RepresentationAdopter $adopter,
 		array &$visited,

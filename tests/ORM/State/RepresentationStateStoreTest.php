@@ -8,11 +8,11 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
-final class RepresentationStoreTest extends TestCase
+final class RepresentationStateStoreTest extends TestCase
 {
 	private function emptyState(): RepresentationState
 	{
@@ -21,11 +21,11 @@ final class RepresentationStoreTest extends TestCase
 		return new RepresentationState(new RepresentationBinding($users), []);
 	}
 
-	public function testAddAndGetByObjectIdentity(): void
+	public function testRegisterAndGetByObjectIdentity(): void
 	{
 		$object = new stdClass();
 		$tracked = $this->emptyState();
-		$map = new RepresentationStore();
+		$map = new RepresentationStateStore();
 
 		$map->add($object, $tracked);
 
@@ -45,7 +45,7 @@ final class RepresentationStoreTest extends TestCase
 	{
 		$object = new stdClass();
 		$tracked = $this->emptyState();
-		$map = new RepresentationStore();
+		$map = new RepresentationStateStore();
 
 		$map->add($object, $tracked);
 		$map->add($object, $tracked);
@@ -56,7 +56,7 @@ final class RepresentationStoreTest extends TestCase
 	public function testSameObjectDuplicateWithDifferentRepresentationStateThrows(): void
 	{
 		$object = new stdClass();
-		$map = new RepresentationStore();
+		$map = new RepresentationStateStore();
 		$map->add($object, $this->emptyState());
 
 		$this->expectException(StateException::class);
@@ -67,7 +67,7 @@ final class RepresentationStoreTest extends TestCase
 	{
 		$object = new stdClass();
 		$tracked = $this->emptyState();
-		$map = new RepresentationStore();
+		$map = new RepresentationStateStore();
 		$map->add($object, $tracked);
 
 		$map->remove($object);
@@ -78,7 +78,7 @@ final class RepresentationStoreTest extends TestCase
 	public function testClearWorks(): void
 	{
 		$object = new stdClass();
-		$map = new RepresentationStore();
+		$map = new RepresentationStateStore();
 		$map->add($object, $this->emptyState());
 
 		$map->clear();
@@ -88,7 +88,7 @@ final class RepresentationStoreTest extends TestCase
 
 	public function testWeakMapDoesNotKeepRepresentationAlive(): void
 	{
-		$map = new RepresentationStore();
+		$map = new RepresentationStateStore();
 		$object = new stdClass();
 		$map->add($object, $this->emptyState());
 
@@ -103,7 +103,7 @@ final class RepresentationStoreTest extends TestCase
 	public function testMapDoesNotDiscoverGraphChanges(): void
 	{
 		self::markTestIncomplete(
-			'Phase 0 skeleton: RepresentationStore is an object identity registry only; graph changes must be reported through sync/relation tracking, not discovered by crawling representations.'
+			'Phase 0 skeleton: RepresentationStateStore is an object identity registry only; graph changes must be reported through sync/relation tracking, not discovered by crawling representations.'
 		);
 	}
 }

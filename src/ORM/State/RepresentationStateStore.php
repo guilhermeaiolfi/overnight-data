@@ -7,7 +7,7 @@ namespace ON\Data\ORM\State;
 use ON\Data\ORM\Exception\StateException;
 use WeakMap;
 
-final class RepresentationStore
+final class RepresentationStateStore
 {
 	/** @var WeakMap<object, RepresentationState> */
 	private WeakMap $states;
@@ -34,7 +34,7 @@ final class RepresentationStore
 				return;
 			}
 
-			throw new StateException('Representation store already contains a different state for this object.');
+			throw new StateException('Representation state store already contains a different state for this object.');
 		}
 
 		$this->states[$representation] = $state;

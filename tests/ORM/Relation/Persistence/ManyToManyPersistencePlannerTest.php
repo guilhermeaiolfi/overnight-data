@@ -23,7 +23,7 @@ use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -225,7 +225,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage("Relation 'tags' target item is not tracked");
 
-		$this->plan($relation, $collection, $this->records($owner, $target), new RepresentationStore());
+		$this->plan($relation, $collection, $this->records($owner, $target), new RepresentationStateStore());
 	}
 
 	public function testRepresentationStateThatCannotResolveToRecordStateThrows(): void
@@ -411,7 +411,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		M2MRelation $relation,
 		ToManyRelationState $collection,
 		RecordStateStore $records,
-		RepresentationStore $representations,
+		RepresentationStateStore $representations,
 	): array {
 		$commands = new CommandBuffer();
 		(new ManyToManyPersistencePlanner())->plan(

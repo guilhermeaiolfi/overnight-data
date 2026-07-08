@@ -18,7 +18,7 @@ use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -109,7 +109,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage("Relation 'posts' child item is not tracked");
 
-		$this->plan($relation, $collection, $this->records($owner, $child), new RepresentationStore());
+		$this->plan($relation, $collection, $this->records($owner, $child), new RepresentationStateStore());
 	}
 
 	public function testTrackedChildRepresentationThatCannotResolveToRecordStateThrows(): void
@@ -208,7 +208,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('child item is not tracked');
 
-		$this->plan($relation, $collection, $this->records($owner, $child), new RepresentationStore());
+		$this->plan($relation, $collection, $this->records($owner, $child), new RepresentationStateStore());
 	}
 
 	public function testPassingNonHasManyRelationThrows(): void
@@ -298,7 +298,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		HasManyRelation $relation,
 		ToManyRelationState $collection,
 		RecordStateStore $records,
-		RepresentationStore $representations,
+		RepresentationStateStore $representations,
 	): CommandBuffer {
 		$commands = new CommandBuffer();
 		(new HasManyPersistencePlanner())->plan(

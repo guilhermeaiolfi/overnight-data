@@ -12,7 +12,7 @@ use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\Sync\RepresentationAdopter;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -40,9 +40,9 @@ final class RepresentationAdopterTest extends TestCase
 		self::assertSame($record, $records->getByStateHash($record->getStateHash()));
 	}
 
-	public function testAdoptRegistersRepresentationInRepresentationStore(): void
+	public function testAdoptRegistersRepresentationInRepresentationStateStore(): void
 	{
-		$representations = new RepresentationStore();
+		$representations = new RepresentationStateStore();
 		$representation = new stdClass();
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
 
@@ -55,7 +55,7 @@ final class RepresentationAdopterTest extends TestCase
 	{
 		$representation = new stdClass();
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
-		$representations = new RepresentationStore();
+		$representations = new RepresentationStateStore();
 
 		$tracked = $this->adopter(representations: $representations)->adopt($representation, $this->postBinding(), $record);
 
@@ -132,7 +132,7 @@ final class RepresentationAdopterTest extends TestCase
 	{
 		$representation = new stdClass();
 		$records = new RecordStateStore();
-		$representations = new RepresentationStore();
+		$representations = new RepresentationStateStore();
 		$adopter = $this->adopter($records, $representations);
 
 		$adopter->adopt($representation, $this->postBinding(), RecordState::new($this->posts(), ['title' => 'A1']));
@@ -157,7 +157,7 @@ final class RepresentationAdopterTest extends TestCase
 
 	public function testRelationItemCanBeAdoptedThroughPlainAdoptWithChildBinding(): void
 	{
-		$representations = new RepresentationStore();
+		$representations = new RepresentationStateStore();
 		$item = new stdClass();
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
 		$collection = new ToManyRelationState(RecordState::new($this->users()), 'posts', $this->postBinding());
@@ -176,11 +176,11 @@ final class RepresentationAdopterTest extends TestCase
 
 	private function adopter(
 		?RecordStateStore $records = null,
-		?RepresentationStore $representations = null,
+		?RepresentationStateStore $representations = null,
 	): RepresentationAdopter {
 		return new RepresentationAdopter(
 			$records ?? new RecordStateStore(),
-			$representations ?? new RepresentationStore()
+			$representations ?? new RepresentationStateStore()
 		);
 	}
 }

@@ -118,6 +118,15 @@ final class RepresentationStateFactory
 				));
 			}
 
+			if ($record->getCollection()->getName() !== $source->getCollection()->getName()) {
+				throw new StateException(sprintf(
+					"Representation source path '%s' targets collection '%s', not '%s'.",
+					$source->getPathKey(),
+					$source->getCollection()->getName(),
+					$record->getCollection()->getName(),
+				));
+			}
+
 			foreach ($source->getFields() as $fieldBinding) {
 				$items[] = new RepresentationFieldStateItem(
 					$fieldBinding,

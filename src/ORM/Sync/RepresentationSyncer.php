@@ -7,7 +7,7 @@ namespace ON\Data\ORM\Sync;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 
 final class RepresentationSyncer
 {
@@ -34,7 +34,7 @@ final class RepresentationSyncer
 				throw new SyncException('Cannot synchronize an untracked representation object.');
 			}
 
-			$syncRepresentations = new RepresentationStore();
+			$syncRepresentations = new RepresentationStateStore();
 			$syncRepresentations->add($representation, $state);
 		}
 

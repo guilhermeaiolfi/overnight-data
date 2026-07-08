@@ -19,7 +19,7 @@ use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\State\ValueRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -126,7 +126,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage("Relation 'profile' target item is not tracked");
 
-		$this->plan($relation, $reference, $this->records($owner, $target), new RepresentationStore());
+		$this->plan($relation, $reference, $this->records($owner, $target), new RepresentationStateStore());
 	}
 
 	public function testTrackedCurrentTargetThatCannotResolveToRecordStateThrows(): void
@@ -332,7 +332,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		HasOneRelation $relation,
 		ToOneRelationState $reference,
 		RecordStateStore $records,
-		RepresentationStore $representations,
+		RepresentationStateStore $representations,
 	): CommandBuffer {
 		$commands = new CommandBuffer();
 		(new HasOnePersistencePlanner())->plan(

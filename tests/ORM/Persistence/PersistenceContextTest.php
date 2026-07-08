@@ -9,7 +9,7 @@ use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 use PHPUnit\Framework\TestCase;
 
 final class PersistenceContextTest extends TestCase
@@ -17,7 +17,7 @@ final class PersistenceContextTest extends TestCase
 	public function testGettersReturnExactInstancesPassedToConstructor(): void
 	{
 		$records = new RecordStateStore();
-		$representations = new RepresentationStore();
+		$representations = new RepresentationStateStore();
 		$toManyRelations = new RelationStateStore();
 		$toOneRelations = new RelationStateStore();
 		$commands = new CommandBuffer();

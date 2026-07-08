@@ -74,6 +74,23 @@ final class RepresentationStateFactoryTest extends TestCase
 		self::assertSame(2, $state->getFieldItem('companyName')->getBaselineRevision());
 	}
 
+	public function testProjectionSourceRecordsRejectRecordFromAnotherCollection(): void
+	{
+		$registry = $this->registry();
+		$users = $registry->getCollection('users');
+		$companies = $registry->getCollection('companies');
+		$schema = $this->projectionSchema($users, $companies);
+		$sources = (new ProjectionSourceBuilder())->build($schema);
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage("Representation source path 'company' targets collection 'companies', not 'users'.");
+
+		(new RepresentationStateFactory())->fromSourceRecords($schema, $sources, [
+			'' => RecordState::clean($users->getKey(1), ['id' => 1]),
+			'company' => RecordState::clean($users->getKey(2), ['id' => 2]),
+		]);
+	}
+
 	public function testProjectionSourceRecordsRequireResolvedSourcePath(): void
 	{
 		$registry = $this->registry();

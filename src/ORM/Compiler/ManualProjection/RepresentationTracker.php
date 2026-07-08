@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Compiler\ManualProjection;
 
 /**
- * Registers manual projection targets and adapters in RepresentationStore.
+ * Registers manual projection targets and adapters in RepresentationStateStore.
  *
  * Exists to bridge RecordState identity to PHP objects (including flattened
  * adapters and private stdClass adapters for relation APIs) without a separate
@@ -22,13 +22,13 @@ use ON\Data\ORM\State\RepresentationBindingMerger;
 use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 use stdClass;
 
 final class RepresentationTracker
 {
 	public function __construct(
-		private RepresentationStore $representations,
+		private RepresentationStateStore $representations,
 		private RecordStateStore $records,
 		private RepresentationBindingMerger $bindingMerger = new RepresentationBindingMerger(),
 	) {

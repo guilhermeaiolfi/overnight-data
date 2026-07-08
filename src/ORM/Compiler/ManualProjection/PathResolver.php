@@ -17,12 +17,12 @@ use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStore;
+use ON\Data\ORM\State\RepresentationStateStore;
 
 final class PathResolver
 {
 	public function __construct(
-		private RepresentationStore $representations,
+		private RepresentationStateStore $representations,
 	) {
 	}
 
