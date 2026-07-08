@@ -24,7 +24,7 @@ use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\Sync\AdoptionRecordResolver;
 use ON\Data\ORM\Sync\ExistingIntent;
 use ON\Data\ORM\Sync\GraphAdopter;
-use ON\Data\ORM\Sync\RepresentationAdopter;
+use ON\Data\ORM\Sync\RepresentationAttacher;
 use ON\Data\ORM\Sync\RepresentationSyncer;
 use ON\Data\ORM\Sync\SyncResult;
 use stdClass;
@@ -32,7 +32,7 @@ use stdClass;
 final class Session
 {
 	private SessionContext $context;
-	private RepresentationAdopter $adopter;
+	private RepresentationAttacher $attacher;
 	private AdoptionRecordResolver $recordResolver;
 	private GraphAdopter $graphAdopter;
 	private FlushExecutor $flusher;
@@ -44,7 +44,7 @@ final class Session
 		?RepresentationSyncer $syncer = null,
 	) {
 		$this->context = new SessionContext();
-		$this->adopter = new RepresentationAdopter($this->getRecords(), $this->getRepresentations());
+		$this->attacher = new RepresentationAttacher();
 		$this->recordResolver = new AdoptionRecordResolver(existingIntents: $this->context->getExistingIntents());
 		$this->graphAdopter = new GraphAdopter(records: $this->recordResolver);
 		$this->syncer = $syncer ?? new RepresentationSyncer();
@@ -158,7 +158,7 @@ final class Session
 			$record = RecordState::clean($key, $this->recordResolver->initialValuesForKey($representation, $schema, $key));
 		}
 
-		$this->adopter->adopt($representation, $schema, $record);
+		$this->attachRootRecord($representation, $schema, $record);
 
 		return $representation;
 	}
@@ -168,7 +168,7 @@ final class Session
 		RepresentationSchema $schema,
 		RecordState $record,
 	): RepresentationState {
-		return $this->adopter->adopt($representation, $schema, $record);
+		return $this->attachRootRecord($representation, $schema, $record);
 	}
 
 	public function removeRecord(RecordState $record): void
@@ -274,5 +274,19 @@ final class Session
 		}
 
 		return $schema;
+	}
+
+	private function attachRootRecord(
+		object $representation,
+		RepresentationSchema $schema,
+		RecordState $record,
+	): RepresentationState {
+		return $this->attacher->attach(
+			$representation,
+			$schema,
+			[RepresentationFieldSchema::sourcePathKey([]) => $record],
+			$this->getRecords(),
+			$this->getRepresentations()
+		);
 	}
 }

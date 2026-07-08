@@ -27,6 +27,7 @@ use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
+use ON\Data\ORM\State\RepresentationRelationSchema;
 use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
@@ -224,6 +225,36 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertInstanceOf(RepresentationState::class, $postState);
 		self::assertSame($relatedSchema->getPaths(), $postState->getSchema()->getPaths());
 		self::assertSame('title', $postState->getSchema()->getPaths()[1] ?? null);
+	}
+
+	public function testManualTrackerTrackTargetKeepsRelatedSchemaButAttachesFieldItemsOnly(): void
+	{
+		$registry = new Registry();
+		$posts = $registry->collection('posts')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('title', 'string')->end();
+		$comments = $registry->collection('comments')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('body', 'string')->end();
+		$postSchema = new RepresentationSchema($posts);
+		$postSchema->addField(new RepresentationFieldSchema('title', $posts, 'title'));
+		$postSchema->addRelation(new RepresentationRelationSchema('comments', $posts, 'comments', new RepresentationSchema($comments)));
+		$representations = new RepresentationStateStore();
+		$target = new stdClass();
+
+		(new RepresentationTracker($representations, new RecordStateStore()))->trackTarget(
+			$target,
+			RecordState::new($posts, ['title' => 'Draft']),
+			$postSchema,
+		);
+
+		$state = $representations->get($target);
+		self::assertInstanceOf(RepresentationState::class, $state);
+		self::assertTrue($state->getSchema()->hasRelation('comments'));
+		self::assertSame([], $state->getRelationItems());
+		self::assertTrue($state->getFieldItem('title')->getSchema()->shouldSkipWhenMissing());
 	}
 
 	#[RequiresPhpExtension('pdo_sqlite')]

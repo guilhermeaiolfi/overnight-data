@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
@@ -14,13 +16,16 @@ final class GraphAdopter
 {
 	private RepresentationReader $reader;
 	private AdoptionRecordResolver $records;
+	private RepresentationAttacher $attacher;
 
 	public function __construct(
 		?RepresentationReader $reader = null,
 		?AdoptionRecordResolver $records = null,
+		?RepresentationAttacher $attacher = null,
 	) {
 		$this->reader = $reader ?? new RepresentationReader();
 		$this->records = $records ?? new AdoptionRecordResolver($this->reader);
+		$this->attacher = $attacher ?? new RepresentationAttacher();
 	}
 
 	/**
@@ -37,18 +42,19 @@ final class GraphAdopter
 				throw new StateException('Cannot adopt representation graph because the root representation is not tracked and no root schema was provided.');
 			}
 
-			(new RepresentationAdopter($records, $representations))->adopt(
+			$this->attachRootRecord(
 				$root,
 				$rootSchema,
-				$this->records->resolve($root, $rootSchema, $records, true)
+				$this->records->resolve($root, $rootSchema, $records, true),
+				$records,
+				$representations
 			);
 		}
 
-		$adopter = new RepresentationAdopter($records, $representations);
 		$visited = [];
 		$adopted = [];
 
-		$this->walk($root, $representations, $records, $adopter, $visited, $adopted);
+		$this->walk($root, $representations, $records, $visited, $adopted);
 
 		return $adopted;
 	}
@@ -61,7 +67,6 @@ final class GraphAdopter
 		object $representation,
 		RepresentationStateStore $representations,
 		RecordStateStore $records,
-		RepresentationAdopter $adopter,
 		array &$visited,
 		array &$adopted,
 	): void {
@@ -79,7 +84,7 @@ final class GraphAdopter
 		foreach ($tracked->getSchema()->getRelations() as $relationSchema) {
 			if ($relationSchema->isMany()) {
 				foreach ($this->reader->readItems($representation, $relationSchema, $this->adoptionError(...)) as $item) {
-					$this->adoptAndWalk($item, $relationSchema->getRelatedSchema(), $representations, $records, $adopter, $visited, $adopted);
+					$this->adoptAndWalk($item, $relationSchema->getRelatedSchema(), $representations, $records, $visited, $adopted);
 				}
 
 				continue;
@@ -88,7 +93,7 @@ final class GraphAdopter
 			if ($relationSchema->isSingle()) {
 				$target = $this->reader->readTarget($representation, $relationSchema, $this->adoptionError(...));
 				if ($target !== null) {
-					$this->adoptAndWalk($target, $relationSchema->getRelatedSchema(), $representations, $records, $adopter, $visited, $adopted);
+					$this->adoptAndWalk($target, $relationSchema->getRelatedSchema(), $representations, $records, $visited, $adopted);
 				}
 			}
 		}
@@ -103,19 +108,36 @@ final class GraphAdopter
 		RepresentationSchema $schema,
 		RepresentationStateStore $representations,
 		RecordStateStore $records,
-		RepresentationAdopter $adopter,
 		array &$visited,
 		array &$adopted,
 	): void {
 		if (! $representations->has($representation)) {
-			$adopted[] = $adopter->adopt(
+			$adopted[] = $this->attachRootRecord(
 				$representation,
 				$schema,
-				$this->records->resolve($representation, $schema, $records, false)
+				$this->records->resolve($representation, $schema, $records, false),
+				$records,
+				$representations
 			);
 		}
 
-		$this->walk($representation, $representations, $records, $adopter, $visited, $adopted);
+		$this->walk($representation, $representations, $records, $visited, $adopted);
+	}
+
+	private function attachRootRecord(
+		object $representation,
+		RepresentationSchema $schema,
+		RecordState $record,
+		RecordStateStore $records,
+		RepresentationStateStore $representations,
+	): RepresentationState {
+		return $this->attacher->attach(
+			$representation,
+			$schema,
+			[RepresentationFieldSchema::sourcePathKey([]) => $record],
+			$records,
+			$representations
+		);
 	}
 
 	/**

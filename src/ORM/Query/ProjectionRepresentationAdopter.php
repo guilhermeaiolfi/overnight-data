@@ -20,14 +20,14 @@ use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationState;
+use ON\Data\ORM\Sync\RepresentationAttacher;
 use ON\Data\ORM\Sync\RepresentationReader;
-use ON\Data\ORM\Sync\RepresentationStateFactory;
 
 final class ProjectionRepresentationAdopter
 {
 	public function __construct(
 		private ?RepresentationReader $reader = null,
-		private RepresentationStateFactory $stateFactory = new RepresentationStateFactory(),
+		private RepresentationAttacher $attacher = new RepresentationAttacher(),
 	) {
 		$this->reader ??= new RepresentationReader();
 	}
@@ -48,11 +48,6 @@ final class ProjectionRepresentationAdopter
 		}
 
 		$records = $context->getRecords();
-		$representations = $context->getRepresentations();
-
-		if ($representations->has($representation)) {
-			throw new SyncException('Cannot adopt representation because it is already tracked.');
-		}
 
 		$recordsBySourceKey = $this->resolveSourceRecords(
 			$representation,
@@ -61,19 +56,14 @@ final class ProjectionRepresentationAdopter
 			$records,
 			$sourceRow,
 		);
-		$state = $this->stateFactory->fromSourceRecords(
+
+		return $this->attacher->attach(
+			$representation,
 			$schema,
-			$compilation->getSources(),
 			$recordsBySourceKey,
+			$records,
+			$context->getRepresentations(),
 		);
-
-		foreach ($recordsBySourceKey as $record) {
-			$records->add($record);
-		}
-
-		$representations->add($representation, $state);
-
-		return $state;
 	}
 
 	/**

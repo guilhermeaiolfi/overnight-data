@@ -6,9 +6,7 @@ namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Compiler\ProjectionSourceBuilder;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationRelationSchema;
@@ -18,59 +16,25 @@ use PHPUnit\Framework\TestCase;
 
 final class RepresentationStateFactoryTest extends TestCase
 {
-	public function testCreatesStateFromRootRecordWithFieldAndRelationItems(): void
+	public function testCreatesStateFromSingleRootRecord(): void
 	{
 		$registry = $this->registry();
 		$users = $registry->getCollection('users');
-		$posts = $registry->getCollection('posts');
 		$record = RecordState::new($users, ['id' => 1, 'name' => 'Ada']);
 		$record->setValue('name', 'Ada Lovelace');
-		$postSchema = new RepresentationSchema($posts);
 		$schema = new RepresentationSchema($users);
 		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
-		$schema->addRelation(new RepresentationRelationSchema('posts', $users, 'posts', $postSchema));
 
-		$state = (new RepresentationStateFactory())->fromRootRecord($schema, $record);
+		$state = (new RepresentationStateFactory())->fromRecords($schema, [
+			RepresentationFieldSchema::sourcePathKey([]) => $record,
+		]);
 
 		self::assertSame($schema, $state->getSchema());
 		self::assertSame($record, $state->getFieldItem('name')->getRecord());
 		self::assertSame(2, $state->getFieldItem('name')->getBaselineRevision());
-		self::assertSame($record, $state->getRelationItem('posts')->getOwnerRecord());
-		self::assertSame('posts', $state->getRelationItem('posts')->getRelationName());
 	}
 
-	public function testRootRecordRejectsFieldFromAnotherCollection(): void
-	{
-		$registry = $this->registry();
-		$users = $registry->getCollection('users');
-		$posts = $registry->getCollection('posts');
-		$schema = new RepresentationSchema($posts);
-		$schema->addField(new RepresentationFieldSchema('title', $posts, 'title'));
-
-		$this->expectException(StateException::class);
-		$this->expectExceptionMessage("targets collection 'posts', not 'users'");
-
-		(new RepresentationStateFactory())->fromRootRecord($schema, RecordState::new($users));
-	}
-
-	public function testCreatesFieldOnlyStateWithSkipWhenMissingFieldItems(): void
-	{
-		$registry = $this->registry();
-		$users = $registry->getCollection('users');
-		$posts = $registry->getCollection('posts');
-		$record = RecordState::new($users, ['id' => 1, 'name' => 'Ada']);
-		$schema = new RepresentationSchema($users);
-		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
-		$schema->addRelation(new RepresentationRelationSchema('posts', $users, 'posts', new RepresentationSchema($posts)));
-
-		$state = (new RepresentationStateFactory())->fromRootRecordFields($schema, $record, skipWhenMissing: true);
-
-		self::assertSame($schema, $state->getSchema());
-		self::assertSame([], $state->getRelationItems());
-		self::assertTrue($state->getFieldItem('name')->getSchema()->shouldSkipWhenMissing());
-	}
-
-	public function testCreatesStateFromProjectionSourceRecords(): void
+	public function testCreatesStateFromMultipleSourceRecords(): void
 	{
 		$registry = $this->registry();
 		$users = $registry->getCollection('users');
@@ -79,11 +43,10 @@ final class RepresentationStateFactoryTest extends TestCase
 		$companyRecord = RecordState::clean($companies->getKey(5), ['id' => 5, 'name' => 'Acme']);
 		$companyRecord->setValue('name', 'Acme Ltd');
 		$schema = $this->projectionSchema($users, $companies);
-		$sources = (new ProjectionSourceBuilder())->build($schema);
 
-		$state = (new RepresentationStateFactory())->fromSourceRecords($schema, $sources, [
-			'' => $userRecord,
-			'company' => $companyRecord,
+		$state = (new RepresentationStateFactory())->fromRecords($schema, [
+			RepresentationFieldSchema::sourcePathKey([]) => $userRecord,
+			RepresentationFieldSchema::sourcePathKey(['company']) => $companyRecord,
 		]);
 
 		self::assertSame($userRecord, $state->getFieldItem('id')->getRecord());
@@ -91,40 +54,74 @@ final class RepresentationStateFactoryTest extends TestCase
 		self::assertSame(2, $state->getFieldItem('companyName')->getBaselineRevision());
 	}
 
-	public function testProjectionSourceRecordsRejectRecordFromAnotherCollection(): void
+	public function testRejectsMissingRequiredSourceRecord(): void
 	{
 		$registry = $this->registry();
 		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
 		$schema = $this->projectionSchema($users, $companies);
-		$sources = (new ProjectionSourceBuilder())->build($schema);
 
 		$this->expectException(StateException::class);
-		$this->expectExceptionMessage("Representation source path 'company' targets collection 'companies', not 'users'.");
+		$this->expectExceptionMessage("source path 'company' is unresolved");
 
-		(new RepresentationStateFactory())->fromSourceRecords($schema, $sources, [
-			'' => RecordState::clean($users->getKey(1), ['id' => 1]),
-			'company' => RecordState::clean($users->getKey(2), ['id' => 2]),
+		(new RepresentationStateFactory())->fromRecords($schema, [
+			RepresentationFieldSchema::sourcePathKey([]) => RecordState::clean($users->getKey(1), ['id' => 1]),
 		]);
 	}
 
-	public function testProjectionSourceRecordsRequireResolvedSourcePath(): void
+	public function testRespectsSkipWhenMissingFromFieldSchema(): void
+	{
+		$registry = $this->registry();
+		$users = $registry->getCollection('users');
+		$companies = $registry->getCollection('companies');
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('id', $users, 'id', writable: false));
+		$schema->addField((new RepresentationFieldSchema('companyName', $companies, 'name', sourcePath: ['company']))->withSkipWhenMissing(true));
+
+		$state = (new RepresentationStateFactory())->fromRecords($schema, [
+			RepresentationFieldSchema::sourcePathKey([]) => RecordState::clean($users->getKey(1), ['id' => 1]),
+		]);
+
+		self::assertTrue($state->hasFieldItem('id'));
+		self::assertFalse($state->hasFieldItem('companyName'));
+	}
+
+	public function testRejectsSourceRecordWithWrongCollection(): void
 	{
 		$registry = $this->registry();
 		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
 		$schema = $this->projectionSchema($users, $companies);
-		$sources = (new ProjectionSourceBuilder())->build($schema);
 
-		$this->expectException(SyncException::class);
-		$this->expectExceptionMessage('source path "company" is unresolved');
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage("Representation schema path 'companyName' targets collection 'companies', not 'users'.");
 
-		(new RepresentationStateFactory())->fromSourceRecords($schema, $sources, [
-			'' => RecordState::clean($users->getKey(1), ['id' => 1]),
+		(new RepresentationStateFactory())->fromRecords($schema, [
+			RepresentationFieldSchema::sourcePathKey([]) => RecordState::clean($users->getKey(1), ['id' => 1]),
+			RepresentationFieldSchema::sourcePathKey(['company']) => RecordState::clean($users->getKey(2), ['id' => 2]),
 		]);
 	}
 
-	public function testProjectionSourceRecordsRejectRelationSchemas(): void
+	public function testCreatesRelationStateItemsFromRootRecord(): void
+	{
+		$registry = $this->registry();
+		$users = $registry->getCollection('users');
+		$posts = $registry->getCollection('posts');
+		$record = RecordState::new($users, ['id' => 1, 'name' => 'Ada']);
+		$postSchema = new RepresentationSchema($posts);
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$schema->addRelation(new RepresentationRelationSchema('posts', $users, 'posts', $postSchema));
+
+		$state = (new RepresentationStateFactory())->fromRecords($schema, [
+			RepresentationFieldSchema::sourcePathKey([]) => $record,
+		]);
+
+		self::assertSame($record, $state->getRelationItem('posts')->getOwnerRecord());
+		self::assertSame('posts', $state->getRelationItem('posts')->getRelationName());
+	}
+
+	public function testRelationOnlySchemaRequiresRootRecord(): void
 	{
 		$registry = $this->registry();
 		$users = $registry->getCollection('users');
@@ -133,9 +130,25 @@ final class RepresentationStateFactoryTest extends TestCase
 		$schema->addRelation(new RepresentationRelationSchema('posts', $users, 'posts', new RepresentationSchema($posts)));
 
 		$this->expectException(StateException::class);
-		$this->expectExceptionMessage('schema contains relation schemas');
+		$this->expectExceptionMessage("root source path '' is unresolved");
 
-		(new RepresentationStateFactory())->fromSourceRecords($schema, [], []);
+		(new RepresentationStateFactory())->fromRecords($schema, []);
+	}
+
+	public function testRelationOnlySchemaCreatesRelationItemsFromRootRecord(): void
+	{
+		$registry = $this->registry();
+		$users = $registry->getCollection('users');
+		$posts = $registry->getCollection('posts');
+		$record = RecordState::new($users, ['id' => 1, 'name' => 'Ada']);
+		$schema = new RepresentationSchema($users);
+		$schema->addRelation(new RepresentationRelationSchema('posts', $users, 'posts', new RepresentationSchema($posts)));
+
+		$state = (new RepresentationStateFactory())->fromRecords($schema, [
+			RepresentationFieldSchema::sourcePathKey([]) => $record,
+		]);
+
+		self::assertSame($record, $state->getRelationItem('posts')->getOwnerRecord());
 	}
 
 	private function projectionSchema(

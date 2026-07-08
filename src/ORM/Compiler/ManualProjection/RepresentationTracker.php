@@ -98,7 +98,7 @@ final class RepresentationTracker
 
 		$this->representations->add(
 			$target,
-			$this->stateFactory->fromRootRecordFields($relatedSchema, $record, skipWhenMissing: true)
+			$this->fieldOnlyStateWithSkipWhenMissing($relatedSchema, $record)
 		);
 	}
 
@@ -115,7 +115,10 @@ final class RepresentationTracker
 			$schema->addField(new RepresentationFieldSchema($fieldName, $record->getCollection(), $fieldName, writable: false));
 		}
 
-		$this->representations->add($object, $this->stateFactory->fromRootRecordFields($schema, $record));
+		$this->representations->add(
+			$object,
+			$this->stateFactory->fromRecords($schema, [RepresentationFieldSchema::sourcePathKey([]) => $record])
+		);
 
 		return $object;
 	}
@@ -232,6 +235,18 @@ final class RepresentationTracker
 		}
 
 		return $records;
+	}
+
+	private function fieldOnlyStateWithSkipWhenMissing(
+		RepresentationSchema $schema,
+		RecordState $record,
+	): RepresentationState {
+		$fieldItems = [];
+		foreach ($schema->getFields() as $fieldSchema) {
+			$fieldItems[] = $this->stateFactory->createFieldItem($fieldSchema->withSkipWhenMissing(true), $record);
+		}
+
+		return new RepresentationState($schema, $fieldItems);
 	}
 
 	/**
