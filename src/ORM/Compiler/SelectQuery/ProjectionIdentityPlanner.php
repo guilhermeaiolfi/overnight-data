@@ -13,8 +13,8 @@ namespace ON\Data\ORM\Compiler\SelectQuery;
  * adding INTERNAL-tagged selections and returns ProjectionIdentityColumns keyed
  * by source path + primary-key field.
  *
- * Exists to separate identity planning from structural binding compilation: it
- * never creates field bindings, relation bindings, or normalizes selections.
+ * Exists to separate identity planning from structural schema compilation: it
+ * never creates field schemas, relation schemas, or normalizes selections.
  */
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Compiler\ProjectionSource;

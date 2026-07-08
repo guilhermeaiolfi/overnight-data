@@ -22,14 +22,14 @@ final class RepresentationAdopter
 
 	public function adopt(
 		object $representation,
-		RepresentationSchema $binding,
+		RepresentationSchema $schema,
 		RecordState $record,
 	): RepresentationState {
 		if ($this->representations->has($representation)) {
 			throw new SyncException('Cannot adopt representation because it is already tracked.');
 		}
 
-		$state = $this->stateFactory->fromRootRecord($binding, $record);
+		$state = $this->stateFactory->fromRootRecord($schema, $record);
 
 		$this->records->add($record);
 		$this->representations->add($representation, $state);

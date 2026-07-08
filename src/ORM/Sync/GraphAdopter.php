@@ -34,7 +34,7 @@ final class GraphAdopter
 	): array {
 		if ($representations->get($root) === null) {
 			if (! $rootSchema instanceof RepresentationSchema) {
-				throw new StateException('Cannot adopt representation graph because the root representation is not tracked and no root binding was provided.');
+				throw new StateException('Cannot adopt representation graph because the root representation is not tracked and no root schema was provided.');
 			}
 
 			(new RepresentationAdopter($records, $representations))->adopt(
@@ -100,7 +100,7 @@ final class GraphAdopter
 	 */
 	private function adoptAndWalk(
 		object $representation,
-		RepresentationSchema $binding,
+		RepresentationSchema $schema,
 		RepresentationStateStore $representations,
 		RecordStateStore $records,
 		RepresentationAdopter $adopter,
@@ -110,8 +110,8 @@ final class GraphAdopter
 		if (! $representations->has($representation)) {
 			$adopted[] = $adopter->adopt(
 				$representation,
-				$binding,
-				$this->records->resolve($representation, $binding, $records, false)
+				$schema,
+				$this->records->resolve($representation, $schema, $records, false)
 			);
 		}
 

@@ -6,10 +6,10 @@ namespace ON\Data\ORM\Compiler\SelectQuery;
 
 /**
  * Resolves query-side projection sources (root SelectQuery or RelationRef) to
- * collection identity and source path for binding assembly.
+ * collection identity and source path for schema assembly.
  *
  * Exists as the SelectQuery-specific ProjectionSourceResolverInterface; it
- * intentionally does not interpret aliases or build field bindings.
+ * intentionally does not interpret aliases or build field schemas.
  */
 use InvalidArgumentException;
 use ON\Data\ORM\Compiler\ProjectionSourceResolverInterface;

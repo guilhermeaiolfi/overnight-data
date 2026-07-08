@@ -9,18 +9,18 @@ namespace ON\Data\ORM\Compiler\SelectQuery;
  * for flat mutable projection adoption.
  *
  * Exists as the query-side compiler: it normalizes selections, assembles scalar
- * field bindings, plans relation branches, and delegates shared field assembly
- * to ProjectionBindingAssembler. Hidden identity selection planning is delegated
+ * field schemas, plans relation branches, and delegates shared field assembly
+ * to ProjectionSchemaAssembler. Hidden identity selection planning is delegated
  * to ProjectionIdentityPlanner.
  */
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
-use ON\Data\ORM\Compiler\ProjectionBindingAssembler;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
+use ON\Data\ORM\Compiler\ProjectionSchemaAssembler;
 use ON\Data\ORM\Compiler\ProjectionSourceBuilder;
 use ON\Data\ORM\Compiler\ProjectionSourceResolverInterface;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationRelationSchema;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Relation\RelationRef;
@@ -31,63 +31,63 @@ use ON\Data\Query\SelectQuery;
 final class ProjectionCompiler
 {
 	private ProjectionSelectionNormalizer $selectionNormalizer;
-	private ProjectionBindingAssembler $bindingAssembler;
+	private ProjectionSchemaAssembler $schemaAssembler;
 	private ProjectionIdentityPlanner $identityPlanner;
 	private ProjectionSourceBuilder $sourceBuilder;
 
 	public function __construct(
 		?ProjectionSelectionNormalizer $selectionNormalizer = null,
-		?ProjectionBindingAssembler $bindingAssembler = null,
+		?ProjectionSchemaAssembler $schemaAssembler = null,
 		?ProjectionIdentityPlanner $identityPlanner = null,
 		?ProjectionSourceBuilder $sourceBuilder = null,
 	) {
 		$this->selectionNormalizer = $selectionNormalizer ?? new ProjectionSelectionNormalizer();
-		$this->bindingAssembler = $bindingAssembler ?? new ProjectionBindingAssembler();
+		$this->schemaAssembler = $schemaAssembler ?? new ProjectionSchemaAssembler();
 		$this->identityPlanner = $identityPlanner ?? new ProjectionIdentityPlanner();
 		$this->sourceBuilder = $sourceBuilder ?? new ProjectionSourceBuilder();
 	}
 
 	public function compile(SelectQuery $query): RepresentationSchema
 	{
-		return $this->compileBinding($query);
+		return $this->compileSchema($query);
 	}
 
-	public function compileBinding(SelectQuery $query): RepresentationSchema
+	public function compileSchema(SelectQuery $query): RepresentationSchema
 	{
 		$collection = $query->getCollection();
-		$binding = new RepresentationSchema($collection);
+		$schema = new RepresentationSchema($collection);
 
 		$sourceResolver = new QueryProjectionSourceResolver($query);
 
-		$this->compileRootScalarFields($binding, $query, $collection, $sourceResolver);
-		$this->compileRelationSourcedFlatFields($binding, $query, $sourceResolver);
-		$this->compileRelationSelections($binding, $query);
+		$this->compileRootScalarFields($schema, $query, $collection, $sourceResolver);
+		$this->compileRelationSourcedFlatFields($schema, $query, $sourceResolver);
+		$this->compileRelationSelections($schema, $query);
 
-		return $binding;
+		return $schema;
 	}
 
 	public function compileResult(SelectQuery $query): ProjectionCompilation
 	{
-		$binding = $this->compileBinding($query);
-		$sources = $this->sourceBuilder->build($binding);
+		$schema = $this->compileSchema($query);
+		$sources = $this->sourceBuilder->build($schema);
 		$identityColumns = $this->identityPlanner->plan($query, $sources);
 
-		return new ProjectionCompilation($binding, $sources, $identityColumns);
+		return new ProjectionCompilation($schema, $sources, $identityColumns);
 	}
 
 	private function compileRootScalarFields(
-		RepresentationSchema $binding,
+		RepresentationSchema $schema,
 		SelectQuery $query,
 		CollectionInterface $collection,
 		QueryProjectionSourceResolver $sourceResolver,
 	): void {
 		$shapes = $query->getSelections()->getExplicit() === []
-			? $this->bindingAssembler->defaultFieldShapes($collection, $query)
+			? $this->schemaAssembler->defaultFieldShapes($collection, $query)
 			: $this->selectionNormalizer->normalizeSelections($this->getRootExplicitScalarSelections($query));
 
-		$this->bindingAssembler->assembleInto($binding, $shapes, $sourceResolver);
+		$this->schemaAssembler->assembleInto($schema, $shapes, $sourceResolver);
 
-		$this->assemblePrimaryKeyFields($binding, $collection, $query, $sourceResolver);
+		$this->assemblePrimaryKeyFields($schema, $collection, $query, $sourceResolver);
 	}
 
 	/**
@@ -96,22 +96,22 @@ final class ProjectionCompiler
 	 * selection (including an aliased one) is not shadowed by a read-only copy.
 	 */
 	private function assemblePrimaryKeyFields(
-		RepresentationSchema $binding,
+		RepresentationSchema $schema,
 		CollectionInterface $collection,
 		object $source,
 		ProjectionSourceResolverInterface $sourceResolver,
 	): void {
 		$shapes = [];
 
-		foreach ($this->bindingAssembler->primaryKeyFieldShapes($collection, $source) as $shape) {
-			if ($binding->hasFieldForSource([], $shape->getFieldName())) {
+		foreach ($this->schemaAssembler->primaryKeyFieldShapes($collection, $source) as $shape) {
+			if ($schema->hasFieldForSource([], $shape->getFieldName())) {
 				continue;
 			}
 
 			$shapes[] = $shape;
 		}
 
-		$this->bindingAssembler->assembleInto($binding, $shapes, $sourceResolver);
+		$this->schemaAssembler->assembleInto($schema, $shapes, $sourceResolver);
 	}
 
 	/**
@@ -150,7 +150,7 @@ final class ProjectionCompiler
 	}
 
 	private function compileRelationSourcedFlatFields(
-		RepresentationSchema $binding,
+		RepresentationSchema $schema,
 		SelectQuery $query,
 		QueryProjectionSourceResolver $sourceResolver,
 	): void {
@@ -159,8 +159,8 @@ final class ProjectionCompiler
 				continue;
 			}
 
-			$this->bindingAssembler->assembleInto(
-				$binding,
+			$this->schemaAssembler->assembleInto(
+				$schema,
 				$this->selectionNormalizer->normalizeSelections([$selection]),
 				$sourceResolver,
 			);
@@ -197,28 +197,28 @@ final class ProjectionCompiler
 			static fn (RelationSelection $left, RelationSelection $right): int => count($left->getPath()) <=> count($right->getPath()),
 		);
 
-		/** @var array<string, RepresentationSchema> $bindingsByPath */
-		$bindingsByPath = [];
+		/** @var array<string, RepresentationSchema> $schemasByPath */
+		$schemasByPath = [];
 
 		foreach ($relationSelections as $selection) {
 			$path = $selection->getPath();
 			$pathKey = json_encode($path, JSON_THROW_ON_ERROR);
 			$parentPathKey = $selection->getParentPathKey();
-			$parentBinding = $parentPathKey === null
+			$parentSchema = $parentPathKey === null
 				? $rootSchema
-				: $bindingsByPath[$parentPathKey];
+				: $schemasByPath[$parentPathKey];
 			$ownerCollection = $this->resolveOwnerCollection($query, $path);
 			$relationName = $selection->getName();
-			$relatedSchema = $this->compileRelationBinding($selection);
+			$relatedSchema = $this->compileRelationSchema($selection);
 
-			$parentBinding->addRelation(new RepresentationRelationSchema(
+			$parentSchema->addRelation(new RepresentationRelationSchema(
 				$relationName,
 				$ownerCollection,
 				$relationName,
 				$relatedSchema,
 			));
 
-			$bindingsByPath[$pathKey] = $relatedSchema;
+			$schemasByPath[$pathKey] = $relatedSchema;
 		}
 	}
 
@@ -242,21 +242,21 @@ final class ProjectionCompiler
 		return $collection;
 	}
 
-	private function compileRelationBinding(RelationSelection $selection): RepresentationSchema
+	private function compileRelationSchema(RelationSelection $selection): RepresentationSchema
 	{
 		$targetCollection = $selection->getRelationRef()->getDefinition()->getCollection();
-		$binding = new RepresentationSchema($targetCollection);
+		$schema = new RepresentationSchema($targetCollection);
 		$sourceResolver = new RootSourceResolver($targetCollection);
 		$explicitFields = $selection->getFields();
 
 		$shapes = $explicitFields !== null
 			? $this->explicitFieldShapes($explicitFields, $targetCollection)
-			: $this->bindingAssembler->defaultFieldShapes($targetCollection, $targetCollection);
+			: $this->schemaAssembler->defaultFieldShapes($targetCollection, $targetCollection);
 
-		$this->bindingAssembler->assembleInto($binding, $shapes, $sourceResolver);
-		$this->assemblePrimaryKeyFields($binding, $targetCollection, $targetCollection, $sourceResolver);
+		$this->schemaAssembler->assembleInto($schema, $shapes, $sourceResolver);
+		$this->assemblePrimaryKeyFields($schema, $targetCollection, $targetCollection, $sourceResolver);
 
-		return $binding;
+		return $schema;
 	}
 
 	/**

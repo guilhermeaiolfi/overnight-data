@@ -7,8 +7,8 @@ namespace Tests\ON\Data\ORM\Sync;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\Sync\AdoptionRecordResolver;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -83,7 +83,7 @@ final class AdoptionRecordResolverTest extends TestCase
 	public function testRejectsRootBindingWithNoTargetCollection(): void
 	{
 		$this->expectException(StateException::class);
-		$this->expectExceptionMessage('untracked root sync needs a binding targeting one collection');
+		$this->expectExceptionMessage('untracked root sync needs a schema targeting one collection');
 
 		$this->resolver()->resolve(new stdClass(), new RepresentationSchema($this->users()), new RecordStateStore(), true);
 	}
@@ -91,7 +91,7 @@ final class AdoptionRecordResolverTest extends TestCase
 	public function testRejectsRelatedBindingWithNoTargetCollection(): void
 	{
 		$this->expectException(StateException::class);
-		$this->expectExceptionMessage('related binding does not target a collection');
+		$this->expectExceptionMessage('related schema does not target a collection');
 
 		$this->resolver()->resolve(new stdClass(), new RepresentationSchema($this->users()), new RecordStateStore(), false);
 	}
@@ -172,7 +172,7 @@ final class AdoptionRecordResolverTest extends TestCase
 		$binding->addField(new RepresentationFieldSchema('title', $this->posts(), 'title'));
 
 		$this->expectException(StateException::class);
-		$this->expectExceptionMessage("related binding path 'title' targets collection 'posts' after 'users'");
+		$this->expectExceptionMessage("related schema path 'title' targets collection 'posts' after 'users'");
 
 		$this->resolver()->resolve(new stdClass(), $binding, new RecordStateStore(), false);
 	}

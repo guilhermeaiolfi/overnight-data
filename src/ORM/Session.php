@@ -17,8 +17,8 @@ use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\Sync\AdoptionRecordResolver;
@@ -129,11 +129,11 @@ final class Session
 		CollectionInterface $collection,
 		Key|array $key,
 		?object $representation = null,
-		?RepresentationSchema $binding = null,
+		?RepresentationSchema $schema = null,
 	): object {
 		$key = $collection->getKey($key);
 		$representation ??= $this->keyOnlyRepresentation($key);
-		$binding ??= $this->keyOnlyBinding($collection);
+		$schema ??= $this->keyOnlySchema($collection);
 
 		$existingState = $this->getRepresentations()->get($representation);
 		if ($existingState instanceof RepresentationState) {
@@ -155,20 +155,20 @@ final class Session
 				));
 			}
 		} else {
-			$record = RecordState::clean($key, $this->recordResolver->initialValuesForKey($representation, $binding, $key));
+			$record = RecordState::clean($key, $this->recordResolver->initialValuesForKey($representation, $schema, $key));
 		}
 
-		$this->adopter->adopt($representation, $binding, $record);
+		$this->adopter->adopt($representation, $schema, $record);
 
 		return $representation;
 	}
 
 	public function adopt(
 		object $representation,
-		RepresentationSchema $binding,
+		RepresentationSchema $schema,
 		RecordState $record,
 	): RepresentationState {
-		return $this->adopter->adopt($representation, $binding, $record);
+		return $this->adopter->adopt($representation, $schema, $record);
 	}
 
 	public function removeRecord(RecordState $record): void
@@ -207,10 +207,10 @@ final class Session
 		return $relation;
 	}
 
-	public function sync(?object $representation = null, ?RepresentationSchema $binding = null): SyncResult
+	public function sync(?object $representation = null, ?RepresentationSchema $schema = null): SyncResult
 	{
 		if ($representation !== null) {
-			if (! $this->getRepresentations()->has($representation) && ! $binding instanceof RepresentationSchema) {
+			if (! $this->getRepresentations()->has($representation) && ! $schema instanceof RepresentationSchema) {
 				throw new SyncException('Cannot synchronize an untracked representation object without a root RepresentationSchema.');
 			}
 
@@ -218,7 +218,7 @@ final class Session
 				$representation,
 				$this->context->getRepresentations(),
 				$this->context->getRecords(),
-				$binding
+				$schema
 			);
 
 			return $this->syncer->sync($this->context, $representation);
@@ -246,11 +246,11 @@ final class Session
 		}
 
 		if ($records === []) {
-			throw new StateException('Cannot remove representation because its binding does not resolve to a concrete record state.');
+			throw new StateException('Cannot remove representation because its schema does not resolve to a concrete record state.');
 		}
 
 		if (count($records) > 1) {
-			throw new StateException('Cannot remove representation because its binding resolves to multiple record states.');
+			throw new StateException('Cannot remove representation because its schema resolves to multiple record states.');
 		}
 
 		return array_values($records)[0];
@@ -266,13 +266,13 @@ final class Session
 		return $representation;
 	}
 
-	private function keyOnlyBinding(CollectionInterface $collection): RepresentationSchema
+	private function keyOnlySchema(CollectionInterface $collection): RepresentationSchema
 	{
-		$binding = new RepresentationSchema($collection);
+		$schema = new RepresentationSchema($collection);
 		foreach ($collection->getPrimaryKey() as $fieldName) {
-			$binding->addField(new RepresentationFieldSchema($fieldName, $collection, $fieldName));
+			$schema->addField(new RepresentationFieldSchema($fieldName, $collection, $fieldName));
 		}
 
-		return $binding;
+		return $schema;
 	}
 }

@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Compiler\SelectQuery;
 
 /**
- * Resolves every projection source to one fixed collection rooted at the binding
+ * Resolves every projection source to one fixed collection rooted at the schema
  * itself (empty source path).
  *
- * Exists for nested relation bindings: their scalar fields live at the related
- * binding root, so they must resolve to the target collection with an empty
+ * Exists for nested relation schemas: their scalar fields live at the related
+ * schema root, so they must resolve to the target collection with an empty
  * source path rather than the outer query's relation path. This lets nested
  * relation fields flow through the same ProjectionFieldShape + assembler path as
  * root fields.

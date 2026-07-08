@@ -48,16 +48,16 @@ final class RepresentationTracker
 		$recordsByPath = $this->recordsByPathFromShapes($propertyShapes);
 
 		if ($state instanceof RepresentationState) {
-			$binding = $this->schemaMerger->mergeManualOverlay($state->getSchema(), $manualSchema);
+			$schema = $this->schemaMerger->mergeManualOverlay($state->getSchema(), $manualSchema);
 			$fieldItems = $state->getFieldItems();
 			$relationItems = $state->getRelationItems();
 		} else {
-			$binding = $manualSchema;
+			$schema = $manualSchema;
 			$fieldItems = [];
 			$relationItems = [];
 		}
 
-		foreach ($binding->getFields() as $fieldSchema) {
+		foreach ($schema->getFields() as $fieldSchema) {
 			if ($this->hasFieldItem($fieldItems, $fieldSchema->getPath())) {
 				continue;
 			}
@@ -70,7 +70,7 @@ final class RepresentationTracker
 			$this->representations->remove($representation);
 		}
 
-		$this->representations->add($representation, new RepresentationState($binding, $fieldItems, $relationItems));
+		$this->representations->add($representation, new RepresentationState($schema, $fieldItems, $relationItems));
 	}
 
 	public function trackFlattenedAdapter(RecordState $record, RepresentationSchema $relatedSchema, object $ownerObject): object
@@ -106,16 +106,16 @@ final class RepresentationTracker
 	{
 		// Private adapter for object-based relation state APIs; it is not a second identity system.
 		$object = new stdClass();
-		$binding = new RepresentationSchema($record->getCollection());
+		$schema = new RepresentationSchema($record->getCollection());
 		foreach ($record->getCollection()->getPrimaryKey() as $fieldName) {
 			if ($record->hasValue($fieldName)) {
 				$object->{$fieldName} = $record->getValue($fieldName);
 			}
 
-			$binding->addField(new RepresentationFieldSchema($fieldName, $record->getCollection(), $fieldName, writable: false));
+			$schema->addField(new RepresentationFieldSchema($fieldName, $record->getCollection(), $fieldName, writable: false));
 		}
 
-		$this->representations->add($object, $this->stateFactory->fromRootRecordFields($binding, $record));
+		$this->representations->add($object, $this->stateFactory->fromRootRecordFields($schema, $record));
 
 		return $object;
 	}
@@ -171,7 +171,7 @@ final class RepresentationTracker
 		array $recordsByPath,
 	): RecordState {
 		if ($state instanceof RepresentationState) {
-			$resolved = $this->resolveRecordForFieldBinding($state, $fieldSchema);
+			$resolved = $this->resolveRecordForFieldSchema($state, $fieldSchema);
 			if ($resolved instanceof RecordState) {
 				return $resolved;
 			}
@@ -181,7 +181,7 @@ final class RepresentationTracker
 		if ($explicit instanceof RecordState) {
 			if ($explicit->getCollection()->getName() !== $fieldSchema->getCollectionName()) {
 				throw new StateException(sprintf(
-					"Manual projection field '%s' resolved to a record of collection '%s' but the binding targets collection '%s'.",
+					"Manual projection field '%s' resolved to a record of collection '%s' but the schema targets collection '%s'.",
 					$fieldSchema->getPath(),
 					$explicit->getCollection()->getName(),
 					$fieldSchema->getCollectionName(),
@@ -198,7 +198,7 @@ final class RepresentationTracker
 		));
 	}
 
-	private function resolveRecordForFieldBinding(
+	private function resolveRecordForFieldSchema(
 		RepresentationState $state,
 		RepresentationFieldSchema $fieldSchema,
 	): ?RecordState {

@@ -8,8 +8,8 @@ namespace ON\Data\ORM\Compiler;
  * Intermediate compile artifact: public representation path, backing field name,
  * and the source object used to resolve collection/record identity.
  *
- * Exists as the common input to ProjectionBindingAssembler so query selections
- * and manual property declarations converge before binding assembly.
+ * Exists as the common input to ProjectionSchemaAssembler so query selections
+ * and manual property declarations converge before schema assembly.
  */
 final class ProjectionFieldShape
 {

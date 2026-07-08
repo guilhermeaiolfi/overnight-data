@@ -9,7 +9,7 @@ namespace ON\Data\ORM\Compiler;
  * source path.
  *
  * Exists as the return type of ProjectionSourceResolverInterface so the assembler
- * can create structural field bindings without knowing whether the source came
+ * can create structural field schemas without knowing whether the source came
  * from a query or a manual projection target.
  */
 use ON\Data\Definition\Collection\CollectionInterface;
@@ -20,7 +20,7 @@ final class ResolvedProjectionSource
 	private array $sourcePath;
 
 	/**
-	 * @param list<string> $sourcePath relation path from the binding root to the
+	 * @param list<string> $sourcePath relation path from the schema root to the
 	 *                                  record that owns the resolved field
 	 */
 	public function __construct(

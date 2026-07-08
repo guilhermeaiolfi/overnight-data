@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Compiler;
 
 /**
- * Shared structural binding creation for projection compilation: turns normalized
+ * Shared structural schema creation for projection compilation: turns normalized
  * ProjectionFieldShape values into RepresentationFieldSchema entries, and offers
  * default/primary-key shape factories so root, default, and PK fields flow
  * through the same shape path as explicit selections.
@@ -15,10 +15,10 @@ namespace ON\Data\ORM\Compiler;
  * / skip-when-missing flags.
  */
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
+use ON\Data\ORM\State\RepresentationSchema;
 
-final class ProjectionBindingAssembler
+final class ProjectionSchemaAssembler
 {
 	/**
 	 * @param list<ProjectionFieldShape> $fieldShapes
@@ -29,28 +29,28 @@ final class ProjectionBindingAssembler
 		CollectionInterface $collection,
 		bool $skipWhenMissing = false,
 	): RepresentationSchema {
-		$binding = new RepresentationSchema($collection);
-		$this->assembleInto($binding, $fieldShapes, $resolver, $skipWhenMissing);
+		$schema = new RepresentationSchema($collection);
+		$this->assembleInto($schema, $fieldShapes, $resolver, $skipWhenMissing);
 
-		return $binding;
+		return $schema;
 	}
 
 	/**
 	 * @param list<ProjectionFieldShape> $fieldShapes
 	 */
 	public function assembleInto(
-		RepresentationSchema $binding,
+		RepresentationSchema $schema,
 		array $fieldShapes,
 		ProjectionSourceResolverInterface $resolver,
 		bool $skipWhenMissing = false,
 	): void {
 		foreach ($fieldShapes as $shape) {
-			if ($binding->hasField($shape->getPublicPath())) {
+			if ($schema->hasField($shape->getPublicPath())) {
 				continue;
 			}
 
 			$resolved = $resolver->resolve($shape->getSource());
-			$binding->addField(new RepresentationFieldSchema(
+			$schema->addField(new RepresentationFieldSchema(
 				$shape->getPublicPath(),
 				$resolved->getCollection(),
 				$shape->getFieldName(),
@@ -64,7 +64,7 @@ final class ProjectionBindingAssembler
 	/**
 	 * Builds one writable scalar field shape per collection field, all rooted at
 	 * the given source. Callers pair this with a resolver that maps $source to the
-	 * collection so default field bindings flow through the same shape path as
+	 * collection so default field schemas flow through the same shape path as
 	 * explicit selections.
 	 *
 	 * @return list<ProjectionFieldShape>

@@ -27,18 +27,18 @@ final class AdoptionRecordResolver
 
 	public function resolve(
 		object $representation,
-		RepresentationSchema $binding,
+		RepresentationSchema $schema,
 		RecordStateStore $records,
 		bool $isRoot,
 	): RecordState {
-		$collection = $this->collectionFor($binding, $isRoot);
-		$values = $this->initialValues($representation, $binding, $collection);
-		$keyValues = $this->completeKeyValues($representation, $binding, $collection);
+		$collection = $this->collectionFor($schema, $isRoot);
+		$values = $this->initialValues($representation, $schema, $collection);
+		$keyValues = $this->completeKeyValues($representation, $schema, $collection);
 
 		if ($keyValues === null) {
 			if ($this->hasExistingIntent($representation)) {
 				throw new StateException(sprintf(
-					"Cannot adopt existing representation for collection '%s' because its primary key cannot be read through the binding.",
+					"Cannot adopt existing representation for collection '%s' because its primary key cannot be read through the schema.",
 					$collection->getName()
 				));
 			}
@@ -72,11 +72,11 @@ final class AdoptionRecordResolver
 	 */
 	public function initialValuesForKey(
 		object $representation,
-		RepresentationSchema $binding,
+		RepresentationSchema $schema,
 		Key $key,
 	): array {
 		$values = $key->getValues();
-		foreach ($binding->getFields() as $fieldSchema) {
+		foreach ($schema->getFields() as $fieldSchema) {
 			$fieldName = $fieldSchema->getFieldName();
 
 			try {
@@ -88,23 +88,23 @@ final class AdoptionRecordResolver
 		return $values;
 	}
 
-	private function collectionFor(RepresentationSchema $binding, bool $isRoot): CollectionInterface
+	private function collectionFor(RepresentationSchema $schema, bool $isRoot): CollectionInterface
 	{
 		$collection = null;
-		foreach ($binding->getFields() as $fieldSchema) {
+		foreach ($schema->getFields() as $fieldSchema) {
 			$collection = $this->mergeCollection($collection, $fieldSchema->getCollection(), $fieldSchema->getPath(), $isRoot);
 		}
 
-		foreach ($binding->getRelations() as $relationSchema) {
+		foreach ($schema->getRelations() as $relationSchema) {
 			$collection = $this->mergeCollection($collection, $relationSchema->getOwnerCollection(), $relationSchema->getPath(), $isRoot);
 		}
 
 		if (! $collection instanceof CollectionInterface) {
 			if ($isRoot) {
-				throw new StateException('Cannot synchronize untracked root representation because untracked root sync needs a binding targeting one collection.');
+				throw new StateException('Cannot synchronize untracked root representation because untracked root sync needs a schema targeting one collection.');
 			}
 
-			throw new StateException('Cannot adopt representation graph because a related binding does not target a collection.');
+			throw new StateException('Cannot adopt representation graph because a related schema does not target a collection.');
 		}
 
 		return $collection;
@@ -115,11 +115,11 @@ final class AdoptionRecordResolver
 	 */
 	private function completeKeyValues(
 		object $representation,
-		RepresentationSchema $binding,
+		RepresentationSchema $schema,
 		CollectionInterface $collection,
 	): ?array {
 		$pathsByField = [];
-		foreach ($binding->getFields() as $fieldSchema) {
+		foreach ($schema->getFields() as $fieldSchema) {
 			if ($fieldSchema->getCollectionName() === $collection->getName()) {
 				$pathsByField[$fieldSchema->getFieldName()] = $fieldSchema->getPath();
 			}
@@ -157,7 +157,7 @@ final class AdoptionRecordResolver
 		if ($current->getName() !== $next->getName()) {
 			if ($isRoot) {
 				throw new StateException(sprintf(
-					"Cannot synchronize untracked root representation because untracked root sync needs a binding targeting one collection; path '%s' targets collection '%s' after '%s'.",
+					"Cannot synchronize untracked root representation because untracked root sync needs a schema targeting one collection; path '%s' targets collection '%s' after '%s'.",
 					$path,
 					$next->getName(),
 					$current->getName()
@@ -165,7 +165,7 @@ final class AdoptionRecordResolver
 			}
 
 			throw new StateException(sprintf(
-				"Cannot adopt representation graph because related binding path '%s' targets collection '%s' after '%s'.",
+				"Cannot adopt representation graph because related schema path '%s' targets collection '%s' after '%s'.",
 				$path,
 				$next->getName(),
 				$current->getName()
@@ -178,11 +178,11 @@ final class AdoptionRecordResolver
 	/**
 	 * @return array<string, mixed>
 	 */
-	private function initialValues(object $representation, RepresentationSchema $binding, CollectionInterface $collection): array
+	private function initialValues(object $representation, RepresentationSchema $schema, CollectionInterface $collection): array
 	{
 		$values = [];
 		$primaryKey = array_flip($collection->getPrimaryKey());
-		foreach ($binding->getFields() as $fieldSchema) {
+		foreach ($schema->getFields() as $fieldSchema) {
 			$fieldName = $fieldSchema->getFieldName();
 
 			try {

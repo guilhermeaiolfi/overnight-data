@@ -17,10 +17,10 @@ use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationRelationSchema;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\Sync\RepresentationSyncer;
 use PHPUnit\Framework\TestCase;
@@ -136,7 +136,7 @@ final class SessionTest extends TestCase
 		self::assertSame(['id' => 123, 'title' => 'Existing'], $record->getValues());
 	}
 
-	public function testFailedIdentifyWithWrongBindingDoesNotLeavePartialSessionState(): void
+	public function testFailedIdentifyWithWrongSchemaDoesNotLeavePartialSessionState(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$posts = $this->posts();
@@ -145,7 +145,7 @@ final class SessionTest extends TestCase
 
 		try {
 			$session->identify($posts, $key, $post, $this->templateBinding());
-			self::fail('Expected identify to reject a binding targeting the wrong collection.');
+			self::fail('Expected identify to reject a schema targeting the wrong collection.');
 		} catch (StateException) {
 		}
 
@@ -227,7 +227,7 @@ final class SessionTest extends TestCase
 		self::assertSame($record->getRevision(), $fieldItems[0]->getBaselineRevision());
 	}
 
-	public function testFailedAdoptWithWrongBindingDoesNotLeavePartialSessionState(): void
+	public function testFailedAdoptWithWrongSchemaDoesNotLeavePartialSessionState(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$posts = $this->posts();
@@ -237,7 +237,7 @@ final class SessionTest extends TestCase
 
 		try {
 			$session->adopt($post, $this->templateBinding(), $record);
-			self::fail('Expected adopt to reject a binding targeting the wrong collection.');
+			self::fail('Expected adopt to reject a schema targeting the wrong collection.');
 		} catch (StateException) {
 		}
 
@@ -317,7 +317,7 @@ final class SessionTest extends TestCase
 		self::assertTrue($second->isDirty());
 	}
 
-	public function testSyncUntrackedRootWithBindingOnlySynchronizesAdoptedRootGraph(): void
+	public function testSyncUntrackedRootWithSchemaOnlySynchronizesAdoptedRootGraph(): void
 	{
 		$users = $this->users();
 		$session = new Session(new RecordingCommandExecutor());
@@ -343,7 +343,7 @@ final class SessionTest extends TestCase
 		self::assertTrue($other->isDirty());
 	}
 
-	public function testSyncUntrackedRootWithBindingTracksRootAndSyncsScalarValues(): void
+	public function testSyncUntrackedRootWithSchemaTracksRootAndSyncsScalarValues(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$representation = $this->representation(['name' => 'New User']);
@@ -385,7 +385,7 @@ final class SessionTest extends TestCase
 		self::assertTrue($record->isNew());
 	}
 
-	public function testSyncUntrackedRootWithBindingTracksManyRelatedPlainObjects(): void
+	public function testSyncUntrackedRootWithSchemaTracksManyRelatedPlainObjects(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session(new RecordingCommandExecutor());
@@ -403,7 +403,7 @@ final class SessionTest extends TestCase
 		self::assertCount(1, $result->getRelationChanges());
 	}
 
-	public function testSyncUntrackedRootWithBindingTracksManyRelatedObjectWithCompleteKeyAsNew(): void
+	public function testSyncUntrackedRootWithSchemaTracksManyRelatedObjectWithCompleteKeyAsNew(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session(new RecordingCommandExecutor());
@@ -420,7 +420,7 @@ final class SessionTest extends TestCase
 		self::assertSame(5, $post->getValue('id'));
 	}
 
-	public function testSyncUntrackedRootWithBindingTracksManyRelatedObjectWithoutCompleteKeyAsNew(): void
+	public function testSyncUntrackedRootWithSchemaTracksManyRelatedObjectWithoutCompleteKeyAsNew(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session(new RecordingCommandExecutor());
@@ -461,7 +461,7 @@ final class SessionTest extends TestCase
 		self::assertCount(1, $result->getRelationChanges());
 	}
 
-	public function testSyncUntrackedRootWithBindingTracksOneRelatedPlainTarget(): void
+	public function testSyncUntrackedRootWithSchemaTracksOneRelatedPlainTarget(): void
 	{
 		[$users, $profiles] = $this->usersWithDefaultHasOneProfile();
 		$session = new Session(new RecordingCommandExecutor());
@@ -489,7 +489,7 @@ final class SessionTest extends TestCase
 		$binding->addField(new RepresentationFieldSchema('title', $posts, 'title'));
 
 		$this->expectException(StateException::class);
-		$this->expectExceptionMessage('untracked root sync needs a binding targeting one collection');
+		$this->expectExceptionMessage('untracked root sync needs a schema targeting one collection');
 
 		$session->sync($representation, $binding);
 	}
@@ -509,7 +509,7 @@ final class SessionTest extends TestCase
 		));
 
 		$this->expectException(StateException::class);
-		$this->expectExceptionMessage('untracked root sync needs a binding targeting one collection');
+		$this->expectExceptionMessage('untracked root sync needs a schema targeting one collection');
 
 		$session->sync($representation, $binding);
 	}
@@ -519,7 +519,7 @@ final class SessionTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 
 		$this->expectException(StateException::class);
-		$this->expectExceptionMessage('untracked root sync needs a binding targeting one collection');
+		$this->expectExceptionMessage('untracked root sync needs a schema targeting one collection');
 
 		$session->sync(new stdClass(), new RepresentationSchema($this->users()));
 	}
@@ -549,7 +549,7 @@ final class SessionTest extends TestCase
 		self::assertSame('Post Updated', $postRecord->getValue('title'));
 	}
 
-	public function testSyncWithBindingDoesNotFlush(): void
+	public function testSyncWithSchemaDoesNotFlush(): void
 	{
 		$executor = new RecordingCommandExecutor();
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();

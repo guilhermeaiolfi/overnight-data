@@ -15,8 +15,8 @@ use ON\Data\ORM\Compiler\ManualProjection\RepresentationTracker;
 use ON\Data\ORM\Compiler\ManualProjection\RootTarget;
 use ON\Data\ORM\Compiler\ManualProjection\SourceResolver;
 use ON\Data\ORM\Compiler\ManualProjection\Target;
-use ON\Data\ORM\Compiler\ProjectionBindingAssembler;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
+use ON\Data\ORM\Compiler\ProjectionSchemaAssembler;
 use ON\Data\ORM\Compiler\ResolvedProjectionSource;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionSelectionNormalizer;
 use ON\Data\ORM\Compiler\SelectQuery\QueryProjectionSourceResolver;
@@ -25,9 +25,9 @@ use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\Query\Expression\ValueExpressionInterface;
@@ -77,7 +77,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertStringNotContainsString('relationSchemaFromPath', $contents);
 		self::assertStringNotContainsString('mergeBindings', $contents);
 		self::assertStringNotContainsString('mirrorRelationTarget', $contents);
-		self::assertStringNotContainsString('bindingAssembler->assemble', $contents);
+		self::assertStringNotContainsString('schemaAssembler->assemble', $contents);
 		self::assertStringNotContainsString('attachPathTarget', $contents);
 		self::assertStringNotContainsString('attachRelationTarget', $contents);
 		self::assertStringNotContainsString('recordForExisting', $contents);
@@ -206,7 +206,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 	}
 
 	#[RequiresPhpExtension('pdo_sqlite')]
-	public function testObjectShapedFromPathAppliesRelatedBindingBranchDirectly(): void
+	public function testObjectShapedFromPathAppliesRelatedSchemaBranchDirectly(): void
 	{
 		[$session, $user] = $this->trackedUserWithPostsRelation();
 		$userSchema = $session->getRepresentations()->get($user)->getSchema();
@@ -285,11 +285,11 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		$registry = $this->registry();
 		$users = $registry->getCollection('users');
 		$normalizer = new ProjectionSelectionNormalizer();
-		$assembler = new ProjectionBindingAssembler();
+		$assembler = new ProjectionSchemaAssembler();
 
 		$query = new SelectQuery($users);
 		$query->select($query->name->as('display_name'));
-		$queryBinding = $assembler->assemble(
+		$querySchema = $assembler->assemble(
 			$normalizer->normalizeSelections($query->getSelections()->getExplicit()),
 			new QueryProjectionSourceResolver($query),
 			$users,
@@ -301,14 +301,14 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			[new ProjectionFieldShape('display_name', $rootTarget, 'name')],
 		);
 
-		self::assertSame($queryBinding->getPaths(), $manualSchema->getPaths());
-		self::assertSame('display_name', $queryBinding->getPaths()[0]);
-		self::assertSame('name', $queryBinding->getField('display_name')->getFieldName());
+		self::assertSame($querySchema->getPaths(), $manualSchema->getPaths());
+		self::assertSame('display_name', $querySchema->getPaths()[0]);
+		self::assertSame('name', $querySchema->getField('display_name')->getFieldName());
 		self::assertSame('name', $manualSchema->getField('display_name')->getFieldName());
 		self::assertSame('users', $manualSchema->getField('display_name')->getCollectionName());
 	}
 
-	public function testSourceResolversDoNotInspectAliasesOrBuildFieldBindings(): void
+	public function testSourceResolversDoNotInspectAliasesOrBuildFieldSchemas(): void
 	{
 		foreach ([
 			dirname(__DIR__, 3) . '/src/ORM/Compiler/SelectQuery/QueryProjectionSourceResolver.php',
@@ -322,7 +322,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		}
 	}
 
-	public function testProjectionFieldBindingsAreCreatedByBindingAssembler(): void
+	public function testProjectionFieldSchemasAreCreatedBySchemaAssembler(): void
 	{
 		$root = dirname(__DIR__, 3);
 
@@ -336,7 +336,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			self::assertStringNotContainsString('new RepresentationFieldSchema', (string) file_get_contents($path), $path);
 		}
 
-		$assembler = (string) file_get_contents($root . '/src/ORM/Compiler/ProjectionBindingAssembler.php');
+		$assembler = (string) file_get_contents($root . '/src/ORM/Compiler/ProjectionSchemaAssembler.php');
 		self::assertStringContainsString('new RepresentationFieldSchema', $assembler);
 	}
 
@@ -508,7 +508,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 	}
 
 	#[RequiresPhpExtension('pdo_sqlite')]
-	public function testFromPathResolvesTrackedBindingWithoutSelectQuery(): void
+	public function testFromPathResolvesTrackedSchemaWithoutSelectQuery(): void
 	{
 		[$session, $user] = $this->trackedUserWithPostsRelation();
 		$pathResolver = new PathResolver($session->getRepresentations());

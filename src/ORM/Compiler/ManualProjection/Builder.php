@@ -8,7 +8,7 @@ namespace ON\Data\ORM\Compiler\ManualProjection;
  * User-facing fluent API for manual mutable projections via Session::projection().
  *
  * Exists to orchestrate target creation (from/fromPath/create/existing/tracked),
- * property declaration collection, representation tracking, and binding
+ * property declaration collection, representation tracking, and schema
  * compilation while delegating target lifecycle elsewhere.
  */
 use InvalidArgumentException;

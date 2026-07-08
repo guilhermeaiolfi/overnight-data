@@ -12,9 +12,9 @@ use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationRelationSchema;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\Sync\ExistingIntent;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
@@ -113,7 +113,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
 		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
-		$post = $session->identify($posts, ['id' => 5], binding: $this->postKeyOnlyBindingFor($posts));
+		$post = $session->identify($posts, ['id' => 5], schema: $this->postKeyOnlyBindingFor($posts));
 		$ownerRepresentation = $this->representation(['id' => 10, 'name' => 'Owner', 'posts' => [$post]]);
 		$session->adopt($ownerRepresentation, $this->ownerBindingWithPostsKeyOnlyChild($users, $posts), $owner);
 
@@ -265,7 +265,8 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$postBinding->addField(new RepresentationFieldSchema('title', $posts, 'title'));
 		$binding->addRelation(new RepresentationRelationSchema(
 			'posts',
-			$users, 'posts',
+			$users,
+			'posts',
 			$postBinding,
 			false
 		));
@@ -280,7 +281,8 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$binding->addField(new RepresentationFieldSchema('name', $users, 'name'));
 		$binding->addRelation(new RepresentationRelationSchema(
 			'posts',
-			$users, 'posts',
+			$users,
+			'posts',
 			$this->postBindingWithIdFor($posts),
 			false
 		));
@@ -313,7 +315,8 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$binding->addField(new RepresentationFieldSchema('name', $users, 'name'));
 		$binding->addRelation(new RepresentationRelationSchema(
 			'posts',
-			$users, 'posts',
+			$users,
+			'posts',
 			$this->postKeyOnlyBindingFor($posts),
 			false
 		));

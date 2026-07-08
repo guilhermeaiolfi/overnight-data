@@ -6,14 +6,14 @@ namespace ON\Data\ORM\Compiler\ManualProjection;
 
 /**
  * Resolved fromPath() context: owner record, relation metadata, and the related
- * binding branch to reuse for new relation targets.
+ * schema branch to reuse for new relation targets.
  *
- * Exists as a small value object so Builder does not re-walk owner bindings
+ * Exists as a small value object so Builder does not re-walk owner schemas
  * when attaching path-based targets.
  */
+use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationSchema;
-use ON\Data\Definition\Relation\RelationCardinality;
 
 final class PathResolution
 {

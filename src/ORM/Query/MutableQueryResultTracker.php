@@ -77,17 +77,17 @@ final class MutableQueryResultTracker
 			return;
 		}
 
-		$binding = $compilation->getSchema();
-		$this->markLoadedRelatedObjectsExisting($session, $object, $binding);
-		$session->sync($object, $binding);
+		$schema = $compilation->getSchema();
+		$this->markLoadedRelatedObjectsExisting($session, $object, $schema);
+		$session->sync($object, $schema);
 	}
 
 	private function markLoadedRelatedObjectsExisting(
 		Session $session,
 		object $object,
-		RepresentationSchema $binding,
+		RepresentationSchema $schema,
 	): void {
-		foreach ($binding->getRelations() as $relation) {
+		foreach ($schema->getRelations() as $relation) {
 			if ($relation->isMany()) {
 				foreach ($this->reader->readItems($object, $relation, static fn (string $message) => new RuntimeException($message)) as $item) {
 					$session->existing($item);

@@ -21,11 +21,11 @@ final class ManualProjectionCompilerTest extends TestCase
 		$users = $registry->getCollection('users');
 		$root = new RootTarget(RecordState::new($users));
 
-		$binding = (new ProjectionCompiler())->compile([
+		$schema = (new ProjectionCompiler())->compile([
 			new ProjectionFieldShape('name', $root, 'name'),
 		]);
 
-		self::assertSame('users', $binding->getCollectionName());
+		self::assertSame('users', $schema->getCollectionName());
 	}
 
 	public function testManualFieldsAreSkipWhenMissing(): void
@@ -34,11 +34,11 @@ final class ManualProjectionCompilerTest extends TestCase
 		$users = $registry->getCollection('users');
 		$root = new RootTarget(RecordState::new($users));
 
-		$binding = (new ProjectionCompiler())->compile([
+		$schema = (new ProjectionCompiler())->compile([
 			new ProjectionFieldShape('name', $root, 'name'),
 		]);
 
-		self::assertTrue($binding->getField('name')->shouldSkipWhenMissing());
+		self::assertTrue($schema->getField('name')->shouldSkipWhenMissing());
 	}
 
 	public function testPreservesSourcePathForRelationSourcedManualFields(): void
@@ -48,17 +48,17 @@ final class ManualProjectionCompilerTest extends TestCase
 		$root = new RootTarget(RecordState::new($users));
 		$manager = $this->relationSource(RecordState::new($users), ['manager']);
 
-		$binding = (new ProjectionCompiler())->compile([
+		$schema = (new ProjectionCompiler())->compile([
 			new ProjectionFieldShape('name', $root, 'name'),
 			new ProjectionFieldShape('managerName', $manager, 'name'),
 		]);
 
-		self::assertSame([], $binding->getField('name')->getSourcePath());
-		self::assertSame('users', $binding->getField('name')->getCollectionName());
-		self::assertSame(['manager'], $binding->getField('managerName')->getSourcePath());
-		self::assertSame('users', $binding->getField('managerName')->getCollectionName());
-		self::assertSame('name', $binding->getField('managerName')->getFieldName());
-		self::assertTrue($binding->getField('managerName')->shouldSkipWhenMissing());
+		self::assertSame([], $schema->getField('name')->getSourcePath());
+		self::assertSame('users', $schema->getField('name')->getCollectionName());
+		self::assertSame(['manager'], $schema->getField('managerName')->getSourcePath());
+		self::assertSame('users', $schema->getField('managerName')->getCollectionName());
+		self::assertSame('name', $schema->getField('managerName')->getFieldName());
+		self::assertTrue($schema->getField('managerName')->shouldSkipWhenMissing());
 	}
 
 	public function testEmptyPropertyShapesUsesFallbackCollection(): void
@@ -66,10 +66,10 @@ final class ManualProjectionCompilerTest extends TestCase
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 
-		$binding = (new ProjectionCompiler())->compile([], $users);
+		$schema = (new ProjectionCompiler())->compile([], $users);
 
-		self::assertSame('users', $binding->getCollectionName());
-		self::assertSame([], $binding->getPaths());
+		self::assertSame('users', $schema->getCollectionName());
+		self::assertSame([], $schema->getPaths());
 	}
 
 	public function testEmptyPropertyShapesWithoutFallbackThrows(): void
@@ -81,7 +81,7 @@ final class ManualProjectionCompilerTest extends TestCase
 
 	private function relationSource(RecordState $record, array $relationPath): PropertySource
 	{
-		return new class($record, $relationPath) implements PropertySource {
+		return new class ($record, $relationPath) implements PropertySource {
 			/**
 			 * @param list<string> $relationPath
 			 */

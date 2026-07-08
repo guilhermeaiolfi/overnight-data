@@ -29,7 +29,7 @@ final class GraphAdopterTest extends TestCase
 		self::assertSame([], $result);
 	}
 
-	public function testUntrackedRootWithBindingIsAdopted(): void
+	public function testUntrackedRootWithSchemaIsAdopted(): void
 	{
 		$root = $this->representation(['name' => 'Root']);
 		$records = new RecordStateStore();
@@ -79,7 +79,7 @@ final class GraphAdopterTest extends TestCase
 	public function testUntrackedRootWithoutBindingThrows(): void
 	{
 		$this->expectException(StateException::class);
-		$this->expectExceptionMessage('root binding');
+		$this->expectExceptionMessage('root schema');
 
 		$this->adopter()->adopt(new stdClass(), new RepresentationStateStore(), new RecordStateStore());
 	}

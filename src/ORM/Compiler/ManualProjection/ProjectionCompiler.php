@@ -9,18 +9,18 @@ namespace ON\Data\ORM\Compiler\ManualProjection;
  * ProjectionFieldShape values using the manual SourceResolver.
  *
  * Exists as the thin manual counterpart to the query-side projection compiler; it
- * reuses ProjectionBindingAssembler and enables skip-when-missing for overlays.
+ * reuses ProjectionSchemaAssembler and enables skip-when-missing for overlays.
  */
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\ORM\Compiler\ProjectionBindingAssembler;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
+use ON\Data\ORM\Compiler\ProjectionSchemaAssembler;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RepresentationSchema;
 
 final class ProjectionCompiler
 {
 	public function __construct(
-		private ProjectionBindingAssembler $bindingAssembler = new ProjectionBindingAssembler(),
+		private ProjectionSchemaAssembler $schemaAssembler = new ProjectionSchemaAssembler(),
 		private SourceResolver $sourceResolver = new SourceResolver(),
 	) {
 	}
@@ -29,7 +29,7 @@ final class ProjectionCompiler
 	 * The root collection is derived from the first declared property source, so
 	 * source resolution errors (for example selecting a MANY relation without a
 	 * concrete item) surface here. When there are no declared properties the
-	 * fallback collection (the existing tracked binding root) is used instead.
+	 * fallback collection (the existing tracked schema root) is used instead.
 	 *
 	 * @param list<ProjectionFieldShape> $propertyShapes
 	 */
@@ -45,7 +45,7 @@ final class ProjectionCompiler
 
 		$rootCollection = $this->sourceResolver->resolve($propertyShapes[0]->getSource())->getCollection();
 
-		return $this->bindingAssembler->assemble(
+		return $this->schemaAssembler->assemble(
 			$propertyShapes,
 			$this->sourceResolver,
 			$rootCollection,

@@ -6,7 +6,7 @@ namespace ON\Data\ORM\Compiler\ManualProjection;
 
 /**
  * Resolves manual projection field-shape sources (PropertySource, RelationRef)
- * to collection and source path for binding assembly.
+ * to collection and source path for schema assembly.
  *
  * Exists as the manual ProjectionSourceResolverInterface implementation;
  * enforces that MANY relations and unresolved sources cannot be compiled alone.

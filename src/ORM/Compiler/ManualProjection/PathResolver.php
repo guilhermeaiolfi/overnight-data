@@ -5,17 +5,16 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Compiler\ManualProjection;
 
 /**
- * Resolves Builder::fromPath() against an already-tracked owner binding graph.
+ * Resolves Builder::fromPath() against an already-tracked owner schema graph.
  *
  * Exists to walk RepresentationRelationSchema branches on tracked owners and
- * return the related binding template used when creating relation targets.
+ * return the related schema used when creating relation targets.
  */
 use InvalidArgumentException;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationRelationSchema;
-use ON\Data\Definition\Relation\RelationCardinality;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 
@@ -48,14 +47,14 @@ final class PathResolver
 		);
 	}
 
-	private function relationSchemaFromPath(RepresentationSchema $binding, string $path): RepresentationRelationSchema
+	private function relationSchemaFromPath(RepresentationSchema $schema, string $path): RepresentationRelationSchema
 	{
 		$segments = array_values(array_filter(explode('.', $path), static fn (string $segment): bool => $segment !== ''));
 		if ($segments === []) {
 			throw new InvalidArgumentException('Builder::fromPath() requires a non-empty path.');
 		}
 
-		$current = $binding;
+		$current = $schema;
 		$relation = null;
 		$lastIndex = count($segments) - 1;
 		foreach ($segments as $index => $segment) {

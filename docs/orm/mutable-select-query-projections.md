@@ -38,8 +38,8 @@ Mutable export requirements:
 
 - `to(stdClass::class)` is required
 - an explicit `Session` is required
-- binding and provenance are compiled only for mutable export
-- one binding is compiled per fetch operation and reused across rows
+- schema and provenance are compiled only for mutable export
+- one schema is compiled per fetch operation and reused across rows
 - each object still gets its own `RepresentationState`
 
 ## Flattened ToOne update
@@ -91,7 +91,7 @@ The query/projection adopter must have enough hidden identity information to res
 
 An existing related object can come from another mutable query, then be added to a tracked relation.
 
-Assume `$user` was already loaded from a mutable query with a `posts` relation binding:
+Assume `$user` was already loaded from a mutable query with a `posts` relation schema:
 
 ```php
 $p = $database->query($posts);
@@ -120,7 +120,7 @@ The post's scalar field provenance comes from its own query projection. Adding i
 
 ## New relation item added to queried object
 
-A queried/tracked user can receive a new child object through its relation binding:
+A queried/tracked user can receive a new child object through its relation schema:
 
 ```php
 $u = $database->query($users);
@@ -147,12 +147,12 @@ Explanation:
 
 ```text
 The user is tracked.
-The posts relation binding gives the context for the new object.
+The posts relation schema gives the context for the new object.
 The new object is discovered by sync().
 After b45374f, discovered untracked related objects default to NEW even with an application-assigned primary key.
 ```
 
-Primary-key presence is data, not lifecycle intent. A newly attached plain object discovered through an explicit relation binding is adopted as `NEW`, even when it already contains a readable primary-key value. Duplicate application-assigned keys are planned as inserts and should fail at the database constraint level rather than being silently converted to updates.
+Primary-key presence is data, not lifecycle intent. A newly attached plain object discovered through an explicit relation schema is adopted as `NEW`, even when it already contains a readable primary-key value. Duplicate application-assigned keys are planned as inserts and should fail at the database constraint level rather than being silently converted to updates.
 
 ## Existing key-only relation item
 
@@ -249,7 +249,7 @@ $post = $p->create($u->posts);
 $p->properties($post->title->as('newPostTitle'))->end();
 ```
 
-A mutable query projection can update fields whose provenance the query declared. It can also admit new related objects through explicit relation bindings on a tracked root. Manual projections cover standalone flat scalars by requiring the developer to create, identify, or reuse the concrete related record item explicitly.
+A mutable query projection can update fields whose provenance the query declared. It can also admit new related objects through explicit relation schemas on a tracked root. Manual projections cover standalone flat scalars by requiring the developer to create, identify, or reuse the concrete related record item explicitly.
 
 ## Rules
 
@@ -258,7 +258,7 @@ Data came from mutable SelectQuery:
   query provenance + hidden identities can create field targets.
 
 New entity-shaped related object added to a tracked relation:
-  relation binding gives context; object defaults to NEW.
+  relation schema gives context; object defaults to NEW.
 
 Existing object came from mutable SelectQuery:
   already tracked; adding it to a relation creates relation intent.

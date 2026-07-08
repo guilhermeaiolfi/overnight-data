@@ -6,7 +6,7 @@ namespace Tests\ON\Data\ORM\Compiler;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Compiler\ProjectionBindingAssembler;
+use ON\Data\ORM\Compiler\ProjectionSchemaAssembler;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
 use ON\Data\ORM\Compiler\ProjectionSourceBuilder;
 use ON\Data\ORM\Compiler\ProjectionSourceResolverInterface;
@@ -14,7 +14,7 @@ use ON\Data\ORM\Compiler\ResolvedProjectionSource;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
-final class ProjectionBindingAssemblerTest extends TestCase
+final class ProjectionSchemaAssemblerTest extends TestCase
 {
 	public function testAssemblesFieldShapesWithResolvedSourceProperties(): void
 	{
@@ -26,8 +26,8 @@ final class ProjectionBindingAssemblerTest extends TestCase
 		$companySource = new stdClass();
 		$resolver = $this->resolver($rootSource, $users, $companySource, $companies, ['company']);
 
-		$assembler = new ProjectionBindingAssembler();
-		$binding = $assembler->assemble(
+		$assembler = new ProjectionSchemaAssembler();
+		$schema = $assembler->assemble(
 			[
 				new ProjectionFieldShape('name', $rootSource, 'name'),
 				new ProjectionFieldShape('companyName', $companySource, 'name'),
@@ -37,9 +37,9 @@ final class ProjectionBindingAssemblerTest extends TestCase
 			skipWhenMissing: true,
 		);
 
-		self::assertSame(['name', 'companyName'], $binding->getPaths());
+		self::assertSame(['name', 'companyName'], $schema->getPaths());
 
-		$name = $binding->getField('name');
+		$name = $schema->getField('name');
 		self::assertSame('name', $name->getPath());
 		self::assertSame([], $name->getSourcePath());
 		self::assertSame('users', $name->getCollectionName());
@@ -47,7 +47,7 @@ final class ProjectionBindingAssemblerTest extends TestCase
 		self::assertTrue($name->isWritable());
 		self::assertTrue($name->shouldSkipWhenMissing());
 
-		$companyName = $binding->getField('companyName');
+		$companyName = $schema->getField('companyName');
 		self::assertSame('companyName', $companyName->getPath());
 		self::assertSame(['company'], $companyName->getSourcePath());
 		self::assertSame('companies', $companyName->getCollectionName());
@@ -56,20 +56,20 @@ final class ProjectionBindingAssemblerTest extends TestCase
 		self::assertTrue($companyName->shouldSkipWhenMissing());
 	}
 
-	public function testAssembleIntoDefaultsToNonSkippingBindings(): void
+	public function testAssembleIntoDefaultsToNonSkippingSchemas(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 		$rootSource = new stdClass();
 		$resolver = $this->resolver($rootSource, $users, new stdClass(), $users, []);
 
-		$binding = (new ProjectionBindingAssembler())->assemble(
+		$schema = (new ProjectionSchemaAssembler())->assemble(
 			[new ProjectionFieldShape('name', $rootSource, 'name')],
 			$resolver,
 			$users,
 		);
 
-		self::assertFalse($binding->getField('name')->shouldSkipWhenMissing());
+		self::assertFalse($schema->getField('name')->shouldSkipWhenMissing());
 	}
 
 	public function testDefaultFieldShapesCoverEveryCollectionFieldAsWritableRootSource(): void
@@ -77,7 +77,7 @@ final class ProjectionBindingAssemblerTest extends TestCase
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 		$source = new stdClass();
-		$assembler = new ProjectionBindingAssembler();
+		$assembler = new ProjectionSchemaAssembler();
 
 		$shapes = $assembler->defaultFieldShapes($users, $source);
 
@@ -100,7 +100,7 @@ final class ProjectionBindingAssemblerTest extends TestCase
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 		$source = new stdClass();
-		$assembler = new ProjectionBindingAssembler();
+		$assembler = new ProjectionSchemaAssembler();
 
 		$shapes = $assembler->primaryKeyFieldShapes($users, $source);
 
@@ -117,20 +117,20 @@ final class ProjectionBindingAssemblerTest extends TestCase
 		$users = $registry->getCollection('users');
 		$source = new stdClass();
 		$resolver = $this->resolver($source, $users, new stdClass(), $users, []);
-		$assembler = new ProjectionBindingAssembler();
+		$assembler = new ProjectionSchemaAssembler();
 
-		$binding = $assembler->assemble(
+		$schema = $assembler->assemble(
 			[new ProjectionFieldShape('name', $source, 'name', writable: true)],
 			$resolver,
 			$users,
 		);
 		$assembler->assembleInto(
-			$binding,
+			$schema,
 			[new ProjectionFieldShape('name', $source, 'name', writable: false)],
 			$resolver,
 		);
 
-		self::assertTrue($binding->getField('name')->isWritable());
+		self::assertTrue($schema->getField('name')->isWritable());
 	}
 
 	public function testResolvedProjectionSourceIsStructuralOnly(): void
@@ -151,7 +151,7 @@ final class ProjectionBindingAssemblerTest extends TestCase
 
 		$rootSource = new stdClass();
 		$companySource = new stdClass();
-		$binding = (new ProjectionBindingAssembler())->assemble(
+		$schema = (new ProjectionSchemaAssembler())->assemble(
 			[
 				new ProjectionFieldShape('name', $rootSource, 'name'),
 				new ProjectionFieldShape('companyName', $companySource, 'name'),
@@ -161,7 +161,7 @@ final class ProjectionBindingAssemblerTest extends TestCase
 			$users,
 		);
 
-		$sources = (new ProjectionSourceBuilder())->build($binding);
+		$sources = (new ProjectionSourceBuilder())->build($schema);
 
 		self::assertCount(2, $sources);
 		self::assertSame([], $sources[0]->getPath());
