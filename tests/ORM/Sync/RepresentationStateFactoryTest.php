@@ -116,7 +116,7 @@ final class RepresentationStateFactoryTest extends TestCase
 		$schema->addRelation(new RepresentationRelationSchema('posts', $users, 'posts', new RepresentationSchema($posts)));
 
 		$this->expectException(StateException::class);
-		$this->expectExceptionMessage('binding contains relation bindings');
+		$this->expectExceptionMessage('schema contains relation schemas');
 
 		(new RepresentationStateFactory())->fromSourceRecords($schema, [], []);
 	}

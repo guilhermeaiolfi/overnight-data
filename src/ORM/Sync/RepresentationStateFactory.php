@@ -36,7 +36,7 @@ final class RepresentationStateFactory
 		array $recordsBySourceKey,
 	): RepresentationState {
 		if ($schema->getRelations() !== []) {
-			throw new StateException('Cannot create flat projection representation state because the binding contains relation bindings.');
+			throw new StateException('Cannot create flat projection representation state because the schema contains relation schemas.');
 		}
 
 		return new RepresentationState(
@@ -54,7 +54,7 @@ final class RepresentationStateFactory
 		foreach ($schema->getFields() as $fieldSchema) {
 			if ($fieldSchema->getCollectionName() !== $record->getCollection()->getName()) {
 				throw new StateException(sprintf(
-					"Representation binding path '%s' targets collection '%s', not '%s'.",
+					"Representation schema path '%s' targets collection '%s', not '%s'.",
 					$fieldSchema->getPath(),
 					$fieldSchema->getCollectionName(),
 					$record->getCollection()->getName()

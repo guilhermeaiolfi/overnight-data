@@ -437,7 +437,7 @@ backing collection
 
 When a new child is added, the relation collection should apply the child `RepresentationSchema` for that relation item.
 
-Do not hard-depend on Doctrine Collections, Illuminate Collections, Loophp Collections, or any other collection package in the ORM foundation. Relation tracking is ORM-specific because the ORM needs owner record, relation definition, loaded state, child binding, added/removed children, cascade/orphan behavior, and relation persistence planning. Generic collection libraries do not know those things.
+Do not hard-depend on Doctrine Collections, Illuminate Collections, Loophp Collections, or any other collection package in the ORM foundation. Relation tracking is ORM-specific because the ORM needs owner record, relation definition, loaded state, child schema, added/removed children, cascade/orphan behavior, and relation persistence planning. Generic collection libraries do not know those things.
 
 Later, allow backing collection adapters/factories, similar to Cycle's collection factory approach. A third-party collection can be backing storage or an exposed collection API, but it cannot own ORM relation semantics.
 
@@ -477,17 +477,17 @@ Phase 1A did not introduce `EntityQuery`, `with()`, repositories, lazy loading, 
 
 Phase 1D introduces `ON\Data\ORM\Relation\ToManyRelationState` as the ORM-owned relation collection primitive. Plain arrays remain valid read/projection values, but they are not writable relation persistence trackers because they cannot own loaded state or add/remove intent.
 
-`ToManyRelationState` owns the owner `RecordState`, relation name, loaded state, known in-memory items, local added/removed child intent, and the reusable child `RepresentationSchema` template. Known items are only the in-memory view currently held by the collection; they are not necessarily the full database relation. `isEmptyKnown()` means no items are currently known in memory, not that the database relation is empty. The collection stores the child binding for later relation runtime work, but it does not mutate that reusable template, apply the binding, or register tracked child representations in this phase.
+`ToManyRelationState` owns the owner `RecordState`, relation name, loaded state, known in-memory items, local added/removed child intent, and the reusable child `RepresentationSchema` template. Known items are only the in-memory view currently held by the collection; they are not necessarily the full database relation. `isEmptyKnown()` means no items are currently known in memory, not that the database relation is empty. The collection stores the child schema for later relation runtime work, but it does not mutate that reusable template, apply the schema, or register tracked child representations in this phase.
 
 Adding a child to an unloaded collection is allowed and makes the collection partially loaded because at least one item is now known, while the complete database set remains unknown. Removing one known object reference from an unloaded collection is also allowed and does not imply the relation is empty. Removing from a relation collection removes the relation link intent; it is not necessarily deletion of the child entity.
 
-Future ORM runtime will apply the child binding to child `RecordState` instances and register tracked child representations. Third-party collection libraries may later provide backing adapters, but they do not own ORM relation semantics.
+Future ORM runtime will apply the child schema to child `RecordState` instances and register tracked child representations. Third-party collection libraries may later provide backing adapters, but they do not own ORM relation semantics.
 
 ## Phase 1E Child Representation Adoption
 
 Phase 1E introduces `ON\Data\ORM\Sync\RepresentationAdopter` as the small bridge between reusable child schema templates and concrete ORM tracking.
 
-`RepresentationAdopter::adopt()` attaches a reusable `RepresentationSchema` template to a concrete child `RecordState`, registers that record in `RecordStateStore`, captures baseline record revisions in `RepresentationFieldStateItem` entries, and registers the child object as a `RepresentationState` in `RepresentationStateStore`. Future relation runtime can use a `ToManyRelationState` child's binding with `RepresentationAdopter::adopt()` around flows such as adding a post object to a user's `ToManyRelationState`.
+`RepresentationAdopter::adopt()` attaches a reusable `RepresentationSchema` template to a concrete child `RecordState`, registers that record in `RecordStateStore`, captures baseline record revisions in `RepresentationFieldStateItem` entries, and registers the child object as a `RepresentationState` in `RepresentationStateStore`. Future relation runtime can use a `ToManyRelationState` child's schema with `RepresentationAdopter::adopt()` around flows such as adding a post object to a user's `ToManyRelationState`.
 
 `ToManyRelationState` still owns relation add/remove intent. Adoption only tracks the child representation; it does not add the item to the relation collection, inspect relation loaded state, sync representation values, persist, flush, write SQL, or mutate the child schema template.
 
