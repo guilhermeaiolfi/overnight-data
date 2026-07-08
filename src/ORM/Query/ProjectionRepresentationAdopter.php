@@ -19,14 +19,15 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\Sync\RepresentationReader;
+use ON\Data\ORM\Sync\RepresentationStateFactory;
 
 final class ProjectionRepresentationAdopter
 {
 	public function __construct(
 		private ?RepresentationReader $reader = null,
+		private RepresentationStateFactory $stateFactory = new RepresentationStateFactory(),
 	) {
 		$this->reader ??= new RepresentationReader();
 	}
@@ -60,9 +61,10 @@ final class ProjectionRepresentationAdopter
 			$records,
 			$sourceRow,
 		);
-		$state = new RepresentationState(
+		$state = $this->stateFactory->fromSourceRecords(
 			$binding,
-			$this->buildFieldItems($compilation->getSources(), $recordsBySourceKey),
+			$compilation->getSources(),
+			$recordsBySourceKey,
 		);
 
 		foreach ($recordsBySourceKey as $record) {
@@ -226,40 +228,5 @@ final class ProjectionRepresentationAdopter
 
 			return null;
 		}
-	}
-
-	/**
-	 * @param list<ProjectionSource> $sources
-	 * @param array<string, RecordState> $recordsBySourceKey
-	 *
-	 * @return list<RepresentationFieldStateItem>
-	 */
-	private function buildFieldItems(
-		array $sources,
-		array $recordsBySourceKey,
-	): array {
-		$items = [];
-
-		foreach ($sources as $source) {
-			$record = $recordsBySourceKey[$source->getPathKey()] ?? null;
-
-			if (! $record instanceof RecordState) {
-				throw new SyncException(sprintf(
-					'Cannot adopt projection representation because source path "%s" is unresolved.',
-					$source->getPathKey(),
-				));
-			}
-
-			foreach ($source->getFields() as $fieldBinding) {
-				$items[] = new RepresentationFieldStateItem(
-					$fieldBinding,
-					$record,
-					$fieldBinding->getFieldName(),
-					$record->getRevision()
-				);
-			}
-		}
-
-		return $items;
 	}
 }
