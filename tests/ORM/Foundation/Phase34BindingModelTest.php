@@ -23,12 +23,12 @@ final class Phase34BindingModelTest extends TestCase
 		self::assertStringContainsString('RepresentationSchema', $contents);
 		self::assertStringContainsString('RepresentationState', $contents);
 		self::assertStringContainsString('ToManyRelationState / ToOneRelationState', $contents);
-		self::assertStringContainsString('field bindings', $contents);
-		self::assertStringContainsString('relation bindings', $contents);
+		self::assertStringContainsString('field schemas', $contents);
+		self::assertStringContainsString('relation schemas', $contents);
 		self::assertStringContainsString('It owns two path maps', $contents);
 		self::assertStringContainsString('getRelatedSchema()', $contents);
-		self::assertStringContainsString('Do not create one binding object per child instance.', $contents);
-		self::assertStringContainsString('Scalar representation sync uses field bindings only', $contents);
+		self::assertStringContainsString('Do not create one schema object per child instance.', $contents);
+		self::assertStringContainsString('Scalar representation sync uses field schemas only', $contents);
 	}
 
 	public function testNoSeparateBindingOrPersistenceGraphClassesWereIntroduced(): void

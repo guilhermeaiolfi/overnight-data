@@ -44,7 +44,7 @@ final class ProjectionRepresentationAdopter
 		$binding = $compilation->getSchema();
 
 		if ($binding->getRelations() !== []) {
-			throw new StateException('Cannot adopt flat projection representation because the binding contains relation bindings.');
+			throw new StateException('Cannot adopt flat projection representation because the schema contains relation schemas.');
 		}
 
 		$records = $context->getRecords();

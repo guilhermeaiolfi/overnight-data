@@ -20,7 +20,7 @@ final class RepresentationFieldSchema
 	private array $sourcePath;
 
 	/**
-	 * @param list<string> $sourcePath relation path from the binding root to the
+	 * @param list<string> $sourcePath relation path from the schema root to the
 	 *                                  record that owns this field ([] for root)
 	 */
 	public function __construct(
@@ -32,11 +32,11 @@ final class RepresentationFieldSchema
 		array $sourcePath = [],
 	) {
 		if ($path === '') {
-			throw new StateException('Representation binding path cannot be empty.');
+			throw new StateException('Representation schema path cannot be empty.');
 		}
 
 		if ($fieldName === '') {
-			throw new StateException('Representation binding field name cannot be empty.');
+			throw new StateException('Representation schema field name cannot be empty.');
 		}
 
 		$this->sourcePath = array_values($sourcePath);

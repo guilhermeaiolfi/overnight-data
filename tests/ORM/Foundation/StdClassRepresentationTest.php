@@ -11,7 +11,7 @@ final class StdClassRepresentationTest extends TestCase
 	public function testStdClassCanBeWritableWhenLineageExists(): void
 	{
 		self::markTestIncomplete(
-			'Phase 0 skeleton: stdClass is persistable when it has representation binding, identity, and writable field lineage.'
+			'Phase 0 skeleton: stdClass is persistable when it has representation schema, identity, and writable field lineage.'
 		);
 	}
 

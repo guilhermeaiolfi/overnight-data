@@ -12,7 +12,7 @@ use ON\Data\Definition\Relation\RelationInterface;
  * relation name, and reusable related RepresentationSchema branch.
  *
  * Exists so graph sync and relation runtime state can share one recursive
- * binding model without duplicating per-child binding templates.
+ * schema model without duplicating per-child schema templates.
  */
 use ON\Data\ORM\Exception\StateException;
 
@@ -26,11 +26,11 @@ final class RepresentationRelationSchema
 		private bool $skipWhenMissing = false,
 	) {
 		if ($path === '') {
-			throw new StateException('Representation relation binding path cannot be empty.');
+			throw new StateException('Representation relation schema path cannot be empty.');
 		}
 
 		if ($relationName === '') {
-			throw new StateException('Representation relation binding relation name cannot be empty.');
+			throw new StateException('Representation relation schema relation name cannot be empty.');
 		}
 	}
 

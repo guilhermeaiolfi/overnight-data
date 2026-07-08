@@ -1,6 +1,6 @@
 # ORM Foundation
 
-This document records the foundation concepts for the `ON\Data` ORM. Some early sections describe the intended architecture before the runtime existed; current persistence behavior is documented in [`persistence.md`](./persistence.md), and the recursive representation binding model is documented in [`representation-schema.md`](./representation-schema.md).
+This document records the foundation concepts for the `ON\Data` ORM. Some early sections describe the intended architecture before the runtime existed; current persistence behavior is documented in [`persistence.md`](./persistence.md), and the recursive representation schema model is documented in [`representation-schema.md`](./representation-schema.md).
 
 The current implementation includes production record state, representation tracking, scalar sync, relation representation sync, relation persistence planning, scalar command planning, flush orchestration, session orchestration, and Cycle-backed scalar command execution. It still does not include lazy loading, generated repositories, service containers, events, proxy objects, `EntityManager`, or `UnitOfWork`.
 
@@ -55,14 +55,14 @@ A `RepresentationState` is concrete runtime state for an applied `Representation
 It stores:
 
 - the structure-only `RepresentationSchema`;
-- `RepresentationFieldStateItem` entries that attach structural field bindings to concrete `RecordState` objects and baseline record revisions;
-- `RepresentationRelationStateItem` entries that attach structural relation bindings to concrete owner `RecordState` objects;
-- writable/read-only flags per mapped slot through field bindings;
+- `RepresentationFieldStateItem` entries that attach structural field schemas to concrete `RecordState` objects and baseline record revisions;
+- `RepresentationRelationStateItem` entries that attach structural relation schemas to concrete owner `RecordState` objects;
+- writable/read-only flags per mapped slot through field schemas;
 - relation collection loaded state later.
 
 It does not store baseline field values. When sync needs an old value, it asks the owning `RecordState` history for the value at the tracked baseline revision.
 
-Do not use `RepresentationState` as a template. It is only for concrete runtime state after a binding has been applied and baseline record revisions are known. The owning `RepresentationStore` keeps the association between the PHP object and its `RepresentationState`.
+Do not use `RepresentationState` as a template. It is only for concrete runtime state after a schema has been applied and baseline record revisions are known. The owning `RepresentationStateStore` keeps the association between the PHP object and its `RepresentationState`.
 
 A single representation may map to multiple records and collections:
 
@@ -173,11 +173,11 @@ Classic ORMs usually map identity to entity object. This ORM maps identity to re
 
 The store is responsible for aliasing both handles to the same `RecordState`. Scalar insert/flush logic calls `RecordStateStore::indexKey($state)` after assigning a generated key so keyed references can resolve the same state that was previously known only by local state hash.
 
-Flat projection identity resolution first uses visible field values, then falls back to `ProjectionIdentityColumns` for hidden primary-key result columns. Structural bindings have no concrete record to resolve until adoption creates `RepresentationFieldStateItem` or `RepresentationRelationStateItem` entries.
+Flat projection identity resolution first uses visible field values, then falls back to `ProjectionIdentityColumns` for hidden primary-key result columns. Structural schemas have no concrete record to resolve until adoption creates `RepresentationFieldStateItem` or `RepresentationRelationStateItem` entries.
 
 `RecordStateStore` is not an object identity store. It strongly owns record state for the current session/unit of work. `ToManyRelationStore` and `ToOneRelationStore` also strongly own relation runtime state for the session.
 
-`RepresentationStore` remains separate and tracks PHP representation object identity with weak keys. It does not keep representation objects alive in long-lived workers. When a representation object becomes otherwise unreachable, its store entry can disappear after garbage collection.
+`RepresentationStateStore` remains separate and tracks PHP representation object identity with weak keys. It does not keep representation objects alive in long-lived workers. When a representation object becomes otherwise unreachable, its store entry can disappear after garbage collection.
 
 Use one `Session` per request/job in long-lived workers. If a session is intentionally reused, call `Session::clear()` to clear record, representation, collection, and reference stores between jobs.
 
@@ -290,9 +290,9 @@ RepresentationState
 `RepresentationSchema` is the reusable mapping shape. It is not limited to instance-level tracking and can represent:
 
 ```text
-root representation binding
-child representation binding/template
-relation item binding/template
+root representation schema
+child representation schema/template
+relation item schema/template
 ```
 
 Use this same concept for child and relation item mapping until implementation proves a separate `ChildRepresentationTemplate` class is necessary.
@@ -307,7 +307,7 @@ RepresentationState
     concrete object + field/relation state items + baseline record revisions
 ```
 
-Concrete runtime attachment may need local record state that is more precise than collection + field + `sourcePath`. A structure-only binding is reusable, but it is ambiguous for multiple new child records:
+Concrete runtime attachment may need local record state that is more precise than collection + field + `sourcePath`. A structure-only schema is reusable, but it is ambiguous for multiple new child records:
 
 ```text
 posts[no-key].title
@@ -316,18 +316,18 @@ posts[no-key].title
 
 `RepresentationSchema` therefore remains structural only:
 
-- field bindings store representation path, collection, field, writability, and `sourcePath`;
-- relation bindings store representation path, owner collection, relation name, and the reusable related binding;
+- field schemas store representation path, collection, field, writability, and `sourcePath`;
+- relation schemas store representation path, owner collection, relation name, and the reusable related schema;
 - concrete records live in `RepresentationFieldStateItem` and `RepresentationRelationStateItem`.
 
 State items point to concrete in-memory `RecordState` objects, including new unsaved records before any database key exists. Their stable local handle is `RecordState::getStateHash()`.
 
-Sources of binding information:
+Sources of schema information:
 
 1. Query selection lineage.
 2. Collection/view definitions.
 3. Mapper attributes such as `MapFrom` and `MapTo`.
-4. Optional explicit binding for manually attached/new representations.
+4. Optional explicit schema for manually attached/new representations.
 
 `MapFrom` and `MapTo` are naming hints. They are not enough for ORM persistence because the ORM also needs source collection, field lineage, identity, read/write status, and relation state.
 
@@ -335,7 +335,7 @@ Sources of binding information:
 
 `stdClass` is a first-class representation target.
 
-A `stdClass` may be persistable if it has representation binding and lineage. A random `stdClass` without binding is only a projection unless explicitly attached with enough information.
+A `stdClass` may be persistable if it has representation schema and lineage. A random `stdClass` without schema is only a projection unless explicitly attached with enough information.
 
 ## Partial Results
 
@@ -467,7 +467,7 @@ Phase 1A introduces the first production ORM state primitives only:
 - `RepresentationFieldSchema`
 - `RepresentationSchema`
 - `RepresentationState`
-- `RepresentationStore`
+- `RepresentationStateStore`
 - `SyncConflict`
 - `SyncConflictDetector`
 
@@ -485,11 +485,11 @@ Future ORM runtime will apply the child binding to child `RecordState` instances
 
 ## Phase 1E Child Representation Adoption
 
-Phase 1E introduces `ON\Data\ORM\Sync\RepresentationAdopter` as the small bridge between reusable child binding templates and concrete ORM tracking.
+Phase 1E introduces `ON\Data\ORM\Sync\RepresentationAdopter` as the small bridge between reusable child schema templates and concrete ORM tracking.
 
-`RepresentationAdopter::adopt()` attaches a reusable `RepresentationSchema` template to a concrete child `RecordState`, registers that record in `RecordStateStore`, captures baseline record revisions in `RepresentationFieldStateItem` entries, and registers the child object as a `RepresentationState` in `RepresentationStore`. Future relation runtime can use a `ToManyRelationState` child's binding with `RepresentationAdopter::adopt()` around flows such as adding a post object to a user's `ToManyRelationState`.
+`RepresentationAdopter::adopt()` attaches a reusable `RepresentationSchema` template to a concrete child `RecordState`, registers that record in `RecordStateStore`, captures baseline record revisions in `RepresentationFieldStateItem` entries, and registers the child object as a `RepresentationState` in `RepresentationStateStore`. Future relation runtime can use a `ToManyRelationState` child's binding with `RepresentationAdopter::adopt()` around flows such as adding a post object to a user's `ToManyRelationState`.
 
-`ToManyRelationState` still owns relation add/remove intent. Adoption only tracks the child representation; it does not add the item to the relation collection, inspect relation loaded state, sync representation values, persist, flush, write SQL, or mutate the child binding template.
+`ToManyRelationState` still owns relation add/remove intent. Adoption only tracks the child representation; it does not add the item to the relation collection, inspect relation loaded state, sync representation values, persist, flush, write SQL, or mutate the child schema template.
 
 ## Phase 1F Representation Value Reading
 

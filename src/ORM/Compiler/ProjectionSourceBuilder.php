@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Compiler;
 
 /**
- * Builds structural projection sources from an assembled representation binding.
+ * Builds structural projection sources from an assembled representation schema.
  */
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\State\RepresentationSchema;

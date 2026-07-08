@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace ON\Data\ORM\State;
 
 /**
- * Merges a manual projection overlay into an existing tracked binding.
+ * Merges a manual projection overlay into an existing tracked schema.
  *
  * Exists so Builder::end() can add manual field paths on top of query-created
- * provenance without recompiling the full binding graph.
+ * provenance without recompiling the full schema graph.
  */
 use ON\Data\ORM\Exception\StateException;
 
@@ -26,7 +26,7 @@ final class RepresentationSchemaMerger
 
 		foreach ($manual->getFields() as $field) {
 			if ($merged->hasPath($field->getPath())) {
-				throw new StateException(sprintf("Manual projection path '%s' conflicts with an existing representation binding path.", $field->getPath()));
+				throw new StateException(sprintf("Manual projection path '%s' conflicts with an existing representation schema path.", $field->getPath()));
 			}
 
 			$merged->addField($field);

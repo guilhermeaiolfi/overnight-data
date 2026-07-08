@@ -209,7 +209,7 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$identityColumns = $this->companyIdProjectionIdentities($registry->getCollection('companies'), 'company_id');
 
 		$this->expectException(StateException::class);
-		$this->expectExceptionMessage('binding contains relation bindings');
+		$this->expectExceptionMessage('schema contains relation schemas');
 
 		$this->adopter()->adopt($this->flatUser(1, 'Acme'), $this->compilation($binding, $identityColumns), [
 			'id' => 1,

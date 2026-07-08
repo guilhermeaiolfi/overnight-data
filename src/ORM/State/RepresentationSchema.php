@@ -11,8 +11,8 @@ namespace ON\Data\ORM\State;
  *
  * The root collection means this representation branch is rooted at that
  * collection. Individual field properties may still target other collections in
- * flat heterogeneous projections, and nested relation bindings carry related
- * bindings rooted at the related collection.
+ * flat heterogeneous projections, and nested relation schemas carry related
+ * schemas rooted at the related collection.
  *
  * Exists as the durable ORM model compiled from queries or manual projections
  * and consumed by sync, adoption, and relation runtime state — separate from
@@ -45,12 +45,12 @@ final class RepresentationSchema
 		return $this->collection->getName();
 	}
 
-	public function addField(RepresentationFieldSchema $binding): void
+	public function addField(RepresentationFieldSchema $fieldSchema): void
 	{
-		$path = $binding->getPath();
+		$path = $fieldSchema->getPath();
 		$this->assertPathIsAvailable($path);
 
-		$this->fields[$path] = $binding;
+		$this->fields[$path] = $fieldSchema;
 		$this->paths[] = $path;
 	}
 
@@ -62,7 +62,7 @@ final class RepresentationSchema
 	public function getField(string $path): RepresentationFieldSchema
 	{
 		if (! array_key_exists($path, $this->fields)) {
-			throw new StateException(sprintf("Representation binding does not contain field path '%s'.", $path));
+			throw new StateException(sprintf("Representation schema does not contain field path '%s'.", $path));
 		}
 
 		return $this->fields[$path];
@@ -83,7 +83,7 @@ final class RepresentationSchema
 	{
 		return array_values(array_filter(
 			$this->fields,
-			static fn (RepresentationFieldSchema $binding): bool => $binding->isWritable()
+			static fn (RepresentationFieldSchema $fieldSchema): bool => $fieldSchema->isWritable()
 		));
 	}
 
@@ -94,7 +94,7 @@ final class RepresentationSchema
 	{
 		return array_values(array_filter(
 			$this->fields,
-			static fn (RepresentationFieldSchema $binding): bool => $binding->isReadOnly()
+			static fn (RepresentationFieldSchema $fieldSchema): bool => $fieldSchema->isReadOnly()
 		));
 	}
 
@@ -122,12 +122,12 @@ final class RepresentationSchema
 		return $this->getFieldForSource($sourcePath, $fieldName) instanceof RepresentationFieldSchema;
 	}
 
-	public function addRelation(RepresentationRelationSchema $binding): void
+	public function addRelation(RepresentationRelationSchema $relationSchema): void
 	{
-		$path = $binding->getPath();
+		$path = $relationSchema->getPath();
 		$this->assertPathIsAvailable($path);
 
-		$this->relations[$path] = $binding;
+		$this->relations[$path] = $relationSchema;
 		$this->paths[] = $path;
 	}
 
@@ -139,7 +139,7 @@ final class RepresentationSchema
 	public function getRelation(string $path): RepresentationRelationSchema
 	{
 		if (! array_key_exists($path, $this->relations)) {
-			throw new StateException(sprintf("Representation binding does not contain relation path '%s'.", $path));
+			throw new StateException(sprintf("Representation schema does not contain relation path '%s'.", $path));
 		}
 
 		return $this->relations[$path];
@@ -169,7 +169,7 @@ final class RepresentationSchema
 	private function assertPathIsAvailable(string $path): void
 	{
 		if ($this->hasPath($path)) {
-			throw new StateException(sprintf("Representation binding already contains path '%s'.", $path));
+			throw new StateException(sprintf("Representation schema already contains path '%s'.", $path));
 		}
 	}
 }
