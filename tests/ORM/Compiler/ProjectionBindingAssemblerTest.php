@@ -8,6 +8,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Compiler\ProjectionBindingAssembler;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
+use ON\Data\ORM\Compiler\ProjectionSourceBuilder;
 use ON\Data\ORM\Compiler\ProjectionSourceResolverInterface;
 use ON\Data\ORM\Compiler\ResolvedProjectionSource;
 use PHPUnit\Framework\TestCase;
@@ -140,6 +141,36 @@ final class ProjectionBindingAssemblerTest extends TestCase
 		self::assertSame($users, $source->getCollection());
 		self::assertSame(['manager'], $source->getSourcePath());
 		self::assertFalse(method_exists($source, 'getRecordState'));
+	}
+
+	public function testProjectionSourcesGroupFieldsBySourcePath(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$companies = $registry->getCollection('companies');
+
+		$rootSource = new stdClass();
+		$companySource = new stdClass();
+		$binding = (new ProjectionBindingAssembler())->assemble(
+			[
+				new ProjectionFieldShape('name', $rootSource, 'name'),
+				new ProjectionFieldShape('companyName', $companySource, 'name'),
+				new ProjectionFieldShape('companyId', $companySource, 'id'),
+			],
+			$this->resolver($rootSource, $users, $companySource, $companies, ['company']),
+			$users,
+		);
+
+		$sources = (new ProjectionSourceBuilder())->build($binding);
+
+		self::assertCount(2, $sources);
+		self::assertSame([], $sources[0]->getPath());
+		self::assertSame(['company'], $sources[1]->getPath());
+		self::assertSame('companies', $sources[1]->getCollection()->getName());
+		self::assertTrue($sources[1]->hasField('name'));
+		self::assertFalse($sources[1]->hasField('companyName'));
+		self::assertSame('companyName', $sources[1]->getFieldPath('name'));
+		self::assertSame('companyId', $sources[1]->getFieldPath('id'));
 	}
 
 	private function resolver(

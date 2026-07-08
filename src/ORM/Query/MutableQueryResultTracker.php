@@ -11,7 +11,7 @@ namespace ON\Data\ORM\Query;
  * Exists as the bridge between SelectQuery mutable export and Session tracking,
  * keeping SelectQuery itself free of persistence orchestration details.
  */
-use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityColumns;
+use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompilation;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\Sync\RepresentationReader;
@@ -35,13 +35,12 @@ final class MutableQueryResultTracker
 	 */
 	public function trackAll(
 		Session $session,
-		RepresentationBinding $binding,
-		ProjectionIdentityColumns $identityColumns,
+		ProjectionCompilation $compilation,
 		array $objects,
 		array $sourceRows,
 	): void {
 		foreach ($objects as $index => $object) {
-			$this->trackObject($session, $object, $binding, $identityColumns, $sourceRows[$index] ?? []);
+			$this->trackObject($session, $object, $compilation, $sourceRows[$index] ?? []);
 		}
 	}
 
@@ -50,12 +49,11 @@ final class MutableQueryResultTracker
 	 */
 	public function trackOne(
 		Session $session,
-		RepresentationBinding $binding,
-		ProjectionIdentityColumns $identityColumns,
+		ProjectionCompilation $compilation,
 		object $object,
 		array $sourceRow,
 	): void {
-		$this->trackObject($session, $object, $binding, $identityColumns, $sourceRow);
+		$this->trackObject($session, $object, $compilation, $sourceRow);
 	}
 
 	/**
@@ -64,15 +62,13 @@ final class MutableQueryResultTracker
 	private function trackObject(
 		Session $session,
 		object $object,
-		RepresentationBinding $binding,
-		ProjectionIdentityColumns $identityColumns,
+		ProjectionCompilation $compilation,
 		array $sourceRow,
 	): void {
-		if ($this->isProjectionBinding($binding)) {
+		if ($compilation->hasNonRootSources()) {
 			$this->projectionAdopter->adopt(
 				$object,
-				$binding,
-				$identityColumns,
+				$compilation,
 				$sourceRow,
 				$session->getContext(),
 			);
@@ -81,19 +77,9 @@ final class MutableQueryResultTracker
 			return;
 		}
 
+		$binding = $compilation->getBinding();
 		$this->markLoadedRelatedObjectsExisting($session, $object, $binding);
 		$session->sync($object, $binding);
-	}
-
-	private function isProjectionBinding(RepresentationBinding $binding): bool
-	{
-		$sourcePaths = [];
-
-		foreach ($binding->getFields() as $fieldBinding) {
-			$sourcePaths[$fieldBinding->getSourcePathKey()] = true;
-		}
-
-		return count($sourcePaths) > 1;
 	}
 
 	private function markLoadedRelatedObjectsExisting(

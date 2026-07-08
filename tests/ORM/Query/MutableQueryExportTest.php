@@ -7,7 +7,6 @@ namespace Tests\ON\Data\ORM\Query;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompiler;
-use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityColumns;
 use ON\Data\ORM\Query\MutableQueryResultTracker;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RepresentationState;
@@ -150,8 +149,8 @@ final class MutableQueryExportTest extends TestCase
 		$user->posts = [$post];
 
 		$session = new Session(new RecordingCommandExecutor());
-		$binding = (new ProjectionCompiler())->compile($query);
-		(new MutableQueryResultTracker())->trackOne($session, $binding, new ProjectionIdentityColumns(), $user, ['id' => 1, 'name' => 'Ada']);
+		$compilation = (new ProjectionCompiler())->compileResult($query);
+		(new MutableQueryResultTracker())->trackOne($session, $compilation, $user, ['id' => 1, 'name' => 'Ada']);
 
 		self::assertTrue($session->getRepresentations()->has($user));
 		self::assertTrue($session->getRepresentations()->has($post));
@@ -283,12 +282,12 @@ final class MutableQueryResultTrackerTest extends TestCase
 
 		$tracker = new MutableQueryResultTracker();
 		$session = new Session(new RecordingCommandExecutor());
-		$binding = (new ProjectionCompiler())->compile($query);
+		$compilation = (new ProjectionCompiler())->compileResult($query);
 
 		$first = $this->userWithPosts(1, 'Ada', 10, 'Hello');
 		$second = $this->userWithPosts(2, 'Grace', 11, 'World');
 
-		$tracker->trackAll($session, $binding, new ProjectionIdentityColumns(), [$first, $second], [
+		$tracker->trackAll($session, $compilation, [$first, $second], [
 			['id' => 1, 'name' => 'Ada'],
 			['id' => 2, 'name' => 'Grace'],
 		]);
@@ -313,12 +312,12 @@ final class MutableQueryResultTrackerTest extends TestCase
 
 		$tracker = new MutableQueryResultTracker();
 		$session = new Session(new RecordingCommandExecutor());
-		$binding = (new ProjectionCompiler())->compile($query);
+		$compilation = (new ProjectionCompiler())->compileResult($query);
 
 		$first = $this->userObject(1, 'Ada');
 		$second = $this->userObject(2, 'Grace');
 
-		$tracker->trackAll($session, $binding, new ProjectionIdentityColumns(), [$first, $second], [
+		$tracker->trackAll($session, $compilation, [$first, $second], [
 			['id' => 1, 'name' => 'Ada'],
 			['id' => 2, 'name' => 'Grace'],
 		]);
@@ -341,9 +340,9 @@ final class MutableQueryResultTrackerTest extends TestCase
 		$tracker = new MutableQueryResultTracker();
 		$session = new Session(new RecordingCommandExecutor());
 		$user = $this->userObject(1, 'Ada');
-		$binding = (new ProjectionCompiler())->compile($query);
+		$compilation = (new ProjectionCompiler())->compileResult($query);
 
-		$tracker->trackOne($session, $binding, new ProjectionIdentityColumns(), $user, ['id' => 1, 'name' => 'Ada']);
+		$tracker->trackOne($session, $compilation, $user, ['id' => 1, 'name' => 'Ada']);
 
 		self::assertTrue($session->getRepresentations()->has($user));
 		self::assertTrue($session->getRepresentations()->get($user)?->getBinding()->hasField('name'));

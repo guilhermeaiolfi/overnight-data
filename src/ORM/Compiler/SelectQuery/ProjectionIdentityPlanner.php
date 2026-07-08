@@ -17,9 +17,8 @@ namespace ON\Data\ORM\Compiler\SelectQuery;
  * never creates field bindings, relation bindings, or normalizes selections.
  */
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\ORM\Compiler\ProjectionSource;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Selection\SelectionTag;
@@ -29,51 +28,32 @@ final class ProjectionIdentityPlanner
 {
 	private int $internalResultKeyCounter = 0;
 
-	public function plan(
-		SelectQuery $query,
-		RepresentationBinding $binding,
-	): ProjectionIdentityColumns {
+	/**
+	 * @param list<ProjectionSource> $sources
+	 */
+	public function plan(SelectQuery $query, array $sources): ProjectionIdentityColumns
+	{
 		$this->internalResultKeyCounter = 0;
 
 		$identityColumns = new ProjectionIdentityColumns();
 
-		foreach ($this->collectProjectedSourceFields($binding) as $sourceField) {
-			$this->ensureIdentitySelections($query, $binding, $sourceField, $identityColumns);
+		foreach ($sources as $source) {
+			$this->ensureIdentitySelections($query, $source, $identityColumns);
 		}
 
 		return $identityColumns;
 	}
 
-	/**
-	 * @return list<RepresentationFieldBinding>
-	 */
-	private function collectProjectedSourceFields(RepresentationBinding $binding): array
-	{
-		/** @var array<string, RepresentationFieldBinding> $fieldsBySourcePath */
-		$fieldsBySourcePath = [];
-
-		foreach ($binding->getFields() as $field) {
-			$sourceKey = $field->getSourcePathKey();
-
-			if (! array_key_exists($sourceKey, $fieldsBySourcePath)) {
-				$fieldsBySourcePath[$sourceKey] = $field;
-			}
-		}
-
-		return array_values($fieldsBySourcePath);
-	}
-
 	private function ensureIdentitySelections(
 		SelectQuery $query,
-		RepresentationBinding $binding,
-		RepresentationFieldBinding $sourceField,
+		ProjectionSource $source,
 		ProjectionIdentityColumns $identityColumns,
 	): void {
-		$sourcePath = $sourceField->getSourcePath();
-		$collection = $sourceField->getCollection();
+		$sourcePath = $source->getPath();
+		$collection = $source->getCollection();
 
 		foreach ($collection->getPrimaryKey() as $fieldName) {
-			if ($binding->hasFieldForSource($sourcePath, $fieldName)) {
+			if ($source->hasField($fieldName)) {
 				continue;
 			}
 

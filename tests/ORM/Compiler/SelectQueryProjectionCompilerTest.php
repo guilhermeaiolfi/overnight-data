@@ -184,6 +184,45 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		self::assertNull($compilation->getIdentityColumns()->get([], 'id'));
 	}
 
+	public function testCompileResultCarriesStructuralProjectionSources(): void
+	{
+		$registry = $this->makeRegistryWithCompany();
+		$users = $registry->getCollection('users');
+		$query = query($users, fn (SelectQuery $query) => $query
+			->select(
+				$query->id,
+				$query->company->name->as('companyName'),
+				$query->company->id->as('companyId'),
+			));
+
+		$compilation = $this->compiler->compileResult($query);
+		$sources = $compilation->getSources();
+
+		self::assertCount(2, $sources);
+		self::assertTrue($compilation->hasNonRootSources());
+		self::assertSame([], $sources[0]->getPath());
+		self::assertSame(['company'], $sources[1]->getPath());
+		self::assertSame('companies', $sources[1]->getCollection()->getName());
+		self::assertTrue($sources[1]->hasField('name'));
+		self::assertTrue($sources[1]->hasField('id'));
+		self::assertFalse($sources[1]->hasField('companyName'));
+		self::assertSame('companyName', $sources[1]->getFieldPath('name'));
+		self::assertSame('companyId', $sources[1]->getFieldPath('id'));
+	}
+
+	public function testComputedExpressionsDoNotCreateProjectionSourceFields(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = query($users, fn (SelectQuery $query) => $query->select($query->name, $query->id->count()->as('post_count')));
+
+		$compilation = $this->compiler->compileResult($query);
+
+		self::assertFalse($compilation->getBinding()->hasField('post_count'));
+		self::assertCount(1, $compilation->getSources());
+		self::assertNull($compilation->getSources()[0]->getFieldPath('post_count'));
+	}
+
 	public function testSameTerminalCollectionFlatProjectionKeepsDistinctSourcePaths(): void
 	{
 		$registry = $this->makeRegistryWithManager();

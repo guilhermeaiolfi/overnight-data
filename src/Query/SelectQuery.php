@@ -12,10 +12,8 @@ use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompilation;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompiler;
-use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityColumns;
 use ON\Data\ORM\Query\MutableQueryResultTracker;
 use ON\Data\ORM\Session;
-use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Exception\ObjectExportException;
 use ON\Data\Query\Exception\RelationSelectionException;
@@ -623,13 +621,10 @@ final class SelectQuery implements QuerySourceInterface
 	{
 		$executor = $this->requireExecutor();
 		$relationSelections = $this->getRelationSelections();
-		$binding = null;
-		$identityColumns = null;
+		$compilation = null;
 
 		if ($this->mutable) {
 			$compilation = $this->compileMutableProjection();
-			$binding = $compilation->getBinding();
-			$identityColumns = $compilation->getIdentityColumns();
 		}
 
 		if ($relationSelections->isEmpty()) {
@@ -641,7 +636,7 @@ final class SelectQuery implements QuerySourceInterface
 		$materialized = $this->materializeRows($this->publicRows($rows));
 
 		if ($this->mutable) {
-			$this->trackMutableResults($binding, $identityColumns, $rows, $materialized);
+			$this->trackMutableResults($compilation, $rows, $materialized);
 		}
 
 		return $materialized;
@@ -654,13 +649,10 @@ final class SelectQuery implements QuerySourceInterface
 	{
 		$executor = $this->requireExecutor();
 		$relationSelections = $this->getRelationSelections();
-		$binding = null;
-		$identityColumns = null;
+		$compilation = null;
 
 		if ($this->mutable) {
 			$compilation = $this->compileMutableProjection();
-			$binding = $compilation->getBinding();
-			$identityColumns = $compilation->getIdentityColumns();
 		}
 
 		if ($relationSelections->isEmpty()) {
@@ -678,8 +670,7 @@ final class SelectQuery implements QuerySourceInterface
 		if ($this->mutable && is_object($materialized)) {
 			(new MutableQueryResultTracker())->trackOne(
 				$this->requireMutableSession(),
-				$binding,
-				$identityColumns,
+				$compilation,
 				$materialized,
 				$row,
 			);
@@ -827,15 +818,13 @@ final class SelectQuery implements QuerySourceInterface
 	 * @param list<object> $objects
 	 */
 	private function trackMutableResults(
-		RepresentationBinding $binding,
-		ProjectionIdentityColumns $identityColumns,
+		ProjectionCompilation $compilation,
 		array $sourceRows,
 		array $objects,
 	): void {
 		(new MutableQueryResultTracker())->trackAll(
 			$this->requireMutableSession(),
-			$binding,
-			$identityColumns,
+			$compilation,
 			$objects,
 			$sourceRows,
 		);

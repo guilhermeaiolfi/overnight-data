@@ -17,6 +17,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Compiler\ProjectionBindingAssembler;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
+use ON\Data\ORM\Compiler\ProjectionSourceBuilder;
 use ON\Data\ORM\Compiler\ProjectionSourceResolverInterface;
 use ON\Data\ORM\State\RepresentationBinding;
 use ON\Data\ORM\State\RepresentationRelationBinding;
@@ -32,15 +33,18 @@ final class ProjectionCompiler
 	private ProjectionSelectionNormalizer $selectionNormalizer;
 	private ProjectionBindingAssembler $bindingAssembler;
 	private ProjectionIdentityPlanner $identityPlanner;
+	private ProjectionSourceBuilder $sourceBuilder;
 
 	public function __construct(
 		?ProjectionSelectionNormalizer $selectionNormalizer = null,
 		?ProjectionBindingAssembler $bindingAssembler = null,
 		?ProjectionIdentityPlanner $identityPlanner = null,
+		?ProjectionSourceBuilder $sourceBuilder = null,
 	) {
 		$this->selectionNormalizer = $selectionNormalizer ?? new ProjectionSelectionNormalizer();
 		$this->bindingAssembler = $bindingAssembler ?? new ProjectionBindingAssembler();
 		$this->identityPlanner = $identityPlanner ?? new ProjectionIdentityPlanner();
+		$this->sourceBuilder = $sourceBuilder ?? new ProjectionSourceBuilder();
 	}
 
 	public function compile(SelectQuery $query): RepresentationBinding
@@ -65,9 +69,10 @@ final class ProjectionCompiler
 	public function compileResult(SelectQuery $query): ProjectionCompilation
 	{
 		$binding = $this->compileBinding($query);
-		$identityColumns = $this->identityPlanner->plan($query, $binding);
+		$sources = $this->sourceBuilder->build($binding);
+		$identityColumns = $this->identityPlanner->plan($query, $sources);
 
-		return new ProjectionCompilation($binding, $identityColumns);
+		return new ProjectionCompilation($binding, $sources, $identityColumns);
 	}
 
 	private function compileRootScalarFields(

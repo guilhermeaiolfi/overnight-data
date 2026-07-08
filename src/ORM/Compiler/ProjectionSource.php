@@ -1,0 +1,82 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ON\Data\ORM\Compiler;
+
+/**
+ * Structural grouping of projection fields that originate from one source path.
+ *
+ * Carries only representation/source structure. Query result aliases and row
+ * keys stay in ProjectionIdentityColumns.
+ */
+use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\ORM\State\RepresentationFieldBinding;
+
+final class ProjectionSource
+{
+	/** @var list<string> */
+	private array $path;
+	/** @var list<RepresentationFieldBinding> */
+	private array $fields;
+
+	/**
+	 * @param list<string> $path
+	 * @param list<RepresentationFieldBinding> $fields
+	 */
+	public function __construct(
+		array $path,
+		private CollectionInterface $collection,
+		array $fields,
+	) {
+		$this->path = array_values($path);
+		$this->fields = array_values($fields);
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	public function getPath(): array
+	{
+		return $this->path;
+	}
+
+	public function getPathKey(): string
+	{
+		return implode('.', $this->path);
+	}
+
+	public function getCollection(): CollectionInterface
+	{
+		return $this->collection;
+	}
+
+	/**
+	 * @return list<RepresentationFieldBinding>
+	 */
+	public function getFields(): array
+	{
+		return $this->fields;
+	}
+
+	public function isRoot(): bool
+	{
+		return $this->path === [];
+	}
+
+	public function hasField(string $fieldName): bool
+	{
+		return $this->getFieldPath($fieldName) !== null;
+	}
+
+	public function getFieldPath(string $fieldName): ?string
+	{
+		foreach ($this->fields as $field) {
+			if ($field->getFieldName() === $fieldName) {
+				return $field->getPath();
+			}
+		}
+
+		return null;
+	}
+}

@@ -11,14 +11,23 @@ namespace ON\Data\ORM\Compiler\SelectQuery;
  * Exists because mutable SelectQuery export must pass identity metadata to
  * ProjectionRepresentationAdopter separately from the user-visible binding.
  */
+use ON\Data\ORM\Compiler\ProjectionSource;
 use ON\Data\ORM\State\RepresentationBinding;
 
 final class ProjectionCompilation
 {
+	/** @var list<ProjectionSource> */
+	private array $sources;
+
+	/**
+	 * @param list<ProjectionSource> $sources
+	 */
 	public function __construct(
 		private RepresentationBinding $binding,
+		array $sources,
 		private ProjectionIdentityColumns $identityColumns,
 	) {
+		$this->sources = array_values($sources);
 	}
 
 	public function getBinding(): RepresentationBinding
@@ -26,8 +35,27 @@ final class ProjectionCompilation
 		return $this->binding;
 	}
 
+	/**
+	 * @return list<ProjectionSource>
+	 */
+	public function getSources(): array
+	{
+		return $this->sources;
+	}
+
 	public function getIdentityColumns(): ProjectionIdentityColumns
 	{
 		return $this->identityColumns;
+	}
+
+	public function hasNonRootSources(): bool
+	{
+		foreach ($this->sources as $source) {
+			if (! $source->isRoot()) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

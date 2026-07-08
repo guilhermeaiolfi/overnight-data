@@ -11,15 +11,14 @@ namespace ON\Data\ORM\Query;
  * Exists because flat stdClass projections can span collections via hidden
  * identity selections; GraphAdopter handles nested object graphs instead.
  */
-use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\ORM\Compiler\ProjectionSource;
+use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompilation;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityColumns;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\Sync\RepresentationReader;
@@ -37,11 +36,12 @@ final class ProjectionRepresentationAdopter
 	 */
 	public function adopt(
 		object $representation,
-		RepresentationBinding $binding,
-		ProjectionIdentityColumns $identityColumns,
+		ProjectionCompilation $compilation,
 		array $sourceRow,
 		SessionContext $context,
 	): RepresentationState {
+		$binding = $compilation->getBinding();
+
 		if ($binding->getRelations() !== []) {
 			throw new StateException('Cannot adopt flat projection representation because the binding contains relation bindings.');
 		}
@@ -55,14 +55,14 @@ final class ProjectionRepresentationAdopter
 
 		$recordsBySourcePath = $this->resolveRecordsBySourcePath(
 			$representation,
-			$binding,
-			$identityColumns,
+			$compilation->getSources(),
+			$compilation->getIdentityColumns(),
 			$records,
 			$sourceRow,
 		);
 		$state = new RepresentationState(
 			$binding,
-			$this->buildFieldItems($binding, $recordsBySourcePath),
+			$this->buildFieldItems($compilation->getSources(), $recordsBySourcePath),
 		);
 
 		foreach ($recordsBySourcePath as $record) {
@@ -75,26 +75,23 @@ final class ProjectionRepresentationAdopter
 	}
 
 	/**
+	 * @param list<ProjectionSource> $sources
+	 *
 	 * @return array<string, RecordState>
 	 */
 	private function resolveRecordsBySourcePath(
 		object $representation,
-		RepresentationBinding $binding,
+		array $sources,
 		ProjectionIdentityColumns $identityColumns,
 		RecordStateStore $records,
 		array $sourceRow,
 	): array {
 		$resolved = [];
 
-		foreach ($this->groupFieldBindingsBySourcePath($binding) as $sourceKey => $fieldBindings) {
-			$collection = $fieldBindings[0]->getCollection();
-			$sourcePath = $fieldBindings[0]->getSourcePath();
-			$sourceBinding = $this->bindingForFields($fieldBindings, $collection);
-			$resolved[$sourceKey] = $this->resolveRecord(
+		foreach ($sources as $source) {
+			$resolved[$source->getPathKey()] = $this->resolveRecord(
 				$representation,
-				$sourceBinding,
-				$collection,
-				$sourcePath,
+				$source,
 				$identityColumns,
 				$records,
 				$sourceRow,
@@ -104,20 +101,16 @@ final class ProjectionRepresentationAdopter
 		return $resolved;
 	}
 
-	/**
-	 * @param list<string> $sourcePath
-	 */
 	private function resolveRecord(
 		object $representation,
-		RepresentationBinding $binding,
-		CollectionInterface $collection,
-		array $sourcePath,
+		ProjectionSource $source,
 		ProjectionIdentityColumns $identityColumns,
 		RecordStateStore $records,
 		array $sourceRow,
 	): RecordState {
-		$values = $this->initialValues($representation, $binding, $collection, $sourceRow);
-		$keyValues = $this->completeKeyValues($representation, $binding, $collection, $sourcePath, $identityColumns, $sourceRow);
+		$collection = $source->getCollection();
+		$values = $this->initialValues($representation, $source, $sourceRow);
+		$keyValues = $this->completeKeyValues($representation, $source, $identityColumns, $sourceRow);
 		$key = $collection->getKey($keyValues);
 		$record = $records->getByKey($key);
 
@@ -137,63 +130,25 @@ final class ProjectionRepresentationAdopter
 	}
 
 	/**
-	 * @return array<string, list<RepresentationFieldBinding>>
-	 */
-	private function groupFieldBindingsBySourcePath(RepresentationBinding $binding): array
-	{
-		/** @var array<string, list<RepresentationFieldBinding>> $grouped */
-		$grouped = [];
-
-		foreach ($binding->getFields() as $fieldBinding) {
-			$grouped[$fieldBinding->getSourcePathKey()][] = $fieldBinding;
-		}
-
-		return $grouped;
-	}
-
-	/**
-	 * @param list<RepresentationFieldBinding> $fieldBindings
-	 */
-	private function bindingForFields(array $fieldBindings, CollectionInterface $collection): RepresentationBinding
-	{
-		$sourceBinding = new RepresentationBinding($collection);
-
-		foreach ($fieldBindings as $fieldBinding) {
-			$sourceBinding->addField($fieldBinding);
-		}
-
-		return $sourceBinding;
-	}
-
-	/**
-	 * @param list<string> $sourcePath
-	 *
 	 * @return non-empty-array<string, string|int|float|bool>
 	 */
 	private function completeKeyValues(
 		object $representation,
-		RepresentationBinding $binding,
-		CollectionInterface $collection,
-		array $sourcePath,
+		ProjectionSource $source,
 		ProjectionIdentityColumns $identityColumns,
 		array $sourceRow,
 	): array {
-		$pathsByField = [];
-
-		foreach ($binding->getFields() as $fieldBinding) {
-			$pathsByField[$fieldBinding->getFieldName()] = $fieldBinding->getPath();
-		}
-
+		$collection = $source->getCollection();
 		$values = [];
 
 		foreach ($collection->getPrimaryKey() as $fieldName) {
-			$path = $pathsByField[$fieldName] ?? null;
+			$path = $source->getFieldPath($fieldName);
 			$value = $path !== null
 				? $this->readValue($representation, $path, $sourceRow)
 				: null;
 
 			if ($value === null) {
-				$resultKey = $identityColumns->get($sourcePath, $fieldName);
+				$resultKey = $identityColumns->get($source->getPath(), $fieldName);
 
 				if ($resultKey === null) {
 					throw new StateException(sprintf(
@@ -235,14 +190,14 @@ final class ProjectionRepresentationAdopter
 	 */
 	private function initialValues(
 		object $representation,
-		RepresentationBinding $binding,
-		CollectionInterface $collection,
+		ProjectionSource $source,
 		array $sourceRow,
 	): array {
+		$collection = $source->getCollection();
 		$values = [];
 		$primaryKey = array_flip($collection->getPrimaryKey());
 
-		foreach ($binding->getFields() as $fieldBinding) {
+		foreach ($source->getFields() as $fieldBinding) {
 			$fieldName = $fieldBinding->getFieldName();
 			$value = $this->readValue($representation, $fieldBinding->getPath(), $sourceRow);
 
@@ -274,33 +229,35 @@ final class ProjectionRepresentationAdopter
 	}
 
 	/**
+	 * @param list<ProjectionSource> $sources
 	 * @param array<string, RecordState> $recordsBySourcePath
 	 *
 	 * @return list<RepresentationFieldStateItem>
 	 */
 	private function buildFieldItems(
-		RepresentationBinding $binding,
+		array $sources,
 		array $recordsBySourcePath,
 	): array {
 		$items = [];
 
-		foreach ($binding->getFields() as $fieldBinding) {
-			$record = $recordsBySourcePath[$fieldBinding->getSourcePathKey()] ?? null;
+		foreach ($sources as $source) {
+			$record = $recordsBySourcePath[$source->getPathKey()] ?? null;
 
 			if (! $record instanceof RecordState) {
 				throw new SyncException(sprintf(
-					'Cannot adopt projection representation because field path "%s" targets unresolved source path "%s".',
-					$fieldBinding->getPath(),
-					$fieldBinding->getSourcePathKey(),
+					'Cannot adopt projection representation because source path "%s" is unresolved.',
+					$source->getPathKey(),
 				));
 			}
 
-			$items[] = new RepresentationFieldStateItem(
-				$fieldBinding,
-				$record,
-				$fieldBinding->getFieldName(),
-				$record->getRevision()
-			);
+			foreach ($source->getFields() as $fieldBinding) {
+				$items[] = new RepresentationFieldStateItem(
+					$fieldBinding,
+					$record,
+					$fieldBinding->getFieldName(),
+					$record->getRevision()
+				);
+			}
 		}
 
 		return $items;
