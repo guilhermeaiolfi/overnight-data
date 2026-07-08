@@ -8,9 +8,10 @@ use ON\Data\ORM\Compiler\ProjectionSource;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationRelationStateItem;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 
 final class RepresentationStateFactory
@@ -23,6 +24,17 @@ final class RepresentationStateFactory
 			$schema,
 			$this->fieldItemsForRootRecord($schema, $record),
 			$this->relationItemsForRootRecord($schema, $record),
+		);
+	}
+
+	public function fromRootRecordFields(
+		RepresentationSchema $schema,
+		RecordState $record,
+		bool $skipWhenMissing = false,
+	): RepresentationState {
+		return new RepresentationState(
+			$schema,
+			$this->fieldItemsForRootRecord($schema, $record, $skipWhenMissing),
 		);
 	}
 
@@ -45,28 +57,39 @@ final class RepresentationStateFactory
 		);
 	}
 
+	public function createFieldItem(
+		RepresentationFieldSchema $fieldSchema,
+		RecordState $record,
+		bool $skipWhenMissing = false,
+	): RepresentationFieldStateItem {
+		if ($fieldSchema->getCollectionName() !== $record->getCollection()->getName()) {
+			throw new StateException(sprintf(
+				"Representation schema path '%s' targets collection '%s', not '%s'.",
+				$fieldSchema->getPath(),
+				$fieldSchema->getCollectionName(),
+				$record->getCollection()->getName()
+			));
+		}
+
+		return new RepresentationFieldStateItem(
+			$skipWhenMissing ? $fieldSchema->withSkipWhenMissing(true) : $fieldSchema,
+			$record,
+			$fieldSchema->getFieldName(),
+			$record->getRevision()
+		);
+	}
+
 	/**
 	 * @return list<RepresentationFieldStateItem>
 	 */
-	private function fieldItemsForRootRecord(RepresentationSchema $schema, RecordState $record): array
-	{
+	private function fieldItemsForRootRecord(
+		RepresentationSchema $schema,
+		RecordState $record,
+		bool $skipWhenMissing = false,
+	): array {
 		$items = [];
 		foreach ($schema->getFields() as $fieldSchema) {
-			if ($fieldSchema->getCollectionName() !== $record->getCollection()->getName()) {
-				throw new StateException(sprintf(
-					"Representation schema path '%s' targets collection '%s', not '%s'.",
-					$fieldSchema->getPath(),
-					$fieldSchema->getCollectionName(),
-					$record->getCollection()->getName()
-				));
-			}
-
-			$items[] = new RepresentationFieldStateItem(
-				$fieldSchema,
-				$record,
-				$fieldSchema->getFieldName(),
-				$record->getRevision()
-			);
+			$items[] = $this->createFieldItem($fieldSchema, $record, $skipWhenMissing);
 		}
 
 		return $items;
@@ -128,12 +151,7 @@ final class RepresentationStateFactory
 			}
 
 			foreach ($source->getFields() as $fieldSchema) {
-				$items[] = new RepresentationFieldStateItem(
-					$fieldSchema,
-					$record,
-					$fieldSchema->getFieldName(),
-					$record->getRevision()
-				);
+				$items[] = $this->createFieldItem($fieldSchema, $record);
 			}
 		}
 

@@ -17,10 +17,10 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationSchema;
-use ON\Data\ORM\State\RepresentationSchemaMerger;
 use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationSchemaMerger;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\Sync\RepresentationStateFactory;
@@ -63,12 +63,7 @@ final class RepresentationTracker
 			}
 
 			$record = $this->resolveRecordForNewField($state, $fieldSchema, $recordsByPath);
-			$fieldItems[] = new RepresentationFieldStateItem(
-				$fieldSchema,
-				$record,
-				$fieldSchema->getFieldName(),
-				$record->getRevision()
-			);
+			$fieldItems[] = $this->stateFactory->createFieldItem($fieldSchema, $record);
 		}
 
 		if ($state instanceof RepresentationState) {
@@ -101,18 +96,10 @@ final class RepresentationTracker
 			return;
 		}
 
-		// Field items carry skip-when-missing bindings; the state binding stays as-is.
-		$fieldItems = [];
-		foreach ($relatedSchema->getFields() as $fieldSchema) {
-			$fieldItems[] = new RepresentationFieldStateItem(
-				$fieldSchema->withSkipWhenMissing(true),
-				$record,
-				$fieldSchema->getFieldName(),
-				$record->getRevision()
-			);
-		}
-
-		$this->representations->add($target, new RepresentationState($relatedSchema, $fieldItems));
+		$this->representations->add(
+			$target,
+			$this->stateFactory->fromRootRecordFields($relatedSchema, $record, skipWhenMissing: true)
+		);
 	}
 
 	public function trackAdapter(RecordState $record): object
@@ -128,7 +115,7 @@ final class RepresentationTracker
 			$binding->addField(new RepresentationFieldSchema($fieldName, $record->getCollection(), $fieldName, writable: false));
 		}
 
-		$this->representations->add($object, $this->stateFactory->fromRootRecord($binding, $record));
+		$this->representations->add($object, $this->stateFactory->fromRootRecordFields($binding, $record));
 
 		return $object;
 	}

@@ -10,9 +10,9 @@ use ON\Data\ORM\Compiler\ProjectionSourceBuilder;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationRelationSchema;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\Sync\RepresentationStateFactory;
 use PHPUnit\Framework\TestCase;
 
@@ -51,6 +51,23 @@ final class RepresentationStateFactoryTest extends TestCase
 		$this->expectExceptionMessage("targets collection 'posts', not 'users'");
 
 		(new RepresentationStateFactory())->fromRootRecord($schema, RecordState::new($users));
+	}
+
+	public function testCreatesFieldOnlyStateWithSkipWhenMissingFieldItems(): void
+	{
+		$registry = $this->registry();
+		$users = $registry->getCollection('users');
+		$posts = $registry->getCollection('posts');
+		$record = RecordState::new($users, ['id' => 1, 'name' => 'Ada']);
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$schema->addRelation(new RepresentationRelationSchema('posts', $users, 'posts', new RepresentationSchema($posts)));
+
+		$state = (new RepresentationStateFactory())->fromRootRecordFields($schema, $record, skipWhenMissing: true);
+
+		self::assertSame($schema, $state->getSchema());
+		self::assertSame([], $state->getRelationItems());
+		self::assertTrue($state->getFieldItem('name')->getSchema()->shouldSkipWhenMissing());
 	}
 
 	public function testCreatesStateFromProjectionSourceRecords(): void
