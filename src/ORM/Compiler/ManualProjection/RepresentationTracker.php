@@ -23,6 +23,7 @@ use ON\Data\ORM\State\RepresentationFieldBinding;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
+use ON\Data\ORM\Sync\RepresentationStateFactory;
 use stdClass;
 
 final class RepresentationTracker
@@ -31,6 +32,7 @@ final class RepresentationTracker
 		private RepresentationStateStore $representations,
 		private RecordStateStore $records,
 		private RepresentationBindingMerger $bindingMerger = new RepresentationBindingMerger(),
+		private RepresentationStateFactory $stateFactory = new RepresentationStateFactory(),
 	) {
 	}
 
@@ -99,6 +101,7 @@ final class RepresentationTracker
 			return;
 		}
 
+		// Field items carry skip-when-missing bindings; the state binding stays as-is.
 		$fieldItems = [];
 		foreach ($relatedBinding->getFields() as $fieldBinding) {
 			$fieldItems[] = new RepresentationFieldStateItem(
@@ -125,17 +128,7 @@ final class RepresentationTracker
 			$binding->addField(new RepresentationFieldBinding($fieldName, $record->getCollection(), $fieldName, writable: false));
 		}
 
-		$fieldItems = [];
-		foreach ($binding->getFields() as $fieldBinding) {
-			$fieldItems[] = new RepresentationFieldStateItem(
-				$fieldBinding,
-				$record,
-				$fieldBinding->getFieldName(),
-				$record->getRevision()
-			);
-		}
-
-		$this->representations->add($object, new RepresentationState($binding, $fieldItems));
+		$this->representations->add($object, $this->stateFactory->fromRootRecord($binding, $record));
 
 		return $object;
 	}
