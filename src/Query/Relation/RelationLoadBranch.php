@@ -144,7 +144,7 @@ final class RelationLoadBranch extends LoadBranch
 
 	public function returnsMany(): bool
 	{
-		return $this->getRelationRef()->getDefinition()->getCardinality() === 'many';
+		return $this->getRelationRef()->getDefinition()->getCardinality()->isMany();
 	}
 
 	private function fieldSelectionName(string $fieldName): string

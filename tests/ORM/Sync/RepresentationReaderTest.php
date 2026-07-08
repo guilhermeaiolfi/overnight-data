@@ -10,7 +10,6 @@ use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationRelationSchema;
-use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\Sync\RepresentationReader;
 use PHPUnit\Framework\TestCase;
 use stdClass;

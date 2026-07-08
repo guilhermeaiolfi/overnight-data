@@ -12,6 +12,7 @@ use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Interface\InterfaceTrait;
 use ON\Data\Definition\Internal\DefinitionFactory;
 use ON\Data\Definition\MetadataTrait;
+use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Definition\Relation\RelationKeyPairing;
 use ON\Data\ORM\Relation\Persistence\RelationPersistencePlannerInterface;
@@ -250,9 +251,9 @@ final class CustomOwnedRelation extends DefinitionNode implements RelationInterf
 		return is_array($orderBy) ? $orderBy : [];
 	}
 
-	public function getCardinality(): string
+	public function getCardinality(): RelationCardinality
 	{
-		return 'many';
+		return RelationCardinality::MANY;
 	}
 
 	public function isJunction(): bool

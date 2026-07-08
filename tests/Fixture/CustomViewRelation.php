@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Fixture;
 
 use ON\Data\Definition\Relation\AbstractRelation;
+use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\Query\Relation\Loader\HasManyLoader;
 
 class CustomViewRelation extends AbstractRelation
@@ -16,8 +17,8 @@ class CustomViewRelation extends AbstractRelation
 		]);
 	}
 
-	public function getCardinality(): string
+	public function getCardinality(): RelationCardinality
 	{
-		return 'many';
+		return RelationCardinality::MANY;
 	}
 }

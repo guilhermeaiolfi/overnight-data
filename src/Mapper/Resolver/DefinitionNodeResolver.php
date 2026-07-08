@@ -73,7 +73,7 @@ final class DefinitionNodeResolver implements CacheableNodeResolverInterface
 				$definition,
 				$relation->getCollection(),
 			),
-			collection: $relation->getCardinality() === 'many',
+			collection: $relation->getCardinality()->isMany(),
 		);
 	}
 

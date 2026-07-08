@@ -5,15 +5,8 @@ declare(strict_types=1);
 namespace ON\Data\ORM\State;
 
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\Definition\Relation\RelationInterface;
-
-/**
- * One structural relation representation path bound to an owner collection,
- * relation name, and reusable related RepresentationSchema branch.
- *
- * Exists so graph sync and relation runtime state can share one recursive
- * schema model without duplicating per-child schema templates.
- */
 use ON\Data\ORM\Exception\StateException;
 
 final class RepresentationRelationSchema
@@ -64,14 +57,19 @@ final class RepresentationRelationSchema
 		return $this->relatedSchema;
 	}
 
+	public function getCardinality(): RelationCardinality
+	{
+		return $this->getDefinition()->getCardinality();
+	}
+
 	public function isMany(): bool
 	{
-		return $this->getDefinition()->getCardinality() === 'many';
+		return $this->getCardinality()->isMany();
 	}
 
 	public function isSingle(): bool
 	{
-		return $this->getDefinition()->getCardinality() === 'single';
+		return $this->getCardinality()->isSingle();
 	}
 
 	public function shouldSkipWhenMissing(): bool

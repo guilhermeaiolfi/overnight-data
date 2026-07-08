@@ -15,7 +15,6 @@ use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationRelationSchema;
-use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\Sync\ExistingIntent;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;

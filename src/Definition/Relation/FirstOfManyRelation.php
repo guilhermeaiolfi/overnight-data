@@ -15,8 +15,8 @@ class FirstOfManyRelation extends HasManyRelation
 		]);
 	}
 
-	public function getCardinality(): string
+	public function getCardinality(): RelationCardinality
 	{
-		return 'single';
+		return RelationCardinality::SINGLE;
 	}
 }

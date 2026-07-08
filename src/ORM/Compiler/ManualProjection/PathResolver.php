@@ -15,7 +15,7 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationRelationSchema;
-use ON\Data\ORM\State\RepresentationRelationCardinality;
+use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 
@@ -43,7 +43,7 @@ final class PathResolver
 			$owner,
 			$relationItem->getOwnerRecord(),
 			$relationSchema->getRelationName(),
-			$relationSchema->isMany() ? RepresentationRelationCardinality::MANY : RepresentationRelationCardinality::ONE,
+			$relationSchema->getCardinality(),
 			$relationSchema->getRelatedSchema()
 		);
 	}

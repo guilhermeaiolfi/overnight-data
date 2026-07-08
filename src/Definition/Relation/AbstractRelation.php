@@ -293,9 +293,9 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 		return $value;
 	}
 
-	public function getCardinality(): string
+	public function getCardinality(): RelationCardinality
 	{
-		return 'single';
+		return RelationCardinality::SINGLE;
 	}
 
 	public function isJunction(): bool

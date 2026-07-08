@@ -7,6 +7,7 @@ namespace Tests\ON\Data\Definition;
 use InvalidArgumentException;
 use LogicException;
 use ON\Data\Definition\Registry;
+use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\Definition\Relation\BelongsToRelation;
 use ON\Data\Definition\Relation\FirstOfManyRelation;
 use ON\Data\Definition\Relation\HasManyRelation;
@@ -49,7 +50,7 @@ final class RelationDefinitionTest extends TestCase
 		self::assertSame(['id'], $relation->getOuterKeys());
 		self::assertSame('user_id', $relation->getInnerField()->getName());
 		self::assertSame('id', $relation->getOuterField()->getName());
-		self::assertSame('single', $relation->getCardinality());
+		self::assertSame(RelationCardinality::SINGLE, $relation->getCardinality());
 		self::assertFalse($relation->isJunction());
 	}
 
@@ -134,7 +135,7 @@ final class RelationDefinitionTest extends TestCase
 		self::assertSame(['tenant_id', 'slug'], $relation->getOuterKeys());
 		self::assertSame(['article_tenant_id', 'article_slug'], $relation->through->getInnerKeys());
 		self::assertSame(['tag_tenant_id', 'tag_slug'], $relation->through->getOuterKeys());
-		self::assertSame('many', $relation->getCardinality());
+		self::assertSame(RelationCardinality::MANY, $relation->getCardinality());
 		self::assertTrue($relation->isJunction());
 	}
 
@@ -237,7 +238,7 @@ final class RelationDefinitionTest extends TestCase
 	{
 		$relation = (new Registry())->collection('user')->relation('featured', FirstOfManyRelation::class);
 
-		self::assertSame('single', $relation->getCardinality());
+		self::assertSame(RelationCardinality::SINGLE, $relation->getCardinality());
 		self::assertFalse($relation->isJunction());
 	}
 

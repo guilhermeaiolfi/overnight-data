@@ -26,7 +26,7 @@ final class SourceResolver implements ProjectionSourceResolverInterface
 		}
 
 		if ($source instanceof RelationRef) {
-			if ($source->getDefinition()->getCardinality() === 'many') {
+			if ($source->getDefinition()->getCardinality()->isMany()) {
 				throw new StateException(sprintf(
 					"Cannot select MANY relation source '%s' without first creating or identifying one concrete relation item.",
 					implode('.', $source->getPath())

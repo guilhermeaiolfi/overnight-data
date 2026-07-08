@@ -86,9 +86,9 @@ interface RelationInterface
 	public function getOrderBy(): array;
 
 	/**
-	 * Returns 'single' or 'many' — whether this relation resolves to one item or a collection.
+	 * Whether this relation resolves to one item or a collection.
 	 */
-	public function getCardinality(): string;
+	public function getCardinality(): RelationCardinality;
 
 	/**
 	 * Whether this is a junction/pivot relation (M2M) that uses a through table.

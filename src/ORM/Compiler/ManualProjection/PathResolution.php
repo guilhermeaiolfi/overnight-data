@@ -13,7 +13,7 @@ namespace ON\Data\ORM\Compiler\ManualProjection;
  */
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationSchema;
-use ON\Data\ORM\State\RepresentationRelationCardinality;
+use ON\Data\Definition\Relation\RelationCardinality;
 
 final class PathResolution
 {
@@ -21,7 +21,7 @@ final class PathResolution
 		private object $ownerObject,
 		private RecordState $owner,
 		private string $relationName,
-		private RepresentationRelationCardinality $cardinality,
+		private RelationCardinality $cardinality,
 		private RepresentationSchema $relatedSchema,
 	) {
 	}
@@ -41,7 +41,7 @@ final class PathResolution
 		return $this->relationName;
 	}
 
-	public function getCardinality(): RepresentationRelationCardinality
+	public function getCardinality(): RelationCardinality
 	{
 		return $this->cardinality;
 	}

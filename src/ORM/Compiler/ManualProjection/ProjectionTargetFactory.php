@@ -20,7 +20,7 @@ use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationSchema;
-use ON\Data\ORM\State\RepresentationRelationCardinality;
+use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
 
 final class ProjectionTargetFactory
@@ -187,7 +187,7 @@ final class ProjectionTargetFactory
 		RecordState $owner,
 		object $ownerObject,
 		string $relationName,
-		RepresentationRelationCardinality $cardinality,
+		RelationCardinality $cardinality,
 		RepresentationSchema $relatedSchema,
 		RecordState $record,
 		?object $explicitTarget = null,
@@ -210,7 +210,7 @@ final class ProjectionTargetFactory
 	private function attachRelationTarget(
 		RecordState $owner,
 		string $relationName,
-		RepresentationRelationCardinality $cardinality,
+		RelationCardinality $cardinality,
 		RepresentationSchema $relatedSchema,
 		RecordState $record,
 		object $target,
@@ -253,11 +253,11 @@ final class ProjectionTargetFactory
 	private function applyRelationTarget(
 		RecordState $owner,
 		string $relationName,
-		RepresentationRelationCardinality $cardinality,
+		RelationCardinality $cardinality,
 		RepresentationSchema $relatedSchema,
 		object $target,
 	): void {
-		if ($cardinality === RepresentationRelationCardinality::MANY) {
+		if ($cardinality->isMany()) {
 			$this->applyToManyRelationTarget($owner, $relationName, $relatedSchema, $target);
 
 			return;
@@ -321,10 +321,8 @@ final class ProjectionTargetFactory
 		return $record;
 	}
 
-	private function relationCardinality(RelationRef $relation): RepresentationRelationCardinality
+	private function relationCardinality(RelationRef $relation): RelationCardinality
 	{
-		return $relation->getDefinition()->getCardinality() === 'many'
-			? RepresentationRelationCardinality::MANY
-			: RepresentationRelationCardinality::ONE;
+		return $relation->getDefinition()->getCardinality();
 	}
 }

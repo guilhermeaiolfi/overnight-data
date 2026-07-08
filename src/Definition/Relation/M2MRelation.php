@@ -32,9 +32,9 @@ class M2MRelation extends AbstractRelation
 			));
 	}
 
-	public function getCardinality(): string
+	public function getCardinality(): RelationCardinality
 	{
-		return 'many';
+		return RelationCardinality::MANY;
 	}
 
 	public function getKeyPairing(): RelationKeyPairing

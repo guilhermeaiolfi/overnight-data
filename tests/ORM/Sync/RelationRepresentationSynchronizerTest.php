@@ -13,7 +13,7 @@ use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationRelationSchema;
-use ON\Data\ORM\State\RepresentationRelationCardinality;
+use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\Sync\RelationRepresentationSynchronizer;
@@ -51,7 +51,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 	{
 		$owner = RecordState::new($this->users());
 		$binding = new RepresentationSchema($this->users());
-		$binding->addRelation($this->relationBinding($owner, RepresentationRelationCardinality::ONE));
+		$binding->addRelation($this->relationBinding($owner, RelationCardinality::SINGLE));
 		$toManyRelations = new RelationStateStore();
 		$toOneRelations = new RelationStateStore();
 
@@ -118,8 +118,8 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$item = new stdClass();
 		$target = new stdClass();
 		$binding = new RepresentationSchema($this->users());
-		$binding->addRelation($this->relationBinding($owner, RepresentationRelationCardinality::MANY));
-		$binding->addRelation($this->relationBinding($owner, RepresentationRelationCardinality::ONE));
+		$binding->addRelation($this->relationBinding($owner, RelationCardinality::MANY));
+		$binding->addRelation($this->relationBinding($owner, RelationCardinality::SINGLE));
 
 		$touched = $this->sync(
 			$this->trackedMapWithRelated(
@@ -407,7 +407,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		bool $fullyLoaded = false,
 	): RepresentationState {
 		$binding = new RepresentationSchema($this->users());
-		$binding->addRelation($this->relationBinding($owner, RepresentationRelationCardinality::MANY, $fullyLoaded));
+		$binding->addRelation($this->relationBinding($owner, RelationCardinality::MANY, $fullyLoaded));
 
 		return $this->tracked($this->representation($values), $binding, [$owner]);
 	}
@@ -418,17 +418,17 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 	private function trackedWithOneRelation(RecordState $owner, array $values): RepresentationState
 	{
 		$binding = new RepresentationSchema($this->users());
-		$binding->addRelation($this->relationBinding($owner, RepresentationRelationCardinality::ONE));
+		$binding->addRelation($this->relationBinding($owner, RelationCardinality::SINGLE));
 
 		return $this->tracked($this->representation($values), $binding, [$owner]);
 	}
 
 	private function relationBinding(
 		RecordState $owner,
-		RepresentationRelationCardinality $cardinality,
+		RelationCardinality $cardinality,
 		bool $fullyLoaded = false,
 	): RepresentationRelationSchema {
-		if ($cardinality === RepresentationRelationCardinality::ONE) {
+		if ($cardinality->isSingle()) {
 			return new RepresentationRelationSchema(
 				'profile',
 				$owner->getCollection(),
