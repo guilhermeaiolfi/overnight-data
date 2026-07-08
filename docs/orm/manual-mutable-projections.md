@@ -35,7 +35,7 @@ SelectQuery projections get field targets from executed query provenance.
 
 Manual projections get field targets from explicit property declarations plus manually supplied record identities. Manual projection is not compiling SQL result shape; it is declaring which public properties write to which tracked record fields.
 
-The manual projection builder does not query. It normalizes manual property refs into `RepresentationFieldBinding` targets and registers relation intent through the existing `ToOneRelationState` / `ToManyRelationState` stores. Flush still uses the normal scalar sync, relation planners, command planning, and command execution pipeline.
+The manual projection builder does not query. It normalizes manual property refs into `RepresentationFieldSchema` targets and registers relation intent through the existing `ToOneRelationState` / `ToManyRelationState` stores. Flush still uses the normal scalar sync, relation planners, command planning, and command execution pipeline.
 
 ## Root Source
 

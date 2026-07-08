@@ -6,7 +6,7 @@ namespace ON\Data\ORM\Relation;
 
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
 
 final class ToOneRelationState implements RelationChangeInterface
 {
@@ -16,7 +16,7 @@ final class ToOneRelationState implements RelationChangeInterface
 	public function __construct(
 		private readonly RecordState $owner,
 		private readonly string $relationName,
-		private readonly RepresentationBinding $relatedBinding,
+		private readonly RepresentationSchema $relatedSchema,
 		?object $target = null,
 	) {
 		if (trim($relationName) === '') {
@@ -37,9 +37,9 @@ final class ToOneRelationState implements RelationChangeInterface
 		return $this->relationName;
 	}
 
-	public function getRelatedBinding(): RepresentationBinding
+	public function getRelatedSchema(): RepresentationSchema
 	{
-		return $this->relatedBinding;
+		return $this->relatedSchema;
 	}
 
 	public function getTarget(): ?object

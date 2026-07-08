@@ -12,7 +12,7 @@ namespace ON\Data\ORM\Compiler\ManualProjection;
  * when attaching path-based targets.
  */
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 
 final class PathResolution
@@ -22,7 +22,7 @@ final class PathResolution
 		private RecordState $owner,
 		private string $relationName,
 		private RepresentationRelationCardinality $cardinality,
-		private RepresentationBinding $relatedBinding,
+		private RepresentationSchema $relatedSchema,
 	) {
 	}
 
@@ -46,8 +46,8 @@ final class PathResolution
 		return $this->cardinality;
 	}
 
-	public function getRelatedBinding(): RepresentationBinding
+	public function getRelatedSchema(): RepresentationSchema
 	{
-		return $this->relatedBinding;
+		return $this->relatedSchema;
 	}
 }

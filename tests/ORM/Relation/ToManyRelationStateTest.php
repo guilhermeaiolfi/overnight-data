@@ -38,7 +38,7 @@ final class ToManyRelationStateTest extends TestCase
 		self::assertSame($owner, $collection->getOwner());
 		self::assertSame('posts', $collection->getRelationName());
 		self::assertSame($binding, $collection->getChildBinding());
-		self::assertSame($binding, $collection->getRelatedBinding());
+		self::assertSame($binding, $collection->getRelatedSchema());
 		self::assertTrue($collection->isFullyLoaded());
 	}
 
@@ -318,7 +318,7 @@ final class ToManyRelationStateTest extends TestCase
 		$collection->remove($item);
 
 		self::assertSame($binding, $collection->getChildBinding());
-		self::assertSame($binding, $collection->getRelatedBinding());
+		self::assertSame($binding, $collection->getRelatedSchema());
 		self::assertSame('posts', $binding->getField('title')->getCollectionName());
 	}
 

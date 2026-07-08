@@ -7,7 +7,7 @@ namespace Tests\ON\Data\ORM\Compiler;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompilation;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompiler;
-use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
 use function ON\Data\Query\query;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
@@ -100,7 +100,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 			->select($query->id, $query->company->name->as('name')));
 
 		$compilation = $this->compiler->compileResult($query);
-		$binding = $compilation->getBinding();
+		$binding = $compilation->getSchema();
 
 		self::assertTrue($binding->hasField('id'));
 		self::assertTrue($binding->hasField('name'));
@@ -122,7 +122,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		);
 	}
 
-	public function testCompileBindingReturnsRepresentationBindingWithoutInternalSelections(): void
+	public function testCompileBindingReturnsRepresentationSchemaWithoutInternalSelections(): void
 	{
 		$registry = $this->makeRegistryWithCompany();
 		$users = $registry->getCollection('users');
@@ -131,7 +131,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 
 		$binding = $this->compiler->compileBinding($query);
 
-		self::assertInstanceOf(RepresentationBinding::class, $binding);
+		self::assertInstanceOf(RepresentationSchema::class, $binding);
 		self::assertTrue($binding->hasField('id'));
 		self::assertTrue($binding->hasField('name'));
 		self::assertSame(['company'], $binding->getField('name')->getSourcePath());
@@ -147,7 +147,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 
 		$binding = $this->compiler->compile($query);
 
-		self::assertInstanceOf(RepresentationBinding::class, $binding);
+		self::assertInstanceOf(RepresentationSchema::class, $binding);
 		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
 	}
 
@@ -179,7 +179,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		$compilation = $this->compiler->compileResult($query);
 
 		self::assertInstanceOf(ProjectionCompilation::class, $compilation);
-		self::assertTrue($compilation->getBinding()->getField('name')->getSourcePath() === ['company']);
+		self::assertTrue($compilation->getSchema()->getField('name')->getSourcePath() === ['company']);
 		self::assertNotNull($compilation->getIdentityColumns()->get(['company'], 'id'));
 		self::assertNull($compilation->getIdentityColumns()->get([], 'id'));
 	}
@@ -218,7 +218,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 
 		$compilation = $this->compiler->compileResult($query);
 
-		self::assertFalse($compilation->getBinding()->hasField('post_count'));
+		self::assertFalse($compilation->getSchema()->hasField('post_count'));
 		self::assertCount(1, $compilation->getSources());
 		self::assertNull($compilation->getSources()[0]->getFieldPath('post_count'));
 	}
@@ -231,7 +231,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 			->select($query->name, $query->manager->name->as('managerName')));
 
 		$compilation = $this->compiler->compileResult($query);
-		$binding = $compilation->getBinding();
+		$binding = $compilation->getSchema();
 
 		self::assertSame('users', $binding->getField('name')->getCollectionName());
 		self::assertSame('users', $binding->getField('managerName')->getCollectionName());
@@ -255,7 +255,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 			->select($query->company->name->as('company_name')));
 
 		$compilation = $this->compiler->compileResult($query);
-		$binding = $compilation->getBinding();
+		$binding = $compilation->getSchema();
 
 		self::assertTrue($binding->hasField('company_name'));
 		self::assertFalse($binding->hasField('company.id'));
@@ -278,9 +278,9 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		self::assertSame('users', $posts->getOwnerCollectionName());
 		self::assertSame('posts', $posts->getRelationName());
 		self::assertTrue($posts->isMany());
-		self::assertTrue($posts->getRelatedBinding()->hasField('title'));
-		self::assertTrue($posts->getRelatedBinding()->hasField('id'));
-		self::assertTrue($posts->getRelatedBinding()->getField('id')->isReadOnly());
+		self::assertTrue($posts->getRelatedSchema()->hasField('title'));
+		self::assertTrue($posts->getRelatedSchema()->hasField('id'));
+		self::assertTrue($posts->getRelatedSchema()->getField('id')->isReadOnly());
 	}
 
 	public function testRelationWithLoadAndNoFieldsFallsBackToTargetDefinitionFields(): void
@@ -293,7 +293,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 			->load());
 
 		$binding = $this->compiler->compile($query);
-		$posts = $binding->getRelation('posts')->getRelatedBinding();
+		$posts = $binding->getRelation('posts')->getRelatedSchema();
 
 		self::assertTrue($posts->hasField('id'));
 		self::assertTrue($posts->hasField('title'));
@@ -389,14 +389,14 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		self::assertTrue($binding->hasRelation('posts'));
 		self::assertFalse($binding->hasRelation('posts.comments'));
 
-		$postsBinding = $binding->getRelation('posts')->getRelatedBinding();
-		self::assertTrue($postsBinding->hasRelation('comments'));
-		self::assertFalse($postsBinding->hasRelation('posts.comments'));
+		$postsSchema = $binding->getRelation('posts')->getRelatedSchema();
+		self::assertTrue($postsSchema->hasRelation('comments'));
+		self::assertFalse($postsSchema->hasRelation('posts.comments'));
 
-		$commentsBinding = $postsBinding->getRelation('comments')->getRelatedBinding();
-		self::assertTrue($commentsBinding->hasField('body'));
-		self::assertTrue($commentsBinding->hasField('id'));
-		self::assertTrue($commentsBinding->getField('id')->isReadOnly());
+		$commentsSchema = $postsSchema->getRelation('comments')->getRelatedSchema();
+		self::assertTrue($commentsSchema->hasField('body'));
+		self::assertTrue($commentsSchema->hasField('id'));
+		self::assertTrue($commentsSchema->getField('id')->isReadOnly());
 	}
 
 	public function testIgnoresUnsupportedExpressions(): void
@@ -457,7 +457,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 			->load());
 
 		$binding = $this->compiler->compile($query);
-		$posts = $binding->getRelation('posts')->getRelatedBinding();
+		$posts = $binding->getRelation('posts')->getRelatedSchema();
 
 		self::assertTrue($posts->getField('id')->isWritable());
 		self::assertSame([], $posts->getField('id')->getSourcePath());
@@ -474,7 +474,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 			->fields('title'));
 
 		$binding = $this->compiler->compile($query);
-		$posts = $binding->getRelation('posts')->getRelatedBinding();
+		$posts = $binding->getRelation('posts')->getRelatedSchema();
 
 		self::assertTrue($posts->getField('title')->isWritable());
 		self::assertTrue($posts->getField('id')->isReadOnly());
@@ -482,7 +482,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		self::assertSame([], $posts->getField('id')->getSourcePath());
 	}
 
-	public function testReturnsNewRepresentationBindingEachTime(): void
+	public function testReturnsNewRepresentationSchemaEachTime(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');

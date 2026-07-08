@@ -25,7 +25,7 @@ final class ToOneRelationStateTest extends TestCase
 
 		self::assertSame($owner, $reference->getOwner());
 		self::assertSame('author', $reference->getRelationName());
-		self::assertSame($binding, $reference->getRelatedBinding());
+		self::assertSame($binding, $reference->getRelatedSchema());
 		self::assertSame($target, $reference->getBaselineTarget());
 		self::assertSame($target, $reference->getTarget());
 	}
@@ -122,7 +122,7 @@ final class ToOneRelationStateTest extends TestCase
 	{
 		$binding = $this->postBinding();
 
-		self::assertSame($binding, (new ToOneRelationState(RecordState::new($this->users()), 'author', $binding))->getRelatedBinding());
+		self::assertSame($binding, (new ToOneRelationState(RecordState::new($this->users()), 'author', $binding))->getRelatedSchema());
 	}
 
 	private function reference(?object $target = null): ToOneRelationState

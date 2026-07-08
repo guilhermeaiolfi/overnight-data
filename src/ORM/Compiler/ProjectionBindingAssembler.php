@@ -6,7 +6,7 @@ namespace ON\Data\ORM\Compiler;
 
 /**
  * Shared structural binding creation for projection compilation: turns normalized
- * ProjectionFieldShape values into RepresentationFieldBinding entries, and offers
+ * ProjectionFieldShape values into RepresentationFieldSchema entries, and offers
  * default/primary-key shape factories so root, default, and PK fields flow
  * through the same shape path as explicit selections.
  *
@@ -15,8 +15,8 @@ namespace ON\Data\ORM\Compiler;
  * / skip-when-missing flags.
  */
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 
 final class ProjectionBindingAssembler
 {
@@ -28,8 +28,8 @@ final class ProjectionBindingAssembler
 		ProjectionSourceResolverInterface $resolver,
 		CollectionInterface $collection,
 		bool $skipWhenMissing = false,
-	): RepresentationBinding {
-		$binding = new RepresentationBinding($collection);
+	): RepresentationSchema {
+		$binding = new RepresentationSchema($collection);
 		$this->assembleInto($binding, $fieldShapes, $resolver, $skipWhenMissing);
 
 		return $binding;
@@ -39,7 +39,7 @@ final class ProjectionBindingAssembler
 	 * @param list<ProjectionFieldShape> $fieldShapes
 	 */
 	public function assembleInto(
-		RepresentationBinding $binding,
+		RepresentationSchema $binding,
 		array $fieldShapes,
 		ProjectionSourceResolverInterface $resolver,
 		bool $skipWhenMissing = false,
@@ -50,7 +50,7 @@ final class ProjectionBindingAssembler
 			}
 
 			$resolved = $resolver->resolve($shape->getSource());
-			$binding->addField(new RepresentationFieldBinding(
+			$binding->addField(new RepresentationFieldSchema(
 				$shape->getPublicPath(),
 				$resolved->getCollection(),
 				$shape->getFieldName(),

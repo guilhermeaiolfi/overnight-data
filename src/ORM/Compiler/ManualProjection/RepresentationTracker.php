@@ -17,9 +17,9 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationBindingMerger;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationSchemaMerger;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
@@ -31,7 +31,7 @@ final class RepresentationTracker
 	public function __construct(
 		private RepresentationStateStore $representations,
 		private RecordStateStore $records,
-		private RepresentationBindingMerger $bindingMerger = new RepresentationBindingMerger(),
+		private RepresentationSchemaMerger $schemaMerger = new RepresentationSchemaMerger(),
 		private RepresentationStateFactory $stateFactory = new RepresentationStateFactory(),
 	) {
 	}
@@ -41,32 +41,32 @@ final class RepresentationTracker
 	 */
 	public function applyManualProjection(
 		object $representation,
-		RepresentationBinding $manualBinding,
+		RepresentationSchema $manualSchema,
 		array $propertyShapes,
 	): void {
 		$state = $this->representations->get($representation);
 		$recordsByPath = $this->recordsByPathFromShapes($propertyShapes);
 
 		if ($state instanceof RepresentationState) {
-			$binding = $this->bindingMerger->mergeManualOverlay($state->getBinding(), $manualBinding);
+			$binding = $this->schemaMerger->mergeManualOverlay($state->getSchema(), $manualSchema);
 			$fieldItems = $state->getFieldItems();
 			$relationItems = $state->getRelationItems();
 		} else {
-			$binding = $manualBinding;
+			$binding = $manualSchema;
 			$fieldItems = [];
 			$relationItems = [];
 		}
 
-		foreach ($binding->getFields() as $fieldBinding) {
-			if ($this->hasFieldItem($fieldItems, $fieldBinding->getPath())) {
+		foreach ($binding->getFields() as $fieldSchema) {
+			if ($this->hasFieldItem($fieldItems, $fieldSchema->getPath())) {
 				continue;
 			}
 
-			$record = $this->resolveRecordForNewField($state, $fieldBinding, $recordsByPath);
+			$record = $this->resolveRecordForNewField($state, $fieldSchema, $recordsByPath);
 			$fieldItems[] = new RepresentationFieldStateItem(
-				$fieldBinding,
+				$fieldSchema,
 				$record,
-				$fieldBinding->getFieldName(),
+				$fieldSchema->getFieldName(),
 				$record->getRevision()
 			);
 		}
@@ -78,7 +78,7 @@ final class RepresentationTracker
 		$this->representations->add($representation, new RepresentationState($binding, $fieldItems, $relationItems));
 	}
 
-	public function trackFlattenedAdapter(RecordState $record, RepresentationBinding $relatedBinding, object $ownerObject): object
+	public function trackFlattenedAdapter(RecordState $record, RepresentationSchema $relatedSchema, object $ownerObject): object
 	{
 		$target = $ownerObject;
 		$state = $this->representations->get($target);
@@ -89,12 +89,12 @@ final class RepresentationTracker
 			}
 		}
 
-		$this->trackTarget($target, $record, $relatedBinding);
+		$this->trackTarget($target, $record, $relatedSchema);
 
 		return $target;
 	}
 
-	public function trackTarget(object $target, RecordState $record, RepresentationBinding $relatedBinding): void
+	public function trackTarget(object $target, RecordState $record, RepresentationSchema $relatedSchema): void
 	{
 		$state = $this->representations->get($target);
 		if ($state instanceof RepresentationState) {
@@ -103,29 +103,29 @@ final class RepresentationTracker
 
 		// Field items carry skip-when-missing bindings; the state binding stays as-is.
 		$fieldItems = [];
-		foreach ($relatedBinding->getFields() as $fieldBinding) {
+		foreach ($relatedSchema->getFields() as $fieldSchema) {
 			$fieldItems[] = new RepresentationFieldStateItem(
-				$fieldBinding->withSkipWhenMissing(true),
+				$fieldSchema->withSkipWhenMissing(true),
 				$record,
-				$fieldBinding->getFieldName(),
+				$fieldSchema->getFieldName(),
 				$record->getRevision()
 			);
 		}
 
-		$this->representations->add($target, new RepresentationState($relatedBinding, $fieldItems));
+		$this->representations->add($target, new RepresentationState($relatedSchema, $fieldItems));
 	}
 
 	public function trackAdapter(RecordState $record): object
 	{
 		// Private adapter for object-based relation state APIs; it is not a second identity system.
 		$object = new stdClass();
-		$binding = new RepresentationBinding($record->getCollection());
+		$binding = new RepresentationSchema($record->getCollection());
 		foreach ($record->getCollection()->getPrimaryKey() as $fieldName) {
 			if ($record->hasValue($fieldName)) {
 				$object->{$fieldName} = $record->getValue($fieldName);
 			}
 
-			$binding->addField(new RepresentationFieldBinding($fieldName, $record->getCollection(), $fieldName, writable: false));
+			$binding->addField(new RepresentationFieldSchema($fieldName, $record->getCollection(), $fieldName, writable: false));
 		}
 
 		$this->representations->add($object, $this->stateFactory->fromRootRecord($binding, $record));
@@ -140,14 +140,14 @@ final class RepresentationTracker
 	{
 		$records = [];
 		foreach ($state->getFieldItems() as $fieldItem) {
-			if ($fieldItem->getBinding()->getCollectionName() === $collection->getName()) {
+			if ($fieldItem->getSchema()->getCollectionName() === $collection->getName()) {
 				$record = $fieldItem->getRecord();
 				$records[$record->getStateHash()] = $record;
 			}
 		}
 
 		foreach ($state->getRelationItems() as $relationItem) {
-			if ($relationItem->getBinding()->getOwnerCollectionName() === $collection->getName()) {
+			if ($relationItem->getSchema()->getOwnerCollectionName() === $collection->getName()) {
 				$record = $relationItem->getOwnerRecord();
 				$records[$record->getStateHash()] = $record;
 			}
@@ -180,24 +180,24 @@ final class RepresentationTracker
 	 */
 	private function resolveRecordForNewField(
 		?RepresentationState $state,
-		RepresentationFieldBinding $fieldBinding,
+		RepresentationFieldSchema $fieldSchema,
 		array $recordsByPath,
 	): RecordState {
 		if ($state instanceof RepresentationState) {
-			$resolved = $this->resolveRecordForFieldBinding($state, $fieldBinding);
+			$resolved = $this->resolveRecordForFieldBinding($state, $fieldSchema);
 			if ($resolved instanceof RecordState) {
 				return $resolved;
 			}
 		}
 
-		$explicit = $recordsByPath[$fieldBinding->getPath()] ?? null;
+		$explicit = $recordsByPath[$fieldSchema->getPath()] ?? null;
 		if ($explicit instanceof RecordState) {
-			if ($explicit->getCollection()->getName() !== $fieldBinding->getCollectionName()) {
+			if ($explicit->getCollection()->getName() !== $fieldSchema->getCollectionName()) {
 				throw new StateException(sprintf(
 					"Manual projection field '%s' resolved to a record of collection '%s' but the binding targets collection '%s'.",
-					$fieldBinding->getPath(),
+					$fieldSchema->getPath(),
 					$explicit->getCollection()->getName(),
-					$fieldBinding->getCollectionName(),
+					$fieldSchema->getCollectionName(),
 				));
 			}
 
@@ -206,22 +206,22 @@ final class RepresentationTracker
 
 		throw new StateException(sprintf(
 			"Cannot attach manual projection field '%s' because no concrete record state for source path '%s' could be resolved.",
-			$fieldBinding->getPath(),
-			$fieldBinding->getSourcePathKey(),
+			$fieldSchema->getPath(),
+			$fieldSchema->getSourcePathKey(),
 		));
 	}
 
 	private function resolveRecordForFieldBinding(
 		RepresentationState $state,
-		RepresentationFieldBinding $fieldBinding,
+		RepresentationFieldSchema $fieldSchema,
 	): ?RecordState {
-		if ($fieldBinding->isRootSource()) {
+		if ($fieldSchema->isRootSource()) {
 			return $state->getRootRecord();
 		}
 
-		$sourceKey = $fieldBinding->getSourcePathKey();
+		$sourceKey = $fieldSchema->getSourcePathKey();
 		foreach ($state->getFieldItems() as $item) {
-			if ($item->getBinding()->getSourcePathKey() === $sourceKey) {
+			if ($item->getSchema()->getSourcePathKey() === $sourceKey) {
 				return $item->getRecord();
 			}
 		}

@@ -8,7 +8,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Compiler\ProjectionSource;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityPlanner;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
@@ -30,8 +30,8 @@ final class ProjectionIdentityPlannerTest extends TestCase
 			$this->source(
 				$users,
 				[],
-				new RepresentationFieldBinding('id', $users, 'id', writable: false),
-				new RepresentationFieldBinding('name', $users, 'name'),
+				new RepresentationFieldSchema('id', $users, 'id', writable: false),
+				new RepresentationFieldSchema('name', $users, 'name'),
 			),
 		];
 
@@ -49,7 +49,7 @@ final class ProjectionIdentityPlannerTest extends TestCase
 			$this->source(
 				$users,
 				[],
-				new RepresentationFieldBinding('name', $users, 'name'),
+				new RepresentationFieldSchema('name', $users, 'name'),
 			),
 		];
 
@@ -69,13 +69,13 @@ final class ProjectionIdentityPlannerTest extends TestCase
 			$this->source(
 				$users,
 				[],
-				new RepresentationFieldBinding('id', $users, 'id', writable: false),
-				new RepresentationFieldBinding('name', $users, 'name'),
+				new RepresentationFieldSchema('id', $users, 'id', writable: false),
+				new RepresentationFieldSchema('name', $users, 'name'),
 			),
 			$this->source(
 				$users,
 				['manager'],
-				new RepresentationFieldBinding('managerName', $users, 'name', sourcePath: ['manager']),
+				new RepresentationFieldSchema('managerName', $users, 'name', sourcePath: ['manager']),
 			),
 		];
 
@@ -96,13 +96,13 @@ final class ProjectionIdentityPlannerTest extends TestCase
 			$this->source(
 				$users,
 				[],
-				new RepresentationFieldBinding('id', $users, 'id', writable: false),
+				new RepresentationFieldSchema('id', $users, 'id', writable: false),
 			),
 			$this->source(
 				$users,
 				['manager'],
-				new RepresentationFieldBinding('managerName', $users, 'name', sourcePath: ['manager']),
-				new RepresentationFieldBinding('managerRef', $users, 'manager_id', sourcePath: ['manager']),
+				new RepresentationFieldSchema('managerName', $users, 'name', sourcePath: ['manager']),
+				new RepresentationFieldSchema('managerRef', $users, 'manager_id', sourcePath: ['manager']),
 			),
 		];
 
@@ -120,13 +120,13 @@ final class ProjectionIdentityPlannerTest extends TestCase
 			$this->source(
 				$users,
 				[],
-				new RepresentationFieldBinding('id', $users, 'id', writable: false),
+				new RepresentationFieldSchema('id', $users, 'id', writable: false),
 			),
 			$this->source(
 				$users,
 				['manager'],
-				new RepresentationFieldBinding('managerId', $users, 'id', sourcePath: ['manager']),
-				new RepresentationFieldBinding('managerName', $users, 'name', sourcePath: ['manager']),
+				new RepresentationFieldSchema('managerId', $users, 'id', sourcePath: ['manager']),
+				new RepresentationFieldSchema('managerName', $users, 'name', sourcePath: ['manager']),
 			),
 		];
 
@@ -145,12 +145,12 @@ final class ProjectionIdentityPlannerTest extends TestCase
 			$this->source(
 				$users,
 				[],
-				new RepresentationFieldBinding('id', $users, 'id', writable: false),
+				new RepresentationFieldSchema('id', $users, 'id', writable: false),
 			),
 			$this->source(
 				$users,
 				['manager', 'manager'],
-				new RepresentationFieldBinding('grandName', $users, 'name', sourcePath: ['manager', 'manager']),
+				new RepresentationFieldSchema('grandName', $users, 'name', sourcePath: ['manager', 'manager']),
 			),
 		];
 
@@ -177,7 +177,7 @@ final class ProjectionIdentityPlannerTest extends TestCase
 	private function source(
 		CollectionInterface $collection,
 		array $path,
-		RepresentationFieldBinding ...$fields,
+		RepresentationFieldSchema ...$fields,
 	): ProjectionSource {
 		return new ProjectionSource($path, $collection, $fields);
 	}

@@ -7,7 +7,7 @@ namespace ON\Data\ORM\Sync;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 
@@ -22,7 +22,7 @@ final class RepresentationAdopter
 
 	public function adopt(
 		object $representation,
-		RepresentationBinding $binding,
+		RepresentationSchema $binding,
 		RecordState $record,
 	): RepresentationState {
 		if ($this->representations->has($representation)) {

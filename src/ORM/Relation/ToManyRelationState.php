@@ -6,7 +6,7 @@ namespace ON\Data\ORM\Relation;
 
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
 
 final class ToManyRelationState implements RelationChangeInterface
 {
@@ -35,7 +35,7 @@ final class ToManyRelationState implements RelationChangeInterface
 	public function __construct(
 		private readonly RecordState $owner,
 		private readonly string $relationName,
-		private readonly RepresentationBinding $childBinding,
+		private readonly RepresentationSchema $childBinding,
 		array $items = [],
 	) {
 		if (trim($relationName) === '') {
@@ -65,7 +65,7 @@ final class ToManyRelationState implements RelationChangeInterface
 	public static function full(
 		RecordState $owner,
 		string $relationName,
-		RepresentationBinding $childBinding,
+		RepresentationSchema $childBinding,
 		array $items = [],
 	): self {
 		$state = new self($owner, $relationName, $childBinding, $items);
@@ -84,12 +84,12 @@ final class ToManyRelationState implements RelationChangeInterface
 		return $this->relationName;
 	}
 
-	public function getChildBinding(): RepresentationBinding
+	public function getChildBinding(): RepresentationSchema
 	{
 		return $this->childBinding;
 	}
 
-	public function getRelatedBinding(): RepresentationBinding
+	public function getRelatedSchema(): RepresentationSchema
 	{
 		return $this->childBinding;
 	}

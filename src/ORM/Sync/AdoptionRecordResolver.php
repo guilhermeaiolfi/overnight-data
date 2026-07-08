@@ -10,7 +10,7 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
 
 final class AdoptionRecordResolver
 {
@@ -27,7 +27,7 @@ final class AdoptionRecordResolver
 
 	public function resolve(
 		object $representation,
-		RepresentationBinding $binding,
+		RepresentationSchema $binding,
 		RecordStateStore $records,
 		bool $isRoot,
 	): RecordState {
@@ -72,15 +72,15 @@ final class AdoptionRecordResolver
 	 */
 	public function initialValuesForKey(
 		object $representation,
-		RepresentationBinding $binding,
+		RepresentationSchema $binding,
 		Key $key,
 	): array {
 		$values = $key->getValues();
-		foreach ($binding->getFields() as $fieldBinding) {
-			$fieldName = $fieldBinding->getFieldName();
+		foreach ($binding->getFields() as $fieldSchema) {
+			$fieldName = $fieldSchema->getFieldName();
 
 			try {
-				$values[$fieldName] = $this->reader->readPath($representation, $fieldBinding->getPath());
+				$values[$fieldName] = $this->reader->readPath($representation, $fieldSchema->getPath());
 			} catch (SyncException) {
 			}
 		}
@@ -88,15 +88,15 @@ final class AdoptionRecordResolver
 		return $values;
 	}
 
-	private function collectionFor(RepresentationBinding $binding, bool $isRoot): CollectionInterface
+	private function collectionFor(RepresentationSchema $binding, bool $isRoot): CollectionInterface
 	{
 		$collection = null;
-		foreach ($binding->getFields() as $fieldBinding) {
-			$collection = $this->mergeCollection($collection, $fieldBinding->getCollection(), $fieldBinding->getPath(), $isRoot);
+		foreach ($binding->getFields() as $fieldSchema) {
+			$collection = $this->mergeCollection($collection, $fieldSchema->getCollection(), $fieldSchema->getPath(), $isRoot);
 		}
 
-		foreach ($binding->getRelations() as $relationBinding) {
-			$collection = $this->mergeCollection($collection, $relationBinding->getOwnerCollection(), $relationBinding->getPath(), $isRoot);
+		foreach ($binding->getRelations() as $relationSchema) {
+			$collection = $this->mergeCollection($collection, $relationSchema->getOwnerCollection(), $relationSchema->getPath(), $isRoot);
 		}
 
 		if (! $collection instanceof CollectionInterface) {
@@ -115,13 +115,13 @@ final class AdoptionRecordResolver
 	 */
 	private function completeKeyValues(
 		object $representation,
-		RepresentationBinding $binding,
+		RepresentationSchema $binding,
 		CollectionInterface $collection,
 	): ?array {
 		$pathsByField = [];
-		foreach ($binding->getFields() as $fieldBinding) {
-			if ($fieldBinding->getCollectionName() === $collection->getName()) {
-				$pathsByField[$fieldBinding->getFieldName()] = $fieldBinding->getPath();
+		foreach ($binding->getFields() as $fieldSchema) {
+			if ($fieldSchema->getCollectionName() === $collection->getName()) {
+				$pathsByField[$fieldSchema->getFieldName()] = $fieldSchema->getPath();
 			}
 		}
 
@@ -178,15 +178,15 @@ final class AdoptionRecordResolver
 	/**
 	 * @return array<string, mixed>
 	 */
-	private function initialValues(object $representation, RepresentationBinding $binding, CollectionInterface $collection): array
+	private function initialValues(object $representation, RepresentationSchema $binding, CollectionInterface $collection): array
 	{
 		$values = [];
 		$primaryKey = array_flip($collection->getPrimaryKey());
-		foreach ($binding->getFields() as $fieldBinding) {
-			$fieldName = $fieldBinding->getFieldName();
+		foreach ($binding->getFields() as $fieldSchema) {
+			$fieldName = $fieldSchema->getFieldName();
 
 			try {
-				$value = $this->reader->readPath($representation, $fieldBinding->getPath());
+				$value = $this->reader->readPath($representation, $fieldSchema->getPath());
 			} catch (SyncException) {
 				continue;
 			}

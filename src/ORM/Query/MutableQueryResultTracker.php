@@ -13,7 +13,7 @@ namespace ON\Data\ORM\Query;
  */
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompilation;
 use ON\Data\ORM\Session;
-use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\Sync\RepresentationReader;
 use RuntimeException;
 
@@ -77,7 +77,7 @@ final class MutableQueryResultTracker
 			return;
 		}
 
-		$binding = $compilation->getBinding();
+		$binding = $compilation->getSchema();
 		$this->markLoadedRelatedObjectsExisting($session, $object, $binding);
 		$session->sync($object, $binding);
 	}
@@ -85,13 +85,13 @@ final class MutableQueryResultTracker
 	private function markLoadedRelatedObjectsExisting(
 		Session $session,
 		object $object,
-		RepresentationBinding $binding,
+		RepresentationSchema $binding,
 	): void {
 		foreach ($binding->getRelations() as $relation) {
 			if ($relation->isMany()) {
 				foreach ($this->reader->readItems($object, $relation, static fn (string $message) => new RuntimeException($message)) as $item) {
 					$session->existing($item);
-					$this->markLoadedRelatedObjectsExisting($session, $item, $relation->getRelatedBinding());
+					$this->markLoadedRelatedObjectsExisting($session, $item, $relation->getRelatedSchema());
 				}
 
 				continue;
@@ -101,7 +101,7 @@ final class MutableQueryResultTracker
 				$target = $this->reader->readTarget($object, $relation, static fn (string $message) => new RuntimeException($message));
 				if ($target !== null) {
 					$session->existing($target);
-					$this->markLoadedRelatedObjectsExisting($session, $target, $relation->getRelatedBinding());
+					$this->markLoadedRelatedObjectsExisting($session, $target, $relation->getRelatedSchema());
 				}
 			}
 		}

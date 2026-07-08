@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationRelationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationRelationSchema;
 use ON\Data\ORM\State\RepresentationRelationStateItem;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -20,17 +20,17 @@ final class RepresentationRelationStateItemTest extends TestCase
 	{
 		$users = $this->users();
 		$owner = RecordState::new($users, ['name' => 'Ada']);
-		$binding = new RepresentationRelationBinding(
+		$binding = new RepresentationRelationSchema(
 			'posts',
 			$users,
 			'posts',
-			new RepresentationBinding($this->posts()),
+			new RepresentationSchema($this->posts()),
 		);
 
 		$item = new RepresentationRelationStateItem($binding, $owner, 'posts');
 
 		self::assertSame('posts', $item->getPath());
-		self::assertSame($binding, $item->getBinding());
+		self::assertSame($binding, $item->getSchema());
 		self::assertSame($owner, $item->getOwnerRecord());
 		self::assertSame('posts', $item->getRelationName());
 	}
@@ -43,7 +43,7 @@ final class RepresentationRelationStateItemTest extends TestCase
 		self::assertNotNull($constructor);
 		self::assertSame(3, $constructor->getNumberOfParameters());
 		self::assertSame(
-			['binding', 'ownerRecord', 'relationName'],
+			['schema', 'ownerRecord', 'relationName'],
 			array_map(static fn ($parameter) => $parameter->getName(), $constructor->getParameters()),
 		);
 	}

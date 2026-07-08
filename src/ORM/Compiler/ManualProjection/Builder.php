@@ -168,12 +168,12 @@ final class Builder
 	{
 		$state = $this->session->getRepresentations()->get($this->representation);
 		$fallbackCollection = $state instanceof RepresentationState
-			? $state->getBinding()->getCollection()
+			? $state->getSchema()->getCollection()
 			: null;
-		$manualBinding = $this->projectionCompiler->compile($this->propertyShapes, $fallbackCollection);
+		$manualSchema = $this->projectionCompiler->compile($this->propertyShapes, $fallbackCollection);
 		$this->representationTracker->applyManualProjection(
 			$this->representation,
-			$manualBinding,
+			$manualSchema,
 			$this->propertyShapes,
 		);
 		$this->propertyShapes = [];

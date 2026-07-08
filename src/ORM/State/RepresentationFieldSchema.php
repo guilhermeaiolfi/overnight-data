@@ -9,12 +9,12 @@ use ON\Data\Definition\Collection\CollectionInterface;
  * One structural scalar representation path with writability and optional
  * skip-when-missing adoption behavior.
  *
- * Exists as the leaf node of RepresentationBinding used by scalar sync and flat
+ * Exists as the leaf node of RepresentationSchema used by scalar sync and flat
  * projection adoption.
  */
 use ON\Data\ORM\Exception\StateException;
 
-final class RepresentationFieldBinding
+final class RepresentationFieldSchema
 {
 	/** @var list<string> */
 	private array $sourcePath;

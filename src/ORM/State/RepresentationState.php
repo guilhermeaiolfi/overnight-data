@@ -18,7 +18,7 @@ final class RepresentationState
 	 * @param array<string, RepresentationRelationStateItem>|list<RepresentationRelationStateItem> $relationItems
 	 */
 	public function __construct(
-		private RepresentationBinding $binding,
+		private RepresentationSchema $schema,
 		array $fieldItems,
 		array $relationItems = [],
 	) {
@@ -26,9 +26,9 @@ final class RepresentationState
 		$this->relationItems = $this->normalizeRelationItems($relationItems);
 	}
 
-	public function getBinding(): RepresentationBinding
+	public function getSchema(): RepresentationSchema
 	{
-		return $this->binding;
+		return $this->schema;
 	}
 
 	/**
@@ -44,7 +44,7 @@ final class RepresentationState
 		$rootRecord = null;
 
 		foreach ($this->fieldItems as $item) {
-			if (! $item->getBinding()->isRootSource()) {
+			if (! $item->getSchema()->isRootSource()) {
 				continue;
 			}
 
@@ -53,7 +53,7 @@ final class RepresentationState
 			if ($rootRecord instanceof RecordState && $rootRecord->getStateHash() !== $record->getStateHash()) {
 				throw new StateException(sprintf(
 					"Representation state has inconsistent root records for collection '%s'.",
-					$this->binding->getCollectionName()
+					$this->schema->getCollectionName()
 				));
 			}
 
@@ -69,7 +69,7 @@ final class RepresentationState
 		if (! $record instanceof RecordState) {
 			throw new StateException(sprintf(
 				"Representation state has no root record for collection '%s'.",
-				$this->binding->getCollectionName()
+				$this->schema->getCollectionName()
 			));
 		}
 
@@ -105,7 +105,7 @@ final class RepresentationState
 	{
 		return array_values(array_filter(
 			$this->fieldItems,
-			static fn (RepresentationFieldStateItem $item): bool => $item->getBinding()->isWritable()
+			static fn (RepresentationFieldStateItem $item): bool => $item->getSchema()->isWritable()
 		));
 	}
 

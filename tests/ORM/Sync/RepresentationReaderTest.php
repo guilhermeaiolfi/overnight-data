@@ -7,9 +7,9 @@ namespace Tests\ON\Data\ORM\Sync;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
-use ON\Data\ORM\State\RepresentationRelationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationFieldSchema;
+use ON\Data\ORM\State\RepresentationRelationSchema;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\Sync\RepresentationReader;
 use PHPUnit\Framework\TestCase;
@@ -168,9 +168,9 @@ final class RepresentationReaderTest extends TestCase
 		$row = new stdClass();
 		$row->name = 'Ada';
 		$row->upperName = 'ADA';
-		$binding = new RepresentationBinding($this->users());
-		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
-		$binding->addField(new RepresentationFieldBinding('upperName', $this->users(), 'name', false));
+		$binding = new RepresentationSchema($this->users());
+		$binding->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
+		$binding->addField(new RepresentationFieldSchema('upperName', $this->users(), 'name', false));
 
 		self::assertSame(
 			['name' => 'Ada', 'upperName' => 'ADA'],
@@ -183,9 +183,9 @@ final class RepresentationReaderTest extends TestCase
 		$row = new stdClass();
 		$row->email = 'ada@example.test';
 		$row->name = 'Ada';
-		$binding = new RepresentationBinding($this->users());
-		$binding->addField(new RepresentationFieldBinding('email', $this->users(), 'email'));
-		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
+		$binding = new RepresentationSchema($this->users());
+		$binding->addField(new RepresentationFieldSchema('email', $this->users(), 'email'));
+		$binding->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
 
 		self::assertSame(
 			['email' => 'ada@example.test', 'name' => 'Ada'],
@@ -237,26 +237,26 @@ final class RepresentationReaderTest extends TestCase
 		return new StateException(rtrim($message, '.') . ' during graph adoption.');
 	}
 
-	private function fieldBinding(string $path): RepresentationBinding
+	private function fieldBinding(string $path): RepresentationSchema
 	{
-		$binding = new RepresentationBinding($this->users());
-		$binding->addField(new RepresentationFieldBinding($path, $this->users(), 'name'));
+		$binding = new RepresentationSchema($this->users());
+		$binding->addField(new RepresentationFieldSchema($path, $this->users(), 'name'));
 
 		return $binding;
 	}
 
-	private function postsRelationBinding(): RepresentationRelationBinding
+	private function postsRelationBinding(): RepresentationRelationSchema
 	{
-		return new RepresentationRelationBinding(
+		return new RepresentationRelationSchema(
 			'posts',
 			$this->users(), 'posts',
 			$this->postBinding()
 		);
 	}
 
-	private function profileRelationBinding(): RepresentationRelationBinding
+	private function profileRelationBinding(): RepresentationRelationSchema
 	{
-		return new RepresentationRelationBinding(
+		return new RepresentationRelationSchema(
 			'profile',
 			$this->users(), 'profile',
 			$this->profileBinding()

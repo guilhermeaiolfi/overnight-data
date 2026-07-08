@@ -8,7 +8,7 @@ use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\ORM\Support\OrmFixture;
 
@@ -20,7 +20,7 @@ final class RelationChangeInterfaceTest extends TestCase
 	{
 		self::assertInstanceOf(
 			RelationChangeInterface::class,
-			new ToManyRelationState(RecordState::new($this->users()), 'posts', new RepresentationBinding($this->users()))
+			new ToManyRelationState(RecordState::new($this->users()), 'posts', new RepresentationSchema($this->users()))
 		);
 	}
 
@@ -28,7 +28,7 @@ final class RelationChangeInterfaceTest extends TestCase
 	{
 		self::assertInstanceOf(
 			RelationChangeInterface::class,
-			new ToOneRelationState(RecordState::new($this->users()), 'author', new RepresentationBinding($this->users()))
+			new ToOneRelationState(RecordState::new($this->users()), 'author', new RepresentationSchema($this->users()))
 		);
 	}
 }

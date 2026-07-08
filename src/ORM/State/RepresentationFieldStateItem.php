@@ -7,7 +7,7 @@ namespace ON\Data\ORM\State;
 final class RepresentationFieldStateItem
 {
 	public function __construct(
-		private RepresentationFieldBinding $binding,
+		private RepresentationFieldSchema $schema,
 		private RecordState $record,
 		private string $fieldName,
 		private int $baselineRevision,
@@ -16,12 +16,12 @@ final class RepresentationFieldStateItem
 
 	public function getPath(): string
 	{
-		return $this->binding->getPath();
+		return $this->schema->getPath();
 	}
 
-	public function getBinding(): RepresentationFieldBinding
+	public function getSchema(): RepresentationFieldSchema
 	{
-		return $this->binding;
+		return $this->schema;
 	}
 
 	public function getRecord(): RecordState
@@ -61,6 +61,6 @@ final class RepresentationFieldStateItem
 
 	public function withBaselineRevision(int $revision): self
 	{
-		return new self($this->binding, $this->record, $this->fieldName, $revision);
+		return new self($this->schema, $this->record, $this->fieldName, $revision);
 	}
 }

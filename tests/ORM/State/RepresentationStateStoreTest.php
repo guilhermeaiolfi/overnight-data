@@ -6,7 +6,7 @@ namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 use PHPUnit\Framework\TestCase;
@@ -18,7 +18,7 @@ final class RepresentationStateStoreTest extends TestCase
 	{
 		$users = (new Registry())->collection('users')->primaryKey('id')->field('id')->end();
 
-		return new RepresentationState(new RepresentationBinding($users), []);
+		return new RepresentationState(new RepresentationSchema($users), []);
 	}
 
 	public function testRegisterAndGetByObjectIdentity(): void

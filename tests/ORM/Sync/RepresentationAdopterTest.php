@@ -9,8 +9,8 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\Sync\RepresentationAdopter;
@@ -87,9 +87,9 @@ final class RepresentationAdopterTest extends TestCase
 	public function testMultipleFieldsForSameRecordProduceOneBaselineRevision(): void
 	{
 		$record = RecordState::new($this->posts(), ['title' => 'A1', 'body' => 'Body']);
-		$binding = new RepresentationBinding($this->posts());
-		$binding->addField(new RepresentationFieldBinding('title', $this->posts(), 'title'));
-		$binding->addField(new RepresentationFieldBinding('body', $this->posts(), 'body'));
+		$binding = new RepresentationSchema($this->posts());
+		$binding->addField(new RepresentationFieldSchema('title', $this->posts(), 'title'));
+		$binding->addField(new RepresentationFieldSchema('body', $this->posts(), 'body'));
 
 		$tracked = $this->adopter()->adopt(new stdClass(), $binding, $record);
 
@@ -101,8 +101,8 @@ final class RepresentationAdopterTest extends TestCase
 	public function testReadOnlyFieldsContributeBaselineRecordRevision(): void
 	{
 		$record = RecordState::new($this->posts(), ['title' => 'A1']);
-		$binding = new RepresentationBinding($this->posts());
-		$binding->addField(new RepresentationFieldBinding('titleLabel', $this->posts(), 'title', false));
+		$binding = new RepresentationSchema($this->posts());
+		$binding->addField(new RepresentationFieldSchema('titleLabel', $this->posts(), 'title', false));
 
 		$tracked = $this->adopter()->adopt(new stdClass(), $binding, $record);
 

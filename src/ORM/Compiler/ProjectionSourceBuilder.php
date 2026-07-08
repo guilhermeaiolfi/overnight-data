@@ -8,17 +8,17 @@ namespace ON\Data\ORM\Compiler;
  * Builds structural projection sources from an assembled representation binding.
  */
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 
 final class ProjectionSourceBuilder
 {
 	/**
 	 * @return list<ProjectionSource>
 	 */
-	public function build(RepresentationBinding $binding): array
+	public function build(RepresentationSchema $binding): array
 	{
-		/** @var array<string, list<RepresentationFieldBinding>> $fieldsByPath */
+		/** @var array<string, list<RepresentationFieldSchema>> $fieldsByPath */
 		$fieldsByPath = [];
 		/** @var array<string, list<string>> $pathsByKey */
 		$pathsByKey = [];

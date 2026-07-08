@@ -11,22 +11,22 @@ use SplFileInfo;
 
 final class Phase34BindingModelTest extends TestCase
 {
-	public function testRepresentationBindingDocumentationNamesTheModelBoundaries(): void
+	public function testRepresentationSchemaDocumentationNamesTheModelBoundaries(): void
 	{
-		$contents = file_get_contents(dirname(__DIR__, 3) . '/docs/orm/representation-binding.md');
+		$contents = file_get_contents(dirname(__DIR__, 3) . '/docs/orm/representation-schema.md');
 
 		self::assertIsString($contents);
 		self::assertStringContainsString('Definition Tree', $contents);
 		self::assertStringContainsString('Query Graph / Selection Graph', $contents);
 		self::assertStringContainsString('`map($source)->to(...)`', $contents);
 		self::assertStringContainsString('The mapper does not by itself know persistence provenance.', $contents);
-		self::assertStringContainsString('RepresentationBinding', $contents);
+		self::assertStringContainsString('RepresentationSchema', $contents);
 		self::assertStringContainsString('RepresentationState', $contents);
 		self::assertStringContainsString('ToManyRelationState / ToOneRelationState', $contents);
 		self::assertStringContainsString('field bindings', $contents);
 		self::assertStringContainsString('relation bindings', $contents);
 		self::assertStringContainsString('It owns two path maps', $contents);
-		self::assertStringContainsString('getRelatedBinding()', $contents);
+		self::assertStringContainsString('getRelatedSchema()', $contents);
 		self::assertStringContainsString('Do not create one binding object per child instance.', $contents);
 		self::assertStringContainsString('Scalar representation sync uses field bindings only', $contents);
 	}
@@ -53,7 +53,7 @@ final class Phase34BindingModelTest extends TestCase
 		}
 	}
 
-	public function testRepresentationBindingIsNotCoupledToMapperHydrationApi(): void
+	public function testRepresentationSchemaIsNotCoupledToMapperHydrationApi(): void
 	{
 		foreach ($this->phpFiles(dirname(__DIR__, 3) . '/src/ORM/State') as $path) {
 			$contents = file_get_contents($path);

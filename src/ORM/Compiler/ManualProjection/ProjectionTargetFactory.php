@@ -19,7 +19,7 @@ use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
 
@@ -53,7 +53,7 @@ final class ProjectionTargetFactory
 	 */
 	public function createAtPath(PathResolution $path, array $values): Target
 	{
-		$collection = $path->getRelatedBinding()->getCollection();
+		$collection = $path->getRelatedSchema()->getCollection();
 		$record = $this->session->trackRecord(RecordState::new($collection, $values));
 
 		return $this->attachPathTarget(
@@ -61,7 +61,7 @@ final class ProjectionTargetFactory
 			$path->getOwnerObject(),
 			$path->getRelationName(),
 			$path->getCardinality(),
-			$path->getRelatedBinding(),
+			$path->getRelatedSchema(),
 			$record,
 		);
 	}
@@ -78,7 +78,7 @@ final class ProjectionTargetFactory
 			$owner,
 			$relation->getName(),
 			$this->relationCardinality($relation),
-			new RepresentationBinding($relation->getDefinition()->getCollection()),
+			new RepresentationSchema($relation->getDefinition()->getCollection()),
 			$record,
 			$this->representationTracker->trackAdapter($record),
 		);
@@ -91,14 +91,14 @@ final class ProjectionTargetFactory
 
 	public function existingAtPath(PathResolution $path, Key|array $key, array $seedValues): Target
 	{
-		$record = $this->recordForExisting($path->getRelatedBinding()->getCollection(), $key, $seedValues);
+		$record = $this->recordForExisting($path->getRelatedSchema()->getCollection(), $key, $seedValues);
 
 		return $this->attachPathTarget(
 			$path->getOwner(),
 			$path->getOwnerObject(),
 			$path->getRelationName(),
 			$path->getCardinality(),
-			$path->getRelatedBinding(),
+			$path->getRelatedSchema(),
 			$record,
 		);
 	}
@@ -112,7 +112,7 @@ final class ProjectionTargetFactory
 			$owner,
 			$relation->getName(),
 			$this->relationCardinality($relation),
-			new RepresentationBinding($relation->getDefinition()->getCollection()),
+			new RepresentationSchema($relation->getDefinition()->getCollection()),
 			$record,
 			$this->representationTracker->trackAdapter($record),
 		);
@@ -148,7 +148,7 @@ final class ProjectionTargetFactory
 		$target ??= $representation;
 		$record = $this->representationTracker->singleRecordForTrackedTarget(
 			$target,
-			$path->getRelatedBinding()->getCollection(),
+			$path->getRelatedSchema()->getCollection(),
 			sprintf("Cannot use tracked() for relation '%s'", $path->getRelationName())
 		);
 
@@ -157,7 +157,7 @@ final class ProjectionTargetFactory
 			$path->getOwnerObject(),
 			$path->getRelationName(),
 			$path->getCardinality(),
-			$path->getRelatedBinding(),
+			$path->getRelatedSchema(),
 			$record,
 			$target,
 		);
@@ -177,7 +177,7 @@ final class ProjectionTargetFactory
 			$owner,
 			$relation->getName(),
 			$this->relationCardinality($relation),
-			new RepresentationBinding($relation->getDefinition()->getCollection()),
+			new RepresentationSchema($relation->getDefinition()->getCollection()),
 			$record,
 			$target,
 		);
@@ -188,19 +188,19 @@ final class ProjectionTargetFactory
 		object $ownerObject,
 		string $relationName,
 		RepresentationRelationCardinality $cardinality,
-		RepresentationBinding $relatedBinding,
+		RepresentationSchema $relatedSchema,
 		RecordState $record,
 		?object $explicitTarget = null,
 	): Target {
 		$objectShaped = $this->rootRepresentation !== $ownerObject;
-		$target = $this->resolvePathTargetObject($record, $relatedBinding, $ownerObject, $explicitTarget, $objectShaped);
-		$this->applyRelationTarget($owner, $relationName, $cardinality, $relatedBinding, $target);
+		$target = $this->resolvePathTargetObject($record, $relatedSchema, $ownerObject, $explicitTarget, $objectShaped);
+		$this->applyRelationTarget($owner, $relationName, $cardinality, $relatedSchema, $target);
 
 		return new Target(
 			$owner,
 			$relationName,
 			$cardinality,
-			$relatedBinding,
+			$relatedSchema,
 			$record,
 			$target,
 			$objectShaped,
@@ -211,17 +211,17 @@ final class ProjectionTargetFactory
 		RecordState $owner,
 		string $relationName,
 		RepresentationRelationCardinality $cardinality,
-		RepresentationBinding $relatedBinding,
+		RepresentationSchema $relatedSchema,
 		RecordState $record,
 		object $target,
 	): Target {
-		$this->applyRelationTarget($owner, $relationName, $cardinality, $relatedBinding, $target);
+		$this->applyRelationTarget($owner, $relationName, $cardinality, $relatedSchema, $target);
 
 		return new Target(
 			$owner,
 			$relationName,
 			$cardinality,
-			$relatedBinding,
+			$relatedSchema,
 			$record,
 			$target,
 			false,
@@ -230,51 +230,51 @@ final class ProjectionTargetFactory
 
 	private function resolvePathTargetObject(
 		RecordState $record,
-		RepresentationBinding $relatedBinding,
+		RepresentationSchema $relatedSchema,
 		object $ownerObject,
 		?object $explicitTarget,
 		bool $objectShaped,
 	): object {
 		if ($explicitTarget !== null) {
-			$this->representationTracker->trackTarget($explicitTarget, $record, $relatedBinding);
+			$this->representationTracker->trackTarget($explicitTarget, $record, $relatedSchema);
 
 			return $explicitTarget;
 		}
 
 		if ($objectShaped) {
-			$this->representationTracker->trackTarget($this->rootRepresentation, $record, $relatedBinding);
+			$this->representationTracker->trackTarget($this->rootRepresentation, $record, $relatedSchema);
 
 			return $this->rootRepresentation;
 		}
 
-		return $this->representationTracker->trackFlattenedAdapter($record, $relatedBinding, $ownerObject);
+		return $this->representationTracker->trackFlattenedAdapter($record, $relatedSchema, $ownerObject);
 	}
 
 	private function applyRelationTarget(
 		RecordState $owner,
 		string $relationName,
 		RepresentationRelationCardinality $cardinality,
-		RepresentationBinding $relatedBinding,
+		RepresentationSchema $relatedSchema,
 		object $target,
 	): void {
 		if ($cardinality === RepresentationRelationCardinality::MANY) {
-			$this->applyToManyRelationTarget($owner, $relationName, $relatedBinding, $target);
+			$this->applyToManyRelationTarget($owner, $relationName, $relatedSchema, $target);
 
 			return;
 		}
 
-		$this->applyToOneRelationTarget($owner, $relationName, $relatedBinding, $target);
+		$this->applyToOneRelationTarget($owner, $relationName, $relatedSchema, $target);
 	}
 
 	private function applyToManyRelationTarget(
 		RecordState $owner,
 		string $relationName,
-		RepresentationBinding $relatedBinding,
+		RepresentationSchema $relatedSchema,
 		object $target,
 	): void {
 		$relation = $this->session->getToManyRelations()->get($owner, $relationName);
 		if (! $relation instanceof ToManyRelationState) {
-			$relation = new ToManyRelationState($owner, $relationName, $relatedBinding);
+			$relation = new ToManyRelationState($owner, $relationName, $relatedSchema);
 			$this->session->getToManyRelations()->add($relation);
 		}
 
@@ -284,12 +284,12 @@ final class ProjectionTargetFactory
 	private function applyToOneRelationTarget(
 		RecordState $owner,
 		string $relationName,
-		RepresentationBinding $relatedBinding,
+		RepresentationSchema $relatedSchema,
 		object $target,
 	): void {
 		$relation = $this->session->getToOneRelations()->get($owner, $relationName);
 		if (! $relation instanceof ToOneRelationState) {
-			$relation = new ToOneRelationState($owner, $relationName, $relatedBinding);
+			$relation = new ToOneRelationState($owner, $relationName, $relatedSchema);
 			$this->session->getToOneRelations()->add($relation);
 		}
 

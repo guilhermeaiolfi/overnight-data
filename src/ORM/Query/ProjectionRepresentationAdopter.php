@@ -41,7 +41,7 @@ final class ProjectionRepresentationAdopter
 		array $sourceRow,
 		SessionContext $context,
 	): RepresentationState {
-		$binding = $compilation->getBinding();
+		$binding = $compilation->getSchema();
 
 		if ($binding->getRelations() !== []) {
 			throw new StateException('Cannot adopt flat projection representation because the binding contains relation bindings.');
@@ -199,9 +199,9 @@ final class ProjectionRepresentationAdopter
 		$values = [];
 		$primaryKey = array_flip($collection->getPrimaryKey());
 
-		foreach ($source->getFields() as $fieldBinding) {
-			$fieldName = $fieldBinding->getFieldName();
-			$value = $this->readValue($representation, $fieldBinding->getPath(), $sourceRow);
+		foreach ($source->getFields() as $fieldSchema) {
+			$fieldName = $fieldSchema->getFieldName();
+			$value = $this->readValue($representation, $fieldSchema->getPath(), $sourceRow);
 
 			if ($value === null && array_key_exists($fieldName, $primaryKey)) {
 				continue;

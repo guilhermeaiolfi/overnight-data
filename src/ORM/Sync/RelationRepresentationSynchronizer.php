@@ -40,14 +40,14 @@ final class RelationRepresentationSynchronizer
 
 		foreach ($representations->getAll() as $representation => $state) {
 			foreach ($state->getRelationItems() as $relationItem) {
-				$relationBinding = $relationItem->getBinding();
-				if ($relationBinding->isMany()) {
+				$relationSchema = $relationItem->getSchema();
+				if ($relationSchema->isMany()) {
 					$this->syncMany($representation, $relationItem, $toManyRelations, $states, $touched, $touchedIds);
 
 					continue;
 				}
 
-				if ($relationBinding->isSingle()) {
+				if ($relationSchema->isSingle()) {
 					$this->syncOne($representation, $relationItem, $toOneRelations, $states, $touched, $touchedIds);
 				}
 			}
@@ -69,26 +69,26 @@ final class RelationRepresentationSynchronizer
 		array &$touched,
 		array &$touchedIds,
 	): void {
-		$relationBinding = $relationItem->getBinding();
+		$relationSchema = $relationItem->getSchema();
 		$owner = $relationItem->getOwnerRecord();
 		$relationName = $relationItem->getRelationName();
 
 		try {
-			$items = $this->reader->readItems($representation, $relationBinding, $this->syncError(...));
+			$items = $this->reader->readItems($representation, $relationSchema, $this->syncError(...));
 		} catch (SyncException $exception) {
-			if (! $relationBinding->shouldSkipWhenMissing() || ! str_contains($exception->getMessage(), ' is missing.')) {
+			if (! $relationSchema->shouldSkipWhenMissing() || ! str_contains($exception->getMessage(), ' is missing.')) {
 				throw $exception;
 			}
 
 			return;
 		}
 		foreach ($items as $item) {
-			$this->requireTrackedRepresentation($states, $item, $relationBinding->getPath());
+			$this->requireTrackedRepresentation($states, $item, $relationSchema->getPath());
 		}
 
 		$relation = $toManyRelations->get($owner, $relationName);
 		if (! $relation instanceof ToManyRelationState) {
-			$relation = new ToManyRelationState($owner, $relationName, $relationBinding->getRelatedBinding());
+			$relation = new ToManyRelationState($owner, $relationName, $relationSchema->getRelatedSchema());
 			$toManyRelations->add($relation);
 		}
 
@@ -109,21 +109,21 @@ final class RelationRepresentationSynchronizer
 		array &$touched,
 		array &$touchedIds,
 	): void {
-		$relationBinding = $relationItem->getBinding();
+		$relationSchema = $relationItem->getSchema();
 		$owner = $relationItem->getOwnerRecord();
 		$relationName = $relationItem->getRelationName();
 
 		try {
-			$target = $this->reader->readTarget($representation, $relationBinding, $this->syncError(...));
+			$target = $this->reader->readTarget($representation, $relationSchema, $this->syncError(...));
 		} catch (SyncException $exception) {
-			if (! $relationBinding->shouldSkipWhenMissing() || ! str_contains($exception->getMessage(), ' is missing.')) {
+			if (! $relationSchema->shouldSkipWhenMissing() || ! str_contains($exception->getMessage(), ' is missing.')) {
 				throw $exception;
 			}
 
 			return;
 		}
 		if ($target !== null) {
-			$this->requireTrackedRepresentation($states, $target, $relationBinding->getPath());
+			$this->requireTrackedRepresentation($states, $target, $relationSchema->getPath());
 		}
 
 		$relation = $toOneRelations->get($owner, $relationName);
@@ -131,7 +131,7 @@ final class RelationRepresentationSynchronizer
 			$relation = new ToOneRelationState(
 				$owner,
 				$relationName,
-				$relationBinding->getRelatedBinding()
+				$relationSchema->getRelatedSchema()
 			);
 			$toOneRelations->add($relation);
 		}

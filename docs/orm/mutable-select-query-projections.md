@@ -8,7 +8,7 @@ See also:
 
 - [`../query/query-model.md`](../query/query-model.md) — query construction, selections, aliases, and result export
 - [`../query/bound-execution.md`](../query/bound-execution.md) — bound execution, result modes, and the data runtime
-- [`representation-binding.md`](./representation-binding.md) — recursive `RepresentationBinding` model and flat projection adoption
+- [`representation-schema.md`](./representation-schema.md) — recursive `RepresentationSchema` model and flat projection adoption
 - [`persistence.md`](./persistence.md) — scalar sync, relation sync, command planning, and flush orchestration
 - [`manual-mutable-projections.md`](./manual-mutable-projections.md) — non-executing manual projection declarations
 
@@ -274,6 +274,6 @@ Brand-new flat scalar that did not come from a query:
 
 - [`../query/query-model.md`](../query/query-model.md)
 - [`../query/bound-execution.md`](../query/bound-execution.md)
-- [`representation-binding.md`](./representation-binding.md)
+- [`representation-schema.md`](./representation-schema.md)
 - [`persistence.md`](./persistence.md)
 - [`manual-mutable-projections.md`](./manual-mutable-projections.md)

@@ -16,8 +16,8 @@ use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\State\ValueRef;
@@ -137,8 +137,8 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$item = new stdClass();
 		$reference = new ToOneRelationState($owner, 'profile', $this->bindingFor($target));
 		$reference->set($item);
-		$binding = new RepresentationBinding($profiles);
-		$binding->addField(new RepresentationFieldBinding('id', $profiles, 'id'));
+		$binding = new RepresentationSchema($profiles);
+		$binding->addField(new RepresentationFieldSchema('id', $profiles, 'id'));
 		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
 
 		$this->expectException(RelationPersistenceException::class);
@@ -213,7 +213,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$posts = $registry->collection('posts')->primaryKey('id')->field('id', 'int')->end()->field('user_id', 'int')->end();
 		$relation = $posts->belongsTo('author', 'users')->innerKey('user_id')->outerKey('id');
 		self::assertInstanceOf(BelongsToRelation::class, $relation);
-		$reference = new ToOneRelationState(RecordState::new($posts, ['user_id' => null]), 'author', new RepresentationBinding($posts));
+		$reference = new ToOneRelationState(RecordState::new($posts, ['user_id' => null]), 'author', new RepresentationSchema($posts));
 		$reference->set(new stdClass());
 
 		$this->expectException(RelationPersistenceException::class);
@@ -229,7 +229,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 	public function testPassingToManyRelationStateChangeThrows(): void
 	{
 		[$relation, $users] = $this->singleKeyModel();
-		$collection = new ToManyRelationState(RecordState::new($users, ['id' => 10]), 'profile', new RepresentationBinding($users));
+		$collection = new ToManyRelationState(RecordState::new($users, ['id' => 10]), 'profile', new RepresentationSchema($users));
 		$collection->add(new stdClass());
 
 		$this->expectException(RelationPersistenceException::class);
@@ -352,12 +352,12 @@ final class HasOnePersistencePlannerTest extends TestCase
 		);
 	}
 
-	private function bindingFor(RecordState $record): RepresentationBinding
+	private function bindingFor(RecordState $record): RepresentationSchema
 	{
-		$binding = new RepresentationBinding($record->getCollection());
+		$binding = new RepresentationSchema($record->getCollection());
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
-			$binding->addField(new RepresentationFieldBinding($field, $record->getCollection(), $field));
+			$binding->addField(new RepresentationFieldSchema($field, $record->getCollection(), $field));
 		}
 
 		return $binding;

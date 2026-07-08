@@ -10,8 +10,8 @@ use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationRelationStateItem;
 use ON\Data\ORM\State\RepresentationState;
@@ -124,74 +124,74 @@ trait OrmFixture
 			->field('body', 'string')->end();
 	}
 
-	protected function userBinding(): RepresentationBinding
+	protected function userBinding(): RepresentationSchema
 	{
 		$users = $this->users();
-		$binding = new RepresentationBinding($users);
-		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
+		$binding = new RepresentationSchema($users);
+		$binding->addField(new RepresentationFieldSchema('name', $users, 'name'));
 
 		return $binding;
 	}
 
-	protected function userBindingWithId(): RepresentationBinding
+	protected function userBindingWithId(): RepresentationSchema
 	{
 		$users = $this->users();
-		$binding = new RepresentationBinding($users);
-		$binding->addField(new RepresentationFieldBinding('id', $users, 'id'));
-		$binding->addField(new RepresentationFieldBinding('name', $users, 'name'));
+		$binding = new RepresentationSchema($users);
+		$binding->addField(new RepresentationFieldSchema('id', $users, 'id'));
+		$binding->addField(new RepresentationFieldSchema('name', $users, 'name'));
 
 		return $binding;
 	}
 
-	protected function postBinding(): RepresentationBinding
+	protected function postBinding(): RepresentationSchema
 	{
 		$posts = $this->posts();
-		$binding = new RepresentationBinding($posts);
-		$binding->addField(new RepresentationFieldBinding('title', $posts, 'title'));
+		$binding = new RepresentationSchema($posts);
+		$binding->addField(new RepresentationFieldSchema('title', $posts, 'title'));
 
 		return $binding;
 	}
 
-	protected function postBindingWithId(): RepresentationBinding
+	protected function postBindingWithId(): RepresentationSchema
 	{
 		$posts = $this->posts();
-		$binding = new RepresentationBinding($posts);
-		$binding->addField(new RepresentationFieldBinding('id', $posts, 'id'));
-		$binding->addField(new RepresentationFieldBinding('title', $posts, 'title'));
+		$binding = new RepresentationSchema($posts);
+		$binding->addField(new RepresentationFieldSchema('id', $posts, 'id'));
+		$binding->addField(new RepresentationFieldSchema('title', $posts, 'title'));
 
 		return $binding;
 	}
 
-	protected function profileBinding(): RepresentationBinding
+	protected function profileBinding(): RepresentationSchema
 	{
 		$profiles = $this->profiles();
-		$binding = new RepresentationBinding($profiles);
-		$binding->addField(new RepresentationFieldBinding('label', $profiles, 'label'));
+		$binding = new RepresentationSchema($profiles);
+		$binding->addField(new RepresentationFieldSchema('label', $profiles, 'label'));
 
 		return $binding;
 	}
 
-	protected function commentBinding(): RepresentationBinding
+	protected function commentBinding(): RepresentationSchema
 	{
 		$comments = $this->comments();
-		$binding = new RepresentationBinding($comments);
-		$binding->addField(new RepresentationFieldBinding('body', $comments, 'body'));
+		$binding = new RepresentationSchema($comments);
+		$binding->addField(new RepresentationFieldSchema('body', $comments, 'body'));
 
 		return $binding;
 	}
 
-	protected function userBindingFor(RecordState $record): RepresentationBinding
+	protected function userBindingFor(RecordState $record): RepresentationSchema
 	{
-		$binding = new RepresentationBinding($record->getCollection());
-		$binding->addField(new RepresentationFieldBinding('name', $record->getCollection(), 'name'));
+		$binding = new RepresentationSchema($record->getCollection());
+		$binding->addField(new RepresentationFieldSchema('name', $record->getCollection(), 'name'));
 
 		return $binding;
 	}
 
-	protected function postBindingFor(RecordState $record): RepresentationBinding
+	protected function postBindingFor(RecordState $record): RepresentationSchema
 	{
-		$binding = new RepresentationBinding($record->getCollection());
-		$binding->addField(new RepresentationFieldBinding('title', $record->getCollection(), 'title'));
+		$binding = new RepresentationSchema($record->getCollection());
+		$binding->addField(new RepresentationFieldSchema('title', $record->getCollection(), 'title'));
 
 		return $binding;
 	}
@@ -201,7 +201,7 @@ trait OrmFixture
 	 */
 	protected function tracked(
 		object $representation,
-		RepresentationBinding $binding,
+		RepresentationSchema $binding,
 		array $records = [],
 	): RepresentationState {
 		return RepresentationStateObjectRegistry::remember(
@@ -214,19 +214,19 @@ trait OrmFixture
 	 * @param list<RecordState> $records
 	 * @return list<RepresentationFieldStateItem>
 	 */
-	protected function fieldItemsFor(RepresentationBinding $binding, array $records): array
+	protected function fieldItemsFor(RepresentationSchema $binding, array $records): array
 	{
 		$items = [];
-		foreach ($binding->getFields() as $fieldBinding) {
+		foreach ($binding->getFields() as $fieldSchema) {
 			foreach ($records as $record) {
-				if ($record->getCollection()->getName() !== $fieldBinding->getCollectionName()) {
+				if ($record->getCollection()->getName() !== $fieldSchema->getCollectionName()) {
 					continue;
 				}
 
 				$items[] = new RepresentationFieldStateItem(
-					$fieldBinding,
+					$fieldSchema,
 					$record,
-					$fieldBinding->getFieldName(),
+					$fieldSchema->getFieldName(),
 					$record->getRevision()
 				);
 
@@ -241,19 +241,19 @@ trait OrmFixture
 	 * @param list<RecordState> $records
 	 * @return list<RepresentationRelationStateItem>
 	 */
-	protected function relationItemsFor(RepresentationBinding $binding, array $records): array
+	protected function relationItemsFor(RepresentationSchema $binding, array $records): array
 	{
 		$items = [];
-		foreach ($binding->getRelations() as $relationBinding) {
+		foreach ($binding->getRelations() as $relationSchema) {
 			foreach ($records as $record) {
-				if ($record->getCollection()->getName() !== $relationBinding->getOwnerCollectionName()) {
+				if ($record->getCollection()->getName() !== $relationSchema->getOwnerCollectionName()) {
 					continue;
 				}
 
 				$items[] = new RepresentationRelationStateItem(
-					$relationBinding,
+					$relationSchema,
 					$record,
-					$relationBinding->getRelationName()
+					$relationSchema->getRelationName()
 				);
 
 				break;

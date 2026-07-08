@@ -7,8 +7,8 @@ namespace Tests\ON\Data\ORM\Sync;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\Sync\SyncConflictDetector;
@@ -126,8 +126,8 @@ final class SyncConflictDetectorTest extends TestCase
 
 	private function tracked(RecordState $record, int $revision, bool $writable = true): RepresentationState
 	{
-		$binding = new RepresentationBinding($record->getCollection());
-		$field = new RepresentationFieldBinding('name', $record->getCollection(), 'name', $writable);
+		$binding = new RepresentationSchema($record->getCollection());
+		$field = new RepresentationFieldSchema('name', $record->getCollection(), 'name', $writable);
 		$binding->addField($field);
 
 		return new RepresentationState($binding, [

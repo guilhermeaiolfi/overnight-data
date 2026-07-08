@@ -19,7 +19,7 @@ final class SyncConflictDetector
 	): array {
 		$conflicts = [];
 		foreach ($tracked->getWritableFieldItems() as $item) {
-			$binding = $item->getBinding();
+			$binding = $item->getSchema();
 			$path = $item->getPath();
 			if (! array_key_exists($path, $currentValues)) {
 				if ($binding->shouldSkipWhenMissing()) {

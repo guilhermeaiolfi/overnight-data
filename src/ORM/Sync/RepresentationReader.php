@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationRelationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationRelationSchema;
 use Throwable;
 
 final class RepresentationReader
@@ -14,11 +14,11 @@ final class RepresentationReader
 	/**
 	 * @return array<string, mixed>
 	 */
-	public function read(object $representation, RepresentationBinding $binding): array
+	public function read(object $representation, RepresentationSchema $binding): array
 	{
 		$values = [];
-		foreach ($binding->getFields() as $fieldBinding) {
-			$path = $fieldBinding->getPath();
+		foreach ($binding->getFields() as $fieldSchema) {
+			$path = $fieldSchema->getPath();
 			$values[$path] = $this->readPath($representation, $path);
 		}
 
@@ -47,7 +47,7 @@ final class RepresentationReader
 	 */
 	public function readItems(
 		object $representation,
-		RepresentationRelationBinding $binding,
+		RepresentationRelationSchema $binding,
 		callable $error,
 	): array {
 		$value = $this->readPath($representation, $binding->getPath());
@@ -82,7 +82,7 @@ final class RepresentationReader
 	 */
 	public function readTarget(
 		object $representation,
-		RepresentationRelationBinding $binding,
+		RepresentationRelationSchema $binding,
 		callable $error,
 	): ?object {
 		$value = $this->readPath($representation, $binding->getPath());

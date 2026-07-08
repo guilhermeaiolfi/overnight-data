@@ -21,11 +21,11 @@ namespace ON\Data\ORM\State;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
 
-final class RepresentationBinding
+final class RepresentationSchema
 {
-	/** @var array<string, RepresentationFieldBinding> */
+	/** @var array<string, RepresentationFieldSchema> */
 	private array $fields = [];
-	/** @var array<string, RepresentationRelationBinding> */
+	/** @var array<string, RepresentationRelationSchema> */
 	private array $relations = [];
 	/** @var list<string> */
 	private array $paths = [];
@@ -45,7 +45,7 @@ final class RepresentationBinding
 		return $this->collection->getName();
 	}
 
-	public function addField(RepresentationFieldBinding $binding): void
+	public function addField(RepresentationFieldSchema $binding): void
 	{
 		$path = $binding->getPath();
 		$this->assertPathIsAvailable($path);
@@ -59,7 +59,7 @@ final class RepresentationBinding
 		return array_key_exists($path, $this->fields);
 	}
 
-	public function getField(string $path): RepresentationFieldBinding
+	public function getField(string $path): RepresentationFieldSchema
 	{
 		if (! array_key_exists($path, $this->fields)) {
 			throw new StateException(sprintf("Representation binding does not contain field path '%s'.", $path));
@@ -69,7 +69,7 @@ final class RepresentationBinding
 	}
 
 	/**
-	 * @return list<RepresentationFieldBinding>
+	 * @return list<RepresentationFieldSchema>
 	 */
 	public function getFields(): array
 	{
@@ -77,33 +77,33 @@ final class RepresentationBinding
 	}
 
 	/**
-	 * @return list<RepresentationFieldBinding>
+	 * @return list<RepresentationFieldSchema>
 	 */
-	public function getWritableFieldBindings(): array
+	public function getWritableFieldSchemas(): array
 	{
 		return array_values(array_filter(
 			$this->fields,
-			static fn (RepresentationFieldBinding $binding): bool => $binding->isWritable()
+			static fn (RepresentationFieldSchema $binding): bool => $binding->isWritable()
 		));
 	}
 
 	/**
-	 * @return list<RepresentationFieldBinding>
+	 * @return list<RepresentationFieldSchema>
 	 */
-	public function getReadOnlyFieldBindings(): array
+	public function getReadOnlyFieldSchemas(): array
 	{
 		return array_values(array_filter(
 			$this->fields,
-			static fn (RepresentationFieldBinding $binding): bool => $binding->isReadOnly()
+			static fn (RepresentationFieldSchema $binding): bool => $binding->isReadOnly()
 		));
 	}
 
 	/**
 	 * @param list<string> $sourcePath
 	 */
-	public function getFieldForSource(array $sourcePath, string $fieldName): ?RepresentationFieldBinding
+	public function getFieldForSource(array $sourcePath, string $fieldName): ?RepresentationFieldSchema
 	{
-		$sourceKey = RepresentationFieldBinding::sourcePathKey($sourcePath);
+		$sourceKey = RepresentationFieldSchema::sourcePathKey($sourcePath);
 
 		foreach ($this->fields as $field) {
 			if ($field->getSourcePathKey() === $sourceKey && $field->getFieldName() === $fieldName) {
@@ -119,10 +119,10 @@ final class RepresentationBinding
 	 */
 	public function hasFieldForSource(array $sourcePath, string $fieldName): bool
 	{
-		return $this->getFieldForSource($sourcePath, $fieldName) instanceof RepresentationFieldBinding;
+		return $this->getFieldForSource($sourcePath, $fieldName) instanceof RepresentationFieldSchema;
 	}
 
-	public function addRelation(RepresentationRelationBinding $binding): void
+	public function addRelation(RepresentationRelationSchema $binding): void
 	{
 		$path = $binding->getPath();
 		$this->assertPathIsAvailable($path);
@@ -136,7 +136,7 @@ final class RepresentationBinding
 		return array_key_exists($path, $this->relations);
 	}
 
-	public function getRelation(string $path): RepresentationRelationBinding
+	public function getRelation(string $path): RepresentationRelationSchema
 	{
 		if (! array_key_exists($path, $this->relations)) {
 			throw new StateException(sprintf("Representation binding does not contain relation path '%s'.", $path));
@@ -146,7 +146,7 @@ final class RepresentationBinding
 	}
 
 	/**
-	 * @return list<RepresentationRelationBinding>
+	 * @return list<RepresentationRelationSchema>
 	 */
 	public function getRelations(): array
 	{

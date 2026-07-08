@@ -15,8 +15,8 @@ use ON\Data\ORM\Relation\Persistence\HasManyPersistencePlanner;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\State\ValueRef;
@@ -120,8 +120,8 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$item = new stdClass();
 		$collection = new ToManyRelationState($owner, 'posts', $this->bindingFor($child));
 		$collection->add($item);
-		$binding = new RepresentationBinding($posts);
-		$binding->addField(new RepresentationFieldBinding('id', $posts, 'id'));
+		$binding = new RepresentationSchema($posts);
+		$binding->addField(new RepresentationFieldSchema('id', $posts, 'id'));
 		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($binding, []));
 
 		$this->expectException(RelationPersistenceException::class);
@@ -218,7 +218,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$posts = $registry->collection('posts')->primaryKey('id')->field('id', 'int')->end()->field('user_id', 'int')->end();
 		$relation = $posts->belongsTo('author', 'users')->innerKey('user_id')->outerKey('id');
 		self::assertInstanceOf(BelongsToRelation::class, $relation);
-		$collection = new ToManyRelationState(RecordState::new($posts, ['user_id' => 10]), 'author', new RepresentationBinding($posts));
+		$collection = new ToManyRelationState(RecordState::new($posts, ['user_id' => 10]), 'author', new RepresentationSchema($posts));
 
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('must be a has-many relation');
@@ -318,12 +318,12 @@ final class HasManyPersistencePlannerTest extends TestCase
 		);
 	}
 
-	private function bindingFor(RecordState $record): RepresentationBinding
+	private function bindingFor(RecordState $record): RepresentationSchema
 	{
-		$binding = new RepresentationBinding($record->getCollection());
+		$binding = new RepresentationSchema($record->getCollection());
 		foreach (array_keys($record->getValues()) as $field) {
 			$field = (string) $field;
-			$binding->addField(new RepresentationFieldBinding($field, $record->getCollection(), $field));
+			$binding->addField(new RepresentationFieldSchema($field, $record->getCollection(), $field));
 		}
 
 		return $binding;

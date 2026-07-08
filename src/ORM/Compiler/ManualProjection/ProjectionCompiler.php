@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Compiler\ManualProjection;
 
 /**
- * Manual projection compiler: assembles RepresentationBinding from pre-built
+ * Manual projection compiler: assembles RepresentationSchema from pre-built
  * ProjectionFieldShape values using the manual SourceResolver.
  *
  * Exists as the thin manual counterpart to the query-side projection compiler; it
@@ -15,7 +15,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Compiler\ProjectionBindingAssembler;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
 
 final class ProjectionCompiler
 {
@@ -33,14 +33,14 @@ final class ProjectionCompiler
 	 *
 	 * @param list<ProjectionFieldShape> $propertyShapes
 	 */
-	public function compile(array $propertyShapes, ?CollectionInterface $fallbackCollection = null): RepresentationBinding
+	public function compile(array $propertyShapes, ?CollectionInterface $fallbackCollection = null): RepresentationSchema
 	{
 		if ($propertyShapes === []) {
 			if (! $fallbackCollection instanceof CollectionInterface) {
 				throw new StateException('Cannot compile a manual projection without a tracked representation or at least one property declaration.');
 			}
 
-			return new RepresentationBinding($fallbackCollection);
+			return new RepresentationSchema($fallbackCollection);
 		}
 
 		$rootCollection = $this->sourceResolver->resolve($propertyShapes[0]->getSource())->getCollection();

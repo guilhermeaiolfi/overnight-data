@@ -9,10 +9,10 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
-use ON\Data\ORM\State\RepresentationRelationBinding;
+use ON\Data\ORM\State\RepresentationRelationSchema;
 use ON\Data\ORM\State\RepresentationRelationStateItem;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
@@ -110,20 +110,20 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
 		$nameField = $this->field('name', $record->getCollection(), 'name');
 		$binding = $this->binding($nameField);
-		$relationBinding = new RepresentationRelationBinding(
+		$relationSchema = new RepresentationRelationSchema(
 			'posts',
 			$record->getCollection(),
 			'posts',
 			$this->postBinding(),
 			true
 		);
-		$binding->addRelation($relationBinding);
+		$binding->addRelation($relationSchema);
 		$tracked = RepresentationStateObjectRegistry::remember(
 			$this->representation(['name' => 'A2']),
 			new RepresentationState(
 				$binding,
 				[new RepresentationFieldStateItem($nameField, $record, 'name', $record->getRevision())],
-				[new RepresentationRelationStateItem($relationBinding, $record, 'posts')],
+				[new RepresentationRelationStateItem($relationSchema, $record, 'posts')],
 			)
 		);
 
@@ -328,13 +328,13 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 		CollectionInterface $collection,
 		string $fieldName,
 		bool $writable = true,
-	): RepresentationFieldBinding {
-		return new RepresentationFieldBinding($path, $collection, $fieldName, $writable);
+	): RepresentationFieldSchema {
+		return new RepresentationFieldSchema($path, $collection, $fieldName, $writable);
 	}
 
-	private function binding(RepresentationFieldBinding ...$fields): RepresentationBinding
+	private function binding(RepresentationFieldSchema ...$fields): RepresentationSchema
 	{
-		$binding = new RepresentationBinding($fields[0]->getCollection());
+		$binding = new RepresentationSchema($fields[0]->getCollection());
 		foreach ($fields as $field) {
 			$binding->addField($field);
 		}
@@ -342,16 +342,16 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 		return $binding;
 	}
 
-	private function tracked(object $representation, RepresentationBinding $binding, RecordState ...$records): RepresentationState
+	private function tracked(object $representation, RepresentationSchema $binding, RecordState ...$records): RepresentationState
 	{
 		$items = [];
-		foreach ($binding->getFields() as $fieldBinding) {
+		foreach ($binding->getFields() as $fieldSchema) {
 			foreach ($records as $record) {
-				if ($record->getCollection()->getName() !== $fieldBinding->getCollectionName()) {
+				if ($record->getCollection()->getName() !== $fieldSchema->getCollectionName()) {
 					continue;
 				}
 
-				$items[] = new RepresentationFieldStateItem($fieldBinding, $record, $fieldBinding->getFieldName(), $record->getRevision());
+				$items[] = new RepresentationFieldStateItem($fieldSchema, $record, $fieldSchema->getFieldName(), $record->getRevision());
 
 				break;
 			}

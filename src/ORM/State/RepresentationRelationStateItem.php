@@ -15,7 +15,7 @@ namespace ON\Data\ORM\State;
 final class RepresentationRelationStateItem
 {
 	public function __construct(
-		private RepresentationRelationBinding $binding,
+		private RepresentationRelationSchema $schema,
 		private RecordState $ownerRecord,
 		private string $relationName,
 	) {
@@ -23,12 +23,12 @@ final class RepresentationRelationStateItem
 
 	public function getPath(): string
 	{
-		return $this->binding->getPath();
+		return $this->schema->getPath();
 	}
 
-	public function getBinding(): RepresentationRelationBinding
+	public function getSchema(): RepresentationRelationSchema
 	{
-		return $this->binding;
+		return $this->schema;
 	}
 
 	public function getOwnerRecord(): RecordState

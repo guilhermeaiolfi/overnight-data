@@ -7,8 +7,8 @@ namespace Tests\ON\Data\ORM\Sync;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\Sync\AdoptionRecordResolver;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -85,7 +85,7 @@ final class AdoptionRecordResolverTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('untracked root sync needs a binding targeting one collection');
 
-		$this->resolver()->resolve(new stdClass(), new RepresentationBinding($this->users()), new RecordStateStore(), true);
+		$this->resolver()->resolve(new stdClass(), new RepresentationSchema($this->users()), new RecordStateStore(), true);
 	}
 
 	public function testRejectsRelatedBindingWithNoTargetCollection(): void
@@ -93,14 +93,14 @@ final class AdoptionRecordResolverTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('related binding does not target a collection');
 
-		$this->resolver()->resolve(new stdClass(), new RepresentationBinding($this->users()), new RecordStateStore(), false);
+		$this->resolver()->resolve(new stdClass(), new RepresentationSchema($this->users()), new RecordStateStore(), false);
 	}
 
 	public function testRejectsBindingTargetingMultipleCollectionNames(): void
 	{
-		$binding = new RepresentationBinding($this->users());
-		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
-		$binding->addField(new RepresentationFieldBinding('title', $this->posts(), 'title'));
+		$binding = new RepresentationSchema($this->users());
+		$binding->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
+		$binding->addField(new RepresentationFieldSchema('title', $this->posts(), 'title'));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("path 'title' targets collection 'posts' after 'users'");
@@ -110,9 +110,9 @@ final class AdoptionRecordResolverTest extends TestCase
 
 	public function testIgnoresMissingNonKeyPathsWhenBuildingInitialValues(): void
 	{
-		$binding = new RepresentationBinding($this->users());
-		$binding->addField(new RepresentationFieldBinding('id', $this->users(), 'id'));
-		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
+		$binding = new RepresentationSchema($this->users());
+		$binding->addField(new RepresentationFieldSchema('id', $this->users(), 'id'));
+		$binding->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
 		$representation = $this->representation(['id' => 10]);
 
 		$record = $this->resolver()->resolve($representation, $binding, new RecordStateStore(), true);
@@ -124,8 +124,8 @@ final class AdoptionRecordResolverTest extends TestCase
 	public function testTreatsMissingKeyPathAsIncompleteKey(): void
 	{
 		$representation = $this->representation(['name' => 'Ada']);
-		$binding = new RepresentationBinding($this->users());
-		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
+		$binding = new RepresentationSchema($this->users());
+		$binding->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
 
 		$record = $this->resolver()->resolve($representation, $binding, new RecordStateStore(), true);
 
@@ -167,9 +167,9 @@ final class AdoptionRecordResolverTest extends TestCase
 
 	public function testRelatedBindingRejectsMultipleCollectionNames(): void
 	{
-		$binding = new RepresentationBinding($this->users());
-		$binding->addField(new RepresentationFieldBinding('name', $this->users(), 'name'));
-		$binding->addField(new RepresentationFieldBinding('title', $this->posts(), 'title'));
+		$binding = new RepresentationSchema($this->users());
+		$binding->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
+		$binding->addField(new RepresentationFieldSchema('title', $this->posts(), 'title'));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("related binding path 'title' targets collection 'posts' after 'users'");

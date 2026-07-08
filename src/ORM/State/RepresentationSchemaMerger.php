@@ -12,11 +12,11 @@ namespace ON\Data\ORM\State;
  */
 use ON\Data\ORM\Exception\StateException;
 
-final class RepresentationBindingMerger
+final class RepresentationSchemaMerger
 {
-	public function mergeManualOverlay(RepresentationBinding $existing, RepresentationBinding $manual): RepresentationBinding
+	public function mergeManualOverlay(RepresentationSchema $existing, RepresentationSchema $manual): RepresentationSchema
 	{
-		$merged = new RepresentationBinding($existing->getCollection());
+		$merged = new RepresentationSchema($existing->getCollection());
 		foreach ($existing->getFields() as $field) {
 			$merged->addField($field);
 		}

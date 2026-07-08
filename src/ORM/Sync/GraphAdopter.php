@@ -6,7 +6,7 @@ namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 
@@ -30,17 +30,17 @@ final class GraphAdopter
 		object $root,
 		RepresentationStateStore $representations,
 		RecordStateStore $records,
-		?RepresentationBinding $rootBinding = null,
+		?RepresentationSchema $rootSchema = null,
 	): array {
 		if ($representations->get($root) === null) {
-			if (! $rootBinding instanceof RepresentationBinding) {
+			if (! $rootSchema instanceof RepresentationSchema) {
 				throw new StateException('Cannot adopt representation graph because the root representation is not tracked and no root binding was provided.');
 			}
 
 			(new RepresentationAdopter($records, $representations))->adopt(
 				$root,
-				$rootBinding,
-				$this->records->resolve($root, $rootBinding, $records, true)
+				$rootSchema,
+				$this->records->resolve($root, $rootSchema, $records, true)
 			);
 		}
 
@@ -76,19 +76,19 @@ final class GraphAdopter
 		}
 
 		$visited[$id] = true;
-		foreach ($tracked->getBinding()->getRelations() as $relationBinding) {
-			if ($relationBinding->isMany()) {
-				foreach ($this->reader->readItems($representation, $relationBinding, $this->adoptionError(...)) as $item) {
-					$this->adoptAndWalk($item, $relationBinding->getRelatedBinding(), $representations, $records, $adopter, $visited, $adopted);
+		foreach ($tracked->getSchema()->getRelations() as $relationSchema) {
+			if ($relationSchema->isMany()) {
+				foreach ($this->reader->readItems($representation, $relationSchema, $this->adoptionError(...)) as $item) {
+					$this->adoptAndWalk($item, $relationSchema->getRelatedSchema(), $representations, $records, $adopter, $visited, $adopted);
 				}
 
 				continue;
 			}
 
-			if ($relationBinding->isSingle()) {
-				$target = $this->reader->readTarget($representation, $relationBinding, $this->adoptionError(...));
+			if ($relationSchema->isSingle()) {
+				$target = $this->reader->readTarget($representation, $relationSchema, $this->adoptionError(...));
 				if ($target !== null) {
-					$this->adoptAndWalk($target, $relationBinding->getRelatedBinding(), $representations, $records, $adopter, $visited, $adopted);
+					$this->adoptAndWalk($target, $relationSchema->getRelatedSchema(), $representations, $records, $adopter, $visited, $adopted);
 				}
 			}
 		}
@@ -100,7 +100,7 @@ final class GraphAdopter
 	 */
 	private function adoptAndWalk(
 		object $representation,
-		RepresentationBinding $binding,
+		RepresentationSchema $binding,
 		RepresentationStateStore $representations,
 		RecordStateStore $records,
 		RepresentationAdopter $adopter,

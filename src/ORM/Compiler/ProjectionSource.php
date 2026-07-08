@@ -11,18 +11,18 @@ namespace ON\Data\ORM\Compiler;
  * keys stay in ProjectionIdentityColumns.
  */
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 
 final class ProjectionSource
 {
 	/** @var list<string> */
 	private array $path;
-	/** @var list<RepresentationFieldBinding> */
+	/** @var list<RepresentationFieldSchema> */
 	private array $fields;
 
 	/**
 	 * @param list<string> $path
-	 * @param list<RepresentationFieldBinding> $fields
+	 * @param list<RepresentationFieldSchema> $fields
 	 */
 	public function __construct(
 		array $path,
@@ -43,7 +43,7 @@ final class ProjectionSource
 
 	public function getPathKey(): string
 	{
-		return RepresentationFieldBinding::sourcePathKey($this->path);
+		return RepresentationFieldSchema::sourcePathKey($this->path);
 	}
 
 	public function getCollection(): CollectionInterface
@@ -52,7 +52,7 @@ final class ProjectionSource
 	}
 
 	/**
-	 * @return list<RepresentationFieldBinding>
+	 * @return list<RepresentationFieldSchema>
 	 */
 	public function getFields(): array
 	{

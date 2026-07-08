@@ -6,8 +6,8 @@ namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
 use PHPUnit\Framework\TestCase;
@@ -19,10 +19,10 @@ final class RepresentationStateTest extends TestCase
 
 	public function testExposesBindingWithoutRepresentationObject(): void
 	{
-		$binding = new RepresentationBinding($this->users());
+		$binding = new RepresentationSchema($this->users());
 		$tracked = new RepresentationState($binding, []);
 
-		self::assertSame($binding, $tracked->getBinding());
+		self::assertSame($binding, $tracked->getSchema());
 		self::assertFalse(method_exists($tracked, 'getRepresentation'));
 	}
 
@@ -39,7 +39,7 @@ final class RepresentationStateTest extends TestCase
 
 	public function testMissingFieldItemThrows(): void
 	{
-		$state = new RepresentationState(new RepresentationBinding($this->users()), []);
+		$state = new RepresentationState(new RepresentationSchema($this->users()), []);
 
 		$this->expectException(StateException::class);
 		$state->getFieldItem('missing');
@@ -56,14 +56,14 @@ final class RepresentationStateTest extends TestCase
 
 	public function testGetRootRecordReturnsNullWhenNoRootItemAttached(): void
 	{
-		$state = new RepresentationState(new RepresentationBinding($this->users()), []);
+		$state = new RepresentationState(new RepresentationSchema($this->users()), []);
 
 		self::assertNull($state->getRootRecord());
 	}
 
 	public function testRequireRootRecordThrowsWhenNoRootItemAttached(): void
 	{
-		$state = new RepresentationState(new RepresentationBinding($this->users()), []);
+		$state = new RepresentationState(new RepresentationSchema($this->users()), []);
 
 		$this->expectException(StateException::class);
 		$state->requireRootRecord();
@@ -76,9 +76,9 @@ final class RepresentationStateTest extends TestCase
 		$rootRecord = RecordState::new($users, ['name' => 'A1']);
 		$foreignRecord = RecordState::new($posts, ['title' => 'T']);
 
-		$binding = new RepresentationBinding($users);
-		$rootField = new RepresentationFieldBinding('name', $users, 'name');
-		$foreignField = new RepresentationFieldBinding('companyTitle', $posts, 'title', sourcePath: ['company']);
+		$binding = new RepresentationSchema($users);
+		$rootField = new RepresentationFieldSchema('name', $users, 'name');
+		$foreignField = new RepresentationFieldSchema('companyTitle', $posts, 'title', sourcePath: ['company']);
 		$binding->addField($foreignField);
 		$binding->addField($rootField);
 
@@ -96,9 +96,9 @@ final class RepresentationStateTest extends TestCase
 		$recordOne = RecordState::new($users, ['name' => 'A1']);
 		$recordTwo = RecordState::new($users, ['name' => 'A2']);
 
-		$binding = new RepresentationBinding($users);
-		$fieldOne = new RepresentationFieldBinding('name', $users, 'name');
-		$fieldTwo = new RepresentationFieldBinding('nickname', $users, 'name');
+		$binding = new RepresentationSchema($users);
+		$fieldOne = new RepresentationFieldSchema('name', $users, 'name');
+		$fieldTwo = new RepresentationFieldSchema('nickname', $users, 'name');
 		$binding->addField($fieldOne);
 		$binding->addField($fieldTwo);
 
@@ -114,7 +114,7 @@ final class RepresentationStateTest extends TestCase
 	public function testAcceptSyncedRecordsAdvancesOnlyTouchedItemBaselines(): void
 	{
 		[$binding, $name] = $this->stateParts();
-		$emailBinding = new RepresentationFieldBinding('email', $this->users(), 'email');
+		$emailBinding = new RepresentationFieldSchema('email', $this->users(), 'email');
 		$emailRecord = RecordState::new($this->users(), ['email' => 'a@example.test']);
 		$binding->addField($emailBinding);
 		$state = new RepresentationState($binding, [
@@ -131,13 +131,13 @@ final class RepresentationStateTest extends TestCase
 	}
 
 	/**
-	 * @return array{RepresentationBinding, RepresentationFieldStateItem}
+	 * @return array{RepresentationSchema, RepresentationFieldStateItem}
 	 */
 	private function stateParts(): array
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
-		$binding = new RepresentationBinding($record->getCollection());
-		$field = new RepresentationFieldBinding('name', $record->getCollection(), 'name');
+		$binding = new RepresentationSchema($record->getCollection());
+		$field = new RepresentationFieldSchema('name', $record->getCollection(), 'name');
 		$binding->addField($field);
 
 		return [$binding, new RepresentationFieldStateItem($field, $record, 'name', $record->getRevision())];

@@ -88,7 +88,7 @@ final class MutableQueryExportTest extends TestCase
 		$state = $session->getRepresentations()->get($row);
 		self::assertInstanceOf(RepresentationState::class, $state);
 
-		$binding = $state->getBinding();
+		$binding = $state->getSchema();
 		self::assertTrue($binding->hasFieldForSource([], 'id'));
 		self::assertTrue($binding->hasFieldForSource([], 'name'));
 		self::assertFalse($binding->hasField('postCount'));
@@ -111,7 +111,7 @@ final class MutableQueryExportTest extends TestCase
 		$states = $this->representationStates($session, $rows[0], $rows[1]);
 
 		self::assertCount(2, $states);
-		self::assertSame($states[0]->getBinding()->getPaths(), $states[1]->getBinding()->getPaths());
+		self::assertSame($states[0]->getSchema()->getPaths(), $states[1]->getSchema()->getPaths());
 	}
 
 	public function testEachRootObjectGetsItsOwnRepresentationState(): void
@@ -298,8 +298,8 @@ final class MutableQueryResultTrackerTest extends TestCase
 		self::assertInstanceOf(RepresentationState::class, $secondState);
 
 		self::assertSame(
-			$firstState->getBinding()->getRelation('posts')->getRelatedBinding(),
-			$secondState->getBinding()->getRelation('posts')->getRelatedBinding(),
+			$firstState->getSchema()->getRelation('posts')->getRelatedSchema(),
+			$secondState->getSchema()->getRelation('posts')->getRelatedSchema(),
 		);
 	}
 
@@ -345,7 +345,7 @@ final class MutableQueryResultTrackerTest extends TestCase
 		$tracker->trackOne($session, $compilation, $user, ['id' => 1, 'name' => 'Ada']);
 
 		self::assertTrue($session->getRepresentations()->has($user));
-		self::assertTrue($session->getRepresentations()->get($user)?->getBinding()->hasField('name'));
+		self::assertTrue($session->getRepresentations()->get($user)?->getSchema()->hasField('name'));
 	}
 
 	private function makeRegistry(): Registry

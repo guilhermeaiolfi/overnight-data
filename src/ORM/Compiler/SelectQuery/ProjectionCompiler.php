@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Compiler\SelectQuery;
 
 /**
- * Compiles a SelectQuery selection graph into a structural RepresentationBinding
+ * Compiles a SelectQuery selection graph into a structural RepresentationSchema
  * for flat mutable projection adoption.
  *
  * Exists as the query-side compiler: it normalizes selections, assembles scalar
@@ -19,8 +19,8 @@ use ON\Data\ORM\Compiler\ProjectionBindingAssembler;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
 use ON\Data\ORM\Compiler\ProjectionSourceBuilder;
 use ON\Data\ORM\Compiler\ProjectionSourceResolverInterface;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationRelationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationRelationSchema;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Relation\RelationRef;
@@ -47,15 +47,15 @@ final class ProjectionCompiler
 		$this->sourceBuilder = $sourceBuilder ?? new ProjectionSourceBuilder();
 	}
 
-	public function compile(SelectQuery $query): RepresentationBinding
+	public function compile(SelectQuery $query): RepresentationSchema
 	{
 		return $this->compileBinding($query);
 	}
 
-	public function compileBinding(SelectQuery $query): RepresentationBinding
+	public function compileBinding(SelectQuery $query): RepresentationSchema
 	{
 		$collection = $query->getCollection();
-		$binding = new RepresentationBinding($collection);
+		$binding = new RepresentationSchema($collection);
 
 		$sourceResolver = new QueryProjectionSourceResolver($query);
 
@@ -76,7 +76,7 @@ final class ProjectionCompiler
 	}
 
 	private function compileRootScalarFields(
-		RepresentationBinding $binding,
+		RepresentationSchema $binding,
 		SelectQuery $query,
 		CollectionInterface $collection,
 		QueryProjectionSourceResolver $sourceResolver,
@@ -96,7 +96,7 @@ final class ProjectionCompiler
 	 * selection (including an aliased one) is not shadowed by a read-only copy.
 	 */
 	private function assemblePrimaryKeyFields(
-		RepresentationBinding $binding,
+		RepresentationSchema $binding,
 		CollectionInterface $collection,
 		object $source,
 		ProjectionSourceResolverInterface $sourceResolver,
@@ -150,7 +150,7 @@ final class ProjectionCompiler
 	}
 
 	private function compileRelationSourcedFlatFields(
-		RepresentationBinding $binding,
+		RepresentationSchema $binding,
 		SelectQuery $query,
 		QueryProjectionSourceResolver $sourceResolver,
 	): void {
@@ -188,7 +188,7 @@ final class ProjectionCompiler
 		return $source instanceof RelationRef && $source->getQuery() === $query;
 	}
 
-	private function compileRelationSelections(RepresentationBinding $rootBinding, SelectQuery $query): void
+	private function compileRelationSelections(RepresentationSchema $rootSchema, SelectQuery $query): void
 	{
 		$relationSelections = $query->getRelationSelections()->getAll();
 
@@ -197,7 +197,7 @@ final class ProjectionCompiler
 			static fn (RelationSelection $left, RelationSelection $right): int => count($left->getPath()) <=> count($right->getPath()),
 		);
 
-		/** @var array<string, RepresentationBinding> $bindingsByPath */
+		/** @var array<string, RepresentationSchema> $bindingsByPath */
 		$bindingsByPath = [];
 
 		foreach ($relationSelections as $selection) {
@@ -205,20 +205,20 @@ final class ProjectionCompiler
 			$pathKey = json_encode($path, JSON_THROW_ON_ERROR);
 			$parentPathKey = $selection->getParentPathKey();
 			$parentBinding = $parentPathKey === null
-				? $rootBinding
+				? $rootSchema
 				: $bindingsByPath[$parentPathKey];
 			$ownerCollection = $this->resolveOwnerCollection($query, $path);
 			$relationName = $selection->getName();
-			$relatedBinding = $this->compileRelationBinding($selection);
+			$relatedSchema = $this->compileRelationBinding($selection);
 
-			$parentBinding->addRelation(new RepresentationRelationBinding(
+			$parentBinding->addRelation(new RepresentationRelationSchema(
 				$relationName,
 				$ownerCollection,
 				$relationName,
-				$relatedBinding,
+				$relatedSchema,
 			));
 
-			$bindingsByPath[$pathKey] = $relatedBinding;
+			$bindingsByPath[$pathKey] = $relatedSchema;
 		}
 	}
 
@@ -242,10 +242,10 @@ final class ProjectionCompiler
 		return $collection;
 	}
 
-	private function compileRelationBinding(RelationSelection $selection): RepresentationBinding
+	private function compileRelationBinding(RelationSelection $selection): RepresentationSchema
 	{
 		$targetCollection = $selection->getRelationRef()->getDefinition()->getCollection();
-		$binding = new RepresentationBinding($targetCollection);
+		$binding = new RepresentationSchema($targetCollection);
 		$sourceResolver = new RootSourceResolver($targetCollection);
 		$explicitFields = $selection->getFields();
 

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Compiler\SelectQuery;
 
 /**
- * Query compilation result pairing the public RepresentationBinding with the
+ * Query compilation result pairing the public RepresentationSchema with the
  * compiled structural ProjectionSource entries and ProjectionIdentityColumns
  * needed to adopt flat mutable query rows.
  *
@@ -13,7 +13,7 @@ namespace ON\Data\ORM\Compiler\SelectQuery;
  * ProjectionRepresentationAdopter separately from the user-visible binding.
  */
 use ON\Data\ORM\Compiler\ProjectionSource;
-use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
 
 final class ProjectionCompilation
 {
@@ -24,16 +24,16 @@ final class ProjectionCompilation
 	 * @param list<ProjectionSource> $sources
 	 */
 	public function __construct(
-		private RepresentationBinding $binding,
+		private RepresentationSchema $schema,
 		array $sources,
 		private ProjectionIdentityColumns $identityColumns,
 	) {
 		$this->sources = array_values($sources);
 	}
 
-	public function getBinding(): RepresentationBinding
+	public function getSchema(): RepresentationSchema
 	{
-		return $this->binding;
+		return $this->schema;
 	}
 
 	/**

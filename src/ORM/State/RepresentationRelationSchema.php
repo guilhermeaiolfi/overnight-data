@@ -9,20 +9,20 @@ use ON\Data\Definition\Relation\RelationInterface;
 
 /**
  * One structural relation representation path bound to an owner collection,
- * relation name, and reusable related RepresentationBinding branch.
+ * relation name, and reusable related RepresentationSchema branch.
  *
  * Exists so graph sync and relation runtime state can share one recursive
  * binding model without duplicating per-child binding templates.
  */
 use ON\Data\ORM\Exception\StateException;
 
-final class RepresentationRelationBinding
+final class RepresentationRelationSchema
 {
 	public function __construct(
 		private string $path,
 		private CollectionInterface $ownerCollection,
 		private string $relationName,
-		private RepresentationBinding $relatedBinding,
+		private RepresentationSchema $relatedSchema,
 		private bool $skipWhenMissing = false,
 	) {
 		if ($path === '') {
@@ -59,9 +59,9 @@ final class RepresentationRelationBinding
 		return $this->ownerCollection->getRelations()->get($this->relationName);
 	}
 
-	public function getRelatedBinding(): RepresentationBinding
+	public function getRelatedSchema(): RepresentationSchema
 	{
-		return $this->relatedBinding;
+		return $this->relatedSchema;
 	}
 
 	public function isMany(): bool

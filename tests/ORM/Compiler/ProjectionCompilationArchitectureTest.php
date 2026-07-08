@@ -25,8 +25,8 @@ use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
@@ -74,7 +74,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 
 		self::assertStringNotContainsString('new ToManyRelationState', $contents);
 		self::assertStringNotContainsString('new ToOneRelationState', $contents);
-		self::assertStringNotContainsString('relationBindingFromPath', $contents);
+		self::assertStringNotContainsString('relationSchemaFromPath', $contents);
 		self::assertStringNotContainsString('mergeBindings', $contents);
 		self::assertStringNotContainsString('mirrorRelationTarget', $contents);
 		self::assertStringNotContainsString('bindingAssembler->assemble', $contents);
@@ -83,11 +83,11 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertStringNotContainsString('recordForExisting', $contents);
 		self::assertStringNotContainsString('new RepresentationFieldStateItem', $contents);
 		self::assertStringNotContainsString('resolveRecordForNewField', $contents);
-		self::assertStringNotContainsString('RepresentationBindingMerger', $contents);
-		self::assertStringNotContainsString('bindingMerger', $contents);
+		self::assertStringNotContainsString('RepresentationSchemaMerger', $contents);
+		self::assertStringNotContainsString('schemaMerger', $contents);
 	}
 
-	public function testManualBuilderDelegatesProjectionApplicationWithoutBindingMerger(): void
+	public function testManualBuilderDelegatesProjectionApplicationWithoutSchemaMerger(): void
 	{
 		$method = (new ReflectionClass(RepresentationTracker::class))->getMethod('applyManualProjection');
 		$parameterTypes = array_map(
@@ -97,7 +97,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 
 		self::assertSame([
 			'object',
-			RepresentationBinding::class,
+			RepresentationSchema::class,
 			'array',
 		], $parameterTypes);
 	}
@@ -209,8 +209,8 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 	public function testObjectShapedFromPathAppliesRelatedBindingBranchDirectly(): void
 	{
 		[$session, $user] = $this->trackedUserWithPostsRelation();
-		$userBinding = $session->getRepresentations()->get($user)->getBinding();
-		$relatedBinding = $userBinding->getRelation('posts')->getRelatedBinding();
+		$userSchema = $session->getRepresentations()->get($user)->getSchema();
+		$relatedSchema = $userSchema->getRelation('posts')->getRelatedSchema();
 		$post = new stdClass();
 		$post->title = 'Branch reuse';
 
@@ -222,8 +222,8 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 
 		$postState = $session->getRepresentations()->get($post);
 		self::assertInstanceOf(RepresentationState::class, $postState);
-		self::assertSame($relatedBinding->getPaths(), $postState->getBinding()->getPaths());
-		self::assertSame('title', $postState->getBinding()->getPaths()[1] ?? null);
+		self::assertSame($relatedSchema->getPaths(), $postState->getSchema()->getPaths());
+		self::assertSame('title', $postState->getSchema()->getPaths()[1] ?? null);
 	}
 
 	#[RequiresPhpExtension('pdo_sqlite')]
@@ -276,8 +276,8 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 
 		self::assertInstanceOf(RepresentationState::class, $state);
 		self::assertSame(10, $adapter->id);
-		self::assertSame('id', $state->getBinding()->getPaths()[0]);
-		self::assertTrue($state->getBinding()->getField('id')->isReadOnly());
+		self::assertSame('id', $state->getSchema()->getPaths()[0]);
+		self::assertTrue($state->getSchema()->getField('id')->isReadOnly());
 	}
 
 	public function testQueryAndManualAliasProjectionUseEquivalentPublicPaths(): void
@@ -297,15 +297,15 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 
 		$record = RecordState::new($users);
 		$rootTarget = new RootTarget($record);
-		$manualBinding = (new ProjectionCompiler())->compile(
+		$manualSchema = (new ProjectionCompiler())->compile(
 			[new ProjectionFieldShape('display_name', $rootTarget, 'name')],
 		);
 
-		self::assertSame($queryBinding->getPaths(), $manualBinding->getPaths());
+		self::assertSame($queryBinding->getPaths(), $manualSchema->getPaths());
 		self::assertSame('display_name', $queryBinding->getPaths()[0]);
 		self::assertSame('name', $queryBinding->getField('display_name')->getFieldName());
-		self::assertSame('name', $manualBinding->getField('display_name')->getFieldName());
-		self::assertSame('users', $manualBinding->getField('display_name')->getCollectionName());
+		self::assertSame('name', $manualSchema->getField('display_name')->getFieldName());
+		self::assertSame('users', $manualSchema->getField('display_name')->getCollectionName());
 	}
 
 	public function testSourceResolversDoNotInspectAliasesOrBuildFieldBindings(): void
@@ -318,7 +318,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 
 			self::assertStringNotContainsString('AliasedExpression', $contents, $path);
 			self::assertStringNotContainsString('SelectionItem', $contents, $path);
-			self::assertStringNotContainsString('RepresentationFieldBinding', $contents, $path);
+			self::assertStringNotContainsString('RepresentationFieldSchema', $contents, $path);
 		}
 	}
 
@@ -333,11 +333,11 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			$root . '/src/ORM/Compiler/ManualProjection/SourceResolver.php',
 			$root . '/src/ORM/Compiler/SelectQuery/ProjectionCompiler.php',
 		] as $path) {
-			self::assertStringNotContainsString('new RepresentationFieldBinding', (string) file_get_contents($path), $path);
+			self::assertStringNotContainsString('new RepresentationFieldSchema', (string) file_get_contents($path), $path);
 		}
 
 		$assembler = (string) file_get_contents($root . '/src/ORM/Compiler/ProjectionBindingAssembler.php');
-		self::assertStringContainsString('new RepresentationFieldBinding', $assembler);
+		self::assertStringContainsString('new RepresentationFieldSchema', $assembler);
 	}
 
 	public function testHiddenIdentityPlanningRemainsOutsideManualProjectionPath(): void
@@ -402,7 +402,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		$state = $session->getRepresentations()->get($row);
 		self::assertInstanceOf(RepresentationState::class, $state);
 		self::assertSame(['name', 'email'], array_values(array_filter(
-			$state->getBinding()->getPaths(),
+			$state->getSchema()->getPaths(),
 			static fn (string $path): bool => $path !== 'id',
 		)));
 	}
@@ -419,7 +419,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 
 		self::assertSame($row, $builder->properties($target->name)->end());
 		self::assertSame($row, $builder->end());
-		self::assertSame(['name'], $session->getRepresentations()->get($row)->getBinding()->getPaths());
+		self::assertSame(['name'], $session->getRepresentations()->get($row)->getSchema()->getPaths());
 	}
 
 	public function testManualProjectionAttachmentAddsRootFieldToExistingRootRecord(): void
@@ -428,19 +428,19 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		$record = RecordState::new($users, ['id' => 10]);
 		$representation = new stdClass();
 		$representations = new RepresentationStateStore();
-		$rootBinding = new RepresentationBinding($users);
-		$id = new RepresentationFieldBinding('id', $users, 'id');
-		$rootBinding->addField($id);
-		$representations->add($representation, new RepresentationState($rootBinding, [
+		$rootSchema = new RepresentationSchema($users);
+		$id = new RepresentationFieldSchema('id', $users, 'id');
+		$rootSchema->addField($id);
+		$representations->add($representation, new RepresentationState($rootSchema, [
 			new RepresentationFieldStateItem($id, $record, 'id', $record->getRevision()),
 		]));
 
-		$manualBinding = new RepresentationBinding($users);
-		$manualBinding->addField(new RepresentationFieldBinding('name', $users, 'name'));
+		$manualSchema = new RepresentationSchema($users);
+		$manualSchema->addField(new RepresentationFieldSchema('name', $users, 'name'));
 
 		(new RepresentationTracker($representations, new RecordStateStore()))->applyManualProjection(
 			$representation,
-			$manualBinding,
+			$manualSchema,
 			[new ProjectionFieldShape('name', new RootTarget($record), 'name')],
 		);
 
@@ -456,22 +456,22 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		$managerRecord = RecordState::new($users, ['id' => 20]);
 		$representation = new stdClass();
 		$representations = new RepresentationStateStore();
-		$existingBinding = new RepresentationBinding($users);
-		$rootField = new RepresentationFieldBinding('name', $users, 'name');
-		$managerField = new RepresentationFieldBinding('managerName', $users, 'name', sourcePath: ['manager']);
-		$existingBinding->addField($rootField);
-		$existingBinding->addField($managerField);
-		$representations->add($representation, new RepresentationState($existingBinding, [
+		$existingSchema = new RepresentationSchema($users);
+		$rootField = new RepresentationFieldSchema('name', $users, 'name');
+		$managerField = new RepresentationFieldSchema('managerName', $users, 'name', sourcePath: ['manager']);
+		$existingSchema->addField($rootField);
+		$existingSchema->addField($managerField);
+		$representations->add($representation, new RepresentationState($existingSchema, [
 			new RepresentationFieldStateItem($rootField, $rootRecord, 'name', $rootRecord->getRevision()),
 			new RepresentationFieldStateItem($managerField, $managerRecord, 'name', $managerRecord->getRevision()),
 		]));
 
-		$manualBinding = new RepresentationBinding($users);
-		$manualBinding->addField(new RepresentationFieldBinding('managerEmail', $users, 'email', sourcePath: ['manager']));
+		$manualSchema = new RepresentationSchema($users);
+		$manualSchema->addField(new RepresentationFieldSchema('managerEmail', $users, 'email', sourcePath: ['manager']));
 
 		(new RepresentationTracker($representations, new RecordStateStore()))->applyManualProjection(
 			$representation,
-			$manualBinding,
+			$manualSchema,
 			[],
 		);
 
@@ -487,22 +487,22 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		$record = RecordState::new($users, ['id' => 10]);
 		$representation = new stdClass();
 		$representations = new RepresentationStateStore();
-		$existingBinding = new RepresentationBinding($users);
-		$rootField = new RepresentationFieldBinding('name', $users, 'name');
-		$existingBinding->addField($rootField);
-		$representations->add($representation, new RepresentationState($existingBinding, [
+		$existingSchema = new RepresentationSchema($users);
+		$rootField = new RepresentationFieldSchema('name', $users, 'name');
+		$existingSchema->addField($rootField);
+		$representations->add($representation, new RepresentationState($existingSchema, [
 			new RepresentationFieldStateItem($rootField, $record, 'name', $record->getRevision()),
 		]));
 
-		$manualBinding = new RepresentationBinding($users);
-		$manualBinding->addField(new RepresentationFieldBinding('managerEmail', $users, 'email', sourcePath: ['manager']));
+		$manualSchema = new RepresentationSchema($users);
+		$manualSchema->addField(new RepresentationFieldSchema('managerEmail', $users, 'email', sourcePath: ['manager']));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("Cannot attach manual projection field 'managerEmail'");
 
 		(new RepresentationTracker($representations, new RecordStateStore()))->applyManualProjection(
 			$representation,
-			$manualBinding,
+			$manualSchema,
 			[],
 		);
 	}

@@ -14,9 +14,9 @@ use ON\Data\ORM\Query\ProjectionRepresentationAdopter;
 use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
-use ON\Data\ORM\State\RepresentationRelationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationFieldSchema;
+use ON\Data\ORM\State\RepresentationRelationSchema;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
@@ -40,8 +40,8 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 
 		self::assertTrue($context->getRepresentations()->has($object));
 		self::assertSame($state, $context->getRepresentations()->get($object));
-		self::assertTrue($state->getBinding()->hasField('id'));
-		self::assertTrue($state->getBinding()->hasField('name'));
+		self::assertTrue($state->getSchema()->hasField('id'));
+		self::assertTrue($state->getSchema()->hasField('name'));
 	}
 
 	public function testCreatesOneRecordStatePerCollection(): void
@@ -199,11 +199,11 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 		$binding = $this->projectionBinding($users, $registry->getCollection('companies'));
-		$binding->addRelation(new RepresentationRelationBinding(
+		$binding->addRelation(new RepresentationRelationSchema(
 			'company',
 			$users,
 			'company',
-			new RepresentationBinding($registry->getCollection('companies')),
+			new RepresentationSchema($registry->getCollection('companies')),
 		));
 		$context = new SessionContext();
 		$identityColumns = $this->companyIdProjectionIdentities($registry->getCollection('companies'), 'company_id');
@@ -222,10 +222,10 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 	{
 		$registry = $this->makeSelfRelationRegistry();
 		$users = $registry->getCollection('users');
-		$binding = new RepresentationBinding($users);
-		$binding->addField(new RepresentationFieldBinding('id', $users, 'id', writable: false));
-		$binding->addField(new RepresentationFieldBinding('name', $users, 'name', writable: true));
-		$binding->addField(new RepresentationFieldBinding('managerName', $users, 'name', writable: true, sourcePath: ['manager']));
+		$binding = new RepresentationSchema($users);
+		$binding->addField(new RepresentationFieldSchema('id', $users, 'id', writable: false));
+		$binding->addField(new RepresentationFieldSchema('name', $users, 'name', writable: true));
+		$binding->addField(new RepresentationFieldSchema('managerName', $users, 'name', writable: true, sourcePath: ['manager']));
 
 		$object = new stdClass();
 		$object->id = 1;
@@ -263,9 +263,9 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 	{
 		$registry = $this->makeSelfRelationRegistry();
 		$users = $registry->getCollection('users');
-		$binding = new RepresentationBinding($users);
-		$binding->addField(new RepresentationFieldBinding('id', $users, 'id', writable: false));
-		$binding->addField(new RepresentationFieldBinding('managerName', $users, 'name', writable: true, sourcePath: ['manager']));
+		$binding = new RepresentationSchema($users);
+		$binding->addField(new RepresentationFieldSchema('id', $users, 'id', writable: false));
+		$binding->addField(new RepresentationFieldSchema('managerName', $users, 'name', writable: true, sourcePath: ['manager']));
 
 		$object = new stdClass();
 		$object->id = 1;
@@ -285,8 +285,8 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$managerItem = $state->getFieldItem('managerName');
 
 		self::assertNotSame($idItem->getRecord()->getStateHash(), $managerItem->getRecord()->getStateHash());
-		self::assertTrue($idItem->getBinding()->isRootSource());
-		self::assertSame(['manager'], $managerItem->getBinding()->getSourcePath());
+		self::assertTrue($idItem->getSchema()->isRootSource());
+		self::assertSame(['manager'], $managerItem->getSchema()->getSourcePath());
 	}
 
 	public function testReusesExistingTrackedRecordState(): void
@@ -316,7 +316,7 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 	}
 
 	private function compilation(
-		RepresentationBinding $binding,
+		RepresentationSchema $binding,
 		ProjectionIdentityColumns $identityColumns,
 	): ProjectionCompilation {
 		return new ProjectionCompilation(
@@ -346,10 +346,10 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 	private function projectionBinding(
 		CollectionInterface $users,
 		CollectionInterface $companies,
-	): RepresentationBinding {
-		$binding = new RepresentationBinding($users);
-		$binding->addField(new RepresentationFieldBinding('id', $users, 'id', writable: false));
-		$binding->addField(new RepresentationFieldBinding('name', $companies, 'name', writable: true, sourcePath: ['company']));
+	): RepresentationSchema {
+		$binding = new RepresentationSchema($users);
+		$binding->addField(new RepresentationFieldSchema('id', $users, 'id', writable: false));
+		$binding->addField(new RepresentationFieldSchema('name', $companies, 'name', writable: true, sourcePath: ['company']));
 
 		return $binding;
 	}

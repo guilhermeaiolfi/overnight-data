@@ -6,23 +6,23 @@ namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationRelationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationRelationSchema;
 use PHPUnit\Framework\TestCase;
 
-final class RepresentationRelationBindingTest extends TestCase
+final class RepresentationRelationSchemaTest extends TestCase
 {
 	public function testExposesStructuralRelationData(): void
 	{
 		$users = $this->users();
-		$relatedBinding = $this->related();
-		$binding = new RepresentationRelationBinding('posts', $users, 'posts', $relatedBinding, true);
+		$relatedSchema = $this->related();
+		$binding = new RepresentationRelationSchema('posts', $users, 'posts', $relatedSchema, true);
 
 		self::assertSame('posts', $binding->getPath());
 		self::assertSame($users, $binding->getOwnerCollection());
 		self::assertSame('users', $binding->getOwnerCollectionName());
 		self::assertSame('posts', $binding->getRelationName());
-		self::assertSame($relatedBinding, $binding->getRelatedBinding());
+		self::assertSame($relatedSchema, $binding->getRelatedSchema());
 		self::assertTrue($binding->shouldSkipWhenMissing());
 	}
 
@@ -30,21 +30,21 @@ final class RepresentationRelationBindingTest extends TestCase
 	{
 		$this->expectException(StateException::class);
 
-		new RepresentationRelationBinding('', $this->users(), 'posts', $this->related());
+		new RepresentationRelationSchema('', $this->users(), 'posts', $this->related());
 	}
 
 	public function testRejectsEmptyRelationName(): void
 	{
 		$this->expectException(StateException::class);
 
-		new RepresentationRelationBinding('posts', $this->users(), '', $this->related());
+		new RepresentationRelationSchema('posts', $this->users(), '', $this->related());
 	}
 
 	public function testDerivesCardinalityFromRelationDefinition(): void
 	{
 		$users = $this->users();
-		$posts = new RepresentationRelationBinding('posts', $users, 'posts', $this->related());
-		$profile = new RepresentationRelationBinding('profile', $users, 'profile', $this->related());
+		$posts = new RepresentationRelationSchema('posts', $users, 'posts', $this->related());
+		$profile = new RepresentationRelationSchema('profile', $users, 'profile', $this->related());
 
 		self::assertTrue($posts->isMany());
 		self::assertFalse($posts->isSingle());
@@ -62,11 +62,11 @@ final class RepresentationRelationBindingTest extends TestCase
 		return $users;
 	}
 
-	private function related(): RepresentationBinding
+	private function related(): RepresentationSchema
 	{
 		$registry = new Registry();
 		$related = $registry->collection('posts')->primaryKey('id')->field('id')->end();
 
-		return new RepresentationBinding($related);
+		return new RepresentationSchema($related);
 	}
 }

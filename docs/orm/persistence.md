@@ -11,7 +11,7 @@ ScalarRepresentationSynchronizer
   object scalar fields -> RecordState scalar values
 
 RelationRepresentationSynchronizer
-  object relation paths from RepresentationBinding -> ToManyRelationState / ToOneRelationState runtime state
+  object relation paths from RepresentationSchema -> ToManyRelationState / ToOneRelationState runtime state
 
 RelationPersistencePlanner
   ToManyRelationState / ToOneRelationState changes -> RecordState mutations and/or extra persistence commands
@@ -31,9 +31,9 @@ CommandExecutorInterface
 
 Representations are user-facing objects or values. A representation object can drift from its record state until synchronization happens. `RepresentationStore` associates the object with `RepresentationState` through weak object keys, so the session does not keep otherwise-unused representation objects alive. `ScalarRepresentationSynchronizer` reads field bindings only and applies planned representation field updates into `RecordState` while preserving the conflict rules from the ORM foundation: a representation based on a stale record revision cannot silently overwrite a newer record value.
 
-`Session::sync(?object $representation = null, ?RepresentationBinding $binding = null)` is the explicit graph entry point. With no argument it strictly syncs already-tracked representations. With an object it walks that object's explicit `RepresentationRelationBinding` graph, syncs scalar values into `RecordState`, and syncs relation values into `ToManyRelationState` / `ToOneRelationState` runtime state. It returns `SyncResult`, containing scalar sync plans and touched relation changes. It does not plan relation persistence, flush records, execute commands, mark records clean, or clear relation changes.
+`Session::sync(?object $representation = null, ?RepresentationSchema $binding = null)` is the explicit graph entry point. With no argument it strictly syncs already-tracked representations. With an object it walks that object's explicit `RepresentationRelationSchema` graph, syncs scalar values into `RecordState`, and syncs relation values into `ToManyRelationState` / `ToOneRelationState` runtime state. It returns `SyncResult`, containing scalar sync plans and touched relation changes. It does not plan relation persistence, flush records, execute commands, mark records clean, or clear relation changes.
 
-For an untracked root object, `sync($object, $binding)` requires a root `RepresentationBinding` that targets exactly one root collection through its field bindings and/or relation owner bindings. This entry point is for entity-shaped object bindings. A binding with no resolvable collection, or a mixed/projection binding spanning multiple collections, cannot create a root `RecordState` and raises `StateException`. When the binding is valid, the root is tracked from that binding, then the method follows only explicit relation bindings. For `MANY` relation bindings, `null` means an empty collection and a non-null value must be iterable objects. For `ONE` relation bindings, `null` means no target and a non-null value must be an object. Each discovered untracked related object is tracked with that relation binding's `getRelatedBinding()`, and the walk continues recursively while guarding object identity cycles.
+For an untracked root object, `sync($object, $binding)` requires a root `RepresentationSchema` that targets exactly one root collection through its field bindings and/or relation owner bindings. This entry point is for entity-shaped object bindings. A binding with no resolvable collection, or a mixed/projection binding spanning multiple collections, cannot create a root `RecordState` and raises `StateException`. When the binding is valid, the root is tracked from that binding, then the method follows only explicit relation bindings. For `MANY` relation bindings, `null` means an empty collection and a non-null value must be iterable objects. For `ONE` relation bindings, `null` means no target and a non-null value must be an object. Each discovered untracked related object is tracked with that relation binding's `getRelatedSchema()`, and the walk continues recursively while guarding object identity cycles.
 
 Primary-key presence is data, not lifecycle intent. `sync()` discovers binding and collection context from tracked roots and relation bindings. Untracked related objects discovered through that graph default to `NEW`, even when they contain a complete application-assigned primary key. Missing, complete, and composite primary keys are all accepted for new related objects as long as normal insert rules allow them. Use `Session::existing($object)` when a real related object should be treated as an existing row during graph sync; the marker attaches intent to the PHP object only and does not require a collection, binding, or key at marker time. When that object is later discovered by `sync()`, the relation binding supplies collection context and the primary-key values are read through that binding to build the existing `RecordState` identity. Use `Session::identify($collection, $key)` for key-only existing references. Upsert is not implicit and is not implemented here: duplicate application-assigned keys on new objects are planned as inserts and should fail at the database constraint level rather than being silently converted to updates.
 
@@ -41,14 +41,14 @@ For an untracked root with a complete readable primary key, graph adoption still
 
 `Session::existing(object $representation): ExistingIntent` marks a representation object as existing before graph sync discovers it. The returned marker is attached to the PHP object only. When the object is later adopted through a relation binding, its readable primary-key values become the existing record identity and the record is adopted as clean, not new.
 
-`Session::identify(CollectionInterface $collection, Key|array $key, ?object $representation = null, ?RepresentationBinding $binding = null): object` explicitly attaches a representation to an existing row known by key without querying. Without a representation it creates a key-only `stdClass` using same-name primary-key paths. Without a binding it creates a minimal key-only binding. The resulting record is clean, not new or dirty, and can be reused for deletion or relation unlinking.
+`Session::identify(CollectionInterface $collection, Key|array $key, ?object $representation = null, ?RepresentationSchema $binding = null): object` explicitly attaches a representation to an existing row known by key without querying. Without a representation it creates a key-only `stdClass` using same-name primary-key paths. Without a binding it creates a minimal key-only binding. The resulting record is clean, not new or dirty, and can be reused for deletion or relation unlinking.
 
 For an already-tracked root object, `sync($object)` uses its existing tracked binding and can bring newly attached related plain objects into the session through explicit relation bindings. Passing an extra binding for an already-tracked object is currently unnecessary; the tracked binding is the source of truth. Query/projection/mixed bindings remain valid provenance for already-tracked or query-created representations because they already have concrete tracked state; they are not used to silently create a new root record.
 
 For a new plain object graph:
 
 ```php
-$session->sync($user, $userBinding);
+$session->sync($user, $userSchema);
 $session->flush();
 ```
 
@@ -213,7 +213,7 @@ This is deliberately not an `EntityManager`. There is no repository API, object 
 ## Current Limits
 
 - Scalar insert/update/delete plus configured relation persistence planning only.
-- Untracked root objects passed to `sync($object)` need an explicit root `RepresentationBinding` targeting one collection; related objects use each relation binding's `getRelatedBinding()`.
+- Untracked root objects passed to `sync($object)` need an explicit root `RepresentationSchema` targeting one collection; related objects use each relation binding's `getRelatedSchema()`.
 - Untracked objects adopted by `sync()` become clean existing records when the binding exposes a complete non-null primary key; otherwise they become new records.
 - `identify()` is the public key-only existing-record primitive. It does not query or load records from the database.
 - `sync()` accepts object roots only; array input is not supported yet.

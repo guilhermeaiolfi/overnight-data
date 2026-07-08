@@ -6,7 +6,7 @@ namespace ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 
 final class SyncFieldUpdate
 {
@@ -14,7 +14,7 @@ final class SyncFieldUpdate
 		private RecordState $record,
 		private string $field,
 		private mixed $value,
-		private RepresentationFieldBinding $binding,
+		private RepresentationFieldSchema $schema,
 	) {
 		if ($field === '') {
 			throw new SyncException('Sync field update field cannot be empty.');
@@ -36,8 +36,8 @@ final class SyncFieldUpdate
 		return $this->value;
 	}
 
-	public function getBinding(): RepresentationFieldBinding
+	public function getSchema(): RepresentationFieldSchema
 	{
-		return $this->binding;
+		return $this->schema;
 	}
 }

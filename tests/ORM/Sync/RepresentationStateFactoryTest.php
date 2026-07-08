@@ -10,9 +10,9 @@ use ON\Data\ORM\Compiler\ProjectionSourceBuilder;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
-use ON\Data\ORM\State\RepresentationRelationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationFieldSchema;
+use ON\Data\ORM\State\RepresentationRelationSchema;
 use ON\Data\ORM\Sync\RepresentationStateFactory;
 use PHPUnit\Framework\TestCase;
 
@@ -25,14 +25,14 @@ final class RepresentationStateFactoryTest extends TestCase
 		$posts = $registry->getCollection('posts');
 		$record = RecordState::new($users, ['id' => 1, 'name' => 'Ada']);
 		$record->setValue('name', 'Ada Lovelace');
-		$postSchema = new RepresentationBinding($posts);
-		$schema = new RepresentationBinding($users);
-		$schema->addField(new RepresentationFieldBinding('name', $users, 'name'));
-		$schema->addRelation(new RepresentationRelationBinding('posts', $users, 'posts', $postSchema));
+		$postSchema = new RepresentationSchema($posts);
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$schema->addRelation(new RepresentationRelationSchema('posts', $users, 'posts', $postSchema));
 
 		$state = (new RepresentationStateFactory())->fromRootRecord($schema, $record);
 
-		self::assertSame($schema, $state->getBinding());
+		self::assertSame($schema, $state->getSchema());
 		self::assertSame($record, $state->getFieldItem('name')->getRecord());
 		self::assertSame(2, $state->getFieldItem('name')->getBaselineRevision());
 		self::assertSame($record, $state->getRelationItem('posts')->getOwnerRecord());
@@ -44,8 +44,8 @@ final class RepresentationStateFactoryTest extends TestCase
 		$registry = $this->registry();
 		$users = $registry->getCollection('users');
 		$posts = $registry->getCollection('posts');
-		$schema = new RepresentationBinding($posts);
-		$schema->addField(new RepresentationFieldBinding('title', $posts, 'title'));
+		$schema = new RepresentationSchema($posts);
+		$schema->addField(new RepresentationFieldSchema('title', $posts, 'title'));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("targets collection 'posts', not 'users'");
@@ -112,8 +112,8 @@ final class RepresentationStateFactoryTest extends TestCase
 		$registry = $this->registry();
 		$users = $registry->getCollection('users');
 		$posts = $registry->getCollection('posts');
-		$schema = new RepresentationBinding($users);
-		$schema->addRelation(new RepresentationRelationBinding('posts', $users, 'posts', new RepresentationBinding($posts)));
+		$schema = new RepresentationSchema($users);
+		$schema->addRelation(new RepresentationRelationSchema('posts', $users, 'posts', new RepresentationSchema($posts)));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('binding contains relation bindings');
@@ -124,10 +124,10 @@ final class RepresentationStateFactoryTest extends TestCase
 	private function projectionSchema(
 		CollectionInterface $users,
 		CollectionInterface $companies,
-	): RepresentationBinding {
-		$schema = new RepresentationBinding($users);
-		$schema->addField(new RepresentationFieldBinding('id', $users, 'id', writable: false));
-		$schema->addField(new RepresentationFieldBinding('companyName', $companies, 'name', sourcePath: ['company']));
+	): RepresentationSchema {
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('id', $users, 'id', writable: false));
+		$schema->addField(new RepresentationFieldSchema('companyName', $companies, 'name', sourcePath: ['company']));
 
 		return $schema;
 	}

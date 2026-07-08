@@ -1,6 +1,6 @@
 # ORM Foundation
 
-This document records the foundation concepts for the `ON\Data` ORM. Some early sections describe the intended architecture before the runtime existed; current persistence behavior is documented in [`persistence.md`](./persistence.md), and the recursive representation binding model is documented in [`representation-binding.md`](./representation-binding.md).
+This document records the foundation concepts for the `ON\Data` ORM. Some early sections describe the intended architecture before the runtime existed; current persistence behavior is documented in [`persistence.md`](./persistence.md), and the recursive representation binding model is documented in [`representation-schema.md`](./representation-schema.md).
 
 The current implementation includes production record state, representation tracking, scalar sync, relation representation sync, relation persistence planning, scalar command planning, flush orchestration, session orchestration, and Cycle-backed scalar command execution. It still does not include lazy loading, generated repositories, service containers, events, proxy objects, `EntityManager`, or `UnitOfWork`.
 
@@ -50,11 +50,11 @@ Representations are not automatically the source of truth. They can drift from t
 
 ## RepresentationState
 
-A `RepresentationState` is concrete runtime state for an applied `RepresentationBinding`. It stores baseline record revisions for one representation object, but it does not store the object itself.
+A `RepresentationState` is concrete runtime state for an applied `RepresentationSchema`. It stores baseline record revisions for one representation object, but it does not store the object itself.
 
 It stores:
 
-- the structure-only `RepresentationBinding`;
+- the structure-only `RepresentationSchema`;
 - `RepresentationFieldStateItem` entries that attach structural field bindings to concrete `RecordState` objects and baseline record revisions;
 - `RepresentationRelationStateItem` entries that attach structural relation bindings to concrete owner `RecordState` objects;
 - writable/read-only flags per mapped slot through field bindings;
@@ -283,11 +283,11 @@ Use this terminology:
 
 ```text
 RepresentationMap
-RepresentationBinding
+RepresentationSchema
 RepresentationState
 ```
 
-`RepresentationBinding` is the reusable mapping shape. It is not limited to instance-level tracking and can represent:
+`RepresentationSchema` is the reusable mapping shape. It is not limited to instance-level tracking and can represent:
 
 ```text
 root representation binding
@@ -300,7 +300,7 @@ Use this same concept for child and relation item mapping until implementation p
 The distinction is:
 
 ```text
-RepresentationBinding
+RepresentationSchema
     reusable mapping shape
 
 RepresentationState
@@ -314,7 +314,7 @@ posts[no-key].title
 posts[no-key].title
 ```
 
-`RepresentationBinding` therefore remains structural only:
+`RepresentationSchema` therefore remains structural only:
 
 - field bindings store representation path, collection, field, writability, and `sourcePath`;
 - relation bindings store representation path, owner collection, relation name, and the reusable related binding;
@@ -431,11 +431,11 @@ relation definition/ref
 loaded state
 added children
 removed children
-child RepresentationBinding
+child RepresentationSchema
 backing collection
 ```
 
-When a new child is added, the relation collection should apply the child `RepresentationBinding` for that relation item.
+When a new child is added, the relation collection should apply the child `RepresentationSchema` for that relation item.
 
 Do not hard-depend on Doctrine Collections, Illuminate Collections, Loophp Collections, or any other collection package in the ORM foundation. Relation tracking is ORM-specific because the ORM needs owner record, relation definition, loaded state, child binding, added/removed children, cascade/orphan behavior, and relation persistence planning. Generic collection libraries do not know those things.
 
@@ -464,8 +464,8 @@ Phase 1A introduces the first production ORM state primitives only:
 - `RecordHistory`
 - `RecordState`
 - `RecordStateStore`
-- `RepresentationFieldBinding`
-- `RepresentationBinding`
+- `RepresentationFieldSchema`
+- `RepresentationSchema`
 - `RepresentationState`
 - `RepresentationStore`
 - `SyncConflict`
@@ -477,7 +477,7 @@ Phase 1A did not introduce `EntityQuery`, `with()`, repositories, lazy loading, 
 
 Phase 1D introduces `ON\Data\ORM\Relation\ToManyRelationState` as the ORM-owned relation collection primitive. Plain arrays remain valid read/projection values, but they are not writable relation persistence trackers because they cannot own loaded state or add/remove intent.
 
-`ToManyRelationState` owns the owner `RecordState`, relation name, loaded state, known in-memory items, local added/removed child intent, and the reusable child `RepresentationBinding` template. Known items are only the in-memory view currently held by the collection; they are not necessarily the full database relation. `isEmptyKnown()` means no items are currently known in memory, not that the database relation is empty. The collection stores the child binding for later relation runtime work, but it does not mutate that reusable template, apply the binding, or register tracked child representations in this phase.
+`ToManyRelationState` owns the owner `RecordState`, relation name, loaded state, known in-memory items, local added/removed child intent, and the reusable child `RepresentationSchema` template. Known items are only the in-memory view currently held by the collection; they are not necessarily the full database relation. `isEmptyKnown()` means no items are currently known in memory, not that the database relation is empty. The collection stores the child binding for later relation runtime work, but it does not mutate that reusable template, apply the binding, or register tracked child representations in this phase.
 
 Adding a child to an unloaded collection is allowed and makes the collection partially loaded because at least one item is now known, while the complete database set remains unknown. Removing one known object reference from an unloaded collection is also allowed and does not imply the relation is empty. Removing from a relation collection removes the relation link intent; it is not necessarily deletion of the child entity.
 
@@ -487,13 +487,13 @@ Future ORM runtime will apply the child binding to child `RecordState` instances
 
 Phase 1E introduces `ON\Data\ORM\Sync\RepresentationAdopter` as the small bridge between reusable child binding templates and concrete ORM tracking.
 
-`RepresentationAdopter::adopt()` attaches a reusable `RepresentationBinding` template to a concrete child `RecordState`, registers that record in `RecordStateStore`, captures baseline record revisions in `RepresentationFieldStateItem` entries, and registers the child object as a `RepresentationState` in `RepresentationStore`. Future relation runtime can use a `ToManyRelationState` child's binding with `RepresentationAdopter::adopt()` around flows such as adding a post object to a user's `ToManyRelationState`.
+`RepresentationAdopter::adopt()` attaches a reusable `RepresentationSchema` template to a concrete child `RecordState`, registers that record in `RecordStateStore`, captures baseline record revisions in `RepresentationFieldStateItem` entries, and registers the child object as a `RepresentationState` in `RepresentationStore`. Future relation runtime can use a `ToManyRelationState` child's binding with `RepresentationAdopter::adopt()` around flows such as adding a post object to a user's `ToManyRelationState`.
 
 `ToManyRelationState` still owns relation add/remove intent. Adoption only tracks the child representation; it does not add the item to the relation collection, inspect relation loaded state, sync representation values, persist, flush, write SQL, or mutate the child binding template.
 
 ## Phase 1F Representation Value Reading
 
-Phase 1F introduces `ON\Data\ORM\Sync\RepresentationReader` as the small service that reads current values from object and `stdClass` representations using `RepresentationBinding` paths.
+Phase 1F introduces `ON\Data\ORM\Sync\RepresentationReader` as the small service that reads current values from object and `stdClass` representations using `RepresentationSchema` paths.
 
 The reader distinguishes a missing public property from a present `null` value, preserves binding insertion order, and supports simple dot paths through public properties. Numeric path segments can read array offsets for straightforward cases such as `posts.0.title`.
 

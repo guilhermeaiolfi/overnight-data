@@ -17,8 +17,8 @@ use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationBinding;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\Sync\AdoptionRecordResolver;
@@ -129,7 +129,7 @@ final class Session
 		CollectionInterface $collection,
 		Key|array $key,
 		?object $representation = null,
-		?RepresentationBinding $binding = null,
+		?RepresentationSchema $binding = null,
 	): object {
 		$key = $collection->getKey($key);
 		$representation ??= $this->keyOnlyRepresentation($key);
@@ -165,7 +165,7 @@ final class Session
 
 	public function adopt(
 		object $representation,
-		RepresentationBinding $binding,
+		RepresentationSchema $binding,
 		RecordState $record,
 	): RepresentationState {
 		return $this->adopter->adopt($representation, $binding, $record);
@@ -207,11 +207,11 @@ final class Session
 		return $relation;
 	}
 
-	public function sync(?object $representation = null, ?RepresentationBinding $binding = null): SyncResult
+	public function sync(?object $representation = null, ?RepresentationSchema $binding = null): SyncResult
 	{
 		if ($representation !== null) {
-			if (! $this->getRepresentations()->has($representation) && ! $binding instanceof RepresentationBinding) {
-				throw new SyncException('Cannot synchronize an untracked representation object without a root RepresentationBinding.');
+			if (! $this->getRepresentations()->has($representation) && ! $binding instanceof RepresentationSchema) {
+				throw new SyncException('Cannot synchronize an untracked representation object without a root RepresentationSchema.');
 			}
 
 			$this->graphAdopter->adopt(
@@ -266,11 +266,11 @@ final class Session
 		return $representation;
 	}
 
-	private function keyOnlyBinding(CollectionInterface $collection): RepresentationBinding
+	private function keyOnlyBinding(CollectionInterface $collection): RepresentationSchema
 	{
-		$binding = new RepresentationBinding($collection);
+		$binding = new RepresentationSchema($collection);
 		foreach ($collection->getPrimaryKey() as $fieldName) {
-			$binding->addField(new RepresentationFieldBinding($fieldName, $collection, $fieldName));
+			$binding->addField(new RepresentationFieldSchema($fieldName, $collection, $fieldName));
 		}
 
 		return $binding;

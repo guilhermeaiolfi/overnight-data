@@ -70,7 +70,7 @@ final class ScalarRepresentationSynchronizer
 		$values = [];
 
 		foreach ($state->getWritableFieldItems() as $item) {
-			$fieldBinding = $item->getBinding();
+			$fieldSchema = $item->getSchema();
 
 			try {
 				$values[$item->getPath()] = $this->reader->readPath(
@@ -78,7 +78,7 @@ final class ScalarRepresentationSynchronizer
 					$item->getPath()
 				);
 			} catch (SyncException $exception) {
-				if ($fieldBinding->shouldSkipWhenMissing() && str_contains($exception->getMessage(), ' is missing.')) {
+				if ($fieldSchema->shouldSkipWhenMissing() && str_contains($exception->getMessage(), ' is missing.')) {
 					continue;
 				}
 
@@ -105,7 +105,7 @@ final class ScalarRepresentationSynchronizer
 		$updatesByTarget = [];
 
 		foreach ($state->getWritableFieldItems() as $item) {
-			$binding = $item->getBinding();
+			$binding = $item->getSchema();
 			$path = $item->getPath();
 			if (isset($conflictPaths[$path])) {
 				continue;

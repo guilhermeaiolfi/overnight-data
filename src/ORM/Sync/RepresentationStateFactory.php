@@ -8,7 +8,7 @@ use ON\Data\ORM\Compiler\ProjectionSource;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationRelationStateItem;
 use ON\Data\ORM\State\RepresentationState;
@@ -16,7 +16,7 @@ use ON\Data\ORM\State\RepresentationState;
 final class RepresentationStateFactory
 {
 	public function fromRootRecord(
-		RepresentationBinding $schema,
+		RepresentationSchema $schema,
 		RecordState $record,
 	): RepresentationState {
 		return new RepresentationState(
@@ -31,7 +31,7 @@ final class RepresentationStateFactory
 	 * @param array<string, RecordState> $recordsBySourceKey
 	 */
 	public function fromSourceRecords(
-		RepresentationBinding $schema,
+		RepresentationSchema $schema,
 		array $sources,
 		array $recordsBySourceKey,
 	): RepresentationState {
@@ -48,23 +48,23 @@ final class RepresentationStateFactory
 	/**
 	 * @return list<RepresentationFieldStateItem>
 	 */
-	private function fieldItemsForRootRecord(RepresentationBinding $schema, RecordState $record): array
+	private function fieldItemsForRootRecord(RepresentationSchema $schema, RecordState $record): array
 	{
 		$items = [];
-		foreach ($schema->getFields() as $fieldBinding) {
-			if ($fieldBinding->getCollectionName() !== $record->getCollection()->getName()) {
+		foreach ($schema->getFields() as $fieldSchema) {
+			if ($fieldSchema->getCollectionName() !== $record->getCollection()->getName()) {
 				throw new StateException(sprintf(
 					"Representation binding path '%s' targets collection '%s', not '%s'.",
-					$fieldBinding->getPath(),
-					$fieldBinding->getCollectionName(),
+					$fieldSchema->getPath(),
+					$fieldSchema->getCollectionName(),
 					$record->getCollection()->getName()
 				));
 			}
 
 			$items[] = new RepresentationFieldStateItem(
-				$fieldBinding,
+				$fieldSchema,
 				$record,
-				$fieldBinding->getFieldName(),
+				$fieldSchema->getFieldName(),
 				$record->getRevision()
 			);
 		}
@@ -75,23 +75,23 @@ final class RepresentationStateFactory
 	/**
 	 * @return list<RepresentationRelationStateItem>
 	 */
-	private function relationItemsForRootRecord(RepresentationBinding $schema, RecordState $record): array
+	private function relationItemsForRootRecord(RepresentationSchema $schema, RecordState $record): array
 	{
 		$items = [];
-		foreach ($schema->getRelations() as $relationBinding) {
-			if ($relationBinding->getOwnerCollectionName() !== $record->getCollection()->getName()) {
+		foreach ($schema->getRelations() as $relationSchema) {
+			if ($relationSchema->getOwnerCollectionName() !== $record->getCollection()->getName()) {
 				throw new StateException(sprintf(
 					"Representation relation path '%s' targets collection '%s', not '%s'.",
-					$relationBinding->getPath(),
-					$relationBinding->getOwnerCollectionName(),
+					$relationSchema->getPath(),
+					$relationSchema->getOwnerCollectionName(),
 					$record->getCollection()->getName()
 				));
 			}
 
 			$items[] = new RepresentationRelationStateItem(
-				$relationBinding,
+				$relationSchema,
 				$record,
-				$relationBinding->getRelationName()
+				$relationSchema->getRelationName()
 			);
 		}
 
@@ -127,11 +127,11 @@ final class RepresentationStateFactory
 				));
 			}
 
-			foreach ($source->getFields() as $fieldBinding) {
+			foreach ($source->getFields() as $fieldSchema) {
 				$items[] = new RepresentationFieldStateItem(
-					$fieldBinding,
+					$fieldSchema,
 					$record,
-					$fieldBinding->getFieldName(),
+					$fieldSchema->getFieldName(),
 					$record->getRevision()
 				);
 			}

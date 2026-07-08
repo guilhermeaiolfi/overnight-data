@@ -12,7 +12,7 @@ namespace ON\Data\ORM\Compiler\ManualProjection;
  * query source.
  */
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationBinding;
+use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\ORM\State\RepresentationRelationCardinality;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 
@@ -22,7 +22,7 @@ final class Target implements PropertySource
 		private RecordState $owner,
 		private string $relationName,
 		private RepresentationRelationCardinality $cardinality,
-		private RepresentationBinding $relatedBinding,
+		private RepresentationSchema $relatedSchema,
 		private RecordState $targetRecord,
 		private object $targetObject,
 		private bool $objectShaped,
@@ -44,9 +44,9 @@ final class Target implements PropertySource
 		return $this->cardinality;
 	}
 
-	public function getRelatedBinding(): RepresentationBinding
+	public function getRelatedSchema(): RepresentationSchema
 	{
-		return $this->relatedBinding;
+		return $this->relatedSchema;
 	}
 
 	public function getTargetRecord(): RecordState

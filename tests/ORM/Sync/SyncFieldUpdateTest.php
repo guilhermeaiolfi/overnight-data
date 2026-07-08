@@ -6,7 +6,7 @@ namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationFieldBinding;
+use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\Sync\SyncFieldUpdate;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\ORM\Support\OrmFixture;
@@ -18,19 +18,19 @@ final class SyncFieldUpdateTest extends TestCase
 	public function testExposesRecordFieldValueAndBinding(): void
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
-		$binding = new RepresentationFieldBinding('name', $record->getCollection(), 'name');
+		$binding = new RepresentationFieldSchema('name', $record->getCollection(), 'name');
 		$update = new SyncFieldUpdate($record, 'name', 'A2', $binding);
 
 		self::assertSame($record, $update->getRecord());
 		self::assertSame('name', $update->getField());
 		self::assertSame('A2', $update->getValue());
-		self::assertSame($binding, $update->getBinding());
+		self::assertSame($binding, $update->getSchema());
 	}
 
 	public function testRejectsEmptyField(): void
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
-		$binding = new RepresentationFieldBinding('name', $record->getCollection(), 'name');
+		$binding = new RepresentationFieldSchema('name', $record->getCollection(), 'name');
 
 		$this->expectException(SyncException::class);
 		new SyncFieldUpdate($record, '', 'A2', $binding);
@@ -39,7 +39,7 @@ final class SyncFieldUpdateTest extends TestCase
 	public function testDoesNotMutateRecord(): void
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
-		$binding = new RepresentationFieldBinding('name', $record->getCollection(), 'name');
+		$binding = new RepresentationFieldSchema('name', $record->getCollection(), 'name');
 
 		new SyncFieldUpdate($record, 'name', 'A2', $binding);
 
