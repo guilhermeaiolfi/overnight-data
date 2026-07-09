@@ -57,12 +57,12 @@ trait OrmFixture
 	protected function context(
 		?RepresentationStateStore $representations = null,
 		?RecordStateStore $records = null,
-		?RelationStateStore $toManyRelations = null,
-		?RelationStateStore $toOneRelations = null,
+		?RelationStateStore $manyStates = null,
+		?RelationStateStore $oneStates = null,
 	): SessionContext {
-		$relations = $toManyRelations ?? $toOneRelations ?? new RelationStateStore();
-		if ($toOneRelations !== null && $toOneRelations !== $relations) {
-			foreach ($toOneRelations->getAll() as $relation) {
+		$relations = $manyStates ?? $oneStates ?? new RelationStateStore();
+		if ($oneStates !== null && $oneStates !== $relations) {
+			foreach ($oneStates->getAll() as $relation) {
 				$relations->add($relation);
 			}
 		}

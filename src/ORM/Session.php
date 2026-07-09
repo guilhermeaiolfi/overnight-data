@@ -71,16 +71,6 @@ final class Session
 		return $this->context->getRelations();
 	}
 
-	public function getToManyRelations(): RelationStateStore
-	{
-		return $this->context->getToManyRelations();
-	}
-
-	public function getToOneRelations(): RelationStateStore
-	{
-		return $this->context->getToOneRelations();
-	}
-
 	public function clear(): void
 	{
 		$this->context->clear();

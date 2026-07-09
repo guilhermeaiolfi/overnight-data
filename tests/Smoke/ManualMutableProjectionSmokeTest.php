@@ -253,7 +253,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 			->create()
 			->end();
 
-		$relation = $session->getToManyRelations()->get($session->getRecords()->getFromRepresentation($session->getRepresentations()->get($user)), 'posts');
+		$relation = $session->getRelations()->get($session->getRecords()->getFromRepresentation($session->getRepresentations()->get($user)), 'posts');
 		self::assertNotNull($relation);
 		self::assertSame([$post], $relation->getAdded());
 

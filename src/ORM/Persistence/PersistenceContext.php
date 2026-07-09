@@ -37,16 +37,6 @@ final class PersistenceContext
 		return $this->session->getRelations();
 	}
 
-	public function getToManyRelations(): RelationStateStore
-	{
-		return $this->session->getToManyRelations();
-	}
-
-	public function getToOneRelations(): RelationStateStore
-	{
-		return $this->session->getToOneRelations();
-	}
-
 	public function getCommands(): CommandBuffer
 	{
 		return $this->commands;

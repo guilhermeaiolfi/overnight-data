@@ -27,8 +27,6 @@ final class PersistenceContextTest extends TestCase
 		self::assertSame($records, $context->getRecords());
 		self::assertSame($representations, $context->getRepresentations());
 		self::assertSame($relations, $context->getRelations());
-		self::assertSame($relations, $context->getToManyRelations());
-		self::assertSame($relations, $context->getToOneRelations());
 		self::assertSame($commands, $context->getCommands());
 	}
 

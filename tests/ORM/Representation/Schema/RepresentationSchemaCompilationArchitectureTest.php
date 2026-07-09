@@ -187,7 +187,7 @@ final class RepresentationSchemaCompilationArchitectureTest extends TestCase
 			->end();
 
 		$userRecord = $session->getRecords()->getFromRepresentation($session->getRepresentations()->get($user));
-		$relation = $session->getToManyRelations()->get($userRecord, 'posts');
+		$relation = $session->getRelations()->get($userRecord, 'posts');
 
 		self::assertInstanceOf(ToManyRelationState::class, $relation);
 		self::assertSame([$post], $relation->getAdded());
@@ -624,13 +624,12 @@ final class RepresentationSchemaCompilationArchitectureTest extends TestCase
 			'trackProjectionSource',
 			'trackProjectionRelation',
 		] as $method) {
-			self::assertNotContains($method, $methods);
+		self::assertNotContains($method, $methods);
 		}
 
 		self::assertContains('getRecords', $methods);
 		self::assertContains('getRepresentations', $methods);
-		self::assertContains('getToOneRelations', $methods);
-		self::assertContains('getToManyRelations', $methods);
+		self::assertContains('getRelations', $methods);
 	}
 
 	private function registry(): Registry

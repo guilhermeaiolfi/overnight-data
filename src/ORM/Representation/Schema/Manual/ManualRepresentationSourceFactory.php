@@ -5,17 +5,20 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Schema\Manual;
 
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\Session;
 use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Relation\ToManyRelationState;
+use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
-use ON\Data\ORM\Representation\State\RepresentationFieldStateItem;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\Definition\Relation\RelationCardinality;
+use ON\Data\ORM\Representation\State\RepresentationFieldStateItem;
 use ON\Data\ORM\Representation\State\RepresentationState;
+use ON\Data\ORM\Session;
 use stdClass;
+
 /**
  * Creates and attaches manual representation sources for create(), existing(), and
  * tracked() without duplicating branch logic in Builder.
@@ -25,15 +28,11 @@ use stdClass;
  */
 final class ManualRepresentationSourceFactory
 {
-	private ManualRepresentationRelationLinker $relationLinker;
-
 	public function __construct(
 		private Session $session,
 		private object $rootRepresentation,
 		private PathResolver $pathResolver,
-		?ManualRepresentationRelationLinker $relationLinker = null,
 	) {
-		$this->relationLinker = $relationLinker ?? new ManualRepresentationRelationLinker($this->session);
 	}
 
 	public function resolvePath(object $owner, string $path): PathResolution
@@ -46,10 +45,7 @@ final class ManualRepresentationSourceFactory
 	 */
 	public function createRoot(CollectionInterface $collection, array $values): RootRepresentationSource
 	{
-		$record = RecordState::new($collection, $values);
-		$this->session->getRecords()->add($record);
-
-		return new RootRepresentationSource($record);
+		return $this->rootSource($this->newRecord($collection, $values));
 	}
 
 	/**
@@ -57,17 +53,9 @@ final class ManualRepresentationSourceFactory
 	 */
 	public function createAtPath(PathResolution $path, array $values): RelationRepresentationSource
 	{
-		$collection = $path->getRelatedSchema()->getCollection();
-		$record = RecordState::new($collection, $values);
-		$this->session->getRecords()->add($record);
-
-		return $this->attachPathTarget(
-			$path->getOwner(),
-			$path->getOwnerObject(),
-			$path->getRelationName(),
-			$path->getCardinality(),
-			$path->getRelatedSchema(),
-			$record,
+		return $this->pathSource(
+			$path,
+			$this->newRecord($path->getRelatedSchema()->getCollection(), $values),
 		);
 	}
 
@@ -76,16 +64,11 @@ final class ManualRepresentationSourceFactory
 	 */
 	public function createAtRelation(RelationRef $relation, array $values): RelationRepresentationSource
 	{
-		$owner = $relation->getOwner()->getTargetRecord();
-		$record = RecordState::new($relation->getDefinition()->getCollection(), $values);
-		$this->session->getRecords()->add($record);
+		$record = $this->newRecord($relation->getDefinition()->getCollection(), $values);
 		$identityObject = $this->createIdentityObject($record);
 
-		return $this->attachRelationTarget(
-			$owner,
-			$relation->getName(),
-			$this->relationCardinality($relation),
-			new RepresentationSchema($relation->getDefinition()->getCollection()),
+		return $this->relationSource(
+			$relation,
 			$record,
 			$identityObject,
 			[new PendingRepresentationAdoption($identityObject, $this->fromPrimaryKeyRecord($record))],
@@ -94,34 +77,24 @@ final class ManualRepresentationSourceFactory
 
 	public function existingRoot(CollectionInterface $collection, Key|array $key, array $seedValues): RootRepresentationSource
 	{
-		return new RootRepresentationSource($this->recordForExisting($collection, $key, $seedValues));
+		return $this->rootSource($this->existingRecord($collection, $key, $seedValues));
 	}
 
 	public function existingAtPath(PathResolution $path, Key|array $key, array $seedValues): RelationRepresentationSource
 	{
-		$record = $this->recordForExisting($path->getRelatedSchema()->getCollection(), $key, $seedValues);
-
-		return $this->attachPathTarget(
-			$path->getOwner(),
-			$path->getOwnerObject(),
-			$path->getRelationName(),
-			$path->getCardinality(),
-			$path->getRelatedSchema(),
-			$record,
+		return $this->pathSource(
+			$path,
+			$this->existingRecord($path->getRelatedSchema()->getCollection(), $key, $seedValues),
 		);
 	}
 
 	public function existingAtRelation(RelationRef $relation, Key|array $key, array $seedValues): RelationRepresentationSource
 	{
-		$owner = $relation->getOwner()->getTargetRecord();
-		$record = $this->recordForExisting($relation->getDefinition()->getCollection(), $key, $seedValues);
+		$record = $this->existingRecord($relation->getDefinition()->getCollection(), $key, $seedValues);
 		$identityObject = $this->createIdentityObject($record);
 
-		return $this->attachRelationTarget(
-			$owner,
-			$relation->getName(),
-			$this->relationCardinality($relation),
-			new RepresentationSchema($relation->getDefinition()->getCollection()),
+		return $this->relationSource(
+			$relation,
 			$record,
 			$identityObject,
 			[new PendingRepresentationAdoption($identityObject, $this->fromPrimaryKeyRecord($record))],
@@ -130,74 +103,93 @@ final class ManualRepresentationSourceFactory
 
 	public function trackedRoot(object $representation, CollectionInterface $collection): RootRepresentationSource
 	{
-		return new RootRepresentationSource($this->singleRecordForTrackedTarget(
+		return $this->rootSource($this->trackedRecord(
 			$representation,
 			$collection,
-			sprintf("Cannot use tracked() for collection '%s'", $collection->getName())
+			sprintf("Cannot use tracked() for collection '%s'", $collection->getName()),
 		));
 	}
 
 	public function trackedAtPath(PathResolution $path, object $representation, ?object $target): RelationRepresentationSource
 	{
 		$target ??= $representation;
-		$record = $this->singleRecordForTrackedTarget(
-			$target,
-			$path->getRelatedSchema()->getCollection(),
-			sprintf("Cannot use tracked() for relation '%s'", $path->getRelationName())
-		);
 
-		return $this->attachPathTarget(
-			$path->getOwner(),
-			$path->getOwnerObject(),
-			$path->getRelationName(),
-			$path->getCardinality(),
-			$path->getRelatedSchema(),
-			$record,
+		return $this->pathSource(
+			$path,
+			$this->trackedRecord(
+				$target,
+				$path->getRelatedSchema()->getCollection(),
+				sprintf("Cannot use tracked() for relation '%s'", $path->getRelationName()),
+			),
 			$target,
 		);
 	}
 
 	public function trackedAtRelation(RelationRef $relation, object $representation, ?object $target): RelationRepresentationSource
 	{
-		$owner = $relation->getOwner()->getTargetRecord();
 		$target ??= $representation;
-		$record = $this->singleRecordForTrackedTarget(
-			$target,
-			$relation->getDefinition()->getCollection(),
-			sprintf("Cannot use tracked() for relation '%s'", implode('.', $relation->getPath()))
-		);
 
-		return $this->attachRelationTarget(
-			$owner,
-			$relation->getName(),
-			$this->relationCardinality($relation),
-			new RepresentationSchema($relation->getDefinition()->getCollection()),
-			$record,
+		return $this->relationSource(
+			$relation,
+			$this->trackedRecord(
+				$target,
+				$relation->getDefinition()->getCollection(),
+				sprintf("Cannot use tracked() for relation '%s'", implode('.', $relation->getPath())),
+			),
 			$target,
 		);
 	}
 
-	private function attachPathTarget(
-		RecordState $owner,
-		object $ownerObject,
-		string $relationName,
-		RelationCardinality $cardinality,
-		RepresentationSchema $relatedSchema,
+	private function rootSource(RecordState $record): RootRepresentationSource
+	{
+		return new RootRepresentationSource($record);
+	}
+
+	private function pathSource(
+		PathResolution $path,
 		RecordState $record,
 		?object $explicitTarget = null,
 	): RelationRepresentationSource {
-		$objectShaped = $this->rootRepresentation !== $ownerObject;
-		[$target, $pendingEnrollments] = $this->resolvePathTargetObject($record, $relatedSchema, $ownerObject, $explicitTarget, $objectShaped);
-		$this->relationLinker->applyTarget($owner, $relationName, $cardinality, $relatedSchema, $target);
+		$objectShaped = $this->rootRepresentation !== $path->getOwnerObject();
+		[$target, $pendingEnrollments] = $this->resolvePathTargetObject(
+			$record,
+			$path->getRelatedSchema(),
+			$path->getOwnerObject(),
+			$explicitTarget,
+			$objectShaped,
+		);
 
-		return new RelationRepresentationSource(
-			$owner,
-			$relationName,
-			$cardinality,
-			$relatedSchema,
+		return $this->attachRelationTarget(
+			$path->getOwner(),
+			$path->getRelationName(),
+			$path->getCardinality(),
+			$path->getRelatedSchema(),
 			$record,
 			$target,
 			$objectShaped,
+			$pendingEnrollments,
+		);
+	}
+
+	/**
+	 * @param list<PendingRepresentationAdoption> $pendingEnrollments
+	 */
+	private function relationSource(
+		RelationRef $relation,
+		RecordState $record,
+		?object $target = null,
+		array $pendingEnrollments = [],
+	): RelationRepresentationSource {
+		$relatedSchema = new RepresentationSchema($relation->getDefinition()->getCollection());
+
+		return $this->attachRelationTarget(
+			$relation->getOwner()->getTargetRecord(),
+			$relation->getName(),
+			$this->relationCardinality($relation),
+			$relatedSchema,
+			$record,
+			$target ?? $this->rootRepresentation,
+			false,
 			$pendingEnrollments,
 		);
 	}
@@ -212,9 +204,10 @@ final class ManualRepresentationSourceFactory
 		RepresentationSchema $relatedSchema,
 		RecordState $record,
 		object $target,
+		bool $objectShaped,
 		array $pendingEnrollments = [],
 	): RelationRepresentationSource {
-		$this->relationLinker->applyTarget($owner, $relationName, $cardinality, $relatedSchema, $target);
+		$this->applyRelationTarget($owner, $relationName, $cardinality, $relatedSchema, $target);
 
 		return new RelationRepresentationSource(
 			$owner,
@@ -223,9 +216,42 @@ final class ManualRepresentationSourceFactory
 			$relatedSchema,
 			$record,
 			$target,
-			false,
+			$objectShaped,
 			$pendingEnrollments,
 		);
+	}
+
+	private function applyRelationTarget(
+		RecordState $owner,
+		string $relationName,
+		RelationCardinality $cardinality,
+		RepresentationSchema $relatedSchema,
+		object $target,
+	): void {
+		$relations = $this->session->getRelations();
+		$relation = $relations->get($owner, $relationName);
+
+		if ($cardinality->isMany()) {
+			if ($relation === null) {
+				$relation = new ToManyRelationState($owner, $relationName, $relatedSchema);
+				$relations->add($relation);
+			} elseif (! $relation instanceof ToManyRelationState) {
+				throw $this->incompatibleCardinality($relationName);
+			}
+
+			$relation->add($target);
+
+			return;
+		}
+
+		if ($relation === null) {
+			$relation = new ToOneRelationState($owner, $relationName, $relatedSchema);
+			$relations->add($relation);
+		} elseif (! $relation instanceof ToOneRelationState) {
+			throw $this->incompatibleCardinality($relationName);
+		}
+
+		$relation->set($target);
 	}
 
 	/**
@@ -249,29 +275,21 @@ final class ManualRepresentationSourceFactory
 		return $this->resolveFlattenedAdapter($record, $relatedSchema, $ownerObject);
 	}
 
-	private function singleRecordForTrackedTarget(object $target, CollectionInterface $collection, string $prefix): RecordState
+	/**
+	 * @param array<string, mixed> $values
+	 */
+	private function newRecord(CollectionInterface $collection, array $values): RecordState
 	{
-		$state = $this->session->getRepresentations()->get($target);
-		if (! $state instanceof RepresentationState) {
-			throw new SyncException($prefix . ' because the target representation is not tracked.');
-		}
+		$record = RecordState::new($collection, $values);
+		$this->session->getRecords()->add($record);
 
-		$matches = $state->getRecordsForCollection($collection);
-		if ($matches === []) {
-			throw new StateException($prefix . ' because the target has no matching tracked record state.');
-		}
-
-		if (count($matches) > 1) {
-			throw new StateException($prefix . ' because the matching target record state is ambiguous.');
-		}
-
-		return $matches[0];
+		return $record;
 	}
 
 	/**
 	 * @param array<string, mixed> $values
 	 */
-	private function recordForExisting(CollectionInterface $collection, Key|array $key, array $values): RecordState
+	private function existingRecord(CollectionInterface $collection, Key|array $key, array $values): RecordState
 	{
 		$key = $collection->getKey($key);
 		$record = $this->session->getRecords()->getByKey($key);
@@ -293,9 +311,36 @@ final class ManualRepresentationSourceFactory
 		return $record;
 	}
 
+	private function trackedRecord(object $target, CollectionInterface $collection, string $prefix): RecordState
+	{
+		$state = $this->session->getRepresentations()->get($target);
+		if (! $state instanceof RepresentationState) {
+			throw new SyncException($prefix . ' because the target representation is not tracked.');
+		}
+
+		$matches = $state->getRecordsForCollection($collection);
+		if ($matches === []) {
+			throw new StateException($prefix . ' because the target has no matching tracked record state.');
+		}
+
+		if (count($matches) > 1) {
+			throw new StateException($prefix . ' because the matching target record state is ambiguous.');
+		}
+
+		return $matches[0];
+	}
+
 	private function relationCardinality(RelationRef $relation): RelationCardinality
 	{
 		return $relation->getDefinition()->getCardinality();
+	}
+
+	private function incompatibleCardinality(string $relationName): StateException
+	{
+		return new StateException(sprintf(
+			"Relation '%s' is already tracked with incompatible cardinality.",
+			$relationName
+		));
 	}
 
 	private function fromPrimaryKeyRecord(RecordState $record): RepresentationState
