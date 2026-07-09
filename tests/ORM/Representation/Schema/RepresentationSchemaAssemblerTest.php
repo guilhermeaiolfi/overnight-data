@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Tests\ON\Data\ORM\Compiler;
+namespace Tests\ON\Data\ORM\Representation\Schema;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
@@ -14,7 +14,7 @@ use ON\Data\ORM\Representation\Schema\Shape\ResolvedRepresentationSource;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
-final class ProjectionSchemaAssemblerTest extends TestCase
+final class RepresentationSchemaAssemblerTest extends TestCase
 {
 	public function testAssemblesFieldShapesWithResolvedSourceProperties(): void
 	{
@@ -133,7 +133,7 @@ final class ProjectionSchemaAssemblerTest extends TestCase
 		self::assertTrue($schema->getField('name')->isWritable());
 	}
 
-	public function testResolvedProjectionSourceIsStructuralOnly(): void
+	public function testResolvedRepresentationSourceIsStructuralOnly(): void
 	{
 		$users = $this->makeRegistry()->getCollection('users');
 		$source = new ResolvedRepresentationSource($users, ['manager']);
@@ -143,7 +143,7 @@ final class ProjectionSchemaAssemblerTest extends TestCase
 		self::assertFalse(method_exists($source, 'getRecordState'));
 	}
 
-	public function testProjectionSourcesGroupFieldsBySourcePath(): void
+	public function testRepresentationSourcesGroupFieldsBySourcePath(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');

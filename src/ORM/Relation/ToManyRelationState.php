@@ -8,7 +8,7 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 
-final class ToManyRelationState implements RelationChangeInterface
+final class ToManyRelationState implements RelationStateInterface
 {
 	private const LOAD_UNLOADED = 'unloaded';
 	private const LOAD_PARTIAL = 'partial';

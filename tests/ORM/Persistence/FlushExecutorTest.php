@@ -811,7 +811,7 @@ final class FlushExecutorTest extends TestCase
 		$users = $this->usersWithProfile();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$target = new stdClass();
-		$toOneRelations = new RelationStateStore();
+		$relations = new RelationStateStore();
 
 		(new FlushExecutor(new RecordingCommandExecutor()))->flush($this->context(
 			$this->representations(
@@ -819,11 +819,10 @@ final class FlushExecutorTest extends TestCase
 				$this->tracked($target, new RepresentationSchema($this->profiles()))
 			),
 			$this->records($record),
-			new RelationStateStore(),
-			$toOneRelations
+			$relations
 		));
 
-		$reference = $toOneRelations->get($record, 'profile');
+		$reference = $relations->get($record, 'profile');
 		self::assertInstanceOf(ToOneRelationState::class, $reference);
 		self::assertSame($target, $reference->getTarget());
 		self::assertSame([$reference], RecordingRelationPersistencePlanner::$changes);

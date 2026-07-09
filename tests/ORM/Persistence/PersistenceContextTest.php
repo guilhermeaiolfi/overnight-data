@@ -18,17 +18,17 @@ final class PersistenceContextTest extends TestCase
 	{
 		$records = new RecordStateStore();
 		$representations = new RepresentationStateStore();
-		$toManyRelations = new RelationStateStore();
-		$toOneRelations = new RelationStateStore();
+		$relations = new RelationStateStore();
 		$commands = new CommandBuffer();
-		$session = new SessionContext($records, $representations, $toManyRelations, $toOneRelations);
+		$session = new SessionContext($records, $representations, $relations);
 		$context = new PersistenceContext($session, $commands);
 
 		self::assertSame($session, $context->getSession());
 		self::assertSame($records, $context->getRecords());
 		self::assertSame($representations, $context->getRepresentations());
-		self::assertSame($toManyRelations, $context->getToManyRelations());
-		self::assertSame($toOneRelations, $context->getToOneRelations());
+		self::assertSame($relations, $context->getRelations());
+		self::assertSame($relations, $context->getToManyRelations());
+		self::assertSame($relations, $context->getToOneRelations());
 		self::assertSame($commands, $context->getCommands());
 	}
 

@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Tests\ON\Data\ORM\Compiler;
+namespace Tests\ON\Data\ORM\Representation\Schema;
 
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use PHPUnit\Framework\TestCase;
 
-final class ProjectionSourceTest extends TestCase
+final class RepresentationSourceTest extends TestCase
 {
 	public function testRootSourcePathKeyMatchesCanonicalRepresentationSourceKey(): void
 	{

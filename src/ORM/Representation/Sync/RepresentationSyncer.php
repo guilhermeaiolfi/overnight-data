@@ -24,8 +24,7 @@ final class RepresentationSyncer
 	): SyncResult {
 		$representations = $context->getRepresentations();
 		$records = $context->getRecords();
-		$toManyRelations = $context->getToManyRelations();
-		$toOneRelations = $context->getToOneRelations();
+		$relations = $context->getRelations();
 		$syncRepresentations = $representations;
 		if ($representation !== null) {
 			$state = $representations->get($representation);
@@ -38,7 +37,7 @@ final class RepresentationSyncer
 		}
 
 		$syncPlans = $this->scalarSynchronizer->sync($syncRepresentations, $records);
-		$relationChanges = $this->relationSynchronizer->sync($syncRepresentations, $toManyRelations, $toOneRelations, $representations);
+		$relationChanges = $this->relationSynchronizer->sync($syncRepresentations, $relations, $representations);
 
 		return new SyncResult($syncPlans, $relationChanges);
 	}

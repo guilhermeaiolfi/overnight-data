@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Schema\Manual;
 
 use ON\Data\Definition\Relation\RelationCardinality;
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
@@ -42,10 +43,12 @@ final class ManualRepresentationRelationLinker
 		string $relationName,
 		RepresentationSchema $relatedSchema,
 	): ToManyRelationState {
-		$relation = $this->session->getToManyRelations()->get($owner, $relationName);
-		if (! $relation instanceof ToManyRelationState) {
+		$relation = $this->session->getRelations()->get($owner, $relationName);
+		if ($relation === null) {
 			$relation = new ToManyRelationState($owner, $relationName, $relatedSchema);
-			$this->session->getToManyRelations()->add($relation);
+			$this->session->getRelations()->add($relation);
+		} elseif (! $relation instanceof ToManyRelationState) {
+			throw $this->incompatibleCardinality($relationName);
 		}
 
 		return $relation;
@@ -56,12 +59,22 @@ final class ManualRepresentationRelationLinker
 		string $relationName,
 		RepresentationSchema $relatedSchema,
 	): ToOneRelationState {
-		$relation = $this->session->getToOneRelations()->get($owner, $relationName);
-		if (! $relation instanceof ToOneRelationState) {
+		$relation = $this->session->getRelations()->get($owner, $relationName);
+		if ($relation === null) {
 			$relation = new ToOneRelationState($owner, $relationName, $relatedSchema);
-			$this->session->getToOneRelations()->add($relation);
+			$this->session->getRelations()->add($relation);
+		} elseif (! $relation instanceof ToOneRelationState) {
+			throw $this->incompatibleCardinality($relationName);
 		}
 
 		return $relation;
+	}
+
+	private function incompatibleCardinality(string $relationName): StateException
+	{
+		return new StateException(sprintf(
+			"Relation '%s' is already tracked with incompatible cardinality.",
+			$relationName
+		));
 	}
 }

@@ -6,7 +6,7 @@ namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\Relation\RelationChangeInterface;
+use ON\Data\ORM\Relation\RelationStateInterface;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
@@ -52,21 +52,18 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$owner = RecordState::new($this->users());
 		$schema = new RepresentationSchema($this->users());
 		$schema->addRelation($this->relationSchema($owner, RelationCardinality::SINGLE));
-		$toManyRelations = new RelationStateStore();
-		$toOneRelations = new RelationStateStore();
+		$relations = new RelationStateStore();
 
 		$touched = $this->sync(
 			$this->representations($this->tracked($this->representation(['profile' => null]), $schema, [$owner])),
-			$toManyRelations,
-			$toOneRelations
+			$relations
 		);
 
-		self::assertSame([], $toManyRelations->getAll());
 		self::assertCount(1, $touched);
 		self::assertInstanceOf(ToOneRelationState::class, $touched[0]);
 		self::assertFalse($touched[0]->hasTarget());
 		self::assertFalse($touched[0]->hasChanges());
-		self::assertSame($touched[0], $toOneRelations->get($owner, 'profile'));
+		self::assertSame($touched[0], $relations->get($owner, 'profile'));
 	}
 
 	public function testOneRelationWithObjectValueCreatesTouchedReferenceAndSetsTarget(): void
@@ -489,17 +486,23 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 	}
 
 	/**
-	 * @return list<RelationChangeInterface>
+	 * @return list<RelationStateInterface>
 	 */
 	private function sync(
 		RepresentationStateStore $representations,
 		?RelationStateStore $toManyRelations = null,
 		?RelationStateStore $toOneRelations = null,
 	): array {
+		$relations = $toManyRelations ?? $toOneRelations ?? new RelationStateStore();
+		if ($toOneRelations !== null && $toOneRelations !== $relations) {
+			foreach ($toOneRelations->getAll() as $relation) {
+				$relations->add($relation);
+			}
+		}
+
 		return $this->synchronizer()->sync(
 			$representations,
-			$toManyRelations ?? new RelationStateStore(),
-			$toOneRelations ?? new RelationStateStore()
+			$relations
 		);
 	}
 }

@@ -60,11 +60,17 @@ trait OrmFixture
 		?RelationStateStore $toManyRelations = null,
 		?RelationStateStore $toOneRelations = null,
 	): SessionContext {
+		$relations = $toManyRelations ?? $toOneRelations ?? new RelationStateStore();
+		if ($toOneRelations !== null && $toOneRelations !== $relations) {
+			foreach ($toOneRelations->getAll() as $relation) {
+				$relations->add($relation);
+			}
+		}
+
 		return new SessionContext(
 			$records,
 			$representations,
-			$toManyRelations,
-			$toOneRelations
+			$relations
 		);
 	}
 

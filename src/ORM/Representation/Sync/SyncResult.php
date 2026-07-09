@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Sync;
 
-use ON\Data\ORM\Relation\RelationChangeInterface;
+use ON\Data\ORM\Relation\RelationStateInterface;
 final class SyncResult
 {
 	/** @var list<SyncPlan> */
 	private array $syncPlans;
-	/** @var list<RelationChangeInterface> */
+	/** @var list<RelationStateInterface> */
 	private array $relationChanges;
 
 	/**
 	 * @param list<SyncPlan> $syncPlans
-	 * @param list<RelationChangeInterface> $relationChanges
+	 * @param list<RelationStateInterface> $relationChanges
 	 */
 	public function __construct(array $syncPlans, array $relationChanges)
 	{
@@ -31,7 +31,7 @@ final class SyncResult
 	}
 
 	/**
-	 * @return list<RelationChangeInterface>
+	 * @return list<RelationStateInterface>
 	 */
 	public function getRelationChanges(): array
 	{

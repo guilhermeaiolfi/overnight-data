@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Persistence;
 
 use ON\Data\ORM\Relation\RelationStateStore;
-use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
@@ -34,17 +32,16 @@ final class PersistenceContext
 		return $this->session->getRepresentations();
 	}
 
-	/**
-	 * @return RelationStateStore<ToManyRelationState>
-	 */
+	public function getRelations(): RelationStateStore
+	{
+		return $this->session->getRelations();
+	}
+
 	public function getToManyRelations(): RelationStateStore
 	{
 		return $this->session->getToManyRelations();
 	}
 
-	/**
-	 * @return RelationStateStore<ToOneRelationState>
-	 */
 	public function getToOneRelations(): RelationStateStore
 	{
 		return $this->session->getToOneRelations();

@@ -8,7 +8,7 @@ use ON\Data\Definition\Relation\BelongsToRelation;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\PersistenceContext;
-use ON\Data\ORM\Relation\RelationChangeInterface;
+use ON\Data\ORM\Relation\RelationStateInterface;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Record\RecordState;
 
@@ -23,7 +23,7 @@ final class BelongsToPersistencePlanner implements RelationPersistencePlannerInt
 		$this->keys = $keys ?? new ForeignKeyWriter();
 	}
 
-	public function plan(PersistenceContext $context, RelationInterface $relation, RelationChangeInterface $change): void
+	public function plan(PersistenceContext $context, RelationInterface $relation, RelationStateInterface $change): void
 	{
 		if (! $change instanceof ToOneRelationState) {
 			throw new RelationPersistenceException(sprintf(

@@ -7,18 +7,12 @@ namespace ON\Data\ORM\Relation;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
 
-/**
- * @template T of RelationChangeInterface
- */
 final class RelationStateStore
 {
-	/** @var array<string, T> */
+	/** @var array<string, RelationStateInterface> */
 	private array $states = [];
 
-	/**
-	 * @param T $state
-	 */
-	public function add(RelationChangeInterface $state): void
+	public function add(RelationStateInterface $state): void
 	{
 		$key = $this->key($state->getOwner(), $state->getRelationName());
 		if (isset($this->states[$key])) {
@@ -27,7 +21,7 @@ final class RelationStateStore
 			}
 
 			throw new StateException(sprintf(
-				"Relation state store already contains a different state for relation '%s'.",
+				"Relation '%s' is already tracked with a different relation state.",
 				$state->getRelationName()
 			));
 		}
@@ -40,10 +34,7 @@ final class RelationStateStore
 		return array_key_exists($this->key($owner, $relationName), $this->states);
 	}
 
-	/**
-	 * @return T|null
-	 */
-	public function get(RecordState $owner, string $relationName): ?RelationChangeInterface
+	public function get(RecordState $owner, string $relationName): ?RelationStateInterface
 	{
 		return $this->states[$this->key($owner, $relationName)] ?? null;
 	}
@@ -58,22 +49,18 @@ final class RelationStateStore
 		$this->states = [];
 	}
 
-	/**
-	 * @return list<T>
-	 */
+	/** @return list<RelationStateInterface> */
 	public function getAll(): array
 	{
 		return array_values($this->states);
 	}
 
-	/**
-	 * @return list<T>
-	 */
+	/** @return list<RelationStateInterface> */
 	public function getChanged(): array
 	{
 		return array_values(array_filter(
 			$this->states,
-			static fn (RelationChangeInterface $state): bool => $state->hasChanges()
+			static fn (RelationStateInterface $state): bool => $state->hasChanges()
 		));
 	}
 

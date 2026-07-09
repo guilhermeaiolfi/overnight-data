@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\ORM;
 
 use ON\Data\ORM\Relation\RelationStateStore;
-use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\ORM\Representation\Sync\ExistingIntentStore;
@@ -17,27 +15,17 @@ final class SessionContext
 	private RepresentationStateStore $representations;
 	private ExistingIntentStore $existingIntents;
 
-	/** @var RelationStateStore<ToManyRelationState> */
-	private RelationStateStore $toManyRelations;
+	private RelationStateStore $relations;
 
-	/** @var RelationStateStore<ToOneRelationState> */
-	private RelationStateStore $toOneRelations;
-
-	/**
-	 * @param RelationStateStore<ToManyRelationState>|null $toManyRelations
-	 * @param RelationStateStore<ToOneRelationState>|null $toOneRelations
-	 */
 	public function __construct(
 		?RecordStateStore $records = null,
 		?RepresentationStateStore $representations = null,
-		?RelationStateStore $toManyRelations = null,
-		?RelationStateStore $toOneRelations = null,
+		?RelationStateStore $relations = null,
 	) {
 		$this->records = $records ?? new RecordStateStore();
 		$this->representations = $representations ?? new RepresentationStateStore();
 		$this->existingIntents = new ExistingIntentStore();
-		$this->toManyRelations = $toManyRelations ?? new RelationStateStore();
-		$this->toOneRelations = $toOneRelations ?? new RelationStateStore();
+		$this->relations = $relations ?? new RelationStateStore();
 	}
 
 	public function getExistingIntents(): ExistingIntentStore
@@ -55,20 +43,19 @@ final class SessionContext
 		return $this->representations;
 	}
 
-	/**
-	 * @return RelationStateStore<ToManyRelationState>
-	 */
-	public function getToManyRelations(): RelationStateStore
+	public function getRelations(): RelationStateStore
 	{
-		return $this->toManyRelations;
+		return $this->relations;
 	}
 
-	/**
-	 * @return RelationStateStore<ToOneRelationState>
-	 */
+	public function getToManyRelations(): RelationStateStore
+	{
+		return $this->relations;
+	}
+
 	public function getToOneRelations(): RelationStateStore
 	{
-		return $this->toOneRelations;
+		return $this->relations;
 	}
 
 	public function clear(): void
@@ -76,7 +63,6 @@ final class SessionContext
 		$this->records->clear();
 		$this->representations->clear();
 		$this->existingIntents->clear();
-		$this->toManyRelations->clear();
-		$this->toOneRelations->clear();
+		$this->relations->clear();
 	}
 }

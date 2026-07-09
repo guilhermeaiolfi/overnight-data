@@ -5,18 +5,18 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Relation\Persistence;
 
 use ON\Data\ORM\Persistence\CommandInterface;
-use ON\Data\ORM\Relation\RelationChangeInterface;
+use ON\Data\ORM\Relation\RelationStateInterface;
 
 final class RelationPersistenceResult
 {
-	/** @var list<RelationChangeInterface> */
+	/** @var list<RelationStateInterface> */
 	private array $changes;
 
 	/** @var list<CommandInterface> */
 	private array $commands;
 
 	/**
-	 * @param list<RelationChangeInterface> $changes
+	 * @param list<RelationStateInterface> $changes
 	 * @param list<CommandInterface> $commands
 	 */
 	public function __construct(array $changes, array $commands)
@@ -26,7 +26,7 @@ final class RelationPersistenceResult
 	}
 
 	/**
-	 * @return list<RelationChangeInterface>
+	 * @return list<RelationStateInterface>
 	 */
 	public function getChanges(): array
 	{

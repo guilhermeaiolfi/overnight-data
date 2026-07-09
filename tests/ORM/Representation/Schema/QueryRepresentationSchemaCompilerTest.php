@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Tests\ON\Data\ORM\Compiler;
+namespace Tests\ON\Data\ORM\Representation\Schema;
 
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
@@ -14,7 +14,7 @@ use ON\Data\Query\SelectQuery;
 use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 
-final class SelectQueryProjectionCompilerTest extends TestCase
+final class QueryRepresentationSchemaCompilerTest extends TestCase
 {
 	private QueryRepresentationSchemaCompiler $compiler;
 
@@ -184,7 +184,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		self::assertNull($compilation->getIdentityColumns()->get([], 'id'));
 	}
 
-	public function testCompileResultCarriesStructuralProjectionSources(): void
+	public function testCompileResultCarriesStructuralRepresentationSources(): void
 	{
 		$registry = $this->makeRegistryWithCompany();
 		$users = $registry->getCollection('users');
@@ -210,7 +210,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		self::assertSame('companyId', $sources[1]->getFieldPath('id'));
 	}
 
-	public function testComputedExpressionsDoNotCreateProjectionSourceFields(): void
+	public function testComputedExpressionsDoNotCreateRepresentationSourceFields(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');

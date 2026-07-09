@@ -10,17 +10,14 @@ use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
-use ON\Data\ORM\Relation\RelationChangeInterface;
+use ON\Data\ORM\Relation\RelationStateInterface;
 use ON\Data\ORM\SessionContext;
 
 final class RelationPersistencePlanner
 {
 	public function plan(SessionContext $session): RelationPersistenceResult
 	{
-		$changed = array_merge(
-			$session->getToManyRelations()->getChanged(),
-			$session->getToOneRelations()->getChanged()
-		);
+		$changed = $session->getRelations()->getChanged();
 		$commands = new CommandBuffer();
 		$context = new PersistenceContext($session, $commands);
 
@@ -58,7 +55,7 @@ final class RelationPersistencePlanner
 		return new RelationPersistenceResult($changed, $commands->getAll());
 	}
 
-	private function resolveRelation(RelationChangeInterface $change): RelationInterface
+	private function resolveRelation(RelationStateInterface $change): RelationInterface
 	{
 		$relations = $change->getOwner()->getCollection()->getRelations();
 		if (! $relations->has($change->getRelationName())) {

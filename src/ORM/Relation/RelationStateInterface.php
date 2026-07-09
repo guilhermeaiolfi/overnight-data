@@ -6,7 +6,7 @@ namespace ON\Data\ORM\Relation;
 
 use ON\Data\ORM\Record\RecordState;
 
-interface RelationChangeInterface
+interface RelationStateInterface
 {
 	public function getOwner(): RecordState;
 

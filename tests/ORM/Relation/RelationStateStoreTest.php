@@ -81,8 +81,23 @@ final class RelationStateStoreTest extends TestCase
 		$store->add($this->relatedReference($owner, 'author'));
 
 		$this->expectException(StateException::class);
+		$this->expectExceptionMessage('already tracked');
+		$this->expectExceptionMessage('author');
 
 		$store->add($this->relatedReference($owner, 'author'));
+	}
+
+	public function testSameOwnerAndRelationCannotBeTrackedAsBothToManyAndToOne(): void
+	{
+		$owner = RecordState::new($this->users());
+		$store = new RelationStateStore();
+		$store->add($this->relatedCollection($owner, 'posts'));
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage('already tracked');
+		$this->expectExceptionMessage('posts');
+
+		$store->add($this->relatedReference($owner, 'posts'));
 	}
 
 	public function testGetAllPreservesInsertionOrder(): void

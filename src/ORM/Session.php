@@ -13,8 +13,6 @@ use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\FlushExecutor;
 use ON\Data\ORM\Persistence\FlushResult;
 use ON\Data\ORM\Relation\RelationStateStore;
-use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
@@ -68,17 +66,16 @@ final class Session
 		return $this->context;
 	}
 
-	/**
-	 * @return RelationStateStore<ToManyRelationState>
-	 */
+	public function getRelations(): RelationStateStore
+	{
+		return $this->context->getRelations();
+	}
+
 	public function getToManyRelations(): RelationStateStore
 	{
 		return $this->context->getToManyRelations();
 	}
 
-	/**
-	 * @return RelationStateStore<ToOneRelationState>
-	 */
 	public function getToOneRelations(): RelationStateStore
 	{
 		return $this->context->getToOneRelations();

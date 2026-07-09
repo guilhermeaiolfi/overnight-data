@@ -6,9 +6,9 @@ namespace ON\Data\ORM\Relation\Persistence;
 
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Persistence\PersistenceContext;
-use ON\Data\ORM\Relation\RelationChangeInterface;
+use ON\Data\ORM\Relation\RelationStateInterface;
 
 interface RelationPersistencePlannerInterface
 {
-	public function plan(PersistenceContext $context, RelationInterface $relation, RelationChangeInterface $change): void;
+	public function plan(PersistenceContext $context, RelationInterface $relation, RelationStateInterface $change): void;
 }

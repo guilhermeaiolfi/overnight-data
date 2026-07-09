@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Sync;
 
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\Relation\RelationChangeInterface;
+use ON\Data\ORM\Relation\RelationStateInterface;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
@@ -22,15 +23,11 @@ final class RelationRepresentationSynchronizer
 	}
 
 	/**
-	 * @return list<RelationChangeInterface>
-	 *
-	 * @param RelationStateStore<ToManyRelationState> $toManyRelations
-	 * @param RelationStateStore<ToOneRelationState> $toOneRelations
+	 * @return list<RelationStateInterface>
 	 */
 	public function sync(
 		RepresentationStateStore $representations,
-		RelationStateStore $toManyRelations,
-		RelationStateStore $toOneRelations,
+		RelationStateStore $relations,
 		?RepresentationStateStore $states = null,
 	): array {
 		$touched = [];
@@ -41,13 +38,13 @@ final class RelationRepresentationSynchronizer
 			foreach ($state->getRelationItems() as $relationItem) {
 				$relationSchema = $relationItem->getSchema();
 				if ($relationSchema->isMany()) {
-					$this->syncMany($representation, $relationItem, $toManyRelations, $states, $touched, $touchedIds);
+					$this->syncMany($representation, $relationItem, $relations, $states, $touched, $touchedIds);
 
 					continue;
 				}
 
 				if ($relationSchema->isSingle()) {
-					$this->syncOne($representation, $relationItem, $toOneRelations, $states, $touched, $touchedIds);
+					$this->syncOne($representation, $relationItem, $relations, $states, $touched, $touchedIds);
 				}
 			}
 		}
@@ -56,14 +53,13 @@ final class RelationRepresentationSynchronizer
 	}
 
 	/**
-	 * @param list<RelationChangeInterface> $touched
+	 * @param list<RelationStateInterface> $touched
 	 * @param array<int, true> $touchedIds
-	 * @param RelationStateStore<ToManyRelationState> $toManyRelations
 	 */
 	private function syncMany(
 		object $representation,
 		RepresentationRelationStateItem $relationItem,
-		RelationStateStore $toManyRelations,
+		RelationStateStore $relations,
 		RepresentationStateStore $states,
 		array &$touched,
 		array &$touchedIds,
@@ -85,10 +81,12 @@ final class RelationRepresentationSynchronizer
 			$this->requireTrackedRepresentation($states, $item, $relationSchema->getPath());
 		}
 
-		$relation = $toManyRelations->get($owner, $relationName);
-		if (! $relation instanceof ToManyRelationState) {
+		$relation = $relations->get($owner, $relationName);
+		if ($relation === null) {
 			$relation = new ToManyRelationState($owner, $relationName, $relationSchema->getRelatedSchema());
-			$toManyRelations->add($relation);
+			$relations->add($relation);
+		} elseif (! $relation instanceof ToManyRelationState) {
+			throw $this->incompatibleCardinality($relationName);
 		}
 
 		$this->applyItems($relation, $items);
@@ -96,14 +94,13 @@ final class RelationRepresentationSynchronizer
 	}
 
 	/**
-	 * @param list<RelationChangeInterface> $touched
+	 * @param list<RelationStateInterface> $touched
 	 * @param array<int, true> $touchedIds
-	 * @param RelationStateStore<ToOneRelationState> $toOneRelations
 	 */
 	private function syncOne(
 		object $representation,
 		RepresentationRelationStateItem $relationItem,
-		RelationStateStore $toOneRelations,
+		RelationStateStore $relations,
 		RepresentationStateStore $states,
 		array &$touched,
 		array &$touchedIds,
@@ -125,14 +122,16 @@ final class RelationRepresentationSynchronizer
 			$this->requireTrackedRepresentation($states, $target, $relationSchema->getPath());
 		}
 
-		$relation = $toOneRelations->get($owner, $relationName);
-		if (! $relation instanceof ToOneRelationState) {
+		$relation = $relations->get($owner, $relationName);
+		if ($relation === null) {
 			$relation = new ToOneRelationState(
 				$owner,
 				$relationName,
 				$relationSchema->getRelatedSchema()
 			);
-			$toOneRelations->add($relation);
+			$relations->add($relation);
+		} elseif (! $relation instanceof ToOneRelationState) {
+			throw $this->incompatibleCardinality($relationName);
 		}
 
 		$relation->set($target);
@@ -163,11 +162,19 @@ final class RelationRepresentationSynchronizer
 		return new SyncException($message);
 	}
 
+	private function incompatibleCardinality(string $relationName): StateException
+	{
+		return new StateException(sprintf(
+			"Relation '%s' is already tracked with incompatible cardinality.",
+			$relationName
+		));
+	}
+
 	/**
-	 * @param list<RelationChangeInterface> $touched
+	 * @param list<RelationStateInterface> $touched
 	 * @param array<int, true> $touchedIds
 	 */
-	private function touch(RelationChangeInterface $change, array &$touched, array &$touchedIds): void
+	private function touch(RelationStateInterface $change, array &$touched, array &$touchedIds): void
 	{
 		$id = spl_object_id($change);
 		if (! array_key_exists($id, $touchedIds)) {

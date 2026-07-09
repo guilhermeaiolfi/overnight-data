@@ -46,8 +46,7 @@ final class SessionTest extends TestCase
 
 		self::assertSame([], $session->getRecords()->getAll());
 		self::assertSame([], iterator_to_array($session->getRepresentations()->getAll(), false));
-		self::assertSame([], $session->getToManyRelations()->getAll());
-		self::assertSame([], $session->getToOneRelations()->getAll());
+		self::assertSame([], $session->getRelations()->getAll());
 	}
 
 	public function testDefaultFlushExecutorUsesSessionRepresentationSyncer(): void
@@ -674,14 +673,15 @@ final class SessionTest extends TestCase
 	{
 		$session = new Session(new RecordingCommandExecutor());
 
-		self::assertSame($session->getToManyRelations(), $session->getToManyRelations());
+		self::assertSame($session->getRelations(), $session->getRelations());
 	}
 
-	public function testGetReferencesReturnsOwnedMap(): void
+	public function testLegacyRelationAccessorsReturnUnifiedRelationMap(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 
-		self::assertSame($session->getToOneRelations(), $session->getToOneRelations());
+		self::assertSame($session->getRelations(), $session->getToManyRelations());
+		self::assertSame($session->getRelations(), $session->getToOneRelations());
 	}
 
 	public function testTrackRelationAddsAndReturnsSameCollection(): void
@@ -800,6 +800,7 @@ final class SessionTest extends TestCase
 
 		self::assertSame([], $session->getRecords()->getAll());
 		self::assertSame([], iterator_to_array($session->getRepresentations()->getAll(), false));
+		self::assertSame([], $session->getRelations()->getAll());
 		self::assertSame([], $session->getToManyRelations()->getAll());
 		self::assertSame([], $session->getToOneRelations()->getAll());
 	}

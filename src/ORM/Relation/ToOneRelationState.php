@@ -8,7 +8,7 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 
-final class ToOneRelationState implements RelationChangeInterface
+final class ToOneRelationState implements RelationStateInterface
 {
 	private ?object $baselineTarget;
 	private ?object $target;

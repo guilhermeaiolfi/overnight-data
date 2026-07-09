@@ -8,6 +8,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\ORM\Exception\RelationPersistenceException;
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Persistence\CommandValueResolver;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Relation\Persistence\RelationPersistencePlanner;
@@ -84,17 +85,16 @@ final class RelationPersistencePlannerTest extends TestCase
 		$records = new RecordStateStore();
 		$representations = new RepresentationStateStore();
 
-		$toOneRelations = new RelationStateStore();
-
-		$result = $this->plan($toManyRelations, $toOneRelations, $records, $representations);
+		$result = $this->plan($toManyRelations, records: $records, representations: $representations);
 
 		self::assertSame(1, RecordingRelationPersistencePlanner::$calls);
 		self::assertSame($collection, RecordingRelationPersistencePlanner::$collections[0]);
 		self::assertSame($users->getRelations()->get('posts'), RecordingRelationPersistencePlanner::$relations[0]);
 		self::assertSame($records, RecordingRelationPersistencePlanner::$contexts[0]->getRecords());
 		self::assertSame($representations, RecordingRelationPersistencePlanner::$contexts[0]->getRepresentations());
+		self::assertSame($toManyRelations, RecordingRelationPersistencePlanner::$contexts[0]->getRelations());
 		self::assertSame($toManyRelations, RecordingRelationPersistencePlanner::$contexts[0]->getToManyRelations());
-		self::assertSame($toOneRelations, RecordingRelationPersistencePlanner::$contexts[0]->getToOneRelations());
+		self::assertSame($toManyRelations, RecordingRelationPersistencePlanner::$contexts[0]->getToOneRelations());
 		self::assertSame([$collection], $result->getChanges());
 	}
 
@@ -129,22 +129,36 @@ final class RelationPersistencePlannerTest extends TestCase
 		self::assertSame([$reference], $result->getChanges());
 	}
 
-	public function testCollectionsArePlannedBeforeReferences(): void
+	public function testChangedCollectionsAndReferencesFromUnifiedStoreArePlannedInStoreOrder(): void
 	{
-		$registry = $this->registryWithRelation(RecordingRelationPersistencePlanner::class);
+		$registry = $this->registryWithManyAndOneRelations();
 		$users = $registry->getCollection('users');
 		self::assertInstanceOf(CollectionInterface::class, $users);
 		$collection = $this->changedToManyRelationState(RecordState::new($users));
-		$toManyRelations = new RelationStateStore();
-		$toManyRelations->add($collection);
-		$reference = $this->changedToOneRelationState(RecordState::new($users), 'posts');
-		$toOneRelations = new RelationStateStore();
-		$toOneRelations->add($reference);
+		$reference = $this->changedToOneRelationState(RecordState::new($users));
+		$relations = new RelationStateStore();
+		$relations->add($collection);
+		$relations->add($reference);
 
-		$result = $this->plan($toManyRelations, $toOneRelations);
+		$result = $this->plan($relations);
 
 		self::assertSame([$collection, $reference], $result->getChanges());
 		self::assertSame([$collection, $reference], RecordingRelationPersistencePlanner::$changes);
+	}
+
+	public function testSameOwnerAndRelationCannotBePlannedAsBothCollectionAndReference(): void
+	{
+		$users = $this->registryWithRelation(RecordingRelationPersistencePlanner::class)->getCollection('users');
+		self::assertInstanceOf(CollectionInterface::class, $users);
+		$owner = RecordState::new($users);
+		$relations = new RelationStateStore();
+		$relations->add($this->changedToManyRelationState($owner));
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage('already tracked');
+		$this->expectExceptionMessage('posts');
+
+		$relations->add($this->changedToOneRelationState($owner, 'posts'));
 	}
 
 	public function testUnchangedReferencesAreSkipped(): void
@@ -322,11 +336,17 @@ final class RelationPersistencePlannerTest extends TestCase
 		?RecordStateStore $records = null,
 		?RepresentationStateStore $representations = null,
 	): RelationPersistenceResult {
+		$relations = $toManyRelations ?? new RelationStateStore();
+		if ($toOneRelations !== null && $toOneRelations !== $relations) {
+			foreach ($toOneRelations->getAll() as $relation) {
+				$relations->add($relation);
+			}
+		}
+
 		return (new RelationPersistencePlanner())->plan($this->context(
 			$representations,
 			$records,
-			$toManyRelations,
-			$toOneRelations,
+			$relations,
 		));
 	}
 
@@ -362,6 +382,20 @@ final class RelationPersistencePlannerTest extends TestCase
 		if ($planner !== null) {
 			$relation->persistencePlanner($planner);
 		}
+
+		return $registry;
+	}
+
+	private function registryWithManyAndOneRelations(): Registry
+	{
+		$registry = $this->registryWithRelation(RecordingRelationPersistencePlanner::class);
+		$registry->collection('profiles')->primaryKey('id')->field('user_id', 'int')->end()->end();
+		$users = $registry->getCollection('users');
+		self::assertInstanceOf(CollectionInterface::class, $users);
+		$users->hasOne('profile', 'profiles')
+			->innerKey('id')
+			->outerKey('user_id')
+			->persistencePlanner(RecordingRelationPersistencePlanner::class);
 
 		return $registry;
 	}

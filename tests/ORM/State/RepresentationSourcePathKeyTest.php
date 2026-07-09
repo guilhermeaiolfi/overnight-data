@@ -28,7 +28,7 @@ final class RepresentationSourcePathKeyTest extends TestCase
 		self::assertSame('posts.comments', RepresentationFieldSchema::sourcePathKey(['posts', 'comments']));
 	}
 
-	public function testProjectionSourcePathKeyMatchesFieldSchema(): void
+	public function testRepresentationSourcePathKeyMatchesFieldSchema(): void
 	{
 		$users = $this->users();
 		$source = new RepresentationSource(
