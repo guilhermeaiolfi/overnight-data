@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationFieldSchema;
-use ON\Data\ORM\State\RepresentationSchema;
-use ON\Data\ORM\Sync\AdoptionRecordResolver;
+use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\Sync\AdoptionRecordResolver;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;

@@ -6,7 +6,7 @@ namespace Tests\ON\Data\ORM\Relation;
 
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\State\RecordState;
+use ON\Data\ORM\Record\RecordState;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;

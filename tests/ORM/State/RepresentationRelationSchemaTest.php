@@ -7,8 +7,8 @@ namespace Tests\ON\Data\ORM\State;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RepresentationRelationSchema;
-use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 
 final class RepresentationRelationSchemaTest extends TestCase

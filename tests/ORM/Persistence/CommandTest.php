@@ -11,7 +11,7 @@ use ON\Data\ORM\Persistence\CommandValueResolver;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
-use ON\Data\ORM\State\RecordState;
+use ON\Data\ORM\Record\RecordState;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\ORM\Support\OrmFixture;
 use Tests\ON\Data\Support\RecordingCommandExecutor;

@@ -6,9 +6,9 @@ namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RepresentationFieldSchema;
-use ON\Data\ORM\State\RepresentationRelationSchema;
-use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\ORM\Support\OrmFixture;
 

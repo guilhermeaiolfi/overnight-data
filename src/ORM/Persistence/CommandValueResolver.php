@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Persistence;
 
 use ON\Data\ORM\Exception\InvalidCommandException;
-use ON\Data\ORM\State\ValueRef;
+use ON\Data\ORM\Record\ValueRef;
 
 final class CommandValueResolver
 {

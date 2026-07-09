@@ -11,10 +11,10 @@ use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\SessionContext;
-use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationRelationSchema;
-use ON\Data\ORM\State\RepresentationSchema;
-use ON\Data\ORM\Sync\RepresentationSyncer;
+use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\Sync\RepresentationSyncer;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
@@ -167,7 +167,7 @@ final class RepresentationSyncerTest extends TestCase
 
 	public function testRepresentationSyncerDoesNotDependOnPersistenceClasses(): void
 	{
-		$source = file_get_contents(__DIR__ . '/../../../src/ORM/Sync/RepresentationSyncer.php');
+		$source = file_get_contents(__DIR__ . '/../../../src/ORM/Representation/Sync/RepresentationSyncer.php');
 
 		self::assertIsString($source);
 		self::assertStringNotContainsString('ON\\Data\\ORM\\Persistence', $source);

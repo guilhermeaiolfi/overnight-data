@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Compiler;
 
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompilation;
-use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompiler;
-use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use function ON\Data\Query\query;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
@@ -16,11 +16,11 @@ use PHPUnit\Framework\TestCase;
 
 final class SelectQueryProjectionCompilerTest extends TestCase
 {
-	private ProjectionCompiler $compiler;
+	private QueryRepresentationSchemaCompiler $compiler;
 
 	protected function setUp(): void
 	{
-		$this->compiler = new ProjectionCompiler();
+		$this->compiler = new QueryRepresentationSchemaCompiler();
 	}
 
 	public function testCompilesSelectedRootScalarFields(): void
@@ -178,7 +178,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 
 		$compilation = $this->compiler->compileResult($query);
 
-		self::assertInstanceOf(ProjectionCompilation::class, $compilation);
+		self::assertInstanceOf(QueryRepresentationPlan::class, $compilation);
 		self::assertTrue($compilation->getSchema()->getField('name')->getSourcePath() === ['company']);
 		self::assertNotNull($compilation->getIdentityColumns()->get(['company'], 'id'));
 		self::assertNull($compilation->getIdentityColumns()->get([], 'id'));

@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Compiler\SelectQuery;
 
-use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityColumns;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityColumns;
 use PHPUnit\Framework\TestCase;
 
 final class ProjectionIdentityColumnsTest extends TestCase
 {
 	public function testReturnsNullByDefault(): void
 	{
-		self::assertNull((new ProjectionIdentityColumns())->get([], 'id'));
+		self::assertNull((new QueryRepresentationIdentityColumns())->get([], 'id'));
 	}
 
 	public function testStoresAndRetrievesBySourcePath(): void
 	{
-		$columns = new ProjectionIdentityColumns();
+		$columns = new QueryRepresentationIdentityColumns();
 		$columns->add([], 'id', 'root_id');
 		$columns->add(['company'], 'id', 'company_id');
 
@@ -27,7 +27,7 @@ final class ProjectionIdentityColumnsTest extends TestCase
 
 	public function testStoresSameTerminalCollectionUnderDifferentSourcePaths(): void
 	{
-		$columns = new ProjectionIdentityColumns();
+		$columns = new QueryRepresentationIdentityColumns();
 		$columns->add([], 'id', 'root_id');
 		$columns->add(['manager'], 'id', 'manager_id');
 
@@ -38,7 +38,7 @@ final class ProjectionIdentityColumnsTest extends TestCase
 
 	public function testNestedSourcePathsAreDistinct(): void
 	{
-		$columns = new ProjectionIdentityColumns();
+		$columns = new QueryRepresentationIdentityColumns();
 		$columns->add(['company'], 'id', 'company_id');
 		$columns->add(['company', 'owner'], 'id', 'owner_id');
 

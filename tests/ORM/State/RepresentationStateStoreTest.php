@@ -6,9 +6,9 @@ namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RepresentationSchema;
-use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStateStore;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\State\RepresentationState;
+use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 

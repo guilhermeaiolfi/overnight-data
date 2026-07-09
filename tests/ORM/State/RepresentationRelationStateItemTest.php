@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationRelationSchema;
-use ON\Data\ORM\State\RepresentationRelationStateItem;
-use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
+use ON\Data\ORM\Representation\State\RepresentationRelationStateItem;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;

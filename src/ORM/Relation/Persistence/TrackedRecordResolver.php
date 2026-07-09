@@ -7,7 +7,7 @@ namespace ON\Data\ORM\Relation\Persistence;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\PersistenceContext;
-use ON\Data\ORM\State\RecordState;
+use ON\Data\ORM\Record\RecordState;
 
 final class TrackedRecordResolver
 {

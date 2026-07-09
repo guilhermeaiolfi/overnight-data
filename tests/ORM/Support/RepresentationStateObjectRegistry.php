@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Support;
 
 use LogicException;
-use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStateStore;
+use ON\Data\ORM\Representation\State\RepresentationState;
+use ON\Data\ORM\Representation\State\RepresentationStateStore;
 
 final class RepresentationStateObjectRegistry
 {

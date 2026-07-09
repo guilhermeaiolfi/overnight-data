@@ -7,16 +7,16 @@ namespace Tests\ON\Data\ORM\Sync;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationFieldSchema;
-use ON\Data\ORM\State\RepresentationFieldStateItem;
-use ON\Data\ORM\State\RepresentationRelationSchema;
-use ON\Data\ORM\State\RepresentationRelationStateItem;
-use ON\Data\ORM\State\RepresentationSchema;
-use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStateStore;
-use ON\Data\ORM\Sync\ScalarRepresentationSynchronizer;
+use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
+use ON\Data\ORM\Representation\State\RepresentationFieldStateItem;
+use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
+use ON\Data\ORM\Representation\State\RepresentationRelationStateItem;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\State\RepresentationState;
+use ON\Data\ORM\Representation\State\RepresentationStateStore;
+use ON\Data\ORM\Representation\Sync\ScalarRepresentationSynchronizer;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
@@ -256,7 +256,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 
 	public function testSynchronizerDoesNotDependOnPersistenceClasses(): void
 	{
-		$source = file_get_contents(__DIR__ . '/../../../src/ORM/Sync/ScalarRepresentationSynchronizer.php');
+		$source = file_get_contents(__DIR__ . '/../../../src/ORM/Representation/Sync/ScalarRepresentationSynchronizer.php');
 
 		self::assertIsString($source);
 		self::assertStringNotContainsString('ON\\Data\\ORM\\Persistence', $source);

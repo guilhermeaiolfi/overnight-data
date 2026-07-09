@@ -55,20 +55,25 @@ final class RepresentationArchitectureTest extends TestCase
 
 	public function testRepresentationSchemaIsNotCoupledToMapperHydrationApi(): void
 	{
-		foreach ($this->phpFiles(dirname(__DIR__, 3) . '/src/ORM/State') as $path) {
-			$contents = file_get_contents($path);
-			self::assertIsString($contents);
-			self::assertStringNotContainsString('ON\\Data\\Mapper', $contents, $path);
-			self::assertStringNotContainsString('map(', $contents, $path);
+		foreach ([
+			dirname(__DIR__, 3) . '/src/ORM/Representation/Schema',
+			dirname(__DIR__, 3) . '/src/ORM/Representation/State',
+		] as $root) {
+			foreach ($this->phpFiles($root) as $path) {
+				$contents = file_get_contents($path);
+				self::assertIsString($contents);
+				self::assertStringNotContainsString('ON\\Data\\Mapper', $contents, $path);
+				self::assertStringNotContainsString('map(', $contents, $path);
+			}
 		}
 	}
 
 	public function testScalarSyncStillUsesExplicitFieldSchemasOnly(): void
 	{
 		$sources = [
-			dirname(__DIR__, 3) . '/src/ORM/Sync/RepresentationReader.php' => 'getFields()',
-			dirname(__DIR__, 3) . '/src/ORM/Sync/SyncConflictDetector.php' => 'getWritableFieldItems()',
-			dirname(__DIR__, 3) . '/src/ORM/Sync/ScalarRepresentationSynchronizer.php' => 'getWritableFieldItems()',
+			dirname(__DIR__, 3) . '/src/ORM/Representation/Sync/RepresentationReader.php' => 'getFields()',
+			dirname(__DIR__, 3) . '/src/ORM/Representation/Sync/SyncConflictDetector.php' => 'getWritableFieldItems()',
+			dirname(__DIR__, 3) . '/src/ORM/Representation/Sync/ScalarRepresentationSynchronizer.php' => 'getWritableFieldItems()',
 		];
 
 		foreach ($sources as $path => $expectedCall) {
@@ -87,7 +92,7 @@ final class RepresentationArchitectureTest extends TestCase
 		self::assertIsString($contents);
 		self::assertStringNotContainsString('ON\\Data\\ORM\\Persistence', $contents);
 		self::assertStringNotContainsString('RecordState', $contents);
-		self::assertStringContainsString('SelectQuery\\ProjectionCompiler', $contents);
+		self::assertStringContainsString('QueryRepresentationSchemaCompiler', $contents);
 	}
 
 	/**

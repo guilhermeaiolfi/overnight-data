@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Relation;
 
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RecordState;
+use ON\Data\ORM\Record\RecordState;
 
 /**
  * @template T of RelationChangeInterface

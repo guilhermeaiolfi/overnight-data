@@ -6,10 +6,10 @@ namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\State\RepresentationFieldSchema;
-use ON\Data\ORM\State\RepresentationRelationSchema;
-use ON\Data\ORM\State\RepresentationSchema;
-use ON\Data\ORM\Sync\RepresentationReader;
+use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\Sync\RepresentationReader;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;

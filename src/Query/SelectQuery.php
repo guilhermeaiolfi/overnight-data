@@ -10,9 +10,9 @@ use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
-use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompilation;
-use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompiler;
-use ON\Data\ORM\Query\MutableQueryResultTracker;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
+use ON\Data\ORM\Representation\State\Query\MutableQueryResultTracker;
 use ON\Data\ORM\Session;
 use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Exception\ObjectExportException;
@@ -763,9 +763,9 @@ final class SelectQuery implements QuerySourceInterface
 		return $this->executor;
 	}
 
-	private function compileMutableProjection(): ProjectionCompilation
+	private function compileMutableProjection(): QueryRepresentationPlan
 	{
-		return (new ProjectionCompiler())->compileResult($this);
+		return (new QueryRepresentationSchemaCompiler())->compileResult($this);
 	}
 
 	/**
@@ -818,7 +818,7 @@ final class SelectQuery implements QuerySourceInterface
 	 * @param list<object> $objects
 	 */
 	private function trackMutableResults(
-		ProjectionCompilation $compilation,
+		QueryRepresentationPlan $compilation,
 		array $sourceRows,
 		array $objects,
 	): void {

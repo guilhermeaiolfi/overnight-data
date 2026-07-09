@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Compiler;
 
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Compiler\ManualProjection\ProjectionCompiler;
-use ON\Data\ORM\Compiler\ManualProjection\PropertySource;
-use ON\Data\ORM\Compiler\ManualProjection\RootTarget;
-use ON\Data\ORM\Compiler\ProjectionFieldShape;
+use ON\Data\ORM\Representation\Schema\Manual\ManualRepresentationSchemaCompiler;
+use ON\Data\ORM\Representation\Schema\Manual\ManualRepresentationSourceInterface;
+use ON\Data\ORM\Representation\Schema\Manual\RootRepresentationSource;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationFieldShape;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RecordState;
+use ON\Data\ORM\Record\RecordState;
 use PHPUnit\Framework\TestCase;
 
 final class ManualProjectionCompilerTest extends TestCase
@@ -19,10 +19,10 @@ final class ManualProjectionCompilerTest extends TestCase
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
-		$root = new RootTarget(RecordState::new($users));
+		$root = new RootRepresentationSource(RecordState::new($users));
 
-		$schema = (new ProjectionCompiler())->compile([
-			new ProjectionFieldShape('name', $root, 'name'),
+		$schema = (new ManualRepresentationSchemaCompiler())->compile([
+			new RepresentationFieldShape('name', $root, 'name'),
 		]);
 
 		self::assertSame('users', $schema->getCollectionName());
@@ -32,10 +32,10 @@ final class ManualProjectionCompilerTest extends TestCase
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
-		$root = new RootTarget(RecordState::new($users));
+		$root = new RootRepresentationSource(RecordState::new($users));
 
-		$schema = (new ProjectionCompiler())->compile([
-			new ProjectionFieldShape('name', $root, 'name'),
+		$schema = (new ManualRepresentationSchemaCompiler())->compile([
+			new RepresentationFieldShape('name', $root, 'name'),
 		]);
 
 		self::assertTrue($schema->getField('name')->shouldSkipWhenMissing());
@@ -45,12 +45,12 @@ final class ManualProjectionCompilerTest extends TestCase
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
-		$root = new RootTarget(RecordState::new($users));
+		$root = new RootRepresentationSource(RecordState::new($users));
 		$manager = $this->relationSource(RecordState::new($users), ['manager']);
 
-		$schema = (new ProjectionCompiler())->compile([
-			new ProjectionFieldShape('name', $root, 'name'),
-			new ProjectionFieldShape('managerName', $manager, 'name'),
+		$schema = (new ManualRepresentationSchemaCompiler())->compile([
+			new RepresentationFieldShape('name', $root, 'name'),
+			new RepresentationFieldShape('managerName', $manager, 'name'),
 		]);
 
 		self::assertSame([], $schema->getField('name')->getSourcePath());
@@ -66,7 +66,7 @@ final class ManualProjectionCompilerTest extends TestCase
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 
-		$schema = (new ProjectionCompiler())->compile([], $users);
+		$schema = (new ManualRepresentationSchemaCompiler())->compile([], $users);
 
 		self::assertSame('users', $schema->getCollectionName());
 		self::assertSame([], $schema->getPaths());
@@ -76,12 +76,12 @@ final class ManualProjectionCompilerTest extends TestCase
 	{
 		$this->expectException(StateException::class);
 
-		(new ProjectionCompiler())->compile([]);
+		(new ManualRepresentationSchemaCompiler())->compile([]);
 	}
 
-	private function relationSource(RecordState $record, array $relationPath): PropertySource
+	private function relationSource(RecordState $record, array $relationPath): ManualRepresentationSourceInterface
 	{
-		return new class ($record, $relationPath) implements PropertySource {
+		return new class ($record, $relationPath) implements ManualRepresentationSourceInterface {
 			/**
 			 * @param list<string> $relationPath
 			 */

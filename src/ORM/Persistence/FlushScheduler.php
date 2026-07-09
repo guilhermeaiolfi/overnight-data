@@ -6,9 +6,9 @@ namespace ON\Data\ORM\Persistence;
 
 use ON\Data\Key;
 use ON\Data\ORM\Exception\InvalidCommandException;
-use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\ValueRef;
+use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Record\ValueRef;
 
 final class FlushScheduler
 {

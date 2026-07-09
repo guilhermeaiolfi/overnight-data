@@ -7,11 +7,11 @@ namespace Tests\ON\Data\ORM\Sync;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Session;
-use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationRelationSchema;
-use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStateStore;
+use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
+use ON\Data\ORM\Representation\State\RepresentationState;
+use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
@@ -328,7 +328,7 @@ final class SessionGraphAdoptionTest extends TestCase
 
 	public function testGraphAdoptionDoesNotPlanFlushExecuteOrClearRelationChanges(): void
 	{
-		$source = file_get_contents(__DIR__ . '/../../../src/ORM/Sync/RepresentationStateAdoptionTrait.php');
+		$source = file_get_contents(__DIR__ . '/../../../src/ORM/Representation/Sync/RepresentationStateAdoptionTrait.php');
 
 		self::assertIsString($source);
 		self::assertStringNotContainsString('RelationPersistencePlanner', $source);

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\ValueRef;
+use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Record\ValueRef;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;

@@ -6,20 +6,20 @@ namespace Tests\ON\Data\ORM\Compiler\SelectQuery;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Compiler\ProjectionSource;
-use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityPlanner;
-use ON\Data\ORM\State\RepresentationFieldSchema;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityPlanner;
+use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 
 final class ProjectionIdentityPlannerTest extends TestCase
 {
-	private ProjectionIdentityPlanner $planner;
+	private QueryRepresentationIdentityPlanner $planner;
 
 	protected function setUp(): void
 	{
-		$this->planner = new ProjectionIdentityPlanner();
+		$this->planner = new QueryRepresentationIdentityPlanner();
 	}
 
 	public function testRootPrimaryKeyAlreadyPublicDoesNotAddHiddenSelection(): void
@@ -178,8 +178,8 @@ final class ProjectionIdentityPlannerTest extends TestCase
 		CollectionInterface $collection,
 		array $path,
 		RepresentationFieldSchema ...$fields,
-	): ProjectionSource {
-		return new ProjectionSource($path, $collection, $fields);
+	): RepresentationSource {
+		return new RepresentationSource($path, $collection, $fields);
 	}
 
 	private function registryWithManager(): Registry

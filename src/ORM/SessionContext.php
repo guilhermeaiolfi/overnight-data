@@ -7,9 +7,9 @@ namespace ON\Data\ORM;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationStateStore;
-use ON\Data\ORM\Sync\ExistingIntentStore;
+use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Representation\State\RepresentationStateStore;
+use ON\Data\ORM\Representation\Sync\ExistingIntentStore;
 
 final class SessionContext
 {

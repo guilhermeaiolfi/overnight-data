@@ -6,7 +6,7 @@ namespace ON\Data\ORM;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
-use ON\Data\ORM\Compiler\ManualProjection\Builder;
+use ON\Data\ORM\Representation\Schema\Manual\Builder;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
@@ -15,18 +15,18 @@ use ON\Data\ORM\Persistence\FlushResult;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationFieldSchema;
-use ON\Data\ORM\State\RepresentationSchema;
-use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStateStore;
-use ON\Data\ORM\Sync\AdoptionRecordResolver;
-use ON\Data\ORM\Sync\ExistingIntent;
-use ON\Data\ORM\Sync\RepresentationReader;
-use ON\Data\ORM\Sync\RepresentationStateAdoptionTrait;
-use ON\Data\ORM\Sync\RepresentationSyncer;
-use ON\Data\ORM\Sync\SyncResult;
+use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\State\RepresentationState;
+use ON\Data\ORM\Representation\State\RepresentationStateStore;
+use ON\Data\ORM\Representation\Sync\AdoptionRecordResolver;
+use ON\Data\ORM\Representation\Sync\ExistingIntent;
+use ON\Data\ORM\Representation\Sync\RepresentationReader;
+use ON\Data\ORM\Representation\Sync\RepresentationStateAdoptionTrait;
+use ON\Data\ORM\Representation\Sync\RepresentationSyncer;
+use ON\Data\ORM\Representation\Sync\SyncResult;
 
 final class Session
 {

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Relation\Persistence;
 
 use ON\Data\ORM\Exception\RelationPersistenceException;
-use ON\Data\ORM\State\RecordState;
+use ON\Data\ORM\Record\RecordState;
 
 final class ForeignKeyWriter
 {

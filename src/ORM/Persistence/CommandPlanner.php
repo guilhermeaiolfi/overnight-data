@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Persistence;
 
 use ON\Data\ORM\Exception\InvalidCommandException;
-use ON\Data\ORM\State\RecordState;
+use ON\Data\ORM\Record\RecordState;
 
 final class CommandPlanner
 {

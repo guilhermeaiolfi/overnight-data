@@ -173,7 +173,7 @@ Classic ORMs usually map identity to entity object. This ORM maps identity to re
 
 The store is responsible for aliasing both handles to the same `RecordState`. Scalar insert/flush logic calls `RecordStateStore::indexKey($state)` after assigning a generated key so keyed references can resolve the same state that was previously known only by local state hash.
 
-Flat projection identity resolution first uses visible field values, then falls back to `ProjectionIdentityColumns` for hidden primary-key result columns. Structural schemas have no concrete record to resolve until adoption creates `RepresentationFieldStateItem` or `RepresentationRelationStateItem` entries.
+Flat projection identity resolution first uses visible field values, then falls back to `QueryRepresentationIdentityColumns` for hidden primary-key result columns. Structural schemas have no concrete record to resolve until adoption creates `RepresentationFieldStateItem` or `RepresentationRelationStateItem` entries.
 
 `RecordStateStore` is not an object identity store. It strongly owns record state for the current session/unit of work. `ToManyRelationStore` and `ToOneRelationStore` also strongly own relation runtime state for the session.
 
@@ -485,7 +485,7 @@ Future ORM runtime will apply the child schema to child `RecordState` instances 
 
 ## Phase 1E Child Representation Adoption
 
-Phase 1E introduces `ON\Data\ORM\Sync\RepresentationAdopter` as the small bridge between reusable child schema templates and concrete ORM tracking.
+Phase 1E introduces `ON\Data\ORM\Representation\Sync\RepresentationAdopter` as the small bridge between reusable child schema templates and concrete ORM tracking.
 
 `RepresentationAdopter::adopt()` attaches a reusable `RepresentationSchema` template to a concrete child `RecordState`, registers that record in `RecordStateStore`, captures baseline record revisions in `RepresentationFieldStateItem` entries, and registers the child object as a `RepresentationState` in `RepresentationStateStore`. Future relation runtime can use a `ToManyRelationState` child's schema with `RepresentationAdopter::adopt()` around flows such as adding a post object to a user's `ToManyRelationState`.
 
@@ -493,7 +493,7 @@ Phase 1E introduces `ON\Data\ORM\Sync\RepresentationAdopter` as the small bridge
 
 ## Phase 1F Representation Value Reading
 
-Phase 1F introduces `ON\Data\ORM\Sync\RepresentationReader` as the small service that reads current values from object and `stdClass` representations using `RepresentationSchema` paths.
+Phase 1F introduces `ON\Data\ORM\Representation\Sync\RepresentationReader` as the small service that reads current values from object and `stdClass` representations using `RepresentationSchema` paths.
 
 The reader distinguishes a missing public property from a present `null` value, preserves schema insertion order, and supports simple dot paths through public properties. Numeric path segments can read array offsets for straightforward cases such as `posts.0.title`.
 

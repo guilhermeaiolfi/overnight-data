@@ -7,7 +7,7 @@ namespace Tests\ON\Data\Smoke;
 use ON\Data\Database\Cycle\CycleCommandExecutor;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Session;
-use ON\Data\ORM\State\RecordState;
+use ON\Data\ORM\Record\RecordState;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\Smoke\Support\SqliteMemoryHarness;

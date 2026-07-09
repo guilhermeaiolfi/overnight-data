@@ -6,18 +6,18 @@ namespace Tests\ON\Data\ORM\Query;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Compiler\ProjectionSource;
-use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompilation;
-use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityColumns;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityColumns;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Query\QueryRepresentationStateBuilder;
+use ON\Data\ORM\Representation\State\Query\QueryRepresentationStateBuilder;
 use ON\Data\ORM\Session;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
-use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationFieldSchema;
-use ON\Data\ORM\State\RepresentationRelationSchema;
-use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
@@ -171,7 +171,7 @@ final class QueryRepresentationStateBuilderTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("primary key field 'id' is missing or incomplete");
 
-		$this->builder()->build($this->flatUser(1, 'Acme'), $this->compilation($schema, new ProjectionIdentityColumns()), [
+		$this->builder()->build($this->flatUser(1, 'Acme'), $this->compilation($schema, new QueryRepresentationIdentityColumns()), [
 			'id' => 1,
 			'name' => 'Acme',
 		], $session->getRecords());
@@ -234,7 +234,7 @@ final class QueryRepresentationStateBuilderTest extends TestCase
 		$object->managerName = 'Boss';
 
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = new ProjectionIdentityColumns();
+		$identities = new QueryRepresentationIdentityColumns();
 		$identities->add(['manager'], 'id', 'manager_id');
 
 		$state = $this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
@@ -273,7 +273,7 @@ final class QueryRepresentationStateBuilderTest extends TestCase
 		$object->managerName = 'Boss';
 
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = new ProjectionIdentityColumns();
+		$identities = new QueryRepresentationIdentityColumns();
 		$identities->add(['manager'], 'id', 'manager_id');
 
 		$state = $this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
@@ -306,7 +306,7 @@ final class QueryRepresentationStateBuilderTest extends TestCase
 			'company_id' => 5,
 		], $records);
 
-		self::assertInstanceOf(\ON\Data\ORM\State\RepresentationState::class, $state);
+		self::assertInstanceOf(\ON\Data\ORM\Representation\State\RepresentationState::class, $state);
 		self::assertSame([], $records->getAll());
 	}
 
@@ -338,10 +338,10 @@ final class QueryRepresentationStateBuilderTest extends TestCase
 
 	private function adoptFlatProjection(
 		object $object,
-		ProjectionCompilation $compilation,
+		QueryRepresentationPlan $compilation,
 		array $sourceRow,
 		Session $session,
-	): \ON\Data\ORM\State\RepresentationState {
+	): \ON\Data\ORM\Representation\State\RepresentationState {
 		$state = $this->builder()->build($object, $compilation, $sourceRow, $session->getRecords());
 		$session->adopt($object, $state);
 
@@ -350,11 +350,11 @@ final class QueryRepresentationStateBuilderTest extends TestCase
 
 	private function compilation(
 		RepresentationSchema $schema,
-		ProjectionIdentityColumns $identityColumns,
-	): ProjectionCompilation {
-		return new ProjectionCompilation(
+		QueryRepresentationIdentityColumns $identityColumns,
+	): QueryRepresentationPlan {
+		return new QueryRepresentationPlan(
 			$schema,
-			ProjectionSource::fromRepresentationSchema($schema),
+			RepresentationSource::fromRepresentationSchema($schema),
 			$identityColumns,
 		);
 	}
@@ -368,9 +368,9 @@ final class QueryRepresentationStateBuilderTest extends TestCase
 		return $user;
 	}
 
-	private function companyIdProjectionIdentities(CollectionInterface $companies, string $resultKey): ProjectionIdentityColumns
+	private function companyIdProjectionIdentities(CollectionInterface $companies, string $resultKey): QueryRepresentationIdentityColumns
 	{
-		$map = new ProjectionIdentityColumns();
+		$map = new QueryRepresentationIdentityColumns();
 		$map->add(['company'], 'id', $resultKey);
 
 		return $map;

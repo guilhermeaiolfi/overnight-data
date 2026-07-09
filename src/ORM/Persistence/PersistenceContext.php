@@ -8,8 +8,8 @@ use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\SessionContext;
-use ON\Data\ORM\State\RecordStateStore;
-use ON\Data\ORM\State\RepresentationStateStore;
+use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Representation\State\RepresentationStateStore;
 
 final class PersistenceContext
 {

@@ -7,8 +7,8 @@ namespace Tests\ON\Data\ORM\Relation;
 use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\ORM\Support\OrmFixture;
 

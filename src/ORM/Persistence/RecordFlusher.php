@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Persistence;
 
-use ON\Data\ORM\State\RecordStateStore;
+use ON\Data\ORM\Record\RecordStateStore;
 
 final class RecordFlusher
 {

@@ -13,7 +13,7 @@ use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\State\RecordState;
+use ON\Data\ORM\Record\RecordState;
 
 final class ManyToManyPersistencePlanner implements RelationPersistencePlannerInterface
 {

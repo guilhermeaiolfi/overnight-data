@@ -6,11 +6,11 @@ namespace Tests\ON\Data\ORM\Compiler;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Compiler\ProjectionSchemaAssembler;
-use ON\Data\ORM\Compiler\ProjectionFieldShape;
-use ON\Data\ORM\Compiler\ProjectionSource;
-use ON\Data\ORM\Compiler\ProjectionSourceResolverInterface;
-use ON\Data\ORM\Compiler\ResolvedProjectionSource;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationSchemaAssembler;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationFieldShape;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationSourceResolverInterface;
+use ON\Data\ORM\Representation\Schema\Shape\ResolvedRepresentationSource;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
@@ -26,11 +26,11 @@ final class ProjectionSchemaAssemblerTest extends TestCase
 		$companySource = new stdClass();
 		$resolver = $this->resolver($rootSource, $users, $companySource, $companies, ['company']);
 
-		$assembler = new ProjectionSchemaAssembler();
+		$assembler = new RepresentationSchemaAssembler();
 		$schema = $assembler->assemble(
 			[
-				new ProjectionFieldShape('name', $rootSource, 'name'),
-				new ProjectionFieldShape('companyName', $companySource, 'name'),
+				new RepresentationFieldShape('name', $rootSource, 'name'),
+				new RepresentationFieldShape('companyName', $companySource, 'name'),
 			],
 			$resolver,
 			$users,
@@ -63,8 +63,8 @@ final class ProjectionSchemaAssemblerTest extends TestCase
 		$rootSource = new stdClass();
 		$resolver = $this->resolver($rootSource, $users, new stdClass(), $users, []);
 
-		$schema = (new ProjectionSchemaAssembler())->assemble(
-			[new ProjectionFieldShape('name', $rootSource, 'name')],
+		$schema = (new RepresentationSchemaAssembler())->assemble(
+			[new RepresentationFieldShape('name', $rootSource, 'name')],
 			$resolver,
 			$users,
 		);
@@ -77,12 +77,12 @@ final class ProjectionSchemaAssemblerTest extends TestCase
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 		$source = new stdClass();
-		$assembler = new ProjectionSchemaAssembler();
+		$assembler = new RepresentationSchemaAssembler();
 
 		$shapes = $assembler->defaultFieldShapes($users, $source);
 
 		$publicPaths = array_map(
-			static fn (ProjectionFieldShape $shape): string => $shape->getPublicPath(),
+			static fn (RepresentationFieldShape $shape): string => $shape->getPublicPath(),
 			$shapes,
 		);
 		sort($publicPaths);
@@ -100,7 +100,7 @@ final class ProjectionSchemaAssemblerTest extends TestCase
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 		$source = new stdClass();
-		$assembler = new ProjectionSchemaAssembler();
+		$assembler = new RepresentationSchemaAssembler();
 
 		$shapes = $assembler->primaryKeyFieldShapes($users, $source);
 
@@ -117,16 +117,16 @@ final class ProjectionSchemaAssemblerTest extends TestCase
 		$users = $registry->getCollection('users');
 		$source = new stdClass();
 		$resolver = $this->resolver($source, $users, new stdClass(), $users, []);
-		$assembler = new ProjectionSchemaAssembler();
+		$assembler = new RepresentationSchemaAssembler();
 
 		$schema = $assembler->assemble(
-			[new ProjectionFieldShape('name', $source, 'name', writable: true)],
+			[new RepresentationFieldShape('name', $source, 'name', writable: true)],
 			$resolver,
 			$users,
 		);
 		$assembler->assembleInto(
 			$schema,
-			[new ProjectionFieldShape('name', $source, 'name', writable: false)],
+			[new RepresentationFieldShape('name', $source, 'name', writable: false)],
 			$resolver,
 		);
 
@@ -136,7 +136,7 @@ final class ProjectionSchemaAssemblerTest extends TestCase
 	public function testResolvedProjectionSourceIsStructuralOnly(): void
 	{
 		$users = $this->makeRegistry()->getCollection('users');
-		$source = new ResolvedProjectionSource($users, ['manager']);
+		$source = new ResolvedRepresentationSource($users, ['manager']);
 
 		self::assertSame($users, $source->getCollection());
 		self::assertSame(['manager'], $source->getSourcePath());
@@ -151,17 +151,17 @@ final class ProjectionSchemaAssemblerTest extends TestCase
 
 		$rootSource = new stdClass();
 		$companySource = new stdClass();
-		$schema = (new ProjectionSchemaAssembler())->assemble(
+		$schema = (new RepresentationSchemaAssembler())->assemble(
 			[
-				new ProjectionFieldShape('name', $rootSource, 'name'),
-				new ProjectionFieldShape('companyName', $companySource, 'name'),
-				new ProjectionFieldShape('companyId', $companySource, 'id'),
+				new RepresentationFieldShape('name', $rootSource, 'name'),
+				new RepresentationFieldShape('companyName', $companySource, 'name'),
+				new RepresentationFieldShape('companyId', $companySource, 'id'),
 			],
 			$this->resolver($rootSource, $users, $companySource, $companies, ['company']),
 			$users,
 		);
 
-		$sources = ProjectionSource::fromRepresentationSchema($schema);
+		$sources = RepresentationSource::fromRepresentationSchema($schema);
 
 		self::assertCount(2, $sources);
 		self::assertSame([], $sources[0]->getPath());
@@ -179,8 +179,8 @@ final class ProjectionSchemaAssemblerTest extends TestCase
 		object $relationSource,
 		CollectionInterface $relationCollection,
 		array $relationSourcePath,
-	): ProjectionSourceResolverInterface {
-		return new class ($rootSource, $rootCollection, $relationSource, $relationCollection, $relationSourcePath) implements ProjectionSourceResolverInterface {
+	): RepresentationSourceResolverInterface {
+		return new class ($rootSource, $rootCollection, $relationSource, $relationCollection, $relationSourcePath) implements RepresentationSourceResolverInterface {
 			/**
 			 * @param list<string> $relationSourcePath
 			 */
@@ -193,13 +193,13 @@ final class ProjectionSchemaAssemblerTest extends TestCase
 			) {
 			}
 
-			public function resolve(object $source): ResolvedProjectionSource
+			public function resolve(object $source): ResolvedRepresentationSource
 			{
 				if ($source === $this->relationSource) {
-					return new ResolvedProjectionSource($this->relationCollection, sourcePath: $this->relationSourcePath);
+					return new ResolvedRepresentationSource($this->relationCollection, sourcePath: $this->relationSourcePath);
 				}
 
-				return new ResolvedProjectionSource($this->rootCollection, sourcePath: []);
+				return new ResolvedRepresentationSource($this->rootCollection, sourcePath: []);
 			}
 		};
 	}

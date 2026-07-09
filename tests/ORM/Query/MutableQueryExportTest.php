@@ -6,10 +6,10 @@ namespace Tests\ON\Data\ORM\Query;
 
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompiler;
-use ON\Data\ORM\Query\MutableQueryResultTracker;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
+use ON\Data\ORM\Representation\State\Query\MutableQueryResultTracker;
 use ON\Data\ORM\Session;
-use ON\Data\ORM\State\RepresentationState;
+use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\Query\Exception\ObjectExportException;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
@@ -149,7 +149,7 @@ final class MutableQueryExportTest extends TestCase
 		$user->posts = [$post];
 
 		$session = new Session(new RecordingCommandExecutor());
-		$compilation = (new ProjectionCompiler())->compileResult($query);
+		$compilation = (new QueryRepresentationSchemaCompiler())->compileResult($query);
 		(new MutableQueryResultTracker())->trackOne($session, $compilation, $user, ['id' => 1, 'name' => 'Ada']);
 
 		self::assertTrue($session->getRepresentations()->has($user));
@@ -282,7 +282,7 @@ final class MutableQueryResultTrackerTest extends TestCase
 
 		$tracker = new MutableQueryResultTracker();
 		$session = new Session(new RecordingCommandExecutor());
-		$compilation = (new ProjectionCompiler())->compileResult($query);
+		$compilation = (new QueryRepresentationSchemaCompiler())->compileResult($query);
 
 		$first = $this->userWithPosts(1, 'Ada', 10, 'Hello');
 		$second = $this->userWithPosts(2, 'Grace', 11, 'World');
@@ -312,7 +312,7 @@ final class MutableQueryResultTrackerTest extends TestCase
 
 		$tracker = new MutableQueryResultTracker();
 		$session = new Session(new RecordingCommandExecutor());
-		$compilation = (new ProjectionCompiler())->compileResult($query);
+		$compilation = (new QueryRepresentationSchemaCompiler())->compileResult($query);
 
 		$first = $this->userObject(1, 'Ada');
 		$second = $this->userObject(2, 'Grace');
@@ -340,7 +340,7 @@ final class MutableQueryResultTrackerTest extends TestCase
 		$tracker = new MutableQueryResultTracker();
 		$session = new Session(new RecordingCommandExecutor());
 		$user = $this->userObject(1, 'Ada');
-		$compilation = (new ProjectionCompiler())->compileResult($query);
+		$compilation = (new QueryRepresentationSchemaCompiler())->compileResult($query);
 
 		$tracker->trackOne($session, $compilation, $user, ['id' => 1, 'name' => 'Ada']);
 

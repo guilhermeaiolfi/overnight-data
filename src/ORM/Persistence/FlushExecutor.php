@@ -6,8 +6,8 @@ namespace ON\Data\ORM\Persistence;
 
 use ON\Data\ORM\Relation\Persistence\RelationPersistencePlanner;
 use ON\Data\ORM\SessionContext;
-use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\Sync\RepresentationSyncer;
+use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Representation\Sync\RepresentationSyncer;
 
 final class FlushExecutor
 {
@@ -113,7 +113,7 @@ final class FlushExecutor
 	/**
 	 * @return list<array{0: RecordState, 1: array{
 	 *     key: \ON\Data\Key|null,
-	 *     lifecycle: \ON\Data\ORM\State\RecordLifecycle,
+	 *     lifecycle: \ON\Data\ORM\Record\RecordLifecycle,
 	 *     revision: int,
 	 *     originalValues: array<string, mixed>,
 	 *     values: array<string, mixed>
@@ -132,7 +132,7 @@ final class FlushExecutor
 	/**
 	 * @param list<array{0: RecordState, 1: array{
 	 *     key: \ON\Data\Key|null,
-	 *     lifecycle: \ON\Data\ORM\State\RecordLifecycle,
+	 *     lifecycle: \ON\Data\ORM\Record\RecordLifecycle,
 	 *     revision: int,
 	 *     originalValues: array<string, mixed>,
 	 *     values: array<string, mixed>

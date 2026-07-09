@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RecordHistory;
+use ON\Data\ORM\Record\RecordHistory;
 use PHPUnit\Framework\TestCase;
 
 final class RecordHistoryTest extends TestCase

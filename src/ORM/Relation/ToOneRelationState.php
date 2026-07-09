@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Relation;
 
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationSchema;
+use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 
 final class ToOneRelationState implements RelationChangeInterface
 {

@@ -6,12 +6,12 @@ namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationFieldSchema;
-use ON\Data\ORM\State\RepresentationFieldStateItem;
-use ON\Data\ORM\State\RepresentationSchema;
-use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\Sync\SyncConflictDetector;
+use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
+use ON\Data\ORM\Representation\State\RepresentationFieldStateItem;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\State\RepresentationState;
+use ON\Data\ORM\Representation\Sync\SyncConflictDetector;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\ORM\Support\OrmFixture;
 

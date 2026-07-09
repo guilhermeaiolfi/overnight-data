@@ -10,13 +10,13 @@ use ON\Data\ORM\Relation\RelationChangeInterface;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\State\RecordState;
-use ON\Data\ORM\State\RepresentationFieldSchema;
-use ON\Data\ORM\State\RepresentationRelationSchema;
-use ON\Data\ORM\State\RepresentationSchema;
-use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\State\RepresentationStateStore;
-use ON\Data\ORM\Sync\RelationRepresentationSynchronizer;
+use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\State\RepresentationState;
+use ON\Data\ORM\Representation\State\RepresentationStateStore;
+use ON\Data\ORM\Representation\Sync\RelationRepresentationSynchronizer;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
@@ -373,7 +373,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 
 	public function testRelationSynchronizerDoesNotExecuteCommandsOrCallRelationPersistencePlanners(): void
 	{
-		$source = file_get_contents(__DIR__ . '/../../../src/ORM/Sync/RelationRepresentationSynchronizer.php');
+		$source = file_get_contents(__DIR__ . '/../../../src/ORM/Representation/Sync/RelationRepresentationSynchronizer.php');
 
 		self::assertIsString($source);
 		self::assertStringNotContainsString('CommandExecutor', $source);
