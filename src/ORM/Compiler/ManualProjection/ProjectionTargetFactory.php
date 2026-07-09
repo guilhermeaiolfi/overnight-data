@@ -14,6 +14,7 @@ namespace ON\Data\ORM\Compiler\ManualProjection;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Session;
@@ -128,7 +129,7 @@ final class ProjectionTargetFactory
 
 	public function trackedRoot(object $representation, CollectionInterface $collection): RootTarget
 	{
-		return new RootTarget($this->session->getRepresentations()->getSingleRecordForTrackedTarget(
+		return new RootTarget($this->singleRecordForTrackedTarget(
 			$representation,
 			$collection,
 			sprintf("Cannot use tracked() for collection '%s'", $collection->getName())
@@ -138,7 +139,7 @@ final class ProjectionTargetFactory
 	public function trackedAtPath(PathResolution $path, object $representation, ?object $target): Target
 	{
 		$target ??= $representation;
-		$record = $this->session->getRepresentations()->getSingleRecordForTrackedTarget(
+		$record = $this->singleRecordForTrackedTarget(
 			$target,
 			$path->getRelatedSchema()->getCollection(),
 			sprintf("Cannot use tracked() for relation '%s'", $path->getRelationName())
@@ -159,7 +160,7 @@ final class ProjectionTargetFactory
 	{
 		$owner = $relation->getOwner()->getTargetRecord();
 		$target ??= $representation;
-		$record = $this->session->getRepresentations()->getSingleRecordForTrackedTarget(
+		$record = $this->singleRecordForTrackedTarget(
 			$target,
 			$relation->getDefinition()->getCollection(),
 			sprintf("Cannot use tracked() for relation '%s'", implode('.', $relation->getPath()))
@@ -291,6 +292,25 @@ final class ProjectionTargetFactory
 		}
 
 		$relation->set($target);
+	}
+
+	private function singleRecordForTrackedTarget(object $target, CollectionInterface $collection, string $prefix): RecordState
+	{
+		$state = $this->session->getRepresentations()->get($target);
+		if (! $state instanceof RepresentationState) {
+			throw new SyncException($prefix . ' because the target representation is not tracked.');
+		}
+
+		$matches = $state->getRecordsForCollection($collection);
+		if ($matches === []) {
+			throw new StateException($prefix . ' because the target has no matching tracked record state.');
+		}
+
+		if (count($matches) > 1) {
+			throw new StateException($prefix . ' because the matching target record state is ambiguous.');
+		}
+
+		return $matches[0];
 	}
 
 	/**

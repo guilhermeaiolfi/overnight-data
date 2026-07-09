@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\State;
 
-use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Exception\SyncException;
 use WeakMap;
 
 final class RepresentationStateStore
@@ -58,24 +56,5 @@ final class RepresentationStateStore
 	public function getAll(): iterable
 	{
 		return $this->states;
-	}
-
-	public function getSingleRecordForTrackedTarget(object $target, CollectionInterface $collection, string $prefix): RecordState
-	{
-		$state = $this->get($target);
-		if (! $state instanceof RepresentationState) {
-			throw new SyncException($prefix . ' because the target representation is not tracked.');
-		}
-
-		$matches = $state->getRecordsForCollection($collection);
-		if ($matches === []) {
-			throw new StateException($prefix . ' because the target has no matching tracked record state.');
-		}
-
-		if (count($matches) > 1) {
-			throw new StateException($prefix . ' because the matching target record state is ambiguous.');
-		}
-
-		return $matches[0];
 	}
 }

@@ -473,6 +473,34 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertSame(['name'], $session->getRepresentations()->get($row)->getSchema()->getPaths());
 	}
 
+	public function testTrackedResolvesRecordForEachObjectInSameCollection(): void
+	{
+		$users = $this->registry()->getCollection('users');
+		$session = new Session(new RecordingCommandExecutor());
+
+		$ada = new stdClass();
+		$pa = $session->projection($ada);
+		$a = $pa->from($users)->existing(['id' => 1], ['id' => 1, 'name' => 'Ada']);
+		$pa->properties($a->name)->end();
+
+		$bob = new stdClass();
+		$pb = $session->projection($bob);
+		$b = $pb->from($users)->existing(['id' => 2], ['id' => 2, 'name' => 'Bob']);
+		$pb->properties($b->name)->end();
+
+		$adaTracked = $session->projection($ada)->from($users)->tracked();
+		$bobTracked = $session->projection($bob)->from($users)->tracked();
+
+		$adaState = $session->getRepresentations()->get($ada);
+		$bobState = $session->getRepresentations()->get($bob);
+		self::assertInstanceOf(RepresentationState::class, $adaState);
+		self::assertInstanceOf(RepresentationState::class, $bobState);
+
+		self::assertSame($adaState->getFieldItem('name')->getRecord(), $adaTracked->getTargetRecord());
+		self::assertSame($bobState->getFieldItem('name')->getRecord(), $bobTracked->getTargetRecord());
+		self::assertNotSame($adaTracked->getTargetRecord(), $bobTracked->getTargetRecord());
+	}
+
 	public function testManualProjectionAttachmentAddsRootFieldToExistingRootRecord(): void
 	{
 		$users = $this->registry()->getCollection('users');

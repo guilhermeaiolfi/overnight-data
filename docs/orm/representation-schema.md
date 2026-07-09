@@ -82,8 +82,8 @@ Graph sync does not infer relations from collection definitions, object properti
 
 Object graphs and flat mutable projections use different adoption paths:
 
-- `Session::adoptGraph()` handles object graphs: one representation object resolves to nested related objects, each with its own schema branch.
-- `QueryRepresentationStateBuilder` handles flat mutable projections: one representation object can be backed by multiple `RecordState` objects through compiled `ProjectionSource` entries.
+- Graph-shaped objects are adopted internally by `Session::sync($object, $schema)` / `Session::sync($object)`: one representation object resolves to nested related objects, each with its own schema branch.
+- `QueryRepresentationStateBuilder` handles flat mutable projection rows: one representation object can be backed by multiple `RecordState` objects through compiled `ProjectionSource` entries.
 
 For flat projections, the compiler may add hidden identity selections tagged `SelectionTag::INTERNAL`. `ProjectionIdentityColumns` maps source-path primary-key fields to result row keys, allowing adoption to read identity values and resolve `RecordState` keys. Internal selections are stripped from public query results, but they are required for mutable flat projection tracking.
 
@@ -159,7 +159,7 @@ Use `getRelatedSchema()` for both cardinalities. Do not introduce separate `getI
 
 `RepresentationSchema` stays structure-only. It is attached to concrete runtime state by services that create `RepresentationState` items:
 
-- `RepresentationState::fromRecords()` builds field and relation state items for graph-shaped objects.
+- `RepresentationState::fromRecords()` builds field and relation state items from a schema and concrete `RecordState` instances keyed by source path.
 - `QueryRepresentationStateBuilder` consumes compiled `ProjectionSource` entries, resolves flat projection identities through `ProjectionIdentityColumns`, and builds field state items against concrete source records.
 - Manual projection tracking merges structural overlays and attaches new fields to concrete records from manual sources.
 
