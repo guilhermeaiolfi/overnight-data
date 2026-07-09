@@ -9,6 +9,7 @@ use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Result\Parser\RootNode;
 use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionList;
@@ -160,6 +161,16 @@ final class RootLoadBranch extends LoadBranch
 		}
 
 		foreach ($publicSelections as $selection) {
+			$expression = $selection->getExpression();
+
+			if ($expression instanceof StarExpression && $expression->getSource() === $this->query) {
+				foreach ($this->query->getCollection()->getVisibleFields() as $fieldName) {
+					$this->selections->add($this->query->field($fieldName), SelectionTag::PUBLIC, $selection->isExplicit());
+				}
+
+				continue;
+			}
+
 			$this->selections->add($selection->getExpression(), SelectionTag::PUBLIC, $selection->isExplicit());
 		}
 	}

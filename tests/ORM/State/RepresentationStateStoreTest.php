@@ -102,8 +102,17 @@ final class RepresentationStateStoreTest extends TestCase
 
 	public function testMapDoesNotDiscoverGraphChanges(): void
 	{
-		self::markTestIncomplete(
-			'Phase 0 skeleton: RepresentationStateStore is an object identity registry only; graph changes must be reported through sync/relation tracking, not discovered by crawling representations.'
-		);
+		$root = new stdClass();
+		$root->child = new stdClass();
+		$tracked = $this->emptyState();
+		$map = new RepresentationStateStore();
+		$map->add($root, $tracked);
+
+		$root->child->name = 'nested';
+		$root->child = new stdClass();
+
+		self::assertSame($tracked, $map->get($root));
+		self::assertFalse($map->has($root->child));
+		self::assertCount(1, iterator_to_array($map->getAll(), false));
 	}
 }

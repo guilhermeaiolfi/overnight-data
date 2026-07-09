@@ -14,6 +14,7 @@ use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Selection\SelectionItem;
@@ -77,7 +78,7 @@ final class QueryRepresentationSchemaCompiler
 		CollectionInterface $collection,
 		QueryRepresentationSourceResolver $sourceResolver,
 	): void {
-		$shapes = $query->getSelections()->getExplicit() === []
+		$shapes = $this->hasExplicitRootStarSelection($query)
 			? $this->schemaAssembler->defaultFieldShapes($collection, $query)
 			: $this->selectionNormalizer->normalizeSelections($this->getRootExplicitScalarSelections($query));
 
@@ -118,12 +119,33 @@ final class QueryRepresentationSchemaCompiler
 		$selections = [];
 
 		foreach ($query->getSelections()->getExplicit() as $selection) {
+			if ($selection->getExpression() instanceof StarExpression) {
+				continue;
+			}
+
 			if ($this->resolveRootFieldRef($query, $selection) !== null) {
 				$selections[] = $selection;
 			}
 		}
 
 		return $selections;
+	}
+
+	private function hasExplicitRootStarSelection(SelectQuery $query): bool
+	{
+		foreach ($query->getSelections()->getExplicit() as $selection) {
+			$expression = $selection->getExpression();
+
+			if (! $expression instanceof StarExpression) {
+				continue;
+			}
+
+			if ($expression->getSource() === $query) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private function resolveRootFieldRef(SelectQuery $query, SelectionItem $selection): ?FieldRef

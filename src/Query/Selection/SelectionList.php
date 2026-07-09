@@ -32,11 +32,6 @@ final class SelectionList implements IteratorAggregate, Countable
 	private array $namedExpressions = [];
 
 	/**
-	 * @var array<string, list<int>>
-	 */
-	private array $tagEntryIndexes = [];
-
-	/**
 	 * @param list<ValueExpressionInterface|AliasedExpression|StarExpression> $expressions
 	 */
 	public function addExplicit(array $expressions): void
@@ -91,7 +86,7 @@ final class SelectionList implements IteratorAggregate, Countable
 		}
 
 		$this->entries = $pendingEntries;
-		$this->rebuildTagIndexes();
+		$this->rebuildNamedExpressions();
 
 		foreach ($incomingExpressions as $alias => $expression) {
 			$this->namedExpressions[$alias] = $expression;
@@ -113,10 +108,6 @@ final class SelectionList implements IteratorAggregate, Countable
 				continue;
 			}
 
-			$newTags = array_values(array_filter(
-				$normalizedTags,
-				static fn (string $tag): bool => ! $entry->hasTag($tag),
-			));
 			$updated = $entry->withTags($normalizedTags);
 
 			if ($explicit) {
@@ -124,7 +115,6 @@ final class SelectionList implements IteratorAggregate, Countable
 			}
 
 			$this->entries[$index] = $updated;
-			$this->registerTagIndexes($index, $newTags);
 
 			return $updated;
 		}
@@ -134,7 +124,7 @@ final class SelectionList implements IteratorAggregate, Countable
 		}
 
 		$item = new SelectionItem($expression, $explicit, $normalizedTags);
-		$this->appendItem($item, $normalizedTags);
+		$this->appendItem($item);
 
 		return $item;
 	}
@@ -157,13 +147,8 @@ final class SelectionList implements IteratorAggregate, Countable
 				continue;
 			}
 
-			$newTags = array_values(array_filter(
-				$normalizedTags,
-				static fn (string $tag): bool => ! $entry->hasTag($tag),
-			));
 			$updated = $entry->withTags($normalizedTags);
 			$this->entries[$index] = $updated;
-			$this->registerTagIndexes($index, $newTags);
 
 			return $updated;
 		}
@@ -278,7 +263,32 @@ final class SelectionList implements IteratorAggregate, Countable
 			throw new InvalidArgumentException('Selection tag lookups require a non-empty string.');
 		}
 
-		return $this->getItemsInTagOrder($tag);
+		$matches = [];
+
+		foreach ($this->entries as $index => $selection) {
+			$tagPosition = array_search($tag, $selection->getTags(), true);
+
+			if ($tagPosition === false) {
+				continue;
+			}
+
+			$matches[] = [
+				'selection' => $selection,
+				'tagPosition' => $tagPosition,
+				'entryPosition' => $index,
+			];
+		}
+
+		usort(
+			$matches,
+			static fn (array $left, array $right): int => [$left['tagPosition'], $left['entryPosition']]
+				<=> [$right['tagPosition'], $right['entryPosition']],
+		);
+
+		return array_map(
+			static fn (array $match): SelectionItem => $match['selection'],
+			$matches,
+		);
 	}
 
 	public function filterByTag(string $tag): self
@@ -286,10 +296,25 @@ final class SelectionList implements IteratorAggregate, Countable
 		$filtered = new self();
 
 		foreach ($this->getByTag($tag) as $selection) {
-			$filtered->appendItem($selection, $selection->getTags());
+			$filtered->appendItem($selection);
 		}
 
 		return $filtered;
+	}
+
+	public function removeByTag(string $tag): void
+	{
+		$tag = trim($tag);
+
+		if ($tag === '') {
+			throw new InvalidArgumentException('Selection tag removals require a non-empty string.');
+		}
+
+		$this->entries = array_values(array_filter(
+			$this->entries,
+			static fn (SelectionItem $entry): bool => ! $entry->hasTag($tag),
+		));
+		$this->rebuildNamedExpressions();
 	}
 
 	/**
@@ -298,25 +323,13 @@ final class SelectionList implements IteratorAggregate, Countable
 	public function filter(callable $predicate): self
 	{
 		$filtered = new self();
-		$indexMap = [];
 
-		foreach ($this->entries as $index => $entry) {
+		foreach ($this->entries as $entry) {
 			if (! $predicate($entry)) {
 				continue;
 			}
 
-			$indexMap[$index] = count($filtered->entries);
 			$filtered->appendItem($entry);
-		}
-
-		foreach ($this->tagEntryIndexes as $tag => $indexes) {
-			foreach ($indexes as $index) {
-				if (! isset($indexMap[$index])) {
-					continue;
-				}
-
-				$filtered->registerTagIndex($tag, $indexMap[$index]);
-			}
 		}
 
 		return $filtered;
@@ -356,22 +369,13 @@ final class SelectionList implements IteratorAggregate, Countable
 		return new ArrayIterator($this->entries);
 	}
 
-	/**
-	 * @param list<string> $tags
-	 */
-	private function appendItem(SelectionItem $item, array $tags = []): void
+	private function appendItem(SelectionItem $item): void
 	{
 		$this->entries[] = $item;
-		$index = array_key_last($this->entries);
-
 		$expression = $item->getExpression();
 
 		if ($expression instanceof AliasedExpression) {
 			$this->namedExpressions[$expression->getAlias()] = $expression->getExpression();
-		}
-
-		if (is_int($index)) {
-			$this->registerTagIndexes($index, $tags);
 		}
 	}
 
@@ -415,33 +419,15 @@ final class SelectionList implements IteratorAggregate, Countable
 		return $this->expressionsMatch($entry->getExpression(), $selection);
 	}
 
-	/**
-	 * @param list<string> $tags
-	 */
-	private function registerTagIndexes(int $index, array $tags): void
+	private function rebuildNamedExpressions(): void
 	{
-		foreach ($tags as $tag) {
-			$this->registerTagIndex($tag, $index);
-		}
-	}
+		$this->namedExpressions = [];
 
-	private function registerTagIndex(string $tag, int $index): void
-	{
-		$this->tagEntryIndexes[$tag] ??= [];
-
-		if (in_array($index, $this->tagEntryIndexes[$tag], true)) {
-			return;
-		}
-
-		$this->tagEntryIndexes[$tag][] = $index;
-	}
-
-	private function rebuildTagIndexes(): void
-	{
-		$this->tagEntryIndexes = [];
-
-		foreach ($this->entries as $index => $entry) {
-			$this->registerTagIndexes($index, $entry->getTags());
+		foreach ($this->entries as $entry) {
+			$expression = $entry->getExpression();
+			if ($expression instanceof AliasedExpression) {
+				$this->namedExpressions[$expression->getAlias()] = $expression->getExpression();
+			}
 		}
 	}
 
@@ -480,23 +466,4 @@ final class SelectionList implements IteratorAggregate, Countable
 		return $expression instanceof FieldRef || $expression instanceof SourceFieldExpression;
 	}
 
-	/**
-	 * @return list<SelectionItem>
-	 */
-	private function getItemsInTagOrder(string $tag): array
-	{
-		$items = [];
-
-		foreach ($this->tagEntryIndexes[$tag] ?? [] as $index) {
-			$item = $this->entries[$index] ?? null;
-
-			if (! $item instanceof SelectionItem) {
-				continue;
-			}
-
-			$items[] = $item;
-		}
-
-		return $items;
-	}
 }

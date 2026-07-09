@@ -107,6 +107,7 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		$this->selections = new SelectionList();
+		$this->selections->add($this->all(), SelectionTag::DEFAULT, true);
 	}
 
 	public function getQuery(): SelectQuery
@@ -282,6 +283,7 @@ final class SelectQuery implements QuerySourceInterface
 	public function copy(): self
 	{
 		$copy = new self($this->source, $this->executor);
+		$copy->selections->removeByTag(SelectionTag::DEFAULT);
 
 		foreach ($this->selections->getAll() as $selection) {
 			$copy->selections->add(
@@ -344,6 +346,8 @@ final class SelectQuery implements QuerySourceInterface
 		if ($expressions === []) {
 			throw new InvalidArgumentException('SelectQuery::select() requires at least one expression.');
 		}
+
+		$this->selections->removeByTag(SelectionTag::DEFAULT);
 
 		$normalized = [];
 

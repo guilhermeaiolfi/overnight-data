@@ -106,9 +106,6 @@ final class CycleQueryTranslator
 	private function translateSelections(SelectQuery $query, CycleTranslationContext $context, bool $root): array
 	{
 		$selections = $query->getSelections()->getAll();
-		if ($root && $query->getSelections()->getExplicit() === []) {
-			throw UnsupportedQueryException::forQuery($query, 'root execution requires at least one explicit selection');
-		}
 
 		$columns = [];
 		$resultColumns = [];

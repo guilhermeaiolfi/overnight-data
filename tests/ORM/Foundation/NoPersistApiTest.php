@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Foundation;
 
+use ON\Data\ORM\Session;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
@@ -27,8 +28,11 @@ final class NoPersistApiTest extends TestCase
 
 	public function testDeletionApiRemainsExplicitAndSeparateFromSync(): void
 	{
-		self::markTestIncomplete(
-			'Phase 0 skeleton: deletion remains explicit, likely remove($representation), and create/update remain sync($representation).'
-		);
+		$reflection = new ReflectionClass(Session::class);
+
+		self::assertTrue($reflection->hasMethod('sync'));
+		self::assertTrue($reflection->hasMethod('remove'));
+		self::assertFalse($reflection->hasMethod('persist'));
+		self::assertFalse($reflection->hasMethod('delete'));
 	}
 }

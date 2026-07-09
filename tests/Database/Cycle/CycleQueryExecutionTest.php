@@ -451,12 +451,46 @@ final class CycleQueryExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testRootExecutionRequiresSelections(): void
+	public function testRootExecutionWithoutExplicitSelectionDefaultsToRootAllFields(): void
 	{
-		$this->expectException(UnsupportedQueryException::class);
-		$this->expectExceptionMessage('root execution requires at least one explicit selection');
+		$users = $this->database->query($this->registry->getCollection('users'));
 
-		$this->database->query($this->registry->getCollection('users'))->fetchAll();
+		$rows = $users
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertEquals([
+			[
+				'id' => 1,
+				'name' => 'Ada',
+				'email' => 'ada@example.test',
+				'active' => true,
+				'createdAt' => new DateTimeImmutable('2026-06-24 10:00:00'),
+				'profile' => ['role' => 'admin'],
+				'nickname' => 'Ada',
+				'score' => 10,
+			],
+			[
+				'id' => 2,
+				'name' => 'Grace',
+				'email' => 'grace@example.test',
+				'active' => true,
+				'createdAt' => new DateTimeImmutable('2026-06-24 11:00:00'),
+				'profile' => ['role' => 'editor'],
+				'nickname' => 'Grace',
+				'score' => 20,
+			],
+			[
+				'id' => 3,
+				'name' => 'Linus',
+				'email' => 'linus@example.test',
+				'active' => false,
+				'createdAt' => new DateTimeImmutable('2026-06-24 12:00:00'),
+				'profile' => null,
+				'nickname' => null,
+				'score' => 30,
+			],
+		], $rows);
 	}
 
 	public function testImplicitSelectionsAreIncludedInSqlButHiddenFromPublicRows(): void
@@ -510,16 +544,46 @@ final class CycleQueryExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testRootQueriesWithOnlyImplicitSelectionsAreRejected(): void
+	public function testRootQueriesWithOnlyImplicitSelectionsStillExposeDefaultRootFields(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
-
-		$this->expectException(UnsupportedQueryException::class);
-		$this->expectExceptionMessage('root execution requires at least one explicit selection');
-
-		$users
+		$rows = $users
 			->require($users->id, 'relation-key')
+			->orderBy($users->id->asc())
 			->fetchAll();
+
+		self::assertEquals([
+			[
+				'id' => 1,
+				'name' => 'Ada',
+				'email' => 'ada@example.test',
+				'active' => true,
+				'createdAt' => new DateTimeImmutable('2026-06-24 10:00:00'),
+				'profile' => ['role' => 'admin'],
+				'nickname' => 'Ada',
+				'score' => 10,
+			],
+			[
+				'id' => 2,
+				'name' => 'Grace',
+				'email' => 'grace@example.test',
+				'active' => true,
+				'createdAt' => new DateTimeImmutable('2026-06-24 11:00:00'),
+				'profile' => ['role' => 'editor'],
+				'nickname' => 'Grace',
+				'score' => 20,
+			],
+			[
+				'id' => 3,
+				'name' => 'Linus',
+				'email' => 'linus@example.test',
+				'active' => false,
+				'createdAt' => new DateTimeImmutable('2026-06-24 12:00:00'),
+				'profile' => null,
+				'nickname' => null,
+				'score' => 30,
+			],
+		], $rows);
 	}
 
 	public function testUnaliasedComputedRootSelectionsAreRejected(): void

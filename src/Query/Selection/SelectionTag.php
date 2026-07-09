@@ -19,4 +19,6 @@ final class SelectionTag
 	public const INTERNAL = 'internal';
 
 	public const SQL_ONLY = 'sql-only';
+
+	public const DEFAULT = 'default';
 }

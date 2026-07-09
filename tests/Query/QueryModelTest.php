@@ -128,10 +128,46 @@ final class QueryModelTest extends TestCase
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$field = $query->name;
+		$selections = $query->getSelections()->getAll();
 
 		self::assertInstanceOf(FieldRef::class, $field);
-		self::assertCount(0, $query->getSelections());
-		self::assertSame([], $query->getSelections()->getAll());
+		self::assertCount(1, $query->getSelections());
+		self::assertCount(1, $selections);
+		self::assertInstanceOf(StarExpression::class, $selections[0]->getExpression());
+		self::assertTrue($selections[0]->hasTag(SelectionTag::DEFAULT));
+	}
+
+	public function testQueryWithoutSelectStartsWithTaggedDefaultRootStarSelection(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$selections = $query->getSelections()->getAll();
+		$explicit = $query->getSelections()->getExplicit();
+
+		self::assertCount(1, $selections);
+		self::assertCount(1, $explicit);
+		self::assertSame($query->all(), $selections[0]->getExpression());
+		self::assertTrue($selections[0]->isExplicit());
+		self::assertTrue($selections[0]->hasTag(SelectionTag::DEFAULT));
+	}
+
+	public function testExplicitSelectReplacesTaggedDefaultRootStar(): void
+	{
+		$query = query($this->makeRegistry()->getCollection('users'));
+		$query->require($query->id, 'relation-key');
+		$query->select($query->name);
+
+		$selections = $query->getSelections()->getAll();
+		$explicit = $query->getSelections()->getExplicit();
+
+		self::assertCount(2, $selections);
+		self::assertCount(1, $explicit);
+		self::assertSame($query->name, $explicit[0]->getExpression());
+		self::assertSame([$query->id, $query->name], array_map(
+			static fn (SelectionItem $selection): mixed => $selection->getExpression(),
+			$selections,
+		));
+		self::assertFalse($explicit[0]->hasTag(SelectionTag::DEFAULT));
+		self::assertTrue($selections[0]->isImplicit());
 	}
 
 	public function testSelectCreatesAnExplicitSelectionUsingTheCachedFieldReference(): void
@@ -224,7 +260,8 @@ final class QueryModelTest extends TestCase
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$query->where(x()->eq($query->name, 'Ada'));
 
-		self::assertCount(0, $query->getSelections());
+		self::assertCount(1, $query->getSelections());
+		self::assertSame($query->all(), $query->getSelections()->getAll()[0]->getExpression());
 	}
 
 	public function testWhereRejectsEmptyCalls(): void
@@ -1174,7 +1211,8 @@ final class QueryModelTest extends TestCase
 		self::assertFalse($exists->isNegated());
 		self::assertSame($posts, $notExists->getQuery());
 		self::assertTrue($notExists->isNegated());
-		self::assertSame([], $posts->getSelections()->getAll());
+		self::assertCount(1, $posts->getSelections()->getAll());
+		self::assertSame($posts->all(), $posts->getSelections()->getAll()[0]->getExpression());
 	}
 
 	public function testComputedAndAliasedExpressionsAreStoredInsideSelections(): void
@@ -1475,7 +1513,10 @@ final class QueryModelTest extends TestCase
 				->projectTo(from: $ranked, to: $outer),
 		);
 
-		$columnSelections = $outer->getSelections()->getByTag(SelectionTag::COLUMN);
+		$columnSelections = array_values(array_filter(
+			$outer->getSelections()->getByTag(SelectionTag::COLUMN),
+			static fn (SelectionItem $item): bool => ! $item->getExpression() instanceof StarExpression,
+		));
 
 		self::assertCount(3, $columnSelections);
 		foreach ($columnSelections as $item) {
@@ -1508,7 +1549,10 @@ final class QueryModelTest extends TestCase
 			['amount'],
 			array_map(
 				static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-				$outer->getSelections()->getByTag(SelectionTag::COLUMN),
+				array_values(array_filter(
+					$outer->getSelections()->getByTag(SelectionTag::COLUMN),
+					static fn (SelectionItem $item): bool => ! $item->getExpression() instanceof StarExpression,
+				)),
 			),
 		);
 		self::assertFalse($outer->getSelections()->hasSelectionKey('__ondata_rank'));
@@ -1566,10 +1610,15 @@ final class QueryModelTest extends TestCase
 			->require($query->id, 'relation-key');
 
 		$selections = $query->getSelections()->getAll();
+		$required = array_values(array_filter(
+			$selections,
+			static fn (SelectionItem $selection): bool => $selection->getExpression() === $query->id,
+		));
 
-		self::assertCount(1, $selections);
-		self::assertTrue($selections[0]->isImplicit());
-		self::assertSame(['relation-key', SelectionTag::COLUMN, 'result-grouping-key'], $selections[0]->getTags());
+		self::assertCount(2, $selections);
+		self::assertCount(1, $required);
+		self::assertTrue($required[0]->isImplicit());
+		self::assertSame(['relation-key', SelectionTag::COLUMN, 'result-grouping-key'], $required[0]->getTags());
 	}
 
 	public function testRequireAfterSelectAnnotatesTheExistingExplicitEntry(): void
