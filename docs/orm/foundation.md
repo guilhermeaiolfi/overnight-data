@@ -485,9 +485,9 @@ Future ORM runtime will apply the child schema to child `RecordState` instances 
 
 ## Phase 1E Child Representation Adoption
 
-Phase 1E introduces `ON\Data\ORM\Representation\Sync\RepresentationAdopter` as the small bridge between reusable child schema templates and concrete ORM tracking.
+Phase 1E introduces `Session::adopt()` and `Session::adoptRecord()` as the small bridge between reusable child schema templates and concrete ORM tracking.
 
-`RepresentationAdopter::adopt()` attaches a reusable `RepresentationSchema` template to a concrete child `RecordState`, registers that record in `RecordStateStore`, captures baseline record revisions in `RepresentationFieldStateItem` entries, and registers the child object as a `RepresentationState` in `RepresentationStateStore`. Future relation runtime can use a `ToManyRelationState` child's schema with `RepresentationAdopter::adopt()` around flows such as adding a post object to a user's `ToManyRelationState`.
+`Session::adoptRecord()` attaches a reusable `RepresentationSchema` template to a concrete child `RecordState`, registers that record in `RecordStateStore`, captures baseline record revisions in `RepresentationFieldStateItem` entries, and registers the child object as a `RepresentationState` in `RepresentationStateStore`. Future relation runtime can use a `ToManyRelationState` child's schema with `Session::adoptRecord()` around flows such as adding a post object to a user's `ToManyRelationState`.
 
 `ToManyRelationState` still owns relation add/remove intent. Adoption only tracks the child representation; it does not add the item to the relation collection, inspect relation loaded state, sync representation values, persist, flush, write SQL, or mutate the child schema template.
 
@@ -533,7 +533,7 @@ After scalar sync apply:
 Scalar flush can group those dirty values into one database update for the users record.
 ```
 
-`ToManyRelationState` tracks relation add/remove intent only. It does not persist, adopt, or write relations. `RepresentationAdopter` adopts tracking only; it does not sync values. `RepresentationReader` reads current values only; it does not convert, mutate, or sync. `SyncPlan` is a description of conflicts and possible field updates, not an apply operation.
+`ToManyRelationState` tracks relation add/remove intent only. It does not persist, adopt, or write relations. `Session::adopt()` adopts tracking only; it does not sync values. `RepresentationReader` reads current values only; it does not convert, mutate, or sync. `SyncPlan` is a description of conflicts and possible field updates, not an apply operation.
 
 ## Remaining Non-Goals
 

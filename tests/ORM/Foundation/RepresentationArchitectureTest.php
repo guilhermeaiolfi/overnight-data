@@ -39,6 +39,16 @@ final class RepresentationArchitectureTest extends TestCase
 			'PersistenceGraph',
 			'QueryGraph',
 			'BindingTree',
+			'RepresentationBinding',
+			'RepresentationFieldBinding',
+			'RepresentationRelationBinding',
+			'RepresentationBindingMerger',
+			'RepresentationBindingAssembler',
+			'RepresentationRelationCardinality',
+			'RepresentationStore',
+			'ProjectionRepresentationAdopter',
+			'GraphAdopter',
+			'RepresentationAdopter',
 		];
 
 		foreach ($this->phpFiles(dirname(__DIR__, 3) . '/src') as $path) {
@@ -51,6 +61,11 @@ final class RepresentationArchitectureTest extends TestCase
 				self::assertStringNotContainsString('enum ' . $name, $contents, $path);
 			}
 		}
+	}
+
+	public function testLegacyBindingDocumentationWasRemoved(): void
+	{
+		self::assertFileDoesNotExist(dirname(__DIR__, 3) . '/docs/orm/representation-binding.md');
 	}
 
 	public function testRepresentationSchemaIsNotCoupledToMapperHydrationApi(): void

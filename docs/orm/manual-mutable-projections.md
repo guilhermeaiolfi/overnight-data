@@ -151,4 +151,4 @@ The existing `id` and `name` provenance stays intact, and the manual projection 
 
 Manual projections do not introduce a second field-target DSL, class-to-schema inference, upsert, lazy loading, repositories, proxies, or SQL changes. They are a manual identity provider for the same representation schema and persistence pipeline used by mutable query projections.
 
-Manual projection does not use `SelectQuery`, `SelectQuery\ManualRepresentationSchemaCompiler`, or query selection normalization. Query mutable export still compiles through `SelectQuery\ManualRepresentationSchemaCompiler`.
+Manual projection does not use `SelectQuery`, `QueryRepresentationSchemaCompiler`, or query selection normalization. Query mutable export compiles through `QueryRepresentationSchemaCompiler`. Manual projection compiles through `ManualRepresentationSchemaCompiler`.
