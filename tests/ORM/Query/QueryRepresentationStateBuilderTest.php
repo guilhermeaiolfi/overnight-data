@@ -6,12 +6,13 @@ namespace Tests\ON\Data\ORM\Query;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Compiler\ProjectionSourceBuilder;
+use ON\Data\ORM\Compiler\ProjectionSource;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompilation;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityColumns;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Query\ProjectionRepresentationAdopter;
-use ON\Data\ORM\SessionContext;
+use ON\Data\ORM\Query\QueryRepresentationStateBuilder;
+use ON\Data\ORM\Session;
+use Tests\ON\Data\Support\RecordingCommandExecutor;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationFieldSchema;
@@ -20,26 +21,26 @@ use ON\Data\ORM\State\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
-final class ProjectionRepresentationAdopterTest extends TestCase
+final class QueryRepresentationStateBuilderTest extends TestCase
 {
-	public function testAdoptsFlatObjectWithFieldsFromTwoCollections(): void
+	public function testBuildsFlatObjectWithFieldsFromTwoCollections(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
 		$schema = $this->projectionSchema($users, $companies);
 		$object = $this->flatUser(1, 'Acme');
-		$context = new SessionContext();
+		$session = new Session(new RecordingCommandExecutor());
 		$identityColumns = $this->companyIdProjectionIdentities($companies, 'company_id');
 
-		$state = $this->adopter()->adopt($object, $this->compilation($schema, $identityColumns), [
+		$state = $this->adoptFlatProjection($object, $this->compilation($schema, $identityColumns), [
 			'id' => 1,
 			'name' => 'Acme',
 			'company_id' => 5,
-		], $context);
+		], $session);
 
-		self::assertTrue($context->getRepresentations()->has($object));
-		self::assertSame($state, $context->getRepresentations()->get($object));
+		self::assertTrue($session->getRepresentations()->has($object));
+		self::assertSame($state, $session->getRepresentations()->get($object));
 		self::assertTrue($state->getSchema()->hasField('id'));
 		self::assertTrue($state->getSchema()->hasField('name'));
 	}
@@ -50,17 +51,17 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
 		$schema = $this->projectionSchema($users, $companies);
-		$context = new SessionContext();
+		$session = new Session(new RecordingCommandExecutor());
 		$identityColumns = $this->companyIdProjectionIdentities($companies, 'company_id');
 
-		$this->adopter()->adopt($this->flatUser(1, 'Acme'), $this->compilation($schema, $identityColumns), [
+		$this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, $identityColumns), [
 			'id' => 1,
 			'name' => 'Acme',
 			'company_id' => 5,
-		], $context);
+		], $session);
 
-		$userRecord = $context->getRecords()->getByKey($users->getKey(1));
-		$companyRecord = $context->getRecords()->getByKey($companies->getKey(5));
+		$userRecord = $session->getRecords()->getByKey($users->getKey(1));
+		$companyRecord = $session->getRecords()->getByKey($companies->getKey(5));
 
 		self::assertInstanceOf(RecordState::class, $userRecord);
 		self::assertInstanceOf(RecordState::class, $companyRecord);
@@ -73,14 +74,14 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
 		$schema = $this->projectionSchema($users, $companies);
-		$context = new SessionContext();
+		$session = new Session(new RecordingCommandExecutor());
 		$identityColumns = $this->companyIdProjectionIdentities($companies, 'company_id');
 
-		$state = $this->adopter()->adopt($this->flatUser(1, 'Acme'), $this->compilation($schema, $identityColumns), [
+		$state = $this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, $identityColumns), [
 			'id' => 1,
 			'name' => 'Acme',
 			'company_id' => 5,
-		], $context);
+		], $session);
 
 		$idItem = $state->getFieldItem('id');
 		$nameItem = $state->getFieldItem('name');
@@ -96,17 +97,17 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
 		$schema = $this->projectionSchema($users, $companies);
-		$context = new SessionContext();
+		$session = new Session(new RecordingCommandExecutor());
 		$identityColumns = $this->companyIdProjectionIdentities($companies, 'company_id');
 
-		$state = $this->adopter()->adopt($this->flatUser(1, 'Acme'), $this->compilation($schema, $identityColumns), [
+		$state = $this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, $identityColumns), [
 			'id' => 1,
 			'name' => 'Acme',
 			'company_id' => 5,
-		], $context);
+		], $session);
 
-		$userRecord = $context->getRecords()->getByKey($users->getKey(1));
-		$companyRecord = $context->getRecords()->getByKey($companies->getKey(5));
+		$userRecord = $session->getRecords()->getByKey($users->getKey(1));
+		$companyRecord = $session->getRecords()->getByKey($companies->getKey(5));
 
 		self::assertInstanceOf(RecordState::class, $userRecord);
 		self::assertInstanceOf(RecordState::class, $companyRecord);
@@ -127,14 +128,14 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$object = new stdClass();
 		$object->id = 1;
 		$object->name = 'Acme';
-		$context = new SessionContext();
+		$session = new Session(new RecordingCommandExecutor());
 		$identityColumns = $this->companyIdProjectionIdentities($companies, 'company_id');
 
-		$this->adopter()->adopt($object, $this->compilation($schema, $identityColumns), [
+		$this->adoptFlatProjection($object, $this->compilation($schema, $identityColumns), [
 			'company_id' => 5,
-		], $context);
+		], $session);
 
-		$companyRecord = $context->getRecords()->getByKey($companies->getKey(5));
+		$companyRecord = $session->getRecords()->getByKey($companies->getKey(5));
 		self::assertInstanceOf(RecordState::class, $companyRecord);
 	}
 
@@ -147,15 +148,15 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$object = new stdClass();
 		$object->id = 1;
 		$object->name = 'Acme';
-		$context = new SessionContext();
+		$session = new Session(new RecordingCommandExecutor());
 		$identityColumns = $this->companyIdProjectionIdentities($companies, 'company_id');
 
-		$this->adopter()->adopt($object, $this->compilation($schema, $identityColumns), [
+		$this->adoptFlatProjection($object, $this->compilation($schema, $identityColumns), [
 			'name' => 'Acme',
 			'company_id' => 5,
-		], $context);
+		], $session);
 
-		$userRecord = $context->getRecords()->getByKey($users->getKey(1));
+		$userRecord = $session->getRecords()->getByKey($users->getKey(1));
 		self::assertInstanceOf(RecordState::class, $userRecord);
 	}
 
@@ -165,15 +166,15 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
 		$schema = $this->projectionSchema($users, $companies);
-		$context = new SessionContext();
+		$session = new Session(new RecordingCommandExecutor());
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("primary key field 'id' is missing or incomplete");
 
-		$this->adopter()->adopt($this->flatUser(1, 'Acme'), $this->compilation($schema, new ProjectionIdentityColumns()), [
+		$this->builder()->build($this->flatUser(1, 'Acme'), $this->compilation($schema, new ProjectionIdentityColumns()), [
 			'id' => 1,
 			'name' => 'Acme',
-		], $context);
+		], $session->getRecords());
 	}
 
 	public function testThrowsWhenMapPointsToMissingSourceRowKey(): void
@@ -182,16 +183,16 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
 		$schema = $this->projectionSchema($users, $companies);
-		$context = new SessionContext();
+		$session = new Session(new RecordingCommandExecutor());
 		$identityColumns = $this->companyIdProjectionIdentities($companies, 'missing_key');
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("internal result key 'missing_key' for primary key field 'id' is missing from the source row");
 
-		$this->adopter()->adopt($this->flatUser(1, 'Acme'), $this->compilation($schema, $identityColumns), [
+		$this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, $identityColumns), [
 			'id' => 1,
 			'name' => 'Acme',
-		], $context);
+		], $session);
 	}
 
 	public function testThrowsWhenSchemaContainsRelationSchemas(): void
@@ -205,17 +206,17 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 			'company',
 			new RepresentationSchema($registry->getCollection('companies')),
 		));
-		$context = new SessionContext();
+		$session = new Session(new RecordingCommandExecutor());
 		$identityColumns = $this->companyIdProjectionIdentities($registry->getCollection('companies'), 'company_id');
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('schema contains relation schemas');
 
-		$this->adopter()->adopt($this->flatUser(1, 'Acme'), $this->compilation($schema, $identityColumns), [
+		$this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, $identityColumns), [
 			'id' => 1,
 			'name' => 'Acme',
 			'company_id' => 5,
-		], $context);
+		], $session);
 	}
 
 	public function testSameCollectionFlatProjectionAttachesFieldsToDistinctRecords(): void
@@ -232,19 +233,19 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$object->name = 'Root';
 		$object->managerName = 'Boss';
 
-		$context = new SessionContext();
+		$session = new Session(new RecordingCommandExecutor());
 		$identities = new ProjectionIdentityColumns();
 		$identities->add(['manager'], 'id', 'manager_id');
 
-		$state = $this->adopter()->adopt($object, $this->compilation($schema, $identities), [
+		$state = $this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
 			'id' => 1,
 			'name' => 'Root',
 			'managerName' => 'Boss',
 			'manager_id' => 9,
-		], $context);
+		], $session);
 
-		$rootRecord = $context->getRecords()->getByKey($users->getKey(1));
-		$managerRecord = $context->getRecords()->getByKey($users->getKey(9));
+		$rootRecord = $session->getRecords()->getByKey($users->getKey(1));
+		$managerRecord = $session->getRecords()->getByKey($users->getKey(9));
 
 		self::assertInstanceOf(RecordState::class, $rootRecord);
 		self::assertInstanceOf(RecordState::class, $managerRecord);
@@ -271,15 +272,15 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$object->id = 1;
 		$object->managerName = 'Boss';
 
-		$context = new SessionContext();
+		$session = new Session(new RecordingCommandExecutor());
 		$identities = new ProjectionIdentityColumns();
 		$identities->add(['manager'], 'id', 'manager_id');
 
-		$state = $this->adopter()->adopt($object, $this->compilation($schema, $identities), [
+		$state = $this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
 			'id' => 1,
 			'managerName' => 'Boss',
 			'manager_id' => 9,
-		], $context);
+		], $session);
 
 		$idItem = $state->getFieldItem('id');
 		$managerItem = $state->getFieldItem('managerName');
@@ -287,6 +288,26 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		self::assertNotSame($idItem->getRecord()->getStateHash(), $managerItem->getRecord()->getStateHash());
 		self::assertTrue($idItem->getSchema()->isRootSource());
 		self::assertSame(['manager'], $managerItem->getSchema()->getSourcePath());
+	}
+
+	public function testBuildReturnsRepresentationStateWithoutStoring(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$companies = $registry->getCollection('companies');
+		$schema = $this->projectionSchema($users, $companies);
+		$object = $this->flatUser(1, 'Acme');
+		$records = new RecordStateStore();
+		$identityColumns = $this->companyIdProjectionIdentities($companies, 'company_id');
+
+		$state = $this->builder()->build($object, $this->compilation($schema, $identityColumns), [
+			'id' => 1,
+			'name' => 'Acme',
+			'company_id' => 5,
+		], $records);
+
+		self::assertInstanceOf(\ON\Data\ORM\State\RepresentationState::class, $state);
+		self::assertSame([], $records->getAll());
 	}
 
 	public function testReusesExistingTrackedRecordState(): void
@@ -298,21 +319,33 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 		$existing = RecordState::clean($companies->getKey(5), ['id' => 5, 'name' => 'Existing']);
 		$records = new RecordStateStore();
 		$records->add($existing);
-		$context = new SessionContext($records);
+		$session = new Session(new RecordingCommandExecutor(), context: new \ON\Data\ORM\SessionContext($records));
 		$identityColumns = $this->companyIdProjectionIdentities($companies, 'company_id');
 
-		$this->adopter()->adopt($this->flatUser(1, 'Acme'), $this->compilation($schema, $identityColumns), [
+		$this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, $identityColumns), [
 			'id' => 1,
 			'name' => 'Acme',
 			'company_id' => 5,
-		], $context);
+		], $session);
 
-		self::assertSame($existing, $context->getRecords()->getByKey($companies->getKey(5)));
+		self::assertSame($existing, $session->getRecords()->getByKey($companies->getKey(5)));
 	}
 
-	private function adopter(): ProjectionRepresentationAdopter
+	private function builder(): QueryRepresentationStateBuilder
 	{
-		return new ProjectionRepresentationAdopter();
+		return new QueryRepresentationStateBuilder();
+	}
+
+	private function adoptFlatProjection(
+		object $object,
+		ProjectionCompilation $compilation,
+		array $sourceRow,
+		Session $session,
+	): \ON\Data\ORM\State\RepresentationState {
+		$state = $this->builder()->build($object, $compilation, $sourceRow, $session->getRecords());
+		$session->adopt($object, $state);
+
+		return $state;
 	}
 
 	private function compilation(
@@ -321,7 +354,7 @@ final class ProjectionRepresentationAdopterTest extends TestCase
 	): ProjectionCompilation {
 		return new ProjectionCompilation(
 			$schema,
-			(new ProjectionSourceBuilder())->build($schema),
+			ProjectionSource::fromRepresentationSchema($schema),
 			$identityColumns,
 		);
 	}

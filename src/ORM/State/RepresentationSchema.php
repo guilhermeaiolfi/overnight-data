@@ -19,7 +19,9 @@ namespace ON\Data\ORM\State;
  * query selections and mapper hydration.
  */
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
+use stdClass;
 
 final class RepresentationSchema
 {
@@ -33,6 +35,26 @@ final class RepresentationSchema
 	public function __construct(
 		private CollectionInterface $collection,
 	) {
+	}
+
+	public static function forPrimaryKey(CollectionInterface $collection): self
+	{
+		$schema = new self($collection);
+		foreach ($collection->getPrimaryKey() as $fieldName) {
+			$schema->addField(new RepresentationFieldSchema($fieldName, $collection, $fieldName));
+		}
+
+		return $schema;
+	}
+
+	public static function representationForKey(Key $key): object
+	{
+		$representation = new stdClass();
+		foreach ($key->getValues() as $fieldName => $value) {
+			$representation->{$fieldName} = $value;
+		}
+
+		return $representation;
 	}
 
 	public function getCollection(): CollectionInterface

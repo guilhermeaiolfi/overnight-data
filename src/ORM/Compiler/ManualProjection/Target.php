@@ -18,6 +18,12 @@ use ON\Data\Query\Exception\UnknownQueryFieldException;
 
 final class Target implements PropertySource
 {
+	/** @var list<RepresentationEnrollment> */
+	private array $pendingEnrollments;
+
+	/**
+	 * @param list<RepresentationEnrollment> $pendingEnrollments
+	 */
 	public function __construct(
 		private RecordState $owner,
 		private string $relationName,
@@ -26,7 +32,9 @@ final class Target implements PropertySource
 		private RecordState $targetRecord,
 		private object $targetObject,
 		private bool $objectShaped,
+		array $pendingEnrollments = [],
 	) {
+		$this->pendingEnrollments = array_values($pendingEnrollments);
 	}
 
 	public function getOwner(): RecordState
@@ -62,6 +70,17 @@ final class Target implements PropertySource
 	public function isObjectShaped(): bool
 	{
 		return $this->objectShaped;
+	}
+
+	/**
+	 * @return list<RepresentationEnrollment>
+	 */
+	public function pullPendingEnrollments(): array
+	{
+		$pending = $this->pendingEnrollments;
+		$this->pendingEnrollments = [];
+
+		return $pending;
 	}
 
 	/**

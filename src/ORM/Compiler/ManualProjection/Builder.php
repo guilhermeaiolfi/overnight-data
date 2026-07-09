@@ -17,6 +17,7 @@ use ON\Data\Key;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RepresentationState;
+use ON\Data\ORM\Sync\RepresentationAttachmentMode;
 
 final class Builder
 {
@@ -28,26 +29,19 @@ final class Builder
 	private ?PathResolution $pendingPath = null;
 
 	private ProjectionTargetFactory $targetFactory;
-	private RepresentationTracker $representationTracker;
 
 	public function __construct(
 		private Session $session,
 		private object $representation,
 		private ProjectionCompiler $projectionCompiler = new ProjectionCompiler(),
+		private ManualProjectionRepresentationStateBuilder $stateBuilder = new ManualProjectionRepresentationStateBuilder(),
 		?PathResolver $pathResolver = null,
-		?RepresentationTracker $representationTracker = null,
 	) {
 		$pathResolver ??= new PathResolver($this->session->getRepresentations());
-		$representationTracker ??= new RepresentationTracker(
-			$this->session->getRepresentations(),
-			$this->session->getRecords()
-		);
-		$this->representationTracker = $representationTracker;
 		$this->targetFactory = new ProjectionTargetFactory(
 			$this->session,
 			$this->representation,
 			$pathResolver,
-			$representationTracker,
 		);
 	}
 
@@ -75,7 +69,7 @@ final class Builder
 	public function tracked(?RelationRef $relation = null, ?object $object = null): RootTarget|Target
 	{
 		if ($relation instanceof RelationRef) {
-			return $this->targetFactory->trackedAtRelation($relation, $this->representation, $object);
+			return $this->finalizeTarget($this->targetFactory->trackedAtRelation($relation, $this->representation, $object));
 		}
 
 		if ($this->pendingCollection !== null) {
@@ -89,7 +83,7 @@ final class Builder
 			$path = $this->pendingPath;
 			$this->clearPending();
 
-			return $this->targetFactory->trackedAtPath($path, $this->representation, $object);
+			return $this->finalizeTarget($this->targetFactory->trackedAtPath($path, $this->representation, $object));
 		}
 
 		throw new InvalidArgumentException('Builder::tracked() requires from(), fromPath(), or a relation reference.');
@@ -101,7 +95,7 @@ final class Builder
 	public function create(RelationRef|array $relationOrValues = [], array $values = []): RootTarget|Target
 	{
 		if ($relationOrValues instanceof RelationRef) {
-			return $this->targetFactory->createAtRelation($relationOrValues, $values);
+			return $this->finalizeTarget($this->targetFactory->createAtRelation($relationOrValues, $values));
 		}
 
 		if ($this->pendingCollection !== null) {
@@ -115,7 +109,7 @@ final class Builder
 			$path = $this->pendingPath;
 			$this->clearPending();
 
-			return $this->targetFactory->createAtPath($path, $relationOrValues);
+			return $this->finalizeTarget($this->targetFactory->createAtPath($path, $relationOrValues));
 		}
 
 		throw new InvalidArgumentException('Builder::create() requires from(), fromPath(), or a relation reference.');
@@ -131,7 +125,7 @@ final class Builder
 				throw new InvalidArgumentException('Builder::existing() requires a key when identifying a relation target.');
 			}
 
-			return $this->targetFactory->existingAtRelation($relationOrKey, $key, $values);
+			return $this->finalizeTarget($this->targetFactory->existingAtRelation($relationOrKey, $key, $values));
 		}
 
 		if ($this->pendingCollection !== null) {
@@ -145,7 +139,7 @@ final class Builder
 			$path = $this->pendingPath;
 			$this->clearPending();
 
-			return $this->targetFactory->existingAtPath($path, $relationOrKey, $this->resolveExistingSeedValues($key, $values));
+			return $this->finalizeTarget($this->targetFactory->existingAtPath($path, $relationOrKey, $this->resolveExistingSeedValues($key, $values)));
 		}
 
 		throw new InvalidArgumentException('Builder::existing() requires from(), fromPath(), or a relation reference.');
@@ -166,15 +160,20 @@ final class Builder
 
 	public function end(): object
 	{
-		$state = $this->session->getRepresentations()->get($this->representation);
-		$fallbackCollection = $state instanceof RepresentationState
-			? $state->getSchema()->getCollection()
+		$existingState = $this->session->getRepresentations()->get($this->representation);
+		$fallbackCollection = $existingState instanceof RepresentationState
+			? $existingState->getSchema()->getCollection()
 			: null;
 		$manualSchema = $this->projectionCompiler->compile($this->propertyShapes, $fallbackCollection);
-		$this->representationTracker->applyManualProjection(
-			$this->representation,
+		$state = $this->stateBuilder->buildOverlay(
+			$existingState instanceof RepresentationState ? $existingState : null,
 			$manualSchema,
 			$this->propertyShapes,
+		);
+		$this->session->adopt(
+			$this->representation,
+			$state,
+			RepresentationAttachmentMode::Replace,
 		);
 		$this->propertyShapes = [];
 
@@ -185,6 +184,22 @@ final class Builder
 	{
 		$this->pendingCollection = null;
 		$this->pendingPath = null;
+	}
+
+	private function finalizeTarget(RootTarget|Target $result): RootTarget|Target
+	{
+		if ($result instanceof Target) {
+			$this->enrollPending($result);
+		}
+
+		return $result;
+	}
+
+	private function enrollPending(Target $target): void
+	{
+		foreach ($target->pullPendingEnrollments() as $enrollment) {
+			$this->session->adopt($enrollment->representation, $enrollment->state);
+		}
 	}
 
 	/**

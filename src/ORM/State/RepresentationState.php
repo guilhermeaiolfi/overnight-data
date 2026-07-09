@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\State;
 
+use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
 
 final class RepresentationState
@@ -24,6 +25,20 @@ final class RepresentationState
 	) {
 		$this->fieldItems = $this->normalizeFieldItems($fieldItems);
 		$this->relationItems = $this->normalizeRelationItems($relationItems);
+	}
+
+	/**
+	 * @param array<string, RecordState> $recordsBySourceKey
+	 */
+	public static function fromRecords(
+		RepresentationSchema $schema,
+		array $recordsBySourceKey,
+	): self {
+		return new self(
+			$schema,
+			self::fieldItemsForRecords($schema, $recordsBySourceKey),
+			self::relationItemsForRecords($schema, $recordsBySourceKey),
+		);
 	}
 
 	public function getSchema(): RepresentationSchema
@@ -132,6 +147,29 @@ final class RepresentationState
 	}
 
 	/**
+	 * @return list<RecordState>
+	 */
+	public function getRecordsForCollection(CollectionInterface $collection): array
+	{
+		$records = [];
+		foreach ($this->fieldItems as $fieldItem) {
+			if ($fieldItem->getSchema()->getCollectionName() === $collection->getName()) {
+				$record = $fieldItem->getRecord();
+				$records[$record->getStateHash()] = $record;
+			}
+		}
+
+		foreach ($this->relationItems as $relationItem) {
+			if ($relationItem->getSchema()->getOwnerCollectionName() === $collection->getName()) {
+				$record = $relationItem->getOwnerRecord();
+				$records[$record->getStateHash()] = $record;
+			}
+		}
+
+		return array_values($records);
+	}
+
+	/**
 	 * Deliberate post-sync acknowledgement only.
 	 *
 	 * @param array<string, RecordState> $touchedRecords
@@ -146,6 +184,63 @@ final class RepresentationState
 
 			$this->fieldItems[$path] = $item->withBaselineRevision($record->getRevision());
 		}
+	}
+
+	/**
+	 * @param array<string, RecordState> $recordsBySourceKey
+	 * @return list<RepresentationFieldStateItem>
+	 */
+	private static function fieldItemsForRecords(
+		RepresentationSchema $schema,
+		array $recordsBySourceKey,
+	): array {
+		$items = [];
+		foreach ($schema->getFields() as $fieldSchema) {
+			$sourceKey = $fieldSchema->getSourcePathKey();
+			$record = $recordsBySourceKey[$sourceKey] ?? null;
+
+			if (! $record instanceof RecordState) {
+				if ($fieldSchema->shouldSkipWhenMissing()) {
+					continue;
+				}
+
+				throw new StateException(sprintf(
+					"Cannot create representation state because source path '%s' is unresolved.",
+					$sourceKey
+				));
+			}
+
+			$items[] = RepresentationFieldStateItem::createOne($fieldSchema, $record);
+		}
+
+		return $items;
+	}
+
+	/**
+	 * @param array<string, RecordState> $recordsBySourceKey
+	 * @return list<RepresentationRelationStateItem>
+	 */
+	private static function relationItemsForRecords(RepresentationSchema $schema, array $recordsBySourceKey): array
+	{
+		if ($schema->getRelations() === []) {
+			return [];
+		}
+
+		$rootKey = RepresentationFieldSchema::sourcePathKey([]);
+		$rootRecord = $recordsBySourceKey[$rootKey] ?? null;
+		if (! $rootRecord instanceof RecordState) {
+			throw new StateException(sprintf(
+				"Cannot create representation state because root source path '%s' is unresolved.",
+				$rootKey
+			));
+		}
+
+		$items = [];
+		foreach ($schema->getRelations() as $relationSchema) {
+			$items[] = RepresentationRelationStateItem::createOne($relationSchema, $rootRecord);
+		}
+
+		return $items;
 	}
 
 	/**

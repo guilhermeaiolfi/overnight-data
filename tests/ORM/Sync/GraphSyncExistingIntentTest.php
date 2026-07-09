@@ -112,10 +112,11 @@ final class GraphSyncExistingIntentTest extends TestCase
 		[$users, $posts] = $this->usersWithPostsRelation();
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$session->getRecords()->add($owner);
 		$post = $session->identify($posts, ['id' => 5], schema: $this->postKeyOnlySchemaFor($posts));
 		$ownerRepresentation = $this->representation(['id' => 10, 'name' => 'Owner', 'posts' => [$post]]);
-		$session->adopt($ownerRepresentation, $this->ownerSchemaWithPostsKeyOnlyChild($users, $posts), $owner);
+		$this->adoptRecord($session, $ownerRepresentation, $this->ownerSchemaWithPostsKeyOnlyChild($users, $posts), $owner);
 
 		$session->sync($ownerRepresentation);
 		$session->flush();
@@ -133,12 +134,14 @@ final class GraphSyncExistingIntentTest extends TestCase
 	{
 		[$users, $posts] = $this->usersWithPostsRelation();
 		$session = new Session(new RecordingCommandExecutor());
-		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
-		$child = $session->trackNew($posts, ['id' => 5, 'title' => 'Draft', 'user_id' => null]);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$session->getRecords()->add($owner);
+		$child = RecordState::new($posts, ['id' => 5, 'title' => 'Draft', 'user_id' => null]);
+		$session->getRecords()->add($child);
 		$post = $this->representation(['id' => 5, 'title' => 'Draft', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['id' => 10, 'name' => 'Owner', 'posts' => [$post]]);
-		$session->adopt($ownerRepresentation, $this->ownerSchemaWithPosts($users, $posts), $owner);
-		$session->adopt($post, $this->postSchemaWithIdFor($posts), $child);
+		$this->adoptRecord($session, $ownerRepresentation, $this->ownerSchemaWithPosts($users, $posts), $owner);
+		$this->adoptRecord($session, $post, $this->postSchemaWithIdFor($posts), $child);
 
 		$session->sync($ownerRepresentation);
 

@@ -65,37 +65,37 @@ final class SessionTest extends TestCase
 		self::assertSame($syncer, $syncerProperty->getValue($flusher));
 	}
 
-	public function testTrackRecordAddsExistingRecordAndReturnsSameInstance(): void
+	public function testRecordStateStoreAddRegistersExistingRecord(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
 
-		$result = $session->trackRecord($record);
-		$secondResult = $session->trackRecord($record);
+		$session->getRecords()->add($record);
+		$session->getRecords()->add($record);
 
-		self::assertSame($record, $result);
-		self::assertSame($record, $secondResult);
 		self::assertSame([$record], $session->getRecords()->getAll());
 	}
 
-	public function testTrackNewCreatesTracksAndReturnsNewRecordState(): void
+	public function testNewRecordStateCanBeAddedToSessionStore(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 
-		$record = $session->trackNew($this->users(), ['name' => 'A1']);
+		$record = RecordState::new($this->users(), ['name' => 'A1']);
+		$session->getRecords()->add($record);
 
 		self::assertTrue($record->isNew());
 		self::assertSame(['name' => 'A1'], $record->getValues());
 		self::assertSame([$record], $session->getRecords()->getAll());
 	}
 
-	public function testTrackCleanCreatesTracksAndReturnsCleanKeyedRecordState(): void
+	public function testCleanRecordStateCanBeAddedToSessionStore(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$users = $this->users();
 		$key = $users->getKey(10);
 
-		$record = $session->trackClean($key, ['id' => 10, 'name' => 'A1']);
+		$record = RecordState::clean($key, ['id' => 10, 'name' => 'A1']);
+		$session->getRecords()->add($record);
 
 		self::assertTrue($record->isClean());
 		self::assertSame($key, $record->getKey());
@@ -171,7 +171,8 @@ final class SessionTest extends TestCase
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$posts = $this->posts();
-		$record = $session->trackClean($posts->getKey(123), ['id' => 123, 'title' => 'Before']);
+		$record = RecordState::clean($posts->getKey(123), ['id' => 123, 'title' => 'Before']);
+		$session->getRecords()->add($record);
 		$record->setValue('title', 'Dirty');
 		$post = $this->representation(['id' => 123, 'title' => 'Object']);
 
@@ -187,7 +188,8 @@ final class SessionTest extends TestCase
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$posts = $this->posts();
-		$record = $session->trackClean($posts->getKey(123), ['id' => 123, 'title' => 'Before']);
+		$record = RecordState::clean($posts->getKey(123), ['id' => 123, 'title' => 'Before']);
+		$session->getRecords()->add($record);
 		$record->markRemoved();
 
 		$this->expectException(StateException::class);
@@ -211,13 +213,13 @@ final class SessionTest extends TestCase
 		$session->identify($posts, ['id' => 456], $post);
 	}
 
-	public function testAdoptTracksRepresentationAndRecordThroughAdopter(): void
+	public function testAdoptTracksRepresentationAndRecord(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
 		$representation = $this->representation(['name' => 'A1']);
 
-		$tracked = $session->adopt($representation, $this->templateSchema(), $record);
+		$tracked = $this->adoptRecord($session, $representation, $this->templateSchema(), $record);
 
 		self::assertSame($tracked, $session->getRepresentations()->get($representation));
 		self::assertSame($record, $session->getRecords()->getByStateHash($record->getStateHash()));
@@ -236,7 +238,7 @@ final class SessionTest extends TestCase
 		$post = $this->representation(['id' => 123, 'title' => 'Existing']);
 
 		try {
-			$session->adopt($post, $this->templateSchema(), $record);
+			$this->adoptRecord($session, $post, $this->templateSchema(), $record);
 			self::fail('Expected adopt to reject a schema targeting the wrong collection.');
 		} catch (StateException) {
 		}
@@ -251,22 +253,23 @@ final class SessionTest extends TestCase
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
 		$representation = $this->representation(['name' => 'A1']);
 
-		$session->adopt($representation, $this->templateSchema(), $record);
+		$this->adoptRecord($session, $representation, $this->templateSchema(), $record);
 
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('already tracked');
 
-		$session->adopt($representation, $this->templateSchema(), $record);
+		$this->adoptRecord($session, $representation, $this->templateSchema(), $record);
 	}
 
 	public function testSyncTrackedRootAdoptsUntrackedRelatedManyItems(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session(new RecordingCommandExecutor());
-		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$session->getRecords()->add($owner);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		$result = $session->sync($ownerRepresentation);
 
@@ -279,10 +282,11 @@ final class SessionTest extends TestCase
 	{
 		[$users, $profiles] = $this->usersWithDefaultHasOneProfile();
 		$session = new Session(new RecordingCommandExecutor());
-		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$session->getRecords()->add($owner);
 		$profileRepresentation = $this->representation(['id' => 5, 'label' => 'Profile', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'profile' => $profileRepresentation]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithProfile($users, $profiles), $owner);
+		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithProfile($users, $profiles), $owner);
 
 		$result = $session->sync($ownerRepresentation);
 
@@ -295,12 +299,14 @@ final class SessionTest extends TestCase
 	{
 		$users = $this->users();
 		$session = new Session(new RecordingCommandExecutor());
-		$first = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$second = $session->trackClean($users->getKey(20), ['id' => 20, 'name' => 'B1']);
+		$first = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->getRecords()->add($first);
+		$second = RecordState::clean($users->getKey(20), ['id' => 20, 'name' => 'B1']);
+		$session->getRecords()->add($second);
 		$firstRepresentation = $this->representation(['name' => 'A2']);
 		$secondRepresentation = $this->representation(['name' => 'B2']);
-		$session->adopt($firstRepresentation, $this->templateSchema(), $first);
-		$session->adopt($secondRepresentation, $this->templateSchema(), $second);
+		$this->adoptRecord($session, $firstRepresentation, $this->templateSchema(), $first);
+		$this->adoptRecord($session, $secondRepresentation, $this->templateSchema(), $second);
 
 		$result = $session->sync($firstRepresentation);
 
@@ -321,11 +327,13 @@ final class SessionTest extends TestCase
 	{
 		$users = $this->users();
 		$session = new Session(new RecordingCommandExecutor());
-		$root = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$other = $session->trackClean($users->getKey(20), ['id' => 20, 'name' => 'B1']);
+		$root = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->getRecords()->add($root);
+		$other = RecordState::clean($users->getKey(20), ['id' => 20, 'name' => 'B1']);
+		$session->getRecords()->add($other);
 		$rootRepresentation = $this->representation(['id' => 10, 'name' => 'A2']);
 		$otherRepresentation = $this->representation(['name' => 'B2']);
-		$session->adopt($otherRepresentation, $this->templateSchema(), $other);
+		$this->adoptRecord($session, $otherRepresentation, $this->templateSchema(), $other);
 
 		$result = $session->sync($rootRepresentation, $this->userTemplateSchemaFor($users));
 
@@ -528,8 +536,10 @@ final class SessionTest extends TestCase
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session(new RecordingCommandExecutor());
-		$userRecord = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
-		$postRecord = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Original', 'user_id' => null]);
+		$userRecord = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$session->getRecords()->add($userRecord);
+		$postRecord = RecordState::clean($posts->getKey(5), ['id' => 5, 'title' => 'Original', 'user_id' => null]);
+		$session->getRecords()->add($postRecord);
 		$representation = $this->representation(['name' => 'Owner Updated', 'title' => 'Post Updated']);
 		$schema = new RepresentationSchema($userRecord->getCollection());
 		$schema->addField(new RepresentationFieldSchema('name', $userRecord->getCollection(), 'name'));
@@ -554,11 +564,12 @@ final class SessionTest extends TestCase
 		$executor = new RecordingCommandExecutor();
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session($executor);
-		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$session->getRecords()->add($owner);
 		$owner->setValue('name', 'Owner Updated');
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner Updated', 'posts' => [$postRepresentation]]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		$session->sync($ownerRepresentation);
 
@@ -569,7 +580,8 @@ final class SessionTest extends TestCase
 	public function testRemoveRecordMarksTrackedCleanRecordRemovedAndKeepsItInMapBeforeFlush(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
-		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->getRecords()->add($record);
 
 		$session->removeRecord($record);
 
@@ -591,7 +603,8 @@ final class SessionTest extends TestCase
 	public function testRemoveMarksTrackedCleanRecordRemoved(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
-		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->getRecords()->add($record);
 
 		$session->remove($record);
 
@@ -602,9 +615,10 @@ final class SessionTest extends TestCase
 	public function testRemoveObjectMarksSingleConcreteTrackedRecordRemoved(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
-		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->getRecords()->add($record);
 		$representation = $this->representation(['name' => 'A1']);
-		$session->adopt($representation, $this->templateSchema(), $record);
+		$this->adoptRecord($session, $representation, $this->templateSchema(), $record);
 
 		$session->remove($representation);
 
@@ -637,8 +651,10 @@ final class SessionTest extends TestCase
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session(new RecordingCommandExecutor());
-		$userRecord = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
-		$postRecord = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'user_id' => 10]);
+		$userRecord = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$session->getRecords()->add($userRecord);
+		$postRecord = RecordState::clean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'user_id' => 10]);
+		$session->getRecords()->add($postRecord);
 		$representation = $this->representation(['name' => 'Owner', 'title' => 'Post']);
 		$schema = new RepresentationSchema($userRecord->getCollection());
 		$schema->addField(new RepresentationFieldSchema('name', $userRecord->getCollection(), 'name'));
@@ -673,9 +689,8 @@ final class SessionTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 		$collection = $this->changedToManyRelationState(RecordState::new($this->usersWithPosts()));
 
-		$result = $session->trackToManyRelation($collection);
+		$session->getToManyRelations()->add($collection);
 
-		self::assertSame($collection, $result);
 		self::assertSame([$collection], $session->getToManyRelations()->getAll());
 	}
 
@@ -684,9 +699,8 @@ final class SessionTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 		$reference = $this->changedToOneRelationState(RecordState::new($this->usersWithProfile()));
 
-		$result = $session->trackToOneRelation($reference);
+		$session->getToOneRelations()->add($reference);
 
-		self::assertSame($reference, $result);
 		self::assertSame([$reference], $session->getToOneRelations()->getAll());
 	}
 
@@ -694,9 +708,10 @@ final class SessionTest extends TestCase
 	{
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->getRecords()->add($record);
 		$representation = $this->representation(['name' => 'A1']);
-		$session->adopt($representation, $this->templateSchema(), $record);
+		$this->adoptRecord($session, $representation, $this->templateSchema(), $record);
 		$representation->name = 'A2';
 
 		$result = $session->flush();
@@ -717,7 +732,8 @@ final class SessionTest extends TestCase
 	{
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->getRecords()->add($record);
 		$session->removeRecord($record);
 
 		$session->flush();
@@ -731,7 +747,8 @@ final class SessionTest extends TestCase
 	{
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$record = $session->trackNew($this->users(), ['name' => 'A1']);
+		$record = RecordState::new($this->users(), ['name' => 'A1']);
+		$session->getRecords()->add($record);
 		$session->remove($record);
 
 		$session->flush();
@@ -744,7 +761,8 @@ final class SessionTest extends TestCase
 	{
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->getRecords()->add($record);
 		$session->remove($record);
 
 		$session->flush();
@@ -757,9 +775,10 @@ final class SessionTest extends TestCase
 	public function testFlushDoesNotClearRepresentationStates(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
-		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->getRecords()->add($record);
 		$representation = $this->representation(['name' => 'A1']);
-		$tracked = $session->adopt($representation, $this->templateSchema(), $record);
+		$tracked = $this->adoptRecord($session, $representation, $this->templateSchema(), $record);
 		$representation->name = 'A2';
 
 		$session->flush();
@@ -770,11 +789,12 @@ final class SessionTest extends TestCase
 	public function testClearClearsAllRuntimeStores(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
-		$record = $session->trackNew($this->users(), ['name' => 'A1']);
+		$record = RecordState::new($this->users(), ['name' => 'A1']);
+		$session->getRecords()->add($record);
 		$representation = $this->representation(['name' => 'A1']);
-		$session->adopt($representation, $this->templateSchema(), $record);
-		$session->trackToManyRelation(new ToManyRelationState($record, 'posts', new RepresentationSchema($record->getCollection())));
-		$session->trackToOneRelation(new ToOneRelationState($record, 'profile', new RepresentationSchema($record->getCollection())));
+		$this->adoptRecord($session, $representation, $this->templateSchema(), $record);
+		$session->getToManyRelations()->add(new ToManyRelationState($record, 'posts', new RepresentationSchema($record->getCollection())));
+		$session->getToOneRelations()->add(new ToOneRelationState($record, 'profile', new RepresentationSchema($record->getCollection())));
 
 		$session->clear();
 
@@ -789,8 +809,9 @@ final class SessionTest extends TestCase
 		RecordingRelationPersistencePlanner::$addCommand = true;
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$record = $session->trackClean($this->usersWithPosts()->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$session->trackToManyRelation($this->changedToManyRelationState($record));
+		$record = RecordState::clean($this->usersWithPosts()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->getRecords()->add($record);
+		$session->getToManyRelations()->add($this->changedToManyRelationState($record));
 
 		$session->flush();
 
@@ -803,8 +824,9 @@ final class SessionTest extends TestCase
 		RecordingRelationPersistencePlanner::$addCommand = true;
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$record = $session->trackClean($this->usersWithProfile()->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$session->trackToOneRelation($this->changedToOneRelationState($record));
+		$record = RecordState::clean($this->usersWithProfile()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->getRecords()->add($record);
+		$session->getToOneRelations()->add($this->changedToOneRelationState($record));
 
 		$session->flush();
 
@@ -816,8 +838,10 @@ final class SessionTest extends TestCase
 	{
 		RecordingRelationPersistencePlanner::$addCommand = true;
 		$session = new Session(new RecordingCommandExecutor());
-		$record = $session->trackClean($this->usersWithPosts()->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$collection = $session->trackToManyRelation($this->changedToManyRelationState($record));
+		$record = RecordState::clean($this->usersWithPosts()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->getRecords()->add($record);
+		$collection = $this->changedToManyRelationState($record);
+		$session->getToManyRelations()->add($collection);
 
 		$session->flush();
 
@@ -827,8 +851,10 @@ final class SessionTest extends TestCase
 	public function testReferenceChangesAreClearedAfterSuccessfulFlushThroughSession(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
-		$record = $session->trackClean($this->usersWithProfile()->getKey(10), ['id' => 10, 'name' => 'A1']);
-		$reference = $session->trackToOneRelation($this->changedToOneRelationState($record));
+		$record = RecordState::clean($this->usersWithProfile()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->getRecords()->add($record);
+		$reference = $this->changedToOneRelationState($record);
+		$session->getToOneRelations()->add($reference);
 
 		$session->flush();
 
@@ -840,14 +866,16 @@ final class SessionTest extends TestCase
 		[$users, $tags, $through] = $this->usersWithTags();
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Ada']);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Ada']);
+		$session->getRecords()->add($owner);
 		$owner->setValue('name', 'Ada Lovelace');
-		$target = $session->trackClean($tags->getKey(3), ['id' => 3, 'label' => 'math']);
+		$target = RecordState::clean($tags->getKey(3), ['id' => 3, 'label' => 'math']);
+		$session->getRecords()->add($target);
 		$item = $this->representation(['id' => 3, 'label' => 'math']);
-		$session->adopt($item, $this->tagTemplateSchemaFor($tags), $target);
+		$this->adoptRecord($session, $item, $this->tagTemplateSchemaFor($tags), $target);
 		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($item);
-		$session->trackToManyRelation($collection);
+		$session->getToManyRelations()->add($collection);
 
 		$session->flush();
 
@@ -868,12 +896,14 @@ final class SessionTest extends TestCase
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
-		$child = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$session->getRecords()->add($owner);
+		$child = RecordState::clean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$session->getRecords()->add($child);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
-		$session->adopt($postRepresentation, $this->postTemplateSchemaFor($posts), $child);
+		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$this->adoptRecord($session, $postRepresentation, $this->postTemplateSchemaFor($posts), $child);
 
 		$session->flush();
 
@@ -898,12 +928,14 @@ final class SessionTest extends TestCase
 		[$posts, $users] = $this->postsWithDefaultBelongsToAuthor();
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$owner = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'author_id' => null]);
-		$target = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Ada']);
+		$owner = RecordState::clean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'author_id' => null]);
+		$session->getRecords()->add($owner);
+		$target = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Ada']);
+		$session->getRecords()->add($target);
 		$authorRepresentation = $this->representation(['id' => 10, 'name' => 'Ada']);
 		$ownerRepresentation = $this->representation(['title' => 'Post', 'author' => $authorRepresentation]);
-		$session->adopt($authorRepresentation, $this->userTemplateSchemaFor($users), $target);
-		$session->adopt($ownerRepresentation, $this->postTemplateSchemaWithAuthor($posts, $users), $owner);
+		$this->adoptRecord($session, $authorRepresentation, $this->userTemplateSchemaFor($users), $target);
+		$this->adoptRecord($session, $ownerRepresentation, $this->postTemplateSchemaWithAuthor($posts, $users), $owner);
 
 		$session->flush();
 
@@ -928,11 +960,12 @@ final class SessionTest extends TestCase
 		[$posts, $users] = $this->postsWithDefaultBelongsToAuthor();
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$owner = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'author_id' => 10]);
+		$owner = RecordState::clean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'author_id' => 10]);
+		$session->getRecords()->add($owner);
 		$baselineAuthor = new stdClass();
 		$ownerRepresentation = $this->representation(['title' => 'Post', 'author' => null]);
-		$session->adopt($ownerRepresentation, $this->postTemplateSchemaWithAuthor($posts, $users), $owner);
-		$session->trackToOneRelation(new ToOneRelationState($owner, 'author', $this->userTemplateSchemaFor($users), $baselineAuthor));
+		$this->adoptRecord($session, $ownerRepresentation, $this->postTemplateSchemaWithAuthor($posts, $users), $owner);
+		$session->getToOneRelations()->add(new ToOneRelationState($owner, 'author', $this->userTemplateSchemaFor($users), $baselineAuthor));
 
 		$session->flush();
 
@@ -957,12 +990,14 @@ final class SessionTest extends TestCase
 		[$users, $profiles] = $this->usersWithDefaultHasOneProfile();
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
-		$target = $session->trackClean($profiles->getKey(5), ['id' => 5, 'label' => 'Profile', 'user_id' => null]);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$session->getRecords()->add($owner);
+		$target = RecordState::clean($profiles->getKey(5), ['id' => 5, 'label' => 'Profile', 'user_id' => null]);
+		$session->getRecords()->add($target);
 		$profileRepresentation = $this->representation(['id' => 5, 'label' => 'Profile', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'profile' => $profileRepresentation]);
-		$session->adopt($profileRepresentation, $this->profileTemplateSchemaFor($profiles), $target);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithProfile($users, $profiles), $owner);
+		$this->adoptRecord($session, $profileRepresentation, $this->profileTemplateSchemaFor($profiles), $target);
+		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithProfile($users, $profiles), $owner);
 
 		$session->flush();
 
@@ -986,9 +1021,10 @@ final class SessionTest extends TestCase
 	{
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->getRecords()->add($record);
 		$representation = $this->representation(['name' => 'A2']);
-		$session->adopt($representation, $this->templateSchema(), $record);
+		$this->adoptRecord($session, $representation, $this->templateSchema(), $record);
 
 		$result = $session->sync();
 
@@ -1002,10 +1038,11 @@ final class SessionTest extends TestCase
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session(new RecordingCommandExecutor());
-		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$session->getRecords()->add($owner);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		$result = $session->sync($ownerRepresentation);
 
@@ -1018,10 +1055,11 @@ final class SessionTest extends TestCase
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$session->getRecords()->add($owner);
 		$postRepresentation = $this->representation(['id' => null, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		$session->sync($ownerRepresentation);
 		$session->flush();
@@ -1035,11 +1073,12 @@ final class SessionTest extends TestCase
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$session->getRecords()->add($owner);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Existing title', 'user_id' => 10]);
 		$session->existing($postRepresentation);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		$session->sync($ownerRepresentation);
 		$session->remove($postRepresentation);
@@ -1058,9 +1097,10 @@ final class SessionTest extends TestCase
 	public function testSyncRepresentationStateWorksWithoutSchema(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
-		$first = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$first = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->getRecords()->add($first);
 		$firstRepresentation = $this->representation(['name' => 'A2']);
-		$session->adopt($firstRepresentation, $this->templateSchema(), $first);
+		$this->adoptRecord($session, $firstRepresentation, $this->templateSchema(), $first);
 
 		$session->sync($firstRepresentation);
 
@@ -1081,9 +1121,10 @@ final class SessionTest extends TestCase
 	{
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$record = $session->trackClean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
+		$session->getRecords()->add($record);
 		$representation = $this->representation(['name' => 'A2']);
-		$session->adopt($representation, $this->templateSchema(), $record);
+		$this->adoptRecord($session, $representation, $this->templateSchema(), $record);
 
 		$session->flush();
 
@@ -1095,10 +1136,11 @@ final class SessionTest extends TestCase
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$session = new Session(new RecordingCommandExecutor());
-		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$session->getRecords()->add($owner);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		try {
 			$session->sync();
@@ -1118,12 +1160,14 @@ final class SessionTest extends TestCase
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
-		$child = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$session->getRecords()->add($owner);
+		$child = RecordState::clean($posts->getKey(5), ['id' => 5, 'title' => 'Post', 'user_id' => null]);
+		$session->getRecords()->add($child);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$session->adopt($ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
-		$session->adopt($postRepresentation, $this->postTemplateSchemaFor($posts), $child);
+		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$this->adoptRecord($session, $postRepresentation, $this->postTemplateSchemaFor($posts), $child);
 
 		$syncResult = $session->sync();
 		$session->flush();
@@ -1141,10 +1185,12 @@ final class SessionTest extends TestCase
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$session->getRecords()->add($owner);
 		$newChild = $this->representation(['id' => null, 'title' => 'New child', 'user_id' => null]);
-		$session->adopt($newChild, $this->postTemplateSchemaFor($posts), $session->trackNew($posts, ['title' => 'New child', 'user_id' => null]));
-		$collection = $session->trackToManyRelation(new ToManyRelationState($owner, 'posts', $this->postTemplateSchemaFor($posts)));
+		$this->adoptRecord($session, $newChild, $this->postTemplateSchemaFor($posts), RecordState::new($posts, ['title' => 'New child', 'user_id' => null]));
+		$collection = new ToManyRelationState($owner, 'posts', $this->postTemplateSchemaFor($posts));
+		$session->getToManyRelations()->add($collection);
 
 		$collection->add($newChild);
 		$session->flush();
@@ -1167,16 +1213,19 @@ final class SessionTest extends TestCase
 		[$users, $posts] = $this->usersWithNullablePosts();
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
-		$child = $session->trackClean($posts->getKey(5), ['id' => 5, 'title' => 'Known child', 'user_id' => 10]);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$session->getRecords()->add($owner);
+		$child = RecordState::clean($posts->getKey(5), ['id' => 5, 'title' => 'Known child', 'user_id' => 10]);
+		$session->getRecords()->add($child);
 		$childRepresentation = $this->representation(['id' => 5, 'title' => 'Known child', 'user_id' => 10]);
-		$session->adopt($childRepresentation, $this->postTemplateSchemaFor($posts), $child);
-		$collection = $session->trackToManyRelation(new ToManyRelationState(
+		$this->adoptRecord($session, $childRepresentation, $this->postTemplateSchemaFor($posts), $child);
+		$collection = new ToManyRelationState(
 			$owner,
 			'posts',
 			$this->postTemplateSchemaFor($posts),
 			[$childRepresentation],
-		));
+		);
+		$session->getToManyRelations()->add($collection);
 
 		$collection->remove($childRepresentation);
 		$session->flush();
@@ -1244,18 +1293,20 @@ final class SessionTest extends TestCase
 		[$owners, $children] = $this->compositeOwnersWithChildren();
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$owner = $session->trackClean($owners->getKey(['tenant_id' => 7, 'user_id' => 10]), [
+		$owner = RecordState::clean($owners->getKey(['tenant_id' => 7, 'user_id' => 10]), [
 			'tenant_id' => 7,
 			'user_id' => 10,
 			'name' => 'Owner',
 		]);
+		$session->getRecords()->add($owner);
 		$newChild = $this->representation(['label' => 'Composite child', 'tenant_ref' => null, 'user_ref' => null]);
-		$session->adopt($newChild, $this->compositeChildSchemaFor($children), $session->trackNew($children, [
+		$this->adoptRecord($session, $newChild, $this->compositeChildSchemaFor($children), RecordState::new($children, [
 			'label' => 'Composite child',
 			'tenant_ref' => null,
 			'user_ref' => null,
 		]));
-		$collection = $session->trackToManyRelation(new ToManyRelationState($owner, 'children', $this->compositeChildSchemaFor($children)));
+		$collection = new ToManyRelationState($owner, 'children', $this->compositeChildSchemaFor($children));
+		$session->getToManyRelations()->add($collection);
 
 		$collection->add($newChild);
 		$session->flush();
@@ -1278,9 +1329,11 @@ final class SessionTest extends TestCase
 		[$users, $tags, $through] = $this->usersWithTags();
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
-		$owner = $session->trackClean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
+		$session->getRecords()->add($owner);
 		$tag = $session->identify($tags, ['id' => 3]);
-		$collection = $session->trackToManyRelation(new ToManyRelationState($owner, 'tags', $this->tagTemplateSchemaFor($tags)));
+		$collection = new ToManyRelationState($owner, 'tags', $this->tagTemplateSchemaFor($tags));
+		$session->getToManyRelations()->add($collection);
 
 		$collection->remove($tag);
 		$session->flush();
@@ -1311,9 +1364,11 @@ final class SessionTest extends TestCase
 		self::assertStringNotContainsString('Database', $source);
 	}
 
-	public function testSessionHasNoPublicAdoptGraphMethod(): void
+	public function testSessionDoesNotExposeAdoptGraph(): void
 	{
-		self::assertFalse(method_exists(Session::class, 'adoptGraph'));
+		$method = new \ReflectionMethod(Session::class, 'adoptGraph');
+
+		self::assertTrue($method->isPrivate());
 	}
 
 	private function templateSchema(): RepresentationSchema

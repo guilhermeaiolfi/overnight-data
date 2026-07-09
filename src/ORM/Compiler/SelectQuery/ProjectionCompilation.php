@@ -10,7 +10,7 @@ namespace ON\Data\ORM\Compiler\SelectQuery;
  * needed to adopt flat mutable query rows.
  *
  * Exists because mutable SelectQuery export must pass identity metadata to
- * ProjectionRepresentationAdopter separately from the user-visible schema.
+ * QueryRepresentationStateBuilder separately from the user-visible schema.
  */
 use ON\Data\ORM\Compiler\ProjectionSource;
 use ON\Data\ORM\State\RepresentationSchema;

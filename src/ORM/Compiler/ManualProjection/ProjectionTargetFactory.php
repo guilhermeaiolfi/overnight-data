@@ -14,14 +14,16 @@ namespace ON\Data\ORM\Compiler\ManualProjection;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RecordState;
+use ON\Data\ORM\State\RepresentationFieldSchema;
+use ON\Data\ORM\State\RepresentationFieldStateItem;
 use ON\Data\ORM\State\RepresentationSchema;
 use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\ORM\State\RepresentationState;
+use stdClass;
 
 final class ProjectionTargetFactory
 {
@@ -29,7 +31,6 @@ final class ProjectionTargetFactory
 		private Session $session,
 		private object $rootRepresentation,
 		private PathResolver $pathResolver,
-		private RepresentationTracker $representationTracker,
 	) {
 	}
 
@@ -43,7 +44,8 @@ final class ProjectionTargetFactory
 	 */
 	public function createRoot(CollectionInterface $collection, array $values): RootTarget
 	{
-		$record = $this->session->trackRecord(RecordState::new($collection, $values));
+		$record = RecordState::new($collection, $values);
+		$this->session->getRecords()->add($record);
 
 		return new RootTarget($record);
 	}
@@ -54,7 +56,8 @@ final class ProjectionTargetFactory
 	public function createAtPath(PathResolution $path, array $values): Target
 	{
 		$collection = $path->getRelatedSchema()->getCollection();
-		$record = $this->session->trackRecord(RecordState::new($collection, $values));
+		$record = RecordState::new($collection, $values);
+		$this->session->getRecords()->add($record);
 
 		return $this->attachPathTarget(
 			$path->getOwner(),
@@ -72,7 +75,9 @@ final class ProjectionTargetFactory
 	public function createAtRelation(RelationRef $relation, array $values): Target
 	{
 		$owner = $relation->getOwner()->getTargetRecord();
-		$record = $this->session->trackRecord(RecordState::new($relation->getDefinition()->getCollection(), $values));
+		$record = RecordState::new($relation->getDefinition()->getCollection(), $values);
+		$this->session->getRecords()->add($record);
+		$identityObject = $this->createIdentityObject($record);
 
 		return $this->attachRelationTarget(
 			$owner,
@@ -80,7 +85,8 @@ final class ProjectionTargetFactory
 			$this->relationCardinality($relation),
 			new RepresentationSchema($relation->getDefinition()->getCollection()),
 			$record,
-			$this->representationTracker->trackAdapter($record),
+			$identityObject,
+			[new RepresentationEnrollment($identityObject, $this->fromPrimaryKeyRecord($record))],
 		);
 	}
 
@@ -107,6 +113,7 @@ final class ProjectionTargetFactory
 	{
 		$owner = $relation->getOwner()->getTargetRecord();
 		$record = $this->recordForExisting($relation->getDefinition()->getCollection(), $key, $seedValues);
+		$identityObject = $this->createIdentityObject($record);
 
 		return $this->attachRelationTarget(
 			$owner,
@@ -114,39 +121,24 @@ final class ProjectionTargetFactory
 			$this->relationCardinality($relation),
 			new RepresentationSchema($relation->getDefinition()->getCollection()),
 			$record,
-			$this->representationTracker->trackAdapter($record),
+			$identityObject,
+			[new RepresentationEnrollment($identityObject, $this->fromPrimaryKeyRecord($record))],
 		);
 	}
 
 	public function trackedRoot(object $representation, CollectionInterface $collection): RootTarget
 	{
-		$state = $this->session->getRepresentations()->get($representation);
-		if (! $state instanceof RepresentationState) {
-			throw new SyncException('Cannot use tracked() for a manual projection source because the representation is not tracked.');
-		}
-
-		$matches = $this->representationTracker->recordsForCollection($state, $collection);
-		if ($matches === []) {
-			throw new StateException(sprintf(
-				"Cannot use tracked() for collection '%s' because the representation has no matching tracked record state.",
-				$collection->getName()
-			));
-		}
-
-		if (count($matches) > 1) {
-			throw new StateException(sprintf(
-				"Cannot use tracked() for collection '%s' because the matching record state is ambiguous.",
-				$collection->getName()
-			));
-		}
-
-		return new RootTarget($matches[0]);
+		return new RootTarget($this->session->getRepresentations()->getSingleRecordForTrackedTarget(
+			$representation,
+			$collection,
+			sprintf("Cannot use tracked() for collection '%s'", $collection->getName())
+		));
 	}
 
 	public function trackedAtPath(PathResolution $path, object $representation, ?object $target): Target
 	{
 		$target ??= $representation;
-		$record = $this->representationTracker->singleRecordForTrackedTarget(
+		$record = $this->session->getRepresentations()->getSingleRecordForTrackedTarget(
 			$target,
 			$path->getRelatedSchema()->getCollection(),
 			sprintf("Cannot use tracked() for relation '%s'", $path->getRelationName())
@@ -167,7 +159,7 @@ final class ProjectionTargetFactory
 	{
 		$owner = $relation->getOwner()->getTargetRecord();
 		$target ??= $representation;
-		$record = $this->representationTracker->singleRecordForTrackedTarget(
+		$record = $this->session->getRepresentations()->getSingleRecordForTrackedTarget(
 			$target,
 			$relation->getDefinition()->getCollection(),
 			sprintf("Cannot use tracked() for relation '%s'", implode('.', $relation->getPath()))
@@ -193,7 +185,7 @@ final class ProjectionTargetFactory
 		?object $explicitTarget = null,
 	): Target {
 		$objectShaped = $this->rootRepresentation !== $ownerObject;
-		$target = $this->resolvePathTargetObject($record, $relatedSchema, $ownerObject, $explicitTarget, $objectShaped);
+		[$target, $pendingEnrollments] = $this->resolvePathTargetObject($record, $relatedSchema, $ownerObject, $explicitTarget, $objectShaped);
 		$this->applyRelationTarget($owner, $relationName, $cardinality, $relatedSchema, $target);
 
 		return new Target(
@@ -204,9 +196,13 @@ final class ProjectionTargetFactory
 			$record,
 			$target,
 			$objectShaped,
+			$pendingEnrollments,
 		);
 	}
 
+	/**
+	 * @param list<RepresentationEnrollment> $pendingEnrollments
+	 */
 	private function attachRelationTarget(
 		RecordState $owner,
 		string $relationName,
@@ -214,6 +210,7 @@ final class ProjectionTargetFactory
 		RepresentationSchema $relatedSchema,
 		RecordState $record,
 		object $target,
+		array $pendingEnrollments = [],
 	): Target {
 		$this->applyRelationTarget($owner, $relationName, $cardinality, $relatedSchema, $target);
 
@@ -225,29 +222,29 @@ final class ProjectionTargetFactory
 			$record,
 			$target,
 			false,
+			$pendingEnrollments,
 		);
 	}
 
+	/**
+	 * @return array{0: object, 1: list<RepresentationEnrollment>}
+	 */
 	private function resolvePathTargetObject(
 		RecordState $record,
 		RepresentationSchema $relatedSchema,
 		object $ownerObject,
 		?object $explicitTarget,
 		bool $objectShaped,
-	): object {
+	): array {
 		if ($explicitTarget !== null) {
-			$this->representationTracker->trackTarget($explicitTarget, $record, $relatedSchema);
-
-			return $explicitTarget;
+			return [$explicitTarget, $this->pendingEnrollmentsIfUntracked($explicitTarget, $record, $relatedSchema)];
 		}
 
 		if ($objectShaped) {
-			$this->representationTracker->trackTarget($this->rootRepresentation, $record, $relatedSchema);
-
-			return $this->rootRepresentation;
+			return [$this->rootRepresentation, $this->pendingEnrollmentsIfUntracked($this->rootRepresentation, $record, $relatedSchema)];
 		}
 
-		return $this->representationTracker->trackFlattenedAdapter($record, $relatedSchema, $ownerObject);
+		return $this->resolveFlattenedAdapter($record, $relatedSchema, $ownerObject);
 	}
 
 	private function applyRelationTarget(
@@ -316,7 +313,7 @@ final class ProjectionTargetFactory
 		}
 
 		$record = RecordState::clean($key, $values + $key->getValues());
-		$this->session->trackRecord($record);
+		$this->session->getRecords()->add($record);
 
 		return $record;
 	}
@@ -324,5 +321,77 @@ final class ProjectionTargetFactory
 	private function relationCardinality(RelationRef $relation): RelationCardinality
 	{
 		return $relation->getDefinition()->getCardinality();
+	}
+
+	private function fromPrimaryKeyRecord(RecordState $record): RepresentationState
+	{
+		$schema = new RepresentationSchema($record->getCollection());
+		foreach ($record->getCollection()->getPrimaryKey() as $fieldName) {
+			$schema->addField(new RepresentationFieldSchema($fieldName, $record->getCollection(), $fieldName, writable: false));
+		}
+
+		return RepresentationState::fromRecords(
+			$schema,
+			[RepresentationFieldSchema::sourcePathKey([]) => $record],
+		);
+	}
+
+	private function fromRelationTarget(
+		RepresentationSchema $schema,
+		RecordState $record,
+	): RepresentationState {
+		$fieldItems = [];
+		foreach ($schema->getFields() as $fieldSchema) {
+			$fieldItems[] = RepresentationFieldStateItem::createOne($fieldSchema->withSkipWhenMissing(true), $record);
+		}
+
+		return new RepresentationState($schema, $fieldItems);
+	}
+
+	private function createIdentityObject(RecordState $record): object
+	{
+		$object = new stdClass();
+		foreach ($record->getCollection()->getPrimaryKey() as $fieldName) {
+			if ($record->hasValue($fieldName)) {
+				$object->{$fieldName} = $record->getValue($fieldName);
+			}
+		}
+
+		return $object;
+	}
+
+	/**
+	 * @return list<RepresentationEnrollment>
+	 */
+	private function pendingEnrollmentsIfUntracked(
+		object $target,
+		RecordState $record,
+		RepresentationSchema $schema,
+	): array {
+		if ($this->session->getRepresentations()->has($target)) {
+			return [];
+		}
+
+		return [new RepresentationEnrollment($target, $this->fromRelationTarget($schema, $record))];
+	}
+
+	/**
+	 * @return array{0: object, 1: list<RepresentationEnrollment>}
+	 */
+	private function resolveFlattenedAdapter(
+		RecordState $record,
+		RepresentationSchema $relatedSchema,
+		object $ownerObject,
+	): array {
+		$target = $ownerObject;
+		$state = $this->session->getRepresentations()->get($target);
+		if ($state instanceof RepresentationState) {
+			$existing = $this->session->getRecords()->getFromRepresentation($state);
+			if ($existing !== $record) {
+				$target = new stdClass();
+			}
+		}
+
+		return [$target, $this->pendingEnrollmentsIfUntracked($target, $record, $relatedSchema)];
 	}
 }

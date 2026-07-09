@@ -4,8 +4,31 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\State;
 
+use ON\Data\ORM\Exception\StateException;
+
 final class RepresentationFieldStateItem
 {
+	public static function createOne(
+		RepresentationFieldSchema $fieldSchema,
+		RecordState $record,
+	): self {
+		if ($fieldSchema->getCollectionName() !== $record->getCollection()->getName()) {
+			throw new StateException(sprintf(
+				"Representation schema path '%s' targets collection '%s', not '%s'.",
+				$fieldSchema->getPath(),
+				$fieldSchema->getCollectionName(),
+				$record->getCollection()->getName()
+			));
+		}
+
+		return new self(
+			$fieldSchema,
+			$record,
+			$fieldSchema->getFieldName(),
+			$record->getRevision()
+		);
+	}
+
 	public function __construct(
 		private RepresentationFieldSchema $schema,
 		private RecordState $record,

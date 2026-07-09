@@ -5,17 +5,19 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\Exception\SyncException;
+use ON\Data\ORM\Session;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationRelationSchema;
 use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
-use ON\Data\ORM\Sync\GraphAdopter;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
+use Tests\ON\Data\Support\RecordingCommandExecutor;
 
-final class GraphAdopterTest extends TestCase
+final class SessionGraphAdoptionTest extends TestCase
 {
 	use OrmFixture;
 
@@ -24,9 +26,9 @@ final class GraphAdopterTest extends TestCase
 		$root = $this->representation(['name' => 'Root']);
 		$representations = $this->representations($this->tracked($root, $this->userSchemaFor(RecordState::new($this->users()))));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
+		$this->session($representations)->sync($root);
 
-		self::assertSame([], $result);
+		self::assertCount(1, $representations->getAll());
 	}
 
 	public function testUntrackedRootWithSchemaIsAdopted(): void
@@ -34,10 +36,10 @@ final class GraphAdopterTest extends TestCase
 		$root = $this->representation(['name' => 'Root']);
 		$records = new RecordStateStore();
 		$representations = new RepresentationStateStore();
+		$session = $this->session($representations, $records);
 
-		$result = $this->adopter()->adopt($root, $representations, $records, $this->userSchema());
+		$session->sync($root, $this->userSchema());
 
-		self::assertSame([], $result);
 		$tracked = $representations->get($root);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
 		self::assertSame('Root', $records->getFromRepresentation($tracked)?->getValue('name'));
@@ -50,7 +52,7 @@ final class GraphAdopterTest extends TestCase
 		$records = new RecordStateStore();
 		$representations = new RepresentationStateStore();
 
-		$this->adopter()->adopt($root, $representations, $records, $this->userSchemaWithId());
+		$this->session($representations, $records)->sync($root, $this->userSchemaWithId());
 
 		$tracked = $representations->get($root);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
@@ -67,7 +69,7 @@ final class GraphAdopterTest extends TestCase
 		$records = new RecordStateStore();
 		$representations = new RepresentationStateStore();
 
-		$this->adopter()->adopt($root, $representations, $records, $this->userSchemaWithId());
+		$this->session($representations, $records)->sync($root, $this->userSchemaWithId());
 
 		$tracked = $representations->get($root);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
@@ -78,10 +80,10 @@ final class GraphAdopterTest extends TestCase
 
 	public function testUntrackedRootWithoutSchemaThrows(): void
 	{
-		$this->expectException(StateException::class);
-		$this->expectExceptionMessage('root schema');
+		$this->expectException(SyncException::class);
+		$this->expectExceptionMessage('without a root RepresentationSchema');
 
-		$this->adopter()->adopt(new stdClass(), new RepresentationStateStore(), new RecordStateStore());
+		$this->session(new RepresentationStateStore())->sync(new stdClass());
 	}
 
 	public function testManyRelationWithNullValueAdoptsNothing(): void
@@ -89,9 +91,9 @@ final class GraphAdopterTest extends TestCase
 		$root = $this->representation(['posts' => null]);
 		$representations = $this->representations($this->trackedRootWithPosts($root));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
+		$this->session($representations)->sync($root);
 
-		self::assertSame([], $result);
+		self::assertCount(1, $representations->getAll());
 	}
 
 	public function testManyRelationWithIterableObjectsAdoptsUntrackedItems(): void
@@ -101,12 +103,11 @@ final class GraphAdopterTest extends TestCase
 		$records = new RecordStateStore();
 		$representations = $this->representations($this->trackedRootWithPosts($root));
 
-		$result = $this->adopter()->adopt($root, $representations, $records);
+		$this->session($representations, $records)->sync($root);
 
-		self::assertCount(1, $result);
-		self::assertSame($representations->get($item), $result[0]);
-		self::assertSame($result[0], $representations->get($item));
-		self::assertTrue($records->getFromRepresentation($result[0])?->isNew());
+		$adopted = $representations->get($item);
+		self::assertInstanceOf(RepresentationState::class, $adopted);
+		self::assertTrue($records->getFromRepresentation($adopted)?->isNew());
 	}
 
 	public function testManyRelationWithCompleteKeyAdoptsUntrackedItemAsNew(): void
@@ -116,10 +117,11 @@ final class GraphAdopterTest extends TestCase
 		$records = new RecordStateStore();
 		$representations = $this->representations($this->trackedRootWithPostsAndPostIds($root));
 
-		$result = $this->adopter()->adopt($root, $representations, $records);
+		$this->session($representations, $records)->sync($root);
 
-		self::assertCount(1, $result);
-		$record = $records->getFromRepresentation($result[0]);
+		$adopted = $representations->get($item);
+		self::assertInstanceOf(RepresentationState::class, $adopted);
+		$record = $records->getFromRepresentation($adopted);
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isNew());
 		self::assertSame(5, $record->getValue('id'));
@@ -132,10 +134,11 @@ final class GraphAdopterTest extends TestCase
 		$records = new RecordStateStore();
 		$representations = $this->representations($this->trackedRootWithPostsAndPostIds($root));
 
-		$result = $this->adopter()->adopt($root, $representations, $records);
+		$this->session($representations, $records)->sync($root);
 
-		self::assertCount(1, $result);
-		$record = $records->getFromRepresentation($result[0]);
+		$adopted = $representations->get($item);
+		self::assertInstanceOf(RepresentationState::class, $adopted);
+		$record = $records->getFromRepresentation($adopted);
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isNew());
 	}
@@ -149,7 +152,7 @@ final class GraphAdopterTest extends TestCase
 		$this->expectExceptionMessage('posts');
 		$this->expectExceptionMessage('iterable');
 
-		$this->adopter()->adopt($root, $representations, new RecordStateStore());
+		$this->session($representations)->sync($root);
 	}
 
 	public function testManyRelationWithNonObjectItemThrows(): void
@@ -161,7 +164,7 @@ final class GraphAdopterTest extends TestCase
 		$this->expectExceptionMessage('posts');
 		$this->expectExceptionMessage('only contain objects');
 
-		$this->adopter()->adopt($root, $representations, new RecordStateStore());
+		$this->session($representations)->sync($root);
 	}
 
 	public function testOneRelationWithNullValueAdoptsNothing(): void
@@ -169,9 +172,9 @@ final class GraphAdopterTest extends TestCase
 		$root = $this->representation(['profile' => null]);
 		$representations = $this->representations($this->trackedRootWithProfile($root));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
+		$this->session($representations)->sync($root);
 
-		self::assertSame([], $result);
+		self::assertCount(1, $representations->getAll());
 	}
 
 	public function testOneRelationWithObjectValueAdoptsUntrackedTarget(): void
@@ -180,10 +183,9 @@ final class GraphAdopterTest extends TestCase
 		$root = $this->representation(['profile' => $target]);
 		$representations = $this->representations($this->trackedRootWithProfile($root));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
+		$this->session($representations)->sync($root);
 
-		self::assertCount(1, $result);
-		self::assertSame($representations->get($target), $result[0]);
+		self::assertInstanceOf(RepresentationState::class, $representations->get($target));
 	}
 
 	public function testOneRelationWithNonObjectNonNullValueThrows(): void
@@ -195,7 +197,7 @@ final class GraphAdopterTest extends TestCase
 		$this->expectExceptionMessage('profile');
 		$this->expectExceptionMessage('object value or null');
 
-		$this->adopter()->adopt($root, $representations, new RecordStateStore());
+		$this->session($representations)->sync($root);
 	}
 
 	public function testAlreadyTrackedRelatedObjectIsNotDuplicated(): void
@@ -207,9 +209,8 @@ final class GraphAdopterTest extends TestCase
 			$this->tracked($item, $this->postSchemaFor(RecordState::new($this->posts())))
 		);
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
+		$this->session($representations)->sync($root);
 
-		self::assertSame([], $result);
 		self::assertCount(2, $representations->getAll());
 	}
 
@@ -227,10 +228,9 @@ final class GraphAdopterTest extends TestCase
 		));
 		$representations = $this->representations($this->trackedRootWithPosts($root), $this->tracked($post, $postSchema));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
+		$this->session($representations)->sync($root);
 
-		self::assertCount(1, $result);
-		self::assertSame($representations->get($comment), $result[0]);
+		self::assertInstanceOf(RepresentationState::class, $representations->get($comment));
 	}
 
 	public function testRecursiveManyRelationAdoptionWorks(): void
@@ -254,9 +254,10 @@ final class GraphAdopterTest extends TestCase
 		));
 		$representations = $this->representations($this->tracked($root, $rootSchema));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
+		$this->session($representations)->sync($root);
 
-		self::assertSame([$representations->get($post), $representations->get($comment)], $result);
+		self::assertInstanceOf(RepresentationState::class, $representations->get($post));
+		self::assertInstanceOf(RepresentationState::class, $representations->get($comment));
 	}
 
 	public function testRecursiveOneRelationAdoptionWorks(): void
@@ -279,9 +280,10 @@ final class GraphAdopterTest extends TestCase
 		));
 		$representations = $this->representations($this->tracked($root, $rootSchema));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
+		$this->session($representations)->sync($root);
 
-		self::assertSame([$representations->get($profile), $representations->get($user)], $result);
+		self::assertInstanceOf(RepresentationState::class, $representations->get($profile));
+		self::assertInstanceOf(RepresentationState::class, $representations->get($user));
 	}
 
 	public function testCyclicGraphDoesNotInfiniteLoop(): void
@@ -306,10 +308,9 @@ final class GraphAdopterTest extends TestCase
 		));
 		$representations = $this->representations($this->tracked($root, $rootSchema));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
+		$this->session($representations)->sync($root);
 
-		self::assertCount(1, $result);
-		self::assertSame($representations->get($item), $result[0]);
+		self::assertInstanceOf(RepresentationState::class, $representations->get($item));
 	}
 
 	public function testRelatedObjectsAreAdoptedUsingGetRelatedSchema(): void
@@ -318,14 +319,16 @@ final class GraphAdopterTest extends TestCase
 		$root = $this->representation(['posts' => [$item]]);
 		$representations = $this->representations($this->trackedRootWithPosts($root));
 
-		$result = $this->adopter()->adopt($root, $representations, new RecordStateStore());
+		$this->session($representations)->sync($root);
 
-		self::assertSame('posts', $result[0]->getSchema()->getField('title')->getCollectionName());
+		$adopted = $representations->get($item);
+		self::assertInstanceOf(RepresentationState::class, $adopted);
+		self::assertSame('posts', $adopted->getSchema()->getField('title')->getCollectionName());
 	}
 
 	public function testGraphAdoptionDoesNotPlanFlushExecuteOrClearRelationChanges(): void
 	{
-		$source = file_get_contents(__DIR__ . '/../../../src/ORM/Sync/GraphAdopter.php');
+		$source = file_get_contents(__DIR__ . '/../../../src/ORM/Sync/RepresentationStateAdoptionTrait.php');
 
 		self::assertIsString($source);
 		self::assertStringNotContainsString('RelationPersistencePlanner', $source);
@@ -335,9 +338,12 @@ final class GraphAdopterTest extends TestCase
 		self::assertStringNotContainsString('clearChanges', $source);
 	}
 
-	private function adopter(): GraphAdopter
+	private function session(RepresentationStateStore $representations, ?RecordStateStore $records = null): Session
 	{
-		return new GraphAdopter();
+		return new Session(
+			new RecordingCommandExecutor(),
+			context: $this->context($representations, $records ?? new RecordStateStore()),
+		);
 	}
 
 	private function trackedRootWithPosts(object $root): RepresentationState

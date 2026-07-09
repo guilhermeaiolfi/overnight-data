@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\State;
 
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationRelationSchema;
 use ON\Data\ORM\State\RepresentationRelationStateItem;
@@ -15,6 +16,43 @@ use Tests\ON\Data\ORM\Support\OrmFixture;
 final class RepresentationRelationStateItemTest extends TestCase
 {
 	use OrmFixture;
+
+	public function testCreateOneValidatesOwnerCollection(): void
+	{
+		$schema = new RepresentationRelationSchema(
+			'posts',
+			$this->users(),
+			'posts',
+			new RepresentationSchema($this->posts()),
+		);
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage("Representation relation path 'posts' targets collection 'users', not 'posts'.");
+
+		RepresentationRelationStateItem::createOne(
+			$schema,
+			RecordState::new($this->posts(), ['title' => 'A1']),
+		);
+	}
+
+	public function testCreateOnePreservesExistingItemBehavior(): void
+	{
+		$users = $this->users();
+		$owner = RecordState::new($users, ['name' => 'Ada']);
+		$schema = new RepresentationRelationSchema(
+			'posts',
+			$users,
+			'posts',
+			new RepresentationSchema($this->posts()),
+		);
+
+		$item = RepresentationRelationStateItem::createOne($schema, $owner);
+
+		self::assertSame('posts', $item->getPath());
+		self::assertSame($schema, $item->getSchema());
+		self::assertSame($owner, $item->getOwnerRecord());
+		self::assertSame('posts', $item->getRelationName());
+	}
 
 	public function testExposesSchemaOwnerRecordAndRelationName(): void
 	{

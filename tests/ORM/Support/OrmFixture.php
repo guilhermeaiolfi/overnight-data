@@ -7,6 +7,7 @@ namespace Tests\ON\Data\ORM\Support;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Relation\RelationStateStore;
+use ON\Data\ORM\Session;
 use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
@@ -65,6 +66,15 @@ trait OrmFixture
 			$toManyRelations,
 			$toOneRelations
 		);
+	}
+
+	protected function adoptRecord(
+		Session $session,
+		object $representation,
+		RepresentationSchema $schema,
+		RecordState $record,
+	): RepresentationState {
+		return $session->adoptRecord($representation, $schema, $record);
 	}
 
 	protected function users(): CollectionInterface

@@ -82,8 +82,8 @@ Graph sync does not infer relations from collection definitions, object properti
 
 Object graphs and flat mutable projections use different adoption paths:
 
-- `GraphAdopter` handles object graphs: one representation object resolves to nested related objects, each with its own schema branch.
-- `ProjectionRepresentationAdopter` handles flat mutable projections: one representation object can be backed by multiple `RecordState` objects through compiled `ProjectionSource` entries.
+- `Session::adoptGraph()` handles object graphs: one representation object resolves to nested related objects, each with its own schema branch.
+- `QueryRepresentationStateBuilder` handles flat mutable projections: one representation object can be backed by multiple `RecordState` objects through compiled `ProjectionSource` entries.
 
 For flat projections, the compiler may add hidden identity selections tagged `SelectionTag::INTERNAL`. `ProjectionIdentityColumns` maps source-path primary-key fields to result row keys, allowing adoption to read identity values and resolve `RecordState` keys. Internal selections are stripped from public query results, but they are required for mutable flat projection tracking.
 
@@ -159,8 +159,8 @@ Use `getRelatedSchema()` for both cardinalities. Do not introduce separate `getI
 
 `RepresentationSchema` stays structure-only. It is attached to concrete runtime state by services that create `RepresentationState` items:
 
-- `RepresentationAdopter` builds field and relation state items for graph-shaped objects.
-- `ProjectionRepresentationAdopter` consumes compiled `ProjectionSource` entries, resolves flat projection identities through `ProjectionIdentityColumns`, and builds field state items against concrete source records.
+- `RepresentationState::fromRecords()` builds field and relation state items for graph-shaped objects.
+- `QueryRepresentationStateBuilder` consumes compiled `ProjectionSource` entries, resolves flat projection identities through `ProjectionIdentityColumns`, and builds field state items against concrete source records.
 - Manual projection tracking merges structural overlays and attaches new fields to concrete records from manual sources.
 
 These attachment steps do not mutate the reusable schema shape. `Session::sync($object, $schema)` is the explicit API that chooses related objects from relation path values, then uses each relation schema's `getRelatedSchema()` with the existing adoption path. Schema attachment still does not infer relations from objects or plan relation persistence.

@@ -17,7 +17,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
 use ON\Data\ORM\Compiler\ProjectionSchemaAssembler;
-use ON\Data\ORM\Compiler\ProjectionSourceBuilder;
+use ON\Data\ORM\Compiler\ProjectionSource;
 use ON\Data\ORM\Compiler\ProjectionSourceResolverInterface;
 use ON\Data\ORM\State\RepresentationRelationSchema;
 use ON\Data\ORM\State\RepresentationSchema;
@@ -33,18 +33,15 @@ final class ProjectionCompiler
 	private ProjectionSelectionNormalizer $selectionNormalizer;
 	private ProjectionSchemaAssembler $schemaAssembler;
 	private ProjectionIdentityPlanner $identityPlanner;
-	private ProjectionSourceBuilder $sourceBuilder;
 
 	public function __construct(
 		?ProjectionSelectionNormalizer $selectionNormalizer = null,
 		?ProjectionSchemaAssembler $schemaAssembler = null,
 		?ProjectionIdentityPlanner $identityPlanner = null,
-		?ProjectionSourceBuilder $sourceBuilder = null,
 	) {
 		$this->selectionNormalizer = $selectionNormalizer ?? new ProjectionSelectionNormalizer();
 		$this->schemaAssembler = $schemaAssembler ?? new ProjectionSchemaAssembler();
 		$this->identityPlanner = $identityPlanner ?? new ProjectionIdentityPlanner();
-		$this->sourceBuilder = $sourceBuilder ?? new ProjectionSourceBuilder();
 	}
 
 	public function compile(SelectQuery $query): RepresentationSchema
@@ -69,7 +66,7 @@ final class ProjectionCompiler
 	public function compileResult(SelectQuery $query): ProjectionCompilation
 	{
 		$schema = $this->compileSchema($query);
-		$sources = $this->sourceBuilder->build($schema);
+		$sources = ProjectionSource::fromRepresentationSchema($schema);
 		$identityColumns = $this->identityPlanner->plan($query, $sources);
 
 		return new ProjectionCompilation($schema, $sources, $identityColumns);

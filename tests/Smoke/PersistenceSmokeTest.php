@@ -15,7 +15,7 @@ use Tests\ON\Data\Smoke\Support\SqliteMemoryHarness;
 #[RequiresPhpExtension('pdo_sqlite')]
 final class PersistenceSmokeTest extends TestCase
 {
-	public function testDocumentedTrackNewFlushMergesGeneratedIdAndPersistsRow(): void
+	public function testDocumentedNewRecordFlushMergesGeneratedIdAndPersistsRow(): void
 	{
 		$harness = SqliteMemoryHarness::create();
 		$harness->exec('CREATE TABLE app_users (user_id INTEGER PRIMARY KEY AUTOINCREMENT, full_name TEXT)');
@@ -31,9 +31,10 @@ final class PersistenceSmokeTest extends TestCase
 		$session = new Session(new CycleCommandExecutor($harness->cycleDatabase));
 
 		/** @var RecordState $record */
-		$record = $session->trackNew($users, [
+		$record = RecordState::new($users, [
 			'name' => 'Ada Lovelace',
 		]);
+		$session->getRecords()->add($record);
 
 		$session->flush();
 

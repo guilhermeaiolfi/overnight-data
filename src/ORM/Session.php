@@ -23,18 +23,17 @@ use ON\Data\ORM\State\RepresentationState;
 use ON\Data\ORM\State\RepresentationStateStore;
 use ON\Data\ORM\Sync\AdoptionRecordResolver;
 use ON\Data\ORM\Sync\ExistingIntent;
-use ON\Data\ORM\Sync\GraphAdopter;
-use ON\Data\ORM\Sync\RepresentationAttacher;
+use ON\Data\ORM\Sync\RepresentationReader;
+use ON\Data\ORM\Sync\RepresentationStateAdoptionTrait;
 use ON\Data\ORM\Sync\RepresentationSyncer;
 use ON\Data\ORM\Sync\SyncResult;
-use stdClass;
 
 final class Session
 {
+	use RepresentationStateAdoptionTrait;
+
 	private SessionContext $context;
-	private RepresentationAttacher $attacher;
 	private AdoptionRecordResolver $recordResolver;
-	private GraphAdopter $graphAdopter;
 	private FlushExecutor $flusher;
 	private RepresentationSyncer $syncer;
 
@@ -42,11 +41,11 @@ final class Session
 		CommandExecutorInterface $executor,
 		?FlushExecutor $flusher = null,
 		?RepresentationSyncer $syncer = null,
+		?SessionContext $context = null,
 	) {
-		$this->context = new SessionContext();
-		$this->attacher = new RepresentationAttacher();
+		$this->context = $context ?? new SessionContext();
 		$this->recordResolver = new AdoptionRecordResolver(existingIntents: $this->context->getExistingIntents());
-		$this->graphAdopter = new GraphAdopter(records: $this->recordResolver);
+		$this->representationReader = new RepresentationReader();
 		$this->syncer = $syncer ?? new RepresentationSyncer();
 		$this->flusher = $flusher ?? new FlushExecutor($executor, $this->syncer);
 	}
@@ -90,29 +89,6 @@ final class Session
 		$this->context->clear();
 	}
 
-	public function trackRecord(RecordState $record): RecordState
-	{
-		$this->getRecords()->add($record);
-
-		return $record;
-	}
-
-	/**
-	 * @param array<string, mixed> $values
-	 */
-	public function trackNew(CollectionInterface $collection, array $values = []): RecordState
-	{
-		return $this->trackRecord(RecordState::new($collection, $values));
-	}
-
-	/**
-	 * @param array<string, mixed> $values
-	 */
-	public function trackClean(Key $key, array $values): RecordState
-	{
-		return $this->trackRecord(RecordState::clean($key, $values));
-	}
-
 	public function existing(object $representation): ExistingIntent
 	{
 		$this->context->getExistingIntents()->mark($representation);
@@ -132,8 +108,8 @@ final class Session
 		?RepresentationSchema $schema = null,
 	): object {
 		$key = $collection->getKey($key);
-		$representation ??= $this->keyOnlyRepresentation($key);
-		$schema ??= $this->keyOnlySchema($collection);
+		$representation ??= RepresentationSchema::representationForKey($key);
+		$schema ??= RepresentationSchema::forPrimaryKey($collection);
 
 		$existingState = $this->getRepresentations()->get($representation);
 		if ($existingState instanceof RepresentationState) {
@@ -158,17 +134,14 @@ final class Session
 			$record = RecordState::clean($key, $this->recordResolver->initialValuesForKey($representation, $schema, $key));
 		}
 
-		$this->attachRootRecord($representation, $schema, $record);
+		$this->adopt(
+			$representation,
+			RepresentationState::fromRecords($schema, [
+				RepresentationFieldSchema::sourcePathKey([]) => $record,
+			]),
+		);
 
 		return $representation;
-	}
-
-	public function adopt(
-		object $representation,
-		RepresentationSchema $schema,
-		RecordState $record,
-	): RepresentationState {
-		return $this->attachRootRecord($representation, $schema, $record);
 	}
 
 	public function removeRecord(RecordState $record): void
@@ -193,20 +166,6 @@ final class Session
 		$this->resolveSingleRecordForRemoval($state)->markRemoved();
 	}
 
-	public function trackToManyRelation(ToManyRelationState $relation): ToManyRelationState
-	{
-		$this->getToManyRelations()->add($relation);
-
-		return $relation;
-	}
-
-	public function trackToOneRelation(ToOneRelationState $relation): ToOneRelationState
-	{
-		$this->getToOneRelations()->add($relation);
-
-		return $relation;
-	}
-
 	public function sync(?object $representation = null, ?RepresentationSchema $schema = null): SyncResult
 	{
 		if ($representation !== null) {
@@ -214,12 +173,7 @@ final class Session
 				throw new SyncException('Cannot synchronize an untracked representation object without a root RepresentationSchema.');
 			}
 
-			$this->graphAdopter->adopt(
-				$representation,
-				$this->context->getRepresentations(),
-				$this->context->getRecords(),
-				$schema
-			);
+			$this->adoptGraph($representation, $schema);
 
 			return $this->syncer->sync($this->context, $representation);
 		}
@@ -254,39 +208,5 @@ final class Session
 		}
 
 		return array_values($records)[0];
-	}
-
-	private function keyOnlyRepresentation(Key $key): object
-	{
-		$representation = new stdClass();
-		foreach ($key->getValues() as $fieldName => $value) {
-			$representation->{$fieldName} = $value;
-		}
-
-		return $representation;
-	}
-
-	private function keyOnlySchema(CollectionInterface $collection): RepresentationSchema
-	{
-		$schema = new RepresentationSchema($collection);
-		foreach ($collection->getPrimaryKey() as $fieldName) {
-			$schema->addField(new RepresentationFieldSchema($fieldName, $collection, $fieldName));
-		}
-
-		return $schema;
-	}
-
-	private function attachRootRecord(
-		object $representation,
-		RepresentationSchema $schema,
-		RecordState $record,
-	): RepresentationState {
-		return $this->attacher->attach(
-			$representation,
-			$schema,
-			[RepresentationFieldSchema::sourcePathKey([]) => $record],
-			$this->getRecords(),
-			$this->getRepresentations()
-		);
 	}
 }

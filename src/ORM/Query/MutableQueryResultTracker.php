@@ -22,10 +22,10 @@ final class MutableQueryResultTracker
 	private RepresentationReader $reader;
 
 	public function __construct(
-		private ?ProjectionRepresentationAdopter $projectionAdopter = null,
+		private ?QueryRepresentationStateBuilder $stateBuilder = null,
 		?RepresentationReader $reader = null,
 	) {
-		$this->projectionAdopter ??= new ProjectionRepresentationAdopter();
+		$this->stateBuilder ??= new QueryRepresentationStateBuilder();
 		$this->reader = $reader ?? new RepresentationReader();
 	}
 
@@ -66,12 +66,13 @@ final class MutableQueryResultTracker
 		array $sourceRow,
 	): void {
 		if ($compilation->hasNonRootSources()) {
-			$this->projectionAdopter->adopt(
+			$state = $this->stateBuilder->build(
 				$object,
 				$compilation,
 				$sourceRow,
-				$session->getContext(),
+				$session->getRecords(),
 			);
+			$session->adopt($object, $state);
 			$session->sync($object);
 
 			return;

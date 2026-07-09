@@ -5,29 +5,25 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Query;
 
 /**
- * Adopts flat mutable query projections into tracked RepresentationState by
- * resolving multiple RecordState identities from one result row.
+ * Converts flat mutable query projection input into RepresentationState.
  *
  * Exists because flat stdClass projections can span collections via hidden
- * identity selections; GraphAdopter handles nested object graphs instead.
+ * identity selections; Session graph adoption handles nested object graphs instead.
  */
 use ON\Data\ORM\Compiler\ProjectionSource;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionCompilation;
 use ON\Data\ORM\Compiler\SelectQuery\ProjectionIdentityColumns;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationState;
-use ON\Data\ORM\Sync\RepresentationAttacher;
 use ON\Data\ORM\Sync\RepresentationReader;
 
-final class ProjectionRepresentationAdopter
+final class QueryRepresentationStateBuilder
 {
 	public function __construct(
 		private ?RepresentationReader $reader = null,
-		private RepresentationAttacher $attacher = new RepresentationAttacher(),
 	) {
 		$this->reader ??= new RepresentationReader();
 	}
@@ -35,19 +31,17 @@ final class ProjectionRepresentationAdopter
 	/**
 	 * @param array<string, mixed> $sourceRow
 	 */
-	public function adopt(
+	public function build(
 		object $representation,
 		ProjectionCompilation $compilation,
 		array $sourceRow,
-		SessionContext $context,
+		RecordStateStore $records,
 	): RepresentationState {
 		$schema = $compilation->getSchema();
 
 		if ($schema->getRelations() !== []) {
-			throw new StateException('Cannot adopt flat projection representation because the schema contains relation schemas.');
+			throw new StateException('Cannot build flat projection representation because the schema contains relation schemas.');
 		}
-
-		$records = $context->getRecords();
 
 		$recordsBySourceKey = $this->resolveSourceRecords(
 			$representation,
@@ -57,13 +51,7 @@ final class ProjectionRepresentationAdopter
 			$sourceRow,
 		);
 
-		return $this->attacher->attach(
-			$representation,
-			$schema,
-			$recordsBySourceKey,
-			$records,
-			$context->getRepresentations(),
-		);
+		return RepresentationState::fromRecords($schema, $recordsBySourceKey);
 	}
 
 	/**
@@ -109,7 +97,7 @@ final class ProjectionRepresentationAdopter
 		if ($record instanceof RecordState) {
 			if ($record->isRemoved()) {
 				throw new StateException(sprintf(
-					"Cannot adopt projection representation for collection '%s' because key '%s' is already tracked as removed.",
+					"Cannot build projection representation for collection '%s' because key '%s' is already tracked as removed.",
 					$collection->getName(),
 					$key->getDebugString()
 				));
@@ -144,7 +132,7 @@ final class ProjectionRepresentationAdopter
 
 				if ($resultKey === null) {
 					throw new StateException(sprintf(
-						"Cannot adopt projection representation for collection '%s' because primary key field '%s' is missing or incomplete.",
+						"Cannot build projection representation for collection '%s' because primary key field '%s' is missing or incomplete.",
 						$collection->getName(),
 						$fieldName,
 					));
@@ -152,7 +140,7 @@ final class ProjectionRepresentationAdopter
 
 				if (! array_key_exists($resultKey, $sourceRow)) {
 					throw new StateException(sprintf(
-						"Cannot adopt projection representation for collection '%s' because internal result key '%s' for primary key field '%s' is missing from the source row.",
+						"Cannot build projection representation for collection '%s' because internal result key '%s' for primary key field '%s' is missing from the source row.",
 						$collection->getName(),
 						$resultKey,
 						$fieldName,
@@ -164,7 +152,7 @@ final class ProjectionRepresentationAdopter
 
 			if ($value === null) {
 				throw new StateException(sprintf(
-					"Cannot adopt projection representation for collection '%s' because primary key field '%s' is missing or incomplete.",
+					"Cannot build projection representation for collection '%s' because primary key field '%s' is missing or incomplete.",
 					$collection->getName(),
 					$fieldName,
 				));

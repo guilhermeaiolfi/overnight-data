@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\State;
 
+use ON\Data\ORM\Exception\StateException;
+
 /**
  * Concrete runtime attachment for one relation representation path: the
  * structural relation schema plus the owner record it is bound to.
@@ -14,6 +16,26 @@ namespace ON\Data\ORM\State;
  */
 final class RepresentationRelationStateItem
 {
+	public static function createOne(
+		RepresentationRelationSchema $relationSchema,
+		RecordState $ownerRecord,
+	): self {
+		if ($relationSchema->getOwnerCollectionName() !== $ownerRecord->getCollection()->getName()) {
+			throw new StateException(sprintf(
+				"Representation relation path '%s' targets collection '%s', not '%s'.",
+				$relationSchema->getPath(),
+				$relationSchema->getOwnerCollectionName(),
+				$ownerRecord->getCollection()->getName()
+			));
+		}
+
+		return new self(
+			$relationSchema,
+			$ownerRecord,
+			$relationSchema->getRelationName()
+		);
+	}
+
 	public function __construct(
 		private RepresentationRelationSchema $schema,
 		private RecordState $ownerRecord,

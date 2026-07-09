@@ -10,8 +10,10 @@ use ON\Data\ORM\Compiler\ManualProjection\AllProperties;
 use ON\Data\ORM\Compiler\ManualProjection\Builder;
 use ON\Data\ORM\Compiler\ManualProjection\PathResolver;
 use ON\Data\ORM\Compiler\ManualProjection\ProjectionCompiler;
+use ON\Data\ORM\Compiler\ManualProjection\ProjectionTargetFactory;
 use ON\Data\ORM\Compiler\ManualProjection\PropertyRef;
-use ON\Data\ORM\Compiler\ManualProjection\RepresentationTracker;
+use ON\Data\ORM\Compiler\ManualProjection\RelationRef;
+use ON\Data\ORM\Compiler\ManualProjection\ManualProjectionRepresentationStateBuilder;
 use ON\Data\ORM\Compiler\ManualProjection\RootTarget;
 use ON\Data\ORM\Compiler\ManualProjection\SourceResolver;
 use ON\Data\ORM\Compiler\ManualProjection\Target;
@@ -23,6 +25,9 @@ use ON\Data\ORM\Compiler\SelectQuery\QueryProjectionSourceResolver;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Session;
+use ON\Data\ORM\SessionContext;
+use ON\Data\ORM\Sync\RepresentationAttachmentMode;
+use Tests\ON\Data\Support\RecordingCommandExecutor;
 use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RecordStateStore;
 use ON\Data\ORM\State\RepresentationFieldSchema;
@@ -39,7 +44,6 @@ use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use stdClass;
 use Tests\ON\Data\Smoke\Support\SqliteMemoryHarness;
-use Tests\ON\Data\Support\RecordingCommandExecutor;
 
 final class ProjectionCompilationArchitectureTest extends TestCase
 {
@@ -88,16 +92,16 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertStringNotContainsString('schemaMerger', $contents);
 	}
 
-	public function testManualBuilderDelegatesProjectionApplicationWithoutSchemaMerger(): void
+	public function testManualBuilderDelegatesProjectionApplicationToStateBuilder(): void
 	{
-		$method = (new ReflectionClass(RepresentationTracker::class))->getMethod('applyManualProjection');
+		$method = (new ReflectionClass(ManualProjectionRepresentationStateBuilder::class))->getMethod('buildOverlay');
 		$parameterTypes = array_map(
 			static fn ($parameter): ?string => $parameter->getType()?->getName(),
 			$method->getParameters()
 		);
 
 		self::assertSame([
-			'object',
+			RepresentationState::class,
 			RepresentationSchema::class,
 			'array',
 		], $parameterTypes);
@@ -227,7 +231,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertSame('title', $postState->getSchema()->getPaths()[1] ?? null);
 	}
 
-	public function testManualTrackerTrackTargetKeepsRelatedSchemaButAttachesFieldItemsOnly(): void
+	public function testManualRelationTargetEnrollmentBuildsSkipWhenMissingFieldItemsOnly(): void
 	{
 		$registry = new Registry();
 		$posts = $registry->collection('posts')
@@ -238,23 +242,24 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('body', 'string')->end();
+		$posts->hasMany('comments', 'comments');
 		$postSchema = new RepresentationSchema($posts);
 		$postSchema->addField(new RepresentationFieldSchema('title', $posts, 'title'));
 		$postSchema->addRelation(new RepresentationRelationSchema('comments', $posts, 'comments', new RepresentationSchema($comments)));
-		$representations = new RepresentationStateStore();
-		$target = new stdClass();
+		$session = new Session(new RecordingCommandExecutor());
+		$representation = new stdClass();
+		$ownerRecord = RecordState::new($posts, ['title' => 'Draft']);
+		$session->getRecords()->add($ownerRecord);
+		$session->adoptRecord($representation, $postSchema, $ownerRecord);
 
-		(new RepresentationTracker($representations, new RecordStateStore()))->trackTarget(
-			$target,
-			RecordState::new($posts, ['title' => 'Draft']),
-			$postSchema,
-		);
+		$target = (new Builder($session, $representation))
+			->fromPath($representation, 'comments')
+			->create(['body' => 'Note']);
 
-		$state = $representations->get($target);
+		$state = $session->getRepresentations()->get($target->getTargetObject());
 		self::assertInstanceOf(RepresentationState::class, $state);
-		self::assertTrue($state->getSchema()->hasRelation('comments'));
+		self::assertSame('comments', $state->getSchema()->getCollectionName());
 		self::assertSame([], $state->getRelationItems());
-		self::assertTrue($state->getFieldItem('title')->getSchema()->shouldSkipWhenMissing());
 	}
 
 	#[RequiresPhpExtension('pdo_sqlite')]
@@ -296,14 +301,29 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertSame('title', $property->getFieldName());
 	}
 
-	public function testAdapterObjectsAreRegisteredInNormalRepresentationStateStore(): void
+	public function testPrimaryKeyRelationTargetBuildsReadOnlyIdentityState(): void
 	{
-		$representations = new RepresentationStateStore();
-		$tracker = new RepresentationTracker($representations, new RecordStateStore());
-		$record = RecordState::new($this->registry()->getCollection('users'), ['id' => 10]);
+		$registry = new Registry();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+		$profiles = $registry->collection('profiles')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+		$users->hasOne('profile', 'profiles');
+		$session = new Session(new RecordingCommandExecutor());
+		$representation = new stdClass();
+		$ownerRecord = RecordState::new($users, ['id' => 1, 'name' => 'Ada']);
+		$session->getRecords()->add($ownerRecord);
+		$target = (new Builder($session, $representation))->create(
+			new RelationRef(new RootTarget($ownerRecord), 'profile', $users->getRelation('profile')),
+			['id' => 10, 'name' => 'Profile'],
+		);
 
-		$adapter = $tracker->trackAdapter($record);
-		$state = $representations->get($adapter);
+		$adapter = $target->getTargetObject();
+		$state = $session->getRepresentations()->get($adapter);
 
 		self::assertInstanceOf(RepresentationState::class, $state);
 		self::assertSame(10, $adapter->id);
@@ -469,10 +489,20 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		$manualSchema = new RepresentationSchema($users);
 		$manualSchema->addField(new RepresentationFieldSchema('name', $users, 'name'));
 
-		(new RepresentationTracker($representations, new RecordStateStore()))->applyManualProjection(
+		$builder = new ManualProjectionRepresentationStateBuilder();
+		$existingState = $representations->get($representation);
+		$session = new Session(
+			new RecordingCommandExecutor(),
+			context: new SessionContext(new RecordStateStore(), $representations),
+		);
+		$session->adopt(
 			$representation,
-			$manualSchema,
-			[new ProjectionFieldShape('name', new RootTarget($record), 'name')],
+			$builder->buildOverlay(
+				$existingState instanceof RepresentationState ? $existingState : null,
+				$manualSchema,
+				[new ProjectionFieldShape('name', new RootTarget($record), 'name')],
+			),
+			RepresentationAttachmentMode::Replace,
 		);
 
 		$state = $representations->get($representation);
@@ -500,10 +530,16 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		$manualSchema = new RepresentationSchema($users);
 		$manualSchema->addField(new RepresentationFieldSchema('managerEmail', $users, 'email', sourcePath: ['manager']));
 
-		(new RepresentationTracker($representations, new RecordStateStore()))->applyManualProjection(
+		$builder = new ManualProjectionRepresentationStateBuilder();
+		$existingState = $representations->get($representation);
+		$session = new Session(
+			new RecordingCommandExecutor(),
+			context: new SessionContext(new RecordStateStore(), $representations),
+		);
+		$session->adopt(
 			$representation,
-			$manualSchema,
-			[],
+			$builder->buildOverlay($existingState instanceof RepresentationState ? $existingState : null, $manualSchema, []),
+			RepresentationAttachmentMode::Replace,
 		);
 
 		$state = $representations->get($representation);
@@ -531,8 +567,8 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("Cannot attach manual projection field 'managerEmail'");
 
-		(new RepresentationTracker($representations, new RecordStateStore()))->applyManualProjection(
-			$representation,
+		(new ManualProjectionRepresentationStateBuilder())->buildOverlay(
+			$representations->get($representation),
 			$manualSchema,
 			[],
 		);

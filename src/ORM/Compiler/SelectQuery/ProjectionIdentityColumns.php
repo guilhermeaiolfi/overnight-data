@@ -14,7 +14,7 @@ namespace ON\Data\ORM\Compiler\SelectQuery;
  * columns can be found, keyed by source path + primary-key field. SelectQuery may
  * inject INTERNAL-tagged identity selections that must not appear in public
  * results but are required to resolve RecordState keys during
- * ProjectionRepresentationAdopter::adopt(). Keying by source path (rather than
+ * QueryRepresentationStateBuilder::build(). Keying by source path (rather than
  * collection name) lets root and related sources share a terminal collection
  * while remaining distinct records.
  */

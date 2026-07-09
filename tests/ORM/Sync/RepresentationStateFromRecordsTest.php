@@ -11,10 +11,10 @@ use ON\Data\ORM\State\RecordState;
 use ON\Data\ORM\State\RepresentationFieldSchema;
 use ON\Data\ORM\State\RepresentationRelationSchema;
 use ON\Data\ORM\State\RepresentationSchema;
-use ON\Data\ORM\Sync\RepresentationStateFactory;
+use ON\Data\ORM\State\RepresentationState;
 use PHPUnit\Framework\TestCase;
 
-final class RepresentationStateFactoryTest extends TestCase
+final class RepresentationStateFromRecordsTest extends TestCase
 {
 	public function testCreatesStateFromSingleRootRecord(): void
 	{
@@ -25,7 +25,7 @@ final class RepresentationStateFactoryTest extends TestCase
 		$schema = new RepresentationSchema($users);
 		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
 
-		$state = (new RepresentationStateFactory())->fromRecords($schema, [
+		$state = RepresentationState::fromRecords($schema, [
 			RepresentationFieldSchema::sourcePathKey([]) => $record,
 		]);
 
@@ -44,7 +44,7 @@ final class RepresentationStateFactoryTest extends TestCase
 		$companyRecord->setValue('name', 'Acme Ltd');
 		$schema = $this->projectionSchema($users, $companies);
 
-		$state = (new RepresentationStateFactory())->fromRecords($schema, [
+		$state = RepresentationState::fromRecords($schema, [
 			RepresentationFieldSchema::sourcePathKey([]) => $userRecord,
 			RepresentationFieldSchema::sourcePathKey(['company']) => $companyRecord,
 		]);
@@ -64,7 +64,7 @@ final class RepresentationStateFactoryTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("source path 'company' is unresolved");
 
-		(new RepresentationStateFactory())->fromRecords($schema, [
+		RepresentationState::fromRecords($schema, [
 			RepresentationFieldSchema::sourcePathKey([]) => RecordState::clean($users->getKey(1), ['id' => 1]),
 		]);
 	}
@@ -78,7 +78,7 @@ final class RepresentationStateFactoryTest extends TestCase
 		$schema->addField(new RepresentationFieldSchema('id', $users, 'id', writable: false));
 		$schema->addField((new RepresentationFieldSchema('companyName', $companies, 'name', sourcePath: ['company']))->withSkipWhenMissing(true));
 
-		$state = (new RepresentationStateFactory())->fromRecords($schema, [
+		$state = RepresentationState::fromRecords($schema, [
 			RepresentationFieldSchema::sourcePathKey([]) => RecordState::clean($users->getKey(1), ['id' => 1]),
 		]);
 
@@ -96,7 +96,7 @@ final class RepresentationStateFactoryTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("Representation schema path 'companyName' targets collection 'companies', not 'users'.");
 
-		(new RepresentationStateFactory())->fromRecords($schema, [
+		RepresentationState::fromRecords($schema, [
 			RepresentationFieldSchema::sourcePathKey([]) => RecordState::clean($users->getKey(1), ['id' => 1]),
 			RepresentationFieldSchema::sourcePathKey(['company']) => RecordState::clean($users->getKey(2), ['id' => 2]),
 		]);
@@ -113,7 +113,7 @@ final class RepresentationStateFactoryTest extends TestCase
 		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
 		$schema->addRelation(new RepresentationRelationSchema('posts', $users, 'posts', $postSchema));
 
-		$state = (new RepresentationStateFactory())->fromRecords($schema, [
+		$state = RepresentationState::fromRecords($schema, [
 			RepresentationFieldSchema::sourcePathKey([]) => $record,
 		]);
 
@@ -132,7 +132,7 @@ final class RepresentationStateFactoryTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("root source path '' is unresolved");
 
-		(new RepresentationStateFactory())->fromRecords($schema, []);
+		RepresentationState::fromRecords($schema, []);
 	}
 
 	public function testRelationOnlySchemaCreatesRelationItemsFromRootRecord(): void
@@ -144,7 +144,7 @@ final class RepresentationStateFactoryTest extends TestCase
 		$schema = new RepresentationSchema($users);
 		$schema->addRelation(new RepresentationRelationSchema('posts', $users, 'posts', new RepresentationSchema($posts)));
 
-		$state = (new RepresentationStateFactory())->fromRecords($schema, [
+		$state = RepresentationState::fromRecords($schema, [
 			RepresentationFieldSchema::sourcePathKey([]) => $record,
 		]);
 

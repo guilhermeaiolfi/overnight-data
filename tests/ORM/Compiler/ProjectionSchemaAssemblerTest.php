@@ -8,7 +8,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Compiler\ProjectionSchemaAssembler;
 use ON\Data\ORM\Compiler\ProjectionFieldShape;
-use ON\Data\ORM\Compiler\ProjectionSourceBuilder;
+use ON\Data\ORM\Compiler\ProjectionSource;
 use ON\Data\ORM\Compiler\ProjectionSourceResolverInterface;
 use ON\Data\ORM\Compiler\ResolvedProjectionSource;
 use PHPUnit\Framework\TestCase;
@@ -161,7 +161,7 @@ final class ProjectionSchemaAssemblerTest extends TestCase
 			$users,
 		);
 
-		$sources = (new ProjectionSourceBuilder())->build($schema);
+		$sources = ProjectionSource::fromRepresentationSchema($schema);
 
 		self::assertCount(2, $sources);
 		self::assertSame([], $sources[0]->getPath());

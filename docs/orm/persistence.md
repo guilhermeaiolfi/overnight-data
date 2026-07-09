@@ -184,9 +184,10 @@ $users = $registry
 
 $session = new Session(new CycleCommandExecutor($cycleDatabase));
 
-$record = $session->trackNew($users, [
+$record = RecordState::new($users, [
     'name' => 'Ada Lovelace',
 ]);
+$session->getRecords()->add($record);
 
 $session->flush();
 

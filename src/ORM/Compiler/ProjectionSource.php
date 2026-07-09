@@ -12,6 +12,7 @@ namespace ON\Data\ORM\Compiler;
  */
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\State\RepresentationFieldSchema;
+use ON\Data\ORM\State\RepresentationSchema;
 
 final class ProjectionSource
 {
@@ -78,5 +79,32 @@ final class ProjectionSource
 		}
 
 		return null;
+	}
+
+	/**
+	 * @return list<ProjectionSource>
+	 */
+	public static function fromRepresentationSchema(RepresentationSchema $schema): array
+	{
+		/** @var array<string, list<RepresentationFieldSchema>> $fieldsByPath */
+		$fieldsByPath = [];
+		/** @var array<string, list<string>> $pathsByKey */
+		$pathsByKey = [];
+		/** @var array<string, CollectionInterface> $collectionsByKey */
+		$collectionsByKey = [];
+
+		foreach ($schema->getFields() as $field) {
+			$key = $field->getSourcePathKey();
+			$fieldsByPath[$key][] = $field;
+			$pathsByKey[$key] ??= $field->getSourcePath();
+			$collectionsByKey[$key] ??= $field->getCollection();
+		}
+
+		$sources = [];
+		foreach ($fieldsByPath as $key => $fields) {
+			$sources[] = new self($pathsByKey[$key], $collectionsByKey[$key], $fields);
+		}
+
+		return $sources;
 	}
 }
