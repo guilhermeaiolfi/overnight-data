@@ -281,7 +281,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		$contents = (string) file_get_contents(dirname(__DIR__, 3) . '/src/ORM/Representation/Schema/Manual/Builder.php');
 
 		self::assertStringContainsString('RepresentationFieldShape', $contents);
-		self::assertStringContainsString('projectionCompiler->compile', $contents);
+		self::assertStringContainsString('schemaCompiler->compile', $contents);
 		self::assertStringNotContainsString('QueryRepresentationSelectionNormalizer', $contents);
 		self::assertStringNotContainsString('SelectQuery\\ManualRepresentationSchemaCompiler', $contents);
 	}

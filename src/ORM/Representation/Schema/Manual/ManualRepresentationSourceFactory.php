@@ -8,8 +8,6 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
@@ -27,11 +25,15 @@ use stdClass;
  */
 final class ManualRepresentationSourceFactory
 {
+	private ManualRepresentationRelationLinker $relationLinker;
+
 	public function __construct(
 		private Session $session,
 		private object $rootRepresentation,
 		private PathResolver $pathResolver,
+		?ManualRepresentationRelationLinker $relationLinker = null,
 	) {
+		$this->relationLinker = $relationLinker ?? new ManualRepresentationRelationLinker($this->session);
 	}
 
 	public function resolvePath(object $owner, string $path): PathResolution
@@ -186,7 +188,7 @@ final class ManualRepresentationSourceFactory
 	): RelationRepresentationSource {
 		$objectShaped = $this->rootRepresentation !== $ownerObject;
 		[$target, $pendingEnrollments] = $this->resolvePathTargetObject($record, $relatedSchema, $ownerObject, $explicitTarget, $objectShaped);
-		$this->applyRelationTarget($owner, $relationName, $cardinality, $relatedSchema, $target);
+		$this->relationLinker->applyTarget($owner, $relationName, $cardinality, $relatedSchema, $target);
 
 		return new RelationRepresentationSource(
 			$owner,
@@ -212,7 +214,7 @@ final class ManualRepresentationSourceFactory
 		object $target,
 		array $pendingEnrollments = [],
 	): RelationRepresentationSource {
-		$this->applyRelationTarget($owner, $relationName, $cardinality, $relatedSchema, $target);
+		$this->relationLinker->applyTarget($owner, $relationName, $cardinality, $relatedSchema, $target);
 
 		return new RelationRepresentationSource(
 			$owner,
@@ -245,52 +247,6 @@ final class ManualRepresentationSourceFactory
 		}
 
 		return $this->resolveFlattenedAdapter($record, $relatedSchema, $ownerObject);
-	}
-
-	private function applyRelationTarget(
-		RecordState $owner,
-		string $relationName,
-		RelationCardinality $cardinality,
-		RepresentationSchema $relatedSchema,
-		object $target,
-	): void {
-		if ($cardinality->isMany()) {
-			$this->applyToManyRelationTarget($owner, $relationName, $relatedSchema, $target);
-
-			return;
-		}
-
-		$this->applyToOneRelationTarget($owner, $relationName, $relatedSchema, $target);
-	}
-
-	private function applyToManyRelationTarget(
-		RecordState $owner,
-		string $relationName,
-		RepresentationSchema $relatedSchema,
-		object $target,
-	): void {
-		$relation = $this->session->getToManyRelations()->get($owner, $relationName);
-		if (! $relation instanceof ToManyRelationState) {
-			$relation = new ToManyRelationState($owner, $relationName, $relatedSchema);
-			$this->session->getToManyRelations()->add($relation);
-		}
-
-		$relation->add($target);
-	}
-
-	private function applyToOneRelationTarget(
-		RecordState $owner,
-		string $relationName,
-		RepresentationSchema $relatedSchema,
-		object $target,
-	): void {
-		$relation = $this->session->getToOneRelations()->get($owner, $relationName);
-		if (! $relation instanceof ToOneRelationState) {
-			$relation = new ToOneRelationState($owner, $relationName, $relatedSchema);
-			$this->session->getToOneRelations()->add($relation);
-		}
-
-		$relation->set($target);
 	}
 
 	private function singleRecordForTrackedTarget(object $target, CollectionInterface $collection, string $prefix): RecordState

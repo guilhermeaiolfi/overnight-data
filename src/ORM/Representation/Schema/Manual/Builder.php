@@ -27,17 +27,17 @@ final class Builder
 
 	private ?PathResolution $pendingPath = null;
 
-	private ManualRepresentationSourceFactory $targetFactory;
+	private ManualRepresentationSourceFactory $sourceFactory;
 
 	public function __construct(
 		private Session $session,
 		private object $representation,
-		private ManualRepresentationSchemaCompiler $projectionCompiler = new ManualRepresentationSchemaCompiler(),
+		private ManualRepresentationSchemaCompiler $schemaCompiler = new ManualRepresentationSchemaCompiler(),
 		private ManualRepresentationStateBuilder $stateBuilder = new ManualRepresentationStateBuilder(),
 		?PathResolver $pathResolver = null,
 	) {
 		$pathResolver ??= new PathResolver($this->session->getRepresentations());
-		$this->targetFactory = new ManualRepresentationSourceFactory(
+		$this->sourceFactory = new ManualRepresentationSourceFactory(
 			$this->session,
 			$this->representation,
 			$pathResolver,
@@ -60,7 +60,7 @@ final class Builder
 	public function fromPath(object $owner, string $path): self
 	{
 		$this->clearPending();
-		$this->pendingPath = $this->targetFactory->resolvePath($owner, $path);
+		$this->pendingPath = $this->sourceFactory->resolvePath($owner, $path);
 
 		return $this;
 	}
@@ -68,21 +68,21 @@ final class Builder
 	public function tracked(?RelationRef $relation = null, ?object $object = null): RootRepresentationSource|RelationRepresentationSource
 	{
 		if ($relation instanceof RelationRef) {
-			return $this->finalizeTarget($this->targetFactory->trackedAtRelation($relation, $this->representation, $object));
+			return $this->finalizeTarget($this->sourceFactory->trackedAtRelation($relation, $this->representation, $object));
 		}
 
 		if ($this->pendingCollection !== null) {
 			$collection = $this->pendingCollection;
 			$this->clearPending();
 
-			return $this->targetFactory->trackedRoot($this->representation, $collection);
+			return $this->sourceFactory->trackedRoot($this->representation, $collection);
 		}
 
 		if ($this->pendingPath !== null) {
 			$path = $this->pendingPath;
 			$this->clearPending();
 
-			return $this->finalizeTarget($this->targetFactory->trackedAtPath($path, $this->representation, $object));
+			return $this->finalizeTarget($this->sourceFactory->trackedAtPath($path, $this->representation, $object));
 		}
 
 		throw new InvalidArgumentException('Builder::tracked() requires from(), fromPath(), or a relation reference.');
@@ -94,21 +94,21 @@ final class Builder
 	public function create(RelationRef|array $relationOrValues = [], array $values = []): RootRepresentationSource|RelationRepresentationSource
 	{
 		if ($relationOrValues instanceof RelationRef) {
-			return $this->finalizeTarget($this->targetFactory->createAtRelation($relationOrValues, $values));
+			return $this->finalizeTarget($this->sourceFactory->createAtRelation($relationOrValues, $values));
 		}
 
 		if ($this->pendingCollection !== null) {
 			$collection = $this->pendingCollection;
 			$this->clearPending();
 
-			return $this->targetFactory->createRoot($collection, $relationOrValues);
+			return $this->sourceFactory->createRoot($collection, $relationOrValues);
 		}
 
 		if ($this->pendingPath !== null) {
 			$path = $this->pendingPath;
 			$this->clearPending();
 
-			return $this->finalizeTarget($this->targetFactory->createAtPath($path, $relationOrValues));
+			return $this->finalizeTarget($this->sourceFactory->createAtPath($path, $relationOrValues));
 		}
 
 		throw new InvalidArgumentException('Builder::create() requires from(), fromPath(), or a relation reference.');
@@ -124,21 +124,21 @@ final class Builder
 				throw new InvalidArgumentException('Builder::existing() requires a key when identifying a relation target.');
 			}
 
-			return $this->finalizeTarget($this->targetFactory->existingAtRelation($relationOrKey, $key, $values));
+			return $this->finalizeTarget($this->sourceFactory->existingAtRelation($relationOrKey, $key, $values));
 		}
 
 		if ($this->pendingCollection !== null) {
 			$collection = $this->pendingCollection;
 			$this->clearPending();
 
-			return $this->targetFactory->existingRoot($collection, $relationOrKey, $this->resolveExistingSeedValues($key, $values));
+			return $this->sourceFactory->existingRoot($collection, $relationOrKey, $this->resolveExistingSeedValues($key, $values));
 		}
 
 		if ($this->pendingPath !== null) {
 			$path = $this->pendingPath;
 			$this->clearPending();
 
-			return $this->finalizeTarget($this->targetFactory->existingAtPath($path, $relationOrKey, $this->resolveExistingSeedValues($key, $values)));
+			return $this->finalizeTarget($this->sourceFactory->existingAtPath($path, $relationOrKey, $this->resolveExistingSeedValues($key, $values)));
 		}
 
 		throw new InvalidArgumentException('Builder::existing() requires from(), fromPath(), or a relation reference.');
@@ -163,7 +163,7 @@ final class Builder
 		$fallbackCollection = $existingState instanceof RepresentationState
 			? $existingState->getSchema()->getCollection()
 			: null;
-		$manualSchema = $this->projectionCompiler->compile($this->propertyShapes, $fallbackCollection);
+		$manualSchema = $this->schemaCompiler->compile($this->propertyShapes, $fallbackCollection);
 		$state = $this->stateBuilder->buildOverlay(
 			$existingState instanceof RepresentationState ? $existingState : null,
 			$manualSchema,
