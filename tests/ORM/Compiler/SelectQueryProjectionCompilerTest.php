@@ -169,7 +169,7 @@ final class SelectQueryProjectionCompilerTest extends TestCase
 		self::assertNotNull($compilation->getIdentityColumns()->get(['company'], 'id'));
 	}
 
-	public function testCompileResultReturnsProjectionCompilationWithSourcePathKeyedIdentities(): void
+	public function testCompileResultReturnsQueryRepresentationPlanWithSourcePathKeyedIdentities(): void
 	{
 		$registry = $this->makeRegistryWithCompany();
 		$users = $registry->getCollection('users');

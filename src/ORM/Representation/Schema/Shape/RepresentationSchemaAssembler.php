@@ -8,12 +8,12 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 /**
- * Shared structural schema creation for projection compilation: turns normalized
+ * Shared structural schema creation for representation schema compilation: turns normalized
  * RepresentationFieldShape values into RepresentationFieldSchema entries, and offers
  * default/primary-key shape factories so root, default, and PK fields flow
  * through the same shape path as explicit selections.
  *
- * Exists so SelectQuery and manual projection compilers share one query-agnostic,
+ * Exists so SelectQuery and manual representation compilers share one query-agnostic,
  * manual-projection-agnostic place that resolves sources and applies writability
  * / skip-when-missing flags.
  */

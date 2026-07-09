@@ -17,7 +17,7 @@ use Tests\ON\Data\Smoke\Support\SqliteMemoryHarness;
 #[RequiresPhpExtension('pdo_sqlite')]
 final class ManualMutableProjectionSmokeTest extends TestCase
 {
-	public function testManualProjectionCreatesFlatRecord(): void
+	public function testManualRepresentationCreatesFlatRecord(): void
 	{
 		$harness = SqliteMemoryHarness::create();
 		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)');
@@ -35,7 +35,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 		self::assertSame(['name' => 'Guilherme'], $harness->fetchRow('SELECT name FROM users WHERE id = 1'));
 	}
 
-	public function testManualProjectionUpdatesExistingFlatRecord(): void
+	public function testManualRepresentationUpdatesExistingFlatRecord(): void
 	{
 		$harness = SqliteMemoryHarness::create();
 		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)');
@@ -54,7 +54,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 		self::assertSame(['name' => 'Updated name'], $harness->fetchRow('SELECT name FROM users WHERE id = 1'));
 	}
 
-	public function testManualProjectionTreatsAppAssignedPrimaryKeyInCreateAsInsert(): void
+	public function testManualRepresentationTreatsAppAssignedPrimaryKeyInCreateAsInsert(): void
 	{
 		$harness = SqliteMemoryHarness::create();
 		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
@@ -72,7 +72,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 		self::assertSame(['id' => 10, 'name' => 'Assigned'], $harness->fetchRow('SELECT id, name FROM users WHERE id = 10'));
 	}
 
-	public function testManualProjectionSkipsMissingSelectedPropertyAndWritesExplicitNull(): void
+	public function testManualRepresentationSkipsMissingSelectedPropertyAndWritesExplicitNull(): void
 	{
 		$harness = SqliteMemoryHarness::create();
 		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT)');
@@ -91,7 +91,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 		self::assertSame(['name' => 'Old', 'email' => null], $harness->fetchRow('SELECT name, email FROM users WHERE id = 1'));
 	}
 
-	public function testManualProjectionAliasWritesFromAliasPath(): void
+	public function testManualRepresentationAliasWritesFromAliasPath(): void
 	{
 		$harness = SqliteMemoryHarness::create();
 		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT)');
@@ -124,7 +124,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 		$p->end();
 	}
 
-	public function testManualProjectionCreatesFlattenedToOneTarget(): void
+	public function testManualRepresentationCreatesFlattenedToOneTarget(): void
 	{
 		$harness = SqliteMemoryHarness::create();
 		$harness->exec('CREATE TABLE profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)');
@@ -146,7 +146,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 		self::assertSame(['profile_id' => 1], $harness->fetchRow('SELECT profile_id FROM users WHERE id = 1'));
 	}
 
-	public function testManualProjectionCreatesFlattenedM2MTarget(): void
+	public function testManualRepresentationCreatesFlattenedM2MTarget(): void
 	{
 		$harness = SqliteMemoryHarness::create();
 		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
@@ -201,7 +201,7 @@ final class ManualMutableProjectionSmokeTest extends TestCase
 		self::assertSame(['email' => 'ada@old.test'], $harness->fetchRow('SELECT email FROM users WHERE id = 1'));
 	}
 
-	public function testManualProjectionExtendsQueryCreatedMutableObject(): void
+	public function testManualRepresentationExtendsQueryCreatedMutableObject(): void
 	{
 		$harness = SqliteMemoryHarness::create();
 		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');

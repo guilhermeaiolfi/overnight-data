@@ -18,7 +18,7 @@ use stdClass;
  * flat heterogeneous projections, and nested relation schemas carry related
  * schemas rooted at the related collection.
  *
- * Exists as the durable ORM model compiled from queries or manual projections
+ * Exists as the durable ORM model compiled from queries or manual representation declarations
  * and consumed by sync, adoption, and relation runtime state — separate from
  * query selections and mapper hydration.
  */

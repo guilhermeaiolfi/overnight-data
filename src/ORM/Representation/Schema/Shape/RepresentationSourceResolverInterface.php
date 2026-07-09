@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Schema\Shape;
 
 /**
- * Maps a projection field-shape source (query root, relation ref, manual target)
+ * Maps a representation field-shape source (query root, relation ref, manual source)
  * to collection and record identity for schema assembly.
  *
  * Exists to keep RepresentationSchemaAssembler source-agnostic; each compiler

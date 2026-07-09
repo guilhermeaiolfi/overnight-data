@@ -10,7 +10,7 @@ use ON\Data\ORM\Representation\Schema\Shape\RepresentationSchemaAssembler;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 /**
- * Manual projection compiler: assembles RepresentationSchema from pre-built
+ * Manual representation compiler: assembles RepresentationSchema from pre-built
  * RepresentationFieldShape values using the manual ManualRepresentationSourceResolver.
  *
  * Exists as the thin manual counterpart to the query-side projection compiler; it

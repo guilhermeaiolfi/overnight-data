@@ -6,7 +6,7 @@ namespace ON\Data\ORM\Representation\Schema;
 
 use ON\Data\ORM\Exception\StateException;
 /**
- * Merges a manual projection overlay into an existing tracked schema.
+ * Merges a manual representation overlay into an existing tracked schema.
  *
  * Exists so Builder::end() can add manual field paths on top of query-created
  * provenance without recompiling the full schema graph.

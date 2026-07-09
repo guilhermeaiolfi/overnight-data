@@ -9,7 +9,7 @@ use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 /**
- * Fluent handle for a concrete relation target during manual projection.
+ * Fluent handle for a concrete relation target during manual representation building.
  *
  * Exists to expose field()/all()/end() on relation items after create(),
  * existing(), or tracked(), mirroring query-style ergonomics without being a

@@ -9,10 +9,10 @@ use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Exception\UnknownQueryMemberException;
 use ON\Data\Query\Exception\UnknownQueryRelationException;
 /**
- * Fluent handle for a root manual projection target bound to one RecordState.
+ * Fluent handle for a root manual representation source bound to one RecordState.
  *
  * Exists as the entry point for field(), relation navigation, and all() after
- * from()->create()/existing()/tracked() on a collection-backed projection.
+ * from()->create()/existing()/tracked() on a collection-backed representation.
  */
 final class RootRepresentationSource implements ManualRepresentationSourceInterface
 {

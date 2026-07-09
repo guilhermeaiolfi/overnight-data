@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Tests\ON\Data\ORM\Compiler;
+namespace Tests\ON\Data\ORM\Representation\Schema;
 
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Representation\Schema\Manual\ManualRepresentationSchemaCompiler;
@@ -13,7 +13,7 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
 use PHPUnit\Framework\TestCase;
 
-final class ManualProjectionCompilerTest extends TestCase
+final class ManualRepresentationSchemaCompilerTest extends TestCase
 {
 	public function testResolvesRootCollectionFromFirstPropertySource(): void
 	{

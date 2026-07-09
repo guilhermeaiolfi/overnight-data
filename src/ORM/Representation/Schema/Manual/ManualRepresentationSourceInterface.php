@@ -6,7 +6,7 @@ namespace ON\Data\ORM\Representation\Schema\Manual;
 
 use ON\Data\ORM\Record\RecordState;
 /**
- * Common contract for manual projection sources that resolve to a concrete
+ * Common contract for manual representation sources that resolve to a concrete
  * RecordState (root target or relation item).
  *
  * Exists so PropertyRef and relation traversal share one identity surface for

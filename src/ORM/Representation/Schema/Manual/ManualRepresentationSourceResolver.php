@@ -8,7 +8,7 @@ use ON\Data\ORM\Representation\Schema\Shape\RepresentationSourceResolverInterfac
 use ON\Data\ORM\Representation\Schema\Shape\ResolvedRepresentationSource;
 use ON\Data\ORM\Exception\StateException;
 /**
- * Resolves manual projection field-shape sources (ManualRepresentationSourceInterface, RelationRef)
+ * Resolves manual representation field-shape sources (ManualRepresentationSourceInterface, RelationRef)
  * to collection and source path for schema assembly.
  *
  * Exists as the manual RepresentationSourceResolverInterface implementation;

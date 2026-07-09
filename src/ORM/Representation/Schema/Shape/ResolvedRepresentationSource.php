@@ -6,12 +6,12 @@ namespace ON\Data\ORM\Representation\Schema\Shape;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 /**
- * Resolved compile-time identity for one projection field shape: collection plus
+ * Resolved compile-time identity for one representation field shape: collection plus
  * source path.
  *
  * Exists as the return type of RepresentationSourceResolverInterface so the assembler
  * can create structural field schemas without knowing whether the source came
- * from a query or a manual projection target.
+ * from a query or a manual representation source.
  */
 final class ResolvedRepresentationSource
 {

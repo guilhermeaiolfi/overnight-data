@@ -7,7 +7,7 @@ namespace ON\Data\ORM\Representation\Schema\Manual;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 /**
- * Navigable relation reference in the manual projection fluent API.
+ * Navigable relation reference in the manual representation fluent API.
  *
  * Exists to mirror query relation refs for nested field selection and for
  * create()/existing()/tracked($relation) without depending on SelectQuery types.

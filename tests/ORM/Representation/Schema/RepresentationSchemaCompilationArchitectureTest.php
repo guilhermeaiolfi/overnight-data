@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Tests\ON\Data\ORM\Compiler;
+namespace Tests\ON\Data\ORM\Representation\Schema;
 
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
@@ -45,11 +45,11 @@ use ReflectionClass;
 use stdClass;
 use Tests\ON\Data\Smoke\Support\SqliteMemoryHarness;
 
-final class ProjectionCompilationArchitectureTest extends TestCase
+final class RepresentationSchemaCompilationArchitectureTest extends TestCase
 {
-	public function testRemovedProjectionIdentityProviderApiDoesNotExist(): void
+	public function testRemovedLegacyProjectionIdentityProviderApiDoesNotExist(): void
 	{
-		$root = dirname(__DIR__, 3);
+		$root = dirname(__DIR__, 4);
 
 		self::assertDirectoryDoesNotExist($root . '/src/ORM/Binding');
 		self::assertFileDoesNotExist($root . '/src/ORM/ManualProjection/ManualProjectionIdentityProvider.php');
@@ -63,7 +63,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertFalse(method_exists(PathResolver::class, 'collectionFromBinding'));
 	}
 
-	public function testManualBuilderUsesProjectionCompilerNotAssemblerDirectly(): void
+	public function testManualBuilderUsesSchemaCompilerNotAssemblerDirectly(): void
 	{
 		$constructor = (new ReflectionClass(Builder::class))->getConstructor();
 		self::assertNotNull($constructor);
@@ -73,9 +73,9 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertSame(ManualRepresentationSchemaCompiler::class, $parameters[2]->getType()?->getName());
 	}
 
-	public function testManualBuilderDoesNotOwnExtractedProjectionInternals(): void
+	public function testManualBuilderDoesNotOwnExtractedRepresentationInternals(): void
 	{
-		$contents = (string) file_get_contents(dirname(__DIR__, 3) . '/src/ORM/Representation/Schema/Manual/Builder.php');
+		$contents = (string) file_get_contents(dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Manual/Builder.php');
 
 		self::assertStringNotContainsString('new ToManyRelationState', $contents);
 		self::assertStringNotContainsString('new ToOneRelationState', $contents);
@@ -92,7 +92,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertStringNotContainsString('schemaMerger', $contents);
 	}
 
-	public function testManualBuilderDelegatesProjectionApplicationToStateBuilder(): void
+	public function testManualBuilderDelegatesRepresentationOverlayApplicationToStateBuilder(): void
 	{
 		$method = (new ReflectionClass(ManualRepresentationStateBuilder::class))->getMethod('buildOverlay');
 		$parameterTypes = array_map(
@@ -109,22 +109,22 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 
 	public function testDeclarationWrapperClassesDoNotExist(): void
 	{
-		$root = dirname(__DIR__, 3);
+		$root = dirname(__DIR__, 4);
 
 		self::assertFileDoesNotExist($root . '/src/ORM/ManualProjection/ProjectionSourceDeclaration.php');
 		self::assertFileDoesNotExist($root . '/src/ORM/ManualProjection/ProjectionPathDeclaration.php');
 	}
 
-	public function testManualProjectionNamespaceDoesNotExist(): void
+	public function testLegacyManualProjectionNamespaceDoesNotExist(): void
 	{
-		$root = dirname(__DIR__, 3);
+		$root = dirname(__DIR__, 4);
 
 		self::assertDirectoryDoesNotExist($root . '/src/ORM/ManualProjection');
 	}
 
-	public function testSelectQueryCompilerDoesNotReferenceManualProjection(): void
+	public function testSelectQueryCompilerDoesNotReferenceManualRepresentationSchema(): void
 	{
-		$root = dirname(__DIR__, 3) . '/src/ORM/Representation/Schema/Query';
+		$root = dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Query';
 
 		foreach (glob($root . '/*.php') ?: [] as $path) {
 			$contents = (string) file_get_contents($path);
@@ -133,9 +133,9 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		}
 	}
 
-	public function testManualProjectionCompilerDoesNotReferenceSelectQuery(): void
+	public function testManualRepresentationSchemaCompilerDoesNotReferenceSelectQuery(): void
 	{
-		$root = dirname(__DIR__, 3) . '/src/ORM/Representation/Schema/Manual';
+		$root = dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Manual';
 
 		foreach (glob($root . '/*.php') ?: [] as $path) {
 			$contents = (string) file_get_contents($path);
@@ -144,14 +144,14 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 			self::assertStringNotContainsString('QuerySourceInterface', $contents, $path);
 		}
 
-		$compilerContents = (string) file_get_contents(dirname(__DIR__, 3) . '/src/ORM/Representation/Schema/Manual/ManualRepresentationSchemaCompiler.php');
+		$compilerContents = (string) file_get_contents(dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Manual/ManualRepresentationSchemaCompiler.php');
 		self::assertStringNotContainsString('ON\Data\Query\SelectQuery', $compilerContents);
 		self::assertStringNotContainsString('QuerySourceInterface', $compilerContents);
 	}
 
-	public function testProjectionPathSourceWasReplacedByRelationRepresentationSource(): void
+	public function testLegacyProjectionPathSourceWasReplacedByRelationRepresentationSource(): void
 	{
-		$root = dirname(__DIR__, 3);
+		$root = dirname(__DIR__, 4);
 
 		self::assertFileDoesNotExist($root . '/src/ORM/ManualProjection/ProjectionPathSource.php');
 		self::assertFileExists($root . '/src/ORM/Representation/Schema/Manual/RelationRepresentationSource.php');
@@ -276,9 +276,9 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertInstanceOf(stdClass::class, $postTarget->getTargetObject());
 	}
 
-	public function testManualBuilderBuildsProjectionFieldShapesDirectly(): void
+	public function testManualBuilderBuildsRepresentationFieldShapesDirectly(): void
 	{
-		$contents = (string) file_get_contents(dirname(__DIR__, 3) . '/src/ORM/Representation/Schema/Manual/Builder.php');
+		$contents = (string) file_get_contents(dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Manual/Builder.php');
 
 		self::assertStringContainsString('RepresentationFieldShape', $contents);
 		self::assertStringContainsString('schemaCompiler->compile', $contents);
@@ -331,7 +331,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertTrue($state->getSchema()->getField('id')->isReadOnly());
 	}
 
-	public function testQueryAndManualAliasProjectionUseEquivalentPublicPaths(): void
+	public function testQueryProjectionAndManualRepresentationUseEquivalentPublicPaths(): void
 	{
 		$registry = $this->registry();
 		$users = $registry->getCollection('users');
@@ -362,8 +362,8 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 	public function testSourceResolversDoNotInspectAliasesOrBuildFieldSchemas(): void
 	{
 		foreach ([
-			dirname(__DIR__, 3) . '/src/ORM/Representation/Schema/Query/QueryRepresentationSourceResolver.php',
-			dirname(__DIR__, 3) . '/src/ORM/Representation/Schema/Manual/ManualRepresentationSourceResolver.php',
+			dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Query/QueryRepresentationSourceResolver.php',
+			dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Manual/ManualRepresentationSourceResolver.php',
 		] as $path) {
 			$contents = (string) file_get_contents($path);
 
@@ -373,9 +373,9 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		}
 	}
 
-	public function testProjectionFieldSchemasAreCreatedBySchemaAssembler(): void
+	public function testRepresentationFieldSchemasAreCreatedBySchemaAssembler(): void
 	{
-		$root = dirname(__DIR__, 3);
+		$root = dirname(__DIR__, 4);
 
 		foreach ([
 			$root . '/src/ORM/Representation/Schema/Query/QueryRepresentationSelectionNormalizer.php',
@@ -391,9 +391,9 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertStringContainsString('new RepresentationFieldSchema', $assembler);
 	}
 
-	public function testHiddenIdentityPlanningRemainsOutsideManualProjectionPath(): void
+	public function testHiddenIdentityPlanningRemainsOutsideManualRepresentationPath(): void
 	{
-		$manualRoot = dirname(__DIR__, 3) . '/src/ORM/Representation/Schema/Manual';
+		$manualRoot = dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Manual';
 
 		foreach (glob($manualRoot . '/*.php') ?: [] as $path) {
 			$contents = (string) file_get_contents($path);
@@ -404,9 +404,9 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		}
 	}
 
-	public function testManualProjectionNamespaceDoesNotImportSelectQuery(): void
+	public function testManualRepresentationNamespaceDoesNotImportSelectQuery(): void
 	{
-		$manualRoot = dirname(__DIR__, 3) . '/src/ORM/Representation/Schema/Manual';
+		$manualRoot = dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Manual';
 
 		foreach (glob($manualRoot . '/*.php') ?: [] as $path) {
 			$contents = (string) file_get_contents($path);
@@ -417,7 +417,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		}
 	}
 
-	public function testManualProjectionTargetDoesNotImplementQuerySourceInterface(): void
+	public function testManualRepresentationSourceDoesNotImplementQuerySourceInterface(): void
 	{
 		self::assertFalse(is_subclass_of(RelationRepresentationSource::class, QuerySourceInterface::class));
 		self::assertFalse(is_subclass_of(RootRepresentationSource::class, QuerySourceInterface::class));
@@ -501,7 +501,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertNotSame($adaTracked->getTargetRecord(), $bobTracked->getTargetRecord());
 	}
 
-	public function testManualProjectionAttachmentAddsRootFieldToExistingRootRecord(): void
+	public function testManualRepresentationAttachmentAddsRootFieldToExistingRootRecord(): void
 	{
 		$users = $this->registry()->getCollection('users');
 		$record = RecordState::new($users, ['id' => 10]);
@@ -538,7 +538,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertSame($record, $state->getFieldItem('name')->getRecord());
 	}
 
-	public function testManualProjectionAttachmentUsesSourcePathWhenCollectionsMatch(): void
+	public function testManualRepresentationAttachmentUsesSourcePathWhenCollectionsMatch(): void
 	{
 		$users = $this->registry()->getCollection('users');
 		$rootRecord = RecordState::new($users, ['id' => 10]);
@@ -576,7 +576,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertNotSame($rootRecord, $state->getFieldItem('managerEmail')->getRecord());
 	}
 
-	public function testManualProjectionAttachmentThrowsWhenSourcePathCannotResolve(): void
+	public function testManualRepresentationAttachmentThrowsWhenSourcePathCannotResolve(): void
 	{
 		$users = $this->registry()->getCollection('users');
 		$record = RecordState::new($users, ['id' => 10]);
@@ -613,7 +613,7 @@ final class ProjectionCompilationArchitectureTest extends TestCase
 		self::assertSame('posts', $resolved->getRelationName());
 	}
 
-	public function testManualProjectionDoesNotAddDurableProjectionStores(): void
+	public function testManualRepresentationDoesNotAddDurableProjectionStores(): void
 	{
 		$methods = get_class_methods('ON\Data\ORM\Session');
 

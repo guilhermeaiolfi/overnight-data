@@ -8,7 +8,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 /**
- * Structural grouping of projection fields that originate from one source path.
+ * Structural grouping of representation fields that originate from one source path.
  *
  * Carries only representation/source structure. Query result aliases and row
  * keys stay in QueryRepresentationIdentityColumns.

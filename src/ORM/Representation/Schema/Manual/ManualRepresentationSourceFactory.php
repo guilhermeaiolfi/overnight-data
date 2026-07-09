@@ -17,7 +17,7 @@ use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use stdClass;
 /**
- * Creates and attaches manual projection targets for create(), existing(), and
+ * Creates and attaches manual representation sources for create(), existing(), and
  * tracked() without duplicating branch logic in Builder.
  *
  * Exists because Builder's lifecycle methods share the same root/path/relation
