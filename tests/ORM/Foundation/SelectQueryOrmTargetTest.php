@@ -54,10 +54,16 @@ final class SelectQueryOrmTargetTest extends TestCase
 		self::assertSame('ada@example.test', $user->email);
 	}
 
-	public function testArrayTargetWithoutExplicitSelectUsesDefaultRootScalarFields(): void
+	public function testDefaultArrayResultWithoutExplicitSelectUsesDefaultRootScalarFields(): void
 	{
-		self::markTestIncomplete(
-			'Phase 0 skeleton: query($users)->to([]) with no explicit select() implies root scalar field arrays.'
+		[$harness, $users] = $this->usersHarness();
+
+		$user = $harness->database->query($users)->fetchOne();
+
+		self::assertIsArray($user);
+		self::assertSame(
+			['id' => 1, 'name' => 'Ada', 'email' => 'ada@example.test'],
+			$user,
 		);
 	}
 
@@ -132,8 +138,24 @@ final class SelectQueryOrmTargetTest extends TestCase
 
 	public function testExpressionSelectedValuesAreReadOnlyByDefault(): void
 	{
-		self::markTestIncomplete(
-			'Phase 0 skeleton: expression selections such as upper(name) are read-only unless future explicit reverse mapping exists.'
+		[$harness, $users] = $this->usersHarness();
+		$session = new Session($harness->commandExecutor);
+		$query = $harness->database->query($users);
+		$query->select($query->id, $query->name->upper()->as('upperName'));
+
+		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		self::assertInstanceOf(stdClass::class, $user);
+		self::assertSame(1, $user->id);
+		self::assertSame('ADA', $user->upperName);
+
+		$user->upperName = 'CHANGED';
+		$session->sync($user);
+		$result = $session->flush();
+
+		self::assertSame([], $result->getCommandResults());
+		self::assertSame(
+			['name' => 'Ada'],
+			$harness->fetchRow('SELECT name FROM users WHERE id = 1'),
 		);
 	}
 
@@ -175,9 +197,16 @@ final class SelectQueryOrmTargetTest extends TestCase
 
 	public function testPartialClassRepresentationsAreProjectionLikeUnlessTrackedFieldByField(): void
 	{
-		self::markTestIncomplete(
-			'Phase 0 skeleton: partial class representations are projection-like unless the ORM explicitly tracks selected fields field-by-field.'
-		);
+		[$harness, $users] = $this->usersHarness();
+		$query = $harness->database->query($users);
+		$query->select($query->id, $query->name);
+
+		$user = $query->to(SelectQueryOrmPartialUser::class)->fetchOne();
+
+		self::assertInstanceOf(SelectQueryOrmPartialUser::class, $user);
+		self::assertSame(1, $user->id);
+		self::assertSame('Ada', $user->name);
+		self::assertNull($user->email);
 	}
 
 	/**
@@ -220,4 +249,13 @@ final class SelectQueryOrmTargetUser
 	public string $name;
 
 	public string $email;
+}
+
+final class SelectQueryOrmPartialUser
+{
+	public ?int $id = null;
+
+	public ?string $name = null;
+
+	public ?string $email = null;
 }

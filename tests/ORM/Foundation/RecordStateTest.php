@@ -50,11 +50,4 @@ final class RecordStateTest extends TestCase
 			self::assertStringNotContainsString($forbidden, $contents, $forbidden);
 		}
 	}
-
-	public function testSqlDialectBehaviorStaysOutsideOrmCore(): void
-	{
-		self::markTestIncomplete(
-			'When ORM core exists, assert it delegates dialect SQL behavior to the database/DBAL integration layer.'
-		);
-	}
 }
