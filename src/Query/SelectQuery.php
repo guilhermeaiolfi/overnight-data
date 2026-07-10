@@ -27,6 +27,7 @@ use ON\Data\Query\Expression\SourceFieldExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
+use ON\Data\Query\Relation\RelationQueryPlanner;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelectionTree;
 use ON\Data\Query\Result\ObjectExportClassValidator;
@@ -257,6 +258,10 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function star(): StarExpression
 	{
+		if ($this->source instanceof self) {
+			return $this->sourceStar ??= new StarExpression($this->source);
+		}
+
 		if ($this->hasAlias()) {
 			return $this->sourceStar ??= new StarExpression($this);
 		}
@@ -720,6 +725,26 @@ final class SelectQuery implements QuerySourceInterface
 	public function related(CollectionInterface $collection): self
 	{
 		return new self($collection, $this->executor);
+	}
+
+	/**
+	 * Build a correlated query over a relation target for EXISTS / NOT EXISTS predicates.
+	 *
+	 * Does not select, load, or join the relation onto this parent query.
+	 *
+	 * @param null|callable(SelectQuery): mixed $build
+	 */
+	public function relatedQuery(
+		RelationRef $relation,
+		?callable $build = null,
+	): SelectQuery {
+		$target = (new RelationQueryPlanner())->plan($relation, $this);
+
+		if ($build !== null) {
+			$build($target);
+		}
+
+		return $target;
 	}
 
 	public function exposesField(string $name): bool

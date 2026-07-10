@@ -33,6 +33,7 @@ use ON\Data\Query\Expression\AggregateExpression;
 use ON\Data\Query\Expression\AggregateFunction;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\FunctionCallExpression;
 use ON\Data\Query\Expression\LiteralExpression;
 use ON\Data\Query\Expression\RawSqlExpression;
 use ON\Data\Query\Expression\SourceFieldExpression;
@@ -44,6 +45,9 @@ use ON\Data\Query\Expression\ValueOperationExpression;
 use ON\Data\Query\Expression\WindowFunctionExpression;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
+use ON\Data\Query\QueryFunction\FunctionArguments;
+use ON\Data\Query\QueryFunction\InvalidQueryFunctionException;
+use ON\Data\Query\QueryFunction\QueryFunctionInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Selection\SelectionItem;
@@ -413,9 +417,67 @@ final class CycleQueryTranslator
 			$expression instanceof AggregateExpression => $this->translateAggregate($expression, $context, $joinContext),
 			$expression instanceof ValueOperationExpression => $this->translateValueOperation($expression, $context, $joinContext),
 			$expression instanceof WindowFunctionExpression => $this->translateWindowFunction($expression, $context, $joinContext),
+			$expression instanceof FunctionCallExpression => $this->translateFunctionCall($expression, $context, $joinContext),
 			$expression instanceof SubqueryExpression => $this->compileNestedQuery($expression->getQuery(), $context, QueryUsage::SCALAR_SUBQUERY),
 			default => throw UnsupportedQueryException::forQuery($context->root(), 'unknown value expression type'),
 		};
+	}
+
+	public function translateExpressionForFunction(
+		ValueExpressionInterface $expression,
+		CycleTranslationContext $context,
+		?Join $joinContext,
+		CycleFunctionCompilationStack $stack,
+	): SqlFragment {
+		if ($expression instanceof FunctionCallExpression) {
+			return $this->translateFunctionCall($expression, $context, $joinContext, $stack);
+		}
+
+		return $this->translateExpression($expression, $context, null, $joinContext);
+	}
+
+	public function quoteIdentifierForFunction(string $identifier): string
+	{
+		return $this->quote($identifier);
+	}
+
+	private function translateFunctionCall(
+		FunctionCallExpression $expression,
+		CycleTranslationContext $context,
+		?Join $joinContext = null,
+		?CycleFunctionCompilationStack $stack = null,
+	): SqlFragment {
+		$stack ??= new CycleFunctionCompilationStack();
+		$stack->enter($expression);
+
+		try {
+			$function = $expression->getFunction();
+			$implementation = new $function();
+
+			if (! $implementation instanceof QueryFunctionInterface) {
+				throw InvalidQueryFunctionException::mustImplement($function);
+			}
+
+			$compilationContext = new CycleFunctionCompilationContext(
+				$this,
+				$context,
+				new CycleDatabasePlatform($this->database),
+				$joinContext,
+				$stack,
+			);
+
+			$compiled = $implementation->compile(
+				$compilationContext,
+				new FunctionArguments($expression->getArguments()),
+			);
+
+			return SqlFragment::withParameters(
+				$compiled->getSql(),
+				CycleFunctionCompilationContext::adaptParameters($compiled->getParameters()),
+			);
+		} finally {
+			$stack->leave($expression);
+		}
 	}
 
 	private function translateStar(StarExpression $expression, CycleTranslationContext $context): SqlFragment

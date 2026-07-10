@@ -18,6 +18,7 @@ use ON\Data\Query\Condition\NullOperator;
 use ON\Data\Query\Expression\AggregateExpression;
 use ON\Data\Query\Expression\AggregateFunction;
 use ON\Data\Query\Expression\AliasedExpression;
+use ON\Data\Query\Expression\ExpressionOperandNormalizer;
 use ON\Data\Query\Expression\LiteralExpression;
 use ON\Data\Query\Expression\RawSqlExpression;
 use ON\Data\Query\Expression\StarExpression;
@@ -320,40 +321,12 @@ final class ExpressionFactory
 
 	private function normalizeExpression(ValueExpressionInterface|SelectQuery $expression): ValueExpressionInterface
 	{
-		if ($expression instanceof AliasedExpression) {
-			throw new InvalidArgumentException('AliasedExpression cannot be used as a comparison operand.');
-		}
-
-		if ($expression instanceof SelectQuery) {
-			return new SubqueryExpression($expression);
-		}
-
-		return $expression;
+		return ExpressionOperandNormalizer::normalizeExpression($expression);
 	}
 
 	private function normalizeOperand(mixed $operand, string $context): ValueExpressionInterface
 	{
-		if ($operand instanceof AliasedExpression) {
-			throw new InvalidArgumentException(sprintf('AliasedExpression cannot be used as a %s operand.', $context));
-		}
-
-		if ($operand instanceof StarExpression) {
-			throw new InvalidArgumentException(sprintf('StarExpression cannot be used as a %s operand.', $context));
-		}
-
-		if ($operand instanceof ConditionInterface) {
-			throw new InvalidArgumentException(sprintf('ConditionInterface cannot be used as a %s operand.', $context));
-		}
-
-		if ($operand instanceof SelectQuery) {
-			return new SubqueryExpression($operand);
-		}
-
-		if ($operand instanceof ValueExpressionInterface) {
-			return $operand;
-		}
-
-		return new LiteralExpression($operand);
+		return ExpressionOperandNormalizer::normalize($operand, $context);
 	}
 
 	/**
