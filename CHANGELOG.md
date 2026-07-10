@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-07-10
+
+### Added
+
+- **LIKE / NOT LIKE conditions** — `ExpressionFactory::like()`, `notLike()`, `contains()`, `notContains()`, `startsWith()`, `endsWith()` condition builders; `ComparisonOperator::LIKE` and `NOT_LIKE` cases; matching fluent shorthands on all value expressions (`$field->like(...)`, `$field->contains(...)`, etc.); `CycleQueryTranslator` translates both operators to SQL `LIKE` / `NOT LIKE`.
+- **AVG / MIN / MAX aggregates** — `AggregateFunction::AVG`, `MIN`, `MAX` cases; `ExpressionFactory::avg()`, `min()`, `max()` following the same validation as `sum()` (no aliased operands, no nested aggregates); fluent shorthands on all aggregateable expressions (`$field->avg()`, `$field->min()`, `$field->max()`); `CycleQueryTranslator` translates to `AVG(...)`, `MIN(...)`, `MAX(...)`.
+
 ## [1.1.0] - 2026-07-10
 
 ORM representation, projection, and database-adapter cleanup on top of the 1.0 foundation. Definition and mapper public APIs used by Overnight remain compatible. Deep ORM representation/session internals were reorganized; see notes below if you depended on those types directly.
@@ -73,6 +80,7 @@ First stable public release of `guilhermeaiolfi/overnight-data`.
 - Runtime database integration currently ships through Cycle Database.
 - See README **Current Limitations** for intentional non-goals such as lazy loading, repositories, and full cascade policy.
 
-[Unreleased]: https://github.com/guilhermeaiolfi/overnight-data/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/guilhermeaiolfi/overnight-data/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/guilhermeaiolfi/overnight-data/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/guilhermeaiolfi/overnight-data/releases/tag/v1.1.0
 [1.0.0]: https://github.com/guilhermeaiolfi/overnight-data/releases/tag/v1.0.0

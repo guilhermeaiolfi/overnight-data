@@ -12,4 +12,6 @@ enum ComparisonOperator: string
 	case GTE = 'gte';
 	case LT = 'lt';
 	case LTE = 'lte';
+	case LIKE = 'like';
+	case NOT_LIKE = 'not_like';
 }

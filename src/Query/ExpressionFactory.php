@@ -88,6 +88,60 @@ final class ExpressionFactory
 		return new ComparisonCondition($this->normalizeExpression($left), ComparisonOperator::LTE, $this->normalizeOrderedOperand($right, 'lte'));
 	}
 
+	public function like(ValueExpressionInterface|SelectQuery $expression, mixed $pattern): ComparisonCondition
+	{
+		return new ComparisonCondition(
+			$this->normalizeExpression($expression),
+			ComparisonOperator::LIKE,
+			$this->normalizeOrderedOperand($pattern, 'like'),
+		);
+	}
+
+	public function notLike(ValueExpressionInterface|SelectQuery $expression, mixed $pattern): ComparisonCondition
+	{
+		return new ComparisonCondition(
+			$this->normalizeExpression($expression),
+			ComparisonOperator::NOT_LIKE,
+			$this->normalizeOrderedOperand($pattern, 'notLike'),
+		);
+	}
+
+	public function contains(ValueExpressionInterface|SelectQuery $expression, string $value): ComparisonCondition
+	{
+		return new ComparisonCondition(
+			$this->normalizeExpression($expression),
+			ComparisonOperator::LIKE,
+			new LiteralExpression('%' . $value . '%'),
+		);
+	}
+
+	public function notContains(ValueExpressionInterface|SelectQuery $expression, string $value): ComparisonCondition
+	{
+		return new ComparisonCondition(
+			$this->normalizeExpression($expression),
+			ComparisonOperator::NOT_LIKE,
+			new LiteralExpression('%' . $value . '%'),
+		);
+	}
+
+	public function startsWith(ValueExpressionInterface|SelectQuery $expression, string $value): ComparisonCondition
+	{
+		return new ComparisonCondition(
+			$this->normalizeExpression($expression),
+			ComparisonOperator::LIKE,
+			new LiteralExpression($value . '%'),
+		);
+	}
+
+	public function endsWith(ValueExpressionInterface|SelectQuery $expression, string $value): ComparisonCondition
+	{
+		return new ComparisonCondition(
+			$this->normalizeExpression($expression),
+			ComparisonOperator::LIKE,
+			new LiteralExpression('%' . $value),
+		);
+	}
+
 	public function count(ValueExpressionInterface|StarExpression $expression): AggregateExpression
 	{
 		if ($expression instanceof AliasedExpression) {
@@ -121,6 +175,39 @@ final class ExpressionFactory
 		$this->assertAggregateInput($expression);
 
 		return new AggregateExpression(AggregateFunction::SUM, $expression);
+	}
+
+	public function avg(ValueExpressionInterface $expression): AggregateExpression
+	{
+		if ($expression instanceof AliasedExpression) {
+			throw new InvalidArgumentException('AliasedExpression cannot be used as an aggregate operand.');
+		}
+
+		$this->assertAggregateInput($expression);
+
+		return new AggregateExpression(AggregateFunction::AVG, $expression);
+	}
+
+	public function min(ValueExpressionInterface $expression): AggregateExpression
+	{
+		if ($expression instanceof AliasedExpression) {
+			throw new InvalidArgumentException('AliasedExpression cannot be used as an aggregate operand.');
+		}
+
+		$this->assertAggregateInput($expression);
+
+		return new AggregateExpression(AggregateFunction::MIN, $expression);
+	}
+
+	public function max(ValueExpressionInterface $expression): AggregateExpression
+	{
+		if ($expression instanceof AliasedExpression) {
+			throw new InvalidArgumentException('AliasedExpression cannot be used as an aggregate operand.');
+		}
+
+		$this->assertAggregateInput($expression);
+
+		return new AggregateExpression(AggregateFunction::MAX, $expression);
 	}
 
 	public function upper(mixed $expression): ValueOperationExpression

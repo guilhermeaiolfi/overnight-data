@@ -750,6 +750,138 @@ final class CycleQueryExecutionTest extends TestCase
 		}
 	}
 
+	public function testLikeFiltersRowsByPattern(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name)
+			->where(x()->like($users->name, 'G%'))
+			->orderBy($users->name->asc())
+			->fetchAll();
+
+		self::assertSame([['name' => 'Grace']], $rows);
+	}
+
+	public function testNotLikeExcludesMatchingRows(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name)
+			->where(x()->notLike($users->name, 'G%'))
+			->orderBy($users->name->asc())
+			->fetchAll();
+
+		self::assertSame([['name' => 'Ada'], ['name' => 'Linus']], $rows);
+	}
+
+	public function testContainsFiltersRowsBySubstring(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name)
+			->where(x()->contains($users->name, 'ac'))
+			->fetchAll();
+
+		self::assertSame([['name' => 'Grace']], $rows);
+	}
+
+	public function testStartsWithFiltersRowsByPrefix(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name)
+			->where(x()->startsWith($users->name, 'Li'))
+			->fetchAll();
+
+		self::assertSame([['name' => 'Linus']], $rows);
+	}
+
+	public function testEndsWithFiltersRowsBySuffix(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name)
+			->where(x()->endsWith($users->name, 'us'))
+			->fetchAll();
+
+		self::assertSame([['name' => 'Linus']], $rows);
+	}
+
+	public function testFluentLikeShorthandFiltersRows(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name)
+			->where($users->name->like('Ada'))
+			->fetchAll();
+
+		self::assertSame([['name' => 'Ada']], $rows);
+	}
+
+	public function testAvgReturnsAverageValue(): void
+	{
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+
+		$row = $posts
+			->select($posts->amount->avg()->as('avg_amount'))
+			->fetchOne();
+
+		// amounts: 10.0, 15.5, 7.5 → avg = 11.0
+		self::assertEqualsWithDelta(11.0, $row['avg_amount'], 0.001);
+	}
+
+	public function testMinReturnsMinimumValue(): void
+	{
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+
+		$row = $posts
+			->select($posts->amount->min()->as('min_amount'))
+			->fetchOne();
+
+		self::assertEqualsWithDelta(7.5, $row['min_amount'], 0.001);
+	}
+
+	public function testMaxReturnsMaximumValue(): void
+	{
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+
+		$row = $posts
+			->select($posts->amount->max()->as('max_amount'))
+			->fetchOne();
+
+		self::assertEqualsWithDelta(15.5, $row['max_amount'], 0.001);
+	}
+
+	public function testAvgMinMaxWithGroupBy(): void
+	{
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+
+		$rows = $posts
+			->select(
+				$posts->userId,
+				$posts->amount->avg()->as('avg_amount'),
+				$posts->amount->min()->as('min_amount'),
+				$posts->amount->max()->as('max_amount'),
+			)
+			->groupBy($posts->userId)
+			->orderBy($posts->userId->asc())
+			->fetchAll();
+
+		// user 1: amounts 10.0, 15.5 → avg=12.75, min=10.0, max=15.5
+		// user 2: amounts 7.5     → avg=7.5,   min=7.5,  max=7.5
+		self::assertCount(2, $rows);
+		self::assertEqualsWithDelta(12.75, $rows[0]['avg_amount'], 0.001);
+		self::assertEqualsWithDelta(10.0, $rows[0]['min_amount'], 0.001);
+		self::assertEqualsWithDelta(15.5, $rows[0]['max_amount'], 0.001);
+		self::assertEqualsWithDelta(7.5, $rows[1]['avg_amount'], 0.001);
+	}
+
 	private function makeRegistry(): Registry
 	{
 		$registry = new Registry();

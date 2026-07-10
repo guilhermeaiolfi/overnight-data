@@ -303,6 +303,8 @@ final class CycleQueryTranslator
 					ComparisonOperator::GTE => '>=',
 					ComparisonOperator::LT => '<',
 					ComparisonOperator::LTE => '<=',
+					ComparisonOperator::LIKE => 'LIKE',
+					ComparisonOperator::NOT_LIKE => 'NOT LIKE',
 				}),
 				$rightSql,
 			],
@@ -638,6 +640,9 @@ final class CycleQueryTranslator
 				: 'COUNT(' . $inner->sql() . ')',
 			AggregateFunction::COUNT_DISTINCT => 'COUNT(DISTINCT ' . $inner->sql() . ')',
 			AggregateFunction::SUM => 'SUM(' . $inner->sql() . ')',
+			AggregateFunction::AVG => 'AVG(' . $inner->sql() . ')',
+			AggregateFunction::MIN => 'MIN(' . $inner->sql() . ')',
+			AggregateFunction::MAX => 'MAX(' . $inner->sql() . ')',
 		};
 
 		return SqlFragment::withParameters($sql, $inner->parameters());

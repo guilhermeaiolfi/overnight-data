@@ -118,16 +118,63 @@ Supported aggregate builders are:
 - `count()`
 - `countDistinct()`
 - `sum()`
+- `avg()`
+- `min()`
+- `max()`
 
 Examples:
 
 ```php
 $u->id->count();
 $u->amount->sum();
+$u->amount->avg();
+$u->amount->min();
+$u->amount->max();
+
+// factory form
+x()->avg($posts->amount);
+x()->min($posts->price);
+x()->max($posts->score);
+
 $postCount = (new SubqueryExpression($posts))->as('post_count');
 ```
 
+`avg()`, `min()`, and `max()` follow the same validation as `sum()`: `AliasedExpression` operands and nested aggregates are rejected.
+
 Direct nested queries are normalized to `SubqueryExpression` where the API accepts them, including `select()`, comparisons, grouping, and sorting.
+
+## Pattern-matching conditions (LIKE)
+
+Use `like()` and `notLike()` for SQL `LIKE` / `NOT LIKE` predicates:
+
+```php
+$u->where(x()->like($u->name, 'Ada%'));
+$u->where(x()->notLike($u->email, '%@spam.%'));
+
+// fluent shorthand
+$u->where($u->name->like('G%'));
+$u->where($u->name->notLike('%bot%'));
+```
+
+Convenience helpers wrap the plain string value with `%` automatically:
+
+| Method | Translates to |
+|---|---|
+| `contains($expr, 'ac')` | `expr LIKE '%ac%'` |
+| `notContains($expr, 'ac')` | `expr NOT LIKE '%ac%'` |
+| `startsWith($expr, 'Ada')` | `expr LIKE 'Ada%'` |
+| `endsWith($expr, 'ace')` | `expr LIKE '%ace'` |
+
+```php
+$u->where($u->name->contains('grace'));
+$u->where($u->name->startsWith('Ada'));
+$u->where($u->name->endsWith('ace'));
+$u->where($u->email->notContains('@spam'));
+```
+
+**Note:** `%` and `_` inside the value passed to `like()` / `notLike()` / convenience helpers are treated as SQL wildcards. The caller is responsible for escaping them when needed. No automatic SQL `ESCAPE` clause is added.
+
+Passing `null` as the pattern to `like()` or `notLike()` throws `InvalidArgumentException`, matching the behavior of ordered comparisons (`gt`, `gte`, etc.).
 
 ## Comparisons and boolean composition
 
@@ -146,6 +193,7 @@ $u->where(
 Supported condition builders include:
 
 - `eq`, `neq`, `gt`, `gte`, `lt`, `lte`
+- `like`, `notLike`, `contains`, `notContains`, `startsWith`, `endsWith`
 - `and`, `or`, `not`
 - `isNull`, `isNotNull`
 - `exists`, `notExists`

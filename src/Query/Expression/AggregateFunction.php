@@ -9,4 +9,7 @@ enum AggregateFunction: string
 	case COUNT = 'count';
 	case COUNT_DISTINCT = 'count_distinct';
 	case SUM = 'sum';
+	case AVG = 'avg';
+	case MIN = 'min';
+	case MAX = 'max';
 }

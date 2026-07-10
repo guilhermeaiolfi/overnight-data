@@ -24,6 +24,21 @@ abstract class AbstractAggregateableExpression extends AbstractValueExpression
 		return $this->factory()->sum($this);
 	}
 
+	final public function avg(): AggregateExpression
+	{
+		return $this->factory()->avg($this);
+	}
+
+	final public function min(): AggregateExpression
+	{
+		return $this->factory()->min($this);
+	}
+
+	final public function max(): AggregateExpression
+	{
+		return $this->factory()->max($this);
+	}
+
 	private function factory(): ExpressionFactory
 	{
 		return x();

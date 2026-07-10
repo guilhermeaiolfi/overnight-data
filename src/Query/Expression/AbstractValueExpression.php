@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Expression;
 
 use LogicException;
+use ON\Data\Query\Condition\ComparisonCondition;
 use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\ExpressionFactory;
 use ON\Data\Query\QuerySourceInterface;
@@ -79,6 +80,36 @@ abstract class AbstractValueExpression implements ValueExpressionInterface
 	final public function lte(mixed $right): ConditionInterface
 	{
 		return $this->factory()->lte($this, $right);
+	}
+
+	final public function like(mixed $pattern): ComparisonCondition
+	{
+		return $this->factory()->like($this, $pattern);
+	}
+
+	final public function notLike(mixed $pattern): ComparisonCondition
+	{
+		return $this->factory()->notLike($this, $pattern);
+	}
+
+	final public function contains(string $value): ComparisonCondition
+	{
+		return $this->factory()->contains($this, $value);
+	}
+
+	final public function notContains(string $value): ComparisonCondition
+	{
+		return $this->factory()->notContains($this, $value);
+	}
+
+	final public function startsWith(string $value): ComparisonCondition
+	{
+		return $this->factory()->startsWith($this, $value);
+	}
+
+	final public function endsWith(string $value): ComparisonCondition
+	{
+		return $this->factory()->endsWith($this, $value);
 	}
 
 	private function factory(): ExpressionFactory
