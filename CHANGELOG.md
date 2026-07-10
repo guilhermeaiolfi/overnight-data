@@ -7,14 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-10
+
+ORM representation, projection, and database-adapter cleanup on top of the 1.0 foundation. Definition and mapper public APIs used by Overnight remain compatible. Deep ORM representation/session internals were reorganized; see notes below if you depended on those types directly.
+
+### Added
+
+- **Manual mutable projections** — `Session::projection($object)->from(...)->properties(...)->end()` for application-created or manually extended objects, with smoke coverage and docs.
+- **Representation schema model** — structure-only `RepresentationSchema` / field & relation schemas, shared shape assembly, `ProjectionSource`, identity planning, and runtime attachment via `RepresentationState` items.
+- **Database adapter boundary** — Cycle-backed runtime under `ON\Data\Database\Cycle\`, `DataRuntime`, and `CycleRuntimeFactory`; ADR documenting the adapter split.
+- **Existing-intent graph sync** — explicit adoption/attachment intent for graph sync, with focused tests.
+- **RelationCardinality** — shared cardinality helper replacing representation-specific cardinality types.
+- Smoke tests mirroring quickstart, persistence, and mutable `stdClass` projection examples.
+
+### Changed
+
+- Queries without an explicit `->select()` are treated as `->select($root->all())`.
+- `flush()` defaults to transaction-based execution.
+- Relation state storage unified in the session; Linker collapsed into Factory.
+- Representation vocabulary cleanup: binding → schema, store/state factory boundaries, adoption → attachment where applicable.
+- Record state types moved under `ON\Data\ORM\Record\`.
+- Sync types moved under `ON\Data\ORM\Representation\Sync\`.
+- Projection compilation reworked around shared schema compilers (query + manual) instead of parallel binding compilers.
+
 ### Fixed
 
 - Preserve internal mutable-projection identity columns in Cycle query results so flat related-field export can adopt and flush updates against a real database executor.
+- Incomplete ORM/session/persistence tests filled out; flush failure, retry/recovery, and transaction-safety coverage expanded.
 
 ### Documentation
 
-- Clarified v1.0 wording in `docs/orm/foundation.md` and fixed a formatting issue in `README.md`.
-- Added smoke tests that mirror `docs/quickstart.md`, ORM persistence, and mutable `stdClass` projection examples.
+- Docs for mutable SelectQuery projections and manual mutable projections.
+- Representation schema docs replace the older representation-binding guide.
+- Clarified v1.0 wording in foundation docs; README formatting fix.
+- Architecture decision record for the database adapter boundary.
+
+### Notes for upgraders
+
+- If you only use definitions, mapping, and basic query execution (typical Overnight integration), upgrade to `^1.1` and run your suite.
+- If you imported removed/renamed ORM types (`RepresentationBinding*`, old `ORM\State\Representation*`, `SelectQueryBindingCompiler`, `GraphAdopter`, top-level `Database\Database` helpers, etc.), switch to the new schema/state/sync namespaces documented under `docs/orm/`.
 
 ## [1.0.0] - 2026-07-05
 
@@ -42,4 +73,6 @@ First stable public release of `guilhermeaiolfi/overnight-data`.
 - Runtime database integration currently ships through Cycle Database.
 - See README **Current Limitations** for intentional non-goals such as lazy loading, repositories, and full cascade policy.
 
+[Unreleased]: https://github.com/guilhermeaiolfi/overnight-data/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/guilhermeaiolfi/overnight-data/releases/tag/v1.1.0
 [1.0.0]: https://github.com/guilhermeaiolfi/overnight-data/releases/tag/v1.0.0

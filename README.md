@@ -6,13 +6,14 @@ It is independent from the Overnight framework. The package can be consumed on i
 
 ## Stability
 
-**v1.0** is the first stable release of the public data-layer foundation:
+**v1.1** continues the stable 1.x data-layer line:
 
 - definitions, conversion, and mapper runtime;
 - query model, bound execution, and relation loading;
-- initial ORM persistence through `Session` and Cycle-backed command execution.
+- ORM persistence through `Session`, representation schemas, and Cycle-backed command execution;
+- mutable query projections and manual mutable projections.
 
-Patch and minor releases within `^1.0` follow the policy in [`UPGRADE.md`](UPGRADE.md). Features listed under **Current Limitations** may still evolve in minor releases.
+Patch and minor releases within `^1.0` / `^1.1` follow the policy in [`UPGRADE.md`](UPGRADE.md). Features listed under **Current Limitations** may still evolve in minor releases.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for release history and [`docs/quickstart.md`](docs/quickstart.md) for a first end-to-end walkthrough.
 

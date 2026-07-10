@@ -39,14 +39,16 @@ Features explicitly marked as limitations in README and docs may evolve in minor
 ## Installing a specific line
 
 ```bash
-composer require guilhermeaiolfi/overnight-data:^1.0
+composer require guilhermeaiolfi/overnight-data:^1.1
 ```
 
-Pin more tightly when you want only patch updates:
+Pin more tightly when you want only patch updates on the 1.1 line:
 
 ```bash
-composer require guilhermeaiolfi/overnight-data:~1.0.0
+composer require guilhermeaiolfi/overnight-data:~1.1.0
 ```
+
+The 1.0 line remains installable as `^1.0` / `~1.0.0` for consumers that are not ready to pick up 1.1 ORM representation changes.
 
 ## Before upgrading
 
