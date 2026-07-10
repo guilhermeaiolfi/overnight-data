@@ -112,6 +112,47 @@ final class RelationKeyQueryTest extends TestCase
 		self::assertSame([], $query->getConditions());
 	}
 
+	public function testCorrelateRightToLeftUsesRightChildAndLeftParentFields(): void
+	{
+		$registry = $this->makeRegistry();
+		$parent = new SelectQuery($registry->getCollection('articles'));
+		$child = new SelectQuery($registry->getCollection('article_tags'));
+		$pairing = RelationKeyPairing::from(['id'], ['article_id']);
+
+		RelationKeyQuery::correlateRightToLeft($pairing, $child, $child, $parent);
+
+		$conditions = $child->getConditions();
+		self::assertCount(1, $conditions);
+		self::assertInstanceOf(ComparisonCondition::class, $conditions[0]);
+		self::assertSame(ComparisonOperator::EQ, $conditions[0]->getOperator());
+		self::assertSame('article_id', $conditions[0]->getLeft()->getName());
+		self::assertSame($child, $conditions[0]->getLeft()->getSource());
+		self::assertSame('id', $conditions[0]->getRight()->getName());
+		self::assertSame($parent, $conditions[0]->getRight()->getSource());
+	}
+
+	public function testCorrelateRightToLeftAddsEveryCompositePair(): void
+	{
+		$registry = $this->makeRegistry();
+		$parent = new SelectQuery($registry->getCollection('articles'));
+		$child = new SelectQuery($registry->getCollection('article_tags'));
+		$pairing = RelationKeyPairing::from(['tenant_id', 'slug'], ['article_tenant_id', 'article_slug']);
+
+		RelationKeyQuery::correlateRightToLeft($pairing, $child, $child, $parent);
+
+		$conditions = $child->getConditions();
+		self::assertCount(2, $conditions);
+
+		foreach ($conditions as $index => $condition) {
+			self::assertInstanceOf(ComparisonCondition::class, $condition);
+			self::assertSame(ComparisonOperator::EQ, $condition->getOperator());
+			self::assertSame($pairing->getRightFields()[$index], $condition->getLeft()->getName());
+			self::assertSame($child, $condition->getLeft()->getSource());
+			self::assertSame($pairing->getLeftFields()[$index], $condition->getRight()->getName());
+			self::assertSame($parent, $condition->getRight()->getSource());
+		}
+	}
+
 	public function testFilterRightByLeftReferencesAcceptsOrderedReferenceValues(): void
 	{
 		$registry = $this->makeRegistry();

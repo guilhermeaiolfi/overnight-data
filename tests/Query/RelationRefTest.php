@@ -23,6 +23,7 @@ use ON\Data\Query\Expression\ValueOperationExpression;
 use function ON\Data\Query\query;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationRef;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
@@ -214,7 +215,9 @@ final class RelationRefTest extends TestCase
 		$users->posts->title;
 		$users->posts->author->name;
 
-		self::assertCount(0, $users->getSelections());
+		$selections = $users->getSelections()->getAll();
+		self::assertCount(1, $selections);
+		self::assertTrue($selections[0]->hasTag(SelectionTag::DEFAULT));
 		self::assertSame([], $users->getConditions());
 		self::assertSame([], $users->getGroups());
 		self::assertSame([], $users->getSorts());
@@ -241,7 +244,9 @@ final class RelationRefTest extends TestCase
 
 		$users->posts->fields('id', 'title');
 
-		self::assertCount(0, $users->getSelections());
+		$selections = $users->getSelections()->getAll();
+		self::assertCount(1, $selections);
+		self::assertTrue($selections[0]->hasTag(SelectionTag::DEFAULT));
 		self::assertSame([
 			['posts', true, true, ['id', 'title']],
 		], $this->selectionState($users));

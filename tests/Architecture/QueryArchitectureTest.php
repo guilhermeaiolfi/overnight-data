@@ -499,6 +499,7 @@ final class QueryArchitectureTest extends TestCase
 			'requireRight(',
 			'addJoinConditions(',
 			'filterRightByLeftReferences(',
+			'correlateRightToLeft(',
 		] as $forbidden) {
 			self::assertStringNotContainsString($forbidden, $contents, $forbidden);
 		}
@@ -507,6 +508,7 @@ final class QueryArchitectureTest extends TestCase
 		self::assertStringContainsString('RelationKeyPairing', $queryHelperContents);
 		self::assertStringContainsString('addJoinConditions', $queryHelperContents);
 		self::assertStringContainsString('filterRightByLeftReferences', $queryHelperContents);
+		self::assertStringContainsString('correlateRightToLeft', $queryHelperContents);
 	}
 
 	public function testBranchOutputShapingUsesRelationCardinalityInsteadOfParserCollectionChecks(): void
@@ -542,6 +544,7 @@ final class QueryArchitectureTest extends TestCase
 			[
 				'/src/Query/Relation/Loader/',
 				'/src/Query/Relation/RelationLoadBranch.php',
+				'/src/Query/Relation/RelationQueryPlanner.php',
 			],
 			[
 				'HasOneRelation',

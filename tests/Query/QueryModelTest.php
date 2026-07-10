@@ -150,6 +150,18 @@ final class QueryModelTest extends TestCase
 		self::assertTrue($selections[0]->hasTag(SelectionTag::DEFAULT));
 	}
 
+	public function testDerivedQueryDefaultStarTargetsFromSourceNotSelf(): void
+	{
+		$inner = query($this->makeRegistry()->getCollection('users'))->as('users_src');
+		$derived = query($inner);
+		$star = $derived->getSelections()->getAll()[0]->getExpression();
+
+		self::assertInstanceOf(StarExpression::class, $star);
+		self::assertSame($inner, $star->getSource());
+		self::assertSame($inner, $derived->all()->getSource());
+		self::assertNotSame($derived, $star->getSource());
+	}
+
 	public function testExplicitSelectReplacesTaggedDefaultRootStar(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));

@@ -1451,6 +1451,182 @@ final class CycleJoinExecutionTest extends TestCase
 		);
 	}
 
+	public function testRelatedQueryExistsForHasManyBelongsToAndHasOne(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$rows = $users
+			->select($users->name)
+			->where(x()->exists(
+				$users->relatedQuery(
+					$users->posts,
+					fn (SelectQuery $posts) => $posts->where(x()->eq($posts->published, true)),
+				),
+			))
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([['name' => 'Ada'], ['name' => 'Grace']], $rows);
+
+		$withCompany = $this->database->query($this->registry->getCollection('users'));
+		$companyRows = $withCompany
+			->select($withCompany->name)
+			->where(x()->exists(
+				$withCompany->relatedQuery(
+					$withCompany->company,
+					fn (SelectQuery $company) => $company->where(x()->eq($company->active, true)),
+				),
+			))
+			->orderBy($withCompany->id->asc())
+			->fetchAll();
+
+		self::assertSame([['name' => 'Ada'], ['name' => 'Grace']], $companyRows);
+
+		$withProfile = $this->database->query($this->registry->getCollection('users'));
+		$profileRows = $withProfile
+			->select($withProfile->name)
+			->where(x()->exists($withProfile->relatedQuery($withProfile->profile)))
+			->orderBy($withProfile->id->asc())
+			->fetchAll();
+
+		self::assertSame([['name' => 'Ada'], ['name' => 'Grace']], $profileRows);
+	}
+
+	public function testRelatedQueryNotExistsAndNullableKeys(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$rows = $users
+			->select($users->name)
+			->where(x()->notExists(
+				$users->relatedQuery(
+					$users->posts,
+					fn (SelectQuery $posts) => $posts->where(x()->eq($posts->published, true)),
+				),
+			))
+			->fetchAll();
+
+		self::assertSame([['name' => 'Linus']], $rows);
+
+		$nullable = $this->database->query($this->registry->getCollection('users'));
+		$withoutCompany = $nullable
+			->select($nullable->name)
+			->where(x()->notExists($nullable->relatedQuery($nullable->company)))
+			->fetchAll();
+
+		self::assertSame([['name' => 'Linus']], $withoutCompany);
+	}
+
+	public function testRelatedQueryM2MAndTargetFilter(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$rows = $users
+			->select($users->name)
+			->where(x()->exists(
+				$users->relatedQuery(
+					$users->roles,
+					fn (SelectQuery $roles) => $roles->where(x()->eq($roles->name, 'Editor')),
+				),
+			))
+			->fetchAll();
+
+		self::assertSame([['name' => 'Ada']], $rows);
+	}
+
+	public function testRelatedQueryCompositeKeysAndNestedExists(): void
+	{
+		$accounts = $this->database->query($this->registry->getCollection('accounts'));
+		$accountRows = $accounts
+			->select($accounts->name)
+			->where(x()->exists(
+				$accounts->relatedQuery(
+					$accounts->employees,
+					fn (SelectQuery $employees) => $employees->where(x()->eq($employees->name, 'Ada')),
+				),
+			))
+			->fetchAll();
+
+		self::assertSame([['name' => 'Platform']], $accountRows);
+
+		$articles = $this->database->query($this->registry->getCollection('composite_articles'));
+		$tagRows = $articles
+			->select($articles->title)
+			->where(x()->exists(
+				$articles->relatedQuery(
+					$articles->tags,
+					fn (SelectQuery $tags) => $tags->where(x()->eq($tags->name, 'php')),
+				),
+			))
+			->fetchAll();
+
+		self::assertSame([['title' => 'Joins']], $tagRows);
+
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$nested = $users
+			->select($users->name)
+			->where(x()->exists(
+				$users->relatedQuery(
+					$users->posts,
+					function (SelectQuery $posts): void {
+						$posts->where(x()->exists(
+							$posts->relatedQuery(
+								$posts->comments,
+								fn (SelectQuery $comments) => $comments->where(x()->eq($comments->body, 'First')),
+							),
+						));
+					},
+				),
+			))
+			->fetchAll();
+
+		self::assertSame([['name' => 'Ada']], $nested);
+	}
+
+	public function testRelatedQueryDoesNotSelectOrJoinParentAndCoexistsWithLoading(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$related = $users->relatedQuery(
+			$users->posts,
+			fn (SelectQuery $posts) => $posts->where(x()->eq($posts->published, true)),
+		);
+
+		self::assertFalse($users->posts->isSelected());
+		self::assertSame([], $users->getJoins());
+
+		$users->posts->load();
+		$rows = $users
+			->select($users->name)
+			->where(x()->exists($related))
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame('Ada', $rows[0]['name']);
+		self::assertCount(2, $rows[0]['posts']);
+		self::assertSame('Grace', $rows[1]['name']);
+		self::assertCount(1, $rows[1]['posts']);
+	}
+
+	public function testRepeatedRelatedQueryPredicatesAllocateDistinctAliases(): void
+	{
+		$executor = $this->executorFromDatabase($this->database);
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users
+			->select($users->id)
+			->where(
+				x()->exists($users->relatedQuery(
+					$users->posts,
+					fn (SelectQuery $posts) => $posts->where(x()->eq($posts->published, true)),
+				)),
+				x()->exists($users->relatedQuery(
+					$users->roles,
+					fn (SelectQuery $roles) => $roles->where(x()->eq($roles->name, 'Admin')),
+				)),
+			);
+
+		$sql = $this->compileSqlWithExecutor($executor, $users);
+
+		self::assertSame(2, preg_match_all('/EXISTS/i', $sql));
+		self::assertMatchesRegularExpression('/"q\d+".*"q\d+"/s', $sql);
+	}
+
 	private function makeRegistry(): Registry
 	{
 		$registry = new Registry();
@@ -1636,6 +1812,10 @@ final class CycleJoinExecutionTest extends TestCase
 		$accounts->field('tenantId', 'int')->column('tenant_id');
 		$accounts->field('id', 'int');
 		$accounts->field('name', 'string');
+		$accounts->hasMany('employees', 'employees')
+			->innerKey(['tenantId', 'id'])
+			->outerKey(['tenantId', 'accountId'])
+			->end();
 		$accounts->primaryKey('tenantId', 'id');
 
 		$employees = $registry->collection('employees');

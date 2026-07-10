@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation\Loader;
 
 use ON\Data\Query\Exception\RelationLoaderException;
+use ON\Data\Query\Expression\StarExpression;
 use function ON\Data\Query\query;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
@@ -14,6 +15,7 @@ use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
+use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
@@ -150,9 +152,11 @@ final class FirstOfManyLoader extends AbstractLoader
 		$ranked = $inner->as(self::DERIVED_ALIAS);
 		$outer = query($ranked);
 
+		$outer->getSelections()->removeByTag(SelectionTag::DEFAULT);
 		$outer->getSelections()->merge(
 			$inner->getSelections()
 				->filterByTag(SelectionTag::COLUMN)
+				->filter(static fn (SelectionItem $selection): bool => ! $selection->getExpression() instanceof StarExpression)
 				->projectTo(from: $ranked, to: $outer),
 		);
 

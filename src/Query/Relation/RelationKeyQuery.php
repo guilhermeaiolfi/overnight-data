@@ -26,6 +26,27 @@ final class RelationKeyQuery
 	}
 
 	/**
+	 * Correlate a right/child query source to a left/parent source for every key pair.
+	 *
+	 * Each pair becomes: right.field(rightKey) = left.field(leftKey).
+	 */
+	public static function correlateRightToLeft(
+		RelationKeyPairing $pairing,
+		SelectQuery $query,
+		QuerySourceInterface $rightSource,
+		QuerySourceInterface $leftSource,
+	): void {
+		foreach ($pairing->getPairs() as $pair) {
+			$query->where(
+				x()->eq(
+					$rightSource->field($pair['right']),
+					$leftSource->field($pair['left']),
+				),
+			);
+		}
+	}
+
+	/**
 	 * @param list<array<string, mixed>> $references
 	 */
 	public static function filterRightByLeftReferences(
