@@ -123,6 +123,8 @@ When a loaded relation does not specify `fields(...)`, the public projection use
 
 Built-in `FirstOfMany` loading is separate-query-only. JOIN loading is intentionally unsupported because the loader must choose one ordered child per parent without changing root row shape. The relation definition must provide deterministic `orderBy` metadata; the loader appends any missing target primary-key fields as stable tie breakers. SQL backends with the modeled window-expression and derived-source APIs load it by ranking children with `ROW_NUMBER() OVER (PARTITION BY child relation keys ORDER BY definition order, primary key tie breakers)` and filtering the derived source to rank `1`.
 
+`FirstOfMany` is query-only: its default `persistencePlanner` is `null`. Mutations belong on the underlying has-many (or child collection), not on the first-of-many view.
+
 Built-in `HasMany` limit/offset is also separate-query-only. JOIN loading with relation-level `limit(...)` or `offset(...)` is intentionally unsupported. Supported SQL backends load limited `HasMany` branches by wrapping the relation query in a derived source, adding `ROW_NUMBER() OVER (PARTITION BY child relation keys ORDER BY selection order, primary key tie breakers)`, and filtering that rank in the outer query.
 
 Example:

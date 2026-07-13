@@ -101,7 +101,7 @@ Session::projection($object)
 
 For to-many and M2M relations, a declared relation field does not create an item by itself. The projection must first call `create($u->posts)`, `existing($u->posts, $key)`, or `tracked($u->posts, $object)` so relation runtime state has one concrete item to add.
 
-Relation persistence planning then consumes changed `ToManyRelationState` and `ToOneRelationState` instances. Built-in planners cover many-to-many, has-many, belongs-to, and has-one relation definitions.
+Relation persistence planning then consumes changed `ToManyRelationState` and `ToOneRelationState` instances. Built-in planners cover many-to-many, has-many, belongs-to, and has-one relation definitions. `FirstOfMany` has no persistence planner by default — it is a read-only ordered view over has-many.
 
 ## Schema Kinds
 

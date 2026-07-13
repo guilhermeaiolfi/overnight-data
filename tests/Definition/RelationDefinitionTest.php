@@ -242,6 +242,13 @@ final class RelationDefinitionTest extends TestCase
 		self::assertFalse($relation->isJunction());
 	}
 
+	public function testFirstOfManyRelationHasNoPersistencePlannerByDefault(): void
+	{
+		$relation = (new Registry())->collection('user')->relation('featured', FirstOfManyRelation::class);
+
+		self::assertNull($relation->getPersistencePlanner());
+	}
+
 	public function testBuiltInRelationsDeclareOnDataLoaderDefaults(): void
 	{
 		$registry = new Registry();
