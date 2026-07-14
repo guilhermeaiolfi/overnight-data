@@ -13,19 +13,29 @@ final class ArrayPathExpander
 	 *
 	 * @return array<mixed>
 	 */
-	public function expand(array $source): array
+	public static function undot(array $source): array
+	{
+		return self::expand($source);
+	}
+
+	/**
+	 * @param array<mixed> $source
+	 *
+	 * @return array<mixed>
+	 */
+	public static function expand(array $source): array
 	{
 		$result = [];
 
 		foreach ($source as $key => $value) {
 			if (is_int($key) || ! is_string($key) || ! str_contains($key, '.')) {
-				$this->assignLiteral($result, $key, $value);
+				self::assignLiteral($result, $key, $value);
 
 				continue;
 			}
 
-			$segments = $this->parseSegments($key);
-			$this->assignPath($result, $segments, $value, $key);
+			$segments = self::parseSegments($key);
+			self::assignPath($result, $segments, $value, $key);
 		}
 
 		return $result;
@@ -35,7 +45,7 @@ final class ArrayPathExpander
 	 * @param array<mixed> $target
 	 * @param string|int $key
 	 */
-	private function assignLiteral(array &$target, string|int $key, mixed $value): void
+	private static function assignLiteral(array &$target, string|int $key, mixed $value): void
 	{
 		if (! array_key_exists($key, $target)) {
 			$target[$key] = $value;
@@ -45,7 +55,7 @@ final class ArrayPathExpander
 
 		$current = $target[$key];
 		if (is_array($current) && is_array($value)) {
-			$target[$key] = $this->mergeBranches($current, $value, (string) $key);
+			$target[$key] = self::mergeBranches($current, $value, (string) $key);
 
 			return;
 		}
@@ -57,7 +67,7 @@ final class ArrayPathExpander
 	 * @param array<mixed> $target
 	 * @param list<string> $segments
 	 */
-	private function assignPath(array &$target, array $segments, mixed $value, string $originalKey): void
+	private static function assignPath(array &$target, array $segments, mixed $value, string $originalKey): void
 	{
 		$current = &$target;
 		$currentPath = '';
@@ -76,7 +86,7 @@ final class ArrayPathExpander
 
 				$existing = $current[$segment];
 				if (is_array($existing) && is_array($value)) {
-					$current[$segment] = $this->mergeBranches($existing, $value, $currentPath);
+					$current[$segment] = self::mergeBranches($existing, $value, $currentPath);
 
 					return;
 				}
@@ -104,7 +114,7 @@ final class ArrayPathExpander
 	 *
 	 * @return array<mixed>
 	 */
-	private function mergeBranches(array $left, array $right, string $path): array
+	private static function mergeBranches(array $left, array $right, string $path): array
 	{
 		$merged = $left;
 
@@ -119,7 +129,7 @@ final class ArrayPathExpander
 
 			$existing = $merged[$key];
 			if (is_array($existing) && is_array($value)) {
-				$merged[$key] = $this->mergeBranches($existing, $value, $childPath);
+				$merged[$key] = self::mergeBranches($existing, $value, $childPath);
 
 				continue;
 			}
@@ -133,7 +143,7 @@ final class ArrayPathExpander
 	/**
 	 * @return list<string>
 	 */
-	private function parseSegments(string $key): array
+	private static function parseSegments(string $key): array
 	{
 		if ($key === '' || str_starts_with($key, '.') || str_ends_with($key, '.') || str_contains($key, '..')) {
 			throw new MappingException(sprintf("Malformed dotted key '%s'.", $key));

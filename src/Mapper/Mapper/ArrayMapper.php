@@ -12,11 +12,6 @@ use ON\Data\Mapper\Support\ArrayPathExpander;
 
 final class ArrayMapper implements MapperInterface
 {
-	public function __construct(
-		private readonly ?ArrayPathExpander $pathExpander = null,
-	) {
-	}
-
 	public static function canMap(
 		mixed $source,
 		MappingOptions $options,
@@ -32,7 +27,7 @@ final class ArrayMapper implements MapperInterface
 		}
 
 		$source = $this->shouldExpandDottedKeys($context->getNode())
-			? ($this->pathExpander ?? new ArrayPathExpander())->expand($source)
+			? ArrayPathExpander::expand($source)
 			: $source;
 
 		foreach ($source as $name => $value) {
