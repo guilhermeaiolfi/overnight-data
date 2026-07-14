@@ -35,6 +35,7 @@ final class CustomOwnedRelation extends DefinitionNode implements RelationInterf
 			'collectionName' => '',
 			'nullable' => false,
 			'cascade' => true,
+			'exclusive' => false,
 			'load' => 'lazy',
 			'inner_keys' => [],
 			'outer_keys' => [],
@@ -100,6 +101,18 @@ final class CustomOwnedRelation extends DefinitionNode implements RelationInterf
 	public function isCascade(): bool
 	{
 		return (bool) $this->get('cascade');
+	}
+
+	public function exclusive(bool $exclusive): self
+	{
+		$this->set('exclusive', $exclusive);
+
+		return $this;
+	}
+
+	public function isExclusive(): bool
+	{
+		return (bool) $this->get('exclusive');
 	}
 
 	public function load(string $load): self
