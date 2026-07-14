@@ -141,8 +141,12 @@ final class HasManyLoader extends AbstractLoader
 			$partitionBy[] = $inner->field($fieldName);
 		}
 
+		// SelectQuery starts with DEFAULT *; keeping it alongside projected columns
+		// makes MySQL reject the derived table (Duplicate column name).
+		$inner->getSelections()->removeByTag(SelectionTag::DEFAULT);
 		$inner->getSelections()->merge(
 			$childQuery->getSelections()
+				->filter(static fn (SelectionItem $selection): bool => ! $selection->getExpression() instanceof StarExpression)
 				->projectTo(from: $childQuery, to: $inner),
 		);
 

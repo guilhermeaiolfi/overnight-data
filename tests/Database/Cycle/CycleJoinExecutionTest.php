@@ -1064,6 +1064,9 @@ final class CycleJoinExecutionTest extends TestCase
 		self::assertStringNotContainsString('"__ondata_first_of_many"."created_at"', $sql);
 		self::assertStringContainsString('__ondata_rank', $sql);
 		self::assertStringContainsString('WHERE "__ondata_first_of_many"."__ondata_rank" = ?', $sql);
+		// MySQL rejects derived tables with duplicate output names; DEFAULT * must not
+		// remain beside projected columns in the windowed subquery.
+		self::assertSame(1, substr_count($sql, '"q1"."id" AS "id"'));
 	}
 
 	public function testFirstOfManyLoaderDoesNotGuessDerivedOutputNamesFromExpressionTypes(): void
