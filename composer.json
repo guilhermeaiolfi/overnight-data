@@ -34,6 +34,11 @@
             "Benchmarks\\ON\\Data\\": "benchmarks/"
         }
     },
+    "extra": {
+        "branch-alias": {
+            "dev-master": "1.1.x-dev"
+        }
+    },
     "scripts": {
         "validate-composer": "composer validate --strict",
         "test": "php vendor/phpunit/phpunit/phpunit --configuration phpunit.xml.dist",
