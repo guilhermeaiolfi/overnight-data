@@ -41,6 +41,14 @@ interface RelationInterface
 
 	public function isCascade(): bool;
 
+	/**
+	 * Exclusive related rows exist only for this owner. Removing them from the
+	 * relation deletes the target row instead of nulling / disconnecting.
+	 */
+	public function exclusive(bool $exclusive): self;
+
+	public function isExclusive(): bool;
+
 	public function load(string $load): self;
 
 	public function getLoadStrategy(): string;

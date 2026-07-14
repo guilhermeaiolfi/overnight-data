@@ -173,6 +173,18 @@ final class HasOnePersistencePlannerTest extends TestCase
 		$this->planClear($relation, $owner, $baseline);
 	}
 
+	public function testClearExclusiveHasOneMarksBaselineRemoved(): void
+	{
+		[$relation, $users, $profiles] = $this->singleKeyModel(exclusive: true);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
+		$baseline = RecordState::clean($profiles->getKey(5), ['id' => 5, 'user_id' => 10]);
+
+		$this->planClear($relation, $owner, $baseline);
+
+		self::assertTrue($baseline->isRemoved());
+		self::assertSame(10, $baseline->getValue('user_id'));
+	}
+
 	public function testReplacementNullableNullsOldTargetAndSetsNewTargetOuterKey(): void
 	{
 		[$relation, $users, $profiles] = $this->singleKeyModel(nullable: true);
@@ -204,6 +216,20 @@ final class HasOnePersistencePlannerTest extends TestCase
 			self::assertTrue($oldTarget->isClean());
 			self::assertTrue($newTarget->isClean());
 		}
+	}
+
+	public function testReplacementExclusiveMarksOldTargetRemovedAndSetsNewTargetOuterKey(): void
+	{
+		[$relation, $users, $profiles] = $this->singleKeyModel(exclusive: true);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
+		$oldTarget = RecordState::clean($profiles->getKey(5), ['id' => 5, 'user_id' => 10]);
+		$newTarget = RecordState::clean($profiles->getKey(6), ['id' => 6, 'user_id' => null]);
+
+		$this->planReplacement($relation, $owner, $oldTarget, $newTarget);
+
+		self::assertTrue($oldTarget->isRemoved());
+		self::assertSame(10, $oldTarget->getValue('user_id'));
+		self::assertSame(10, $newTarget->getValue('user_id'));
 	}
 
 	public function testPassingBelongsToRelationThrows(): void
@@ -366,7 +392,7 @@ final class HasOnePersistencePlannerTest extends TestCase
 	/**
 	 * @return array{0: HasOneRelation, 1: CollectionInterface, 2: CollectionInterface}
 	 */
-	private function singleKeyModel(bool $nullable = false): array
+	private function singleKeyModel(bool $nullable = false, bool $exclusive = false): array
 	{
 		$registry = new Registry();
 		$profiles = $registry->collection('profiles')
@@ -378,7 +404,11 @@ final class HasOnePersistencePlannerTest extends TestCase
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('name', 'string')->end();
-		$relation = $users->hasOne('profile', 'profiles')->innerKey('id')->outerKey('user_id')->nullable($nullable);
+		$relation = $users->hasOne('profile', 'profiles')
+			->innerKey('id')
+			->outerKey('user_id')
+			->nullable($nullable)
+			->exclusive($exclusive);
 
 		return [$relation, $users, $profiles];
 	}

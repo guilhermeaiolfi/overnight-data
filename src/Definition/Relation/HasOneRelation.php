@@ -14,22 +14,9 @@ class HasOneRelation extends AbstractRelation
 	protected static function definitionDefaults(): array
 	{
 		return array_replace(parent::definitionDefaults(), [
-			'exclusive' => false,
 			'loader' => HasOneLoader::class,
 			'persistencePlanner' => HasOnePersistencePlanner::class,
 		]);
-	}
-
-	public function exclusive(bool $exclusive): self
-	{
-		$this->set('exclusive', $exclusive);
-
-		return $this;
-	}
-
-	public function isExclusive(): bool
-	{
-		return (bool) $this->get('exclusive');
 	}
 
 	public function end(): DefinitionInterface

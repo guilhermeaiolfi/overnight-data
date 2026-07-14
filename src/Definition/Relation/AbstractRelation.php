@@ -31,6 +31,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 			'class' => static::class,
 			'nullable' => false,
 			'cascade' => true,
+			'exclusive' => false,
 			'load' => 'lazy',
 			'inner_keys' => [],
 			'outer_keys' => [],
@@ -86,6 +87,22 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 	public function isNullable(): bool
 	{
 		return (bool) $this->get('nullable');
+	}
+
+	/**
+	 * Exclusive related rows exist only for this owner. Removing them from the
+	 * relation deletes the target row instead of nulling outer keys.
+	 */
+	public function exclusive(bool $exclusive): self
+	{
+		$this->set('exclusive', $exclusive);
+
+		return $this;
+	}
+
+	public function isExclusive(): bool
+	{
+		return (bool) $this->get('exclusive');
 	}
 
 	public function where(array $where): self

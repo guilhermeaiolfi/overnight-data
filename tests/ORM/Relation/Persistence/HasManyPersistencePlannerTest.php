@@ -196,6 +196,18 @@ final class HasManyPersistencePlannerTest extends TestCase
 		$this->planSingleRemove($relation, $owner, $child);
 	}
 
+	public function testRemovedChildOnExclusiveRelationMarksChildRemoved(): void
+	{
+		[$relation, $users, $posts] = $this->singleKeyModel(exclusive: true);
+		$owner = RecordState::clean($users->getKey(10), ['id' => 10]);
+		$child = RecordState::clean($posts->getKey(5), ['id' => 5, 'user_id' => 10]);
+
+		$this->planSingleRemove($relation, $owner, $child);
+
+		self::assertTrue($child->isRemoved());
+		self::assertSame(10, $child->getValue('user_id'));
+	}
+
 	public function testRemovedChildThatIsNotTrackedThrows(): void
 	{
 		[$relation, $users, $posts] = $this->singleKeyModel(nullable: true);
@@ -332,7 +344,7 @@ final class HasManyPersistencePlannerTest extends TestCase
 	/**
 	 * @return array{0: HasManyRelation, 1: CollectionInterface, 2: CollectionInterface}
 	 */
-	private function singleKeyModel(bool $nullable = false): array
+	private function singleKeyModel(bool $nullable = false, bool $exclusive = false): array
 	{
 		$registry = new Registry();
 		$posts = $registry->collection('posts')
@@ -344,7 +356,11 @@ final class HasManyPersistencePlannerTest extends TestCase
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('name', 'string')->end();
-		$relation = $users->hasMany('posts', 'posts')->innerKey('id')->outerKey('user_id')->nullable($nullable);
+		$relation = $users->hasMany('posts', 'posts')
+			->innerKey('id')
+			->outerKey('user_id')
+			->nullable($nullable)
+			->exclusive($exclusive);
 
 		return [$relation, $users, $posts];
 	}

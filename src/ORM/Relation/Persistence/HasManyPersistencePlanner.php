@@ -51,6 +51,13 @@ final class HasManyPersistencePlanner implements RelationPersistencePlannerInter
 
 		foreach ($collection->getRemoved() as $item) {
 			$child = $this->records->resolve($context, $relation, $item, 'child');
+			if ($relation->isExclusive()) {
+				if (! $child->isRemoved()) {
+					$child->markRemoved();
+				}
+				continue;
+			}
+
 			if (! $relation->isNullable()) {
 				throw new RelationPersistenceException(sprintf(
 					"Relation '%s' on owner collection '%s' cannot remove child by nulling outer keys because the relation is not nullable.",

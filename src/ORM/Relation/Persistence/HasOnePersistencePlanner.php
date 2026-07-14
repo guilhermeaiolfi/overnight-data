@@ -48,7 +48,7 @@ final class HasOnePersistencePlanner implements RelationPersistencePlannerInterf
 		$baselineTarget = $reference->getBaselineTarget();
 		$requiresUnlink = $baselineTarget !== null && $baselineTarget !== $currentTarget;
 
-		if ($requiresUnlink && ! $relation->isNullable()) {
+		if ($requiresUnlink && ! $relation->isExclusive() && ! $relation->isNullable()) {
 			throw new RelationPersistenceException(sprintf(
 				"Relation '%s' on owner collection '%s' cannot unlink target by nulling outer keys because the relation is not nullable.",
 				$relation->getName(),
@@ -63,7 +63,13 @@ final class HasOnePersistencePlanner implements RelationPersistencePlannerInterf
 			? $this->records->resolve($context, $relation, $baselineTarget, 'target')
 			: null;
 		if ($baselineRecord instanceof RecordState) {
-			$this->keys->nullValues($baselineRecord, $relation->getOuterKeys());
+			if ($relation->isExclusive()) {
+				if (! $baselineRecord->isRemoved()) {
+					$baselineRecord->markRemoved();
+				}
+			} else {
+				$this->keys->nullValues($baselineRecord, $relation->getOuterKeys());
+			}
 		}
 
 		if ($currentRecord instanceof RecordState) {
