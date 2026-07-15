@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Graph adoption intent** — untracked roots with a complete primary key are no longer adopted as clean/existing by default. Roots and related objects both default to `NEW` unless marked with `Session::existing($object)` (or attached via `identify()` / query tracking).
 - **`SelectQuery::select(RelationRef)`** — relation refs are accepted for nested loading. Bare `$u->posts` is equivalent to `$u->posts->load()` (all visible fields); already-configured refs keep their options. Relation-only `select()` keeps default root fields. Foreign-query refs raise `RelationSelectionException::foreignQueryRelation()`.
+- **Separate-query parent-key chunking** — built-in loaders run separate-query continuations in batches of 100 parent keys (`AbstractLoader::executeSeparateByReferences()`), matching Doctrine eager `IN` batching. Parent-key filters use tagged `ConditionList` (`ConditionTag::CORRELATION`), not user `where()`. Custom `AbstractLoader` subclasses may override `separateQueryBatchSize()`.
+- **Tagged query conditions** — `SelectQuery` stores WHERE predicates in `ConditionList` with tags (`USER`, `CORRELATION`, reserved `SCOPE` / `INTERNAL`), parallel to selection tags.
 - Quickstart smoke coverage for nested `posts` relation loading.
 - Relation-loading docs for separate-query parent-batch / `IN` correlation limits.
 

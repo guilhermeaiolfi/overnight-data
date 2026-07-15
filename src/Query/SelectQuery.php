@@ -15,6 +15,8 @@ use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
 use ON\Data\ORM\Representation\State\Query\MutableQueryResultTracker;
 use ON\Data\ORM\Session;
 use ON\Data\Query\Condition\ConditionInterface;
+use ON\Data\Query\Condition\ConditionList;
+use ON\Data\Query\Condition\ConditionTag;
 use ON\Data\Query\Exception\ObjectExportException;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Exception\UnknownQueryExpressionException;
@@ -60,10 +62,7 @@ final class SelectQuery implements QuerySourceInterface
 
 	private readonly SelectionList $selections;
 
-	/**
-	 * @var list<ConditionInterface>
-	 */
-	private array $conditions = [];
+	private readonly ConditionList $conditions;
 
 	/**
 	 * @var list<ValueExpressionInterface>
@@ -109,6 +108,7 @@ final class SelectQuery implements QuerySourceInterface
 
 		$this->selections = new SelectionList();
 		$this->selections->add($this->all(), SelectionTag::DEFAULT, true);
+		$this->conditions = new ConditionList();
 	}
 
 	public function getQuery(): SelectQuery
@@ -298,10 +298,10 @@ final class SelectQuery implements QuerySourceInterface
 			);
 		}
 
-		$copy->conditions = array_map(
-			fn (ConditionInterface $condition): ConditionInterface => $condition->bindTo($copy, from: $this),
-			$this->conditions,
-		);
+		$copy->conditions->clear();
+		foreach ($this->conditions->bindTo($copy, $this)->getItems() as $item) {
+			$copy->conditions->add($item->getCondition(), ...$item->getTags());
+		}
 		$copy->groups = array_map(
 			fn (ValueExpressionInterface $group): ValueExpressionInterface => $group->bindTo($copy, from: $this),
 			$this->groups,
@@ -400,7 +400,7 @@ final class SelectQuery implements QuerySourceInterface
 			throw new InvalidArgumentException('SelectQuery::where() requires at least one condition.');
 		}
 
-		array_push($this->conditions, ...$conditions);
+		$this->conditions->addAll($conditions, ConditionTag::USER);
 
 		return $this;
 	}
@@ -599,6 +599,11 @@ final class SelectQuery implements QuerySourceInterface
 	 * @return list<ConditionInterface>
 	 */
 	public function getConditions(): array
+	{
+		return $this->conditions->getAll();
+	}
+
+	public function getConditionList(): ConditionList
 	{
 		return $this->conditions;
 	}

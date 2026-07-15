@@ -6,7 +6,6 @@ namespace ON\Data\Query\Relation\Loader;
 
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
-use ON\Data\Query\Relation\RelationKeyQuery;
 use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
@@ -68,20 +67,11 @@ final class HasOneLoader extends AbstractLoader
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		$references = $branch->getReferenceValues();
-
-		if ($references === []) {
-			return;
-		}
-
-		$query = $branch->getQuery();
-		RelationKeyQuery::filterRightByLeftReferences(
-			$branch->getRelationRef()->getDefinition()->getKeyPairing(),
-			$query,
-			$query,
-			$references,
-		);
 		$this->applySeparateQueryOptions($branch);
-		$runtime->execute($branch, $query);
+		$this->executeSeparateByReferences(
+			$branch,
+			$runtime,
+			$branch->getRelationRef()->getDefinition()->getKeyPairing(),
+		);
 	}
 }

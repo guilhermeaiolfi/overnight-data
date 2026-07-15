@@ -6,6 +6,8 @@ namespace ON\Data\Query\Relation;
 
 use InvalidArgumentException;
 use ON\Data\Definition\Relation\RelationKeyPairing;
+use ON\Data\Query\Condition\ConditionInterface;
+use ON\Data\Query\Condition\ConditionTag;
 use ON\Data\Query\Join;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
@@ -55,24 +57,39 @@ final class RelationKeyQuery
 		QuerySourceInterface $rightSource,
 		array $references,
 	): void {
-		if ($references === []) {
+		$condition = self::referencesCondition($pairing, $rightSource, $references);
+
+		if ($condition === null) {
+			$query->getConditionList()->removeByTag(ConditionTag::CORRELATION);
+
 			return;
+		}
+
+		$query->getConditionList()->replaceByTag(ConditionTag::CORRELATION, $condition);
+	}
+
+	/**
+	 * @param list<array<string, mixed>> $references
+	 */
+	public static function referencesCondition(
+		RelationKeyPairing $pairing,
+		QuerySourceInterface $rightSource,
+		array $references,
+	): ?ConditionInterface {
+		if ($references === []) {
+			return null;
 		}
 
 		if (! $pairing->isComposite()) {
 			$rightFields = $pairing->getRightFields();
 
-			$query->where(
-				x()->in(
-					$rightSource->field($rightFields[0]),
-					array_map(
-						fn (array $values): mixed => self::referenceValue($pairing, $values, 0),
-						$references,
-					),
+			return x()->in(
+				$rightSource->field($rightFields[0]),
+				array_map(
+					fn (array $values): mixed => self::referenceValue($pairing, $values, 0),
+					$references,
 				),
 			);
-
-			return;
 		}
 
 		$predicates = [];
@@ -90,7 +107,7 @@ final class RelationKeyQuery
 			$predicates[] = x()->and(...$comparisons);
 		}
 
-		$query->where(x()->or(...$predicates));
+		return x()->or(...$predicates);
 	}
 
 	/**

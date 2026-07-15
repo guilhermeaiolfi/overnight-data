@@ -220,7 +220,7 @@ Use getters to inspect the built query:
 - `getCollection()`
 - `getSelections()`
 - `getRelationSelections()`
-- `getConditions()`
+- `getConditions()` / `getConditionList()` — tagged WHERE list (`USER`, `CORRELATION`, …)
 - `getGroups()`
 - `getHavingConditions()`
 - `getSorts()`

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation\Loader;
 
 use LogicException;
+use ON\Data\Definition\Relation\RelationKeyPairing;
+use ON\Data\Query\Condition\ConditionTag;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\JoinType;
@@ -17,9 +19,15 @@ use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionTag;
+use ON\Data\Query\SelectQuery;
 
 abstract class AbstractLoader implements LoaderInterface
 {
+	/**
+	 * Max parent-key references per separate-query continuation (Doctrine-style IN batching).
+	 */
+	protected const SEPARATE_QUERY_BATCH_SIZE = 100;
+
 	public function join(RelationRef $relation): QuerySourceInterface
 	{
 		$this->assertSupportedRelationPath($relation);
@@ -134,6 +142,45 @@ abstract class AbstractLoader implements LoaderInterface
 		if ($sorts !== []) {
 			$query->bindSorts($from, ...$sorts);
 		}
+	}
+
+	/**
+	 * Run a separate-query continuation in parent-key chunks (default 100), like Doctrine eager batching.
+	 *
+	 * Callers should apply template options (where/orderBy) on {@see RelationLoadBranch::getQuery()}
+	 * before calling. Each chunk replaces {@see ConditionTag::CORRELATION} on the condition list.
+	 *
+	 * @param (callable(SelectQuery): QuerySourceInterface)|null $rightSource
+	 *        Resolves the correlated source (defaults to the branch query itself).
+	 * @param (callable(SelectQuery): SelectQuery)|null $finalize
+	 *        Optional transform after correlation (e.g. windowed HasMany / FirstOfMany wrappers).
+	 */
+	protected function executeSeparateByReferences(
+		RelationLoadBranch $branch,
+		LoadRuntime $runtime,
+		RelationKeyPairing $pairing,
+		?callable $rightSource = null,
+		?callable $finalize = null,
+	): void {
+		$references = $branch->getReferenceValues();
+
+		if ($references === []) {
+			return;
+		}
+
+		$query = $branch->getQuery();
+		$batchSize = max(1, $this->separateQueryBatchSize());
+
+		foreach (array_chunk($references, $batchSize) as $chunk) {
+			$source = $rightSource !== null ? $rightSource($query) : $query;
+			RelationKeyQuery::filterRightByLeftReferences($pairing, $query, $source, $chunk);
+			$runtime->execute($branch, $finalize !== null ? $finalize($query) : $query);
+		}
+	}
+
+	protected function separateQueryBatchSize(): int
+	{
+		return self::SEPARATE_QUERY_BATCH_SIZE;
 	}
 
 	/**

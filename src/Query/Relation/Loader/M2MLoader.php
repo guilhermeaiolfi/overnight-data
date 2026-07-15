@@ -116,12 +116,6 @@ final class M2MLoader extends AbstractLoader
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		$references = $branch->getReferenceValues();
-
-		if ($references === []) {
-			return;
-		}
-
 		$relation = $branch->getRelationRef();
 		$definition = $relation->getDefinition();
 
@@ -129,13 +123,13 @@ final class M2MLoader extends AbstractLoader
 			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');
 		}
 
-		$through = $this->through($relation, $definition);
-		$parentToThrough = $definition->getKeyPairing();
-		$query = $branch->getQuery();
-		$throughSource = $this->throughSource($relation, $query);
-		RelationKeyQuery::filterRightByLeftReferences($parentToThrough, $query, $throughSource, $references);
 		$this->applySeparateQueryOptions($branch);
-		$runtime->execute($branch, $query);
+		$this->executeSeparateByReferences(
+			$branch,
+			$runtime,
+			$definition->getKeyPairing(),
+			rightSource: fn (SelectQuery $query): QuerySourceInterface => $this->throughSource($relation, $query),
+		);
 	}
 
 	public function join(RelationRef $relation): QuerySourceInterface

@@ -10,7 +10,6 @@ use function ON\Data\Query\query;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
-use ON\Data\Query\Relation\RelationKeyQuery;
 use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
@@ -80,22 +79,14 @@ final class FirstOfManyLoader extends AbstractLoader
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		$references = $branch->getReferenceValues();
-
-		if ($references === []) {
-			return;
-		}
-
-		$query = $branch->getQuery();
-		RelationKeyQuery::filterRightByLeftReferences(
-			$branch->getRelationRef()->getDefinition()->getKeyPairing(),
-			$query,
-			$query,
-			$references,
-		);
 		$this->applySeparateQueryConditions($branch);
 		$orderBy = $this->deterministicOrder($branch);
-		$runtime->execute($branch, $this->rankedQuery($branch, $query, $orderBy));
+		$this->executeSeparateByReferences(
+			$branch,
+			$runtime,
+			$branch->getRelationRef()->getDefinition()->getKeyPairing(),
+			finalize: fn (SelectQuery $query): SelectQuery => $this->rankedQuery($branch, $query, $orderBy),
+		);
 	}
 
 	public function join(RelationRef $relation): QuerySourceInterface

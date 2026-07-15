@@ -372,6 +372,32 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testSeparateHasManyChunksParentKeysAcrossMultipleQueries(): void
+	{
+		$pdo = new PDO($this->dsn);
+		for ($id = 4; $id <= 101; $id++) {
+			$pdo->prepare('INSERT INTO users (id, name, company_id) VALUES (?, ?, NULL)')
+				->execute([$id, 'User' . $id]);
+		}
+
+		$executor = $this->executorFromDatabase($this->database);
+		$recording = new CountingQueryExecutor($executor);
+		$database = $this->runtimeForExecutor($recording);
+		$users = $database->query($this->registry->getCollection('users'));
+		$users->posts->fields('title');
+
+		$rows = $users
+			->select($users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertCount(101, $rows);
+		self::assertSame(['title' => 'Hello'], $rows[0]['posts'][0]);
+		self::assertSame([], $rows[100]['posts']);
+		// 1 root + 2 child chunks (default batch 100 over 101 parent keys)
+		self::assertSame(3, $recording->fetchAllCount());
+	}
+
 	public function testDirectConfigAppliesSeparateRelationWhereAndOrderBy(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
@@ -2036,6 +2062,38 @@ final class RecordingQueryExecutor implements QueryExecutorInterface
 	public function derivedSql(): array
 	{
 		return $this->derivedSql;
+	}
+}
+
+final class CountingQueryExecutor implements QueryExecutorInterface
+{
+	private int $fetchAllCount = 0;
+
+	public function __construct(
+		private readonly QueryExecutorInterface $inner,
+	) {
+	}
+
+	public function fetchAll(SelectQuery $query): array
+	{
+		$this->fetchAllCount++;
+
+		return $this->inner->fetchAll($query);
+	}
+
+	public function fetchOne(SelectQuery $query): ?array
+	{
+		return $this->inner->fetchOne($query);
+	}
+
+	public function iterate(SelectQuery $query): iterable
+	{
+		return $this->inner->iterate($query);
+	}
+
+	public function fetchAllCount(): int
+	{
+		return $this->fetchAllCount;
 	}
 }
 

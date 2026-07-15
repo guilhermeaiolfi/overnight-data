@@ -11,7 +11,6 @@ use function ON\Data\Query\query;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
-use ON\Data\Query\Relation\RelationKeyQuery;
 use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
@@ -80,30 +79,23 @@ final class HasManyLoader extends AbstractLoader
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		$references = $branch->getReferenceValues();
-
-		if ($references === []) {
-			return;
-		}
-
-		$query = $branch->getQuery();
-		RelationKeyQuery::filterRightByLeftReferences(
-			$branch->getRelationRef()->getDefinition()->getKeyPairing(),
-			$query,
-			$query,
-			$references,
-		);
+		$pairing = $branch->getRelationRef()->getDefinition()->getKeyPairing();
 
 		if (! $this->usesLimitOffset($branch)) {
 			$this->applySeparateQueryOptions($branch);
-			$runtime->execute($branch, $query);
+			$this->executeSeparateByReferences($branch, $runtime, $pairing);
 
 			return;
 		}
 
 		$this->applySeparateQueryConditions($branch);
 		$orderBy = $this->deterministicOrder($branch);
-		$runtime->execute($branch, $this->rankedQuery($branch, $query, $orderBy));
+		$this->executeSeparateByReferences(
+			$branch,
+			$runtime,
+			$pairing,
+			finalize: fn (SelectQuery $query): SelectQuery => $this->rankedQuery($branch, $query, $orderBy),
+		);
 	}
 
 	private function usesLimitOffset(RelationLoadBranch $branch): bool

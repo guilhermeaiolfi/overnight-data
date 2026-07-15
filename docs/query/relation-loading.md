@@ -173,14 +173,14 @@ HasMany, M2M, and FirstOfMany default to `SEPARATE_QUERY`. After the parent/root
 - simple keys become one `IN (...)` predicate over the parent key set;
 - composite keys become an `OR` of per-parent `AND` key comparisons.
 
-That means cost grows with the number of parent rows in the current batch, not only with result size. Very large parent batches can produce large SQL statements or expensive plans.
+Built-in loaders chunk that parent-key set (default **100**, Doctrine-style) so a large parent page does not produce a single oversized `IN` / `OR` statement. Each chunk replaces the `ConditionTag::CORRELATION` predicate on the relation query; user `where()` conditions stay tagged `USER` and are untouched. Results merge into the same relation nodes.
 
 Practical guidance:
 
 - Prefer `join()` for shallow to-one or small to-many loads when the loader accepts JOIN for that relation and option set.
-- Keep parent `fetchAll()` batches bounded when using separate-query HasMany/M2M/FirstOfMany (page roots, or load relations in smaller parent chunks).
-- Nested separate-query branches multiply round-trips (one continuation query per loaded branch level, not one query per parent row, but still O(branches) over a buffered parent set).
-- There is currently no automatic parent-key chunking in the built-in loaders.
+- Keep parent `fetchAll()` batches bounded when using separate-query HasMany/M2M/FirstOfMany (page roots); chunking bounds SQL size, not PHP memory for the full parent set.
+- Nested separate-query branches multiply round-trips (one continuation query per loaded branch level per key chunk, not one query per parent row).
+- Override batch size by providing a custom `AbstractLoader` subclass that overrides `separateQueryBatchSize()` (built-in loaders are final; no public RelationRef knob yet).
 
 ## Architecture Guardrails
 
@@ -198,5 +198,5 @@ Practical guidance:
 - Structured loading for built-in `HasMany` supports relation-level `limit(...)` and `offset(...)` only in separate-query mode, applies them per parent, and requires deterministic selection-level `orderBy(...)`.
 - Joined structured loading for built-in `M2M` is not implemented yet.
 - Relation-level `where` and `orderBy` are supported for separate-query loading first; joined relation conditions and ordering are rejected by built-in loaders.
-- Separate-query correlation uses `IN` (simple keys) or per-parent `OR`/`AND` (composite keys) over the full parent batch; see [Batch size and separate-query correlation](#batch-size-and-separate-query-correlation).
+- Separate-query correlation uses `IN` (simple keys) or per-parent `OR`/`AND` (composite keys), chunked by parent-key batch (default 100); see [Batch size and separate-query correlation](#batch-size-and-separate-query-correlation).
 - Future relation branch configuration should stay loader-owned and branch-local rather than moving relation-specific rules into the registry or generic runtime.
