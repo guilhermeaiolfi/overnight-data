@@ -1,61 +1,32 @@
-# Upgrade & Compatibility Policy
+# Upgrade Notes
 
-This document describes how `guilhermeaiolfi/overnight-data` handles versioning and backward compatibility.
+`guilhermeaiolfi/overnight-data` is still evolving. This file is **not** a compatibility guarantee.
 
-## Versioning
+## Expectation
 
-The package follows [Semantic Versioning](https://semver.org/):
+There is no promise that application code will keep working across releases without changes.
 
-- **MAJOR** — intentional breaking changes to supported public APIs.
-- **MINOR** — backward-compatible functionality additions.
-- **PATCH** — backward-compatible bug fixes and documentation-only changes.
+- Types under `ON\Data\` may move, rename, or change behavior.
+- Documented examples may change when the preferred API changes.
+- Minor and patch releases may include breaking changes when correcting design or closing gaps.
+- `@internal` markers, if present, are hints only; absence of `@internal` does not mean a type is stable.
 
-Git tags use the `vMAJOR.MINOR.PATCH` form, for example `v1.0.0`.
-
-## What counts as public API
-
-The supported public surface for 1.x includes:
-
-- classes, interfaces, and traits under `ON\Data\` shipped in `src/`;
-- global functions loaded from `src/Mapper/functions.php` and `src/Query/functions.php`;
-- documented behavior in `README.md` and `docs/`.
-
-Internal namespaces, `@internal` symbols, test-only helpers, and undocumented implementation details are not part of the compatibility promise.
-
-## 1.x compatibility expectations
-
-Within the 1.x line you should be able to upgrade patch and minor releases without changing application code, except where release notes call out a deliberate behavior correction.
-
-The 1.0 release stabilizes the current data-layer foundation:
-
-- definition registry and wrappers;
-- mapper runtime and conversion gateway;
-- query model and bound execution;
-- relation loading;
-- initial ORM persistence through `Session`, `FlushExecutor`, and Cycle command execution.
-
-Features explicitly marked as limitations in README and docs may evolve in minor releases. That includes ORM persistence boundaries such as cascade policy, generated-key refresh beyond auto-increment primary keys, and mutable export restrictions.
-
-## Installing a specific line
+If you depend on this package, pin an exact version or a very narrow constraint and treat upgrades as deliberate work.
 
 ```bash
-composer require guilhermeaiolfi/overnight-data:^1.1
+composer require guilhermeaiolfi/overnight-data:1.1.1
 ```
 
-Pin more tightly when you want only patch updates on the 1.1 line:
+## Version tags
 
-```bash
-composer require guilhermeaiolfi/overnight-data:~1.1.0
-```
+Git tags use the `vMAJOR.MINOR.PATCH` form (for example `v1.1.1`) so releases are identifiable. The numbers communicate rough scope of change when useful; they are **not** a SemVer contract for this package today.
 
-The 1.0 line remains installable as `^1.0` / `~1.0.0` for consumers that are not ready to pick up 1.1 ORM representation changes.
+## How to upgrade
 
-## Before upgrading
+1. Read [`CHANGELOG.md`](CHANGELOG.md) for the releases you are crossing.
+2. Diff against your pin and update call sites.
+3. Run your test suite and static analysis after upgrading.
 
-1. Read the matching section in [`CHANGELOG.md`](CHANGELOG.md).
-2. Run your test suite after updating.
-3. Re-run static analysis if you depend on PHPStan types from this package.
+## Reporting issues
 
-## Reporting breaking changes
-
-If a release within 1.x removes or changes documented behavior without a clear note in `CHANGELOG.md`, please open an issue on GitHub with the tag you upgraded from and to.
+If a release breaks something that the docs still describe as current behavior, open a GitHub issue with the versions you upgraded from and to. That helps fix docs or code; it is not a claim that the old behavior was guaranteed.

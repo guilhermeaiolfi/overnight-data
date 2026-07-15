@@ -8,6 +8,7 @@ use Cycle\Database\DatabaseInterface as CycleDatabaseInterface;
 use ON\Data\DataRuntime;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\ORM\Persistence\CommandValueResolver;
+use ON\Data\ORM\Persistence\ConvertingCommandExecutor;
 
 final class CycleRuntimeFactory
 {
@@ -28,9 +29,15 @@ final class CycleRuntimeFactory
 		?ConversionGateway $gateway = null,
 		?CommandValueResolver $commandValueResolver = null,
 	): DataRuntime {
+		$gateway ??= ConversionGateway::createDefault();
+
 		return new DataRuntime(
-			new CycleQueryExecutor($database, $gateway ?? ConversionGateway::createDefault()),
-			new CycleCommandExecutor($database, $commandValueResolver),
+			new CycleQueryExecutor($database, $gateway),
+			new ConvertingCommandExecutor(
+				new CycleCommandExecutor($database, $commandValueResolver),
+				$gateway,
+				$commandValueResolver,
+			),
 		);
 	}
 }

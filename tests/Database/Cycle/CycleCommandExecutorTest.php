@@ -15,6 +15,7 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
+use ON\Data\ORM\Persistence\ConvertingCommandExecutor;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\FlushExecutor;
 use ON\Data\ORM\Persistence\InsertCommand;
@@ -41,7 +42,7 @@ final class CycleCommandExecutorTest extends TestCase
 
 	private ?DatabaseInterface $database = null;
 
-	private ?CycleCommandExecutor $executor = null;
+	private ?ConvertingCommandExecutor $executor = null;
 
 	private ?CollectionInterface $users = null;
 
@@ -68,7 +69,7 @@ final class CycleCommandExecutorTest extends TestCase
 		]));
 
 		$this->database = $manager->database('default');
-		$this->executor = new CycleCommandExecutor($this->database);
+		$this->executor = new ConvertingCommandExecutor(new CycleCommandExecutor($this->database));
 		$this->users = $this->makeUsers();
 		$this->memberships = $this->makeMemberships();
 	}
@@ -447,6 +448,9 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertStringNotContainsString('ON\\Data\\ORM\\State\\', $source);
 		self::assertStringNotContainsString('ON\\Data\\ORM\\Sync\\', $source);
 		self::assertStringNotContainsString('ON\\Data\\ORM\\Session', $source);
+		self::assertStringNotContainsString('ConversionGateway', $source);
+		self::assertStringNotContainsString('PhpRepresentation', $source);
+		self::assertStringNotContainsString('StorageRepresentation', $source);
 		self::assertStringNotContainsString('RecordFlusher', $source);
 		self::assertStringNotContainsString('FlushExecutor', $source);
 		self::assertStringNotContainsString('Registry', $source);
@@ -467,15 +471,83 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertStringNotContainsString('DELETE ', $source);
 	}
 
+	public function testInsertCommandConvertsDatetimeAndJsonPhpValuesToStorage(): void
+	{
+		$articles = $this->makeArticles();
+		$publishedAt = new \DateTimeImmutable('2026-06-18 13:45:12');
+		$meta = ['tags' => ['php', 'orm'], 'score' => 3];
+
+		$result = $this->executor()->execute(new InsertCommand($articles, [
+			'id' => 1,
+			'title' => 'Hello',
+			'publishedAt' => $publishedAt,
+			'meta' => $meta,
+		]));
+
+		self::assertSame(1, $result->getAffectedRows());
+		self::assertSame(
+			[
+				'title' => 'Hello',
+				'published_at' => '2026-06-18 13:45:12',
+				'meta_json' => '{"tags":["php","orm"],"score":3}',
+			],
+			$this->fetchArticle(1),
+		);
+	}
+
+	public function testUpdateCommandConvertsDatetimeAndJsonPhpValuesToStorage(): void
+	{
+		$articles = $this->makeArticles();
+		$this->executor()->execute(new InsertCommand($articles, [
+			'id' => 1,
+			'title' => 'Hello',
+			'publishedAt' => new \DateTimeImmutable('2026-01-01 00:00:00'),
+			'meta' => ['v' => 1],
+		]));
+
+		$this->executor()->execute(new UpdateCommand(
+			$articles,
+			['id' => 1],
+			[
+				'publishedAt' => new \DateTimeImmutable('2026-07-15 09:30:00'),
+				'meta' => ['v' => 2, 'ok' => true],
+			],
+		));
+
+		self::assertSame(
+			[
+				'title' => 'Hello',
+				'published_at' => '2026-07-15 09:30:00',
+				'meta_json' => '{"v":2,"ok":true}',
+			],
+			$this->fetchArticle(1),
+		);
+	}
+
 	public function testNonIntegerCycleAffectedRowsResultIsTreatedAsZero(): void
 	{
+		$cycleExecutor = new CycleCommandExecutor($this->database);
 		$reflection = new ReflectionClass(CycleCommandExecutor::class);
 		$method = $reflection->getMethod('affectedRows');
 
-		self::assertSame(0, $method->invoke($this->executor(), false));
-		self::assertSame(0, $method->invoke($this->executor(), '1'));
-		self::assertSame(0, $method->invoke($this->executor(), -1));
-		self::assertSame(2, $method->invoke($this->executor(), 2));
+		self::assertSame(0, $method->invoke($cycleExecutor, false));
+		self::assertSame(0, $method->invoke($cycleExecutor, '1'));
+		self::assertSame(0, $method->invoke($cycleExecutor, -1));
+		self::assertSame(2, $method->invoke($cycleExecutor, 2));
+	}
+
+	/**
+	 * @return array{title: string, published_at: string, meta_json: string}|null
+	 */
+	private function fetchArticle(int $id): ?array
+	{
+		$statement = $this->pdo->prepare(
+			'SELECT title, published_at, meta_json FROM app_articles WHERE article_id = ?',
+		);
+		$statement->execute([$id]);
+		$row = $statement->fetch(PDO::FETCH_ASSOC);
+
+		return is_array($row) ? $row : null;
 	}
 
 	/**
@@ -516,9 +588,9 @@ final class CycleCommandExecutorTest extends TestCase
 		return $this->users;
 	}
 
-	private function executor(): CycleCommandExecutor
+	private function executor(): ConvertingCommandExecutor
 	{
-		self::assertInstanceOf(CycleCommandExecutor::class, $this->executor);
+		self::assertInstanceOf(ConvertingCommandExecutor::class, $this->executor);
 
 		return $this->executor;
 	}
@@ -528,6 +600,18 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertInstanceOf(CollectionInterface::class, $this->memberships);
 
 		return $this->memberships;
+	}
+
+	private function makeArticles(): CollectionInterface
+	{
+		return (new Registry())
+			->collection('articles')
+			->table('app_articles')
+			->primaryKey('id')
+			->field('id', 'int')->column('article_id')->end()
+			->field('title', 'string')->column('title')->end()
+			->field('publishedAt', 'datetime')->column('published_at')->end()
+			->field('meta', 'json')->column('meta_json')->end();
 	}
 
 	private function makeUsers(): CollectionInterface
@@ -567,6 +651,7 @@ final class CycleCommandExecutorTest extends TestCase
 		$pdo->exec('CREATE TABLE app_users (user_id INTEGER PRIMARY KEY, full_name TEXT, email_address TEXT)');
 		$pdo->exec('CREATE TABLE app_external_users (external_id TEXT PRIMARY KEY, full_name TEXT)');
 		$pdo->exec('CREATE TABLE app_memberships (tenant_key INTEGER, member_key INTEGER, role_name TEXT, PRIMARY KEY (tenant_key, member_key))');
+		$pdo->exec('CREATE TABLE app_articles (article_id INTEGER PRIMARY KEY, title TEXT, published_at TEXT, meta_json TEXT)');
 
 		$users = $pdo->prepare('INSERT INTO app_users (user_id, full_name, email_address) VALUES (?, ?, ?)');
 		$users->execute([1, 'Ada', 'ada@example.test']);

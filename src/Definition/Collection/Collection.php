@@ -62,6 +62,9 @@ class Collection extends AbstractDefinition implements CollectionInterface
 		return (string) $this->get('table');
 	}
 
+	/**
+	 * Entity class for external Cycle ORM schema bridges. Unused by ON\Data Session persistence.
+	 */
 	public function entity(string $entity): self
 	{
 		$this->set('entity', $entity);
@@ -100,6 +103,9 @@ class Collection extends AbstractDefinition implements CollectionInterface
 		return is_string($value) ? $value : null;
 	}
 
+	/**
+	 * Scope class for external Cycle ORM schema bridges. Unused by ON\Data Session persistence.
+	 */
 	public function scope(string $scope): self
 	{
 		$this->set('scope', $scope);
@@ -114,6 +120,9 @@ class Collection extends AbstractDefinition implements CollectionInterface
 		return is_string($value) ? $value : null;
 	}
 
+	/**
+	 * Repository class for external Cycle ORM schema bridges. Unused by ON\Data Session persistence.
+	 */
 	public function repository(?string $repository): self
 	{
 		$this->set('repository', $repository);
@@ -128,6 +137,9 @@ class Collection extends AbstractDefinition implements CollectionInterface
 		return is_string($value) ? $value : null;
 	}
 
+	/**
+	 * Mapper class for external Cycle ORM schema bridges. Unused by ON\Data Session persistence.
+	 */
 	public function mapper(?string $mapper): self
 	{
 		$this->set('mapper', $mapper);

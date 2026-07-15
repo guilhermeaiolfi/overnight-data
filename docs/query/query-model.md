@@ -44,11 +44,10 @@ References are cached per query and per path. Two different queries over the sam
 - `AliasedExpression`
 - `SelectQuery`
 - `StarExpression`
-- `RelationRef`
+
+It does **not** accept `RelationRef`. Passing a relation ref fails at the type boundary. Configure relation loading on the ref itself (for example `$u->posts->fields('id', 'title')`), as documented in [`relation-loading.md`](./relation-loading.md).
 
 Scalar expressions become flat selections. A direct `SelectQuery` is normalized to a `SubqueryExpression`.
-
-Selecting a `RelationRef` participates in structured relation loading. The current relation-loading surface is documented in [`relation-loading.md`](./relation-loading.md).
 
 ```php
 $u->select(
@@ -70,20 +69,20 @@ $posts->select($posts->all());
 
 ## Result export
 
-By default, bound queries return arrays. Object export is opt-in through `to(...)`.
+By default, bound queries return arrays. Object export is opt-in through `to(...)`. Bound execution starts from `DataRuntime` (for example via `CycleRuntimeFactory`):
 
 ```php
-$rows = $database->query($users)->fetchAll();
+$rows = $runtime->query($users)->fetchAll();
 // list<array<string, mixed>>
 
-$row = $database->query($users)->fetchOne();
+$row = $runtime->query($users)->fetchOne();
 // array<string, mixed>|null
 
-foreach ($database->query($users)->iterate() as $row) {
+foreach ($runtime->query($users)->iterate() as $row) {
     // array<string, mixed>
 }
 
-$u = $database->query($users);
+$u = $runtime->query($users);
 
 $objects = $u
     ->select($u->id, $u->name)
@@ -101,7 +100,7 @@ final class UserRow
     public string $name;
 }
 
-$u = $database->query($users);
+$u = $runtime->query($users);
 
 $rows = $u
     ->select($u->id, $u->name)
@@ -127,7 +126,7 @@ Mutable export tracks query provenance in a `Session`:
 ```php
 $session = new Session($commandExecutor);
 
-$u = $database->query($users);
+$u = $runtime->query($users);
 
 $user = $u
     ->select($u->id, $u->company->name->as('name'))
@@ -145,7 +144,7 @@ A `SelectQuery` with `to(...)` and no explicit `select()` selects the root colle
 Explicit `select(...)` disables default root field selection:
 
 ```php
-$u = $database->query($users);
+$u = $runtime->query($users);
 
 $rows = $u
     ->select($u->id, $u->name)
@@ -155,15 +154,14 @@ $rows = $u
 
 The runtime may still include hidden required fields for identity or mutable projection tracking. Selections tagged `SelectionTag::INTERNAL` are stripped from public array and object results.
 
-Relation loading remains explicit through `RelationRef` branch selection/configuration:
+Relation loading remains explicit through `RelationRef` branch configuration (not `select()`):
 
 ```php
-$u = $database->query($users);
+$u = $runtime->query($users);
+
+$u->posts->fields('id', 'title');
 
 $users = $u
-    ->select(
-        $u->posts->fields('id', 'title'),
-    )
     ->to(stdClass::class)
     ->fetchAll();
 ```

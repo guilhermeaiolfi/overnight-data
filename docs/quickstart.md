@@ -146,4 +146,4 @@ Mutable tracked export for persistence workflows requires `stdClass` and an expl
 - [`mapper-runtime-guide.md`](./mapper-runtime-guide.md) — conversion gateway and recursive mapping.
 - [`query/query-model.md`](./query/query-model.md) — query construction and result export.
 - [`orm/foundation.md`](./orm/foundation.md) — ORM state model and current limits.
-- [`../UPGRADE.md`](../UPGRADE.md) — compatibility policy for the 1.x line.
+- [`../UPGRADE.md`](../UPGRADE.md) — upgrade expectations (no broad compatibility promise).

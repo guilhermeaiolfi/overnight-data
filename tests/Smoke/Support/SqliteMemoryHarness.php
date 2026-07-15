@@ -7,10 +7,10 @@ namespace Tests\ON\Data\Smoke\Support;
 use Cycle\Database\DatabaseInterface;
 use Cycle\Database\StatementInterface;
 use ON\Data\Database\Cycle\ConnectionConfig;
-use ON\Data\Database\Cycle\CycleCommandExecutor;
 use ON\Data\Database\Cycle\CycleConnectionFactory;
 use ON\Data\Database\Cycle\CycleRuntimeFactory;
 use ON\Data\DataRuntime;
+use ON\Data\ORM\Persistence\CommandExecutorInterface;
 
 /**
  * Shared in-memory SQLite setup for smoke tests.
@@ -22,7 +22,7 @@ final class SqliteMemoryHarness
 	private function __construct(
 		public readonly DatabaseInterface $cycleDatabase,
 		public readonly DataRuntime $database,
-		public readonly CycleCommandExecutor $commandExecutor,
+		public readonly CommandExecutorInterface $commandExecutor,
 	) {
 	}
 
@@ -34,11 +34,12 @@ final class SqliteMemoryHarness
 	public static function fromConnectionConfig(ConnectionConfig $config): self
 	{
 		$cycleDatabase = (new CycleConnectionFactory())->createDatabase($config);
+		$runtime = (new CycleRuntimeFactory())->create($cycleDatabase);
 
 		return new self(
 			$cycleDatabase,
-			(new CycleRuntimeFactory())->create($cycleDatabase),
-			new CycleCommandExecutor($cycleDatabase),
+			$runtime,
+			$runtime->getCommandExecutor(),
 		);
 	}
 

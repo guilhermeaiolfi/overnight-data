@@ -213,7 +213,7 @@ track one root RecordState per row when ORM tracking is active
 
 The current v1.0 implementation defines root default fields as all normal root scalar fields. Later releases may become smarter based on target representation requirements.
 
-Default root selection is root-only. It must not auto-load relations; explicit relation loading still goes through the existing `RelationRef` / `select()` model:
+Default root selection is root-only. It must not auto-load relations; explicit relation loading still goes through `RelationRef` branch configuration (not `SelectQuery::select($relationRef)`):
 
 ```php
 $u = query($users);
@@ -271,7 +271,7 @@ If writable lineage requires primary-key fields that the user did not select pub
 
 Hidden required fields must not appear in the final mapped representation unless explicitly selected or mapped.
 
-Relation loading must keep using `RelationRef` and `select()` / relation branch configuration. Do not add `with()`.
+Relation loading must keep using `RelationRef` branch configuration. Do not add `with()`. Do not pass `RelationRef` to `SelectQuery::select()`.
 
 Relations remain class-based and pluggable. Relation definitions remain the source of relation intent; ORM write behavior is implemented by relation persistence planners that interpret those definitions.
 
@@ -361,16 +361,18 @@ If lazy loading is supported later, it must be explicit and disableable. Accessi
 
 ## Cascades
 
-Do not create separate ORM cascade metadata. Cascade data already exists on relation definitions. The ORM write planner should interpret relation cascade settings later.
+`ON\Data` Session persistence does **not** interpret relation `cascade()` / `isCascade()` today. Built-in planners use `exclusive()` (and nullability) for unlink behavior instead.
 
-Guardrails:
+Relation definitions still store `cascade` and `load` metadata because external tools (notably Overnight’s Cycle ORM schema generator) read those values when bridging definitions into Cycle schema options. Treat them as interoperability metadata for that path, not as ON\Data flush semantics.
+
+ON\Data also does not implement lazy loading. Relation `load('lazy'|'eager')` is similarly stored for external schema consumers; query relation loading is always explicit through `RelationRef` configuration.
+
+Guardrails for any future ON\Data cascade policy:
 
 - unloaded collections are not empty;
 - orphan removal requires a known removed child or a fully loaded collection;
 - cascade remove must not accidentally load/delete huge graphs;
-- relation write behavior belongs to relation write planners;
-- relation definitions remain the source of cascade intent;
-- if boolean cascade becomes too limited, expand relation definition cascade semantics later.
+- relation write behavior belongs to relation write planners.
 
 ## Relation State
 

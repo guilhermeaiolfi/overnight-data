@@ -129,7 +129,7 @@ Manual projections do not accept query expressions, aggregates, subqueries, or a
 Manual projections merge into existing query-created provenance:
 
 ```php
-$user = $database->query($users)
+$user = $runtime->query($users)
     ->select($u->id, $u->name)
     ->to(stdClass::class)
     ->mutable($session)

@@ -13,7 +13,7 @@ It is independent from the Overnight framework. The package can be consumed on i
 - ORM persistence through `Session`, representation schemas, and Cycle-backed command execution;
 - mutable query projections and manual mutable projections.
 
-Patch and minor releases within `^1.0` / `^1.1` follow the policy in [`UPGRADE.md`](UPGRADE.md). Features listed under **Current Limitations** may still evolve in minor releases.
+Patch and minor releases within `^1.0` / `^1.1` may still change behavior. See [`UPGRADE.md`](UPGRADE.md). Features listed under **Current Limitations** may evolve without a major version bump.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for release history and [`docs/quickstart.md`](docs/quickstart.md) for a first end-to-end walkthrough.
 
@@ -22,7 +22,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for release history and [`docs/quickstart.md`
 - Field metadata and conversion: field types, representations, codecs, and the `ConversionGateway` used to convert values through canonical PHP representations.
 - Mapper runtime: recursive mapping across arrays, `stdClass`, and public-property DTOs, with definition-aware resolution, `FieldMap` support, delayed object creation for constructor and readonly targets, and reusable mapper/writer/resolver registration through `MapperManager`.
 - Query model: database-independent `SelectQuery`, field and relation refs, selections, aliases, semantic value operations, aggregates, subqueries, joins, conditions, grouping, ordering, and pagination.
-- Bound execution: optional execution binding through `ON\Data\Database\QueryExecutorInterface`, plus the neutral `Database` facade and `ConnectionConfig`.
+- Bound execution: optional execution binding through `ON\Data\Database\QueryExecutorInterface`, plus `DataRuntime` / `CycleRuntimeFactory` and `ConnectionConfig`.
 - Relation loading: structured relation selection for nested results, loader-owned join or separate-query execution, and parser-backed result assembly for built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relations.
 - ORM persistence: `RecordState`-backed scalar insert/update/delete planning, scalar and relation representation synchronization, configured relation persistence planning, `FlushExecutor` / `Session` orchestration, Cycle-backed command execution, affected-row validation, and simple auto-increment primary-key merge after inserts.
 - Query result export: array results by default, read-only `stdClass` and public-property class export, and mutable `stdClass` query export with flat projection provenance.
@@ -32,7 +32,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for release history and [`docs/quickstart.md`
 
 The result object is flat, but mutable query export remembers where each property came from. A property aliased from a related field still updates the underlying table column after `sync()` and `flush()`. This works through mutable query provenance and flat projection adoption.
 
-Given a bound query and a `Session` backed by a command executor (for example, a `CycleCommandExecutor`):
+Given a bound query and a `Session` backed by a command executor (for example from `CycleRuntimeFactory` / `ConvertingCommandExecutor`):
 
 ```php
 $user = $q
@@ -94,7 +94,7 @@ final class UserRow
     public string $name;
 }
 
-$q = $database->query($users);
+$q = $runtime->query($users);
 
 $rows = $q
     ->select($q->id, $q->name)
@@ -124,8 +124,8 @@ Public-property class export requirements:
 
 - Structured relation loading supports the built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relation types.
 - Built-in `FirstOfMany` loading is separate-query-only, uses windowed ranking on supported SQL backends, and requires deterministic relation-level `orderBy` metadata; JOIN loading is intentionally unsupported.
-- No automatic relation cascade writes or broad orphan-removal policy unless explicitly implemented by a relation planner.
-- `Session::flush()` runs inside a database transaction when the command executor implements `TransactionalCommandExecutorInterface` (including `CycleCommandExecutor`). Production database executors should implement that interface. The non-transactional path remains an unsafe fallback for tests, in-memory executors, and adapters without transaction support. There is no separate transaction API on `Session`.
+- No automatic relation cascade writes or broad orphan-removal policy unless explicitly implemented by a relation planner. Relation definition `cascade()` / `load()` metadata is stored for interoperability with external Cycle ORM schema tools; `ON\Data` Session persistence does not interpret those flags. Use `exclusive()` for owned-child unlink deletion.
+- `Session::flush()` runs inside a database transaction when the command executor implements `TransactionalCommandExecutorInterface` (including `ConvertingCommandExecutor` wrapping `CycleCommandExecutor`). Production database executors should implement that interface. The non-transactional path remains an unsafe fallback for tests, in-memory executors, and adapters without transaction support. There is no separate transaction API on `Session`.
 - No optimistic locking or stale-row revision conflict handling beyond representation sync baseline checks.
 - No lazy loading.
 - No repositories, `EntityManager`, `UnitOfWork`, events, proxies, or generated model layer.
@@ -168,7 +168,7 @@ composer check
 
 - [`docs/quickstart.md`](docs/quickstart.md) is the recommended first walkthrough.
 - [`CHANGELOG.md`](CHANGELOG.md) lists release history.
-- [`UPGRADE.md`](UPGRADE.md) documents the 1.x compatibility policy.
+- [`UPGRADE.md`](UPGRADE.md) describes upgrade expectations (no broad compatibility promise).
 - `docs/README.md` is the full documentation index.
 - `docs/definition-api.md` documents the canonical registry and definition API.
 - `docs/definition-extension-guide.md` documents supported definition extension points and storage rules.

@@ -123,12 +123,14 @@ Composite identity remains first-class. Update and delete identities are keyed b
 public function execute(CommandInterface $command): CommandResult;
 ```
 
-`CycleCommandExecutor` is the built-in executor. It uses Cycle Database query builders for insert, update, and delete. At the adapter boundary it resolves:
+`ConvertingCommandExecutor` is the adapter-agnostic write boundary. It projects command field values from canonical PHP to storage through `ConversionGateway` (`PhpRepresentation` → `StorageRepresentation`), using the same conversion authority as query literal binding and result mapping. It does not mutate the original command objects.
+
+`CycleCommandExecutor` is the built-in Cycle backend executor. It uses Cycle Database query builders for insert, update, and delete. At the Cycle adapter boundary it resolves:
 
 - physical table name from `CollectionInterface::getTable()`
 - physical column names from each field's `getColumn()`
 
-Unknown command field names are rejected with `InvalidCommandException`; they are not passed through as raw column names.
+Unknown command field names are rejected with `InvalidCommandException`; they are not passed through as raw column names. Command and `RecordState` values remain canonical PHP until `ConvertingCommandExecutor`. Backend executors such as `CycleCommandExecutor` receive storage values.
 
 `CycleCommandExecutor` defensively calls `CommandValueResolver::assertReady()` before using query builders. A `ValueRef` that cannot be resolved is rejected with `InvalidCommandException` instead of being bound into SQL. The executor does not build raw SQL strings. When used through `FlushExecutor`, it participates in flush-scoped transactions through `TransactionalCommandExecutorInterface`.
 
@@ -169,6 +171,7 @@ The non-transactional flush path remains available as a fallback for tests, in-m
 use Cycle\Database\DatabaseInterface;
 use ON\Data\Database\Cycle\CycleCommandExecutor;
 use ON\Data\Definition\Registry;
+use ON\Data\ORM\Persistence\ConvertingCommandExecutor;
 use ON\Data\ORM\Session;
 
 // Schema/table creation and Cycle Database bootstrap live outside ON\Data.
@@ -182,7 +185,7 @@ $users = $registry
     ->field('id', 'int')->column('user_id')->autoIncrement(true)->end()
     ->field('name', 'string')->column('full_name')->end();
 
-$session = new Session(new CycleCommandExecutor($cycleDatabase));
+$session = new Session(new ConvertingCommandExecutor(new CycleCommandExecutor($cycleDatabase)));
 
 $record = RecordState::new($users, [
     'name' => 'Ada Lovelace',
@@ -193,6 +196,8 @@ $session->flush();
 
 $generatedId = $record->getValue('id');
 ```
+
+`CycleRuntimeFactory` wires `ConvertingCommandExecutor` around `CycleCommandExecutor` automatically.
 
 Generated ids are currently supported only for simple auto-increment primary keys. Relation persistence planning is limited to configured planners that produce scalar mutations and/or commands. Physical table and column mapping happens in `CycleCommandExecutor` using collection and field metadata.
 
@@ -209,7 +214,7 @@ Generated ids are currently supported only for simple auto-increment primary key
 
 This is deliberately not an `EntityManager`. There is no repository API, object proxy system, lifecycle event system, generated model layer, or relation cascade writer. `sync($object)` is graph synchronization only; it is not a cascade policy, orphan-removal policy, generated-key dependency sorter, or transaction boundary. `remove($object)` only removes an already-tracked representation that maps to one concrete record.
 
-`Session::flush()` runs inside a database transaction when the command executor implements `TransactionalCommandExecutorInterface` (including `CycleCommandExecutor`). Production database executors should implement that interface. The non-transactional path is a fallback for tests, in-memory executors, and adapters without transaction support; it is not the recommended production database mode. There is no separate transaction API on `Session`.
+`Session::flush()` runs inside a database transaction when the command executor implements `TransactionalCommandExecutorInterface` (including `ConvertingCommandExecutor` wrapping `CycleCommandExecutor`). Production database executors should implement that interface. The non-transactional path is a fallback for tests, in-memory executors, and adapters without transaction support; it is not the recommended production database mode. There is no separate transaction API on `Session`.
 
 ## Current Limits
 

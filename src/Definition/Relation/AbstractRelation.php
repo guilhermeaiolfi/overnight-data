@@ -133,6 +133,10 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 		return is_array($orderBy) ? $orderBy : [];
 	}
 
+	/**
+	 * Stored for external schema tools (for example Cycle ORM bridges).
+	 * ON\Data Session persistence does not interpret cascade.
+	 */
 	public function cascade(bool $cascade): self
 	{
 		$this->set('cascade', $cascade);
@@ -145,6 +149,10 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 		return (bool) $this->get('cascade');
 	}
 
+	/**
+	 * Stored for external schema tools (for example Cycle ORM bridges).
+	 * ON\Data does not implement lazy loading; query relation loading is explicit.
+	 */
 	public function load(string $load): self
 	{
 		$this->set('load', $load);

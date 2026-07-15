@@ -7,6 +7,7 @@ namespace Tests\ON\Data\Smoke;
 use ON\Data\Database\Cycle\CycleCommandExecutor;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Session;
+use ON\Data\ORM\Persistence\ConvertingCommandExecutor;
 use ON\Data\ORM\Record\RecordState;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
@@ -28,7 +29,7 @@ final class PersistenceSmokeTest extends TestCase
 			->field('id', 'int')->column('user_id')->autoIncrement(true)->end()
 			->field('name', 'string')->column('full_name')->end();
 
-		$session = new Session(new CycleCommandExecutor($harness->cycleDatabase));
+		$session = new Session(new ConvertingCommandExecutor(new CycleCommandExecutor($harness->cycleDatabase)));
 
 		/** @var RecordState $record */
 		$record = RecordState::new($users, [

@@ -15,6 +15,8 @@ use ON\Data\Database\Cycle\CycleQueryExecutor;
 use ON\Data\Database\Cycle\CycleRuntimeFactory;
 use ON\Data\DataRuntime;
 use ON\Data\Definition\Registry;
+use ON\Data\Mapper\ConversionGateway;
+use ON\Data\ORM\Persistence\ConvertingCommandExecutor;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -27,7 +29,7 @@ final class CycleRuntimeFactoryTest extends TestCase
 	{
 		$runtime = (new CycleRuntimeFactory())->connect(ConnectionConfig::dsn('sqlite', 'sqlite::memory:'));
 		self::assertInstanceOf(DataRuntime::class, $runtime);
-		self::assertInstanceOf(CycleCommandExecutor::class, $runtime->getCommandExecutor());
+		self::assertInstanceOf(ConvertingCommandExecutor::class, $runtime->getCommandExecutor());
 
 		$database = $this->databaseFromRuntimeExecutor($runtime, 'commandExecutor');
 		$database->execute('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
@@ -64,8 +66,30 @@ final class CycleRuntimeFactoryTest extends TestCase
 		$runtime = (new CycleRuntimeFactory())->create($database);
 		$commandExecutor = $runtime->getCommandExecutor();
 
-		self::assertInstanceOf(CycleCommandExecutor::class, $commandExecutor);
-		self::assertSame($database, $this->executorDatabase($commandExecutor));
+		self::assertInstanceOf(ConvertingCommandExecutor::class, $commandExecutor);
+		self::assertSame($database, $this->executorDatabase($this->unwrapCommandExecutor($commandExecutor)));
+	}
+
+	public function testCreateSharesConversionGatewayBetweenQueryAndCommandExecutors(): void
+	{
+		$database = $this->cycleDatabase();
+		$gateway = ConversionGateway::createDefault();
+		$runtime = (new CycleRuntimeFactory())->create($database, $gateway);
+
+		$queryExecutor = $this->runtimeProperty($runtime, 'queryExecutor');
+		$commandExecutor = $runtime->getCommandExecutor();
+
+		self::assertInstanceOf(CycleQueryExecutor::class, $queryExecutor);
+		self::assertInstanceOf(ConvertingCommandExecutor::class, $commandExecutor);
+		self::assertInstanceOf(CycleCommandExecutor::class, $this->unwrapCommandExecutor($commandExecutor));
+
+		$translator = (new ReflectionProperty($queryExecutor, 'translator'))->getValue($queryExecutor);
+		self::assertIsObject($translator);
+		$translatorGateway = (new ReflectionProperty($translator, 'gateway'))->getValue($translator);
+		$commandGateway = (new ReflectionProperty($commandExecutor, 'gateway'))->getValue($commandExecutor);
+
+		self::assertSame($gateway, $translatorGateway);
+		self::assertSame($gateway, $commandGateway);
 	}
 
 	private function cycleDatabase(): DatabaseInterface
@@ -89,7 +113,7 @@ final class CycleRuntimeFactoryTest extends TestCase
 	{
 		$executor = $this->runtimeProperty($runtime, $property);
 
-		return $this->executorDatabase($executor);
+		return $this->executorDatabase($this->unwrapCommandExecutor($executor));
 	}
 
 	private function runtimeProperty(DataRuntime $runtime, string $property): object
@@ -100,6 +124,18 @@ final class CycleRuntimeFactoryTest extends TestCase
 		self::assertIsObject($value);
 
 		return $value;
+	}
+
+	private function unwrapCommandExecutor(object $executor): object
+	{
+		if ($executor instanceof ConvertingCommandExecutor) {
+			$inner = (new ReflectionProperty($executor, 'inner'))->getValue($executor);
+			self::assertIsObject($inner);
+
+			return $inner;
+		}
+
+		return $executor;
 	}
 
 	private function executorDatabase(object $executor): DatabaseInterface

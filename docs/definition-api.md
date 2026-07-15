@@ -53,3 +53,12 @@ Canonical arrays are produced by the node class that owns them.
 ## Compatibility note
 
 Legacy caches that depended on registry-side normalization or field-level `pk` migration are no longer supported. Regenerate those caches from current fluent definitions before restoring them.
+
+## External schema metadata
+
+Some collection and relation fields exist primarily so external tools can bridge `ON\Data` definitions into another runtime (for example Overnight generating Cycle ORM schema):
+
+- collection `entity()`, `repository()`, `mapper()`, `scope()`
+- relation `cascade()`, `load()` / `getLoadStrategy()`
+
+`ON\Data` Session persistence, query loading, and `ConvertingCommandExecutor` do not use those knobs. Prefer `exclusive()` for owned-child delete-on-unlink behavior inside ON\Data.

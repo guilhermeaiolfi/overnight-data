@@ -52,7 +52,7 @@ use stdClass;
 
 $session = new Session($executor);
 
-$u = $database->query($users);
+$u = $runtime->query($users);
 
 $user = $u
     ->select(
@@ -94,7 +94,7 @@ An existing related object can come from another mutable query, then be added to
 Assume `$user` was already loaded from a mutable query with a `posts` relation schema:
 
 ```php
-$p = $database->query($posts);
+$p = $runtime->query($posts);
 
 $post = $p
     ->select($p->id, $p->title)
@@ -123,7 +123,7 @@ The post's scalar field provenance comes from its own query projection. Adding i
 A queried/tracked user can receive a new child object through its relation schema:
 
 ```php
-$u = $database->query($users);
+$u = $runtime->query($users);
 
 $user = $u
     ->select($u->id, $u->name)
@@ -183,7 +183,7 @@ The same provenance model applies when `user.posts` is a many-to-many relation. 
 ### New M2M item discovered through a queried user
 
 ```php
-$u = $database->query($users);
+$u = $runtime->query($users);
 
 $user = $u
     ->select($u->id, $u->name)
@@ -205,7 +205,7 @@ $session->flush();
 ### Existing M2M item from query
 
 ```php
-$p = $database->query($posts);
+$p = $runtime->query($posts);
 
 $post = $p
     ->select($p->id, $p->title)

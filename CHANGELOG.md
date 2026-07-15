@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Write-path field conversion** — `ConvertingCommandExecutor` converts canonical PHP command values to storage through `ConversionGateway` (`PhpRepresentation` → `StorageRepresentation`) before delegating to a backend executor. `CycleRuntimeFactory` wraps `CycleCommandExecutor` with that decorator and shares one gateway across query and command paths.
+
+### Documentation
+
+- Replaced leftover `$database` / “Database facade” wording with `DataRuntime` / `CycleRuntimeFactory`.
+- Corrected `SelectQuery::select()` docs: `RelationRef` is configured on the relation branch, not passed to `select()`.
+- Clarified that collection `entity`/`repository`/`mapper`/`scope` and relation `cascade`/`load` are interoperability metadata for external Cycle schema bridges; ON\Data Session persistence does not interpret them.
+- Rewrote [`UPGRADE.md`](UPGRADE.md) to drop the broad 1.x compatibility promise; upgrades are deliberate and may break call sites.
+
 ## [1.1.1] - 2026-07-10
 
 ### Added
