@@ -17,6 +17,7 @@ use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Representation\Schema\Manual\Builder;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\State\Query\MutableQueryResultTracker;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\ORM\Representation\Sync\AdoptionRecordResolver;
@@ -25,8 +26,11 @@ use ON\Data\ORM\Representation\Sync\RepresentationReader;
 use ON\Data\ORM\Representation\Sync\RepresentationStateAdoptionTrait;
 use ON\Data\ORM\Representation\Sync\RepresentationSyncer;
 use ON\Data\ORM\Representation\Sync\SyncResult;
+use ON\Data\Query\Result\MutablePreparation;
+use ON\Data\Query\Result\MutableResultHandler;
+use ON\Data\Query\SelectQuery;
 
-final class Session
+final class Session implements MutableResultHandler
 {
 	use RepresentationStateAdoptionTrait;
 
@@ -34,6 +38,7 @@ final class Session
 	private AdoptionRecordResolver $recordResolver;
 	private FlushExecutor $flusher;
 	private RepresentationSyncer $syncer;
+	private ?MutableQueryResultTracker $mutableResultTracker = null;
 
 	public function __construct(
 		CommandExecutorInterface $executor,
@@ -46,6 +51,20 @@ final class Session
 		$this->representationReader = new RepresentationReader();
 		$this->syncer = $syncer ?? new RepresentationSyncer();
 		$this->flusher = $flusher ?? new FlushExecutor($executor, $this->syncer);
+	}
+
+	public function prepare(SelectQuery $query): MutablePreparation
+	{
+		return $this->mutableResultTracker()->prepare($query);
+	}
+
+	public function track(
+		SelectQuery $query,
+		MutablePreparation $preparation,
+		array $rawRows,
+		array $objects,
+	): void {
+		$this->mutableResultTracker()->track($query, $preparation, $rawRows, $objects);
 	}
 
 	public function getRecords(): RecordStateStore
@@ -195,5 +214,10 @@ final class Session
 		}
 
 		return array_values($records)[0];
+	}
+
+	private function mutableResultTracker(): MutableQueryResultTracker
+	{
+		return $this->mutableResultTracker ??= new MutableQueryResultTracker($this);
 	}
 }

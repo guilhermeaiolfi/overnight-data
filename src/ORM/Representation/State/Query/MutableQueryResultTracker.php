@@ -4,30 +4,62 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\State\Query;
 
+use InvalidArgumentException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
 use ON\Data\ORM\Session;
+use ON\Data\Query\Result\MutablePreparation;
+use ON\Data\Query\Result\MutableResultHandler;
+use ON\Data\Query\SelectQuery;
 use RuntimeException;
 
 /**
- * Routes mutable query results to the correct adoption path (flat projection vs
- * entity graph) and triggers session sync.
+ * Mutable query export bridge: compiles projections ({@see prepare()}) and routes
+ * results into Session tracking ({@see track()}).
  *
- * Exists as the bridge between SelectQuery mutable export and Session tracking,
- * keeping SelectQuery itself free of persistence orchestration details.
+ * Stateless for preparations — the plan token is owned by the caller (SelectQuery
+ * holds it for the duration of one fetch).
  */
-final class MutableQueryResultTracker
+final class MutableQueryResultTracker implements MutableResultHandler
 {
 	private RepresentationReader $reader;
 
+	private QueryRepresentationSchemaCompiler $compiler;
+
 	public function __construct(
+		private readonly Session $session,
 		private ?QueryRepresentationStateBuilder $stateBuilder = null,
 		?RepresentationReader $reader = null,
+		?QueryRepresentationSchemaCompiler $compiler = null,
 	) {
 		$this->stateBuilder ??= new QueryRepresentationStateBuilder();
 		$this->reader = $reader ?? new RepresentationReader();
+		$this->compiler = $compiler ?? new QueryRepresentationSchemaCompiler();
+	}
+
+	public function prepare(SelectQuery $query): MutablePreparation
+	{
+		return $this->compiler->compileResult($query);
+	}
+
+	public function track(
+		SelectQuery $query,
+		MutablePreparation $preparation,
+		array $rawRows,
+		array $objects,
+	): void {
+		if (! $preparation instanceof QueryRepresentationPlan) {
+			throw new InvalidArgumentException(sprintf(
+				'MutableQueryResultTracker requires %s; %s was provided.',
+				QueryRepresentationPlan::class,
+				$preparation::class,
+			));
+		}
+
+		$this->trackAll($preparation, $objects, $rawRows);
 	}
 
 	/**
@@ -35,13 +67,12 @@ final class MutableQueryResultTracker
 	 * @param list<array<string, mixed>> $sourceRows
 	 */
 	public function trackAll(
-		Session $session,
 		QueryRepresentationPlan $compilation,
 		array $objects,
 		array $sourceRows,
 	): void {
 		foreach ($objects as $index => $object) {
-			$this->trackObject($session, $object, $compilation, $sourceRows[$index] ?? []);
+			$this->trackObject($object, $compilation, $sourceRows[$index] ?? []);
 		}
 	}
 
@@ -49,19 +80,17 @@ final class MutableQueryResultTracker
 	 * @param array<string, mixed> $sourceRow
 	 */
 	public function trackOne(
-		Session $session,
 		QueryRepresentationPlan $compilation,
 		object $object,
 		array $sourceRow,
 	): void {
-		$this->trackObject($session, $object, $compilation, $sourceRow);
+		$this->trackObject($object, $compilation, $sourceRow);
 	}
 
 	/**
 	 * @param array<string, mixed> $sourceRow
 	 */
 	private function trackObject(
-		Session $session,
 		object $object,
 		QueryRepresentationPlan $compilation,
 		array $sourceRow,
@@ -71,10 +100,10 @@ final class MutableQueryResultTracker
 				$object,
 				$compilation,
 				$sourceRow,
-				$session->getRecords(),
+				$this->session->getRecords(),
 			);
-			$session->adopt($object, $state);
-			$session->sync($object);
+			$this->session->adopt($object, $state);
+			$this->session->sync($object);
 
 			return;
 		}
@@ -82,10 +111,10 @@ final class MutableQueryResultTracker
 		$schema = $compilation->getSchema();
 
 		if ($this->hasReadableRootPrimaryKey($object, $schema)) {
-			$session->existing($object);
+			$this->session->existing($object);
 		}
-		$this->markLoadedRelatedObjectsExisting($session, $object, $schema);
-		$session->sync($object, $schema);
+		$this->markLoadedRelatedObjectsExisting($object, $schema);
+		$this->session->sync($object, $schema);
 	}
 
 	private function hasReadableRootPrimaryKey(object $representation, RepresentationSchema $schema): bool
@@ -119,15 +148,14 @@ final class MutableQueryResultTracker
 	}
 
 	private function markLoadedRelatedObjectsExisting(
-		Session $session,
 		object $object,
 		RepresentationSchema $schema,
 	): void {
 		foreach ($schema->getRelations() as $relation) {
 			if ($relation->isMany()) {
 				foreach ($this->reader->readItems($object, $relation, static fn (string $message) => new RuntimeException($message)) as $item) {
-					$session->existing($item);
-					$this->markLoadedRelatedObjectsExisting($session, $item, $relation->getRelatedSchema());
+					$this->session->existing($item);
+					$this->markLoadedRelatedObjectsExisting($item, $relation->getRelatedSchema());
 				}
 
 				continue;
@@ -136,8 +164,8 @@ final class MutableQueryResultTracker
 			if ($relation->isSingle()) {
 				$target = $this->reader->readTarget($object, $relation, static fn (string $message) => new RuntimeException($message));
 				if ($target !== null) {
-					$session->existing($target);
-					$this->markLoadedRelatedObjectsExisting($session, $target, $relation->getRelatedSchema());
+					$this->session->existing($target);
+					$this->markLoadedRelatedObjectsExisting($target, $relation->getRelatedSchema());
 				}
 			}
 		}

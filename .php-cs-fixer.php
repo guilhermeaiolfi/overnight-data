@@ -14,7 +14,7 @@ $finder = Finder::create()
 	->ignoreDotFiles(true)
 	->ignoreVCS(true);
 
-return (new Config())
+$config = (new Config())
 	->setCacheFile('.cache/fixer/cs-fixer.cache')
 	->setRiskyAllowed(true)
 	->setRules([
@@ -62,3 +62,9 @@ return (new Config())
 	->setIndent("\t")
 	->setLineEnding("\n")
 	->setFinder($finder);
+
+if (method_exists($config, 'setUnsupportedPhpVersionAllowed')) {
+	$config->setUnsupportedPhpVersionAllowed(true);
+}
+
+return $config;

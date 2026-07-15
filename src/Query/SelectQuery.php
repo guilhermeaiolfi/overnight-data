@@ -10,10 +10,6 @@ use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
-use ON\Data\ORM\Representation\State\Query\MutableQueryResultTracker;
-use ON\Data\ORM\Session;
 use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Condition\ConditionList;
 use ON\Data\Query\Condition\ConditionTag;
@@ -32,6 +28,7 @@ use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Relation\RelationQueryPlanner;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelectionTree;
+use ON\Data\Query\Result\MutableResultHandler;
 use ON\Data\Query\Result\ObjectExportClassValidator;
 use ON\Data\Query\Result\ObjectResultMaterializer;
 use ON\Data\Query\Selection\SelectionList;
@@ -94,9 +91,9 @@ final class SelectQuery implements QuerySourceInterface
 
 	private ?string $resultClass = null;
 
-	private bool $mutable = false;
+	private ?MutableResultHandler $mutableHandler = null;
 
-	private ?Session $session = null;
+	private ?Relation\LoadRuntime $runtime = null;
 
 	public function __construct(
 		private readonly CollectionInterface|SelectQuery $source,
@@ -183,6 +180,7 @@ final class SelectQuery implements QuerySourceInterface
 	public function detach(): self
 	{
 		$this->executor = null;
+		$this->runtime = null;
 
 		return $this;
 	}
@@ -317,8 +315,7 @@ final class SelectQuery implements QuerySourceInterface
 		$copy->limit = $this->limit;
 		$copy->offset = $this->offset;
 		$copy->resultClass = $this->resultClass;
-		$copy->mutable = $this->mutable;
-		$copy->session = $this->session;
+		$copy->mutableHandler = $this->mutableHandler;
 
 		$joinMap = [spl_object_id($this) => $copy];
 
@@ -500,7 +497,7 @@ final class SelectQuery implements QuerySourceInterface
 		return $this->resultClass;
 	}
 
-	public function mutable(Session $session): self
+	public function mutable(MutableResultHandler $handler): self
 	{
 		if ($this->resultClass === null) {
 			throw ObjectExportException::requiresObjectExport();
@@ -510,20 +507,19 @@ final class SelectQuery implements QuerySourceInterface
 			throw ObjectExportException::mutableRequiresStdClass($this->resultClass);
 		}
 
-		$this->mutable = true;
-		$this->session = $session;
+		$this->mutableHandler = $handler;
 
 		return $this;
 	}
 
 	public function isMutable(): bool
 	{
-		return $this->mutable;
+		return $this->mutableHandler !== null;
 	}
 
-	public function getSession(): ?Session
+	public function getMutableResultHandler(): ?MutableResultHandler
 	{
-		return $this->session;
+		return $this->mutableHandler;
 	}
 
 	public function getSelections(): SelectionList
@@ -647,24 +643,14 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	public function fetchAll(): array
 	{
-		$executor = $this->requireExecutor();
-		$relationSelections = $this->getRelationSelections();
-		$compilation = null;
-
-		if ($this->mutable) {
-			$compilation = $this->compileMutableProjection();
-		}
-
-		if ($relationSelections->isEmpty()) {
-			$rows = $executor->fetchAll($this);
-		} else {
-			$rows = (new Relation\LoadRuntime($this, $executor))->fetchAll();
-		}
-
+		$handler = $this->mutableHandler;
+		$preparation = $handler?->prepare($this);
+		$runtime = $this->getLoadRuntime(fresh: $handler !== null);
+		$rows = $runtime->fetchAll();
 		$materialized = $this->materializeRows($this->publicRows($rows));
 
-		if ($this->mutable) {
-			$this->trackMutableResults($compilation, $rows, $materialized);
+		if ($handler !== null && $preparation !== null) {
+			$handler->track($this, $preparation, $rows, $materialized);
 		}
 
 		return $materialized;
@@ -675,19 +661,10 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	public function fetchOne(): array|object|null
 	{
-		$executor = $this->requireExecutor();
-		$relationSelections = $this->getRelationSelections();
-		$compilation = null;
-
-		if ($this->mutable) {
-			$compilation = $this->compileMutableProjection();
-		}
-
-		if ($relationSelections->isEmpty()) {
-			$row = $executor->fetchOne($this);
-		} else {
-			$row = (new Relation\LoadRuntime($this, $executor))->fetchOne();
-		}
+		$handler = $this->mutableHandler;
+		$preparation = $handler?->prepare($this);
+		$runtime = $this->getLoadRuntime(fresh: $handler !== null);
+		$row = $runtime->fetchOne();
 
 		if ($row === null) {
 			return null;
@@ -695,13 +672,8 @@ final class SelectQuery implements QuerySourceInterface
 
 		$materialized = $this->materializeRow($this->publicRow($row));
 
-		if ($this->mutable && is_object($materialized)) {
-			(new MutableQueryResultTracker())->trackOne(
-				$this->requireMutableSession(),
-				$compilation,
-				$materialized,
-				$row,
-			);
+		if ($handler !== null && $preparation !== null && is_object($materialized)) {
+			$handler->track($this, $preparation, [$row], [$materialized]);
 		}
 
 		return $materialized;
@@ -712,21 +684,32 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	public function iterate(): iterable
 	{
-		if ($this->isMutable()) {
+		if ($this->mutableHandler !== null) {
 			throw ObjectExportException::mutableIterationUnsupported();
 		}
 
-		if (! $this->getRelationSelections()->isEmpty()) {
-			throw RelationSelectionException::iterateNotSupported();
-		}
-
-		$rows = $this->requireExecutor()->iterate($this);
+		$rows = $this->getLoadRuntime()->iterate();
 
 		if ($this->resultClass === null) {
 			return $this->publicIterable($rows);
 		}
 
 		return $this->materializeIterable($rows);
+	}
+
+	private function getLoadRuntime(bool $fresh = false): Relation\LoadRuntime
+	{
+		if ($fresh) {
+			$this->runtime = null;
+		}
+
+		if ($this->runtime !== null) {
+			return $this->runtime;
+		}
+
+		$executor = $this->executor ?? throw QueryNotExecutableException::forQuery($this);
+
+		return $this->runtime = new Relation\LoadRuntime($this, $executor);
 	}
 
 	/**
@@ -802,20 +785,6 @@ final class SelectQuery implements QuerySourceInterface
 		}
 	}
 
-	private function requireExecutor(): QueryExecutorInterface
-	{
-		if (! $this->executor instanceof QueryExecutorInterface) {
-			throw QueryNotExecutableException::forQuery($this);
-		}
-
-		return $this->executor;
-	}
-
-	private function compileMutableProjection(): QueryRepresentationPlan
-	{
-		return (new QueryRepresentationSchemaCompiler())->compileResult($this);
-	}
-
 	/**
 	 * @param list<array<string, mixed>> $rows
 	 *
@@ -862,23 +831,6 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
-	 * @param list<array<string, mixed>> $sourceRows
-	 * @param list<object> $objects
-	 */
-	private function trackMutableResults(
-		QueryRepresentationPlan $compilation,
-		array $sourceRows,
-		array $objects,
-	): void {
-		(new MutableQueryResultTracker())->trackAll(
-			$this->requireMutableSession(),
-			$compilation,
-			$objects,
-			$sourceRows,
-		);
-	}
-
-	/**
 	 * @param array<string, mixed> $row
 	 *
 	 * @return array<string, mixed>
@@ -908,15 +860,6 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		return $publicRows;
-	}
-
-	private function requireMutableSession(): Session
-	{
-		if (! $this->session instanceof Session) {
-			throw ObjectExportException::requiresMutableSession();
-		}
-
-		return $this->session;
 	}
 
 	private function describeSource(QuerySourceInterface $source): string

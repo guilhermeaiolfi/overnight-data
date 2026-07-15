@@ -54,5 +54,3 @@ jobs:
 
       - name: Run checks
         run: composer check
-        env:
-          PHP_CS_FIXER_IGNORE_ENV: "1"

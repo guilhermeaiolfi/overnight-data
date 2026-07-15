@@ -41,6 +41,7 @@ final class QueryArchitectureTest extends TestCase
 			'Cycle\\',
 			'Doctrine\\',
 			'PDO',
+			'use ON\\Data\\ORM\\',
 		];
 
 		$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root));

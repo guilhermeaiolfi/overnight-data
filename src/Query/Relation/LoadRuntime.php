@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
+use ON\Data\Database\Exception\QueryNotExecutableException;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Exception\LoadRuntimeException;
+use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Selection\SelectionTag;
@@ -56,6 +58,10 @@ final class LoadRuntime
 
 	public function fetchAll(): array
 	{
+		if ($this->rootQuery->getRelationSelections()->isEmpty()) {
+			return $this->executor->fetchAll($this->rootQuery);
+		}
+
 		$this->prepare();
 		$this->rootBranch->parseRows($this->executor->fetchAll($this->rootQuery));
 		$this->runContinuationsFor($this->rootQuery);
@@ -65,6 +71,10 @@ final class LoadRuntime
 
 	public function fetchOne(): ?array
 	{
+		if ($this->rootQuery->getRelationSelections()->isEmpty()) {
+			return $this->executor->fetchOne($this->rootQuery);
+		}
+
 		$this->prepare();
 		$row = $this->executor->fetchOne($this->rootQuery);
 
@@ -76,6 +86,18 @@ final class LoadRuntime
 		$this->runContinuationsFor($this->rootQuery);
 
 		return $this->outputProcessor->processRoot($this->rootBranch)[0] ?? null;
+	}
+
+	/**
+	 * @return iterable<array<string, mixed>>
+	 */
+	public function iterate(): iterable
+	{
+		if (! $this->rootQuery->getRelationSelections()->isEmpty()) {
+			throw RelationSelectionException::iterateNotSupported();
+		}
+
+		return $this->executor->iterate($this->rootQuery);
 	}
 
 	public function getQueryRelation(RelationLoadBranch $branch): RelationRef

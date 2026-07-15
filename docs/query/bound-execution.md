@@ -77,12 +77,7 @@ Bound queries expose:
 - `fetchOne()`
 - `iterate()`
 
-Without relation selections, these delegate directly to `QueryExecutorInterface`.
-
-With relation selections:
-
-- `fetchAll()` and `fetchOne()` route through `LoadRuntime`;
-- `iterate()` is intentionally rejected because structured loading may need the full parent batch.
+`fetchAll()`, `fetchOne()`, and `iterate()` all go through `LoadRuntime` after the query resolves its executor (`getLoadRuntime()`). `LoadRuntime` uses a fast path when there are no relation selections; `iterate()` still rejects relation selections because structured loading may need the full parent batch.
 
 Built-in relation loaders keep ownership of join versus separate-query execution decisions.
 

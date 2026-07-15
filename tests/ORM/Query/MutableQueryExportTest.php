@@ -29,7 +29,7 @@ final class MutableQueryExportTest extends TestCase
 
 		self::assertInstanceOf(stdClass::class, $rows[0]);
 		self::assertFalse($query->isMutable());
-		self::assertNull($query->getSession());
+		self::assertNull($query->getMutableResultHandler());
 	}
 
 	public function testMutableWithoutToThrows(): void
@@ -150,7 +150,7 @@ final class MutableQueryExportTest extends TestCase
 
 		$session = new Session(new RecordingCommandExecutor());
 		$compilation = (new QueryRepresentationSchemaCompiler())->compileResult($query);
-		(new MutableQueryResultTracker())->trackOne($session, $compilation, $user, ['id' => 1, 'name' => 'Ada']);
+		(new MutableQueryResultTracker($session))->trackOne($compilation, $user, ['id' => 1, 'name' => 'Ada']);
 
 		self::assertTrue($session->getRepresentations()->has($user));
 		self::assertTrue($session->getRepresentations()->has($post));
@@ -166,7 +166,7 @@ final class MutableQueryExportTest extends TestCase
 
 		$rows = $query->to(stdClass::class)->mutable($session)->fetchAll();
 
-		self::assertSame($session, $query->getSession());
+		self::assertSame($session, $query->getMutableResultHandler());
 		self::assertTrue($session->getRepresentations()->has($rows[0]));
 		self::assertTrue($session->getRepresentations()->has($rows[1]));
 	}
@@ -182,7 +182,7 @@ final class MutableQueryExportTest extends TestCase
 		$row = $query->to(stdClass::class)->mutable($session)->fetchOne();
 
 		self::assertInstanceOf(stdClass::class, $row);
-		self::assertSame($session, $query->getSession());
+		self::assertSame($session, $query->getMutableResultHandler());
 		self::assertTrue($session->getRepresentations()->has($row));
 	}
 
@@ -195,7 +195,7 @@ final class MutableQueryExportTest extends TestCase
 		);
 
 		self::assertNull($query->to(stdClass::class)->mutable($session)->fetchOne());
-		self::assertSame($session, $query->getSession());
+		self::assertSame($session, $query->getMutableResultHandler());
 		self::assertSame([], iterator_to_array($session->getRepresentations()->getAll(), false));
 	}
 
@@ -209,7 +209,7 @@ final class MutableQueryExportTest extends TestCase
 
 		self::assertTrue($copy->isMutable());
 		self::assertSame(stdClass::class, $copy->getResultClass());
-		self::assertSame($session, $copy->getSession());
+		self::assertSame($session, $copy->getMutableResultHandler());
 	}
 
 	public function testUnsupportedClassCannotReachMutable(): void
@@ -280,14 +280,14 @@ final class MutableQueryResultTrackerTest extends TestCase
 		$query->select($query->name);
 		$query->posts->fields('title');
 
-		$tracker = new MutableQueryResultTracker();
 		$session = new Session(new RecordingCommandExecutor());
+		$tracker = new MutableQueryResultTracker($session);
 		$compilation = (new QueryRepresentationSchemaCompiler())->compileResult($query);
 
 		$first = $this->userWithPosts(1, 'Ada', 10, 'Hello');
 		$second = $this->userWithPosts(2, 'Grace', 11, 'World');
 
-		$tracker->trackAll($session, $compilation, [$first, $second], [
+		$tracker->trackAll($compilation, [$first, $second], [
 			['id' => 1, 'name' => 'Ada'],
 			['id' => 2, 'name' => 'Grace'],
 		]);
@@ -310,14 +310,14 @@ final class MutableQueryResultTrackerTest extends TestCase
 		$query = new SelectQuery($users);
 		$query->select($query->name);
 
-		$tracker = new MutableQueryResultTracker();
 		$session = new Session(new RecordingCommandExecutor());
+		$tracker = new MutableQueryResultTracker($session);
 		$compilation = (new QueryRepresentationSchemaCompiler())->compileResult($query);
 
 		$first = $this->userObject(1, 'Ada');
 		$second = $this->userObject(2, 'Grace');
 
-		$tracker->trackAll($session, $compilation, [$first, $second], [
+		$tracker->trackAll($compilation, [$first, $second], [
 			['id' => 1, 'name' => 'Ada'],
 			['id' => 2, 'name' => 'Grace'],
 		]);
@@ -337,12 +337,12 @@ final class MutableQueryResultTrackerTest extends TestCase
 		$query = new SelectQuery($users);
 		$query->select($query->name);
 
-		$tracker = new MutableQueryResultTracker();
 		$session = new Session(new RecordingCommandExecutor());
+		$tracker = new MutableQueryResultTracker($session);
 		$user = $this->userObject(1, 'Ada');
 		$compilation = (new QueryRepresentationSchemaCompiler())->compileResult($query);
 
-		$tracker->trackOne($session, $compilation, $user, ['id' => 1, 'name' => 'Ada']);
+		$tracker->trackOne($compilation, $user, ['id' => 1, 'name' => 'Ada']);
 
 		self::assertTrue($session->getRepresentations()->has($user));
 		self::assertTrue($session->getRepresentations()->get($user)?->getSchema()->hasField('name'));

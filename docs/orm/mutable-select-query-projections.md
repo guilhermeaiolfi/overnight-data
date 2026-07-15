@@ -37,8 +37,8 @@ When a mutable projection is created by `SelectQuery`, the query is the field-ta
 Mutable export requirements:
 
 - `to(stdClass::class)` is required
-- an explicit `Session` is required
-- schema and provenance are compiled only for mutable export
+- an explicit `Session` is required (`Session` implements `MutableResultHandler`; that is the Query↔ORM bridge)
+- `prepare()` returns a `MutablePreparation` token (concretely `QueryRepresentationPlan`); the query holds it for that fetch and passes it to `track()`
 - one schema is compiled per fetch operation and reused across rows
 - each object still gets its own `RepresentationState`
 
