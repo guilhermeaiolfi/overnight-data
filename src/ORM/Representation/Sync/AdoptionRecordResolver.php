@@ -59,7 +59,7 @@ final class AdoptionRecordResolver
 			return $record;
 		}
 
-		if ($this->hasExistingIntent($representation) || $isRoot) {
+		if ($this->hasExistingIntent($representation)) {
 			return RecordState::clean($key, $values);
 		}
 

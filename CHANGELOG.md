@@ -14,13 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - Replaced leftover `$database` / “Database facade” wording with `DataRuntime` / `CycleRuntimeFactory`.
-- Corrected `SelectQuery::select()` docs: `RelationRef` is configured on the relation branch, not passed to `select()`.
+- Documented `SelectQuery::select(RelationRef)` for nested relation loading alongside root scalars.
 - Clarified that collection `entity`/`repository`/`mapper`/`scope` and relation `cascade`/`load` are interoperability metadata for external Cycle schema bridges; ON\Data Session persistence does not interpret them.
 - Rewrote [`UPGRADE.md`](UPGRADE.md) to drop the broad 1.x compatibility promise; upgrades are deliberate and may break call sites.
 
-### Added
+### Changed
 
-- GitHub Actions CI running `composer validate --strict` and `composer check` on PHP 8.3 and 8.4.
+- **Graph adoption intent** — untracked roots with a complete primary key are no longer adopted as clean/existing by default. Roots and related objects both default to `NEW` unless marked with `Session::existing($object)` (or attached via `identify()` / query tracking).
+- **`SelectQuery::select(RelationRef)`** — relation refs are accepted for nested loading. Bare `$u->posts` is equivalent to `$u->posts->load()` (all visible fields); already-configured refs keep their options. Relation-only `select()` keeps default root fields. Foreign-query refs raise `RelationSelectionException::foreignQueryRelation()`.
+- Quickstart smoke coverage for nested `posts` relation loading.
+- Relation-loading docs for separate-query parent-batch / `IN` correlation limits.
 
 ## [1.1.1] - 2026-07-10
 

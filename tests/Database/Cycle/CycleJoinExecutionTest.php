@@ -342,6 +342,36 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testSelectAcceptsRelationRefAndLoadsAllVisibleFields(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$rows = $users
+			->select($users->name, $users->posts)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'posts' => [
+					['id' => 1, 'userId' => 1, 'title' => 'Hello', 'published' => true],
+					['id' => 2, 'userId' => 1, 'title' => 'World', 'published' => false],
+				],
+			],
+			[
+				'name' => 'Grace',
+				'posts' => [
+					['id' => 3, 'userId' => 2, 'title' => 'Graph', 'published' => true],
+				],
+			],
+			[
+				'name' => 'Linus',
+				'posts' => [],
+			],
+		], $rows);
+	}
+
 	public function testDirectConfigAppliesSeparateRelationWhereAndOrderBy(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));

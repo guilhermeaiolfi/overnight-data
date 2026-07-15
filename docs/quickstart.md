@@ -94,18 +94,19 @@ This example assumes matching SQLite tables already exist for the definitions ab
 
 ## 5. Load nested relations
 
-Relation loading is configured on cached relation refs, separate from root `select()`.
+Pass relation refs to `select()`, or configure them on the cached ref before fetch. Bare `$query->posts` loads all visible related fields.
 
 ```php
 $query = $runtime->query($users);
 
-$query
-    ->posts
-        ->fields('id', 'title')
-        ->where(x()->eq($query->posts->published, true));
-
 $rows = $query
-    ->select($query->id, $query->name)
+    ->select(
+        $query->id,
+        $query->name,
+        $query->posts
+            ->fields('id', 'title')
+            ->where(x()->eq($query->posts->published, true)),
+    )
     ->orderBy($query->id->asc())
     ->fetchAll();
 

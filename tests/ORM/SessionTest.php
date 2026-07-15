@@ -363,10 +363,27 @@ final class SessionTest extends TestCase
 		self::assertSame('New User', $session->getRecords()->getFromRepresentation($tracked)?->getValue('name'));
 	}
 
-	public function testSyncUntrackedRootWithCompleteKeyTracksRootAsCleanExisting(): void
+	public function testSyncUntrackedRootWithCompleteKeyTracksRootAsNewWithoutExistingIntent(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$representation = $this->representation(['id' => 10, 'name' => 'Assigned User']);
+
+		$result = $session->sync($representation, $this->userTemplateSchemaFor($this->users()));
+
+		$tracked = $session->getRepresentations()->get($representation);
+		self::assertInstanceOf(RepresentationState::class, $tracked);
+		$record = $session->getRecords()->getFromRepresentation($tracked);
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertTrue($record->isNew());
+		self::assertFalse($record->hasKey());
+		self::assertFalse($result->hasChanges());
+	}
+
+	public function testSyncUntrackedRootWithCompleteKeyTracksRootAsCleanWhenMarkedExisting(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$representation = $this->representation(['id' => 10, 'name' => 'Existing User']);
+		$session->existing($representation);
 
 		$result = $session->sync($representation, $this->userTemplateSchemaFor($this->users()));
 
@@ -376,6 +393,25 @@ final class SessionTest extends TestCase
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isClean());
 		self::assertFalse($result->hasChanges());
+	}
+
+	public function testExistingMarkedRootWithCompleteKeyFlushPlansUpdateNotInsert(): void
+	{
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$user = $this->representation(['id' => 10, 'name' => 'Ada']);
+		$session->existing($user);
+		$session->sync($user, $this->userTemplateSchemaFor($this->users()));
+
+		$user->name = 'Ada Lovelace';
+		$session->sync($user);
+		$session->flush();
+
+		self::assertCount(1, $executor->getCommands());
+		$command = $executor->getCommands()[0];
+		self::assertInstanceOf(UpdateCommand::class, $command);
+		self::assertSame(['id' => 10], $command->getIdentity());
+		self::assertSame(['name' => 'Ada Lovelace'], $command->getChanges());
 	}
 
 	public function testSyncUntrackedRootWithoutCompleteKeyTracksRootAsNew(): void

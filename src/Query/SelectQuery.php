@@ -346,23 +346,37 @@ final class SelectQuery implements QuerySourceInterface
 		return $copy;
 	}
 
-	public function select(ValueExpressionInterface|AliasedExpression|StarExpression|SelectQuery ...$expressions): self
+	public function select(ValueExpressionInterface|AliasedExpression|StarExpression|SelectQuery|RelationRef ...$expressions): self
 	{
 		if ($expressions === []) {
 			throw new InvalidArgumentException('SelectQuery::select() requires at least one expression.');
 		}
 
-		$this->selections->removeByTag(SelectionTag::DEFAULT);
-
 		$normalized = [];
 
 		foreach ($expressions as $expression) {
+			if ($expression instanceof RelationRef) {
+				if ($expression->getQuery() !== $this) {
+					throw RelationSelectionException::foreignQueryRelation($expression, $this);
+				}
+
+				// Bare RelationRef loads all visible fields; already-configured refs keep their options.
+				if (! $expression->isSelected()) {
+					$expression->load();
+				}
+
+				continue;
+			}
+
 			$normalized[] = $expression instanceof SelectQuery
 				? new SubqueryExpression($expression)
 				: $expression;
 		}
 
-		$this->selections->addExplicit($normalized);
+		if ($normalized !== []) {
+			$this->selections->removeByTag(SelectionTag::DEFAULT);
+			$this->selections->addExplicit($normalized);
+		}
 
 		$this->assertNoRelationSelectionCollisions();
 

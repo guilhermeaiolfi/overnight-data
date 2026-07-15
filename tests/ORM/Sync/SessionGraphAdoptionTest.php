@@ -46,15 +46,35 @@ final class SessionGraphAdoptionTest extends TestCase
 		self::assertTrue($records->getFromRepresentation($tracked)?->isNew());
 	}
 
-	public function testUntrackedRootWithCompleteKeyIsAdoptedAsCleanExisting(): void
+	public function testUntrackedRootWithCompleteKeyIsAdoptedAsNewWithoutExistingIntent(): void
 	{
 		$root = $this->representation(['id' => 10, 'name' => 'Root']);
 		$records = new RecordStateStore();
-		$representations = new RepresentationStateStore();
+		$reps = new RepresentationStateStore();
 
-		$this->session($representations, $records)->sync($root, $this->userSchemaWithId());
+		$this->session($reps, $records)->sync($root, $this->userSchemaWithId());
 
-		$tracked = $representations->get($root);
+		$tracked = $reps->get($root);
+		self::assertInstanceOf(RepresentationState::class, $tracked);
+		$record = $records->getFromRepresentation($tracked);
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertTrue($record->isNew());
+		self::assertFalse($record->hasKey());
+		self::assertSame(10, $record->getValue('id'));
+		self::assertSame('Root', $record->getValue('name'));
+	}
+
+	public function testUntrackedRootWithCompleteKeyIsAdoptedAsCleanWhenMarkedExisting(): void
+	{
+		$root = $this->representation(['id' => 10, 'name' => 'Root']);
+		$records = new RecordStateStore();
+		$reps = new RepresentationStateStore();
+		$session = $this->session($reps, $records);
+		$session->existing($root);
+
+		$session->sync($root, $this->userSchemaWithId());
+
+		$tracked = $reps->get($root);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
 		$record = $records->getFromRepresentation($tracked);
 		self::assertInstanceOf(RecordState::class, $record);
@@ -62,7 +82,6 @@ final class SessionGraphAdoptionTest extends TestCase
 		self::assertSame(10, $record->getKey()?->getFieldValue('id'));
 		self::assertSame('Root', $record->getValue('name'));
 	}
-
 	public function testUntrackedRootWithoutCompleteKeyIsAdoptedAsNew(): void
 	{
 		$root = $this->representation(['id' => null, 'name' => 'Root']);

@@ -223,14 +223,36 @@ final class RelationRefTest extends TestCase
 		self::assertSame([], $users->getSorts());
 	}
 
-	public function testRelationRefIsNotAValueExpressionAndSelectRejectsIt(): void
+	public function testRelationRefIsNotAValueExpressionAndSelectLoadsVisibleFields(): void
 	{
 		$users = $this->makeQuery('users');
 
 		self::assertFalse(is_a($users->posts, ValueExpressionInterface::class));
 
-		$this->expectException(TypeError::class);
 		$users->select($users->posts);
+
+		self::assertTrue($users->posts->isSelected());
+		self::assertTrue($users->posts->isLoaded());
+		self::assertNull($users->posts->getFields());
+		self::assertSame([
+			['posts', true, true, null],
+		], $this->selectionState($users));
+
+		$selections = $users->getSelections()->getAll();
+		self::assertCount(1, $selections);
+		self::assertTrue($selections[0]->hasTag(SelectionTag::DEFAULT));
+	}
+
+	public function testSelectWithRelationAndScalarsKeepsConfiguredRelationFields(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$users->select($users->id, $users->posts->fields('id', 'title'));
+
+		self::assertSame([
+			['posts', true, true, ['id', 'title']],
+		], $this->selectionState($users));
+		self::assertFalse($users->getSelections()->getAll()[0]->hasTag(SelectionTag::DEFAULT));
 	}
 
 	public function testSelectQueryLoadNoLongerExists(): void
@@ -787,7 +809,8 @@ final class RelationRefTest extends TestCase
 		$users = $this->makeQuery('users', $registry);
 		$other = $this->makeQuery('users', $registry);
 
-		$this->expectException(TypeError::class);
+		$this->expectException(RelationSelectionException::class);
+		$this->expectExceptionMessage('belongs to a different SelectQuery');
 		$users->select($other->posts);
 	}
 

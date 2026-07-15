@@ -10,6 +10,7 @@ use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Sync\AdoptionRecordResolver;
+use ON\Data\ORM\Representation\Sync\ExistingIntentStore;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
@@ -43,12 +44,28 @@ final class AdoptionRecordResolverTest extends TestCase
 		self::assertSame('Ada', $record->getValue('name'));
 	}
 
-	public function testCreatesCleanRecordStateWhenPrimaryKeyCanBeCompleted(): void
+	public function testCreatesNewRecordStateWhenRootHasCompletePrimaryKeyWithoutExistingIntent(): void
 	{
 		$representation = $this->representation(['id' => 10, 'name' => 'Ada']);
 		$records = new RecordStateStore();
 
 		$record = $this->resolver()->resolve($representation, $this->userSchemaWithId(), $records, true);
+
+		self::assertTrue($record->isNew());
+		self::assertFalse($record->hasKey());
+		self::assertSame(10, $record->getValue('id'));
+		self::assertSame('Ada', $record->getValue('name'));
+	}
+
+	public function testCreatesCleanRecordStateWhenExistingIntentAndPrimaryKeyCanBeCompleted(): void
+	{
+		$representation = $this->representation(['id' => 10, 'name' => 'Ada']);
+		$records = new RecordStateStore();
+		$intents = new ExistingIntentStore();
+		$intents->mark($representation);
+
+		$record = (new AdoptionRecordResolver(existingIntents: $intents))
+			->resolve($representation, $this->userSchemaWithId(), $records, true);
 
 		self::assertTrue($record->isClean());
 		self::assertSame(10, $record->getKey()?->getFieldValue('id'));
@@ -114,8 +131,11 @@ final class AdoptionRecordResolverTest extends TestCase
 		$schema->addField(new RepresentationFieldSchema('id', $this->users(), 'id'));
 		$schema->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
 		$representation = $this->representation(['id' => 10]);
+		$intents = new ExistingIntentStore();
+		$intents->mark($representation);
 
-		$record = $this->resolver()->resolve($representation, $schema, new RecordStateStore(), true);
+		$record = (new AdoptionRecordResolver(existingIntents: $intents))
+			->resolve($representation, $schema, new RecordStateStore(), true);
 
 		self::assertTrue($record->isClean());
 		self::assertSame(['id' => 10], $record->getValues());

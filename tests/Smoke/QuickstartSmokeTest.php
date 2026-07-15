@@ -82,6 +82,42 @@ final class QuickstartSmokeTest extends TestCase
 		self::assertInstanceOf(UserRow::class, $objects[0]);
 		self::assertSame(1, $objects[0]->id);
 		self::assertSame('Ada', $objects[0]->name);
+
+		$harness->exec('INSERT INTO users (id, name, active) VALUES (2, \'Grace\', 1)');
+		$harness->exec('INSERT INTO posts (id, user_id, title, published) VALUES (10, 1, \'Hello\', 1)');
+		$harness->exec('INSERT INTO posts (id, user_id, title, published) VALUES (11, 1, \'Draft\', 0)');
+		$harness->exec('INSERT INTO posts (id, user_id, title, published) VALUES (12, 2, \'Notes\', 1)');
+
+		$relationQuery = $harness->database->query($users);
+		$relationQuery
+			->posts
+			->fields('id', 'title')
+			->where(x()->eq($relationQuery->posts->published, true));
+
+		$withPosts = $relationQuery
+			->select($relationQuery->id, $relationQuery->name)
+			->orderBy($relationQuery->id->asc())
+			->fetchAll();
+
+		self::assertSame(
+			[
+				[
+					'id' => 1,
+					'name' => 'Ada',
+					'posts' => [
+						['id' => 10, 'title' => 'Hello'],
+					],
+				],
+				[
+					'id' => 2,
+					'name' => 'Grace',
+					'posts' => [
+						['id' => 12, 'title' => 'Notes'],
+					],
+				],
+			],
+			$withPosts,
+		);
 	}
 }
 

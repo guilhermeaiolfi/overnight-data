@@ -1,12 +1,19 @@
 # Relation Loading
 
-Relation loading is configured through cached `RelationRef` branches. `SelectQuery::select()` is for root scalar/value expressions; relation branches are selected by configuring the relation ref directly.
+Relation loading is configured through cached `RelationRef` branches. Pass a `RelationRef` to `SelectQuery::select()` to include nested relation results, or configure the ref before fetching. Root scalar expressions and relation refs can share one `select()` call.
 
 ## Selecting Relations
 
-Any relation configuration that loads data marks that cached relation ref as selected:
+Any relation configuration that loads data marks that cached relation ref as selected. A bare `$u->posts` inside `select()` calls `load()` (all visible fields):
 
 ```php
+$u->select($u->id, $u->name, $u->posts);
+
+$u->select(
+    $u->id,
+    $u->posts->fields('id', 'title'),
+);
+
 $users->posts->load();
 
 $users->posts->fields('id', 'title');
@@ -37,12 +44,17 @@ That automatically registers missing ancestors. In this example:
 - `posts` becomes a visible structural container;
 - `author` becomes the loaded terminal relation.
 
-Root field selection remains separate:
+Root scalars and relations can be selected together, or configured separately:
 
 ```php
+$u->select($u->id, $u->name, $u->posts->fields('title'));
+
+// equivalent:
 $u->posts->fields('title');
 $u->select($u->id, $u->name);
 ```
+
+Relation-only `select($u->posts)` keeps default root fields.
 
 ## Load Options
 
@@ -154,6 +166,22 @@ The acquisition strategy is loader-owned. A relation selection may override the 
 
 `fetchAll()` and `fetchOne()` support structured relation loading. `iterate()` does not.
 
+## Batch size and separate-query correlation
+
+HasMany, M2M, and FirstOfMany default to `SEPARATE_QUERY`. After the parent/root batch is fetched, the loader correlates children with parent key values:
+
+- simple keys become one `IN (...)` predicate over the parent key set;
+- composite keys become an `OR` of per-parent `AND` key comparisons.
+
+That means cost grows with the number of parent rows in the current batch, not only with result size. Very large parent batches can produce large SQL statements or expensive plans.
+
+Practical guidance:
+
+- Prefer `join()` for shallow to-one or small to-many loads when the loader accepts JOIN for that relation and option set.
+- Keep parent `fetchAll()` batches bounded when using separate-query HasMany/M2M/FirstOfMany (page roots, or load relations in smaller parent chunks).
+- Nested separate-query branches multiply round-trips (one continuation query per loaded branch level, not one query per parent row, but still O(branches) over a buffered parent set).
+- There is currently no automatic parent-key chunking in the built-in loaders.
+
 ## Architecture Guardrails
 
 - The registry must not know relation-specific loading behavior.
@@ -170,4 +198,5 @@ The acquisition strategy is loader-owned. A relation selection may override the 
 - Structured loading for built-in `HasMany` supports relation-level `limit(...)` and `offset(...)` only in separate-query mode, applies them per parent, and requires deterministic selection-level `orderBy(...)`.
 - Joined structured loading for built-in `M2M` is not implemented yet.
 - Relation-level `where` and `orderBy` are supported for separate-query loading first; joined relation conditions and ordering are rejected by built-in loaders.
+- Separate-query correlation uses `IN` (simple keys) or per-parent `OR`/`AND` (composite keys) over the full parent batch; see [Batch size and separate-query correlation](#batch-size-and-separate-query-correlation).
 - Future relation branch configuration should stay loader-owned and branch-local rather than moving relation-specific rules into the registry or generic runtime.

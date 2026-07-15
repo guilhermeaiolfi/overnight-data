@@ -213,7 +213,7 @@ track one root RecordState per row when ORM tracking is active
 
 The current v1.0 implementation defines root default fields as all normal root scalar fields. Later releases may become smarter based on target representation requirements.
 
-Default root selection is root-only. It must not auto-load relations; explicit relation loading still goes through `RelationRef` branch configuration (not `SelectQuery::select($relationRef)`):
+Default root selection is root-only. It must not auto-load relations; pass a `RelationRef` to `select()` (or configure the ref before fetch) for nested loading:
 
 ```php
 $u = query($users);
@@ -226,7 +226,7 @@ $users = $u
     ->fetchAll();
 ```
 
-Do not add `with()` for this.
+A bare `$u->posts` in `select()` loads all visible related fields. Relation-only `select()` keeps default root scalars. Do not add `with()` for this.
 
 `stdClass` and array targets use the same omitted-selection rule:
 
@@ -271,7 +271,7 @@ If writable lineage requires primary-key fields that the user did not select pub
 
 Hidden required fields must not appear in the final mapped representation unless explicitly selected or mapped.
 
-Relation loading must keep using `RelationRef` branch configuration. Do not add `with()`. Do not pass `RelationRef` to `SelectQuery::select()`.
+Relation loading uses `RelationRef` branch configuration, including refs passed to `SelectQuery::select()`. Do not add `with()`.
 
 Relations remain class-based and pluggable. Relation definitions remain the source of relation intent; ORM write behavior is implemented by relation persistence planners that interpret those definitions.
 

@@ -44,18 +44,23 @@ References are cached per query and per path. Two different queries over the sam
 - `AliasedExpression`
 - `SelectQuery`
 - `StarExpression`
+- `RelationRef` — marks that relation branch for nested loading (not a flat SQL column)
 
-It does **not** accept `RelationRef`. Passing a relation ref fails at the type boundary. Configure relation loading on the ref itself (for example `$u->posts->fields('id', 'title')`), as documented in [`relation-loading.md`](./relation-loading.md).
-
-Scalar expressions become flat selections. A direct `SelectQuery` is normalized to a `SubqueryExpression`.
+A bare `$u->posts` is equivalent to `$u->posts->load()` (all visible related fields). A configured ref keeps its options:
 
 ```php
 $u->select(
     $u->id,
     $u->email->as('contact_email'),
+    $u->posts,
+    $u->profile->fields('avatar'),
     $postCountQuery,
 );
 ```
+
+Relation-only `select($u->posts)` keeps the default root field selection. Passing any scalar/value expression clears defaults and uses the explicit scalar list, as before.
+
+Scalar expressions become flat selections. A direct `SelectQuery` is normalized to a `SubqueryExpression`.
 
 Use `all()` for a source-wide selection:
 
@@ -154,19 +159,22 @@ $rows = $u
 
 The runtime may still include hidden required fields for identity or mutable projection tracking. Selections tagged `SelectionTag::INTERNAL` are stripped from public array and object results.
 
-Relation loading remains explicit through `RelationRef` branch configuration (not `select()`):
+Relation loading remains explicit through `RelationRef` branches. Prefer including them in `select()`:
 
 ```php
 $u = $runtime->query($users);
 
-$u->posts->fields('id', 'title');
-
 $users = $u
+    ->select(
+        $u->id,
+        $u->name,
+        $u->posts->fields('id', 'title'),
+    )
     ->to(stdClass::class)
     ->fetchAll();
 ```
 
-Do not introduce `with()` or `EntityQuery`.
+Configuring the ref before `select()` is equivalent. Do not introduce `with()` or `EntityQuery`.
 
 ## Named expressions
 
