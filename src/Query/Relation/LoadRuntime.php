@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
-use ON\Data\Database\Exception\QueryNotExecutableException;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Exception\LoadRuntimeException;
