@@ -688,6 +688,10 @@ final class SelectQuery implements QuerySourceInterface
 			throw ObjectExportException::mutableIterationUnsupported();
 		}
 
+		if (! $this->getRelationSelections()->isEmpty()) {
+			throw RelationSelectionException::iterateNotSupported();
+		}
+
 		$rows = $this->getLoadRuntime()->iterate();
 
 		if ($this->resultClass === null) {

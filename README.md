@@ -6,14 +6,11 @@ It is independent from the Overnight framework. The package can be consumed on i
 
 ## Stability
 
-**v1.1** continues the stable 1.x data-layer line:
+This package does **not** offer a SemVer compatibility promise. Version tags identify releases; they are not a contract that application code will keep working across upgrades.
 
-- definitions, conversion, and mapper runtime;
-- query model, bound execution, and relation loading;
-- ORM persistence through `Session`, representation schemas, and Cycle-backed command execution;
-- mutable query projections and manual mutable projections.
+Docs describe current behavior for orientation. They are not a support or “stable API” list. See [`UPGRADE.md`](UPGRADE.md).
 
-Patch and minor releases within `^1.0` / `^1.1` may still change behavior. See [`UPGRADE.md`](UPGRADE.md). Features listed under **Current Limitations** may evolve without a major version bump.
+Typical starting points today (convenience only, not a supported surface): `CycleRuntimeFactory` / `DataRuntime`, `SelectQuery`, `Session`.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for release history and [`docs/quickstart.md`](docs/quickstart.md) for a first end-to-end walkthrough.
 
@@ -143,15 +140,17 @@ Production code autoloads from the `ON\Data\` namespace.
 Requires PHP `>=8.3`.
 
 ```bash
-composer require guilhermeaiolfi/overnight-data:^1.0
+composer require guilhermeaiolfi/overnight-data:1.1.1
 ```
 
 If Composer cannot resolve the package from Packagist yet, register the GitHub repository first:
 
 ```bash
 composer config repositories.overnight-data vcs https://github.com/guilhermeaiolfi/overnight-data
-composer require guilhermeaiolfi/overnight-data:^1.0
+composer require guilhermeaiolfi/overnight-data:1.1.1
 ```
+
+Pin an exact version (or a very narrow constraint); see [`UPGRADE.md`](UPGRADE.md).
 ## Quality Commands
 
 ```bash
@@ -169,7 +168,7 @@ GitHub Actions runs `composer validate --strict` and `composer check` on PHP 8.3
 
 - [`docs/quickstart.md`](docs/quickstart.md) is the recommended first walkthrough.
 - [`CHANGELOG.md`](CHANGELOG.md) lists release history.
-- [`UPGRADE.md`](UPGRADE.md) describes upgrade expectations (no broad compatibility promise).
+- [`UPGRADE.md`](UPGRADE.md) — what docs mean, and that there is no compatibility promise.
 - `docs/README.md` is the full documentation index.
 - `docs/definition-api.md` documents the canonical registry and definition API.
 - `docs/definition-extension-guide.md` documents supported definition extension points and storage rules.

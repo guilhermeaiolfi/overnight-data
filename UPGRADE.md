@@ -2,16 +2,28 @@
 
 `guilhermeaiolfi/overnight-data` is still evolving. This file is **not** a compatibility guarantee.
 
+## What documentation means
+
+Docs describe **how the code works today**, so you can use and debug it.
+
+They are **not**:
+
+- a support contract
+- a stability or “safe to depend on” list
+- a promise that examples or type names will stay the same
+
+Anything under `ON\Data\` may move, rename, or change behavior. `@internal` markers, if present, are optional hints only; their absence does not mean a type is stable.
+
+Typical integration paths people start from today: `CycleRuntimeFactory` / `DataRuntime`, `SelectQuery`, and `Session`. That is convenience for orientation, **not** a supported public surface.
+
 ## Expectation
 
 There is no promise that application code will keep working across releases without changes.
 
 - Types under `ON\Data\` may move, rename, or change behavior.
-- Documented examples may change when the preferred API changes.
-- Minor and patch releases may include breaking changes when correcting design or closing gaps.
-- `@internal` markers, if present, are hints only; absence of `@internal` does not mean a type is stable.
-
-If you depend on this package, pin an exact version or a very narrow constraint and treat upgrades as deliberate work.
+- Documented examples may change when the code changes.
+- Version tags may include breaking changes when correcting design or closing gaps — including what look like minor or patch bumps.
+- Pin an exact version or a very narrow constraint and treat upgrades as deliberate work.
 
 ```bash
 composer require guilhermeaiolfi/overnight-data:1.1.1

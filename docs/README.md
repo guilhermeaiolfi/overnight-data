@@ -1,12 +1,14 @@
 # Documentation Index
 
-Start here for the current public documentation. The files linked below are the canonical docs for the current API.
+Docs describe how the code works **today**. They are not a support contract or stability guarantee — see [`../UPGRADE.md`](../UPGRADE.md).
+
+The files linked below are the current reference material.
 
 ## Getting started
 
 - [`quickstart.md`](./quickstart.md): First end-to-end walkthrough using definitions, mapping, bound queries, and relation loading.
 - [`../CHANGELOG.md`](../CHANGELOG.md): Release history.
-- [`../UPGRADE.md`](../UPGRADE.md): Upgrade expectations (no broad compatibility promise).
+- [`../UPGRADE.md`](../UPGRADE.md): What docs mean, upgrade expectations, no compatibility promise.
 
 ## Definitions
 

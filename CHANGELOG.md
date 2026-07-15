@@ -2,8 +2,8 @@
 
 All notable changes to this project are documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Version tags use MAJOR.MINOR.PATCH numbering for identification; this package does **not** treat that as a SemVer compatibility contract (see [`UPGRADE.md`](UPGRADE.md)).
 
 ## [Unreleased]
 
@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- Clarified docs honesty: docs describe current behavior, not a support or stable-API contract; aligned README / docs index with [`UPGRADE.md`](UPGRADE.md).
 - Replaced leftover `$database` / “Database facade” wording with `DataRuntime` / `CycleRuntimeFactory`.
 - Documented `SelectQuery::select(RelationRef)` for nested relation loading alongside root scalars.
 - Clarified that collection `entity`/`repository`/`mapper`/`scope` and relation `cascade`/`load` are interoperability metadata for external Cycle schema bridges; ON\Data Session persistence does not interpret them.
