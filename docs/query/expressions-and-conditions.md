@@ -50,7 +50,9 @@ These operations are semantic. They do not encode SQL function names.
 
 ## Raw SQL escape hatch
 
-`x()->rawSql()` creates an advanced escape-hatch expression for SQL features that are not modeled by the typed query API yet:
+`x()->rawSql()` is an advanced escape hatch for SQL features the typed query API does not model yet.
+
+**Trust boundary:** the SQL string is trusted application code. It is sent to the backend as a fragment (identifiers and keywords are not quoted or validated). Treat it like writing SQL by hand.
 
 ```php
 $u->select(
@@ -58,14 +60,22 @@ $u->select(
 );
 ```
 
-Raw SQL bypasses the typed query model. Parameter bindings are supported for values:
+Bind dynamic **values** with `?` placeholders. Parameters are escaped as values; they cannot safely carry identifiers (table/column names), operators, or SQL keywords.
 
 ```php
 $u->where(x()->eq(x()->rawSql('LOWER(name)'), 'ada'));
 $u->where(x()->eq(x()->rawSql('name || ?', [' Lovelace']), 'Ada Lovelace'));
 ```
 
-Do not concatenate user input into the SQL string. Parameters are for values only; identifiers inside the SQL fragment are not portable or automatically quoted. Prefer modeled expressions when they exist.
+Unsafe (do not do this):
+
+```php
+// User input must never be concatenated into the SQL string.
+$column = $_GET['column']; // attacker-controlled
+$u->select(x()->rawSql("LOWER({$column})"));
+```
+
+Prefer modeled expressions (`$u->name->lower()`, comparisons, aggregates, windows) whenever they exist.
 
 ## Window functions
 

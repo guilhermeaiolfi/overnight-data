@@ -7,7 +7,8 @@ namespace ON\Data\Query\Expression;
 final class RawSqlExpression extends AbstractValueExpression
 {
 	/**
-	 * @param list<mixed> $parameters
+	 * @param non-empty-string $sql Trusted SQL fragment (not user input).
+	 * @param list<mixed> $parameters Bound values for `?` placeholders in `$sql`.
 	 */
 	public function __construct(
 		private readonly string $sql,

@@ -193,6 +193,10 @@ Create the built-in default gateway:
 $gateway = ConversionGateway::createDefault();
 ```
 
+`map()` uses `Mapping::getDefaultGateway()` when no gateway is passed. That default is a **process-wide static**: `Mapping::setDefaultGateway()` replaces it for the whole PHP process until `resetDefaultGateway()`.
+
+In request-isolated PHP-FPM that is usually fine. In long-lived workers (RoadRunner, FrankenPHP workers, Swoole, shared CLI daemons), do not leave a request- or tenant-specific gateway as the ambient default—pass an explicit gateway into `map()` / runtime construction, or reset after the request so the next tenant does not inherit it.
+
 Convert values explicitly by naming the source and target representations:
 
 ```php

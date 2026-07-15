@@ -44,6 +44,13 @@ final class ExpressionFactory
 	}
 
 	/**
+	 * Build a raw SQL fragment for features the typed query model does not cover yet.
+	 *
+	 * The `$sql` string is trusted application SQL: identifiers and function names are
+	 * interpolated verbatim into the backend statement. Never concatenate request or
+	 * user-controlled input into `$sql`. Bind dynamic *values* through `$parameters`
+	 * (`?` placeholders) only.
+	 *
 	 * @param list<mixed> $parameters
 	 */
 	public function rawSql(string $sql, array $parameters = []): RawSqlExpression

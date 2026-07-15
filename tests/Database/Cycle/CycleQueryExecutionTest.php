@@ -147,6 +147,33 @@ final class CycleQueryExecutionTest extends TestCase
 		self::assertSame([['name' => 'Ada']], $rows);
 	}
 
+	public function testRawSqlParameterPayloadCannotBreakOutOfValueBinding(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$payload = "'; DROP TABLE users; --";
+
+		$rows = $users
+			->select($users->name)
+			->where(x()->eq(x()->rawSql('name || ?', [$payload]), 'Ada' . $payload))
+			->fetchAll();
+
+		self::assertSame([['name' => 'Ada']], $rows);
+
+		$allUsers = $this->database->query($this->registry->getCollection('users'));
+		self::assertCount(3, $allUsers->select($allUsers->id)->fetchAll());
+	}
+
+	public function testRawSqlFragmentIsCompiledVerbatimWithoutQuotingIdentifiers(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->select(x()->rawSql('LOWER(name)')->as('lower_name'));
+
+		$sql = $this->compileSql($users);
+
+		self::assertStringContainsString('LOWER(name)', $sql);
+		self::assertStringNotContainsString('"LOWER(name)"', $sql);
+	}
+
 	public function testIterateYieldsMappedRowsLazily(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));

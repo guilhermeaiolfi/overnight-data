@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Database\Cycle;
 
 use Cycle\Database\DatabaseInterface;
+use Cycle\Database\Query\QueryParameters;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\ORM\Exception\InvalidCommandException;
@@ -48,12 +49,20 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 
 	private function insert(InsertCommand $command): CommandResult
 	{
-		$this->database
+		$insert = $this->database
 			->insert($this->getTable($command))
-			->values($this->mapFieldValuesToColumns($command->getCollection(), $command->getValues()))
-			->run();
+			->values($this->mapFieldValuesToColumns($command->getCollection(), $command->getValues()));
 
-		return new CommandResult(1, $this->getGeneratedValueAfterInsert($command));
+		// InsertQuery::run() returns lastInsertID and discards rowCount; execute for affected rows.
+		$parameters = new QueryParameters();
+		$affected = $this->affectedRows(
+			$this->database->getDriver()->execute(
+				$insert->sqlStatement($parameters),
+				$parameters->getParameters(),
+			),
+		);
+
+		return new CommandResult($affected, $this->getGeneratedValueAfterInsert($command));
 	}
 
 	private function update(UpdateCommand $command): CommandResult

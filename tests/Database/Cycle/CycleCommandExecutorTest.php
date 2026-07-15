@@ -464,12 +464,29 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertStringContainsString('->insert(', $source);
 		self::assertStringContainsString('->update(', $source);
 		self::assertStringContainsString('->delete(', $source);
-		self::assertStringNotContainsString('sqlStatement', $source);
-		self::assertStringNotContainsString('->execute(', $source);
+		self::assertStringContainsString('sqlStatement', $source);
+		self::assertStringContainsString('getDriver()->execute(', $source);
 		self::assertStringNotContainsString('SELECT ', $source);
 		self::assertStringNotContainsString('INSERT ', $source);
 		self::assertStringNotContainsString('UPDATE ', $source);
 		self::assertStringNotContainsString('DELETE ', $source);
+	}
+
+	public function testInsertReportsDriverAffectedRows(): void
+	{
+		$users = $this->makeUsers();
+
+		$result = $this->executor()->execute(new InsertCommand($users, [
+			'id' => 42,
+			'name' => 'Ada',
+			'email' => 'ada@example.test',
+		]));
+
+		self::assertSame(1, $result->getAffectedRows());
+		self::assertSame(
+			['name' => 'Ada', 'email' => 'ada@example.test'],
+			$this->fetchUser(42),
+		);
 	}
 
 	public function testInsertCommandConvertsDatetimeAndJsonPhpValuesToStorage(): void

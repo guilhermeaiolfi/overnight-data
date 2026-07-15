@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Write-path field conversion** — `ConvertingCommandExecutor` converts canonical PHP command values to storage through `ConversionGateway` (`PhpRepresentation` → `StorageRepresentation`) before delegating to a backend executor. `CycleRuntimeFactory` wraps `CycleCommandExecutor` with that decorator and shares one gateway across query and command paths.
+- **Insert affected rows** — `CycleCommandExecutor::insert()` reports the driver’s `execute()` row count instead of assuming `1` (Cycle `InsertQuery::run()` only returns last insert id).
 
 ### Documentation
 
@@ -17,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documented `SelectQuery::select(RelationRef)` for nested relation loading alongside root scalars.
 - Clarified that collection `entity`/`repository`/`mapper`/`scope` and relation `cascade`/`load` are interoperability metadata for external Cycle schema bridges; ON\Data Session persistence does not interpret them.
 - Rewrote [`UPGRADE.md`](UPGRADE.md) to drop the broad 1.x compatibility promise; upgrades are deliberate and may break call sites.
+- Documented `x()->rawSql()` trust boundary: SQL string is trusted application code; bind values only via `?` parameters.
+- Noted that `Mapping`’s default `ConversionGateway` is process-wide ambient state (isolation guidance for long-lived workers).
 
 ### Changed
 
