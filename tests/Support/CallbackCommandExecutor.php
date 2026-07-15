@@ -4,22 +4,29 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Support;
 
+use Closure;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\TransactionalCommandExecutorInterface;
 
-final class RecordingCommandExecutor implements CommandExecutorInterface, TransactionalCommandExecutorInterface
+/**
+ * Transactional test executor that records commands and delegates results to a callback.
+ *
+ * @phpstan-type ExecuteCallback Closure(CommandInterface, list<CommandInterface>): CommandResult
+ */
+final class CallbackCommandExecutor implements CommandExecutorInterface, TransactionalCommandExecutorInterface
 {
 	/** @var list<CommandInterface> */
 	private array $commands = [];
 
+	public int $transactions = 0;
+
 	/**
-	 * @param list<CommandResult> $results
+	 * @param ExecuteCallback $callback
 	 */
 	public function __construct(
-		private CommandResult $result = new CommandResult(1),
-		private array $results = [],
+		private readonly Closure $callback,
 	) {
 	}
 
@@ -27,11 +34,13 @@ final class RecordingCommandExecutor implements CommandExecutorInterface, Transa
 	{
 		$this->commands[] = $command;
 
-		return array_shift($this->results) ?? $this->result;
+		return ($this->callback)($command, $this->commands);
 	}
 
 	public function transaction(callable $callback): mixed
 	{
+		++$this->transactions;
+
 		return $callback();
 	}
 
@@ -41,10 +50,5 @@ final class RecordingCommandExecutor implements CommandExecutorInterface, Transa
 	public function getCommands(): array
 	{
 		return $this->commands;
-	}
-
-	public function clear(): void
-	{
-		$this->commands = [];
 	}
 }

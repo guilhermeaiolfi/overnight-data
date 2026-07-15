@@ -9,6 +9,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\ORM\Exception\InvalidCommandException;
+use ON\Data\ORM\Exception\NonTransactionalFlushException;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
@@ -35,6 +36,7 @@ use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
 use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
+use Tests\ON\Data\Support\CallbackCommandExecutor;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
 use Tests\ON\Data\Support\Relation\RecordingRelationPersistencePlanner;
 use Tests\ON\Data\Support\Relation\TestCommand;
@@ -130,12 +132,9 @@ final class FlushExecutorTest extends TestCase
 	public function testCommandExecutorExceptionBubbles(): void
 	{
 		$record = RecordState::new($this->users(), ['name' => 'Ada']);
-		$executor = new class () implements CommandExecutorInterface {
-			public function execute(CommandInterface $command): CommandResult
-			{
-				throw new LogicException('executor failed');
-			}
-		};
+		$executor = new CallbackCommandExecutor(static function (CommandInterface $command, array $commands): CommandResult {
+			throw new LogicException('executor failed');
+		});
 
 		$this->expectException(LogicException::class);
 		$this->expectExceptionMessage('executor failed');
@@ -151,17 +150,9 @@ final class FlushExecutorTest extends TestCase
 			'title' => 'Post',
 			'user_id' => ValueRef::field($owner, 'id'),
 		]);
-		$executor = new class () implements CommandExecutorInterface {
-			/** @var list<CommandInterface> */
-			public array $commands = [];
-
-			public function execute(CommandInterface $command): CommandResult
-			{
-				$this->commands[] = $command;
-
-				throw new LogicException('owner insert failed');
-			}
-		};
+		$executor = new CallbackCommandExecutor(static function (CommandInterface $command, array $commands): CommandResult {
+			throw new LogicException('owner insert failed');
+		});
 
 		$this->expectException(LogicException::class);
 		$this->expectExceptionMessage('owner insert failed');
@@ -172,8 +163,8 @@ final class FlushExecutorTest extends TestCase
 				$this->records($owner, $child)
 			));
 		} finally {
-			self::assertCount(1, $executor->commands);
-			self::assertSame($users, $executor->commands[0]->getCollection());
+			self::assertCount(1, $executor->getCommands());
+			self::assertSame($users, $executor->getCommands()[0]->getCollection());
 			self::assertTrue($owner->isNew());
 			self::assertTrue($child->isNew());
 		}
@@ -187,29 +178,21 @@ final class FlushExecutorTest extends TestCase
 			'title' => 'Post',
 			'user_id' => ValueRef::field($owner, 'id'),
 		]);
-		$executor = new class () implements CommandExecutorInterface {
-			/** @var list<CommandInterface> */
-			public array $commands = [];
-
-			public function execute(CommandInterface $command): CommandResult
-			{
-				$this->commands[] = $command;
-
-				if (count($this->commands) === 1) {
-					return new CommandResult(1, ['id' => 10]);
-				}
-
-				if (! $command instanceof InsertCommand) {
-					throw new LogicException('Expected child insert.');
-				}
-
-				if ($command->getValues()['user_id'] !== 10) {
-					throw new LogicException('Dependent command executed before generated key merge.');
-				}
-
-				return new CommandResult(1, ['id' => 5]);
+		$executor = new CallbackCommandExecutor(static function (CommandInterface $command, array $commands): CommandResult {
+			if (count($commands) === 1) {
+				return new CommandResult(1, ['id' => 10]);
 			}
-		};
+
+			if (! $command instanceof InsertCommand) {
+				throw new LogicException('Expected child insert.');
+			}
+
+			if ($command->getValues()['user_id'] !== 10) {
+				throw new LogicException('Dependent command executed before generated key merge.');
+			}
+
+			return new CommandResult(1, ['id' => 5]);
+		});
 
 		(new FlushExecutor($executor))->flush($this->context(
 			new RepresentationStateStore(),
@@ -217,8 +200,8 @@ final class FlushExecutorTest extends TestCase
 		));
 
 		self::assertSame(10, $owner->getValue('id'));
-		self::assertCount(2, $executor->commands);
-		self::assertFalse($this->commandContainsValueRef($executor->commands[1]));
+		self::assertCount(2, $executor->getCommands());
+		self::assertFalse($this->commandContainsValueRef($executor->getCommands()[1]));
 	}
 
 	public function testManyToManyThroughRowWithUnresolvedValuesFailsBeforeWritingThroughRow(): void
@@ -245,111 +228,6 @@ final class FlushExecutorTest extends TestCase
 			self::assertNotSame($through, $executor->getCommands()[0]->getCollection());
 			self::assertTrue($collection->hasChanges());
 		}
-	}
-
-	public function testFailedFlushLeavesRecordAndRelationStateInspectableWithoutMarkingSuccess(): void
-	{
-		[$users, $tags] = $this->usersWithTags();
-		$owner = RecordState::new($users, ['name' => 'Owner']);
-		$target = RecordState::clean($tags->getKey(3), ['id' => 3, 'label' => 'Tag']);
-		$tagRepresentation = $this->representation(['id' => 3, 'label' => 'Tag']);
-		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
-		$collection->add($tagRepresentation);
-		$records = $this->records($owner, $target);
-		$executor = new class () implements CommandExecutorInterface {
-			/** @var list<CommandInterface> */
-			public array $commands = [];
-
-			public function execute(CommandInterface $command): CommandResult
-			{
-				$this->commands[] = $command;
-
-				return match (count($this->commands)) {
-					1 => new CommandResult(1, ['id' => 10]),
-					default => throw new LogicException('through insert failed'),
-				};
-			}
-		};
-
-		$this->expectException(LogicException::class);
-		$this->expectExceptionMessage('through insert failed');
-
-		try {
-			(new FlushExecutor($executor))->flush($this->context(
-				$this->representations($this->tracked($tagRepresentation, $this->schemaFor($target))),
-				$records,
-				$this->manyStates($collection)
-			));
-		} finally {
-			self::assertSame(10, $owner->getValue('id'));
-			self::assertTrue($owner->isNew());
-			self::assertSame($owner, $records->getAll()[0]);
-			self::assertTrue($collection->hasChanges());
-			self::assertCount(2, $executor->commands);
-		}
-	}
-
-	public function testNonTransactionalRetryCanExplicitlyAdoptGeneratedKeyBeforeRetryingRelationCommands(): void
-	{
-		[$users, $tags, $through] = $this->usersWithTags();
-		$owner = RecordState::new($users, ['name' => 'Owner']);
-		$target = RecordState::clean($tags->getKey(3), ['id' => 3, 'label' => 'Tag']);
-		$tagRepresentation = $this->representation(['id' => 3, 'label' => 'Tag']);
-		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
-		$collection->add($tagRepresentation);
-		$records = $this->records($owner, $target);
-		$representations = $this->representations($this->tracked($tagRepresentation, $this->schemaFor($target)));
-		$manyStates = $this->manyStates($collection);
-		$firstExecutor = new class () implements CommandExecutorInterface {
-			/** @var list<CommandInterface> */
-			public array $commands = [];
-
-			public function execute(CommandInterface $command): CommandResult
-			{
-				$this->commands[] = $command;
-
-				return match (count($this->commands)) {
-					1 => new CommandResult(1, ['id' => 10]),
-					default => throw new LogicException('through insert failed'),
-				};
-			}
-		};
-
-		try {
-			(new FlushExecutor($firstExecutor))->flush($this->context(
-				$representations,
-				$records,
-				$manyStates
-			));
-			self::fail('Expected first flush to fail.');
-		} catch (LogicException $exception) {
-			self::assertSame('through insert failed', $exception->getMessage());
-		}
-
-		self::assertSame(10, $owner->getValue('id'));
-		self::assertTrue($owner->isNew());
-		self::assertTrue($collection->hasChanges());
-
-		$owner->markClean($users->getKey(10));
-		$records->indexKey($owner);
-		$retryExecutor = new RecordingCommandExecutor();
-
-		(new FlushExecutor($retryExecutor))->flush($this->context(
-			$representations,
-			$records,
-			$manyStates
-		));
-
-		self::assertTrue($owner->isClean());
-		self::assertFalse($collection->hasChanges());
-		self::assertCount(1, $retryExecutor->getCommands());
-		$retryCommand = $retryExecutor->getCommands()[0];
-		if (! $retryCommand instanceof InsertCommand) {
-			self::fail('Expected retry to write only the through insert.');
-		}
-
-		self::assertSame($through, $retryCommand->getCollection());
-		self::assertSame(['user_id' => 10, 'tag_id' => 3], $retryCommand->getValues());
 	}
 
 	public function testTransactionalFailureRestoresGeneratedValuesAndLeavesRelationChangesPending(): void
@@ -447,6 +325,21 @@ final class FlushExecutorTest extends TestCase
 		self::assertSame(1, $executor->transactions);
 		self::assertCount(1, $executor->commands);
 		self::assertTrue($record->isClean());
+	}
+
+	public function testFlushRefusesNonTransactionalExecutor(): void
+	{
+		$record = RecordState::new($this->users(), ['name' => 'Ada']);
+		$executor = new class () implements CommandExecutorInterface {
+			public function execute(CommandInterface $command): CommandResult
+			{
+				return new CommandResult(1);
+			}
+		};
+
+		$this->expectException(NonTransactionalFlushException::class);
+
+		(new FlushExecutor($executor))->flush($this->context(new RepresentationStateStore(), $this->records($record)));
 	}
 
 	public function testTransactionalFlushRunsSchedulerInsideTransactionWithImmediateValueMergeAndDeferredFinalizers(): void
@@ -1237,12 +1130,9 @@ final class FlushExecutorTest extends TestCase
 		$record = RecordState::clean($this->usersWithPosts()->getKey(10), ['id' => 10, 'name' => 'before']);
 		$record->setValue('name', 'dirty');
 		$collection = $this->changedToManyRelationState($record);
-		$executor = new class () implements CommandExecutorInterface {
-			public function execute(CommandInterface $command): CommandResult
-			{
-				throw new LogicException('scalar failed');
-			}
-		};
+		$executor = new CallbackCommandExecutor(static function (CommandInterface $command, array $commands): CommandResult {
+			throw new LogicException('scalar failed');
+		});
 
 		$this->expectException(LogicException::class);
 		$this->expectExceptionMessage('scalar failed');
@@ -1263,12 +1153,9 @@ final class FlushExecutorTest extends TestCase
 		$record = RecordState::clean($this->usersWithProfile()->getKey(10), ['id' => 10, 'name' => 'before']);
 		$record->setValue('name', 'dirty');
 		$reference = $this->changedToOneRelationState($record);
-		$executor = new class () implements CommandExecutorInterface {
-			public function execute(CommandInterface $command): CommandResult
-			{
-				throw new LogicException('scalar failed');
-			}
-		};
+		$executor = new CallbackCommandExecutor(static function (CommandInterface $command, array $commands): CommandResult {
+			throw new LogicException('scalar failed');
+		});
 
 		$this->expectException(LogicException::class);
 		$this->expectExceptionMessage('scalar failed');
@@ -1290,12 +1177,9 @@ final class FlushExecutorTest extends TestCase
 		RecordingRelationPersistencePlanner::$addCommand = true;
 		$record = RecordState::clean($this->usersWithPosts()->getKey(10), ['id' => 10, 'name' => 'before']);
 		$collection = $this->changedToManyRelationState($record);
-		$executor = new class () implements CommandExecutorInterface {
-			public function execute(CommandInterface $command): CommandResult
-			{
-				throw new LogicException('relation command failed');
-			}
-		};
+		$executor = new CallbackCommandExecutor(static function (CommandInterface $command, array $commands): CommandResult {
+			throw new LogicException('relation command failed');
+		});
 
 		$this->expectException(LogicException::class);
 		$this->expectExceptionMessage('relation command failed');
@@ -1316,12 +1200,9 @@ final class FlushExecutorTest extends TestCase
 		RecordingRelationPersistencePlanner::$addCommand = true;
 		$record = RecordState::clean($this->usersWithProfile()->getKey(10), ['id' => 10, 'name' => 'before']);
 		$reference = $this->changedToOneRelationState($record);
-		$executor = new class () implements CommandExecutorInterface {
-			public function execute(CommandInterface $command): CommandResult
-			{
-				throw new LogicException('relation command failed');
-			}
-		};
+		$executor = new CallbackCommandExecutor(static function (CommandInterface $command, array $commands): CommandResult {
+			throw new LogicException('relation command failed');
+		});
 
 		$this->expectException(LogicException::class);
 		$this->expectExceptionMessage('relation command failed');

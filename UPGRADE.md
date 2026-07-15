@@ -27,6 +27,10 @@ Git tags use the `vMAJOR.MINOR.PATCH` form (for example `v1.1.1`) so releases ar
 2. Diff against your pin and update call sites.
 3. Run your test suite and static analysis after upgrading.
 
+Notable recent breaks worth checking explicitly:
+
+- `Session::flush()` / `FlushExecutor` require `TransactionalCommandExecutorInterface`. Plain `CommandExecutorInterface` implementations are rejected with `NonTransactionalFlushException`.
+
 ## Reporting issues
 
 If a release breaks something that the docs still describe as current behavior, open a GitHub issue with the versions you upgraded from and to. That helps fix docs or code; it is not a claim that the old behavior was guaranteed.

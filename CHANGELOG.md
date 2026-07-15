@@ -12,6 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Write-path field conversion** — `ConvertingCommandExecutor` converts canonical PHP command values to storage through `ConversionGateway` (`PhpRepresentation` → `StorageRepresentation`) before delegating to a backend executor. `CycleRuntimeFactory` wraps `CycleCommandExecutor` with that decorator and shares one gateway across query and command paths.
 - **Insert affected rows** — `CycleCommandExecutor::insert()` reports the driver’s `execute()` row count instead of assuming `1` (Cycle `InsertQuery::run()` only returns last insert id).
 
+### Changed
+
+- **Fail-closed flush** — `FlushExecutor` / `Session::flush()` require `TransactionalCommandExecutorInterface` and throw `NonTransactionalFlushException` otherwise. The unsafe non-transactional flush path is removed.
+- **Graph adoption intent** — untracked roots with a complete primary key are no longer adopted as clean/existing by default. Roots and related objects both default to `NEW` unless marked with `Session::existing($object)` (or attached via `identify()` / query tracking).
+- **`SelectQuery::select(RelationRef)`** — relation refs are accepted for nested loading. Bare `$u->posts` is equivalent to `$u->posts->load()` (all visible fields); already-configured refs keep their options. Relation-only `select()` keeps default root fields. Foreign-query refs raise `RelationSelectionException::foreignQueryRelation()`.
+- **Separate-query parent-key chunking** — built-in loaders run separate-query continuations in batches of 100 parent keys (`AbstractLoader::executeSeparateByReferences()`), matching Doctrine eager `IN` batching. Parent-key filters use tagged `ConditionList` (`ConditionTag::CORRELATION`), not user `where()`. Custom `AbstractLoader` subclasses may override `separateQueryBatchSize()`.
+- **Tagged query conditions** — `SelectQuery` stores WHERE predicates in `ConditionList` with tags (`USER`, `CORRELATION`, reserved `SCOPE` / `INTERNAL`), parallel to selection tags.
+- Quickstart smoke coverage for nested `posts` relation loading.
+- Relation-loading docs for separate-query parent-batch / `IN` correlation limits.
+
 ### Documentation
 
 - Replaced leftover `$database` / “Database facade” wording with `DataRuntime` / `CycleRuntimeFactory`.
@@ -20,15 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rewrote [`UPGRADE.md`](UPGRADE.md) to drop the broad 1.x compatibility promise; upgrades are deliberate and may break call sites.
 - Documented `x()->rawSql()` trust boundary: SQL string is trusted application code; bind values only via `?` parameters.
 - Noted that `Mapping`’s default `ConversionGateway` is process-wide ambient state (isolation guidance for long-lived workers).
-
-### Changed
-
-- **Graph adoption intent** — untracked roots with a complete primary key are no longer adopted as clean/existing by default. Roots and related objects both default to `NEW` unless marked with `Session::existing($object)` (or attached via `identify()` / query tracking).
-- **`SelectQuery::select(RelationRef)`** — relation refs are accepted for nested loading. Bare `$u->posts` is equivalent to `$u->posts->load()` (all visible fields); already-configured refs keep their options. Relation-only `select()` keeps default root fields. Foreign-query refs raise `RelationSelectionException::foreignQueryRelation()`.
-- **Separate-query parent-key chunking** — built-in loaders run separate-query continuations in batches of 100 parent keys (`AbstractLoader::executeSeparateByReferences()`), matching Doctrine eager `IN` batching. Parent-key filters use tagged `ConditionList` (`ConditionTag::CORRELATION`), not user `where()`. Custom `AbstractLoader` subclasses may override `separateQueryBatchSize()`.
-- **Tagged query conditions** — `SelectQuery` stores WHERE predicates in `ConditionList` with tags (`USER`, `CORRELATION`, reserved `SCOPE` / `INTERNAL`), parallel to selection tags.
-- Quickstart smoke coverage for nested `posts` relation loading.
-- Relation-loading docs for separate-query parent-batch / `IN` correlation limits.
+- Documented fail-closed flush: `TransactionalCommandExecutorInterface` is required; non-transactional flush is rejected.
 
 ## [1.1.1] - 2026-07-10
 

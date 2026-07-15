@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Persistence;
 
 use ON\Data\Key;
+use ON\Data\ORM\Exception\NonTransactionalFlushException;
 use ON\Data\ORM\Record\RecordLifecycle;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\Persistence\RelationPersistencePlanner;
@@ -33,36 +34,15 @@ final class FlushExecutor
 
 	public function flush(SessionContext $context): FlushResult
 	{
-		if ($this->executor instanceof TransactionalCommandExecutorInterface) {
-			return $this->flushInTransaction($this->executor, $context);
+		if (! $this->executor instanceof TransactionalCommandExecutorInterface) {
+			throw new NonTransactionalFlushException(sprintf(
+				"Flush requires a command executor that implements %s; '%s' does not. Non-transactional flush is not supported.",
+				TransactionalCommandExecutorInterface::class,
+				$this->executor::class,
+			));
 		}
 
-		return $this->flushWithoutTransaction($context);
-	}
-
-	private function flushWithoutTransaction(SessionContext $context): FlushResult
-	{
-		$records = $context->getRecords();
-
-		$syncResult = $this->syncer->sync($context);
-		$relationResult = $this->relationPlanner->plan($context);
-
-		$flush = $this->scheduler->run(
-			$records,
-			$relationResult->getCommands(),
-			true,
-		);
-
-		$flush->finalize();
-
-		foreach ($relationResult->getChanges() as $change) {
-			$change->clearChanges();
-		}
-
-		return new FlushResult(
-			$syncResult->getSyncPlans(),
-			$flush->getCommandResults(),
-		);
+		return $this->flushInTransaction($this->executor, $context);
 	}
 
 	private function flushInTransaction(

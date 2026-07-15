@@ -2,7 +2,7 @@
 
 The current ORM persistence layer writes scalar record fields and plans configured relation changes. It is intentionally small: representations synchronize into `RecordState` and relation state, dirty/new/removed records become neutral commands, configured relation planners can mutate scalar record state or add commands, and an adapter executes those commands against a backend.
 
-It is not a full entity manager, unit of work, automatic relation cascade writer, or public transaction coordinator. Production database command executors should implement `TransactionalCommandExecutorInterface`; `Session::flush()` uses that executor-backed transaction path whenever it is available.
+It is not a full entity manager, unit of work, automatic relation cascade writer, or public transaction coordinator. Command executors used with `Session::flush()` must implement `TransactionalCommandExecutorInterface`; flush always runs inside that executor-backed transaction and refuses executors that do not provide one.
 
 ## Flow
 
@@ -140,7 +140,7 @@ Unknown command field names are rejected with `InvalidCommandException`; they ar
 
 `CycleCommandExecutor` defensively calls `CommandValueResolver::assertReady()` before using query builders. A `ValueRef` that cannot be resolved is rejected with `InvalidCommandException` instead of being bound into SQL. The executor does not build raw SQL strings. When used through `FlushExecutor`, it participates in flush-scoped transactions through `TransactionalCommandExecutorInterface`.
 
-Production database executors should follow the same pattern and implement `TransactionalCommandExecutorInterface`. `FlushExecutor` treats transaction support as the default database path and runs the whole command wave inside one executor transaction when the interface is present.
+Database executors must implement `TransactionalCommandExecutorInterface`. `FlushExecutor` runs the whole command wave inside one executor transaction and throws `NonTransactionalFlushException` when the executor does not implement that interface.
 
 ## Affected-row validation
 
@@ -165,11 +165,7 @@ Numeric integer strings are normalized to `int`. Generated values remain keyed b
 
 The executor does not support generated values for composite keys, non-auto-increment keys, generated non-primary fields, non-primary database defaults, explicit sequence names, or full row refresh.
 
-Generated values are merged into in-memory record state as soon as the insert command succeeds so later dependent commands in the same flush can resolve concrete foreign-key values. If a non-transactional executor writes an insert successfully and a later command fails, the record remains inspectable with the generated value but is not marked clean. Retrying that state unchanged attempts the insert again.
-
-To recover after verifying the row exists, explicitly accept the generated key state with `RecordState::markClean($key)` and `RecordStateStore::indexKey($state)`, then retry the still-pending relation changes. Transactional executors restore in-memory record state when the transaction callback fails, so rolled-back generated values are not exposed after failure.
-
-The non-transactional flush path remains available as a fallback for tests, in-memory executors, and adapters that cannot provide transaction support. It is unsafe for production database writes that span multiple dependent commands because a later command failure can leave earlier database writes committed.
+Generated values are merged into in-memory record state as soon as the insert command succeeds so later dependent commands in the same flush can resolve concrete foreign-key values. When the flush transaction fails, `FlushExecutor` restores in-memory record snapshots so rolled-back generated values are not left exposed after failure. Relation change markers remain pending so a full retry can plan again.
 
 ## Small Example
 
@@ -220,7 +216,7 @@ Generated ids are currently supported only for simple auto-increment primary key
 
 This is deliberately not an `EntityManager`. There is no repository API, object proxy system, lifecycle event system, generated model layer, or relation cascade writer. `sync($object)` is graph synchronization only; it is not a cascade policy, orphan-removal policy, generated-key dependency sorter, or transaction boundary. `remove($object)` only removes an already-tracked representation that maps to one concrete record.
 
-`Session::flush()` runs inside a database transaction when the command executor implements `TransactionalCommandExecutorInterface` (including `ConvertingCommandExecutor` wrapping `CycleCommandExecutor`). Production database executors should implement that interface. The non-transactional path is a fallback for tests, in-memory executors, and adapters without transaction support; it is not the recommended production database mode. There is no separate transaction API on `Session`.
+`Session::flush()` always runs inside a database transaction via `TransactionalCommandExecutorInterface` (including `ConvertingCommandExecutor` wrapping `CycleCommandExecutor`). Executors that omit that interface are rejected with `NonTransactionalFlushException`. There is no separate transaction API on `Session`.
 
 ## Current Limits
 
@@ -231,8 +227,8 @@ This is deliberately not an `EntityManager`. There is no repository API, object 
 - `sync()` accepts object roots only; array input is not supported yet.
 - No automatic relation cascade writes.
 - No automatic graph adoption from `flush()`.
-- `Session::flush()` uses executor-backed transactions when available, and production database executors should implement `TransactionalCommandExecutorInterface`; there is no separate transaction API on `Session`.
-- Non-transactional flush remains as an unsafe fallback for tests, in-memory executors, and adapters without transaction support.
+- `Session::flush()` requires `TransactionalCommandExecutorInterface` and always uses executor-backed transactions; there is no separate transaction API on `Session`.
+- Non-transactional flush is not supported (`NonTransactionalFlushException`).
 - No optimistic locking or stale-row revision conflict handling beyond representation sync baseline checks.
 - No lazy loading.
 - No repositories, `EntityManager`, `UnitOfWork`, lifecycle events, proxies, or generated model layer.
