@@ -6,6 +6,7 @@ namespace ON\Data\ORM\Representation\Schema\Manual;
 
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
+
 /**
  * Navigable relation reference in the manual representation fluent API.
  *

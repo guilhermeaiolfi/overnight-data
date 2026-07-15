@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Relation;
 
 use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\Record\RecordState;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;

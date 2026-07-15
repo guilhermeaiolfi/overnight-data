@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Sync;
 
 use WeakMap;
+
 final class ExistingIntentStore
 {
 	/** @var WeakMap<object, true> */

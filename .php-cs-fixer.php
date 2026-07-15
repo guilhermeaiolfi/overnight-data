@@ -60,5 +60,5 @@ return (new Config())
 		'no_empty_phpdoc' => true,
 	])
 	->setIndent("\t")
-	->setLineEnding(PHP_EOL)
+	->setLineEnding("\n")
 	->setFinder($finder);

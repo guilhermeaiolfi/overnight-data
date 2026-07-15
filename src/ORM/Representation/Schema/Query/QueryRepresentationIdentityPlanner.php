@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Schema\Query;
 
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
 use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
+
 /**
  * Plans hidden identity selections for flat mutable projection adoption.
  *

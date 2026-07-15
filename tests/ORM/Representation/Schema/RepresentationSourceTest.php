@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Representation\Schema;
 
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
 use PHPUnit\Framework\TestCase;
 
 final class RepresentationSourceTest extends TestCase

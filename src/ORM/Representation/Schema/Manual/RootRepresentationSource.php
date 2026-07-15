@@ -8,6 +8,7 @@ use ON\Data\ORM\Record\RecordState;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Exception\UnknownQueryMemberException;
 use ON\Data\Query\Exception\UnknownQueryRelationException;
+
 /**
  * Fluent handle for a root manual representation source bound to one RecordState.
  *

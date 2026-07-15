@@ -7,6 +7,7 @@ namespace ON\Data\ORM\Representation\Schema\Shape;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+
 /**
  * Shared structural schema creation for representation schema compilation: turns normalized
  * RepresentationFieldShape values into RepresentationFieldSchema entries, and offers

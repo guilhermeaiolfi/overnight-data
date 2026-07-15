@@ -11,6 +11,7 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+
 final class AdoptionRecordResolver
 {
 	private RepresentationReader $reader;

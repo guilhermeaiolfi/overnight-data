@@ -9,6 +9,7 @@ use Cycle\Database\Config\SQLite\DsnConnectionConfig;
 use Cycle\Database\Config\SQLiteDriverConfig;
 use Cycle\Database\DatabaseInterface;
 use Cycle\Database\DatabaseManager;
+use DateTimeImmutable;
 use ON\Data\Database\Cycle\CycleCommandExecutor;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
@@ -22,9 +23,9 @@ use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\RecordFlusher;
 use ON\Data\ORM\Persistence\TransactionalCommandExecutorInterface;
 use ON\Data\ORM\Persistence\UpdateCommand;
-use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\SessionContext;
 use PDO;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
@@ -474,7 +475,7 @@ final class CycleCommandExecutorTest extends TestCase
 	public function testInsertCommandConvertsDatetimeAndJsonPhpValuesToStorage(): void
 	{
 		$articles = $this->makeArticles();
-		$publishedAt = new \DateTimeImmutable('2026-06-18 13:45:12');
+		$publishedAt = new DateTimeImmutable('2026-06-18 13:45:12');
 		$meta = ['tags' => ['php', 'orm'], 'score' => 3];
 
 		$result = $this->executor()->execute(new InsertCommand($articles, [
@@ -501,7 +502,7 @@ final class CycleCommandExecutorTest extends TestCase
 		$this->executor()->execute(new InsertCommand($articles, [
 			'id' => 1,
 			'title' => 'Hello',
-			'publishedAt' => new \DateTimeImmutable('2026-01-01 00:00:00'),
+			'publishedAt' => new DateTimeImmutable('2026-01-01 00:00:00'),
 			'meta' => ['v' => 1],
 		]));
 
@@ -509,7 +510,7 @@ final class CycleCommandExecutorTest extends TestCase
 			$articles,
 			['id' => 1],
 			[
-				'publishedAt' => new \DateTimeImmutable('2026-07-15 09:30:00'),
+				'publishedAt' => new DateTimeImmutable('2026-07-15 09:30:00'),
 				'meta' => ['v' => 2, 'ok' => true],
 			],
 		));

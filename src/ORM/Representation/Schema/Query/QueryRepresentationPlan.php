@@ -3,9 +3,11 @@
 declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Schema\Query;
-use ON\Data\ORM\Representation\State\Query\QueryRepresentationStateBuilder;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
+
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
+use ON\Data\ORM\Representation\State\Query\QueryRepresentationStateBuilder;
+
 /**
  * Query compilation result pairing the public RepresentationSchema with the
  * compiled structural RepresentationSource entries and QueryRepresentationIdentityColumns

@@ -6,10 +6,10 @@ namespace Tests\ON\Data\ORM\Persistence;
 
 use ON\Data\ORM\Persistence\CommandBuffer;
 use ON\Data\ORM\Persistence\PersistenceContext;
-use ON\Data\ORM\Relation\RelationStateStore;
-use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
+use ON\Data\ORM\SessionContext;
 use PHPUnit\Framework\TestCase;
 
 final class PersistenceContextTest extends TestCase

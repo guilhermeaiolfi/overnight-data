@@ -7,12 +7,14 @@ namespace Tests\ON\Data\Query;
 use ON\Data\Definition\Registry;
 use ON\Data\Query\Expression\FunctionCallExpression;
 use ON\Data\Query\Expression\LiteralExpression;
+use function ON\Data\Query\query;
+use ON\Data\Query\QueryFunction\CompiledExpression;
 use ON\Data\Query\QueryFunction\FunctionArgumentException;
 use ON\Data\Query\QueryFunction\FunctionArguments;
+use ON\Data\Query\QueryFunction\FunctionCompilationContextInterface;
 use ON\Data\Query\QueryFunction\InvalidQueryFunctionException;
 use ON\Data\Query\QueryFunction\QueryFunctionInterface;
 use ON\Data\Query\QueryFunction\Standard\Temporal\Year;
-use function ON\Data\Query\query;
 use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -99,9 +101,9 @@ final class FunctionWithRequiredConstructor implements QueryFunctionInterface
 	}
 
 	public function compile(
-		\ON\Data\Query\QueryFunction\FunctionCompilationContextInterface $context,
+		FunctionCompilationContextInterface $context,
 		FunctionArguments $arguments,
-	): \ON\Data\Query\QueryFunction\CompiledExpression {
+	): CompiledExpression {
 		return $context->sql('1');
 	}
 }

@@ -6,17 +6,17 @@ namespace Tests\ON\Data\ORM\Support;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Relation\RelationStateStore;
-use ON\Data\ORM\Session;
-use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\State\RepresentationFieldStateItem;
 use ON\Data\ORM\Representation\State\RepresentationRelationStateItem;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
+use ON\Data\ORM\Session;
+use ON\Data\ORM\SessionContext;
 use stdClass;
 
 trait OrmFixture

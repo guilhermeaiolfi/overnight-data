@@ -7,6 +7,7 @@ namespace ON\Data\ORM\Representation\Sync;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
+
 final class SyncFieldUpdate
 {
 	public function __construct(

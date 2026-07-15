@@ -11,9 +11,9 @@ use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\ExpectedAffectedRows;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\PersistenceContext;
+use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\RelationStateInterface;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Record\RecordState;
 
 final class ManyToManyPersistencePlanner implements RelationPersistencePlannerInterface
 {

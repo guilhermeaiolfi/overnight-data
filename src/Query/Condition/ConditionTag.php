@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Condition;
 
+use ON\Data\Query\SelectQuery;
+
 final class ConditionTag
 {
-	/** Caller {@see \ON\Data\Query\SelectQuery::where()} / bindConditions(). */
+	/** Caller {@see SelectQuery::where()} / bindConditions(). */
 	public const USER = 'user';
 
 	/** Separate-query parent-key IN / OR correlation (chunk-replaced). */

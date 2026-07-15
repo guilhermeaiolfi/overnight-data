@@ -13,18 +13,19 @@ use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
+use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\Session;
-use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
-use ON\Data\ORM\Representation\State\RepresentationFieldStateItem;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\State\RepresentationFieldStateItem;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\Sync\RepresentationSyncer;
+use ON\Data\ORM\Session;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use ReflectionMethod;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
@@ -1393,7 +1394,7 @@ final class SessionTest extends TestCase
 
 	public function testSessionDoesNotExposeAdoptGraph(): void
 	{
-		$method = new \ReflectionMethod(Session::class, 'adoptGraph');
+		$method = new ReflectionMethod(Session::class, 'adoptGraph');
 
 		self::assertTrue($method->isPrivate());
 	}

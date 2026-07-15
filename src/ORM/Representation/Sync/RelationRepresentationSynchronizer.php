@@ -13,6 +13,7 @@ use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Representation\State\RepresentationRelationStateItem;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
+
 final class RelationRepresentationSynchronizer
 {
 	private RepresentationReader $reader;

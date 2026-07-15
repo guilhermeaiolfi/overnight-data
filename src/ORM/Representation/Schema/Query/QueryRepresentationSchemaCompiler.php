@@ -6,12 +6,12 @@ namespace ON\Data\ORM\Representation\Schema\Query;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
+use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationFieldShape;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationSchemaAssembler;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationSourceResolverInterface;
-use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
@@ -19,6 +19,7 @@ use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\SelectQuery;
+
 /**
  * Compiles a SelectQuery selection graph into a structural RepresentationSchema
  * for flat mutable projection adoption.

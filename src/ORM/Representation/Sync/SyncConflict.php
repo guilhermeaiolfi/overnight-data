@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
+
 final class SyncConflict
 {
 	public function __construct(

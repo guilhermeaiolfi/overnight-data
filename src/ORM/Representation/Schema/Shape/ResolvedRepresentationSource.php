@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Schema\Shape;
 
 use ON\Data\Definition\Collection\CollectionInterface;
+
 /**
  * Resolved compile-time identity for one representation field shape: collection plus
  * source path.

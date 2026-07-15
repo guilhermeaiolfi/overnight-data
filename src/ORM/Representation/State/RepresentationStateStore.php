@@ -6,6 +6,7 @@ namespace ON\Data\ORM\Representation\State;
 
 use ON\Data\ORM\Exception\StateException;
 use WeakMap;
+
 final class RepresentationStateStore
 {
 	/** @var WeakMap<object, RepresentationState> */

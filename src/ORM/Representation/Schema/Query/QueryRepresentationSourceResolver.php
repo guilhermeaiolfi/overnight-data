@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Schema\Query;
 
 use InvalidArgumentException;
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationSourceResolverInterface;
 use ON\Data\ORM\Representation\Schema\Shape\ResolvedRepresentationSource;
-use ON\Data\ORM\Exception\StateException;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\SelectQuery;
+
 /**
  * Resolves query-side projection sources (root SelectQuery or RelationRef) to
  * collection identity and source path for schema assembly.

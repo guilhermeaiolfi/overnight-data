@@ -11,6 +11,7 @@ use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
+
 /**
  * Resolves Builder::fromPath() against an already-tracked owner schema graph.
  *

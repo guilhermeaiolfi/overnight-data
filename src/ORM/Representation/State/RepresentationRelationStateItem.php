@@ -3,9 +3,11 @@
 declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\State;
+
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
-use ON\Data\ORM\Exception\StateException;
+
 /**
  * Concrete runtime attachment for one relation representation path: the
  * structural relation schema plus the owner record it is bound to.

@@ -6,8 +6,8 @@ namespace Tests\ON\Data\ORM\Representation\Schema;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSchemaAssembler;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationFieldShape;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationSchemaAssembler;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationSourceResolverInterface;
 use ON\Data\ORM\Representation\Schema\Shape\ResolvedRepresentationSource;

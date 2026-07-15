@@ -6,6 +6,7 @@ namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\State\RepresentationState;
+
 final class SyncConflictDetector
 {
 	/**

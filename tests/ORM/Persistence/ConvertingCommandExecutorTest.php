@@ -6,6 +6,7 @@ namespace Tests\ON\Data\ORM\Persistence;
 
 use DateTimeImmutable;
 use ON\Data\Definition\Registry;
+use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\ConvertingCommandExecutor;
@@ -34,7 +35,7 @@ final class ConvertingCommandExecutorTest extends TestCase
 			'meta' => $meta,
 		]);
 
-		$inner = new class () implements \ON\Data\ORM\Persistence\CommandExecutorInterface {
+		$inner = new class () implements CommandExecutorInterface {
 			public ?CommandInterface $lastCommand = null;
 
 			public function execute(CommandInterface $command): CommandResult
@@ -59,7 +60,7 @@ final class ConvertingCommandExecutorTest extends TestCase
 
 	public function testTransactionDelegatesToTransactionalInnerExecutor(): void
 	{
-		$inner = new class () implements \ON\Data\ORM\Persistence\CommandExecutorInterface, TransactionalCommandExecutorInterface {
+		$inner = new class () implements CommandExecutorInterface, TransactionalCommandExecutorInterface {
 			public bool $transactionCalled = false;
 
 			public function execute(CommandInterface $command): CommandResult
@@ -96,7 +97,7 @@ final class ConvertingCommandExecutorTest extends TestCase
 			['publishedAt' => new DateTimeImmutable('2026-07-15 09:30:00')],
 		);
 
-		$inner = new class () implements \ON\Data\ORM\Persistence\CommandExecutorInterface {
+		$inner = new class () implements CommandExecutorInterface {
 			public ?CommandInterface $lastCommand = null;
 
 			public function execute(CommandInterface $command): CommandResult

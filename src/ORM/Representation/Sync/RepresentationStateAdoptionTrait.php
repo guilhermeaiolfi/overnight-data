@@ -10,6 +10,7 @@ use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\State\RepresentationState;
+
 trait RepresentationStateAdoptionTrait
 {
 	private RepresentationReader $representationReader;

@@ -3,10 +3,12 @@
 declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Schema\Query;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationFieldShape;
+
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationFieldShape;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationSourceResolverInterface;
 use ON\Data\ORM\Representation\Schema\Shape\ResolvedRepresentationSource;
+
 /**
  * Resolves every projection source to one fixed collection rooted at the schema
  * itself (empty source path).

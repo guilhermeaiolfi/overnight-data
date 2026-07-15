@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 namespace ON\Data\ORM\Record;
-use ON\Data\ORM\Representation\State\RepresentationState;
 
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\Representation\State\RepresentationState;
 
 final class RecordStateStore
 {

@@ -9,6 +9,7 @@ use ON\Data\ORM\Representation\Schema\Shape\RepresentationFieldShape;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Selection\SelectionItem;
+
 /**
  * Converts query SelectionItem / expression nodes into RepresentationFieldShape
  * values (public path, source, field name).

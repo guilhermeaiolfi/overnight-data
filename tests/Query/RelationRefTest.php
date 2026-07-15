@@ -29,7 +29,6 @@ use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Fixture\CustomRelation;
-use TypeError;
 
 final class RelationRefTest extends TestCase
 {

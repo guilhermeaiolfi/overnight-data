@@ -3,15 +3,17 @@
 declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\State\Manual;
-use ON\Data\ORM\Representation\Schema\Manual\ManualRepresentationSourceInterface;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationFieldShape;
+
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Representation\Schema\Manual\ManualRepresentationSourceInterface;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
-use ON\Data\ORM\Representation\State\RepresentationFieldStateItem;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchemaMerger;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationFieldShape;
+use ON\Data\ORM\Representation\State\RepresentationFieldStateItem;
 use ON\Data\ORM\Representation\State\RepresentationState;
+
 final class ManualRepresentationStateBuilder
 {
 	public function __construct(

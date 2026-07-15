@@ -6,8 +6,8 @@ namespace Tests\ON\Data\Query;
 
 use ON\Data\Definition\Registry;
 use ON\Data\Query\Condition\ConditionTag;
-use function ON\Data\Query\x;
 use ON\Data\Query\SelectQuery;
+use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 
 final class ConditionListTest extends TestCase

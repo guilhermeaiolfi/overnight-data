@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Schema;
 
 use ON\Data\ORM\Exception\StateException;
+
 /**
  * Merges a manual representation overlay into an existing tracked schema.
  *

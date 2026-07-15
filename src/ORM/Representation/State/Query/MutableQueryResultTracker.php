@@ -6,10 +6,11 @@ namespace ON\Data\ORM\Representation\State\Query;
 
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
-use ON\Data\ORM\Session;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
+use ON\Data\ORM\Session;
 use RuntimeException;
+
 /**
  * Routes mutable query results to the correct adoption path (flat projection vs
  * entity graph) and triggers session sync.

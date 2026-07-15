@@ -6,36 +6,34 @@ namespace Tests\ON\Data\ORM\Representation\Schema;
 
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
+use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Representation\Schema\Manual\AllProperties;
 use ON\Data\ORM\Representation\Schema\Manual\Builder;
-use ON\Data\ORM\Representation\Schema\Manual\PathResolver;
 use ON\Data\ORM\Representation\Schema\Manual\ManualRepresentationSchemaCompiler;
-use ON\Data\ORM\Representation\Schema\Manual\ManualRepresentationSourceFactory;
+use ON\Data\ORM\Representation\Schema\Manual\ManualRepresentationSourceResolver;
+use ON\Data\ORM\Representation\Schema\Manual\PathResolver;
 use ON\Data\ORM\Representation\Schema\Manual\PropertyRef;
 use ON\Data\ORM\Representation\Schema\Manual\RelationRef;
-use ON\Data\ORM\Representation\State\Manual\ManualRepresentationStateBuilder;
-use ON\Data\ORM\Representation\Schema\Manual\RootRepresentationSource;
-use ON\Data\ORM\Representation\Schema\Manual\ManualRepresentationSourceResolver;
 use ON\Data\ORM\Representation\Schema\Manual\RelationRepresentationSource;
+use ON\Data\ORM\Representation\Schema\Manual\RootRepresentationSource;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSelectionNormalizer;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSourceResolver;
+use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationFieldShape;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationSchemaAssembler;
 use ON\Data\ORM\Representation\Schema\Shape\ResolvedRepresentationSource;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSelectionNormalizer;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSourceResolver;
-use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Session;
-use ON\Data\ORM\SessionContext;
-use ON\Data\ORM\Representation\Sync\RepresentationAttachmentMode;
-use Tests\ON\Data\Support\RecordingCommandExecutor;
-use ON\Data\ORM\Record\RecordState;
-use ON\Data\ORM\Record\RecordStateStore;
-use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
+use ON\Data\ORM\Representation\State\Manual\ManualRepresentationStateBuilder;
 use ON\Data\ORM\Representation\State\RepresentationFieldStateItem;
-use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
+use ON\Data\ORM\Representation\Sync\RepresentationAttachmentMode;
+use ON\Data\ORM\Session;
+use ON\Data\ORM\SessionContext;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
@@ -44,6 +42,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use stdClass;
 use Tests\ON\Data\Smoke\Support\SqliteMemoryHarness;
+use Tests\ON\Data\Support\RecordingCommandExecutor;
 
 final class RepresentationSchemaCompilationArchitectureTest extends TestCase
 {
@@ -624,7 +623,7 @@ final class RepresentationSchemaCompilationArchitectureTest extends TestCase
 			'trackProjectionSource',
 			'trackProjectionRelation',
 		] as $method) {
-		self::assertNotContains($method, $methods);
+			self::assertNotContains($method, $methods);
 		}
 
 		self::assertContains('getRecords', $methods);

@@ -6,6 +6,7 @@ namespace ON\Data\ORM\Representation\Schema;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
+
 /**
  * One structural scalar representation path with writability and optional
  * skip-when-missing adoption behavior.

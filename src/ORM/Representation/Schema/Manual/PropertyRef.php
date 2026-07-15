@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Schema\Manual;
+
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationFieldShape;
+
 /**
  * Declares one manual representation field: source, backing field name, and optional
  * public path alias via as().

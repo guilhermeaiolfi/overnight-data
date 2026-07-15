@@ -3,10 +3,12 @@
 declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Schema\Query;
+
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
-use ON\Data\ORM\Representation\State\Query\QueryRepresentationStateBuilder;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
+use ON\Data\ORM\Representation\State\Query\QueryRepresentationStateBuilder;
+
 /**
  * Maps projected source-path primary-key fields to result row keys. It is used
  * during projection adoption to read hidden or public identity values from the

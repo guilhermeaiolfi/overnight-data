@@ -8,6 +8,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\StateException;
+
 final class RepresentationRelationSchema
 {
 	public function __construct(

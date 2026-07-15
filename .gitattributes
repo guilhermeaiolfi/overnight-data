@@ -1,0 +1,48 @@
+# Enforce LF in the repository and in the working tree on every OS.
+# This overrides core.autocrlf and stops CRLF/LF drift between Windows and CI.
+* text=auto eol=lf
+
+# Explicit text types (still LF via eol=lf above)
+*.php text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.xml text eol=lf
+*.neon text eol=lf
+*.dist text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.ts text eol=lf
+*.svg text eol=lf
+*.txt text eol=lf
+*.sh text eol=lf
+*.bat text eol=lf
+*.cmd text eol=lf
+*.ps1 text eol=lf
+*.sql text eol=lf
+*.ini text eol=lf
+*.toml text eol=lf
+*.editorconfig text eol=lf
+*.gitattributes text eol=lf
+*.gitignore text eol=lf
+
+# Binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.zip binary
+*.gz binary
+*.phar binary
+*.exe binary
+*.dll binary
+*.sqlite binary
+*.db binary

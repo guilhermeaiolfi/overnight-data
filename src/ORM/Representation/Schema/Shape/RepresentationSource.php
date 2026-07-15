@@ -3,10 +3,12 @@
 declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Schema\Shape;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityColumns;
+
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityColumns;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+
 /**
  * Structural grouping of representation fields that originate from one source path.
  *

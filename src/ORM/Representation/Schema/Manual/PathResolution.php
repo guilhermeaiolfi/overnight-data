@@ -7,6 +7,7 @@ namespace ON\Data\ORM\Representation\Schema\Manual;
 use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+
 /**
  * Resolved fromPath() context: owner record, relation metadata, and the related
  * schema branch to reuse for new relation targets.

@@ -6,20 +6,22 @@ namespace Tests\ON\Data\ORM\Query;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityColumns;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Representation\State\Query\QueryRepresentationStateBuilder;
-use ON\Data\ORM\Session;
-use Tests\ON\Data\Support\RecordingCommandExecutor;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityColumns;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
+use ON\Data\ORM\Representation\State\Query\QueryRepresentationStateBuilder;
+use ON\Data\ORM\Representation\State\RepresentationState;
+use ON\Data\ORM\Session;
+use ON\Data\ORM\SessionContext;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\Support\RecordingCommandExecutor;
 
 final class QueryRepresentationStateBuilderTest extends TestCase
 {
@@ -306,7 +308,7 @@ final class QueryRepresentationStateBuilderTest extends TestCase
 			'company_id' => 5,
 		], $records);
 
-		self::assertInstanceOf(\ON\Data\ORM\Representation\State\RepresentationState::class, $state);
+		self::assertInstanceOf(RepresentationState::class, $state);
 		self::assertSame([], $records->getAll());
 	}
 
@@ -319,7 +321,7 @@ final class QueryRepresentationStateBuilderTest extends TestCase
 		$existing = RecordState::clean($companies->getKey(5), ['id' => 5, 'name' => 'Existing']);
 		$records = new RecordStateStore();
 		$records->add($existing);
-		$session = new Session(new RecordingCommandExecutor(), context: new \ON\Data\ORM\SessionContext($records));
+		$session = new Session(new RecordingCommandExecutor(), context: new SessionContext($records));
 		$identityColumns = $this->companyIdProjectionIdentities($companies, 'company_id');
 
 		$this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, $identityColumns), [
@@ -341,7 +343,7 @@ final class QueryRepresentationStateBuilderTest extends TestCase
 		QueryRepresentationPlan $compilation,
 		array $sourceRow,
 		Session $session,
-	): \ON\Data\ORM\Representation\State\RepresentationState {
+	): RepresentationState {
 		$state = $this->builder()->build($object, $compilation, $sourceRow, $session->getRecords());
 		$session->adopt($object, $state);
 

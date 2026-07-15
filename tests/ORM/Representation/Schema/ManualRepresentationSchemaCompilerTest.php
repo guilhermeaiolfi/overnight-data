@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Representation\Schema;
 
 use ON\Data\Definition\Registry;
+use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Representation\Schema\Manual\ManualRepresentationSchemaCompiler;
 use ON\Data\ORM\Representation\Schema\Manual\ManualRepresentationSourceInterface;
 use ON\Data\ORM\Representation\Schema\Manual\RootRepresentationSource;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationFieldShape;
-use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Record\RecordState;
 use PHPUnit\Framework\TestCase;
 
 final class ManualRepresentationSchemaCompilerTest extends TestCase

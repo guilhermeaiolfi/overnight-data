@@ -465,5 +465,4 @@ final class SelectionList implements IteratorAggregate, Countable
 
 		return $expression instanceof FieldRef || $expression instanceof SourceFieldExpression;
 	}
-
 }

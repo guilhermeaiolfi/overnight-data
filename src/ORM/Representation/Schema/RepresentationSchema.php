@@ -8,6 +8,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
 use stdClass;
+
 /**
  * Persistence provenance graph for one representation shape: a root collection
  * plus field and relation path maps that describe how object properties map to

@@ -6,9 +6,9 @@ namespace Tests\ON\Data\ORM\Relation\Persistence;
 
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\RelationPersistenceException;
-use ON\Data\ORM\Relation\Persistence\ForeignKeyWriter;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\ValueRef;
+use ON\Data\ORM\Relation\Persistence\ForeignKeyWriter;
 use PHPUnit\Framework\TestCase;
 
 final class ForeignKeyWriterTest extends TestCase

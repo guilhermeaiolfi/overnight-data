@@ -3,11 +3,13 @@
 declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\State;
+
+use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\ORM\Exception\StateException;
+
 final class RepresentationState
 {
 	/** @var array<string, RepresentationFieldStateItem> */

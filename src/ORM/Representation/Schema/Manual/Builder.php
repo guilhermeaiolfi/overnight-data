@@ -3,14 +3,16 @@
 declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Schema\Manual;
-use ON\Data\ORM\Representation\State\Manual\ManualRepresentationStateBuilder;
+
 use InvalidArgumentException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationFieldShape;
-use ON\Data\ORM\Session;
+use ON\Data\ORM\Representation\State\Manual\ManualRepresentationStateBuilder;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\Sync\RepresentationAttachmentMode;
+use ON\Data\ORM\Session;
+
 /**
  * User-facing fluent API for manual mutable projections via Session::projection().
  *

@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Schema\Manual;
 
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationSourceResolverInterface;
 use ON\Data\ORM\Representation\Schema\Shape\ResolvedRepresentationSource;
-use ON\Data\ORM\Exception\StateException;
+
 /**
  * Resolves manual representation field-shape sources (ManualRepresentationSourceInterface, RelationRef)
  * to collection and source path for schema assembly.

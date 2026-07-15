@@ -8,6 +8,7 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
+
 final class ScalarRepresentationSynchronizer
 {
 	private RepresentationReader $reader;

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM;
 
-use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\ORM\Representation\Sync\ExistingIntentStore;
 

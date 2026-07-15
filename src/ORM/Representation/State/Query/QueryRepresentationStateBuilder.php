@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\State\Query;
 
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityColumns;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityColumns;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
+
 /**
  * Converts flat mutable query projection input into RepresentationState.
  *

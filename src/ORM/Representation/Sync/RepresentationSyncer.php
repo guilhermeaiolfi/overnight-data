@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
+use ON\Data\ORM\SessionContext;
+
 final class RepresentationSyncer
 {
 	public function __construct(

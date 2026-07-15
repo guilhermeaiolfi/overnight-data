@@ -6,12 +6,12 @@ namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\Session;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
+use ON\Data\ORM\Session;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
@@ -82,6 +82,7 @@ final class SessionGraphAdoptionTest extends TestCase
 		self::assertSame(10, $record->getKey()?->getFieldValue('id'));
 		self::assertSame('Root', $record->getValue('name'));
 	}
+
 	public function testUntrackedRootWithoutCompleteKeyIsAdoptedAsNew(): void
 	{
 		$root = $this->representation(['id' => null, 'name' => 'Root']);

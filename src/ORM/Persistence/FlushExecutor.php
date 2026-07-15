@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Persistence;
 
-use ON\Data\ORM\Relation\Persistence\RelationPersistencePlanner;
-use ON\Data\ORM\SessionContext;
+use ON\Data\Key;
+use ON\Data\ORM\Record\RecordLifecycle;
 use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Relation\Persistence\RelationPersistencePlanner;
 use ON\Data\ORM\Representation\Sync\RepresentationSyncer;
+use ON\Data\ORM\SessionContext;
+use Throwable;
 
 final class FlushExecutor
 {
@@ -91,7 +94,7 @@ final class FlushExecutor
 					$flush->getCommandResults(),
 				);
 			});
-		} catch (\Throwable $exception) {
+		} catch (Throwable $exception) {
 			$this->restoreRecords($recordSnapshots);
 
 			throw $exception;
@@ -112,8 +115,8 @@ final class FlushExecutor
 
 	/**
 	 * @return list<array{0: RecordState, 1: array{
-	 *     key: \ON\Data\Key|null,
-	 *     lifecycle: \ON\Data\ORM\Record\RecordLifecycle,
+	 *     key: Key|null,
+	 *     lifecycle: RecordLifecycle,
 	 *     revision: int,
 	 *     originalValues: array<string, mixed>,
 	 *     values: array<string, mixed>
@@ -131,8 +134,8 @@ final class FlushExecutor
 
 	/**
 	 * @param list<array{0: RecordState, 1: array{
-	 *     key: \ON\Data\Key|null,
-	 *     lifecycle: \ON\Data\ORM\Record\RecordLifecycle,
+	 *     key: Key|null,
+	 *     lifecycle: RecordLifecycle,
 	 *     revision: int,
 	 *     originalValues: array<string, mixed>,
 	 *     values: array<string, mixed>

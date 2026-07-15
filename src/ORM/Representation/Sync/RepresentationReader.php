@@ -8,6 +8,7 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use Throwable;
+
 final class RepresentationReader
 {
 	/**

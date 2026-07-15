@@ -8,9 +8,9 @@ use ON\Data\Definition\Relation\HasManyRelation;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\PersistenceContext;
+use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\RelationStateInterface;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Record\RecordState;
 
 final class HasManyPersistencePlanner implements RelationPersistencePlannerInterface
 {
@@ -55,6 +55,7 @@ final class HasManyPersistencePlanner implements RelationPersistencePlannerInter
 				if (! $child->isRemoved()) {
 					$child->markRemoved();
 				}
+
 				continue;
 			}
 

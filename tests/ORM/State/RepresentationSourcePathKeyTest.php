@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\State;
 
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\ORM\Support\OrmFixture;
 

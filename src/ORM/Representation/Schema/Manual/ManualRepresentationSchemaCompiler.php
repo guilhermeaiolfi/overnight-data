@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Schema\Manual;
 
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationFieldShape;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSchemaAssembler;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationFieldShape;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationSchemaAssembler;
+
 /**
  * Manual representation compiler: assembles RepresentationSchema from pre-built
  * RepresentationFieldShape values using the manual ManualRepresentationSourceResolver.

@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Schema\Manual;
 
+use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
+
 /**
  * Fluent handle for a concrete relation target during manual representation building.
  *

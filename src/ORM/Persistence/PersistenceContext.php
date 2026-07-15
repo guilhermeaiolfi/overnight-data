@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Persistence;
 
-use ON\Data\ORM\Relation\RelationStateStore;
-use ON\Data\ORM\SessionContext;
 use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
+use ON\Data\ORM\SessionContext;
 
 final class PersistenceContext
 {
