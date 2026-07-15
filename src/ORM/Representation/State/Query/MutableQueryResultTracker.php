@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\State\Query;
 
+use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
@@ -78,8 +79,42 @@ final class MutableQueryResultTracker
 		}
 
 		$schema = $compilation->getSchema();
+
+		if ($this->hasReadableRootPrimaryKey($object, $schema)) {
+			$session->existing($object);
+		}
 		$this->markLoadedRelatedObjectsExisting($session, $object, $schema);
 		$session->sync($object, $schema);
+	}
+
+	private function hasReadableRootPrimaryKey(object $representation, RepresentationSchema $schema): bool
+	{
+		$collection = $schema->getCollection();
+		$pathsByField = [];
+
+		foreach ($schema->getFields() as $fieldSchema) {
+			if ($fieldSchema->getCollectionName() === $collection->getName()) {
+				$pathsByField[$fieldSchema->getFieldName()] = $fieldSchema->getPath();
+			}
+		}
+
+		foreach ($collection->getPrimaryKey() as $fieldName) {
+			if (! array_key_exists($fieldName, $pathsByField)) {
+				return false;
+			}
+
+			try {
+				$value = $this->reader->readPath($representation, $pathsByField[$fieldName]);
+			} catch (SyncException) {
+				return false;
+			}
+
+			if ($value === null) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	private function markLoadedRelatedObjectsExisting(

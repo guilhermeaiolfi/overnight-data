@@ -473,13 +473,15 @@ final class QueryArchitectureTest extends TestCase
 
 		$abstractLoaderContents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/Loader/AbstractLoader.php');
 		self::assertStringContainsString('RelationKeyQuery::addJoinConditions(', $abstractLoaderContents);
+		self::assertStringContainsString('RelationKeyQuery::filterRightByLeftReferences(', $abstractLoaderContents);
+		self::assertStringContainsString('executeSeparateByReferences(', $abstractLoaderContents);
 
 		$m2mContents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/Loader/M2MLoader.php');
 		self::assertStringContainsString('$definition->getKeyPairing()', $m2mContents);
 		self::assertStringContainsString('$through->getKeyPairing()', $m2mContents);
 		self::assertStringNotContainsString('addM2MConditions(', $m2mContents);
 		self::assertStringContainsString('RelationKeyQuery::addJoinConditions(', $m2mContents);
-		self::assertStringContainsString('RelationKeyQuery::filterRightByLeftReferences(', $m2mContents);
+		self::assertStringContainsString('executeSeparateByReferences(', $m2mContents);
 		self::assertStringNotContainsString('count($throughInnerKeys) === 1', $m2mContents);
 		self::assertStringNotContainsString('count($childFields) === 1', (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasManyLoader.php'));
 	}
