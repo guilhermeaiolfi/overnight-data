@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clarified that collection `entity`/`repository`/`mapper`/`scope` and relation `cascade`/`load` are interoperability metadata for external Cycle schema bridges; ON\Data Session persistence does not interpret them.
 - Rewrote [`UPGRADE.md`](UPGRADE.md) to drop the broad 1.x compatibility promise; upgrades are deliberate and may break call sites.
 
+### Added
+
+- GitHub Actions CI running `composer validate --strict` and `composer check` on PHP 8.3 and 8.4.
+
 ## [1.1.1] - 2026-07-10
 
 ### Added

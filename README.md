@@ -164,6 +164,7 @@ composer check-style
 composer check
 ```
 
+GitHub Actions runs `composer validate --strict` and `composer check` on PHP 8.3 and 8.4 (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)). PHPStan remains at level 1 for now.
 ## Documentation
 
 - [`docs/quickstart.md`](docs/quickstart.md) is the recommended first walkthrough.
