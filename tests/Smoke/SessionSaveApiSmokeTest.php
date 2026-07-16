@@ -55,6 +55,25 @@ final class SessionSaveApiSmokeTest extends TestCase
 		self::assertSame(['name' => 'Updated name'], $harness->fetchRow('SELECT name FROM users WHERE id = 1'));
 	}
 
+	public function testUpdateFlatRecordWithExplicitIdentityWhenPkNotOnDto(): void
+	{
+		$harness = SqliteMemoryHarness::create();
+		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)');
+		$harness->exec("INSERT INTO users (id, name) VALUES (1, 'Old')");
+		[$users] = $this->flatRegistry();
+		$session = new Session($harness->commandExecutor);
+		$row = new stdClass();
+		$row->name = 'Patched by identity';
+
+		$q = new SelectQuery($users);
+		$map = $q->select($q->name)->projection();
+		$session->update($row, $map)->from($users)->identity(['id' => 1]);
+		$session->sync($row);
+		$session->flush();
+
+		self::assertSame(['name' => 'Patched by identity'], $harness->fetchRow('SELECT name FROM users WHERE id = 1'));
+	}
+
 	public function testCreateWithAppAssignedPrimaryKeyInsertsThatKey(): void
 	{
 		$harness = SqliteMemoryHarness::create();

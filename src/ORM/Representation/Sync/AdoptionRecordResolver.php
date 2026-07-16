@@ -12,6 +12,13 @@ use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 
+/**
+ * Resolves RecordState for graph adoption.
+ *
+ * update intent = PATCH existing row (key-only clean baseline + present DTO fields).
+ * create / unmarked = NEW record.
+ * identify() stays separate (key-only, no field writes).
+ */
 final class AdoptionRecordResolver
 {
 	private RepresentationReader $reader;
@@ -33,12 +40,12 @@ final class AdoptionRecordResolver
 	): RecordState {
 		$collection = $this->collectionFor($schema, $isRoot);
 		$values = $this->initialValues($representation, $schema, $collection);
-		$keyValues = $this->completeKeyValues($representation, $schema, $collection);
+		$keyValues = $this->completeKeyValues($representation, $schema, $collection, $isRoot);
 
 		if ($keyValues === null) {
 			if ($this->hasUpdateIntent($representation)) {
 				throw new StateException(sprintf(
-					"Cannot adopt existing representation for collection '%s' because its primary key cannot be read through the schema.",
+					"Cannot adopt update representation for collection '%s' because its primary key cannot be read through the schema or intent identity.",
 					$collection->getName()
 				));
 			}
@@ -57,14 +64,61 @@ final class AdoptionRecordResolver
 				));
 			}
 
+			if ($this->hasUpdateIntent($representation)) {
+				$this->applyPresentValues($record, $values, $key);
+			}
+
 			return $record;
 		}
 
 		if ($this->hasUpdateIntent($representation)) {
-			return RecordState::clean($key, $values);
+			$record = RecordState::clean($key, $key->getValues());
+			$records->add($record);
+			$this->applyPresentValues($record, $values, $key);
+
+			return $record;
 		}
 
 		return RecordState::new($collection, $values);
+	}
+
+	/**
+	 * Adopt an existing row as a clean snapshot of present schema values (query hydrate).
+	 * Unlike update-intent resolve, this does not PATCH / dirty present fields.
+	 */
+	public function resolveClean(
+		object $representation,
+		RepresentationSchema $schema,
+		RecordStateStore $records,
+		bool $isRoot = true,
+	): RecordState {
+		$collection = $this->collectionFor($schema, $isRoot);
+		$keyValues = $this->completeKeyValues($representation, $schema, $collection, $isRoot);
+		if ($keyValues === null) {
+			throw new StateException(sprintf(
+				"Cannot adopt clean representation for collection '%s' because its primary key cannot be read through the schema.",
+				$collection->getName(),
+			));
+		}
+
+		$key = $collection->getKey($keyValues);
+		$record = $records->getByKey($key);
+		if ($record instanceof RecordState) {
+			if ($record->isRemoved()) {
+				throw new StateException(sprintf(
+					"Cannot adopt representation for collection '%s' because key '%s' is already tracked as removed.",
+					$collection->getName(),
+					$key->getDebugString()
+				));
+			}
+
+			return $record;
+		}
+
+		$record = RecordState::clean($key, $this->initialValuesForKey($representation, $schema, $key));
+		$records->add($record);
+
+		return $record;
 	}
 
 	/**
@@ -117,7 +171,17 @@ final class AdoptionRecordResolver
 		object $representation,
 		RepresentationSchema $schema,
 		CollectionInterface $collection,
+		bool $isRoot,
 	): ?array {
+		if ($isRoot) {
+			$fromIdentity = $this->keyValuesFromIntentIdentity($representation, $collection);
+			if ($fromIdentity !== null) {
+				$this->assertDtoKeyAgrees($representation, $schema, $collection, $fromIdentity);
+
+				return $fromIdentity;
+			}
+		}
+
 		$pathsByField = [];
 		foreach ($schema->getFields() as $fieldSchema) {
 			if ($fieldSchema->getCollectionName() === $collection->getName()) {
@@ -146,6 +210,61 @@ final class AdoptionRecordResolver
 
 		/** @var non-empty-array<string, string|int|float|bool> $values */
 		return $values;
+	}
+
+	/**
+	 * @return non-empty-array<string, string|int|float|bool>|null
+	 */
+	private function keyValuesFromIntentIdentity(
+		object $representation,
+		CollectionInterface $collection,
+	): ?array {
+		$identity = $this->intents?->get($representation)?->getIdentity();
+		if ($identity === null) {
+			return null;
+		}
+
+		return $collection->getKey($identity)->getValues();
+	}
+
+	/**
+	 * @param non-empty-array<string, string|int|float|bool> $identityValues
+	 */
+	private function assertDtoKeyAgrees(
+		object $representation,
+		RepresentationSchema $schema,
+		CollectionInterface $collection,
+		array $identityValues,
+	): void {
+		foreach ($collection->getPrimaryKey() as $fieldName) {
+			$path = null;
+			foreach ($schema->getFields() as $fieldSchema) {
+				if ($fieldSchema->getCollectionName() === $collection->getName()
+					&& $fieldSchema->getFieldName() === $fieldName
+				) {
+					$path = $fieldSchema->getPath();
+
+					break;
+				}
+			}
+			if ($path === null) {
+				continue;
+			}
+
+			try {
+				$value = $this->reader->readPath($representation, $path);
+			} catch (SyncException) {
+				continue;
+			}
+
+			if ($value !== null && $value !== $identityValues[$fieldName]) {
+				throw new StateException(sprintf(
+					"Cannot adopt update representation for collection '%s' because intent identity field '%s' disagrees with the representation.",
+					$collection->getName(),
+					$fieldName,
+				));
+			}
+		}
 	}
 
 	private function mergeCollection(?CollectionInterface $current, CollectionInterface $next, string $path, bool $isRoot): CollectionInterface
@@ -199,6 +318,21 @@ final class AdoptionRecordResolver
 		}
 
 		return $values;
+	}
+
+	/**
+	 * @param array<string, mixed> $values
+	 */
+	private function applyPresentValues(RecordState $record, array $values, Key $key): void
+	{
+		$keyFields = $key->getValues();
+		foreach ($values as $fieldName => $value) {
+			if (array_key_exists($fieldName, $keyFields) && $value === $keyFields[$fieldName]) {
+				continue;
+			}
+
+			$record->setValue($fieldName, $value);
+		}
 	}
 
 	private function hasUpdateIntent(object $representation): bool

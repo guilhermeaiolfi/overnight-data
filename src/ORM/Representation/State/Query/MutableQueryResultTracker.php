@@ -9,6 +9,7 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\Sync\AdoptionRecordResolver;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
 use ON\Data\ORM\Session;
 use ON\Data\Query\Result\MutablePreparation;
@@ -29,15 +30,19 @@ final class MutableQueryResultTracker implements MutableResultHandler
 
 	private QueryRepresentationSchemaCompiler $compiler;
 
+	private AdoptionRecordResolver $recordResolver;
+
 	public function __construct(
 		private readonly Session $session,
 		private ?QueryRepresentationStateBuilder $stateBuilder = null,
 		?RepresentationReader $reader = null,
 		?QueryRepresentationSchemaCompiler $compiler = null,
+		?AdoptionRecordResolver $recordResolver = null,
 	) {
 		$this->stateBuilder ??= new QueryRepresentationStateBuilder();
 		$this->reader = $reader ?? new RepresentationReader();
 		$this->compiler = $compiler ?? new QueryRepresentationSchemaCompiler();
+		$this->recordResolver = $recordResolver ?? new AdoptionRecordResolver();
 	}
 
 	public function prepare(SelectQuery $query): MutablePreparation
@@ -111,10 +116,30 @@ final class MutableQueryResultTracker implements MutableResultHandler
 		$schema = $compilation->getSchema();
 
 		if ($this->hasReadableRootPrimaryKey($object, $schema)) {
-			$this->session->update($object);
+			// Query hydrate must stay clean. update() is PATCH and would dirty present fields.
+			$this->adoptLoadedExisting($object, $schema);
+			$this->adoptLoadedRelatedObjects($object, $schema);
+			$this->session->sync($object);
+
+			return;
 		}
-		$this->markLoadedRelatedObjectsExisting($object, $schema);
+
 		$this->session->sync($object, $schema);
+	}
+
+	private function adoptLoadedExisting(object $object, RepresentationSchema $schema): void
+	{
+		if ($this->session->getRepresentations()->has($object)) {
+			return;
+		}
+
+		$record = $this->recordResolver->resolveClean(
+			$object,
+			$schema,
+			$this->session->getRecords(),
+			true,
+		);
+		$this->session->adoptRecord($object, $schema, $record);
 	}
 
 	private function hasReadableRootPrimaryKey(object $representation, RepresentationSchema $schema): bool
@@ -147,15 +172,15 @@ final class MutableQueryResultTracker implements MutableResultHandler
 		return true;
 	}
 
-	private function markLoadedRelatedObjectsExisting(
+	private function adoptLoadedRelatedObjects(
 		object $object,
 		RepresentationSchema $schema,
 	): void {
 		foreach ($schema->getRelations() as $relation) {
 			if ($relation->isMany()) {
 				foreach ($this->reader->readItems($object, $relation, static fn (string $message) => new RuntimeException($message)) as $item) {
-					$this->session->update($item);
-					$this->markLoadedRelatedObjectsExisting($item, $relation->getRelatedSchema());
+					$this->adoptLoadedExisting($item, $relation->getRelatedSchema());
+					$this->adoptLoadedRelatedObjects($item, $relation->getRelatedSchema());
 				}
 
 				continue;
@@ -164,8 +189,8 @@ final class MutableQueryResultTracker implements MutableResultHandler
 			if ($relation->isSingle()) {
 				$target = $this->reader->readTarget($object, $relation, static fn (string $message) => new RuntimeException($message));
 				if ($target !== null) {
-					$this->session->update($target);
-					$this->markLoadedRelatedObjectsExisting($target, $relation->getRelatedSchema());
+					$this->adoptLoadedExisting($target, $relation->getRelatedSchema());
+					$this->adoptLoadedRelatedObjects($target, $relation->getRelatedSchema());
 				}
 			}
 		}

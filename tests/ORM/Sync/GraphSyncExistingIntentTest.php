@@ -7,6 +7,7 @@ namespace Tests\ON\Data\ORM\Sync;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\IntentBuilder;
 use ON\Data\ORM\Persistence\CommandPlanner;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
@@ -14,7 +15,6 @@ use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\ORM\IntentBuilder;
 use ON\Data\ORM\Session;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
@@ -54,8 +54,13 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$session->sync($owner, $this->ownerSchemaWithPosts($users, $posts));
 		$session->flush();
 
-		self::assertCount(1, $executor->getCommands());
-		$postCommand = $executor->getCommands()[0];
+		$commands = $executor->getCommands();
+		self::assertCount(2, $commands);
+		$ownerCommand = $commands[0];
+		self::assertInstanceOf(UpdateCommand::class, $ownerCommand);
+		self::assertSame(['id' => 10], $ownerCommand->getIdentity());
+		self::assertSame(['name' => 'Owner'], $ownerCommand->getChanges());
+		$postCommand = $commands[1];
 		self::assertInstanceOf(InsertCommand::class, $postCommand);
 		self::assertSame(['id' => 99, 'title' => 'Draft', 'user_id' => 10], $postCommand->getValues());
 	}
@@ -79,9 +84,12 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$session->flush();
 		self::assertSame(['tenant_ref' => 7, 'user_ref' => 10, 'title' => 'Draft'], $record->getValues());
 
-		$postCommand = $executor->getCommands()[0];
-		self::assertInstanceOf(InsertCommand::class, $postCommand);
-		self::assertSame(['tenant_ref' => 7, 'user_ref' => 10, 'title' => 'Draft'], $postCommand->getValues());
+		$inserts = array_values(array_filter(
+			$executor->getCommands(),
+			static fn ($command): bool => $command instanceof InsertCommand,
+		));
+		self::assertCount(1, $inserts);
+		self::assertSame(['tenant_ref' => 7, 'user_ref' => 10, 'title' => 'Draft'], $inserts[0]->getValues());
 	}
 
 	public function testExistingMarkedRelatedObjectIsAdoptedAsManagedAndNotPlannedAsInsert(): void
@@ -105,8 +113,11 @@ final class GraphSyncExistingIntentTest extends TestCase
 		self::assertTrue($record->isClean());
 		self::assertSame(5, $record->getKey()?->getFieldValue('id'));
 
-		foreach ($executor->getCommands() as $command) {
+		$commands = $executor->getCommands();
+		self::assertNotEmpty($commands);
+		foreach ($commands as $command) {
 			self::assertNotInstanceOf(InsertCommand::class, $command);
+			self::assertInstanceOf(UpdateCommand::class, $command);
 		}
 	}
 

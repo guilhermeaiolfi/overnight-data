@@ -129,7 +129,8 @@ final class ProjectionRepresentationStateBuilder
 			return $record;
 		}
 
-		$key = $this->resolveKey($representation, $source, $op);
+		$key = $this->resolveKey($representation, $source, $intent, $op);
+		$values = $this->initialValues($representation, $source);
 		$existing = $records->getByKey($key);
 		if ($existing instanceof RecordState) {
 			if ($existing->isRemoved()) {
@@ -140,15 +141,15 @@ final class ProjectionRepresentationStateBuilder
 				));
 			}
 
+			$this->applyPresentValues($existing, $values, $key);
+
 			return $existing;
 		}
 
 		// Key-only clean baseline, then apply DTO values as dirty updates.
 		$record = RecordState::clean($key, $key->getValues());
 		$records->add($record);
-		foreach ($this->initialValues($representation, $source) as $fieldName => $value) {
-			$record->setValue($fieldName, $value);
-		}
+		$this->applyPresentValues($record, $values, $key);
 
 		return $record;
 	}
@@ -156,11 +157,19 @@ final class ProjectionRepresentationStateBuilder
 	private function resolveKey(
 		object $representation,
 		RepresentationSource $source,
+		RepresentationIntent $intent,
 		?FlatIntentOp $op,
 	): Key {
 		$collection = $source->getCollection();
 		if ($op instanceof FlatIntentOp && $op->getKey() !== null) {
 			return $collection->getKey($op->getKey());
+		}
+
+		if ($source->isRoot() && $intent->getIdentity() !== null) {
+			$key = $collection->getKey($intent->getIdentity());
+			$this->assertDtoKeyAgrees($representation, $source, $key);
+
+			return $key;
 		}
 
 		$keyValues = [];
@@ -194,6 +203,33 @@ final class ProjectionRepresentationStateBuilder
 		return $collection->getKey($keyValues);
 	}
 
+	private function assertDtoKeyAgrees(
+		object $representation,
+		RepresentationSource $source,
+		Key $key,
+	): void {
+		foreach ($key->getValues() as $fieldName => $identityValue) {
+			$path = $source->getFieldPath($fieldName);
+			if ($path === null) {
+				continue;
+			}
+
+			try {
+				$value = $this->reader->readPath($representation, $path);
+			} catch (SyncException) {
+				continue;
+			}
+
+			if ($value !== null && $value !== $identityValue) {
+				throw new StateException(sprintf(
+					"Cannot bind projection source for collection '%s' because intent identity field '%s' disagrees with the representation.",
+					$source->getCollection()->getName(),
+					$fieldName,
+				));
+			}
+		}
+	}
+
 	/**
 	 * @return array<string, mixed>
 	 */
@@ -211,6 +247,21 @@ final class ProjectionRepresentationStateBuilder
 		}
 
 		return $values;
+	}
+
+	/**
+	 * @param array<string, mixed> $values
+	 */
+	private function applyPresentValues(RecordState $record, array $values, Key $key): void
+	{
+		$keyFields = $key->getValues();
+		foreach ($values as $fieldName => $value) {
+			if (array_key_exists($fieldName, $keyFields) && $value === $keyFields[$fieldName]) {
+				continue;
+			}
+
+			$record->setValue($fieldName, $value);
+		}
 	}
 
 	private function registerRelationAdd(

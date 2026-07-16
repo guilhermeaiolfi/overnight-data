@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Key;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 
 /**
@@ -14,6 +15,9 @@ final class RepresentationIntent
 {
 	/** @var list<FlatIntentOp> */
 	private array $flatOps = [];
+
+	/** @var Key|array<string, mixed>|null */
+	private Key|array|null $identity = null;
 
 	public function __construct(
 		private RepresentationIntentLifecycle $lifecycle,
@@ -60,6 +64,22 @@ final class RepresentationIntent
 	public function setRootCollection(?CollectionInterface $rootCollection): void
 	{
 		$this->rootCollection = $rootCollection;
+	}
+
+	/**
+	 * @return Key|array<string, mixed>|null
+	 */
+	public function getIdentity(): Key|array|null
+	{
+		return $this->identity;
+	}
+
+	/**
+	 * @param Key|array<string, mixed>|null $identity
+	 */
+	public function setIdentity(Key|array|null $identity): void
+	{
+		$this->identity = $identity;
 	}
 
 	/**

@@ -380,20 +380,20 @@ final class SessionTest extends TestCase
 		self::assertFalse($result->hasChanges());
 	}
 
-	public function testSyncUntrackedRootWithCompleteKeyTracksRootAsCleanWhenMarkedExisting(): void
+	public function testSyncUntrackedRootWithCompleteKeyPatchesWhenMarkedExisting(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$representation = $this->representation(['id' => 10, 'name' => 'Existing User']);
 		$session->update($representation);
 
-		$result = $session->sync($representation, $this->userTemplateSchemaFor($this->users()));
+		$session->sync($representation, $this->userTemplateSchemaFor($this->users()));
 
 		$tracked = $session->getRepresentations()->get($representation);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
 		$record = $session->getRecords()->getFromRepresentation($tracked);
 		self::assertInstanceOf(RecordState::class, $record);
-		self::assertTrue($record->isClean());
-		self::assertFalse($result->hasChanges());
+		self::assertTrue($record->isDirty());
+		self::assertSame(['name'], $record->getDirtyFields());
 	}
 
 	public function testExistingMarkedRootWithCompleteKeyFlushPlansUpdateNotInsert(): void

@@ -64,7 +64,7 @@ final class SessionGraphAdoptionTest extends TestCase
 		self::assertSame('Root', $record->getValue('name'));
 	}
 
-	public function testUntrackedRootWithCompleteKeyIsAdoptedAsCleanWhenMarkedExisting(): void
+	public function testUntrackedRootWithCompleteKeyIsPatchedWhenMarkedExisting(): void
 	{
 		$root = $this->representation(['id' => 10, 'name' => 'Root']);
 		$records = new RecordStateStore();
@@ -78,9 +78,10 @@ final class SessionGraphAdoptionTest extends TestCase
 		self::assertInstanceOf(RepresentationState::class, $tracked);
 		$record = $records->getFromRepresentation($tracked);
 		self::assertInstanceOf(RecordState::class, $record);
-		self::assertTrue($record->isClean());
+		self::assertTrue($record->isDirty());
 		self::assertSame(10, $record->getKey()?->getFieldValue('id'));
 		self::assertSame('Root', $record->getValue('name'));
+		self::assertSame(['name'], $record->getDirtyFields());
 	}
 
 	public function testUntrackedRootWithoutCompleteKeyIsAdoptedAsNew(): void

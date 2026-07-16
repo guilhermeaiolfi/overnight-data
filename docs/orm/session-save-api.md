@@ -34,9 +34,18 @@ $session->flush();
 
 | Call | Meaning |
 |------|---------|
-| `update($obj, ?$schema)` | Existing row (clean adoption when keys are readable) |
+| `update($obj, ?$schema)` | Existing row: adopt by key, then **PATCH** present DTO/map fields (dirty when non-key fields are present) |
 | `create($obj, ?$schema)` | New row |
-| Primary key on the projection | Resolves **which** row for `update` — does not choose create vs update |
+| `identify($collection, $key)` | Existing row by key only — **no** field writes |
+| Primary key on the projection / `->identity()` | Resolves **which** row for `update` — does not choose create vs update |
+
+Optional root identity when the PK is not on the DTO:
+
+```php
+$session->update($dto, $map)->from($users)->identity(['id' => 10]);
+```
+
+If both `identity()` and a readable PK on the DTO are present, they must agree.
 
 Nested objects use the same verbs (lifecycle only until parent `sync`):
 
@@ -47,6 +56,13 @@ foreach ($dto->images as $image) {
 }
 $session->sync($dto);
 $session->flush();
+```
+
+Attach an existing related row without writing its fields:
+
+```php
+$user->posts[] = $session->identify($posts, ['id' => 12]);
+$session->sync($user);
 ```
 
 ## Flat related paths

@@ -35,6 +35,18 @@ final class IntentBuilder
 	}
 
 	/**
+	 * Root identity when the PK is not readable from the DTO/map.
+	 *
+	 * @param Key|array<string, mixed> $identity
+	 */
+	public function identity(Key|array $identity): self
+	{
+		$this->intent->setIdentity($identity);
+
+		return $this;
+	}
+
+	/**
 	 * Flat related-path update. Pass $key when the PK is not on the projection shape.
 	 *
 	 * @param Key|array<string, mixed>|null $key

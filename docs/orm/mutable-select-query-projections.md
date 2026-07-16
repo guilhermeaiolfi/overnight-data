@@ -174,7 +174,7 @@ This does not require querying the row and does not imply scalar updates.
 
 `Session::identify($collection, $key)` attaches a representation to an existing row known by key without querying. Without a representation it creates a key-only `stdClass` using same-name primary-key paths. The resulting record is clean, not new or dirty, and can be reused for relation linking, deletion, or unlinking.
 
-Use `Session::update($object)` when you already have a real object shape and want graph sync to treat it as an existing row. Use `identify()` when only the key matters.
+Use `Session::update($object)` when you already have a real object shape and want graph sync to PATCH an existing row. Use `identify()` when only the key matters and no field writes should happen.
 
 ## M2M example
 

@@ -58,7 +58,7 @@ final class AdoptionRecordResolverTest extends TestCase
 		self::assertSame('Ada', $record->getValue('name'));
 	}
 
-	public function testCreatesCleanRecordStateWhenExistingIntentAndPrimaryKeyCanBeCompleted(): void
+	public function testPatchesExistingRecordWhenUpdateIntentAndPrimaryKeyCanBeCompleted(): void
 	{
 		$representation = $this->representation(['id' => 10, 'name' => 'Ada']);
 		$records = new RecordStateStore();
@@ -68,9 +68,42 @@ final class AdoptionRecordResolverTest extends TestCase
 		$record = (new AdoptionRecordResolver(intents: $intents))
 			->resolve($representation, $this->userSchemaWithId(), $records, true);
 
-		self::assertTrue($record->isClean());
+		self::assertTrue($record->isDirty());
 		self::assertSame(10, $record->getKey()?->getFieldValue('id'));
 		self::assertSame('Ada', $record->getValue('name'));
+		self::assertSame(['name'], $record->getDirtyFields());
+	}
+
+	public function testUsesIntentIdentityWhenPrimaryKeyIsNotOnRepresentation(): void
+	{
+		$representation = $this->representation(['name' => 'Ada']);
+		$schema = new RepresentationSchema($this->users());
+		$schema->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
+		$records = new RecordStateStore();
+		$intents = new RepresentationIntentStore();
+		$intents->ensure($representation, RepresentationIntentLifecycle::Update)
+			->setIdentity(['id' => 10]);
+
+		$record = (new AdoptionRecordResolver(intents: $intents))
+			->resolve($representation, $schema, $records, true);
+
+		self::assertTrue($record->isDirty());
+		self::assertSame(10, $record->getKey()?->getFieldValue('id'));
+		self::assertSame('Ada', $record->getValue('name'));
+	}
+
+	public function testRejectsIntentIdentityThatDisagreesWithRepresentationPrimaryKey(): void
+	{
+		$representation = $this->representation(['id' => 11, 'name' => 'Ada']);
+		$intents = new RepresentationIntentStore();
+		$intents->ensure($representation, RepresentationIntentLifecycle::Update)
+			->setIdentity(['id' => 10]);
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage("intent identity field 'id' disagrees with the representation");
+
+		(new AdoptionRecordResolver(intents: $intents))
+			->resolve($representation, $this->userSchemaWithId(), new RecordStateStore(), true);
 	}
 
 	public function testReturnsExistingTrackedRecordStateWhenKeyIsAlreadyTracked(): void

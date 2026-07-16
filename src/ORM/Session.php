@@ -104,9 +104,14 @@ final class Session implements MutableResultHandler
 		$this->context->clear();
 	}
 
-	public function update(object $representation, ?RepresentationSchema $schema = null): IntentBuilder
-	{
-		$intent = $this->context->getIntents()->ensure($representation, RepresentationIntentLifecycle::Update);
+	public function update(
+		object $representation,
+		?RepresentationSchema $schema = null,
+	): IntentBuilder {
+		$intent = $this->context->getIntents()->ensure(
+			$representation,
+			RepresentationIntentLifecycle::Update,
+		);
 		if ($schema instanceof RepresentationSchema) {
 			$intent->setSchema($schema);
 		}
