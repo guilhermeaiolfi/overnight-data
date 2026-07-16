@@ -59,7 +59,7 @@ final class MutableQueryExportPersistenceTest extends TestCase
 		self::assertCount(1, $user->posts);
 
 		$user->posts[0]->title = 'Updated';
-		$session->sync($user);
+		$session->sync();
 		$session->flush();
 
 		self::assertCount(1, $executor->getCommands());

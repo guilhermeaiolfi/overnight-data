@@ -107,7 +107,8 @@ final class RepresentationArchitectureTest extends TestCase
 		self::assertIsString($contents);
 		self::assertStringNotContainsString('ON\\Data\\ORM\\Persistence', $contents);
 		self::assertStringNotContainsString('RecordState', $contents);
-		self::assertStringNotContainsString('QueryRepresentationSchemaCompiler', $contents);
+		self::assertStringContainsString('QueryRepresentationSchemaCompiler', $contents);
+		self::assertStringContainsString('function projection(', $contents);
 		self::assertStringContainsString('MutableResultHandler', $contents);
 	}
 

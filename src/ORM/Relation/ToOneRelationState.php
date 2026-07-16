@@ -10,8 +10,8 @@ use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 
 final class ToOneRelationState implements RelationStateInterface
 {
-	private ?object $baselineTarget;
-	private ?object $target;
+	private ?RelationTarget $baselineTarget;
+	private ?RelationTarget $target;
 
 	public function __construct(
 		private readonly RecordState $owner,
@@ -23,8 +23,9 @@ final class ToOneRelationState implements RelationStateInterface
 			throw new StateException('To-one relation name cannot be empty.');
 		}
 
-		$this->baselineTarget = $target;
-		$this->target = $target;
+		$normalized = $target === null ? null : RelationTarget::from($target);
+		$this->baselineTarget = $normalized;
+		$this->target = $normalized;
 	}
 
 	public function getOwner(): RecordState
@@ -44,17 +45,32 @@ final class ToOneRelationState implements RelationStateInterface
 
 	public function getTarget(): ?object
 	{
+		return $this->target?->toObject();
+	}
+
+	public function getTargetRelation(): ?RelationTarget
+	{
 		return $this->target;
 	}
 
 	public function getBaselineTarget(): ?object
 	{
-		return $this->baselineTarget;
+		return $this->baselineTarget?->toObject();
 	}
 
 	public function set(?object $target): void
 	{
-		if ($this->target === $target) {
+		$normalized = $target === null ? null : RelationTarget::from($target);
+		if ($this->sameTarget($this->target, $normalized)) {
+			return;
+		}
+
+		$this->target = $normalized;
+	}
+
+	public function setTarget(?RelationTarget $target): void
+	{
+		if ($this->sameTarget($this->target, $target)) {
 			return;
 		}
 
@@ -73,11 +89,24 @@ final class ToOneRelationState implements RelationStateInterface
 
 	public function hasChanges(): bool
 	{
-		return $this->baselineTarget !== $this->target;
+		return ! $this->sameTarget($this->baselineTarget, $this->target);
 	}
 
 	public function clearChanges(): void
 	{
 		$this->baselineTarget = $this->target;
+	}
+
+	private function sameTarget(?RelationTarget $left, ?RelationTarget $right): bool
+	{
+		if ($left === null && $right === null) {
+			return true;
+		}
+
+		if ($left === null || $right === null) {
+			return false;
+		}
+
+		return $left->equals($right);
 	}
 }

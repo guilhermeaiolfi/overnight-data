@@ -384,7 +384,7 @@ final class SessionTest extends TestCase
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$representation = $this->representation(['id' => 10, 'name' => 'Existing User']);
-		$session->existing($representation);
+		$session->update($representation);
 
 		$result = $session->sync($representation, $this->userTemplateSchemaFor($this->users()));
 
@@ -401,7 +401,7 @@ final class SessionTest extends TestCase
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
 		$user = $this->representation(['id' => 10, 'name' => 'Ada']);
-		$session->existing($user);
+		$session->update($user);
 		$session->sync($user, $this->userTemplateSchemaFor($this->users()));
 
 		$user->name = 'Ada Lovelace';
@@ -1104,7 +1104,7 @@ final class SessionTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$session->getRecords()->add($owner);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Existing title', 'user_id' => 10]);
-		$session->existing($postRepresentation);
+		$session->update($postRepresentation);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
 		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 

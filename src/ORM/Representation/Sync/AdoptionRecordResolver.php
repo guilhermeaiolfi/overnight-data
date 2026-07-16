@@ -15,14 +15,14 @@ use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 final class AdoptionRecordResolver
 {
 	private RepresentationReader $reader;
-	private ?ExistingIntentStore $existingIntents;
+	private ?RepresentationIntentStore $intents;
 
 	public function __construct(
 		?RepresentationReader $reader = null,
-		?ExistingIntentStore $existingIntents = null,
+		?RepresentationIntentStore $intents = null,
 	) {
 		$this->reader = $reader ?? new RepresentationReader();
-		$this->existingIntents = $existingIntents;
+		$this->intents = $intents;
 	}
 
 	public function resolve(
@@ -36,7 +36,7 @@ final class AdoptionRecordResolver
 		$keyValues = $this->completeKeyValues($representation, $schema, $collection);
 
 		if ($keyValues === null) {
-			if ($this->hasExistingIntent($representation)) {
+			if ($this->hasUpdateIntent($representation)) {
 				throw new StateException(sprintf(
 					"Cannot adopt existing representation for collection '%s' because its primary key cannot be read through the schema.",
 					$collection->getName()
@@ -60,7 +60,7 @@ final class AdoptionRecordResolver
 			return $record;
 		}
 
-		if ($this->hasExistingIntent($representation)) {
+		if ($this->hasUpdateIntent($representation)) {
 			return RecordState::clean($key, $values);
 		}
 
@@ -201,9 +201,9 @@ final class AdoptionRecordResolver
 		return $values;
 	}
 
-	private function hasExistingIntent(object $representation): bool
+	private function hasUpdateIntent(object $representation): bool
 	{
-		return $this->existingIntents instanceof ExistingIntentStore
-			&& $this->existingIntents->isMarked($representation);
+		return $this->intents instanceof RepresentationIntentStore
+			&& $this->intents->isUpdate($representation);
 	}
 }

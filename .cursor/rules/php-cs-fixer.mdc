@@ -1,0 +1,24 @@
+---
+description: Always keep PHP changes php-cs-fixer clean so CI check-style passes
+alwaysApply: true
+---
+
+# PHP CS Fixer required
+
+Never leave PHP changes that fail `php-cs-fixer`. GitHub CI runs `composer check` → `check-style` (dry-run) and fails the job on any diff.
+
+## After editing PHP under `src/` or `tests/`
+
+1. Run fixer on the touched files (preferred) or the project check:
+   - `php vendor/friendsofphp/php-cs-fixer/php-cs-fixer fix --config=.php-cs-fixer.php --path-mode=override -- path/to/File.php`
+   - or `composer check-style` / full `composer check` before finishing
+2. If dry-run reports a diff, apply the fix (same command without `--dry-run`) and re-check.
+3. Do not consider the task done while style check would fail.
+
+## Project conventions the fixer enforces (common pitfalls)
+
+- `fully_qualified_strict_types` with `import_symbols`: prefer imported short class names in PHPDoc `@see` / types, not `\ON\Data\...` FQCNs — add `use` imports instead.
+- Tabs for indent, LF line endings.
+- Ordered imports, no unused imports.
+
+Config: `.php-cs-fixer.php`.

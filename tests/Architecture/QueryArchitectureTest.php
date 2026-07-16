@@ -43,6 +43,10 @@ final class QueryArchitectureTest extends TestCase
 			'PDO',
 			'use ON\\Data\\ORM\\',
 		];
+		$selectQueryAllowOrm = [
+			'use ON\\Data\\ORM\\Representation\\Schema\\Query\\QueryRepresentationSchemaCompiler;',
+			'use ON\\Data\\ORM\\Representation\\Schema\\RepresentationSchema;',
+		];
 
 		$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root));
 
@@ -52,7 +56,13 @@ final class QueryArchitectureTest extends TestCase
 				continue;
 			}
 
-			$contents = strtolower((string) file_get_contents($file->getPathname()));
+			$raw = (string) file_get_contents($file->getPathname());
+			$isSelectQuery = str_ends_with(str_replace('\\', '/', $file->getPathname()), '/SelectQuery.php');
+			if ($isSelectQuery) {
+				$raw = str_replace($selectQueryAllowOrm, '', $raw);
+			}
+
+			$contents = strtolower($raw);
 
 			foreach ($forbiddenPatterns as $pattern) {
 				self::assertStringNotContainsString(

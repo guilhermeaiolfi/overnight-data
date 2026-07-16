@@ -8,6 +8,7 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\RelationStateInterface;
 use ON\Data\ORM\Relation\RelationStateStore;
+use ON\Data\ORM\Relation\RelationTarget;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Representation\State\RepresentationRelationStateItem;
@@ -198,22 +199,23 @@ final class RelationRepresentationSynchronizer
 		}
 
 		$currentIds = [];
-		$addedIds = [];
-		foreach ($relation->getAdded() as $added) {
-			$addedIds[spl_object_id($added)] = true;
-		}
-
 		foreach ($items as $item) {
-			$currentIds[spl_object_id($item)] = true;
-			if (! $relation->contains($item)) {
-				$relation->add($item);
+			$target = RelationTarget::from($item);
+			$currentIds[$target->identityKey()] = true;
+			if (! $relation->containsTarget($target)) {
+				$relation->addTarget($target);
 			}
 		}
 
-		foreach ($relation->getItems() as $known) {
-			$id = spl_object_id($known);
-			if (! array_key_exists($id, $currentIds) && ! array_key_exists($id, $addedIds)) {
-				$relation->remove($known);
+		foreach ($relation->getItemTargets() as $known) {
+			// Pending flat/record-backed adds are not present on the DTO array.
+			if ($known->isRecord()) {
+				continue;
+			}
+
+			$id = $known->identityKey();
+			if (! array_key_exists($id, $currentIds)) {
+				$relation->removeTarget($known);
 			}
 		}
 	}

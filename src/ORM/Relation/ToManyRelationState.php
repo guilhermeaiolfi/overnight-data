@@ -18,14 +18,14 @@ final class ToManyRelationState implements RelationStateInterface
 	 * Known in-memory relation members. This may be only a partial view of the
 	 * database relation when the collection is unloaded or partially loaded.
 	 *
-	 * @var array<int, object>
+	 * @var array<string, RelationTarget>
 	 */
 	private array $knownItems = [];
-	/** @var array<int, object> */
+	/** @var array<string, RelationTarget> */
 	private array $baselineKnownItems = [];
-	/** @var array<int, object> */
+	/** @var array<string, RelationTarget> */
 	private array $added = [];
-	/** @var array<int, object> */
+	/** @var array<string, RelationTarget> */
 	private array $removed = [];
 	private string $loadState = self::LOAD_UNLOADED;
 
@@ -50,7 +50,8 @@ final class ToManyRelationState implements RelationStateInterface
 				));
 			}
 
-			$this->knownItems[spl_object_id($item)] = $item;
+			$target = RelationTarget::from($item);
+			$this->knownItems[$target->identityKey()] = $target;
 		}
 
 		$this->baselineKnownItems = $this->knownItems;
@@ -120,7 +121,12 @@ final class ToManyRelationState implements RelationStateInterface
 
 	public function add(object $item): void
 	{
-		$id = spl_object_id($item);
+		$this->addTarget(RelationTarget::from($item));
+	}
+
+	public function addTarget(RelationTarget $target): void
+	{
+		$id = $target->identityKey();
 
 		unset($this->removed[$id]);
 
@@ -128,19 +134,24 @@ final class ToManyRelationState implements RelationStateInterface
 			return;
 		}
 
-		$this->knownItems[$id] = $item;
+		$this->knownItems[$id] = $target;
 		if ($this->isUnloaded()) {
 			$this->markPartiallyLoaded();
 		}
 
 		if (! array_key_exists($id, $this->baselineKnownItems)) {
-			$this->added[$id] = $item;
+			$this->added[$id] = $target;
 		}
 	}
 
 	public function remove(object $item): void
 	{
-		$id = spl_object_id($item);
+		$this->removeTarget(RelationTarget::from($item));
+	}
+
+	public function removeTarget(RelationTarget $target): void
+	{
+		$id = $target->identityKey();
 		$isKnown = array_key_exists($id, $this->knownItems);
 
 		if ($isKnown) {
@@ -153,18 +164,34 @@ final class ToManyRelationState implements RelationStateInterface
 			return;
 		}
 
-		$this->removed[$id] = $item;
+		$this->removed[$id] = $target;
 	}
 
 	public function contains(object $item): bool
 	{
-		return array_key_exists(spl_object_id($item), $this->knownItems);
+		return array_key_exists(RelationTarget::from($item)->identityKey(), $this->knownItems);
+	}
+
+	public function containsTarget(RelationTarget $target): bool
+	{
+		return array_key_exists($target->identityKey(), $this->knownItems);
 	}
 
 	/**
 	 * @return list<object>
 	 */
 	public function getItems(): array
+	{
+		return array_values(array_map(
+			static fn (RelationTarget $target): object => $target->toObject(),
+			$this->knownItems,
+		));
+	}
+
+	/**
+	 * @return list<RelationTarget>
+	 */
+	public function getItemTargets(): array
 	{
 		return array_values($this->knownItems);
 	}
@@ -174,6 +201,17 @@ final class ToManyRelationState implements RelationStateInterface
 	 */
 	public function getAdded(): array
 	{
+		return array_values(array_map(
+			static fn (RelationTarget $target): object => $target->toObject(),
+			$this->added,
+		));
+	}
+
+	/**
+	 * @return list<RelationTarget>
+	 */
+	public function getAddedTargets(): array
+	{
 		return array_values($this->added);
 	}
 
@@ -181,6 +219,17 @@ final class ToManyRelationState implements RelationStateInterface
 	 * @return list<object>
 	 */
 	public function getRemoved(): array
+	{
+		return array_values(array_map(
+			static fn (RelationTarget $target): object => $target->toObject(),
+			$this->removed,
+		));
+	}
+
+	/**
+	 * @return list<RelationTarget>
+	 */
+	public function getRemovedTargets(): array
 	{
 		return array_values($this->removed);
 	}

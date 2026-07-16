@@ -14,7 +14,7 @@ use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\ORM\Representation\Sync\ExistingIntent;
+use ON\Data\ORM\IntentBuilder;
 use ON\Data\ORM\Session;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
@@ -49,7 +49,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$session = new Session($executor);
 		$post = $this->representation(['id' => 99, 'title' => 'Draft', 'user_id' => null]);
 		$owner = $this->representation(['id' => 10, 'name' => 'Owner', 'posts' => [$post]]);
-		$session->existing($owner);
+		$session->update($owner);
 
 		$session->sync($owner, $this->ownerSchemaWithPosts($users, $posts));
 		$session->flush();
@@ -67,7 +67,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$session = new Session($executor);
 		$post = $this->representation(['tenant_ref' => 7, 'user_ref' => 10, 'title' => 'Draft']);
 		$owner = $this->representation(['tenant_id' => 7, 'user_id' => 10, 'posts' => [$post]]);
-		$session->existing($owner);
+		$session->update($owner);
 
 		$session->sync($owner, $this->compositeOwnerSchemaWithPosts($users, $posts));
 
@@ -91,10 +91,10 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$session = new Session($executor);
 		$post = $this->representation(['id' => 5, 'title' => 'Existing', 'user_id' => 10]);
 		$owner = $this->representation(['id' => 10, 'name' => 'Owner', 'posts' => [$post]]);
-		$session->existing($owner);
-		$intent = $session->existing($post);
+		$session->update($owner);
+		$intent = $session->update($post);
 
-		self::assertInstanceOf(ExistingIntent::class, $intent);
+		self::assertInstanceOf(IntentBuilder::class, $intent);
 		self::assertSame($post, $intent->getRepresentation());
 
 		$session->sync($owner, $this->ownerSchemaWithPosts($users, $posts));
@@ -194,7 +194,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$session = new Session($harness->commandExecutor);
 		$post = $this->representation(['id' => 99, 'title' => 'Duplicate', 'user_id' => null]);
 		$owner = $this->representation(['id' => 10, 'name' => 'Owner', 'posts' => [$post]]);
-		$session->existing($owner);
+		$session->update($owner);
 
 		$session->sync($owner, $this->ownerSchemaWithPosts($users, $posts));
 
@@ -208,12 +208,12 @@ final class GraphSyncExistingIntentTest extends TestCase
 		[$users, $posts] = $this->usersWithPostsRelation();
 		$session = new Session(new RecordingCommandExecutor());
 		$post = $this->representation(['title' => 'Existing']);
-		$session->existing($post);
+		$session->update($post);
 		$owner = $this->representation(['id' => 10, 'name' => 'Owner', 'posts' => [$post]]);
-		$session->existing($owner);
+		$session->update($owner);
 
 		$this->expectException(StateException::class);
-		$this->expectExceptionMessage('Cannot adopt existing representation');
+		$this->expectExceptionMessage('Cannot adopt update representation');
 
 		$session->sync($owner, $this->ownerSchemaWithPosts($users, $posts));
 	}

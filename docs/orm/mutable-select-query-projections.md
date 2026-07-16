@@ -1,6 +1,6 @@
 # Mutable SelectQuery Projections
 
-Mutable `SelectQuery` export is more than a convenient object shape. When data comes from a mutable query export, the executed query itself is the field-target declaration. For objects that did not come from a query, use manual mutable projections with `Session::projection($object)`.
+Mutable `SelectQuery` export is more than a convenient object shape. When data comes from a mutable query export, the executed query itself is the field-target declaration. For objects that did not come from a query, use [`session-save-api.md`](./session-save-api.md) (`update` / `create` with `SelectQuery::projection()`).
 
 This page explains how query selection provenance and hidden internal identity selections let ON Data route public object writes to the correct `RecordState` fields — including flattened related fields, nested relation items, and relation intent created after the query runs.
 
@@ -10,7 +10,7 @@ See also:
 - [`../query/bound-execution.md`](../query/bound-execution.md) — bound execution, result modes, and the data runtime
 - [`representation-schema.md`](./representation-schema.md) — recursive `RepresentationSchema` model and flat projection adoption
 - [`persistence.md`](./persistence.md) — scalar sync, relation sync, command planning, and flush orchestration
-- [`manual-mutable-projections.md`](./manual-mutable-projections.md) — non-executing manual projection declarations
+- [`session-save-api.md`](./session-save-api.md) — `update` / `create` / `detach` / `sync` / `flush` for non-query objects and flat overlays
 
 ## Core concept
 
@@ -174,7 +174,7 @@ This does not require querying the row and does not imply scalar updates.
 
 `Session::identify($collection, $key)` attaches a representation to an existing row known by key without querying. Without a representation it creates a key-only `stdClass` using same-name primary-key paths. The resulting record is clean, not new or dirty, and can be reused for relation linking, deletion, or unlinking.
 
-Use `Session::existing($object)` when you already have a real object shape and want graph sync to treat it as an existing row. Use `identify()` when only the key matters.
+Use `Session::update($object)` when you already have a real object shape and want graph sync to treat it as an existing row. Use `identify()` when only the key matters.
 
 ## M2M example
 
@@ -240,16 +240,18 @@ $user->newPostTitle = 'New post';
 $session->sync($user);
 ```
 
-There is no concrete post item and no relation item identity. Use a manual mutable projection to supply that identity:
+There is no concrete post item and no relation item identity. Use the session save API to supply that identity:
 
 ```php
-$p = $session->projection($user);
-$u = $p->from($users)->tracked();
-$post = $p->create($u->posts);
-$p->properties($post->title->as('newPostTitle'))->end();
+$extra = $runtime->query($users)
+    ->select($u->posts->title->as('newPostTitle'))
+    ->projection();
+
+$session->update($user, $extra)->create('posts');
+$session->sync($user);
 ```
 
-A mutable query projection can update fields whose provenance the query declared. It can also admit new related objects through explicit relation schemas on a tracked root. Manual projections cover standalone flat scalars by requiring the developer to create, identify, or reuse the concrete related record item explicitly.
+A mutable query projection can update fields whose provenance the query declared. It can also admit new related objects through explicit relation schemas on a tracked root. Flat overlays that need a new related record use `update`/`create` with `SelectQuery::projection()` — see [`session-save-api.md`](./session-save-api.md).
 
 ## Rules
 
@@ -267,7 +269,7 @@ Existing key-only row:
   use identify(collection, key).
 
 Brand-new flat scalar that did not come from a query:
-  use Session::projection($object) with from(), create()/existing()/tracked(), and properties().
+  use Session::update/create with SelectQuery::projection() — see session-save-api.md.
 ```
 
 ## Related reading
@@ -276,4 +278,4 @@ Brand-new flat scalar that did not come from a query:
 - [`../query/bound-execution.md`](../query/bound-execution.md)
 - [`representation-schema.md`](./representation-schema.md)
 - [`persistence.md`](./persistence.md)
-- [`manual-mutable-projections.md`](./manual-mutable-projections.md)
+- [`session-save-api.md`](./session-save-api.md)

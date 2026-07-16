@@ -70,7 +70,7 @@ final class SessionGraphAdoptionTest extends TestCase
 		$records = new RecordStateStore();
 		$reps = new RepresentationStateStore();
 		$session = $this->session($reps, $records);
-		$session->existing($root);
+		$session->update($root);
 
 		$session->sync($root, $this->userSchemaWithId());
 

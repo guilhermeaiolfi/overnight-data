@@ -4,48 +4,30 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Representation\Schema;
 
+use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
-use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Record\RecordState;
-use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Representation\Schema\Manual\AllProperties;
-use ON\Data\ORM\Representation\Schema\Manual\Builder;
-use ON\Data\ORM\Representation\Schema\Manual\ManualRepresentationSchemaCompiler;
-use ON\Data\ORM\Representation\Schema\Manual\ManualRepresentationSourceResolver;
-use ON\Data\ORM\Representation\Schema\Manual\PathResolver;
-use ON\Data\ORM\Representation\Schema\Manual\PropertyRef;
-use ON\Data\ORM\Representation\Schema\Manual\RelationRef;
-use ON\Data\ORM\Representation\Schema\Manual\RelationRepresentationSource;
-use ON\Data\ORM\Representation\Schema\Manual\RootRepresentationSource;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSelectionNormalizer;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSourceResolver;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationFieldShape;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationSchemaAssembler;
-use ON\Data\ORM\Representation\Schema\Shape\ResolvedRepresentationSource;
-use ON\Data\ORM\Representation\State\Manual\ManualRepresentationStateBuilder;
-use ON\Data\ORM\Representation\State\RepresentationFieldStateItem;
 use ON\Data\ORM\Representation\State\RepresentationState;
-use ON\Data\ORM\Representation\State\RepresentationStateStore;
-use ON\Data\ORM\Representation\Sync\RepresentationAttachmentMode;
 use ON\Data\ORM\Session;
-use ON\Data\ORM\SessionContext;
-use ON\Data\Query\Expression\ValueExpressionInterface;
-use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
-use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
-use ReflectionClass;
-use stdClass;
-use Tests\ON\Data\Smoke\Support\SqliteMemoryHarness;
+use Tests\ON\Data\ORM\Support\OrmFixture;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
 
 final class RepresentationSchemaCompilationArchitectureTest extends TestCase
 {
+	use OrmFixture;
+
 	public function testRemovedLegacyProjectionIdentityProviderApiDoesNotExist(): void
 	{
 		$root = dirname(__DIR__, 4);
@@ -54,56 +36,8 @@ final class RepresentationSchemaCompilationArchitectureTest extends TestCase
 		self::assertFileDoesNotExist($root . '/src/ORM/ManualProjection/ManualProjectionIdentityProvider.php');
 		self::assertFalse(method_exists(QueryRepresentationSelectionNormalizer::class, 'fieldForSelection'));
 		self::assertFileDoesNotExist($root . '/src/ORM/Compiler/ProjectionSourceResolver.php');
-		self::assertFileDoesNotExist($root . '/src/ORM/Representation/Schema/Manual/RelationApplier.php');
 		self::assertFileExists($root . '/src/ORM/Representation/Schema/Shape/RepresentationSourceResolverInterface.php');
 		self::assertFileExists($root . '/src/ORM/Representation/Schema/Shape/ResolvedRepresentationSource.php');
-		self::assertFalse(method_exists(ManualRepresentationSourceResolver::class, 'rememberSource'));
-		self::assertFalse(method_exists(ResolvedRepresentationSource::class, 'getRecordState'));
-		self::assertFalse(method_exists(PathResolver::class, 'collectionFromBinding'));
-	}
-
-	public function testManualBuilderUsesSchemaCompilerNotAssemblerDirectly(): void
-	{
-		$constructor = (new ReflectionClass(Builder::class))->getConstructor();
-		self::assertNotNull($constructor);
-
-		$parameters = $constructor->getParameters();
-
-		self::assertSame(ManualRepresentationSchemaCompiler::class, $parameters[2]->getType()?->getName());
-	}
-
-	public function testManualBuilderDoesNotOwnExtractedRepresentationInternals(): void
-	{
-		$contents = (string) file_get_contents(dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Manual/Builder.php');
-
-		self::assertStringNotContainsString('new ToManyRelationState', $contents);
-		self::assertStringNotContainsString('new ToOneRelationState', $contents);
-		self::assertStringNotContainsString('relationSchemaFromPath', $contents);
-		self::assertStringNotContainsString('mergeBindings', $contents);
-		self::assertStringNotContainsString('mirrorRelationTarget', $contents);
-		self::assertStringNotContainsString('schemaAssembler->assemble', $contents);
-		self::assertStringNotContainsString('attachPathTarget', $contents);
-		self::assertStringNotContainsString('attachRelationTarget', $contents);
-		self::assertStringNotContainsString('recordForExisting', $contents);
-		self::assertStringNotContainsString('new RepresentationFieldStateItem', $contents);
-		self::assertStringNotContainsString('resolveRecordForNewField', $contents);
-		self::assertStringNotContainsString('RepresentationSchemaMerger', $contents);
-		self::assertStringNotContainsString('schemaMerger', $contents);
-	}
-
-	public function testManualBuilderDelegatesRepresentationOverlayApplicationToStateBuilder(): void
-	{
-		$method = (new ReflectionClass(ManualRepresentationStateBuilder::class))->getMethod('buildOverlay');
-		$parameterTypes = array_map(
-			static fn ($parameter): ?string => $parameter->getType()?->getName(),
-			$method->getParameters()
-		);
-
-		self::assertSame([
-			RepresentationState::class,
-			RepresentationSchema::class,
-			'array',
-		], $parameterTypes);
 	}
 
 	public function testDeclarationWrapperClassesDoNotExist(): void
@@ -132,208 +66,89 @@ final class RepresentationSchemaCompilationArchitectureTest extends TestCase
 		}
 	}
 
-	public function testManualRepresentationSchemaCompilerDoesNotReferenceSelectQuery(): void
+	public function testQuerySourceResolverDoesNotInspectAliasesOrBuildFieldSchemas(): void
 	{
-		$root = dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Manual';
+		$path = dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Query/QueryRepresentationSourceResolver.php';
+		$contents = (string) file_get_contents($path);
 
-		foreach (glob($root . '/*.php') ?: [] as $path) {
-			$contents = (string) file_get_contents($path);
-
-			self::assertStringNotContainsString('ON\Data\Query\SelectQuery', $contents, $path);
-			self::assertStringNotContainsString('QuerySourceInterface', $contents, $path);
-		}
-
-		$compilerContents = (string) file_get_contents(dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Manual/ManualRepresentationSchemaCompiler.php');
-		self::assertStringNotContainsString('ON\Data\Query\SelectQuery', $compilerContents);
-		self::assertStringNotContainsString('QuerySourceInterface', $compilerContents);
+		self::assertStringNotContainsString('AliasedExpression', $contents, $path);
+		self::assertStringNotContainsString('SelectionItem', $contents, $path);
+		self::assertStringNotContainsString('RepresentationFieldSchema', $contents, $path);
 	}
 
-	public function testLegacyProjectionPathSourceWasReplacedByRelationRepresentationSource(): void
+	public function testRepresentationFieldSchemasAreCreatedBySchemaAssembler(): void
 	{
 		$root = dirname(__DIR__, 4);
 
-		self::assertFileDoesNotExist($root . '/src/ORM/ManualProjection/ProjectionPathSource.php');
-		self::assertFileExists($root . '/src/ORM/Representation/Schema/Manual/RelationRepresentationSource.php');
+		foreach ([
+			$root . '/src/ORM/Representation/Schema/Query/QueryRepresentationSelectionNormalizer.php',
+			$root . '/src/ORM/Representation/Schema/Shape/RepresentationFieldShape.php',
+			$root . '/src/ORM/Representation/Schema/Query/QueryRepresentationSourceResolver.php',
+			$root . '/src/ORM/Representation/Schema/Query/QueryRepresentationSchemaCompiler.php',
+		] as $path) {
+			self::assertStringNotContainsString('new RepresentationFieldSchema', (string) file_get_contents($path), $path);
+		}
+
+		$assembler = (string) file_get_contents($root . '/src/ORM/Representation/Schema/Shape/RepresentationSchemaAssembler.php');
+		self::assertStringContainsString('new RepresentationFieldSchema', $assembler);
 	}
 
-	#[RequiresPhpExtension('pdo_sqlite')]
-	public function testObjectShapedFromPathCreateReturnsManualPropertyRefsWithoutSelectQuery(): void
+	public function testSessionDoesNotExposeDurableProjectionStores(): void
 	{
-		[$session, $user] = $this->trackedUserWithPostsRelation();
-		$post = new stdClass();
-		$post->title = 'Direct branch';
+		$methods = get_class_methods(Session::class);
 
-		$target = $session
-			->projection($post)
-			->fromPath($user, 'posts')
-			->create();
+		foreach ([
+			'getProjectionSources',
+			'getProjectionRecords',
+			'getProjectionRelations',
+			'trackProjectionSource',
+			'trackProjectionRelation',
+			'projection',
+		] as $method) {
+			self::assertNotContains($method, $methods);
+		}
 
-		self::assertInstanceOf(RelationRepresentationSource::class, $target);
-		self::assertInstanceOf(PropertyRef::class, $target->title);
+		self::assertContains('getRecords', $methods);
+		self::assertContains('getRepresentations', $methods);
+		self::assertContains('getRelations', $methods);
+		self::assertContains('update', $methods);
+		self::assertContains('schemaOf', $methods);
+		self::assertContains('detach', $methods);
 	}
 
-	#[RequiresPhpExtension('pdo_sqlite')]
-	public function testObjectShapedFromPathTracksActualPostObjectAsRelationTarget(): void
+	public function testSelectQueryProjectionReturnsCompiledRepresentationSchema(): void
 	{
-		[$session, $user] = $this->trackedUserWithPostsRelation();
-		$post = new stdClass();
-		$post->title = 'Tracked post';
+		$users = $this->users();
+		$query = new SelectQuery($users);
+		$query->select($query->name->as('display_name'));
 
-		$session
-			->projection($post)
-			->fromPath($user, 'posts')
-			->create()
-			->end();
+		$schema = $query->projection();
 
-		$userRecord = $session->getRecords()->getFromRepresentation($session->getRepresentations()->get($user));
-		$relation = $session->getRelations()->get($userRecord, 'posts');
-
-		self::assertInstanceOf(ToManyRelationState::class, $relation);
-		self::assertSame([$post], $relation->getAdded());
+		self::assertInstanceOf(RepresentationSchema::class, $schema);
+		self::assertSame('users', $schema->getCollectionName());
+		self::assertTrue($schema->hasField('display_name'));
+		self::assertFalse($schema->hasField('name'));
+		self::assertSame('name', $schema->getField('display_name')->getFieldName());
+		self::assertTrue($schema->hasField('id'));
+		self::assertTrue($schema->getField('id')->isReadOnly());
 	}
 
-	#[RequiresPhpExtension('pdo_sqlite')]
-	public function testObjectShapedFromPathDoesNotMutateOwnerPostsProperty(): void
+	public function testSelectQueryProjectionMatchesQueryRepresentationSchemaCompiler(): void
 	{
-		[$session, $user] = $this->trackedUserWithPostsRelation();
-		$postsBefore = $user->posts ?? null;
-		$post = new stdClass();
-		$post->title = 'No mirror';
+		$users = $this->users();
+		$query = new SelectQuery($users);
+		$query->select($query->id, $query->name);
 
-		$session
-			->projection($post)
-			->fromPath($user, 'posts')
-			->create()
-			->end();
+		$viaProjection = $query->projection();
+		$viaCompiler = (new QueryRepresentationSchemaCompiler())->compileSchema($query);
 
-		self::assertSame($postsBefore, $user->posts ?? null);
+		self::assertSame($viaCompiler->getPaths(), $viaProjection->getPaths());
+		self::assertSame('name', $viaProjection->getField('name')->getFieldName());
 	}
 
-	#[RequiresPhpExtension('pdo_sqlite')]
-	public function testObjectShapedFromPathAppliesRelatedSchemaBranchDirectly(): void
+	public function testQueryProjectionUsesAssemblerPublicPaths(): void
 	{
-		[$session, $user] = $this->trackedUserWithPostsRelation();
-		$userSchema = $session->getRepresentations()->get($user)->getSchema();
-		$relatedSchema = $userSchema->getRelation('posts')->getRelatedSchema();
-		$post = new stdClass();
-		$post->title = 'Branch reuse';
-
-		$session
-			->projection($post)
-			->fromPath($user, 'posts')
-			->create()
-			->end();
-
-		$postState = $session->getRepresentations()->get($post);
-		self::assertInstanceOf(RepresentationState::class, $postState);
-		self::assertSame($relatedSchema->getPaths(), $postState->getSchema()->getPaths());
-		self::assertSame('title', $postState->getSchema()->getPaths()[1] ?? null);
-	}
-
-	public function testManualRelationTargetEnrollmentBuildsSkipWhenMissingFieldItemsOnly(): void
-	{
-		$registry = new Registry();
-		$posts = $registry->collection('posts')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('title', 'string')->end();
-		$comments = $registry->collection('comments')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('body', 'string')->end();
-		$posts->hasMany('comments', 'comments');
-		$postSchema = new RepresentationSchema($posts);
-		$postSchema->addField(new RepresentationFieldSchema('title', $posts, 'title'));
-		$postSchema->addRelation(new RepresentationRelationSchema('comments', $posts, 'comments', new RepresentationSchema($comments)));
-		$session = new Session(new RecordingCommandExecutor());
-		$representation = new stdClass();
-		$ownerRecord = RecordState::new($posts, ['title' => 'Draft']);
-		$session->getRecords()->add($ownerRecord);
-		$session->adoptRecord($representation, $postSchema, $ownerRecord);
-
-		$target = (new Builder($session, $representation))
-			->fromPath($representation, 'comments')
-			->create(['body' => 'Note']);
-
-		$state = $session->getRepresentations()->get($target->getTargetObject());
-		self::assertInstanceOf(RepresentationState::class, $state);
-		self::assertSame('comments', $state->getSchema()->getCollectionName());
-		self::assertSame([], $state->getRelationItems());
-	}
-
-	#[RequiresPhpExtension('pdo_sqlite')]
-	public function testFlattenedAliasFromPathUsesAdapterOnlyWhenNoChildObjectExists(): void
-	{
-		[$session, $user] = $this->trackedUserWithPostsRelation();
-		$user->newPostTitle = 'Alias';
-
-		$p = $session->projection($user);
-		$postTarget = $p->fromPath($user, 'posts')->create();
-
-		self::assertInstanceOf(RelationRepresentationSource::class, $postTarget);
-		self::assertNotSame($user, $postTarget->getTargetObject());
-		self::assertInstanceOf(stdClass::class, $postTarget->getTargetObject());
-	}
-
-	public function testManualBuilderBuildsRepresentationFieldShapesDirectly(): void
-	{
-		$contents = (string) file_get_contents(dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Manual/Builder.php');
-
-		self::assertStringContainsString('RepresentationFieldShape', $contents);
-		self::assertStringContainsString('schemaCompiler->compile', $contents);
-		self::assertStringNotContainsString('QueryRepresentationSelectionNormalizer', $contents);
-		self::assertStringNotContainsString('SelectQuery\\ManualRepresentationSchemaCompiler', $contents);
-	}
-
-	#[RequiresPhpExtension('pdo_sqlite')]
-	public function testFlattenedAliasFromPathUsesManualPropertyRefs(): void
-	{
-		[$session, $user] = $this->trackedUserWithPostsRelation();
-		$user->newPostTitle = 'Alias';
-
-		$p = $session->projection($user);
-		$postTarget = $p->fromPath($user, 'posts')->create();
-		$property = $postTarget->title->as('newPostTitle');
-
-		self::assertInstanceOf(PropertyRef::class, $property);
-		self::assertSame('newPostTitle', $property->getPublicPath());
-		self::assertSame('title', $property->getFieldName());
-	}
-
-	public function testPrimaryKeyRelationTargetBuildsReadOnlyIdentityState(): void
-	{
-		$registry = new Registry();
-		$users = $registry->collection('users')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('name', 'string')->end();
-		$profiles = $registry->collection('profiles')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('name', 'string')->end();
-		$users->hasOne('profile', 'profiles');
-		$session = new Session(new RecordingCommandExecutor());
-		$representation = new stdClass();
-		$ownerRecord = RecordState::new($users, ['id' => 1, 'name' => 'Ada']);
-		$session->getRecords()->add($ownerRecord);
-		$target = (new Builder($session, $representation))->create(
-			new RelationRef(new RootRepresentationSource($ownerRecord), 'profile', $users->getRelation('profile')),
-			['id' => 10, 'name' => 'Profile'],
-		);
-
-		$adapter = $target->getTargetObject();
-		$state = $session->getRepresentations()->get($adapter);
-
-		self::assertInstanceOf(RepresentationState::class, $state);
-		self::assertSame(10, $adapter->id);
-		self::assertSame('id', $state->getSchema()->getPaths()[0]);
-		self::assertTrue($state->getSchema()->getField('id')->isReadOnly());
-	}
-
-	public function testQueryProjectionAndManualRepresentationUseEquivalentPublicPaths(): void
-	{
-		$registry = $this->registry();
-		$users = $registry->getCollection('users');
+		$users = $this->users();
 		$normalizer = new QueryRepresentationSelectionNormalizer();
 		$assembler = new RepresentationSchemaAssembler();
 
@@ -345,346 +160,137 @@ final class RepresentationSchemaCompilationArchitectureTest extends TestCase
 			$users,
 		);
 
-		$record = RecordState::new($users);
-		$rootTarget = new RootRepresentationSource($record);
-		$manualSchema = (new ManualRepresentationSchemaCompiler())->compile(
-			[new RepresentationFieldShape('display_name', $rootTarget, 'name')],
-		);
-
-		self::assertSame($querySchema->getPaths(), $manualSchema->getPaths());
-		self::assertSame('display_name', $querySchema->getPaths()[0]);
+		self::assertSame(['display_name'], $querySchema->getPaths());
 		self::assertSame('name', $querySchema->getField('display_name')->getFieldName());
-		self::assertSame('name', $manualSchema->getField('display_name')->getFieldName());
-		self::assertSame('users', $manualSchema->getField('display_name')->getCollectionName());
+		self::assertSame('users', $querySchema->getField('display_name')->getCollectionName());
 	}
 
-	public function testSourceResolversDoNotInspectAliasesOrBuildFieldSchemas(): void
+	public function testSessionUpdateFromSyncTracksDtoAsExisting(): void
 	{
-		foreach ([
-			dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Query/QueryRepresentationSourceResolver.php',
-			dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Manual/ManualRepresentationSourceResolver.php',
-		] as $path) {
-			$contents = (string) file_get_contents($path);
-
-			self::assertStringNotContainsString('AliasedExpression', $contents, $path);
-			self::assertStringNotContainsString('SelectionItem', $contents, $path);
-			self::assertStringNotContainsString('RepresentationFieldSchema', $contents, $path);
-		}
-	}
-
-	public function testRepresentationFieldSchemasAreCreatedBySchemaAssembler(): void
-	{
-		$root = dirname(__DIR__, 4);
-
-		foreach ([
-			$root . '/src/ORM/Representation/Schema/Query/QueryRepresentationSelectionNormalizer.php',
-			$root . '/src/ORM/Representation/Schema/Shape/RepresentationFieldShape.php',
-			$root . '/src/ORM/Representation/Schema/Query/QueryRepresentationSourceResolver.php',
-			$root . '/src/ORM/Representation/Schema/Manual/ManualRepresentationSourceResolver.php',
-			$root . '/src/ORM/Representation/Schema/Manual/ManualRepresentationSchemaCompiler.php',
-		] as $path) {
-			self::assertStringNotContainsString('new RepresentationFieldSchema', (string) file_get_contents($path), $path);
-		}
-
-		$assembler = (string) file_get_contents($root . '/src/ORM/Representation/Schema/Shape/RepresentationSchemaAssembler.php');
-		self::assertStringContainsString('new RepresentationFieldSchema', $assembler);
-	}
-
-	public function testHiddenIdentityPlanningRemainsOutsideManualRepresentationPath(): void
-	{
-		$manualRoot = dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Manual';
-
-		foreach (glob($manualRoot . '/*.php') ?: [] as $path) {
-			$contents = (string) file_get_contents($path);
-
-			self::assertStringNotContainsString('QueryRepresentationIdentityColumns', $contents, $path);
-			self::assertStringNotContainsString('SelectionTag::INTERNAL', $contents, $path);
-			self::assertStringNotContainsString('generateInternalResultKey', $contents, $path);
-		}
-	}
-
-	public function testManualRepresentationNamespaceDoesNotImportSelectQuery(): void
-	{
-		$manualRoot = dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Manual';
-
-		foreach (glob($manualRoot . '/*.php') ?: [] as $path) {
-			$contents = (string) file_get_contents($path);
-
-			self::assertStringNotContainsString('ON\Data\Query\SelectQuery', $contents, $path);
-			self::assertStringNotContainsString('SelectQuery\\ManualRepresentationSchemaCompiler', $contents, $path);
-			self::assertStringNotContainsString('QueryRepresentationSelectionNormalizer', $contents, $path);
-		}
-	}
-
-	public function testManualRepresentationSourceDoesNotImplementQuerySourceInterface(): void
-	{
-		self::assertFalse(is_subclass_of(RelationRepresentationSource::class, QuerySourceInterface::class));
-		self::assertFalse(is_subclass_of(RootRepresentationSource::class, QuerySourceInterface::class));
-	}
-
-	public function testManualPropertyRefsDoNotImplementQueryExpressionInterfaces(): void
-	{
-		self::assertFalse(is_subclass_of(PropertyRef::class, ValueExpressionInterface::class));
-		self::assertFalse(is_subclass_of(AllProperties::class, ValueExpressionInterface::class));
-	}
-
-	#[RequiresPhpExtension('pdo_sqlite')]
-	public function testManualRootPropertiesExpandAllCollectionFields(): void
-	{
-		$harness = SqliteMemoryHarness::create();
-		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT)');
-		$registry = new Registry();
-		$users = $registry->collection('users')
-			->table('users')
-			->primaryKey('id')
-			->field('id', 'int')->autoIncrement(true)->end()
-			->field('name', 'string')->end()
-			->field('email', 'string')->end();
-		$session = new Session($harness->commandExecutor);
-		$row = new stdClass();
-		$row->name = 'Ada';
-		$row->email = 'ada@example.test';
-
-		$p = $session->projection($row);
-		$u = $p->from($users)->create();
-		$p->properties($u->all())->end();
-
-		$state = $session->getRepresentations()->get($row);
-		self::assertInstanceOf(RepresentationState::class, $state);
-		self::assertSame(['name', 'email'], array_values(array_filter(
-			$state->getSchema()->getPaths(),
-			static fn (string $path): bool => $path !== 'id',
-		)));
-	}
-
-	public function testManualBuilderEndReturnsRepresentationAndClearsPropertyShapes(): void
-	{
-		$users = $this->registry()->getCollection('users');
+		$users = $this->users();
 		$session = new Session(new RecordingCommandExecutor());
-		$row = new stdClass();
-		$row->name = 'Ada';
+		$query = new SelectQuery($users);
+		$query->select($query->id, $query->name);
+		$map = $query->projection();
+		$dto = $this->representation(['id' => 10, 'name' => 'Ada']);
 
-		$builder = $session->projection($row);
-		$target = $builder->from($users)->create(['id' => 10]);
+		$builder = $session->update($dto, $map)->from($users);
+		$result = $session->sync($dto);
 
-		self::assertSame($row, $builder->properties($target->name)->end());
-		self::assertSame($row, $builder->end());
-		self::assertSame(['name'], $session->getRepresentations()->get($row)->getSchema()->getPaths());
+		self::assertSame($dto, $builder->getRepresentation());
+		self::assertSame($users, $builder->getIntent()->getRootCollection());
+		// DTO values are applied as dirty during flat adopt; sync may be a no-op.
+		self::assertFalse($result->hasChanges());
+
+		$tracked = $session->getRepresentations()->get($dto);
+		self::assertInstanceOf(RepresentationState::class, $tracked);
+		$record = $session->getRecords()->getFromRepresentation($tracked);
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertTrue($record->isDirty());
+		self::assertSame(['id' => 10], $record->getKey()?->getValues());
+		self::assertSame('Ada', $record->getValue('name'));
 	}
 
-	public function testTrackedResolvesRecordForEachObjectInSameCollection(): void
+	public function testSchemaOfReturnsTrackedRepresentationSchema(): void
 	{
-		$users = $this->registry()->getCollection('users');
+		$session = new Session(new RecordingCommandExecutor());
+		$users = $this->users();
+		$schema = $this->userSchemaWithId();
+		$dto = $this->representation(['id' => 10, 'name' => 'Ada']);
+		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Ada']);
+		$session->getRecords()->add($record);
+		$this->adoptRecord($session, $dto, $schema, $record);
+
+		self::assertSame($schema, $session->schemaOf($dto));
+		self::assertSame(['id', 'name'], $session->schemaOf($dto)->getPaths());
+	}
+
+	public function testSchemaOfThrowsWhenRepresentationIsNotTracked(): void
+	{
 		$session = new Session(new RecordingCommandExecutor());
 
-		$ada = new stdClass();
-		$pa = $session->projection($ada);
-		$a = $pa->from($users)->existing(['id' => 1], ['id' => 1, 'name' => 'Ada']);
-		$pa->properties($a->name)->end();
+		$this->expectException(SyncException::class);
+		$this->expectExceptionMessage('not tracked');
 
-		$bob = new stdClass();
-		$pb = $session->projection($bob);
-		$b = $pb->from($users)->existing(['id' => 2], ['id' => 2, 'name' => 'Bob']);
-		$pb->properties($b->name)->end();
-
-		$adaTracked = $session->projection($ada)->from($users)->tracked();
-		$bobTracked = $session->projection($bob)->from($users)->tracked();
-
-		$adaState = $session->getRepresentations()->get($ada);
-		$bobState = $session->getRepresentations()->get($bob);
-		self::assertInstanceOf(RepresentationState::class, $adaState);
-		self::assertInstanceOf(RepresentationState::class, $bobState);
-
-		self::assertSame($adaState->getFieldItem('name')->getRecord(), $adaTracked->getTargetRecord());
-		self::assertSame($bobState->getFieldItem('name')->getRecord(), $bobTracked->getTargetRecord());
-		self::assertNotSame($adaTracked->getTargetRecord(), $bobTracked->getTargetRecord());
+		$session->schemaOf($this->representation(['name' => 'Ada']));
 	}
 
-	public function testManualRepresentationAttachmentAddsRootFieldToExistingRootRecord(): void
+	public function testDetachWithIdentifyUnlinksM2MTargetWithoutDeletingIt(): void
 	{
-		$users = $this->registry()->getCollection('users');
-		$record = RecordState::new($users, ['id' => 10]);
-		$representation = new stdClass();
-		$representations = new RepresentationStateStore();
-		$rootSchema = new RepresentationSchema($users);
-		$id = new RepresentationFieldSchema('id', $users, 'id');
-		$rootSchema->addField($id);
-		$representations->add($representation, new RepresentationState($rootSchema, [
-			new RepresentationFieldStateItem($id, $record, 'id', $record->getRevision()),
-		]));
+		[$users, $tags] = $this->usersWithTags();
+		$session = new Session(new RecordingCommandExecutor());
+		$ownerRecord = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Ada']);
+		$session->getRecords()->add($ownerRecord);
+		$owner = $this->representation(['id' => 10, 'name' => 'Ada']);
+		$this->adoptRecord($session, $owner, $this->ownerSchemaWithTags($users, $tags), $ownerRecord);
 
-		$manualSchema = new RepresentationSchema($users);
-		$manualSchema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$tag = $session->identify($tags, ['id' => 3]);
+		$session->detach($tag, $owner, 'tags');
 
-		$builder = new ManualRepresentationStateBuilder();
-		$existingState = $representations->get($representation);
-		$session = new Session(
-			new RecordingCommandExecutor(),
-			context: new SessionContext(new RecordStateStore(), $representations),
-		);
-		$session->adopt(
-			$representation,
-			$builder->buildOverlay(
-				$existingState instanceof RepresentationState ? $existingState : null,
-				$manualSchema,
-				[new RepresentationFieldShape('name', new RootRepresentationSource($record), 'name')],
-			),
-			RepresentationAttachmentMode::Replace,
-		);
-
-		$state = $representations->get($representation);
-		self::assertInstanceOf(RepresentationState::class, $state);
-		self::assertSame($record, $state->getFieldItem('name')->getRecord());
-	}
-
-	public function testManualRepresentationAttachmentUsesSourcePathWhenCollectionsMatch(): void
-	{
-		$users = $this->registry()->getCollection('users');
-		$rootRecord = RecordState::new($users, ['id' => 10]);
-		$managerRecord = RecordState::new($users, ['id' => 20]);
-		$representation = new stdClass();
-		$representations = new RepresentationStateStore();
-		$existingSchema = new RepresentationSchema($users);
-		$rootField = new RepresentationFieldSchema('name', $users, 'name');
-		$managerField = new RepresentationFieldSchema('managerName', $users, 'name', sourcePath: ['manager']);
-		$existingSchema->addField($rootField);
-		$existingSchema->addField($managerField);
-		$representations->add($representation, new RepresentationState($existingSchema, [
-			new RepresentationFieldStateItem($rootField, $rootRecord, 'name', $rootRecord->getRevision()),
-			new RepresentationFieldStateItem($managerField, $managerRecord, 'name', $managerRecord->getRevision()),
-		]));
-
-		$manualSchema = new RepresentationSchema($users);
-		$manualSchema->addField(new RepresentationFieldSchema('managerEmail', $users, 'email', sourcePath: ['manager']));
-
-		$builder = new ManualRepresentationStateBuilder();
-		$existingState = $representations->get($representation);
-		$session = new Session(
-			new RecordingCommandExecutor(),
-			context: new SessionContext(new RecordStateStore(), $representations),
-		);
-		$session->adopt(
-			$representation,
-			$builder->buildOverlay($existingState instanceof RepresentationState ? $existingState : null, $manualSchema, []),
-			RepresentationAttachmentMode::Replace,
-		);
-
-		$state = $representations->get($representation);
-		self::assertInstanceOf(RepresentationState::class, $state);
-		self::assertSame($managerRecord, $state->getFieldItem('managerEmail')->getRecord());
-		self::assertNotSame($rootRecord, $state->getFieldItem('managerEmail')->getRecord());
-	}
-
-	public function testManualRepresentationAttachmentThrowsWhenSourcePathCannotResolve(): void
-	{
-		$users = $this->registry()->getCollection('users');
-		$record = RecordState::new($users, ['id' => 10]);
-		$representation = new stdClass();
-		$representations = new RepresentationStateStore();
-		$existingSchema = new RepresentationSchema($users);
-		$rootField = new RepresentationFieldSchema('name', $users, 'name');
-		$existingSchema->addField($rootField);
-		$representations->add($representation, new RepresentationState($existingSchema, [
-			new RepresentationFieldStateItem($rootField, $record, 'name', $record->getRevision()),
-		]));
-
-		$manualSchema = new RepresentationSchema($users);
-		$manualSchema->addField(new RepresentationFieldSchema('managerEmail', $users, 'email', sourcePath: ['manager']));
-
-		$this->expectException(StateException::class);
-		$this->expectExceptionMessage("Cannot attach manual projection field 'managerEmail'");
-
-		(new ManualRepresentationStateBuilder())->buildOverlay(
-			$representations->get($representation),
-			$manualSchema,
-			[],
-		);
-	}
-
-	#[RequiresPhpExtension('pdo_sqlite')]
-	public function testFromPathResolvesTrackedSchemaWithoutSelectQuery(): void
-	{
-		[$session, $user] = $this->trackedUserWithPostsRelation();
-		$pathResolver = new PathResolver($session->getRepresentations());
-
-		$resolved = $pathResolver->resolve($user, 'posts');
-
-		self::assertSame('posts', $resolved->getRelationName());
-	}
-
-	public function testManualRepresentationDoesNotAddDurableProjectionStores(): void
-	{
-		$methods = get_class_methods('ON\Data\ORM\Session');
-
-		foreach ([
-			'getProjectionSources',
-			'getProjectionRecords',
-			'getProjectionRelations',
-			'trackProjectionSource',
-			'trackProjectionRelation',
-		] as $method) {
-			self::assertNotContains($method, $methods);
-		}
-
-		self::assertContains('getRecords', $methods);
-		self::assertContains('getRepresentations', $methods);
-		self::assertContains('getRelations', $methods);
-	}
-
-	private function registry(): Registry
-	{
-		$registry = new Registry();
-		$registry->collection('users')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('name', 'string')->end();
-
-		return $registry;
+		$relation = $session->getRelations()->get($ownerRecord, 'tags');
+		self::assertInstanceOf(ToManyRelationState::class, $relation);
+		$removed = $relation->getRemoved();
+		self::assertCount(1, $removed);
+		$tagRecord = $session->getRecords()->getFromRepresentation($session->getRepresentations()->get($tag));
+		self::assertInstanceOf(RecordState::class, $tagRecord);
+		self::assertSame($tagRecord, $removed[0]);
+		self::assertTrue($session->getRepresentations()->has($tag));
+		self::assertFalse($tagRecord->isRemoved());
+		self::assertTrue($tagRecord->isClean());
 	}
 
 	/**
-	 * @return array{0: Session, 1: stdClass}
+	 * @return array{0: CollectionInterface, 1: CollectionInterface, 2: CollectionInterface}
 	 */
-	private function trackedUserWithPostsRelation(): array
+	private function usersWithTags(): array
 	{
-		$harness = SqliteMemoryHarness::create();
-		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
-		$harness->exec('CREATE TABLE posts (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT)');
-		$harness->exec('CREATE TABLE user_post (user_id INTEGER, post_id INTEGER)');
-		$harness->exec("INSERT INTO users (id, name) VALUES (1, 'Ada')");
-
 		$registry = new Registry();
-		$registry->collection('posts')
-			->table('posts')
+		$registry->collection('tags')
 			->primaryKey('id')
-			->field('id', 'int')->autoIncrement(true)->end()
-			->field('title', 'string')->end();
-		$registry->collection('user_post')
-			->table('user_post')
+			->field('id', 'int')->end()
+			->field('label', 'string')->end()
+			->end();
+		$registry->collection('user_tag')
 			->field('user_id', 'int')->end()
-			->field('post_id', 'int')->end();
+			->field('tag_id', 'int')->end()
+			->end();
 		$users = $registry->collection('users')
-			->table('users')
 			->primaryKey('id')
 			->field('id', 'int')->end()
 			->field('name', 'string')->end();
-		$users->relation('posts', M2MRelation::class)
-			->collection('posts')
+		$relation = $users->relation('tags', M2MRelation::class)
+			->collection('tags')
 			->innerKey('id')
 			->outerKey('id')
-			->through('user_post')
+			->through('user_tag')
 				->innerKey('user_id')
-				->outerKey('post_id')
+				->outerKey('tag_id')
 				->end();
 
-		$session = new Session($harness->commandExecutor);
-		$query = $harness->database->query($users);
-		$query->select($query->id, $query->name);
-		$query->posts->fields('id', 'title');
+		self::assertInstanceOf(M2MRelation::class, $relation);
+		$tags = $registry->getCollection('tags');
+		$through = $registry->getCollection('user_tag');
+		self::assertInstanceOf(CollectionInterface::class, $tags);
+		self::assertInstanceOf(CollectionInterface::class, $through);
 
-		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
-		self::assertInstanceOf(stdClass::class, $user);
+		return [$users, $tags, $through];
+	}
 
-		return [$session, $user];
+	private function ownerSchemaWithTags(CollectionInterface $users, CollectionInterface $tags): RepresentationSchema
+	{
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('id', $users, 'id'));
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$tagSchema = new RepresentationSchema($tags);
+		$tagSchema->addField(new RepresentationFieldSchema('id', $tags, 'id'));
+		$schema->addRelation(new RepresentationRelationSchema(
+			'tags',
+			$users,
+			'tags',
+			$tagSchema,
+			false,
+		));
+
+		return $schema;
 	}
 }

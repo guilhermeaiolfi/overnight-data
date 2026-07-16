@@ -74,7 +74,7 @@ Relation representation sync connects the two models:
 
 In strict sync paths, related objects found at those representation paths must already be tracked/adopted. Relation representation sync validates that each `MANY` item and each non-null `ONE` target has a tracked representation, and throws `SyncException` with the relation path when it does not. It does not auto-adopt related objects by itself.
 
-`Session::sync($representation, $schema)` is the explicit graph entry point for an untracked plain root object. The root schema is required for now; there is no class-to-schema inference. For an untracked root, the schema must be entity-shaped and target exactly one root collection through field schemas and/or relation owner schemas. Empty schemas and mixed/projection schemas spanning multiple root collections cannot create a new root `RecordState` and raise `StateException`. `Session::sync($representation)` can be used when the root object is already tracked. In both cases, the graph walk follows explicit `RepresentationRelationSchema` entries only. A `MANY` value may be `null` or an iterable of objects. A `ONE` value may be `null` or an object. Discovered untracked related objects are tracked with the relation schema's `getRelatedSchema()`, which is then applied to a new related `RecordState` using the existing representation adoption path. Primary-key presence is not lifecycle intent: newly discovered untracked objects (roots and related) default to `NEW`, even with a complete application-assigned primary key. Use `Session::existing($object)` when a real object should be treated as an existing row during graph sync. Use `Session::identify($collection, $key)` for key-only existing references. Upsert is not implicit. Already-tracked objects are not duplicated and keep their current lifecycle. The walker guards object identity cycles and still walks an already-tracked object once if it has not been visited.
+`Session::sync($representation, $schema)` is the explicit graph entry point for an untracked plain root object. The root schema is required for now; there is no class-to-schema inference. For an untracked root, the schema must be entity-shaped and target exactly one root collection through field schemas and/or relation owner schemas. Empty schemas and mixed/projection schemas spanning multiple root collections cannot create a new root `RecordState` and raise `StateException`. `Session::sync($representation)` can be used when the root object is already tracked. In both cases, the graph walk follows explicit `RepresentationRelationSchema` entries only. A `MANY` value may be `null` or an iterable of objects. A `ONE` value may be `null` or an object. Discovered untracked related objects are tracked with the relation schema's `getRelatedSchema()`, which is then applied to a new related `RecordState` using the existing representation adoption path. Primary-key presence is not lifecycle intent: newly discovered untracked objects (roots and related) default to `NEW`, even with a complete application-assigned primary key. Use `Session::update($object)` when a real object should be treated as an existing row during graph sync. Use `Session::identify($collection, $key)` for key-only existing references. Upsert is not implicit. Already-tracked objects are not duplicated and keep their current lifecycle. The walker guards object identity cycles and still walks an already-tracked object once if it has not been visited.
 
 Graph sync does not infer relations from collection definitions, object properties, mapper metadata, or query selections. It syncs scalar and relation runtime state, but does not plan relation persistence, flush records, execute commands, or clear relation changes. Calling `sync($object)` again refreshes state and can bring newly attached related plain objects into the session. Query/projection/mixed schemas remain valid provenance for already-tracked or query-created representations; they require existing tracked state rather than creating a new root record.
 
@@ -87,19 +87,9 @@ Object graphs and flat mutable projections use different adoption paths:
 
 For flat projections, the compiler may add hidden identity selections tagged `SelectionTag::INTERNAL`. `QueryRepresentationIdentityColumns` maps source-path primary-key fields to result row keys, allowing adoption to read identity values and resolve `RecordState` keys. Internal selections are stripped from public query results, but they are required for mutable flat projection tracking.
 
-Flat projection adoption is used by mutable `stdClass` query export. Manual mutable projections use the same schema model, but they supply concrete record identities without executing a query.
+Flat projection adoption is used by mutable `stdClass` query export and by `Session::update`/`create` with `SelectQuery::projection()`. See [`session-save-api.md`](./session-save-api.md).
 
-Manual projections normalize manual property declarations into `RepresentationFieldSchema` entries with `sourcePath` metadata, then attach them to concrete `RecordState` objects through `RepresentationFieldStateItem` entries:
-
-```text
-Session::projection($object)
-  -> from(collection) supplies the source
-  -> create()/existing()/tracked() supplies the concrete RecordState
-  -> properties($target->field->as(...)) supplies the public path
-  -> end() merges RepresentationSchema provenance into the object state
-```
-
-For to-many and M2M relations, a declared relation field does not create an item by itself. The projection must first call `create($u->posts)`, `existing($u->posts, $key)`, or `tracked($u->posts, $object)` so relation runtime state has one concrete item to add.
+Inbound flat binds resolve `RecordState` per source via `ProjectionRepresentationStateBuilder` (keys from the DTO / flat ops, or `RecordState::new` for create). Relation add for flat `create('posts')` registers intent on `ToManyRelationState` / `ToOneRelationState`.
 
 Relation persistence planning then consumes changed `ToManyRelationState` and `ToOneRelationState` instances. Built-in planners cover many-to-many, has-many, belongs-to, and has-one relation definitions. `FirstOfMany` has no persistence planner by default — it is a read-only ordered view over has-many.
 
@@ -161,7 +151,7 @@ Use `getRelatedSchema()` for both cardinalities. Do not introduce separate `getI
 
 - `RepresentationState::fromRecords()` builds field and relation state items from a schema and concrete `RecordState` instances keyed by source path.
 - `QueryRepresentationStateBuilder` consumes compiled `RepresentationSource` entries, resolves flat projection identities through `QueryRepresentationIdentityColumns`, and builds field state items against concrete source records.
-- Manual projection tracking merges structural overlays and attaches new fields to concrete records from manual sources.
+- Session save-API flat binds attach field sources to concrete records via `ProjectionRepresentationStateBuilder`.
 
 These attachment steps do not mutate the reusable schema shape. `Session::sync($object, $schema)` is the explicit API that chooses related objects from relation path values, then uses each relation schema's `getRelatedSchema()` with the existing adoption path. Schema attachment still does not infer relations from objects or plan relation persistence.
 
@@ -186,7 +176,7 @@ RepresentationStateResolver      -> already-tracked related objects only
 
 `MANY` schemas become `ToManyRelationState` runtime state. `ONE` schemas become `ToOneRelationState` runtime state. `Session::sync($object, $schema)` exposes this graph-aware representation sync step directly for plain objects with a single-collection root schema, and `Session::sync($object)` refreshes an already-tracked object graph. `Session::flush()` still runs strict sync automatically before planning and flushing.
 
-Manual projection field and relation schemas may opt into "missing path means no write" behavior because manually extended flat objects often declare optional write paths. Normal graph and query-created schemas remain strict: missing writable scalar paths or malformed relation values still raise through sync.
+Normal graph and query-created schemas remain strict: missing writable scalar paths or malformed relation values still raise through sync. Flat save-API overlays follow the same scalar sync rules after adoption.
 
 `Session::flush()` does not adopt newly attached untracked objects. If a new related plain object is attached after the last explicit `sync($object)`, `flush()` raises through the strict relation synchronization path. Call `sync($object)` again to refresh runtime state before flushing.
 

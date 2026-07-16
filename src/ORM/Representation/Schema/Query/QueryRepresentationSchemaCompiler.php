@@ -83,7 +83,7 @@ final class QueryRepresentationSchemaCompiler
 			? $this->schemaAssembler->defaultFieldShapes($collection, $query)
 			: $this->selectionNormalizer->normalizeSelections($this->getRootExplicitScalarSelections($query));
 
-		$this->schemaAssembler->assembleInto($schema, $shapes, $sourceResolver);
+		$this->schemaAssembler->assembleInto($schema, $shapes, $sourceResolver, skipWhenMissing: true);
 
 		$this->assemblePrimaryKeyFields($schema, $collection, $query, $sourceResolver);
 	}
@@ -109,7 +109,7 @@ final class QueryRepresentationSchemaCompiler
 			$shapes[] = $shape;
 		}
 
-		$this->schemaAssembler->assembleInto($schema, $shapes, $sourceResolver);
+		$this->schemaAssembler->assembleInto($schema, $shapes, $sourceResolver, skipWhenMissing: true);
 	}
 
 	/**
@@ -182,6 +182,7 @@ final class QueryRepresentationSchemaCompiler
 				$schema,
 				$this->selectionNormalizer->normalizeSelections([$selection]),
 				$sourceResolver,
+				skipWhenMissing: true,
 			);
 		}
 	}
@@ -272,7 +273,7 @@ final class QueryRepresentationSchemaCompiler
 			? $this->explicitFieldShapes($explicitFields, $targetCollection)
 			: $this->schemaAssembler->defaultFieldShapes($targetCollection, $targetCollection);
 
-		$this->schemaAssembler->assembleInto($schema, $shapes, $sourceResolver);
+		$this->schemaAssembler->assembleInto($schema, $shapes, $sourceResolver, skipWhenMissing: true);
 		$this->assemblePrimaryKeyFields($schema, $targetCollection, $targetCollection, $sourceResolver);
 
 		return $schema;

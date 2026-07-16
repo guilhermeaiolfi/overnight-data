@@ -111,7 +111,7 @@ final class MutableQueryResultTracker implements MutableResultHandler
 		$schema = $compilation->getSchema();
 
 		if ($this->hasReadableRootPrimaryKey($object, $schema)) {
-			$this->session->existing($object);
+			$this->session->update($object);
 		}
 		$this->markLoadedRelatedObjectsExisting($object, $schema);
 		$this->session->sync($object, $schema);
@@ -154,7 +154,7 @@ final class MutableQueryResultTracker implements MutableResultHandler
 		foreach ($schema->getRelations() as $relation) {
 			if ($relation->isMany()) {
 				foreach ($this->reader->readItems($object, $relation, static fn (string $message) => new RuntimeException($message)) as $item) {
-					$this->session->existing($item);
+					$this->session->update($item);
 					$this->markLoadedRelatedObjectsExisting($item, $relation->getRelatedSchema());
 				}
 
@@ -164,7 +164,7 @@ final class MutableQueryResultTracker implements MutableResultHandler
 			if ($relation->isSingle()) {
 				$target = $this->reader->readTarget($object, $relation, static fn (string $message) => new RuntimeException($message));
 				if ($target !== null) {
-					$this->session->existing($target);
+					$this->session->update($target);
 					$this->markLoadedRelatedObjectsExisting($target, $relation->getRelatedSchema());
 				}
 			}

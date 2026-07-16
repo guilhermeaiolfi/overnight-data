@@ -23,7 +23,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for release history and [`docs/quickstart.md`
 - Relation loading: structured relation selection for nested results, loader-owned join or separate-query execution, and parser-backed result assembly for built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relations.
 - ORM persistence: `RecordState`-backed scalar insert/update/delete planning, scalar and relation representation synchronization, configured relation persistence planning, `FlushExecutor` / `Session` orchestration, Cycle-backed command execution, affected-row validation, and simple auto-increment primary-key merge after inserts.
 - Query result export: array results by default, read-only `stdClass` and public-property class export, and mutable `stdClass` query export with flat projection provenance.
-- Manual mutable projections: non-executing `Session::projection($object)->from(...)->properties(...)->end()` provenance for application-created or manually extended objects.
+- Session save API: `update` / `create` / `detach` with `SelectQuery::projection()` or `schemaOf()` for inbound shapes; pending intents apply on `sync()`, then `flush()`.
 
 ## Query shape and persistence source are independent
 
@@ -49,7 +49,7 @@ $session->flush();
 // Updates companies.name.
 ```
 
-For objects that did not come from a query, `Session::projection($object)` can declare the same kind of field provenance manually with `from()`, `create()`, `existing()`, `tracked()`, and `properties()`. Mutable export is `stdClass`-only for now. User-defined classes are supported for read-only export only.
+For objects that did not come from a query, compile shape with `SelectQuery::projection()` (or reuse `Session::schemaOf($tracked)`), then bind with `Session::update` / `create`, call `sync()`, and `flush()`. See [`docs/orm/session-save-api.md`](docs/orm/session-save-api.md). Mutable export is `stdClass`-only for now. User-defined classes are supported for read-only export only.
 
 ## Query result modes
 
@@ -183,4 +183,4 @@ GitHub Actions runs `composer validate --strict` and `composer check` on PHP 8.3
 - `docs/orm/persistence.md` documents the ORM persistence pipeline, affected-row validation, Cycle command executor boundary, generated-key support, relation persistence planning boundary, and write-side limitations.
 - `docs/orm/representation-schema.md` documents representation schema, flat projection adoption, mapper/query/tracking boundaries, and scalar sync guardrails.
 - `docs/orm/mutable-select-query-projections.md` documents mutable `SelectQuery` projection provenance, flattened related-field updates, relation intent from queried objects, and current projection boundaries.
-- `docs/orm/manual-mutable-projections.md` documents manual non-executing `from()` / `properties()` projections for objects that need explicit record identities and relation item intent.
+- `docs/orm/session-save-api.md` documents `update` / `create` / `detach` / `sync` / `flush`, `SelectQuery::projection()`, and `RepresentationIntentStore`.

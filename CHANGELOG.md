@@ -7,6 +7,14 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 ## [Unreleased]
 
+### Added
+
+- **Session save API** — `Session::update` / `create` / `detach` / `schemaOf` with `SelectQuery::projection()` shape compilation; pending intents in `RepresentationIntentStore` apply on `sync()` (not at flush). Flat related paths via `IntentBuilder::update($path)` / `create($path)`. Docs: [`docs/orm/session-save-api.md`](docs/orm/session-save-api.md).
+
+### Removed
+
+- **Manual mutable projections** — `Session::projection()` Manual builder stack (`Representation\Schema\Manual`, `State\Manual`) and `Session::existing()` / `ExistingIntentStore` are removed in favor of the save API above.
+
 ### Fixed
 
 - **Write-path field conversion** — `ConvertingCommandExecutor` converts canonical PHP command values to storage through `ConversionGateway` (`PhpRepresentation` → `StorageRepresentation`) before delegating to a backend executor. `CycleRuntimeFactory` wraps `CycleCommandExecutor` with that decorator and shares one gateway across query and command paths.
@@ -17,7 +25,7 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 - **Fail-closed flush** — `FlushExecutor` / `Session::flush()` require `TransactionalCommandExecutorInterface` and throw `NonTransactionalFlushException` otherwise. The unsafe non-transactional flush path is removed.
 - **Mutable query export bridge** — `SelectQuery::mutable()` takes `MutableResultHandler` (implemented by `Session`). Compile/track live in `MutableQueryResultTracker`; Query no longer imports ORM types.
 - **SelectQuery fetch path** — `fetchAll()` / `fetchOne()` / `iterate()` resolve an executor once via `getLoadRuntime()` → `LoadRuntime` (empty-relation fast path inside it).
-- **Graph adoption intent** — untracked roots with a complete primary key are no longer adopted as clean/existing by default. Roots and related objects both default to `NEW` unless marked with `Session::existing($object)` (or attached via `identify()` / query tracking).
+- **Graph adoption intent** — untracked roots with a complete primary key are no longer adopted as clean/existing by default. Roots and related objects both default to `NEW` unless marked with `Session::update($object)` (or attached via `identify()` / query tracking).
 - **`SelectQuery::select(RelationRef)`** — relation refs are accepted for nested loading. Bare `$u->posts` is equivalent to `$u->posts->load()` (all visible fields); already-configured refs keep their options. Relation-only `select()` keeps default root fields. Foreign-query refs raise `RelationSelectionException::foreignQueryRelation()`.
 - **Separate-query parent-key chunking** — built-in loaders run separate-query continuations in batches of 100 parent keys (`AbstractLoader::executeSeparateByReferences()`), matching Doctrine eager `IN` batching. Parent-key filters use tagged `ConditionList` (`ConditionTag::CORRELATION`), not user `where()`. Custom `AbstractLoader` subclasses may override `separateQueryBatchSize()`.
 - **Tagged query conditions** — `SelectQuery` stores WHERE predicates in `ConditionList` with tags (`USER`, `CORRELATION`, reserved `SCOPE` / `INTERNAL`), parallel to selection tags.

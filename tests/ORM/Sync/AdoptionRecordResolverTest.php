@@ -10,7 +10,8 @@ use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Sync\AdoptionRecordResolver;
-use ON\Data\ORM\Representation\Sync\ExistingIntentStore;
+use ON\Data\ORM\Representation\Sync\RepresentationIntentLifecycle;
+use ON\Data\ORM\Representation\Sync\RepresentationIntentStore;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
@@ -61,10 +62,10 @@ final class AdoptionRecordResolverTest extends TestCase
 	{
 		$representation = $this->representation(['id' => 10, 'name' => 'Ada']);
 		$records = new RecordStateStore();
-		$intents = new ExistingIntentStore();
-		$intents->mark($representation);
+		$intents = new RepresentationIntentStore();
+		$intents->ensure($representation, RepresentationIntentLifecycle::Update);
 
-		$record = (new AdoptionRecordResolver(existingIntents: $intents))
+		$record = (new AdoptionRecordResolver(intents: $intents))
 			->resolve($representation, $this->userSchemaWithId(), $records, true);
 
 		self::assertTrue($record->isClean());
@@ -131,10 +132,10 @@ final class AdoptionRecordResolverTest extends TestCase
 		$schema->addField(new RepresentationFieldSchema('id', $this->users(), 'id'));
 		$schema->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
 		$representation = $this->representation(['id' => 10]);
-		$intents = new ExistingIntentStore();
-		$intents->mark($representation);
+		$intents = new RepresentationIntentStore();
+		$intents->ensure($representation, RepresentationIntentLifecycle::Update);
 
-		$record = (new AdoptionRecordResolver(existingIntents: $intents))
+		$record = (new AdoptionRecordResolver(intents: $intents))
 			->resolve($representation, $schema, new RecordStateStore(), true);
 
 		self::assertTrue($record->isClean());

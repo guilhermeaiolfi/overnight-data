@@ -10,6 +10,8 @@ use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Condition\ConditionList;
 use ON\Data\Query\Condition\ConditionTag;
@@ -490,6 +492,15 @@ final class SelectQuery implements QuerySourceInterface
 		$this->resultClass = $class;
 
 		return $this;
+	}
+
+	/**
+	 * Compile this select into a structural RepresentationSchema for Session::update/create.
+	 * Does not execute the query.
+	 */
+	public function projection(): RepresentationSchema
+	{
+		return (new QueryRepresentationSchemaCompiler())->compileSchema($this);
 	}
 
 	public function getResultClass(): ?string
