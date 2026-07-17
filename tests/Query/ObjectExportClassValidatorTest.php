@@ -68,13 +68,12 @@ final class ObjectExportClassValidatorTest extends TestCase
 		ObjectExportClassValidator::assertSupported($class);
 	}
 
-	public function testRejectsClassWithRequiredConstructorArgs(): void
+	public function testAcceptsClassWithRequiredConstructorArgs(): void
 	{
 		$class = RequiredCtorLoader::class;
 
-		$this->expectException(ObjectExportException::class);
-		$this->expectExceptionMessage('Object export requires a class with no required constructor arguments');
-
 		ObjectExportClassValidator::assertSupported($class);
+
+		self::assertTrue(class_exists($class, autoload: false));
 	}
 }

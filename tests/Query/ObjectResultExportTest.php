@@ -6,9 +6,9 @@ namespace Tests\ON\Data\Query;
 
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
+use function ON\Data\Mapper\map;
 use ON\Data\ORM\Session;
 use ON\Data\Query\Exception\ObjectExportException;
-use ON\Data\Query\Result\ObjectResultMaterializer;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -70,14 +70,12 @@ final class ObjectResultExportTest extends TestCase
 
 	public function testScalarFieldsBecomePublicProperties(): void
 	{
-		$materializer = new ObjectResultMaterializer();
-
-		$object = $materializer->materialize([
+		$object = map([
 			'id' => 42,
 			'name' => 'Ada',
 			'active' => true,
 			'score' => 9.5,
-		], stdClass::class);
+		])->to(stdClass::class);
 
 		self::assertSame(42, $object->id);
 		self::assertSame('Ada', $object->name);
@@ -87,9 +85,7 @@ final class ObjectResultExportTest extends TestCase
 
 	public function testNestedAssociativeArraysBecomeNestedStdClassObjects(): void
 	{
-		$materializer = new ObjectResultMaterializer();
-
-		$object = $materializer->materialize([
+		$object = map([
 			'id' => 1,
 			'profile' => [
 				'label' => 'Primary',
@@ -97,7 +93,7 @@ final class ObjectResultExportTest extends TestCase
 					'verified' => true,
 				],
 			],
-		], stdClass::class);
+		])->to(stdClass::class);
 
 		self::assertInstanceOf(stdClass::class, $object->profile);
 		self::assertSame('Primary', $object->profile->label);
@@ -107,16 +103,14 @@ final class ObjectResultExportTest extends TestCase
 
 	public function testRelationListArraysBecomeArraysOfStdClassObjects(): void
 	{
-		$materializer = new ObjectResultMaterializer();
-
-		$object = $materializer->materialize([
+		$object = map([
 			'id' => 1,
 			'name' => 'Guilherme',
 			'posts' => [
 				['id' => 10, 'title' => 'Hello'],
 				['id' => 11, 'title' => 'World'],
 			],
-		], stdClass::class);
+		])->to(stdClass::class);
 
 		self::assertIsArray($object->posts);
 		self::assertCount(2, $object->posts);
@@ -129,13 +123,11 @@ final class ObjectResultExportTest extends TestCase
 
 	public function testScalarListsRemainArrays(): void
 	{
-		$materializer = new ObjectResultMaterializer();
-
-		$object = $materializer->materialize([
+		$object = map([
 			'id' => 1,
 			'tags' => ['php', 'orm'],
 			'counts' => [1, 2, 3],
-		], stdClass::class);
+		])->to(stdClass::class);
 
 		self::assertSame(['php', 'orm'], $object->tags);
 		self::assertSame([1, 2, 3], $object->counts);
@@ -143,29 +135,28 @@ final class ObjectResultExportTest extends TestCase
 
 	public function testNullValuesArePreserved(): void
 	{
-		$materializer = new ObjectResultMaterializer();
-
-		$object = $materializer->materialize([
+		$object = map([
 			'id' => 1,
 			'name' => null,
 			'posts' => null,
-		], stdClass::class);
+		])->to(stdClass::class);
 
 		self::assertNull($object->name);
 		self::assertNull($object->posts);
 	}
 
-	public function testExistingObjectsAreUnchanged(): void
+	public function testExistingNestedObjectsAreRemapped(): void
 	{
-		$materializer = new ObjectResultMaterializer();
 		$existing = new stdClass();
 		$existing->label = 'kept';
 
-		$object = $materializer->materialize([
+		$object = map([
 			'profile' => $existing,
-		], stdClass::class);
+		])->to(stdClass::class);
 
-		self::assertSame($existing, $object->profile);
+		self::assertInstanceOf(stdClass::class, $object->profile);
+		self::assertSame('kept', $object->profile->label);
+		self::assertNotSame($existing, $object->profile);
 	}
 
 	public function testUnsupportedClassPassedToToThrowsClearException(): void
@@ -262,12 +253,10 @@ final class ObjectResultExportTest extends TestCase
 
 	public function testMaterializesRootUserDefinedPublicPropertyClass(): void
 	{
-		$materializer = new ObjectResultMaterializer();
-
-		$object = $materializer->materialize([
+		$object = map([
 			'id' => 1,
 			'name' => 'Ada',
-		], ExportUserRow::class);
+		])->to(ExportUserRow::class);
 
 		self::assertInstanceOf(ExportUserRow::class, $object);
 		self::assertSame(1, $object->id);
@@ -277,12 +266,15 @@ final class ObjectResultExportTest extends TestCase
 
 	public function testRejectsMissingClass(): void
 	{
-		$materializer = new ObjectResultMaterializer();
+		$query = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new ObjectExportRecordingExecutor(),
+		);
 
 		$this->expectException(ObjectExportException::class);
 		$this->expectExceptionMessage('Object export class "App\\MissingRow" does not exist.');
 
-		$materializer->materialize(['id' => 1], 'App\\MissingRow');
+		$query->to('App\\MissingRow');
 	}
 
 	public function testRejectsInterface(): void
@@ -311,17 +303,17 @@ final class ObjectResultExportTest extends TestCase
 		$query->to(AbstractExportRow::class);
 	}
 
-	public function testRejectsClassWithRequiredConstructorArgs(): void
+	public function testAcceptsClassWithRequiredConstructorArgs(): void
 	{
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
-			new ObjectExportRecordingExecutor(),
+			new ObjectExportRecordingExecutor(fetchOneRow: ['id' => 9]),
 		);
 
-		$this->expectException(ObjectExportException::class);
-		$this->expectExceptionMessage('Object export requires a class with no required constructor arguments');
+		$row = $query->to(RequiredConstructorExportRow::class)->fetchOne();
 
-		$query->to(RequiredConstructorExportRow::class);
+		self::assertInstanceOf(RequiredConstructorExportRow::class, $row);
+		self::assertSame(9, $row->id);
 	}
 
 	public function testRejectsTrait(): void
@@ -337,30 +329,29 @@ final class ObjectResultExportTest extends TestCase
 		$query->to(ExportRowTrait::class);
 	}
 
-	public function testThrowsForUnknownPublicPropertyClassKeys(): void
+	public function testIgnoresUnknownPublicPropertyClassKeys(): void
 	{
-		$materializer = new ObjectResultMaterializer();
-
-		$this->expectException(ObjectExportException::class);
-		$this->expectExceptionMessage('Object export encountered unknown property "unknown" for class');
-
-		$materializer->materialize([
+		$object = map([
 			'id' => 1,
+			'name' => 'Ada',
 			'unknown' => 'value',
-		], ExportUserRow::class);
+		])->to(ExportUserRow::class);
+
+		self::assertInstanceOf(ExportUserRow::class, $object);
+		self::assertSame(1, $object->id);
+		self::assertSame('Ada', $object->name);
+		self::assertFalse(property_exists($object, 'unknown'));
 	}
 
 	public function testNestedTypedObjectPropertyMaterializesIntoDeclaredClass(): void
 	{
-		$materializer = new ObjectResultMaterializer();
-
-		$object = $materializer->materialize([
+		$object = map([
 			'id' => 1,
 			'name' => 'Ada',
 			'profile' => [
 				'bio' => 'Hi',
 			],
-		], ExportUserWithProfileRow::class);
+		])->to(ExportUserWithProfileRow::class);
 
 		self::assertInstanceOf(ExportUserWithProfileRow::class, $object);
 		self::assertInstanceOf(ExportProfileRow::class, $object->profile);
@@ -369,16 +360,14 @@ final class ObjectResultExportTest extends TestCase
 
 	public function testPublicArrayRelationPropertyReceivesArrayOfStdClassItems(): void
 	{
-		$materializer = new ObjectResultMaterializer();
-
-		$object = $materializer->materialize([
+		$object = map([
 			'id' => 1,
 			'name' => 'Guilherme',
 			'posts' => [
 				['id' => 10, 'title' => 'Hello'],
 				['id' => 11, 'title' => 'World'],
 			],
-		], ExportUserRow::class);
+		])->to(ExportUserRow::class);
 
 		self::assertIsArray($object->posts);
 		self::assertCount(2, $object->posts);
@@ -434,14 +423,12 @@ final class ObjectResultExportTest extends TestCase
 		self::assertSame(stdClass::class, $query->copy()->getResultClass());
 	}
 
-	public function testMaterializeAllConvertsEachRow(): void
+	public function testCollectionMappingConvertsEachRow(): void
 	{
-		$materializer = new ObjectResultMaterializer();
-
-		$rows = $materializer->materializeAll([
+		$rows = map([
 			['id' => 1],
 			['id' => 2],
-		], stdClass::class);
+		])->collection()->to(stdClass::class);
 
 		self::assertCount(2, $rows);
 		self::assertInstanceOf(stdClass::class, $rows[0]);

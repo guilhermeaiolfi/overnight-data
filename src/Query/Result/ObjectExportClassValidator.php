@@ -41,15 +41,5 @@ final class ObjectExportClassValidator
 		if ($reflection->isAbstract()) {
 			throw ObjectExportException::abstractClassNotSupported($class);
 		}
-
-		$constructor = $reflection->getConstructor();
-
-		if ($constructor !== null) {
-			foreach ($constructor->getParameters() as $parameter) {
-				if (! $parameter->isOptional()) {
-					throw ObjectExportException::constructorRequiresArguments($class);
-				}
-			}
-		}
 	}
 }

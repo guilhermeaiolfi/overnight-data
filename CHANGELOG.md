@@ -24,6 +24,7 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 ### Changed
 
 - **Fail-closed flush** — `FlushExecutor` / `Session::flush()` require `TransactionalCommandExecutorInterface` and throw `NonTransactionalFlushException` otherwise. The unsafe non-transactional flush path is removed.
+- **Query object export** — `SelectQuery::to(...)` materializes rows through `map($row)->to(...)` (and `map($rows)->collection()->to(...)`) instead of a query-local hydrator. Constructor/readonly targets follow mapper rules; unknown keys are ignored.
 - **Mutable query export bridge** — `SelectQuery::mutable()` takes `MutableResultHandler` (implemented by `Session`). Compile/track live in `MutableQueryResultTracker`; Query no longer imports ORM types.
 - **SelectQuery fetch path** — `fetchAll()` / `fetchOne()` / `iterate()` resolve an executor once via `getLoadRuntime()` → `LoadRuntime` (empty-relation fast path inside it).
 - **Graph adoption intent** — untracked roots with a complete primary key are no longer adopted as clean/existing by default. Roots and related objects both default to `NEW` unless marked with `Session::update($object)` (or attached via `identify()` / query tracking).

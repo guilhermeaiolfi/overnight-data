@@ -40,23 +40,6 @@ final class ObjectExportException extends InvalidArgumentException
 		));
 	}
 
-	public static function constructorRequiresArguments(string $class): self
-	{
-		return new self(sprintf(
-			'Object export requires a class with no required constructor arguments; "%s" was requested.',
-			$class,
-		));
-	}
-
-	public static function unknownProperty(string $class, string $property): self
-	{
-		return new self(sprintf(
-			'Object export encountered unknown property "%s" for class "%s".',
-			$property,
-			$class,
-		));
-	}
-
 	public static function mutableRequiresStdClass(string $class): self
 	{
 		return new self(sprintf(

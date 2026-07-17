@@ -388,6 +388,27 @@ final class ObjectMappingTest extends TestCase
 		self::assertSame(['id' => 10], map($stdClass)->to([]));
 	}
 
+	public function testStdClassNestedListsPreserveArrayShape(): void
+	{
+		$object = map([
+			'id' => 1,
+			'tags' => ['php', 'orm'],
+			'posts' => [
+				['id' => 10, 'title' => 'Hello'],
+			],
+			'profile' => [
+				'bio' => 'Hi',
+			],
+		])->to(stdClass::class);
+
+		self::assertSame(['php', 'orm'], $object->tags);
+		self::assertIsArray($object->posts);
+		self::assertInstanceOf(stdClass::class, $object->posts[0]);
+		self::assertSame(10, $object->posts[0]->id);
+		self::assertInstanceOf(stdClass::class, $object->profile);
+		self::assertSame('Hi', $object->profile->bio);
+	}
+
 	public function testUnsupportedTargetsFailClearly(): void
 	{
 		$gateway = ConversionGateway::createDefault();

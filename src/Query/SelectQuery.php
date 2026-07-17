@@ -10,6 +10,7 @@ use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
+use function ON\Data\Mapper\map;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Condition\ConditionInterface;
@@ -32,7 +33,6 @@ use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelectionTree;
 use ON\Data\Query\Result\MutableResultHandler;
 use ON\Data\Query\Result\ObjectExportClassValidator;
-use ON\Data\Query\Result\ObjectResultMaterializer;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\Sort\Sort;
@@ -650,7 +650,7 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
-	 * @return list<array<string, mixed>>|list<stdClass>
+	 * @return list<array<string, mixed>>|list<object>
 	 */
 	public function fetchAll(): array
 	{
@@ -658,7 +658,14 @@ final class SelectQuery implements QuerySourceInterface
 		$preparation = $handler?->prepare($this);
 		$runtime = $this->getLoadRuntime(fresh: $handler !== null);
 		$rows = $runtime->fetchAll();
-		$materialized = $this->materializeRows($this->publicRows($rows));
+		$publicRows = $this->publicRows($rows);
+
+		if ($this->resultClass === null) {
+			$materialized = $publicRows;
+		} else {
+			/** @var list<object> $materialized */
+			$materialized = map($publicRows)->collection()->to($this->resultClass);
+		}
 
 		if ($handler !== null && $preparation !== null) {
 			$handler->track($this, $preparation, $rows, $materialized);
@@ -668,7 +675,7 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
-	 * @return array<string, mixed>|stdClass|null
+	 * @return array<string, mixed>|object|null
 	 */
 	public function fetchOne(): array|object|null
 	{
@@ -681,7 +688,14 @@ final class SelectQuery implements QuerySourceInterface
 			return null;
 		}
 
-		$materialized = $this->materializeRow($this->publicRow($row));
+		$publicRow = $this->publicRow($row);
+
+		if ($this->resultClass === null) {
+			$materialized = $publicRow;
+		} else {
+			/** @var object $materialized */
+			$materialized = map($publicRow)->to($this->resultClass);
+		}
 
 		if ($handler !== null && $preparation !== null && is_object($materialized)) {
 			$handler->track($this, $preparation, [$row], [$materialized]);
@@ -691,7 +705,7 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
-	 * @return iterable<array<string, mixed>|stdClass>
+	 * @return iterable<array<string, mixed>|object>
 	 */
 	public function iterate(): iterable
 	{
@@ -709,7 +723,7 @@ final class SelectQuery implements QuerySourceInterface
 			return $this->publicIterable($rows);
 		}
 
-		return $this->materializeIterable($rows);
+		return $this->mapPublicRows($rows, $this->resultClass);
 	}
 
 	private function getLoadRuntime(bool $fresh = false): Relation\LoadRuntime
@@ -801,47 +815,18 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
-	 * @param list<array<string, mixed>> $rows
-	 *
-	 * @return list<array<string, mixed>>|list<stdClass>
-	 */
-	private function materializeRows(array $rows): array
-	{
-		if ($this->resultClass === null) {
-			return $rows;
-		}
-
-		return (new ObjectResultMaterializer())->materializeAll($rows, $this->resultClass);
-	}
-
-	/**
-	 * @param array<string, mixed> $row
-	 *
-	 * @return array<string, mixed>|stdClass
-	 */
-	private function materializeRow(array $row): array|object
-	{
-		if ($this->resultClass === null) {
-			return $row;
-		}
-
-		return (new ObjectResultMaterializer())->materialize($row, $this->resultClass);
-	}
-
-	/**
 	 * @param iterable<array<string, mixed>> $rows
+	 * @param class-string $resultClass
 	 *
-	 * @return iterable<stdClass>
+	 * @return iterable<object>
 	 */
-	private function materializeIterable(iterable $rows): iterable
+	private function mapPublicRows(iterable $rows, string $resultClass): iterable
 	{
-		$resultClass = $this->resultClass;
-		assert($resultClass !== null);
-
-		$materializer = new ObjectResultMaterializer();
-
 		foreach ($rows as $row) {
-			yield $materializer->materialize($this->publicRow($row), $resultClass);
+			/** @var object $mapped */
+			$mapped = map($this->publicRow($row))->to($resultClass);
+
+			yield $mapped;
 		}
 	}
 

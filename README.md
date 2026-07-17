@@ -70,7 +70,7 @@ $query->to(stdClass::class)->fetchAll()
 
 $query->to(UserRow::class)->fetchAll()
     // list<UserRow>
-    // UserRow is a no-required-constructor public-property class
+    // UserRow is a public-property (or constructor-promoted) class
 
 $query->to(stdClass::class)->mutable($session)->fetchAll()
     // tracked mutable stdClass objects
@@ -103,10 +103,9 @@ Public-property class export requirements:
 
 - `stdClass` is supported.
 - User-defined public-property classes are supported for read-only export.
-- Classes must be instantiable without required constructor arguments.
-- Public result keys must match public properties.
+- Public result keys must match public properties (or constructor/promoted parameters via the mapper).
 - Nested typed object properties may be materialized into their declared classes when supported.
-- Array relation/list properties receive arrays of `stdClass` items unless explicitly supported otherwise.
+- Array relation/list properties annotated as `@var list<stdClass>` (or another item class) receive arrays of those items; bare `array` properties keep nested arrays.
 - Mutable export is `stdClass`-only for now.
 
 ## Mutable export requirements
