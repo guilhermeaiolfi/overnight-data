@@ -68,9 +68,9 @@ final class QueryRepresentationSchemaCompiler
 	{
 		$schema = $this->compileSchema($query);
 		$sources = RepresentationSource::fromRepresentationSchema($schema);
-		$identityColumns = $this->identityPlanner->plan($query, $sources);
+		$identities = $this->identityPlanner->plan($query, $sources);
 
-		return new QueryRepresentationPlan($schema, $sources, $identityColumns);
+		return new QueryRepresentationPlan($schema, $sources, $identities);
 	}
 
 	private function compileRootScalarFields(

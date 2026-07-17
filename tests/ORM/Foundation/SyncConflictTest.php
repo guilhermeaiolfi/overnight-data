@@ -83,8 +83,8 @@ final class SyncConflictTest extends TestCase
 		$session->getRecords()->add($record);
 		$firstRepresentation = $this->representation(['name' => 'A1']);
 		$secondRepresentation = $this->representation(['name' => 'A1']);
-		$this->adoptRecord($session, $firstRepresentation, $this->userSchema(), $record);
-		$this->adoptRecord($session, $secondRepresentation, $this->userSchema(), $record);
+		$this->adoptWithRecord($session, $firstRepresentation, $this->userSchema(), $record);
+		$this->adoptWithRecord($session, $secondRepresentation, $this->userSchema(), $record);
 
 		return [$session, $firstRepresentation, $secondRepresentation, $record];
 	}

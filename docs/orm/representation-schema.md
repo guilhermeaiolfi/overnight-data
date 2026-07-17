@@ -80,16 +80,18 @@ Graph sync does not infer relations from collection definitions, object properti
 
 ## Flat projection adoption
 
-Object graphs and flat writable projections use different adoption paths:
+Object graphs and flat writable projections share `RepresentationAdoptionEngine::attach()`:
 
-- Graph-shaped objects are adopted internally by `Session::sync($object, $schema)` / `Session::sync($object)`: one representation object resolves to nested related objects, each with its own schema branch.
-- `QueryRepresentationStateBuilder` handles flat writable projection rows: one representation object can be backed by multiple `RecordState` objects through compiled `RepresentationSource` entries.
+- Flat: walks `RepresentationSource` entries (one object → multiple `RecordState`s).
+- Graph: walks `RepresentationRelationSchema` branches recursively (one object → one `RecordState` each), using `AdoptionRecordResolver` for identity.
 
-For flat projections, the compiler may add hidden identity selections tagged `SelectionTag::INTERNAL`. `QueryRepresentationIdentityColumns` maps source-path primary-key fields to result row keys, allowing adoption to read identity values and resolve `RecordState` keys. Internal selections are stripped from public query results, but they are required for writable flat projection tracking.
+`Session::adopt()` remains the store-a-ready-`RepresentationState` API (session layer only — no `adoptRecord` / `adoptGraph`). Policy is explicit: `Hydrate` (writable query), `Patch` / `Create` (Session intents; graph resolve still honors update intent on the resolver).
+
+For flat projections, the compiler may add hidden identity selections tagged `SelectionTag::INTERNAL`. `QuerySourceIdentities` owns the query-local locators (`add(sourcePath, fieldName, resultKey)` / `getResultKey(sourcePath, fieldName)`) and is the adoption identity map for that prepared query on `QueryRepresentationPlan`; `getIdentity(sourcePath, $rawRow)` uses the row only as a lookup bag. Session flat intents build one `StaticSourceIdentities` per adoption from `identity()` / flat keys. There is no identity map per row.
 
 Flat projection adoption is used by writable `stdClass` query export and by `Session::update`/`create` with `SelectQuery::projection()`. See [`session-save-api.md`](./session-save-api.md).
 
-Inbound flat binds resolve `RecordState` per source via `ProjectionRepresentationStateBuilder` (keys from the DTO / flat ops, or `RecordState::new` for create). Relation add for flat `create('posts')` registers intent on `ToManyRelationState` / `ToOneRelationState`.
+Inbound flat binds resolve `RecordState` per source via the same engine (keys from the DTO / flat ops, or `RecordState::new` for create). Relation add for flat `create('posts')` registers intent on `ToManyRelationState` / `ToOneRelationState`.
 
 Relation persistence planning then consumes changed `ToManyRelationState` and `ToOneRelationState` instances. Built-in planners cover many-to-many, has-many, belongs-to, and has-one relation definitions. `FirstOfMany` has no persistence planner by default — it is a read-only ordered view over has-many.
 
@@ -150,8 +152,7 @@ Use `getRelatedSchema()` for both cardinalities. Do not introduce separate `getI
 `RepresentationSchema` stays structure-only. It is attached to concrete runtime state by services that create `RepresentationState` items:
 
 - `RepresentationState::fromRecords()` builds field and relation state items from a schema and concrete `RecordState` instances keyed by source path.
-- `QueryRepresentationStateBuilder` consumes compiled `RepresentationSource` entries, resolves flat projection identities through `QueryRepresentationIdentityColumns`, and builds field state items against concrete source records.
-- Session save-API flat binds attach field sources to concrete records via `ProjectionRepresentationStateBuilder`.
+- `RepresentationAdoptionEngine::attach()` builds flat projections or walks nested graphs, then stores into session maps. Resolves identities from the object, `RepresentationSourceIdentities`, and/or `AdoptionRecordResolver` (kept separate so the engine stays focused).
 
 These attachment steps do not mutate the reusable schema shape. `Session::sync($object, $schema)` is the explicit API that chooses related objects from relation path values, then uses each relation schema's `getRelatedSchema()` with the existing adoption path. Schema attachment still does not infer relations from objects or plan relation persistence.
 

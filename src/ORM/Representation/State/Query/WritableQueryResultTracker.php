@@ -9,17 +9,19 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\Sync\AdoptionPolicy;
 use ON\Data\ORM\Representation\Sync\AdoptionRecordResolver;
+use ON\Data\ORM\Representation\Sync\RepresentationAdoptionContext;
+use ON\Data\ORM\Representation\Sync\RepresentationAdoptionEngine;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
 use ON\Data\ORM\Session;
 use ON\Data\Query\Result\WritablePreparation;
 use ON\Data\Query\Result\WritableResultHandler;
 use ON\Data\Query\SelectQuery;
-use RuntimeException;
 
 /**
  * Writable query export bridge: compiles projections ({@see prepare()}) and routes
- * results into Session tracking ({@see track()}).
+ * results into Session tracking via {@see RepresentationAdoptionEngine}.
  *
  * Stateless for preparations — the plan token is owned by the caller (SelectQuery
  * holds it for the duration of one fetch).
@@ -30,19 +32,21 @@ final class WritableQueryResultTracker implements WritableResultHandler
 
 	private QueryRepresentationSchemaCompiler $compiler;
 
-	private AdoptionRecordResolver $recordResolver;
+	private RepresentationAdoptionEngine $adoptionEngine;
 
 	public function __construct(
 		private readonly Session $session,
-		private ?QueryRepresentationStateBuilder $stateBuilder = null,
 		?RepresentationReader $reader = null,
 		?QueryRepresentationSchemaCompiler $compiler = null,
 		?AdoptionRecordResolver $recordResolver = null,
+		?RepresentationAdoptionEngine $adoptionEngine = null,
 	) {
-		$this->stateBuilder ??= new QueryRepresentationStateBuilder();
 		$this->reader = $reader ?? new RepresentationReader();
 		$this->compiler = $compiler ?? new QueryRepresentationSchemaCompiler();
-		$this->recordResolver = $recordResolver ?? new AdoptionRecordResolver();
+		$this->adoptionEngine = $adoptionEngine ?? new RepresentationAdoptionEngine(
+			$this->reader,
+			$recordResolver ?? new AdoptionRecordResolver(reader: $this->reader),
+		);
 	}
 
 	public function prepare(SelectQuery $query): WritablePreparation
@@ -101,13 +105,17 @@ final class WritableQueryResultTracker implements WritableResultHandler
 		array $sourceRow,
 	): void {
 		if ($compilation->hasNonRootSources()) {
-			$state = $this->stateBuilder->build(
+			$this->adoptionEngine->attach(
 				$object,
-				$compilation,
-				$sourceRow,
+				new RepresentationAdoptionContext(
+					schema: $compilation->getSchema(),
+					policy: AdoptionPolicy::Hydrate,
+					identities: $compilation->getIdentities(),
+					sourceRow: $sourceRow,
+				),
 				$this->session->getRecords(),
+				$this->session->getRepresentations(),
 			);
-			$this->session->adopt($object, $state);
 			$this->session->sync($object);
 
 			return;
@@ -116,30 +124,21 @@ final class WritableQueryResultTracker implements WritableResultHandler
 		$schema = $compilation->getSchema();
 
 		if ($this->hasReadableRootPrimaryKey($object, $schema)) {
-			// Query hydrate must stay clean. update() is PATCH and would dirty present fields.
-			$this->adoptLoadedExisting($object, $schema);
-			$this->adoptLoadedRelatedObjects($object, $schema);
+			$this->adoptionEngine->attach(
+				$object,
+				new RepresentationAdoptionContext(
+					schema: $schema,
+					policy: AdoptionPolicy::Hydrate,
+				),
+				$this->session->getRecords(),
+				$this->session->getRepresentations(),
+			);
 			$this->session->sync($object);
 
 			return;
 		}
 
 		$this->session->sync($object, $schema);
-	}
-
-	private function adoptLoadedExisting(object $object, RepresentationSchema $schema): void
-	{
-		if ($this->session->getRepresentations()->has($object)) {
-			return;
-		}
-
-		$record = $this->recordResolver->resolveClean(
-			$object,
-			$schema,
-			$this->session->getRecords(),
-			true,
-		);
-		$this->session->adoptRecord($object, $schema, $record);
 	}
 
 	private function hasReadableRootPrimaryKey(object $representation, RepresentationSchema $schema): bool
@@ -170,29 +169,5 @@ final class WritableQueryResultTracker implements WritableResultHandler
 		}
 
 		return true;
-	}
-
-	private function adoptLoadedRelatedObjects(
-		object $object,
-		RepresentationSchema $schema,
-	): void {
-		foreach ($schema->getRelations() as $relation) {
-			if ($relation->isMany()) {
-				foreach ($this->reader->readItems($object, $relation, static fn (string $message) => new RuntimeException($message)) as $item) {
-					$this->adoptLoadedExisting($item, $relation->getRelatedSchema());
-					$this->adoptLoadedRelatedObjects($item, $relation->getRelatedSchema());
-				}
-
-				continue;
-			}
-
-			if ($relation->isSingle()) {
-				$target = $this->reader->readTarget($object, $relation, static fn (string $message) => new RuntimeException($message));
-				if ($target !== null) {
-					$this->adoptLoadedExisting($target, $relation->getRelatedSchema());
-					$this->adoptLoadedRelatedObjects($target, $relation->getRelatedSchema());
-				}
-			}
-		}
 	}
 }

@@ -130,7 +130,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$session->getRecords()->add($owner);
 		$post = $session->identify($posts, ['id' => 5], schema: $this->postKeyOnlySchemaFor($posts));
 		$ownerRepresentation = $this->representation(['id' => 10, 'name' => 'Owner', 'posts' => [$post]]);
-		$this->adoptRecord($session, $ownerRepresentation, $this->ownerSchemaWithPostsKeyOnlyChild($users, $posts), $owner);
+		$this->adoptWithRecord($session, $ownerRepresentation, $this->ownerSchemaWithPostsKeyOnlyChild($users, $posts), $owner);
 
 		$session->sync($ownerRepresentation);
 		$session->flush();
@@ -154,8 +154,8 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$session->getRecords()->add($child);
 		$post = $this->representation(['id' => 5, 'title' => 'Draft', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['id' => 10, 'name' => 'Owner', 'posts' => [$post]]);
-		$this->adoptRecord($session, $ownerRepresentation, $this->ownerSchemaWithPosts($users, $posts), $owner);
-		$this->adoptRecord($session, $post, $this->postSchemaWithIdFor($posts), $child);
+		$this->adoptWithRecord($session, $ownerRepresentation, $this->ownerSchemaWithPosts($users, $posts), $owner);
+		$this->adoptWithRecord($session, $post, $this->postSchemaWithIdFor($posts), $child);
 
 		$session->sync($ownerRepresentation);
 

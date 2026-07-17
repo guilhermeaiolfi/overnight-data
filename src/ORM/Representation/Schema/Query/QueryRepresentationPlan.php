@@ -9,15 +9,11 @@ use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
 use ON\Data\Query\Result\WritablePreparation;
 
 /**
- * Query compilation result pairing the public RepresentationSchema with the
- * compiled structural RepresentationSource entries and QueryRepresentationIdentityColumns
- * needed to adopt flat writable query rows.
+ * Query compilation result for one writable prepare(): schema, sources, and the
+ * query-scoped {@see QuerySourceIdentities} map (locators for the whole fetch).
  *
- * Also serves as the {@see WritablePreparation} token returned from writable export
- * prepare() so SelectQuery can hold the plan locally without importing this type.
- *
- * Exists because writable SelectQuery export must pass identity metadata to
- * QueryRepresentationStateBuilder separately from the user-visible schema.
+ * Also serves as the {@see WritablePreparation} token so SelectQuery can hold the
+ * plan without importing ORM adoption types into the query layer.
  */
 final class QueryRepresentationPlan implements WritablePreparation
 {
@@ -30,7 +26,7 @@ final class QueryRepresentationPlan implements WritablePreparation
 	public function __construct(
 		private RepresentationSchema $schema,
 		array $sources,
-		private QueryRepresentationIdentityColumns $identityColumns,
+		private QuerySourceIdentities $identities,
 	) {
 		$this->sources = array_values($sources);
 	}
@@ -48,9 +44,12 @@ final class QueryRepresentationPlan implements WritablePreparation
 		return $this->sources;
 	}
 
-	public function getIdentityColumns(): QueryRepresentationIdentityColumns
+	/**
+	 * One identity map for the prepared query; reuse across all tracked rows.
+	 */
+	public function getIdentities(): QuerySourceIdentities
 	{
-		return $this->identityColumns;
+		return $this->identities;
 	}
 
 	public function hasNonRootSources(): bool

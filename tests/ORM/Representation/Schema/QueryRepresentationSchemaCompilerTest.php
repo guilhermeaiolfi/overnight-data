@@ -114,11 +114,11 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertCount(1, $internalSelections);
 		self::assertTrue($internalSelections[0]->hasTag(SelectionTag::INTERNAL));
 
-		$identityColumns = $compilation->getIdentityColumns();
-		self::assertNotNull($identityColumns->get(['company'], 'id'));
+		$identities = $compilation->getIdentities();
+		self::assertNotNull($identities->getResultKey(['company'], 'id'));
 		self::assertSame(
 			$internalSelections[0]->getSelectionKey(),
-			$identityColumns->get(['company'], 'id'),
+			$identities->getResultKey(['company'], 'id'),
 		);
 	}
 
@@ -166,7 +166,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$compilation = $this->compiler->compileResult($resultQuery);
 
 		self::assertCount(1, $resultQuery->getSelections()->getByTag(SelectionTag::INTERNAL));
-		self::assertNotNull($compilation->getIdentityColumns()->get(['company'], 'id'));
+		self::assertNotNull($compilation->getIdentities()->getResultKey(['company'], 'id'));
 	}
 
 	public function testCompileResultReturnsQueryRepresentationPlanWithSourcePathKeyedIdentities(): void
@@ -180,8 +180,8 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 
 		self::assertInstanceOf(QueryRepresentationPlan::class, $compilation);
 		self::assertTrue($compilation->getSchema()->getField('name')->getSourcePath() === ['company']);
-		self::assertNotNull($compilation->getIdentityColumns()->get(['company'], 'id'));
-		self::assertNull($compilation->getIdentityColumns()->get([], 'id'));
+		self::assertNotNull($compilation->getIdentities()->getResultKey(['company'], 'id'));
+		self::assertNull($compilation->getIdentities()->getResultKey([], 'id'));
 	}
 
 	public function testCompileResultCarriesStructuralRepresentationSources(): void
@@ -238,13 +238,13 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertSame([], $schema->getField('name')->getSourcePath());
 		self::assertSame(['manager'], $schema->getField('managerName')->getSourcePath());
 
-		$identities = $compilation->getIdentityColumns();
-		self::assertNull($identities->get([], 'id'));
-		self::assertNotNull($identities->get(['manager'], 'id'));
+		$identities = $compilation->getIdentities();
+		self::assertNull($identities->getResultKey([], 'id'));
+		self::assertNotNull($identities->getResultKey(['manager'], 'id'));
 
 		$internal = $query->getSelections()->getByTag(SelectionTag::INTERNAL);
 		self::assertCount(1, $internal);
-		self::assertSame($internal[0]->getSelectionKey(), $identities->get(['manager'], 'id'));
+		self::assertSame($internal[0]->getSelectionKey(), $identities->getResultKey(['manager'], 'id'));
 	}
 
 	public function testInternalIdentityFieldPathsDoNotCollideWithVisibleAliases(): void
@@ -259,7 +259,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 
 		self::assertTrue($schema->hasField('company_name'));
 		self::assertFalse($schema->hasField('company.id'));
-		self::assertNotNull($compilation->getIdentityColumns()->get(['company'], 'id'));
+		self::assertNotNull($compilation->getIdentities()->getResultKey(['company'], 'id'));
 	}
 
 	public function testCompilesSelectedRootRelation(): void

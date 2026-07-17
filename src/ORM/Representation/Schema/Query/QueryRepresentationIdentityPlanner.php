@@ -18,7 +18,7 @@ use ON\Data\Query\SelectQuery;
  * Given compiled structural RepresentationSource entries and a SelectQuery, this
  * ensures the query result carries enough primary-key data to adopt every
  * projection source represented by flat projected fields. It may mutate the query by
- * adding INTERNAL-tagged selections and returns QueryRepresentationIdentityColumns keyed
+ * adding INTERNAL-tagged selections and returns a QuerySourceIdentities map keyed
  * by source path + primary-key field.
  *
  * Exists to separate identity planning from structural schema compilation: it
@@ -31,23 +31,23 @@ final class QueryRepresentationIdentityPlanner
 	/**
 	 * @param list<RepresentationSource> $sources
 	 */
-	public function plan(SelectQuery $query, array $sources): QueryRepresentationIdentityColumns
+	public function plan(SelectQuery $query, array $sources): QuerySourceIdentities
 	{
 		$this->internalResultKeyCounter = 0;
 
-		$identityColumns = new QueryRepresentationIdentityColumns();
+		$identities = new QuerySourceIdentities($sources);
 
 		foreach ($sources as $source) {
-			$this->ensureIdentitySelections($query, $source, $identityColumns);
+			$this->ensureIdentitySelections($query, $source, $identities);
 		}
 
-		return $identityColumns;
+		return $identities;
 	}
 
 	private function ensureIdentitySelections(
 		SelectQuery $query,
 		RepresentationSource $source,
-		QueryRepresentationIdentityColumns $identityColumns,
+		QuerySourceIdentities $identities,
 	): void {
 		$sourcePath = $source->getPath();
 		$collection = $source->getCollection();
@@ -57,7 +57,7 @@ final class QueryRepresentationIdentityPlanner
 				continue;
 			}
 
-			if ($identityColumns->get($sourcePath, $fieldName) !== null) {
+			if ($identities->getResultKey($sourcePath, $fieldName) !== null) {
 				continue;
 			}
 
@@ -67,7 +67,7 @@ final class QueryRepresentationIdentityPlanner
 				$fieldRef->as($resultKey),
 				SelectionTag::INTERNAL,
 			);
-			$identityColumns->add($sourcePath, $fieldName, $resultKey);
+			$identities->add($sourcePath, $fieldName, $resultKey);
 		}
 	}
 

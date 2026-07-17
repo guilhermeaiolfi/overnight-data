@@ -200,7 +200,7 @@ final class RepresentationSchemaCompilationArchitectureTest extends TestCase
 		$dto = $this->representation(['id' => 10, 'name' => 'Ada']);
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Ada']);
 		$session->getRecords()->add($record);
-		$this->adoptRecord($session, $dto, $schema, $record);
+		$this->adoptWithRecord($session, $dto, $schema, $record);
 
 		self::assertSame($schema, $session->schemaOf($dto));
 		self::assertSame(['id', 'name'], $session->schemaOf($dto)->getPaths());
@@ -223,7 +223,7 @@ final class RepresentationSchemaCompilationArchitectureTest extends TestCase
 		$ownerRecord = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Ada']);
 		$session->getRecords()->add($ownerRecord);
 		$owner = $this->representation(['id' => 10, 'name' => 'Ada']);
-		$this->adoptRecord($session, $owner, $this->ownerSchemaWithTags($users, $tags), $ownerRecord);
+		$this->adoptWithRecord($session, $owner, $this->ownerSchemaWithTags($users, $tags), $ownerRecord);
 
 		$tag = $session->identify($tags, ['id' => 3]);
 		$session->detach($tag, $owner, 'tags');

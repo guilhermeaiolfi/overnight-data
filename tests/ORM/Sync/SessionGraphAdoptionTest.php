@@ -349,14 +349,13 @@ final class SessionGraphAdoptionTest extends TestCase
 
 	public function testGraphAdoptionDoesNotPlanFlushExecuteOrClearRelationChanges(): void
 	{
-		$source = file_get_contents(__DIR__ . '/../../../src/ORM/Representation/Sync/RepresentationStateAdoptionTrait.php');
-
-		self::assertIsString($source);
-		self::assertStringNotContainsString('RelationPersistencePlanner', $source);
-		self::assertStringNotContainsString('FlushExecutor', $source);
-		self::assertStringNotContainsString('RecordFlusher', $source);
-		self::assertStringNotContainsString('CommandExecutor', $source);
-		self::assertStringNotContainsString('clearChanges', $source);
+		$engine = file_get_contents(__DIR__ . '/../../../src/ORM/Representation/Sync/RepresentationAdoptionEngine.php');
+		self::assertIsString($engine);
+		self::assertStringNotContainsString('RelationPersistencePlanner', $engine);
+		self::assertStringNotContainsString('FlushExecutor', $engine);
+		self::assertStringNotContainsString('RecordFlusher', $engine);
+		self::assertStringNotContainsString('CommandExecutor', $engine);
+		self::assertStringNotContainsString('clearChanges', $engine);
 	}
 
 	private function session(RepresentationStateStore $representations, ?RecordStateStore $records = null): Session

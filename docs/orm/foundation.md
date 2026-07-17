@@ -173,7 +173,7 @@ Classic ORMs usually map identity to entity object. This ORM maps identity to re
 
 The store is responsible for aliasing both handles to the same `RecordState`. Scalar insert/flush logic calls `RecordStateStore::indexKey($state)` after assigning a generated key so keyed references can resolve the same state that was previously known only by local state hash.
 
-Flat projection identity resolution first uses visible field values, then falls back to `QueryRepresentationIdentityColumns` for hidden primary-key result columns. Structural schemas have no concrete record to resolve until adoption creates `RepresentationFieldStateItem` or `RepresentationRelationStateItem` entries.
+Flat projection identity resolution first uses visible field values, then falls back to `QuerySourceIdentities`' locator map for hidden primary-key result columns. Structural schemas have no concrete record to resolve until adoption creates `RepresentationFieldStateItem` or `RepresentationRelationStateItem` entries.
 
 `RecordStateStore` is not an object identity store. It strongly owns record state for the current session/unit of work. `ToManyRelationStore` and `ToOneRelationStore` also strongly own relation runtime state for the session.
 
@@ -487,9 +487,9 @@ Future ORM runtime will apply the child schema to child `RecordState` instances 
 
 ## Phase 1E Child Representation Adoption
 
-Phase 1E introduces `Session::adopt()` and `Session::adoptRecord()` as the small bridge between reusable child schema templates and concrete ORM tracking.
+Phase 1E introduces `Session::adopt()` as the session-layer store of a ready `RepresentationState` (records into `RecordStateStore`, representation into `RepresentationStateStore`). Building or walking a graph/flat projection is `RepresentationAdoptionEngine::attach()`, not another `adopt*` on Session.
 
-`Session::adoptRecord()` attaches a reusable `RepresentationSchema` template to a concrete child `RecordState`, registers that record in `RecordStateStore`, captures baseline record revisions in `RepresentationFieldStateItem` entries, and registers the child object as a `RepresentationState` in `RepresentationStateStore`. Future relation runtime can use a `ToManyRelationState` child's schema with `Session::adoptRecord()` around flows such as adding a post object to a user's `ToManyRelationState`.
+Typical child tracking builds `RepresentationState::fromRecords($schema, [root => $record])` then calls `Session::adopt()`. Relation runtime can use a `ToManyRelationState` child's schema the same way when adding a post object to a user's relation.
 
 `ToManyRelationState` still owns relation add/remove intent. Adoption only tracks the child representation; it does not add the item to the relation collection, inspect relation loaded state, sync representation values, persist, flush, write SQL, or mutate the child schema template.
 

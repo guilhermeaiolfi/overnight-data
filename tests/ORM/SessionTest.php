@@ -25,7 +25,6 @@ use ON\Data\ORM\Representation\Sync\RepresentationSyncer;
 use ON\Data\ORM\Session;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
-use ReflectionMethod;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
@@ -219,7 +218,7 @@ final class SessionTest extends TestCase
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
 		$representation = $this->representation(['name' => 'A1']);
 
-		$tracked = $this->adoptRecord($session, $representation, $this->templateSchema(), $record);
+		$tracked = $this->adoptWithRecord($session, $representation, $this->templateSchema(), $record);
 
 		self::assertSame($tracked, $session->getRepresentations()->get($representation));
 		self::assertSame($record, $session->getRecords()->getByStateHash($record->getStateHash()));
@@ -238,7 +237,7 @@ final class SessionTest extends TestCase
 		$post = $this->representation(['id' => 123, 'title' => 'Existing']);
 
 		try {
-			$this->adoptRecord($session, $post, $this->templateSchema(), $record);
+			$this->adoptWithRecord($session, $post, $this->templateSchema(), $record);
 			self::fail('Expected adopt to reject a schema targeting the wrong collection.');
 		} catch (StateException) {
 		}
@@ -253,12 +252,12 @@ final class SessionTest extends TestCase
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
 		$representation = $this->representation(['name' => 'A1']);
 
-		$this->adoptRecord($session, $representation, $this->templateSchema(), $record);
+		$this->adoptWithRecord($session, $representation, $this->templateSchema(), $record);
 
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('already tracked');
 
-		$this->adoptRecord($session, $representation, $this->templateSchema(), $record);
+		$this->adoptWithRecord($session, $representation, $this->templateSchema(), $record);
 	}
 
 	public function testSyncTrackedRootAdoptsUntrackedRelatedManyItems(): void
@@ -269,7 +268,7 @@ final class SessionTest extends TestCase
 		$session->getRecords()->add($owner);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$this->adoptWithRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		$result = $session->sync($ownerRepresentation);
 
@@ -286,7 +285,7 @@ final class SessionTest extends TestCase
 		$session->getRecords()->add($owner);
 		$profileRepresentation = $this->representation(['id' => 5, 'label' => 'Profile', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'profile' => $profileRepresentation]);
-		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithProfile($users, $profiles), $owner);
+		$this->adoptWithRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithProfile($users, $profiles), $owner);
 
 		$result = $session->sync($ownerRepresentation);
 
@@ -305,8 +304,8 @@ final class SessionTest extends TestCase
 		$session->getRecords()->add($second);
 		$firstRepresentation = $this->representation(['name' => 'A2']);
 		$secondRepresentation = $this->representation(['name' => 'B2']);
-		$this->adoptRecord($session, $firstRepresentation, $this->templateSchema(), $first);
-		$this->adoptRecord($session, $secondRepresentation, $this->templateSchema(), $second);
+		$this->adoptWithRecord($session, $firstRepresentation, $this->templateSchema(), $first);
+		$this->adoptWithRecord($session, $secondRepresentation, $this->templateSchema(), $second);
 
 		$result = $session->sync($firstRepresentation);
 
@@ -333,7 +332,7 @@ final class SessionTest extends TestCase
 		$session->getRecords()->add($other);
 		$rootRepresentation = $this->representation(['id' => 10, 'name' => 'A2']);
 		$otherRepresentation = $this->representation(['name' => 'B2']);
-		$this->adoptRecord($session, $otherRepresentation, $this->templateSchema(), $other);
+		$this->adoptWithRecord($session, $otherRepresentation, $this->templateSchema(), $other);
 
 		$result = $session->sync($rootRepresentation, $this->userTemplateSchemaFor($users));
 
@@ -605,7 +604,7 @@ final class SessionTest extends TestCase
 		$owner->setValue('name', 'Owner Updated');
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner Updated', 'posts' => [$postRepresentation]]);
-		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$this->adoptWithRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		$session->sync($ownerRepresentation);
 
@@ -654,7 +653,7 @@ final class SessionTest extends TestCase
 		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
 		$session->getRecords()->add($record);
 		$representation = $this->representation(['name' => 'A1']);
-		$this->adoptRecord($session, $representation, $this->templateSchema(), $record);
+		$this->adoptWithRecord($session, $representation, $this->templateSchema(), $record);
 
 		$session->remove($representation);
 
@@ -740,7 +739,7 @@ final class SessionTest extends TestCase
 		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
 		$session->getRecords()->add($record);
 		$representation = $this->representation(['name' => 'A1']);
-		$this->adoptRecord($session, $representation, $this->templateSchema(), $record);
+		$this->adoptWithRecord($session, $representation, $this->templateSchema(), $record);
 		$representation->name = 'A2';
 
 		$result = $session->flush();
@@ -807,7 +806,7 @@ final class SessionTest extends TestCase
 		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
 		$session->getRecords()->add($record);
 		$representation = $this->representation(['name' => 'A1']);
-		$tracked = $this->adoptRecord($session, $representation, $this->templateSchema(), $record);
+		$tracked = $this->adoptWithRecord($session, $representation, $this->templateSchema(), $record);
 		$representation->name = 'A2';
 
 		$session->flush();
@@ -821,7 +820,7 @@ final class SessionTest extends TestCase
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
 		$session->getRecords()->add($record);
 		$representation = $this->representation(['name' => 'A1']);
-		$this->adoptRecord($session, $representation, $this->templateSchema(), $record);
+		$this->adoptWithRecord($session, $representation, $this->templateSchema(), $record);
 		$session->getRelations()->add(new ToManyRelationState($record, 'posts', new RepresentationSchema($record->getCollection())));
 		$session->getRelations()->add(new ToOneRelationState($record, 'profile', new RepresentationSchema($record->getCollection())));
 
@@ -900,7 +899,7 @@ final class SessionTest extends TestCase
 		$target = RecordState::clean($tags->getKey(3), ['id' => 3, 'label' => 'math']);
 		$session->getRecords()->add($target);
 		$item = $this->representation(['id' => 3, 'label' => 'math']);
-		$this->adoptRecord($session, $item, $this->tagTemplateSchemaFor($tags), $target);
+		$this->adoptWithRecord($session, $item, $this->tagTemplateSchemaFor($tags), $target);
 		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($item);
 		$session->getRelations()->add($collection);
@@ -930,8 +929,8 @@ final class SessionTest extends TestCase
 		$session->getRecords()->add($child);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
-		$this->adoptRecord($session, $postRepresentation, $this->postTemplateSchemaFor($posts), $child);
+		$this->adoptWithRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$this->adoptWithRecord($session, $postRepresentation, $this->postTemplateSchemaFor($posts), $child);
 
 		$session->flush();
 
@@ -962,8 +961,8 @@ final class SessionTest extends TestCase
 		$session->getRecords()->add($target);
 		$authorRepresentation = $this->representation(['id' => 10, 'name' => 'Ada']);
 		$ownerRepresentation = $this->representation(['title' => 'Post', 'author' => $authorRepresentation]);
-		$this->adoptRecord($session, $authorRepresentation, $this->userTemplateSchemaFor($users), $target);
-		$this->adoptRecord($session, $ownerRepresentation, $this->postTemplateSchemaWithAuthor($posts, $users), $owner);
+		$this->adoptWithRecord($session, $authorRepresentation, $this->userTemplateSchemaFor($users), $target);
+		$this->adoptWithRecord($session, $ownerRepresentation, $this->postTemplateSchemaWithAuthor($posts, $users), $owner);
 
 		$session->flush();
 
@@ -992,7 +991,7 @@ final class SessionTest extends TestCase
 		$session->getRecords()->add($owner);
 		$baselineAuthor = new stdClass();
 		$ownerRepresentation = $this->representation(['title' => 'Post', 'author' => null]);
-		$this->adoptRecord($session, $ownerRepresentation, $this->postTemplateSchemaWithAuthor($posts, $users), $owner);
+		$this->adoptWithRecord($session, $ownerRepresentation, $this->postTemplateSchemaWithAuthor($posts, $users), $owner);
 		$session->getRelations()->add(new ToOneRelationState($owner, 'author', $this->userTemplateSchemaFor($users), $baselineAuthor));
 
 		$session->flush();
@@ -1024,8 +1023,8 @@ final class SessionTest extends TestCase
 		$session->getRecords()->add($target);
 		$profileRepresentation = $this->representation(['id' => 5, 'label' => 'Profile', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'profile' => $profileRepresentation]);
-		$this->adoptRecord($session, $profileRepresentation, $this->profileTemplateSchemaFor($profiles), $target);
-		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithProfile($users, $profiles), $owner);
+		$this->adoptWithRecord($session, $profileRepresentation, $this->profileTemplateSchemaFor($profiles), $target);
+		$this->adoptWithRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithProfile($users, $profiles), $owner);
 
 		$session->flush();
 
@@ -1052,7 +1051,7 @@ final class SessionTest extends TestCase
 		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
 		$session->getRecords()->add($record);
 		$representation = $this->representation(['name' => 'A2']);
-		$this->adoptRecord($session, $representation, $this->templateSchema(), $record);
+		$this->adoptWithRecord($session, $representation, $this->templateSchema(), $record);
 
 		$result = $session->sync();
 
@@ -1070,7 +1069,7 @@ final class SessionTest extends TestCase
 		$session->getRecords()->add($owner);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$this->adoptWithRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		$result = $session->sync($ownerRepresentation);
 
@@ -1087,7 +1086,7 @@ final class SessionTest extends TestCase
 		$session->getRecords()->add($owner);
 		$postRepresentation = $this->representation(['id' => null, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$this->adoptWithRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		$session->sync($ownerRepresentation);
 		$session->flush();
@@ -1106,7 +1105,7 @@ final class SessionTest extends TestCase
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Existing title', 'user_id' => 10]);
 		$session->update($postRepresentation);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$this->adoptWithRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		$session->sync($ownerRepresentation);
 		$session->remove($postRepresentation);
@@ -1128,7 +1127,7 @@ final class SessionTest extends TestCase
 		$first = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
 		$session->getRecords()->add($first);
 		$firstRepresentation = $this->representation(['name' => 'A2']);
-		$this->adoptRecord($session, $firstRepresentation, $this->templateSchema(), $first);
+		$this->adoptWithRecord($session, $firstRepresentation, $this->templateSchema(), $first);
 
 		$session->sync($firstRepresentation);
 
@@ -1152,7 +1151,7 @@ final class SessionTest extends TestCase
 		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
 		$session->getRecords()->add($record);
 		$representation = $this->representation(['name' => 'A2']);
-		$this->adoptRecord($session, $representation, $this->templateSchema(), $record);
+		$this->adoptWithRecord($session, $representation, $this->templateSchema(), $record);
 
 		$session->flush();
 
@@ -1168,7 +1167,7 @@ final class SessionTest extends TestCase
 		$session->getRecords()->add($owner);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$this->adoptWithRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
 
 		try {
 			$session->sync();
@@ -1194,8 +1193,8 @@ final class SessionTest extends TestCase
 		$session->getRecords()->add($child);
 		$postRepresentation = $this->representation(['id' => 5, 'title' => 'Post', 'user_id' => null]);
 		$ownerRepresentation = $this->representation(['name' => 'Owner', 'posts' => [$postRepresentation]]);
-		$this->adoptRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
-		$this->adoptRecord($session, $postRepresentation, $this->postTemplateSchemaFor($posts), $child);
+		$this->adoptWithRecord($session, $ownerRepresentation, $this->ownerTemplateSchemaWithPosts($users, $posts), $owner);
+		$this->adoptWithRecord($session, $postRepresentation, $this->postTemplateSchemaFor($posts), $child);
 
 		$syncResult = $session->sync();
 		$session->flush();
@@ -1216,7 +1215,7 @@ final class SessionTest extends TestCase
 		$owner = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Owner']);
 		$session->getRecords()->add($owner);
 		$newChild = $this->representation(['id' => null, 'title' => 'New child', 'user_id' => null]);
-		$this->adoptRecord($session, $newChild, $this->postTemplateSchemaFor($posts), RecordState::new($posts, ['title' => 'New child', 'user_id' => null]));
+		$this->adoptWithRecord($session, $newChild, $this->postTemplateSchemaFor($posts), RecordState::new($posts, ['title' => 'New child', 'user_id' => null]));
 		$collection = new ToManyRelationState($owner, 'posts', $this->postTemplateSchemaFor($posts));
 		$session->getRelations()->add($collection);
 
@@ -1246,7 +1245,7 @@ final class SessionTest extends TestCase
 		$child = RecordState::clean($posts->getKey(5), ['id' => 5, 'title' => 'Known child', 'user_id' => 10]);
 		$session->getRecords()->add($child);
 		$childRepresentation = $this->representation(['id' => 5, 'title' => 'Known child', 'user_id' => 10]);
-		$this->adoptRecord($session, $childRepresentation, $this->postTemplateSchemaFor($posts), $child);
+		$this->adoptWithRecord($session, $childRepresentation, $this->postTemplateSchemaFor($posts), $child);
 		$collection = new ToManyRelationState(
 			$owner,
 			'posts',
@@ -1328,7 +1327,7 @@ final class SessionTest extends TestCase
 		]);
 		$session->getRecords()->add($owner);
 		$newChild = $this->representation(['label' => 'Composite child', 'tenant_ref' => null, 'user_ref' => null]);
-		$this->adoptRecord($session, $newChild, $this->compositeChildSchemaFor($children), RecordState::new($children, [
+		$this->adoptWithRecord($session, $newChild, $this->compositeChildSchemaFor($children), RecordState::new($children, [
 			'label' => 'Composite child',
 			'tenant_ref' => null,
 			'user_ref' => null,
@@ -1390,13 +1389,6 @@ final class SessionTest extends TestCase
 		self::assertStringNotContainsString('Transaction', $source);
 		self::assertStringNotContainsString('SQL', $source);
 		self::assertStringNotContainsString('Database', $source);
-	}
-
-	public function testSessionDoesNotExposeAdoptGraph(): void
-	{
-		$method = new ReflectionMethod(Session::class, 'adoptGraph');
-
-		self::assertTrue($method->isPrivate());
 	}
 
 	private function templateSchema(): RepresentationSchema

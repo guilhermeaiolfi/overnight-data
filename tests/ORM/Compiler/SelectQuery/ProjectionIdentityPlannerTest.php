@@ -37,7 +37,7 @@ final class ProjectionIdentityPlannerTest extends TestCase
 
 		$identities = $this->planner->plan($query, $sources);
 
-		self::assertNull($identities->get([], 'id'));
+		self::assertNull($identities->getResultKey([], 'id'));
 		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
 	}
 
@@ -57,8 +57,8 @@ final class ProjectionIdentityPlannerTest extends TestCase
 
 		$internal = $query->getSelections()->getByTag(SelectionTag::INTERNAL);
 		self::assertCount(1, $internal);
-		self::assertNotNull($identities->get([], 'id'));
-		self::assertSame($internal[0]->getSelectionKey(), $identities->get([], 'id'));
+		self::assertNotNull($identities->getResultKey([], 'id'));
+		self::assertSame($internal[0]->getSelectionKey(), $identities->getResultKey([], 'id'));
 	}
 
 	public function testRelationSourcedFieldWithSameTerminalCollectionAddsIndependentSelection(): void
@@ -83,9 +83,9 @@ final class ProjectionIdentityPlannerTest extends TestCase
 
 		$internal = $query->getSelections()->getByTag(SelectionTag::INTERNAL);
 		self::assertCount(1, $internal);
-		self::assertNull($identities->get([], 'id'));
-		self::assertNotNull($identities->get(['manager'], 'id'));
-		self::assertSame($internal[0]->getSelectionKey(), $identities->get(['manager'], 'id'));
+		self::assertNull($identities->getResultKey([], 'id'));
+		self::assertNotNull($identities->getResultKey(['manager'], 'id'));
+		self::assertSame($internal[0]->getSelectionKey(), $identities->getResultKey(['manager'], 'id'));
 	}
 
 	public function testMultipleFieldsFromSameSourceAddIdentityOnce(): void
@@ -109,7 +109,7 @@ final class ProjectionIdentityPlannerTest extends TestCase
 		$identities = $this->planner->plan($query, $sources);
 
 		self::assertCount(1, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
-		self::assertNotNull($identities->get(['manager'], 'id'));
+		self::assertNotNull($identities->getResultKey(['manager'], 'id'));
 	}
 
 	public function testPublicRelationSourcedPrimaryKeyIsNotDuplicated(): void
@@ -132,8 +132,8 @@ final class ProjectionIdentityPlannerTest extends TestCase
 
 		$identities = $this->planner->plan($query, $sources);
 
-		self::assertNull($identities->get([], 'id'));
-		self::assertNull($identities->get(['manager'], 'id'));
+		self::assertNull($identities->getResultKey([], 'id'));
+		self::assertNull($identities->getResultKey(['manager'], 'id'));
 		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
 	}
 
@@ -157,7 +157,7 @@ final class ProjectionIdentityPlannerTest extends TestCase
 		$identities = $this->planner->plan($query, $sources);
 
 		self::assertCount(1, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
-		self::assertNotNull($identities->get(['manager', 'manager'], 'id'));
+		self::assertNotNull($identities->getResultKey(['manager', 'manager'], 'id'));
 	}
 
 	private function registry(): Registry

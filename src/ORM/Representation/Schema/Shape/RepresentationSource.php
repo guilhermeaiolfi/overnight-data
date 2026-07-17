@@ -5,15 +5,14 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Schema\Shape;
 
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityColumns;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 
 /**
  * Structural grouping of representation fields that originate from one source path.
  *
- * Carries only representation/source structure. Query result aliases and row
- * keys stay in QueryRepresentationIdentityColumns.
+ * Carries only representation/source structure. External per-source identities
+ * for adoption are supplied via {@see RepresentationSourceIdentities}.
  */
 final class RepresentationSource
 {

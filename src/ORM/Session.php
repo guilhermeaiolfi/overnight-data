@@ -19,16 +19,18 @@ use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\ORM\Representation\State\Projection\ProjectionRepresentationStateBuilder;
 use ON\Data\ORM\Representation\State\Query\WritableQueryResultTracker;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
+use ON\Data\ORM\Representation\Sync\AdoptionPolicy;
 use ON\Data\ORM\Representation\Sync\AdoptionRecordResolver;
+use ON\Data\ORM\Representation\Sync\RepresentationAdoptionContext;
+use ON\Data\ORM\Representation\Sync\RepresentationAdoptionEngine;
 use ON\Data\ORM\Representation\Sync\RepresentationAttachmentMode;
 use ON\Data\ORM\Representation\Sync\RepresentationIntentLifecycle;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
-use ON\Data\ORM\Representation\Sync\RepresentationStateAdoptionTrait;
 use ON\Data\ORM\Representation\Sync\RepresentationSyncer;
+use ON\Data\ORM\Representation\Sync\StaticSourceIdentities;
 use ON\Data\ORM\Representation\Sync\SyncResult;
 use ON\Data\Query\Result\WritablePreparation;
 use ON\Data\Query\Result\WritableResultHandler;
@@ -36,13 +38,11 @@ use ON\Data\Query\SelectQuery;
 
 final class Session implements WritableResultHandler
 {
-	use RepresentationStateAdoptionTrait;
-
 	private SessionContext $context;
 	private AdoptionRecordResolver $recordResolver;
 	private FlushExecutor $flusher;
 	private RepresentationSyncer $syncer;
-	private ProjectionRepresentationStateBuilder $projectionStateBuilder;
+	private RepresentationAdoptionEngine $adoptionEngine;
 	private ?WritableQueryResultTracker $writableResultTracker = null;
 
 	public function __construct(
@@ -53,9 +53,11 @@ final class Session implements WritableResultHandler
 	) {
 		$this->context = $context ?? new SessionContext();
 		$this->recordResolver = new AdoptionRecordResolver(intents: $this->context->getIntents());
-		$this->representationReader = new RepresentationReader();
+		$this->adoptionEngine = new RepresentationAdoptionEngine(
+			new RepresentationReader(),
+			$this->recordResolver,
+		);
 		$this->syncer = $syncer ?? new RepresentationSyncer();
-		$this->projectionStateBuilder = new ProjectionRepresentationStateBuilder($this->representationReader);
 		$this->flusher = $flusher ?? new FlushExecutor($executor, $this->syncer);
 	}
 
@@ -99,6 +101,34 @@ final class Session implements WritableResultHandler
 	public function clear(): void
 	{
 		$this->context->clear();
+	}
+
+	/**
+	 * Store a ready {@see RepresentationState}. Build/walk is {@see RepresentationAdoptionEngine::attach()}.
+	 */
+	public function adopt(
+		object $representation,
+		RepresentationState $state,
+		RepresentationAttachmentMode $mode = RepresentationAttachmentMode::Add,
+	): RepresentationState {
+		$reps = $this->getRepresentations();
+		$records = $this->getRecords();
+
+		if ($mode === RepresentationAttachmentMode::Add && $reps->has($representation)) {
+			throw new SyncException('Cannot attach representation because it is already tracked.');
+		}
+
+		foreach ($state->getUniqueRecords() as $record) {
+			$records->add($record);
+		}
+
+		if ($mode === RepresentationAttachmentMode::Replace && $reps->has($representation)) {
+			$reps->remove($representation);
+		}
+
+		$reps->add($representation, $state);
+
+		return $state;
 	}
 
 	public function update(
@@ -295,24 +325,40 @@ final class Session implements WritableResultHandler
 				throw new SyncException('Cannot synchronize a flat projection intent without a RepresentationSchema.');
 			}
 
-			$state = $this->projectionStateBuilder->build(
+			$this->adoptionEngine->attach(
 				$representation,
-				$intent,
-				$resolvedSchema,
+				new RepresentationAdoptionContext(
+					schema: $resolvedSchema,
+					policy: $intent->isCreate() ? AdoptionPolicy::Create : AdoptionPolicy::Patch,
+					identities: StaticSourceIdentities::fromIntent($resolvedSchema, $intent),
+					intent: $intent,
+				),
 				$this->getRecords(),
+				$this->getRepresentations(),
 				$this->getRelations(),
+				RepresentationAttachmentMode::Replace,
 			);
-			$this->adopt($representation, $state, RepresentationAttachmentMode::Replace);
 			$this->context->getIntents()->remove($representation);
 
 			return;
 		}
 
-		if (! $this->getRepresentations()->has($representation) && ! $resolvedSchema instanceof RepresentationSchema) {
+		if (! $resolvedSchema instanceof RepresentationSchema) {
 			throw new SyncException('Cannot synchronize an untracked representation object without a root RepresentationSchema.');
 		}
 
-		$this->adoptGraph($representation, $resolvedSchema);
+		$policy = $intent?->isUpdate() === true
+			? AdoptionPolicy::Patch
+			: AdoptionPolicy::Create;
+		$this->adoptionEngine->attach(
+			$representation,
+			new RepresentationAdoptionContext(
+				schema: $resolvedSchema,
+				policy: $policy,
+			),
+			$this->getRecords(),
+			$this->getRepresentations(),
+		);
 		$this->context->getIntents()->remove($representation);
 	}
 

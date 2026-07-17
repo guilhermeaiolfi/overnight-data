@@ -74,13 +74,18 @@ trait OrmFixture
 		);
 	}
 
-	protected function adoptRecord(
+	protected function adoptWithRecord(
 		Session $session,
 		object $representation,
 		RepresentationSchema $schema,
 		RecordState $record,
 	): RepresentationState {
-		return $session->adoptRecord($representation, $schema, $record);
+		return $session->adopt(
+			$representation,
+			RepresentationState::fromRecords($schema, [
+				RepresentationFieldSchema::sourcePathKey([]) => $record,
+			]),
+		);
 	}
 
 	protected function users(): CollectionInterface
