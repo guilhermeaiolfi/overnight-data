@@ -39,7 +39,7 @@ final class TrackedRecordResolver
 			));
 		}
 
-		$record = $context->getRecords()->getFromRepresentation($tracked);
+		$record = $tracked->getSingleRecord();
 		if (! $record instanceof RecordState) {
 			throw new RelationPersistenceException(sprintf(
 				"Relation '%s' tracked %s item cannot be resolved to a record state.",

@@ -178,6 +178,46 @@ final class ToManyRelationState implements RelationStateInterface
 	}
 
 	/**
+	 * Project a DTO item list into this relation state.
+	 *
+	 * Partial/unloaded: add only. Fully loaded: add missing and remove absent
+	 * representation-backed targets (record-backed pending adds are kept).
+	 *
+	 * @param list<object> $items
+	 */
+	public function syncFromItems(array $items): void
+	{
+		if (! $this->isFullyLoaded()) {
+			foreach ($items as $item) {
+				$this->add($item);
+			}
+
+			return;
+		}
+
+		$currentIds = [];
+		foreach ($items as $item) {
+			$target = RelationTarget::from($item);
+			$currentIds[$target->identityKey()] = true;
+			if (! $this->containsTarget($target)) {
+				$this->addTarget($target);
+			}
+		}
+
+		foreach ($this->getItemTargets() as $known) {
+			// Pending flat/record-backed adds are not present on the DTO array.
+			if ($known->isRecord()) {
+				continue;
+			}
+
+			$id = $known->identityKey();
+			if (! array_key_exists($id, $currentIds)) {
+				$this->removeTarget($known);
+			}
+		}
+	}
+
+	/**
 	 * @return list<object>
 	 */
 	public function getItems(): array

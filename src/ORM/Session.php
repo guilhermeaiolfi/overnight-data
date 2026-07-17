@@ -16,18 +16,15 @@ use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\RelationTarget;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
 use ON\Data\ORM\Representation\State\Projection\ProjectionRepresentationStateBuilder;
 use ON\Data\ORM\Representation\State\Query\MutableQueryResultTracker;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\ORM\Representation\Sync\AdoptionRecordResolver;
 use ON\Data\ORM\Representation\Sync\RepresentationAttachmentMode;
-use ON\Data\ORM\Representation\Sync\RepresentationIntent;
 use ON\Data\ORM\Representation\Sync\RepresentationIntentLifecycle;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
 use ON\Data\ORM\Representation\Sync\RepresentationStateAdoptionTrait;
@@ -154,23 +151,21 @@ final class Session implements MutableResultHandler
 			throw new SyncException('Cannot detach because the owner representation is not tracked. Call sync() on the owner first.');
 		}
 
-		$ownerRecord = $this->resolveOwnerRecordForRelation($ownerState, $relation);
+		$ownerRecord = $ownerState->getOwnerRecord($relation);
 		$relationSchema = $this->relationSchemaForDetach($ownerState, $ownerRecord, $relation);
 		$relatedCollection = $relationSchema->getRelatedSchema()->getCollection();
 		$targetObject = $this->resolveDetachTarget($target, $relatedCollection, $relationSchema->getRelatedSchema());
 
 		$relations = $this->getRelations();
-		$state = $relations->get($ownerRecord, $relation);
 		$cardinality = $relationSchema->getCardinality();
+		$state = $relations->getOrCreate(
+			$ownerRecord,
+			$relation,
+			$cardinality,
+			$relationSchema->getRelatedSchema(),
+		);
 
-		if ($cardinality->isMany()) {
-			if ($state === null) {
-				$state = new ToManyRelationState($ownerRecord, $relation, $relationSchema->getRelatedSchema());
-				$relations->add($state);
-			} elseif (! $state instanceof ToManyRelationState) {
-				throw new StateException(sprintf("Relation '%s' is already tracked with incompatible cardinality.", $relation));
-			}
-
+		if ($state instanceof ToManyRelationState) {
 			$targetRecord = $this->recordForDetachTarget($targetObject);
 			if ($targetRecord instanceof RecordState) {
 				$state->removeTarget(RelationTarget::record($targetRecord));
@@ -179,13 +174,6 @@ final class Session implements MutableResultHandler
 			}
 
 			return;
-		}
-
-		if ($state === null) {
-			$state = new ToOneRelationState($ownerRecord, $relation, $relationSchema->getRelatedSchema());
-			$relations->add($state);
-		} elseif (! $state instanceof ToOneRelationState) {
-			throw new StateException(sprintf("Relation '%s' is already tracked with incompatible cardinality.", $relation));
 		}
 
 		$current = $state->getTargetRelation();
@@ -207,7 +195,7 @@ final class Session implements MutableResultHandler
 			return null;
 		}
 
-		$record = $this->getRecords()->getFromRepresentation($tracked);
+		$record = $tracked->getSingleRecord();
 
 		return $record instanceof RecordState ? $record : null;
 	}
@@ -224,7 +212,7 @@ final class Session implements MutableResultHandler
 
 		$existingState = $this->getRepresentations()->get($representation);
 		if ($existingState instanceof RepresentationState) {
-			$record = $this->getRecords()->getFromRepresentation($existingState);
+			$record = $existingState->getSingleRecord();
 			if (! $record instanceof RecordState || ! $record->hasKey() || ! $record->getKey()?->equals($key)) {
 				throw new StateException('Cannot identify representation because it is already tracked for a different record.');
 			}
@@ -274,7 +262,7 @@ final class Session implements MutableResultHandler
 			throw new SyncException('Cannot remove an untracked representation object.');
 		}
 
-		$this->resolveSingleRecordForRemoval($state)->markRemoved();
+		$state->requireSingleRecord()->markRemoved();
 	}
 
 	public function sync(?object $representation = null, ?RepresentationSchema $schema = null): SyncResult
@@ -302,7 +290,7 @@ final class Session implements MutableResultHandler
 				? $this->getRepresentations()->get($representation)?->getSchema()
 				: null);
 
-		if ($intent !== null && $this->isFlatProjectionIntent($intent, $resolvedSchema)) {
+		if ($intent !== null && $intent->isFlatProjection($resolvedSchema)) {
 			if (! $resolvedSchema instanceof RepresentationSchema) {
 				throw new SyncException('Cannot synchronize a flat projection intent without a RepresentationSchema.');
 			}
@@ -326,37 +314,6 @@ final class Session implements MutableResultHandler
 
 		$this->adoptGraph($representation, $resolvedSchema);
 		$this->context->getIntents()->remove($representation);
-	}
-
-	private function isFlatProjectionIntent(
-		?RepresentationIntent $intent,
-		?RepresentationSchema $schema,
-	): bool {
-		if (! $intent instanceof RepresentationIntent) {
-			return false;
-		}
-
-		if ($intent->getFlatOps() !== []) {
-			return true;
-		}
-
-		if (! $schema instanceof RepresentationSchema) {
-			return false;
-		}
-
-		if ($schema->getRelations() !== []) {
-			return false;
-		}
-
-		// Inbound save maps (SelectQuery::projection / schema overlay) without relation
-		// branches use the flat projection binder — including single-collection roots.
-		if ($intent->getSchema() instanceof RepresentationSchema) {
-			return true;
-		}
-
-		$sources = RepresentationSource::fromRepresentationSchema($schema);
-
-		return count($sources) > 1 || ($sources !== [] && ! $sources[0]->isRoot());
 	}
 
 	/**
@@ -399,42 +356,6 @@ final class Session implements MutableResultHandler
 		return $this->identify($collection, [$pk[0] => $target], schema: $relatedSchema);
 	}
 
-	private function resolveOwnerRecordForRelation(
-		RepresentationState $ownerState,
-		string $relation,
-	): RecordState {
-		if ($ownerState->getSchema()->hasRelation($relation)) {
-			$relationSchema = $ownerState->getSchema()->getRelation($relation);
-			foreach ($ownerState->getRelationItems() as $item) {
-				if ($item->getSchema()->getPath() === $relationSchema->getPath()) {
-					return $item->getOwnerRecord();
-				}
-			}
-
-			$root = $ownerState->getRootRecord();
-			if ($root instanceof RecordState) {
-				return $root;
-			}
-		}
-
-		$root = $ownerState->getRootRecord();
-		if ($root instanceof RecordState && $root->getCollection()->hasRelation($relation)) {
-			return $root;
-		}
-
-		$matches = $ownerState->getRecordsForCollection(
-			$ownerState->getSchema()->getCollection(),
-		);
-		if (count($matches) === 1) {
-			return $matches[0];
-		}
-
-		throw new StateException(sprintf(
-			"Cannot resolve owner record for relation '%s' on the tracked representation.",
-			$relation,
-		));
-	}
-
 	private function relationSchemaForDetach(
 		RepresentationState $ownerState,
 		RecordState $ownerRecord,
@@ -461,30 +382,6 @@ final class Session implements MutableResultHandler
 			$relation,
 			$related,
 		);
-	}
-
-	private function resolveSingleRecordForRemoval(RepresentationState $state): RecordState
-	{
-		$records = [];
-		foreach ($state->getFieldItems() as $fieldItem) {
-			$record = $fieldItem->getRecord();
-			$records[$record->getStateHash()] = $record;
-		}
-
-		foreach ($state->getRelationItems() as $relationItem) {
-			$record = $relationItem->getOwnerRecord();
-			$records[$record->getStateHash()] = $record;
-		}
-
-		if ($records === []) {
-			throw new StateException('Cannot remove representation because its schema does not resolve to a concrete record state.');
-		}
-
-		if (count($records) > 1) {
-			throw new StateException('Cannot remove representation because its schema resolves to multiple record states.');
-		}
-
-		return array_values($records)[0];
 	}
 
 	private function mutableResultTracker(): MutableQueryResultTracker

@@ -27,7 +27,7 @@ trait RepresentationStateAdoptionTrait
 			throw new SyncException('Cannot attach representation because it is already tracked.');
 		}
 
-		foreach ($this->uniqueRecordsFromState($state) as $record) {
+		foreach ($state->getUniqueRecords() as $record) {
 			$records->add($record);
 		}
 
@@ -145,25 +145,6 @@ trait RepresentationStateAdoptionTrait
 		}
 
 		$this->walkGraph($representation, $visited, $adopted);
-	}
-
-	/**
-	 * @return list<RecordState>
-	 */
-	private function uniqueRecordsFromState(RepresentationState $state): array
-	{
-		$records = [];
-		foreach ($state->getFieldItems() as $item) {
-			$record = $item->getRecord();
-			$records[spl_object_id($record)] = $record;
-		}
-
-		foreach ($state->getRelationItems() as $item) {
-			$record = $item->getOwnerRecord();
-			$records[spl_object_id($record)] = $record;
-		}
-
-		return array_values($records);
 	}
 
 	/**

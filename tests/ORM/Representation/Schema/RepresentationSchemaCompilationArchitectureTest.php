@@ -184,7 +184,7 @@ final class RepresentationSchemaCompilationArchitectureTest extends TestCase
 
 		$tracked = $session->getRepresentations()->get($dto);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
-		$record = $session->getRecords()->getFromRepresentation($tracked);
+		$record = $tracked->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isDirty());
 		self::assertSame(['id' => 10], $record->getKey()?->getValues());
@@ -231,7 +231,7 @@ final class RepresentationSchemaCompilationArchitectureTest extends TestCase
 		self::assertInstanceOf(ToManyRelationState::class, $relation);
 		$removed = $relation->getRemoved();
 		self::assertCount(1, $removed);
-		$tagRecord = $session->getRecords()->getFromRepresentation($session->getRepresentations()->get($tag));
+		$tagRecord = $session->getRepresentations()->get($tag)->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $tagRecord);
 		self::assertSame($tagRecord, $removed[0]);
 		self::assertTrue($session->getRepresentations()->has($tag));

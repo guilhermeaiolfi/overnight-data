@@ -36,7 +36,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 
 		$session->sync($owner, $this->ownerSchemaWithPosts($users, $posts));
 
-		$record = $session->getRecords()->getFromRepresentation($session->getRepresentations()->get($post));
+		$record = $session->getRepresentations()->get($post)->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isNew());
 		self::assertFalse($record->hasKey());
@@ -76,7 +76,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 
 		$session->sync($owner, $this->compositeOwnerSchemaWithPosts($users, $posts));
 
-		$record = $session->getRecords()->getFromRepresentation($session->getRepresentations()->get($post));
+		$record = $session->getRepresentations()->get($post)->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isNew());
 		self::assertFalse($record->hasKey());
@@ -108,7 +108,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$session->sync($owner, $this->ownerSchemaWithPosts($users, $posts));
 		$session->flush();
 
-		$record = $session->getRecords()->getFromRepresentation($session->getRepresentations()->get($post));
+		$record = $session->getRepresentations()->get($post)->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isClean());
 		self::assertSame(5, $record->getKey()?->getFieldValue('id'));
@@ -135,7 +135,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 		$session->sync($ownerRepresentation);
 		$session->flush();
 
-		$record = $session->getRecords()->getFromRepresentation($session->getRepresentations()->get($post));
+		$record = $session->getRepresentations()->get($post)->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isClean());
 
@@ -159,7 +159,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 
 		$session->sync($ownerRepresentation);
 
-		self::assertSame($child, $session->getRecords()->getFromRepresentation($session->getRepresentations()->get($post)));
+		self::assertSame($child, $session->getRepresentations()->get($post)->getSingleRecord());
 		self::assertTrue($child->isNew());
 		self::assertFalse($child->hasKey());
 	}
@@ -173,7 +173,7 @@ final class GraphSyncExistingIntentTest extends TestCase
 
 		$session->sync($owner, $this->ownerSchemaWithPosts($users, $posts));
 
-		$record = $session->getRecords()->getFromRepresentation($session->getRepresentations()->get($post));
+		$record = $session->getRepresentations()->get($post)->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $record);
 
 		$command = (new CommandPlanner())->plan($record);

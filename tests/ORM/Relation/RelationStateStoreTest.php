@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Relation;
 
+use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\RelationStateStore;
@@ -159,6 +160,32 @@ final class RelationStateStoreTest extends TestCase
 		$this->expectExceptionMessage('Relation name cannot be empty.');
 
 		$store->has($owner, '');
+	}
+
+	public function testGetOrCreateCreatesAndReusesToMany(): void
+	{
+		$owner = RecordState::new($this->users());
+		$store = new RelationStateStore();
+		$schema = $this->postSchema();
+
+		$first = $store->getOrCreate($owner, 'posts', RelationCardinality::MANY, $schema);
+		$second = $store->getOrCreate($owner, 'posts', RelationCardinality::MANY, $schema);
+
+		self::assertInstanceOf(ToManyRelationState::class, $first);
+		self::assertSame($first, $second);
+	}
+
+	public function testGetOrCreateRejectsIncompatibleCardinality(): void
+	{
+		$owner = RecordState::new($this->users());
+		$store = new RelationStateStore();
+		$schema = $this->postSchema();
+		$store->getOrCreate($owner, 'profile', RelationCardinality::SINGLE, $schema);
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage('incompatible cardinality');
+
+		$store->getOrCreate($owner, 'profile', RelationCardinality::MANY, $schema);
 	}
 
 	private function relatedCollection(RecordState $owner, string $relationName): ToManyRelationState

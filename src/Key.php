@@ -106,6 +106,29 @@ final readonly class Key implements Stringable, JsonSerializable
 			&& $this->values === $other->values;
 	}
 
+	/**
+	 * Returns the first primary-key field whose readable value disagrees with this key.
+	 *
+	 * Missing or null readable values are ignored (identity may be supplied separately).
+	 *
+	 * @param array<string, mixed> $readableValues
+	 */
+	public function conflictingIdentityField(array $readableValues): ?string
+	{
+		foreach ($this->values as $fieldName => $identityValue) {
+			if (! array_key_exists($fieldName, $readableValues)) {
+				continue;
+			}
+
+			$value = $readableValues[$fieldName];
+			if ($value !== null && $value !== $identityValue) {
+				return $fieldName;
+			}
+		}
+
+		return null;
+	}
+
 	public function getHash(): string
 	{
 		try {

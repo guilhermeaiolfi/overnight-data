@@ -7,6 +7,7 @@ namespace ON\Data\ORM\Representation\Sync;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
 
 /**
  * Pending update/create intent for one representation until sync().
@@ -93,5 +94,36 @@ final class RepresentationIntent
 	public function addFlatOp(FlatIntentOp $op): void
 	{
 		$this->flatOps[] = $op;
+	}
+
+	/**
+	 * Whether sync should use the flat projection binder instead of graph adoption.
+	 *
+	 * @param RepresentationSchema|null $schema resolved schema for this sync (may differ from intent schema)
+	 */
+	public function isFlatProjection(?RepresentationSchema $schema = null): bool
+	{
+		if ($this->flatOps !== []) {
+			return true;
+		}
+
+		$schema ??= $this->schema;
+		if (! $schema instanceof RepresentationSchema) {
+			return false;
+		}
+
+		if ($schema->getRelations() !== []) {
+			return false;
+		}
+
+		// Inbound save maps (SelectQuery::projection / schema overlay) without relation
+		// branches use the flat projection binder — including single-collection roots.
+		if ($this->schema instanceof RepresentationSchema) {
+			return true;
+		}
+
+		$sources = RepresentationSource::fromRepresentationSchema($schema);
+
+		return count($sources) > 1 || ($sources !== [] && ! $sources[0]->isRoot());
 	}
 }

@@ -12,7 +12,6 @@ use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\RelationTarget;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
 use ON\Data\ORM\Representation\State\RepresentationState;
@@ -131,27 +130,16 @@ final class ProjectionRepresentationStateBuilder
 
 		$key = $this->resolveKey($representation, $source, $intent, $op);
 		$values = $this->initialValues($representation, $source);
-		$existing = $records->getByKey($key);
-		if ($existing instanceof RecordState) {
-			if ($existing->isRemoved()) {
-				throw new StateException(sprintf(
-					"Cannot bind projection source '%s' because key '%s' is already tracked as removed.",
-					$source->getPathKey() === '' ? '[root]' : $source->getPathKey(),
-					$key->getDebugString(),
-				));
-			}
 
-			$this->applyPresentValues($existing, $values, $key);
-
-			return $existing;
-		}
-
-		// Key-only clean baseline, then apply DTO values as dirty updates.
-		$record = RecordState::clean($key, $key->getValues());
-		$records->add($record);
-		$this->applyPresentValues($record, $values, $key);
-
-		return $record;
+		return $records->bindExisting(
+			$key,
+			$values,
+			sprintf(
+				"Cannot bind projection source '%s' because key '%s' is already tracked as removed.",
+				$source->getPathKey() === '' ? '[root]' : $source->getPathKey(),
+				$key->getDebugString(),
+			),
+		);
 	}
 
 	private function resolveKey(
@@ -167,7 +155,16 @@ final class ProjectionRepresentationStateBuilder
 
 		if ($source->isRoot() && $intent->getIdentity() !== null) {
 			$key = $collection->getKey($intent->getIdentity());
-			$this->assertDtoKeyAgrees($representation, $source, $key);
+			$conflict = $key->conflictingIdentityField(
+				$this->readablePrimaryKeyValues($representation, $source),
+			);
+			if ($conflict !== null) {
+				throw new StateException(sprintf(
+					"Cannot bind projection source for collection '%s' because intent identity field '%s' disagrees with the representation.",
+					$collection->getName(),
+					$conflict,
+				));
+			}
 
 			return $key;
 		}
@@ -203,31 +200,25 @@ final class ProjectionRepresentationStateBuilder
 		return $collection->getKey($keyValues);
 	}
 
-	private function assertDtoKeyAgrees(
-		object $representation,
-		RepresentationSource $source,
-		Key $key,
-	): void {
-		foreach ($key->getValues() as $fieldName => $identityValue) {
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function readablePrimaryKeyValues(object $representation, RepresentationSource $source): array
+	{
+		$values = [];
+		foreach ($source->getCollection()->getPrimaryKey() as $fieldName) {
 			$path = $source->getFieldPath($fieldName);
 			if ($path === null) {
 				continue;
 			}
 
 			try {
-				$value = $this->reader->readPath($representation, $path);
+				$values[$fieldName] = $this->reader->readPath($representation, $path);
 			} catch (SyncException) {
-				continue;
-			}
-
-			if ($value !== null && $value !== $identityValue) {
-				throw new StateException(sprintf(
-					"Cannot bind projection source for collection '%s' because intent identity field '%s' disagrees with the representation.",
-					$source->getCollection()->getName(),
-					$fieldName,
-				));
 			}
 		}
+
+		return $values;
 	}
 
 	/**
@@ -247,21 +238,6 @@ final class ProjectionRepresentationStateBuilder
 		}
 
 		return $values;
-	}
-
-	/**
-	 * @param array<string, mixed> $values
-	 */
-	private function applyPresentValues(RecordState $record, array $values, Key $key): void
-	{
-		$keyFields = $key->getValues();
-		foreach ($values as $fieldName => $value) {
-			if (array_key_exists($fieldName, $keyFields) && $value === $keyFields[$fieldName]) {
-				continue;
-			}
-
-			$record->setValue($fieldName, $value);
-		}
 	}
 
 	private function registerRelationAdd(
@@ -292,29 +268,19 @@ final class ProjectionRepresentationStateBuilder
 		$definition = $ownerCollection->getRelation($relationName);
 		$relatedSchema = RepresentationSchema::forPrimaryKey($relatedRecord->getCollection());
 		$target = RelationTarget::record($relatedRecord);
-		$cardinality = $definition->getCardinality();
-		$existing = $relations->get($owner, $relationName);
+		$state = $relations->getOrCreate(
+			$owner,
+			$relationName,
+			$definition->getCardinality(),
+			$relatedSchema,
+		);
 
-		if ($cardinality->isMany()) {
-			if ($existing === null) {
-				$existing = new ToManyRelationState($owner, $relationName, $relatedSchema);
-				$relations->add($existing);
-			} elseif (! $existing instanceof ToManyRelationState) {
-				throw new StateException(sprintf("Relation '%s' is already tracked with incompatible cardinality.", $relationName));
-			}
-
-			$existing->addTarget($target);
+		if ($state instanceof ToManyRelationState) {
+			$state->addTarget($target);
 
 			return;
 		}
 
-		if ($existing === null) {
-			$existing = new ToOneRelationState($owner, $relationName, $relatedSchema);
-			$relations->add($existing);
-		} elseif (! $existing instanceof ToOneRelationState) {
-			throw new StateException(sprintf("Relation '%s' is already tracked with incompatible cardinality.", $relationName));
-		}
-
-		$existing->setTarget($target);
+		$state->setTarget($target);
 	}
 }

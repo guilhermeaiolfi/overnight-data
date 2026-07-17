@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Sync;
 
+use ON\Data\ORM\Representation\State\RepresentationState;
+
 final class SyncPlan
 {
 	/** @var list<SyncFieldUpdate> */
@@ -50,5 +52,21 @@ final class SyncPlan
 	public function isEmpty(): bool
 	{
 		return ! $this->hasUpdates() && ! $this->hasConflicts();
+	}
+
+	/**
+	 * Apply planned field writes into RecordState and acknowledge baselines on $state.
+	 */
+	public function apply(RepresentationState $state): void
+	{
+		$touchedRecords = [];
+
+		foreach ($this->updates as $update) {
+			$record = $update->getRecord();
+			$record->setValue($update->getField(), $update->getValue());
+			$touchedRecords[$record->getStateHash()] = $record;
+		}
+
+		$state->acceptSyncedRecords($touchedRecords);
 	}
 }

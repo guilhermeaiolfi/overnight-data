@@ -113,7 +113,7 @@ final class SessionTest extends TestCase
 		self::assertSame(123, $post->id);
 		$tracked = $session->getRepresentations()->get($post);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
-		$record = $session->getRecords()->getFromRepresentation($tracked);
+		$record = $tracked->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isClean());
 		self::assertSame(['id' => 123], $record->getValues());
@@ -130,7 +130,7 @@ final class SessionTest extends TestCase
 		self::assertSame($post, $result);
 		$tracked = $session->getRepresentations()->get($post);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
-		$record = $session->getRecords()->getFromRepresentation($tracked);
+		$record = $tracked->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isClean());
 		self::assertSame(['id' => 123, 'title' => 'Existing'], $record->getValues());
@@ -162,7 +162,7 @@ final class SessionTest extends TestCase
 
 		$tracked = $session->getRepresentations()->get($membership);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
-		$record = $session->getRecords()->getFromRepresentation($tracked);
+		$record = $tracked->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertSame(['user_id' => 10, 'group_id' => 20], $record->getKey()?->getValues());
 	}
@@ -180,7 +180,7 @@ final class SessionTest extends TestCase
 
 		$tracked = $session->getRepresentations()->get($post);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
-		self::assertSame($record, $session->getRecords()->getFromRepresentation($tracked));
+		self::assertSame($record, $tracked->getSingleRecord());
 		self::assertTrue($record->isDirty());
 	}
 
@@ -361,7 +361,7 @@ final class SessionTest extends TestCase
 		$tracked = $session->getRepresentations()->get($representation);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
 		self::assertFalse($result->hasChanges());
-		self::assertSame('New User', $session->getRecords()->getFromRepresentation($tracked)?->getValue('name'));
+		self::assertSame('New User', $tracked->getSingleRecord()?->getValue('name'));
 	}
 
 	public function testSyncUntrackedRootWithCompleteKeyTracksRootAsNewWithoutExistingIntent(): void
@@ -373,7 +373,7 @@ final class SessionTest extends TestCase
 
 		$tracked = $session->getRepresentations()->get($representation);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
-		$record = $session->getRecords()->getFromRepresentation($tracked);
+		$record = $tracked->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isNew());
 		self::assertFalse($record->hasKey());
@@ -390,7 +390,7 @@ final class SessionTest extends TestCase
 
 		$tracked = $session->getRepresentations()->get($representation);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
-		$record = $session->getRecords()->getFromRepresentation($tracked);
+		$record = $tracked->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isDirty());
 		self::assertSame(['name'], $record->getDirtyFields());
@@ -424,7 +424,7 @@ final class SessionTest extends TestCase
 
 		$tracked = $session->getRepresentations()->get($representation);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
-		$record = $session->getRecords()->getFromRepresentation($tracked);
+		$record = $tracked->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isNew());
 	}
@@ -440,7 +440,7 @@ final class SessionTest extends TestCase
 
 		$trackedOwner = $session->getRepresentations()->get($ownerRepresentation);
 		self::assertInstanceOf(RepresentationState::class, $trackedOwner);
-		$owner = $session->getRecords()->getFromRepresentation($trackedOwner);
+		$owner = $trackedOwner->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $owner);
 		self::assertInstanceOf(RepresentationState::class, $session->getRepresentations()->get($postRepresentation));
 		self::assertSame([$postRepresentation], $session->getRelations()->get($owner, 'posts')?->getItems());
@@ -458,7 +458,7 @@ final class SessionTest extends TestCase
 
 		$trackedPost = $session->getRepresentations()->get($postRepresentation);
 		self::assertInstanceOf(RepresentationState::class, $trackedPost);
-		$post = $session->getRecords()->getFromRepresentation($trackedPost);
+		$post = $trackedPost->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $post);
 		self::assertTrue($post->isNew());
 		self::assertSame(5, $post->getValue('id'));
@@ -475,7 +475,7 @@ final class SessionTest extends TestCase
 
 		$trackedPost = $session->getRepresentations()->get($postRepresentation);
 		self::assertInstanceOf(RepresentationState::class, $trackedPost);
-		$post = $session->getRecords()->getFromRepresentation($trackedPost);
+		$post = $trackedPost->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $post);
 		self::assertTrue($post->isNew());
 	}
@@ -498,7 +498,7 @@ final class SessionTest extends TestCase
 
 		$trackedOwner = $session->getRepresentations()->get($ownerRepresentation);
 		self::assertInstanceOf(RepresentationState::class, $trackedOwner);
-		$owner = $session->getRecords()->getFromRepresentation($trackedOwner);
+		$owner = $trackedOwner->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $owner);
 		self::assertSame([], $owner->getValues());
 		self::assertSame([], $session->getRelations()->get($owner, 'posts')?->getItems());
@@ -516,7 +516,7 @@ final class SessionTest extends TestCase
 
 		$trackedOwner = $session->getRepresentations()->get($ownerRepresentation);
 		self::assertInstanceOf(RepresentationState::class, $trackedOwner);
-		$owner = $session->getRecords()->getFromRepresentation($trackedOwner);
+		$owner = $trackedOwner->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $owner);
 		self::assertInstanceOf(RepresentationState::class, $session->getRepresentations()->get($profileRepresentation));
 		self::assertSame($profileRepresentation, $session->getRelations()->get($owner, 'profile')?->getTarget());

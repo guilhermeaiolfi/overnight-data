@@ -38,7 +38,7 @@ final class AdoptionRecordResolver
 		RecordStateStore $records,
 		bool $isRoot,
 	): RecordState {
-		$collection = $this->collectionFor($schema, $isRoot);
+		$collection = $schema->requireHomogeneousCollection($isRoot);
 		$values = $this->initialValues($representation, $schema, $collection);
 		$keyValues = $this->completeKeyValues($representation, $schema, $collection, $isRoot);
 
@@ -54,29 +54,19 @@ final class AdoptionRecordResolver
 		}
 
 		$key = $collection->getKey($keyValues);
-		$record = $records->getByKey($key);
-		if ($record instanceof RecordState) {
-			if ($record->isRemoved()) {
-				throw new StateException(sprintf(
-					"Cannot adopt representation for collection '%s' because key '%s' is already tracked as removed.",
-					$collection->getName(),
-					$key->getDebugString()
-				));
-			}
-
-			if ($this->hasUpdateIntent($representation)) {
-				$this->applyPresentValues($record, $values, $key);
-			}
-
-			return $record;
-		}
+		$removedMessage = sprintf(
+			"Cannot adopt representation for collection '%s' because key '%s' is already tracked as removed.",
+			$collection->getName(),
+			$key->getDebugString()
+		);
 
 		if ($this->hasUpdateIntent($representation)) {
-			$record = RecordState::clean($key, $key->getValues());
-			$records->add($record);
-			$this->applyPresentValues($record, $values, $key);
+			return $records->bindExisting($key, $values, $removedMessage);
+		}
 
-			return $record;
+		$existing = $records->getActive($key, $removedMessage);
+		if ($existing instanceof RecordState) {
+			return $existing;
 		}
 
 		return RecordState::new($collection, $values);
@@ -92,7 +82,7 @@ final class AdoptionRecordResolver
 		RecordStateStore $records,
 		bool $isRoot = true,
 	): RecordState {
-		$collection = $this->collectionFor($schema, $isRoot);
+		$collection = $schema->requireHomogeneousCollection($isRoot);
 		$keyValues = $this->completeKeyValues($representation, $schema, $collection, $isRoot);
 		if ($keyValues === null) {
 			throw new StateException(sprintf(
@@ -102,17 +92,16 @@ final class AdoptionRecordResolver
 		}
 
 		$key = $collection->getKey($keyValues);
-		$record = $records->getByKey($key);
-		if ($record instanceof RecordState) {
-			if ($record->isRemoved()) {
-				throw new StateException(sprintf(
-					"Cannot adopt representation for collection '%s' because key '%s' is already tracked as removed.",
-					$collection->getName(),
-					$key->getDebugString()
-				));
-			}
-
-			return $record;
+		$existing = $records->getActive(
+			$key,
+			sprintf(
+				"Cannot adopt representation for collection '%s' because key '%s' is already tracked as removed.",
+				$collection->getName(),
+				$key->getDebugString()
+			),
+		);
+		if ($existing instanceof RecordState) {
+			return $existing;
 		}
 
 		$record = RecordState::clean($key, $this->initialValuesForKey($representation, $schema, $key));
@@ -142,28 +131,6 @@ final class AdoptionRecordResolver
 		return $values;
 	}
 
-	private function collectionFor(RepresentationSchema $schema, bool $isRoot): CollectionInterface
-	{
-		$collection = null;
-		foreach ($schema->getFields() as $fieldSchema) {
-			$collection = $this->mergeCollection($collection, $fieldSchema->getCollection(), $fieldSchema->getPath(), $isRoot);
-		}
-
-		foreach ($schema->getRelations() as $relationSchema) {
-			$collection = $this->mergeCollection($collection, $relationSchema->getOwnerCollection(), $relationSchema->getPath(), $isRoot);
-		}
-
-		if (! $collection instanceof CollectionInterface) {
-			if ($isRoot) {
-				throw new StateException('Cannot synchronize untracked root representation because untracked root sync needs a schema targeting one collection.');
-			}
-
-			throw new StateException('Cannot adopt representation graph because a related schema does not target a collection.');
-		}
-
-		return $collection;
-	}
-
 	/**
 	 * @return non-empty-array<string, string|int|float|bool>|null
 	 */
@@ -176,7 +143,17 @@ final class AdoptionRecordResolver
 		if ($isRoot) {
 			$fromIdentity = $this->keyValuesFromIntentIdentity($representation, $collection);
 			if ($fromIdentity !== null) {
-				$this->assertDtoKeyAgrees($representation, $schema, $collection, $fromIdentity);
+				$key = $collection->getKey($fromIdentity);
+				$conflict = $key->conflictingIdentityField(
+					$this->readablePrimaryKeyValues($representation, $schema, $collection),
+				);
+				if ($conflict !== null) {
+					throw new StateException(sprintf(
+						"Cannot adopt update representation for collection '%s' because intent identity field '%s' disagrees with the representation.",
+						$collection->getName(),
+						$conflict,
+					));
+				}
 
 				return $fromIdentity;
 			}
@@ -228,70 +205,33 @@ final class AdoptionRecordResolver
 	}
 
 	/**
-	 * @param non-empty-array<string, string|int|float|bool> $identityValues
+	 * @return array<string, mixed>
 	 */
-	private function assertDtoKeyAgrees(
+	private function readablePrimaryKeyValues(
 		object $representation,
 		RepresentationSchema $schema,
 		CollectionInterface $collection,
-		array $identityValues,
-	): void {
-		foreach ($collection->getPrimaryKey() as $fieldName) {
-			$path = null;
-			foreach ($schema->getFields() as $fieldSchema) {
-				if ($fieldSchema->getCollectionName() === $collection->getName()
-					&& $fieldSchema->getFieldName() === $fieldName
-				) {
-					$path = $fieldSchema->getPath();
-
-					break;
-				}
+	): array {
+		$pathsByField = [];
+		foreach ($schema->getFields() as $fieldSchema) {
+			if ($fieldSchema->getCollectionName() === $collection->getName()) {
+				$pathsByField[$fieldSchema->getFieldName()] = $fieldSchema->getPath();
 			}
-			if ($path === null) {
+		}
+
+		$values = [];
+		foreach ($collection->getPrimaryKey() as $fieldName) {
+			if (! array_key_exists($fieldName, $pathsByField)) {
 				continue;
 			}
 
 			try {
-				$value = $this->reader->readPath($representation, $path);
+				$values[$fieldName] = $this->reader->readPath($representation, $pathsByField[$fieldName]);
 			} catch (SyncException) {
-				continue;
-			}
-
-			if ($value !== null && $value !== $identityValues[$fieldName]) {
-				throw new StateException(sprintf(
-					"Cannot adopt update representation for collection '%s' because intent identity field '%s' disagrees with the representation.",
-					$collection->getName(),
-					$fieldName,
-				));
 			}
 		}
-	}
 
-	private function mergeCollection(?CollectionInterface $current, CollectionInterface $next, string $path, bool $isRoot): CollectionInterface
-	{
-		if ($current === null || $current === $next) {
-			return $next;
-		}
-
-		if ($current->getName() !== $next->getName()) {
-			if ($isRoot) {
-				throw new StateException(sprintf(
-					"Cannot synchronize untracked root representation because untracked root sync needs a schema targeting one collection; path '%s' targets collection '%s' after '%s'.",
-					$path,
-					$next->getName(),
-					$current->getName()
-				));
-			}
-
-			throw new StateException(sprintf(
-				"Cannot adopt representation graph because related schema path '%s' targets collection '%s' after '%s'.",
-				$path,
-				$next->getName(),
-				$current->getName()
-			));
-		}
-
-		return $current;
+		return $values;
 	}
 
 	/**
@@ -318,21 +258,6 @@ final class AdoptionRecordResolver
 		}
 
 		return $values;
-	}
-
-	/**
-	 * @param array<string, mixed> $values
-	 */
-	private function applyPresentValues(RecordState $record, array $values, Key $key): void
-	{
-		$keyFields = $key->getValues();
-		foreach ($values as $fieldName => $value) {
-			if (array_key_exists($fieldName, $keyFields) && $value === $keyFields[$fieldName]) {
-				continue;
-			}
-
-			$record->setValue($fieldName, $value);
-		}
 	}
 
 	private function hasUpdateIntent(object $representation): bool

@@ -42,8 +42,8 @@ final class SessionGraphAdoptionTest extends TestCase
 
 		$tracked = $representations->get($root);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
-		self::assertSame('Root', $records->getFromRepresentation($tracked)?->getValue('name'));
-		self::assertTrue($records->getFromRepresentation($tracked)?->isNew());
+		self::assertSame('Root', $tracked->getSingleRecord()?->getValue('name'));
+		self::assertTrue($tracked->getSingleRecord()?->isNew());
 	}
 
 	public function testUntrackedRootWithCompleteKeyIsAdoptedAsNewWithoutExistingIntent(): void
@@ -56,7 +56,7 @@ final class SessionGraphAdoptionTest extends TestCase
 
 		$tracked = $reps->get($root);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
-		$record = $records->getFromRepresentation($tracked);
+		$record = $tracked->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isNew());
 		self::assertFalse($record->hasKey());
@@ -76,7 +76,7 @@ final class SessionGraphAdoptionTest extends TestCase
 
 		$tracked = $reps->get($root);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
-		$record = $records->getFromRepresentation($tracked);
+		$record = $tracked->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isDirty());
 		self::assertSame(10, $record->getKey()?->getFieldValue('id'));
@@ -94,7 +94,7 @@ final class SessionGraphAdoptionTest extends TestCase
 
 		$tracked = $representations->get($root);
 		self::assertInstanceOf(RepresentationState::class, $tracked);
-		$record = $records->getFromRepresentation($tracked);
+		$record = $tracked->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isNew());
 	}
@@ -128,7 +128,7 @@ final class SessionGraphAdoptionTest extends TestCase
 
 		$adopted = $representations->get($item);
 		self::assertInstanceOf(RepresentationState::class, $adopted);
-		self::assertTrue($records->getFromRepresentation($adopted)?->isNew());
+		self::assertTrue($adopted->getSingleRecord()?->isNew());
 	}
 
 	public function testManyRelationWithCompleteKeyAdoptsUntrackedItemAsNew(): void
@@ -142,7 +142,7 @@ final class SessionGraphAdoptionTest extends TestCase
 
 		$adopted = $representations->get($item);
 		self::assertInstanceOf(RepresentationState::class, $adopted);
-		$record = $records->getFromRepresentation($adopted);
+		$record = $adopted->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isNew());
 		self::assertSame(5, $record->getValue('id'));
@@ -159,7 +159,7 @@ final class SessionGraphAdoptionTest extends TestCase
 
 		$adopted = $representations->get($item);
 		self::assertInstanceOf(RepresentationState::class, $adopted);
-		$record = $records->getFromRepresentation($adopted);
+		$record = $adopted->getSingleRecord();
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertTrue($record->isNew());
 	}

@@ -22,7 +22,7 @@ final class SyncConflictTest extends TestCase
 
 		$session->sync($representation, $this->userSchema());
 		$tracked = $session->getRepresentations()->get($representation);
-		$record = $session->getRecords()->getFromRepresentation($tracked);
+		$record = $tracked->getSingleRecord();
 
 		self::assertInstanceOf(RecordState::class, $record);
 		self::assertSame('A1', $record->getValue('name'));

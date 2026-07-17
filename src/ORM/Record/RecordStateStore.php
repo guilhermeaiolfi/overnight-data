@@ -6,7 +6,6 @@ namespace ON\Data\ORM\Record;
 
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Representation\State\RepresentationState;
 
 final class RecordStateStore
 {
@@ -62,6 +61,44 @@ final class RecordStateStore
 		return $this->statesByKeyHash[$key->getHash()] ?? null;
 	}
 
+	/**
+	 * Tracked record for $key, or null when absent. Throws when the key is tracked as removed.
+	 */
+	public function getActive(Key $key, string $removedMessage): ?RecordState
+	{
+		$record = $this->getByKey($key);
+		if (! $record instanceof RecordState) {
+			return null;
+		}
+
+		if ($record->isRemoved()) {
+			throw new StateException($removedMessage);
+		}
+
+		return $record;
+	}
+
+	/**
+	 * PATCH an existing row: reuse or create a key-only clean record, then set present values.
+	 *
+	 * @param array<string, mixed> $presentValues
+	 */
+	public function bindExisting(Key $key, array $presentValues, string $removedMessage): RecordState
+	{
+		$existing = $this->getActive($key, $removedMessage);
+		if ($existing instanceof RecordState) {
+			$existing->setValues($presentValues);
+
+			return $existing;
+		}
+
+		$record = RecordState::clean($key, $key->getValues());
+		$this->add($record);
+		$record->setValues($presentValues);
+
+		return $record;
+	}
+
 	public function indexKey(RecordState $state): void
 	{
 		$key = $state->getKey();
@@ -86,38 +123,6 @@ final class RecordStateStore
 		}
 
 		$this->statesByKeyHash[$hash] = $state;
-	}
-
-	public function getFromRepresentation(RepresentationState $state): ?RecordState
-	{
-		$record = null;
-		foreach ($state->getFieldItems() as $item) {
-			$resolved = $item->getRecord();
-			if ($record === null) {
-				$record = $resolved;
-
-				continue;
-			}
-
-			if ($record !== $resolved) {
-				throw new StateException('Representation state cannot be collapsed to one record.');
-			}
-		}
-
-		foreach ($state->getRelationItems() as $item) {
-			$resolved = $item->getOwnerRecord();
-			if ($record === null) {
-				$record = $resolved;
-
-				continue;
-			}
-
-			if ($record !== $resolved) {
-				throw new StateException('Representation state cannot be collapsed to one record.');
-			}
-		}
-
-		return $record;
 	}
 
 	public function remove(Key $key): void

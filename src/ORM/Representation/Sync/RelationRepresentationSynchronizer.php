@@ -4,13 +4,10 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Sync;
 
-use ON\Data\ORM\Exception\StateException;
+use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\RelationStateInterface;
 use ON\Data\ORM\Relation\RelationStateStore;
-use ON\Data\ORM\Relation\RelationTarget;
-use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Representation\State\RepresentationRelationStateItem;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
@@ -28,15 +25,15 @@ final class RelationRepresentationSynchronizer
 	 * @return list<RelationStateInterface>
 	 */
 	public function sync(
-		RepresentationStateStore $representations,
+		RepresentationStateStore $reps,
 		RelationStateStore $relations,
 		?RepresentationStateStore $states = null,
 	): array {
 		$touched = [];
 		$touchedIds = [];
-		$states ??= $representations;
+		$states ??= $reps;
 
-		foreach ($representations->getAll() as $representation => $state) {
+		foreach ($reps->getAll() as $representation => $state) {
 			foreach ($state->getRelationItems() as $relationItem) {
 				$relationSchema = $relationItem->getSchema();
 				if ($relationSchema->isMany()) {
@@ -83,15 +80,13 @@ final class RelationRepresentationSynchronizer
 			$this->requireTrackedRepresentation($states, $item, $relationSchema->getPath());
 		}
 
-		$relation = $relations->get($owner, $relationName);
-		if ($relation === null) {
-			$relation = new ToManyRelationState($owner, $relationName, $relationSchema->getRelatedSchema());
-			$relations->add($relation);
-		} elseif (! $relation instanceof ToManyRelationState) {
-			throw $this->incompatibleCardinality($relationName);
-		}
-
-		$this->applyItems($relation, $items);
+		$relation = $relations->getOrCreate(
+			$owner,
+			$relationName,
+			RelationCardinality::MANY,
+			$relationSchema->getRelatedSchema(),
+		);
+		$relation->syncFromItems($items);
 		$this->touch($relation, $touched, $touchedIds);
 	}
 
@@ -124,18 +119,12 @@ final class RelationRepresentationSynchronizer
 			$this->requireTrackedRepresentation($states, $target, $relationSchema->getPath());
 		}
 
-		$relation = $relations->get($owner, $relationName);
-		if ($relation === null) {
-			$relation = new ToOneRelationState(
-				$owner,
-				$relationName,
-				$relationSchema->getRelatedSchema()
-			);
-			$relations->add($relation);
-		} elseif (! $relation instanceof ToOneRelationState) {
-			throw $this->incompatibleCardinality($relationName);
-		}
-
+		$relation = $relations->getOrCreate(
+			$owner,
+			$relationName,
+			RelationCardinality::SINGLE,
+			$relationSchema->getRelatedSchema(),
+		);
 		$relation->set($target);
 		$this->touch($relation, $touched, $touchedIds);
 	}
@@ -164,14 +153,6 @@ final class RelationRepresentationSynchronizer
 		return new SyncException($message);
 	}
 
-	private function incompatibleCardinality(string $relationName): StateException
-	{
-		return new StateException(sprintf(
-			"Relation '%s' is already tracked with incompatible cardinality.",
-			$relationName
-		));
-	}
-
 	/**
 	 * @param list<RelationStateInterface> $touched
 	 * @param array<int, true> $touchedIds
@@ -182,41 +163,6 @@ final class RelationRepresentationSynchronizer
 		if (! array_key_exists($id, $touchedIds)) {
 			$touchedIds[$id] = true;
 			$touched[] = $change;
-		}
-	}
-
-	/**
-	 * @param list<object> $items
-	 */
-	private function applyItems(ToManyRelationState $relation, array $items): void
-	{
-		if (! $relation->isFullyLoaded()) {
-			foreach ($items as $item) {
-				$relation->add($item);
-			}
-
-			return;
-		}
-
-		$currentIds = [];
-		foreach ($items as $item) {
-			$target = RelationTarget::from($item);
-			$currentIds[$target->identityKey()] = true;
-			if (! $relation->containsTarget($target)) {
-				$relation->addTarget($target);
-			}
-		}
-
-		foreach ($relation->getItemTargets() as $known) {
-			// Pending flat/record-backed adds are not present on the DTO array.
-			if ($known->isRecord()) {
-				continue;
-			}
-
-			$id = $known->identityKey();
-			if (! array_key_exists($id, $currentIds)) {
-				$relation->removeTarget($known);
-			}
 		}
 	}
 }

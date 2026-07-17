@@ -173,6 +173,98 @@ final class RepresentationState
 	}
 
 	/**
+	 * All distinct RecordStates referenced by field and relation items.
+	 *
+	 * @return list<RecordState>
+	 */
+	public function getUniqueRecords(): array
+	{
+		$records = [];
+		foreach ($this->fieldItems as $item) {
+			$record = $item->getRecord();
+			$records[$record->getStateHash()] = $record;
+		}
+
+		foreach ($this->relationItems as $item) {
+			$record = $item->getOwnerRecord();
+			$records[$record->getStateHash()] = $record;
+		}
+
+		return array_values($records);
+	}
+
+	/**
+	 * Collapse this representation to one record, or null when no items are attached.
+	 *
+	 * @throws StateException when field/relation items resolve to multiple records
+	 */
+	public function getSingleRecord(): ?RecordState
+	{
+		$records = $this->getUniqueRecords();
+		if ($records === []) {
+			return null;
+		}
+
+		if (count($records) > 1) {
+			throw new StateException('Representation state cannot be collapsed to one record.');
+		}
+
+		return $records[0];
+	}
+
+	/**
+	 * Require exactly one concrete record (e.g. Session::remove).
+	 */
+	public function requireSingleRecord(): RecordState
+	{
+		$records = $this->getUniqueRecords();
+		if ($records === []) {
+			throw new StateException('Cannot remove representation because its schema does not resolve to a concrete record state.');
+		}
+
+		if (count($records) > 1) {
+			throw new StateException('Cannot remove representation because its schema resolves to multiple record states.');
+		}
+
+		return $records[0];
+	}
+
+	/**
+	 * Owner RecordState for a named relation on this representation (detach / relation ops).
+	 */
+	public function getOwnerRecord(string $relation): RecordState
+	{
+		if ($this->schema->hasRelation($relation)) {
+			$relationSchema = $this->schema->getRelation($relation);
+			foreach ($this->relationItems as $item) {
+				if ($item->getSchema()->getPath() === $relationSchema->getPath()) {
+					return $item->getOwnerRecord();
+				}
+			}
+
+			$root = $this->getRootRecord();
+			if ($root instanceof RecordState) {
+				return $root;
+			}
+		}
+
+		$root = $this->getRootRecord();
+		if ($root instanceof RecordState && $root->getCollection()->hasRelation($relation)) {
+			return $root;
+		}
+
+		$matches = $this->getRecordsForCollection($this->schema->getCollection());
+		if (count($matches) === 1) {
+			return $matches[0];
+		}
+
+		throw new StateException(sprintf(
+			"Cannot get owner record for relation '%s' on the tracked representation.",
+			$relation,
+		));
+	}
+
+	/**
 	 * Deliberate post-sync acknowledgement only.
 	 *
 	 * @param array<string, RecordState> $touchedRecords

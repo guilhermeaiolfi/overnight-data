@@ -151,30 +151,30 @@ final class RecordStateStoreTest extends TestCase
 		$map->add($duplicate);
 	}
 
-	public function testGetFromRepresentationReturnsNullWhenNoFieldItemsAttached(): void
+	public function testGetSingleRecordReturnsNullWhenNoFieldItemsAttached(): void
 	{
 		$tracked = new RepresentationState(new RepresentationSchema($this->users()), []);
 
-		self::assertNull((new RecordStateStore())->getFromRepresentation($tracked));
+		self::assertNull($tracked->getSingleRecord());
 	}
 
-	public function testGetFromRepresentationReturnsRecordWhenFieldItemsResolveToOneRecord(): void
+	public function testGetSingleRecordReturnsRecordWhenFieldItemsResolveToOneRecord(): void
 	{
 		$state = RecordState::new($this->users(), ['name' => 'A1']);
 		$tracked = $this->trackedFor($state, ['name']);
 
-		self::assertSame($state, (new RecordStateStore())->getFromRepresentation($tracked));
+		self::assertSame($state, $tracked->getSingleRecord());
 	}
 
-	public function testGetFromRepresentationReturnsSameRecordForMultipleFieldsOnSameRecord(): void
+	public function testGetSingleRecordReturnsSameRecordForMultipleFieldsOnSameRecord(): void
 	{
 		$state = RecordState::new($this->users(), ['id' => 10, 'name' => 'A1']);
 		$tracked = $this->trackedFor($state, ['id', 'name']);
 
-		self::assertSame($state, (new RecordStateStore())->getFromRepresentation($tracked));
+		self::assertSame($state, $tracked->getSingleRecord());
 	}
 
-	public function testGetFromRepresentationThrowsWhenFieldItemsResolveToDifferentRecords(): void
+	public function testGetSingleRecordThrowsWhenFieldItemsResolveToDifferentRecords(): void
 	{
 		$users = $this->users();
 		$first = RecordState::new($users, ['name' => 'A1']);
@@ -193,10 +193,10 @@ final class RecordStateStoreTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('cannot be collapsed to one record');
 
-		(new RecordStateStore())->getFromRepresentation($tracked);
+		$tracked->getSingleRecord();
 	}
 
-	public function testGetFromRepresentationCollapsesFieldAndRelationItemsToOneRecord(): void
+	public function testGetSingleRecordCollapsesFieldAndRelationItemsToOneRecord(): void
 	{
 		$users = $this->users();
 		$state = RecordState::new($users, ['id' => 10, 'name' => 'A1']);
@@ -213,7 +213,7 @@ final class RecordStateStoreTest extends TestCase
 			[new RepresentationRelationStateItem($relationSchema, $state, 'posts')],
 		);
 
-		self::assertSame($state, (new RecordStateStore())->getFromRepresentation($tracked));
+		self::assertSame($state, $tracked->getSingleRecord());
 	}
 
 	public function testRemoveOnlyRemovesKeyAlias(): void

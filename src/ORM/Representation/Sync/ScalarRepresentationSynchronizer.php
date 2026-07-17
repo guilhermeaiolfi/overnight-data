@@ -39,7 +39,7 @@ final class ScalarRepresentationSynchronizer
 		$this->assertNoConflicts($plans);
 
 		foreach ($plannedStates as $index => $state) {
-			$this->applyPlan($state, $plans[$index]);
+			$plans[$index]->apply($state);
 		}
 
 		return $plans;
@@ -205,18 +205,5 @@ final class ScalarRepresentationSynchronizer
 			$count,
 			$firstPath
 		));
-	}
-
-	private function applyPlan(RepresentationState $state, SyncPlan $plan): void
-	{
-		$touchedRecords = [];
-
-		foreach ($plan->getUpdates() as $update) {
-			$record = $update->getRecord();
-			$record->setValue($update->getField(), $update->getValue());
-			$touchedRecords[$record->getStateHash()] = $record;
-		}
-
-		$state->acceptSyncedRecords($touchedRecords);
 	}
 }
