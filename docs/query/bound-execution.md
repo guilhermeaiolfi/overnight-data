@@ -55,17 +55,17 @@ Bound queries return arrays by default. Object export is opt-in through `to(...)
 | `$query->iterate()` | `iterable<array<string, mixed>>` |
 | `$query->to(stdClass::class)->fetchAll()` | `list<stdClass>` |
 | `$query->to(UserRow::class)->fetchAll()` | `list<UserRow>` where `UserRow` is a no-required-constructor public-property class |
-| `$query->to(stdClass::class)->mutable($session)->fetchAll()` | tracked mutable `stdClass` objects |
+| `$query->to(stdClass::class)->writable($session)->fetchAll()` | tracked writable `stdClass` objects |
 
-Read-only object export also supports lazy iteration: `to(...)->iterate()` yields objects one row at a time. `mutable(...)->iterate()` is intentionally unsupported; use `fetchAll()` or `fetchOne()`.
+Read-only object export also supports lazy iteration: `to(...)->iterate()` yields objects one row at a time. `writable(...)->iterate()` is intentionally unsupported; use `fetchAll()` or `fetchOne()`.
 
-Selections tagged `SelectionTag::INTERNAL` are compiled into the query when mutable flat projections need hidden identity values. They are stripped from public array and object results.
+Selections tagged `SelectionTag::INTERNAL` are compiled into the query when writable flat projections need hidden identity values. They are stripped from public array and object results.
 
-Mutable export requirements:
+Writable export requirements:
 
 - requires `to(stdClass::class)`;
 - requires an explicit `Session`;
-- compiles binding/provenance only for mutable export, not for normal array queries or read-only object export;
+- compiles binding/provenance only for writable export, not for normal array queries or read-only object export;
 - compiles one binding per fetch operation and reuses it across rows;
 - still creates a distinct `RepresentationState` per object.
 

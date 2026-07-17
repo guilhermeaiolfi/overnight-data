@@ -111,10 +111,10 @@ $session->detach($tag, $user, 'tags');
 $session->flush();
 ```
 
-## Mutable query export
+## Writable query export
 
 ```php
-$user = $q->to(stdClass::class)->mutable($session)->fetchOne();
+$user = $q->to(stdClass::class)->writable($session)->fetchOne();
 $user->name = 'Ada';
 $session->sync($user); // recommended; flush also syncs already-tracked objects
 $session->flush();

@@ -139,7 +139,7 @@ $objects = $userQuery
     ->fetchAll();
 ```
 
-Mutable tracked export for persistence workflows requires `stdClass` and an explicit `Session`. See [`query/bound-execution.md`](./query/bound-execution.md) and [`orm/persistence.md`](./orm/persistence.md).
+Writable tracked export for persistence workflows requires `stdClass` and an explicit `Session`. See [`query/bound-execution.md`](./query/bound-execution.md) and [`orm/persistence.md`](./orm/persistence.md).
 
 ## Next steps
 

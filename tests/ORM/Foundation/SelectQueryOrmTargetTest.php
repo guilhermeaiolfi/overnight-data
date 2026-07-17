@@ -108,7 +108,7 @@ final class SelectQueryOrmTargetTest extends TestCase
 		$query = $harness->database->query($users);
 		$query->select($query->name);
 
-		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 
 		self::assertInstanceOf(stdClass::class, $user);
 		self::assertSame('Ada', $user->name);
@@ -126,7 +126,7 @@ final class SelectQueryOrmTargetTest extends TestCase
 		$query = $harness->database->query($users);
 		$query->select($query->id, $query->name->as('userName'));
 
-		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 		self::assertInstanceOf(stdClass::class, $user);
 
 		$user->userName = 'Ada Lovelace';
@@ -143,7 +143,7 @@ final class SelectQueryOrmTargetTest extends TestCase
 		$query = $harness->database->query($users);
 		$query->select($query->id, $query->name->upper()->as('upperName'));
 
-		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 		self::assertInstanceOf(stdClass::class, $user);
 		self::assertSame(1, $user->id);
 		self::assertSame('ADA', $user->upperName);
@@ -166,7 +166,7 @@ final class SelectQueryOrmTargetTest extends TestCase
 		$query = $harness->database->query($users);
 		$query->select($query->id, $query->name);
 
-		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 		self::assertInstanceOf(stdClass::class, $user);
 
 		$user->name = 'Ada Lovelace';
@@ -184,7 +184,7 @@ final class SelectQueryOrmTargetTest extends TestCase
 		[$harness, $users] = $this->usersHarness();
 		$session = new Session($harness->commandExecutor);
 
-		$user = $harness->database->query($users)->to(stdClass::class)->mutable($session)->fetchOne();
+		$user = $harness->database->query($users)->to(stdClass::class)->writable($session)->fetchOne();
 		self::assertInstanceOf(stdClass::class, $user);
 
 		$user->name = 'Ada Lovelace';

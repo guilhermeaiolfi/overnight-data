@@ -22,12 +22,12 @@ See [`CHANGELOG.md`](CHANGELOG.md) for release history and [`docs/quickstart.md`
 - Bound execution: optional execution binding through `ON\Data\Database\QueryExecutorInterface`, plus `DataRuntime` / `CycleRuntimeFactory` and `ConnectionConfig`.
 - Relation loading: structured relation selection for nested results, loader-owned join or separate-query execution, and parser-backed result assembly for built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relations.
 - ORM persistence: `RecordState`-backed scalar insert/update/delete planning, scalar and relation representation synchronization, configured relation persistence planning, `FlushExecutor` / `Session` orchestration, Cycle-backed command execution, affected-row validation, and simple auto-increment primary-key merge after inserts.
-- Query result export: array results by default, read-only `stdClass` and public-property class export, and mutable `stdClass` query export with flat projection provenance.
+- Query result export: array results by default, read-only `stdClass` and public-property class export, and writable `stdClass` query export with flat projection provenance.
 - Session save API: `update` / `create` / `detach` with `SelectQuery::projection()` or `schemaOf()` for inbound shapes; pending intents apply on `sync()`, then `flush()`.
 
 ## Query shape and persistence source are independent
 
-The result object is flat, but mutable query export remembers where each property came from. A property aliased from a related field still updates the underlying table column after `sync()` and `flush()`. This works through mutable query provenance and flat projection adoption.
+The result object is flat, but writable query export remembers where each property came from. A property aliased from a related field still updates the underlying table column after `sync()` and `flush()`. This works through writable query provenance and flat projection adoption.
 
 Given a bound query and a `Session` backed by a command executor (for example from `CycleRuntimeFactory` / `ConvertingCommandExecutor`):
 
@@ -38,7 +38,7 @@ $user = $q
         $q->company->name->as('name'),
     )
     ->to(stdClass::class)
-    ->mutable($session)
+    ->writable($session)
     ->fetchOne();
 
 $user->name = 'Dell';
@@ -49,7 +49,7 @@ $session->flush();
 // Updates companies.name.
 ```
 
-For objects that did not come from a query, compile shape with `SelectQuery::projection()` (or reuse `Session::schemaOf($tracked)`), then bind with `Session::update` / `create`, call `sync()`, and `flush()`. See [`docs/orm/session-save-api.md`](docs/orm/session-save-api.md). Mutable export is `stdClass`-only for now. User-defined classes are supported for read-only export only.
+For objects that did not come from a query, compile shape with `SelectQuery::projection()` (or reuse `Session::schemaOf($tracked)`), then bind with `Session::update` / `create`, call `sync()`, and `flush()`. See [`docs/orm/session-save-api.md`](docs/orm/session-save-api.md). Writable export is `stdClass`-only for now. User-defined classes are supported for read-only export only.
 
 ## Query result modes
 
@@ -72,13 +72,13 @@ $query->to(UserRow::class)->fetchAll()
     // list<UserRow>
     // UserRow is a public-property (or constructor-promoted) class
 
-$query->to(stdClass::class)->mutable($session)->fetchAll()
-    // tracked mutable stdClass objects
+$query->to(stdClass::class)->writable($session)->fetchAll()
+    // tracked writable stdClass objects
 ```
 
-Read-only object export also supports lazy iteration: `to(...)->iterate()` yields objects one row at a time. `mutable(...)->iterate()` is intentionally unsupported; use `fetchAll()` or `fetchOne()`.
+Read-only object export also supports lazy iteration: `to(...)->iterate()` yields objects one row at a time. `writable(...)->iterate()` is intentionally unsupported; use `fetchAll()` or `fetchOne()`.
 
-Selections tagged `SelectionTag::INTERNAL` are used for hidden identity values required by mutable flat projections. They are stripped from public array and object results.
+Selections tagged `SelectionTag::INTERNAL` are used for hidden identity values required by writable flat projections. They are stripped from public array and object results.
 
 See [`docs/query/bound-execution.md`](docs/query/bound-execution.md) and [`docs/query/query-model.md`](docs/query/query-model.md) for execution and export details.
 
@@ -106,13 +106,13 @@ Public-property class export requirements:
 - Public result keys must match public properties (or constructor/promoted parameters via the mapper).
 - Nested typed object properties may be materialized into their declared classes when supported.
 - Array relation/list properties annotated as `@var list<stdClass>` (or another item class) receive arrays of those items; bare `array` properties keep nested arrays.
-- Mutable export is `stdClass`-only for now.
+- Writable export is `stdClass`-only for now.
 
-## Mutable export requirements
+## Writable export requirements
 
-- Mutable export requires `to(stdClass::class)`.
-- Mutable export requires an explicit `Session`.
-- Binding and provenance are compiled only for mutable export, not for normal fast array queries or read-only object export.
+- Writable export requires `to(stdClass::class)`.
+- Writable export requires an explicit `Session`.
+- Binding and provenance are compiled only for writable export, not for normal fast array queries or read-only object export.
 - One binding is compiled per fetch operation and reused across rows.
 - Each object still gets its own `RepresentationState`.
 
@@ -126,9 +126,9 @@ Public-property class export requirements:
 - No lazy loading.
 - No repositories, `EntityManager`, `UnitOfWork`, events, proxies, or generated model layer.
 - No full database-default refresh beyond simple auto-increment primary keys.
-- Mutable user-defined class export is not supported yet.
-- Mutable iteration is not supported yet.
-- Flat projection provenance is available for mutable `stdClass` query export and manual mutable projections.
+- Writable user-defined class export is not supported yet.
+- Writable iteration is not supported yet.
+- Flat projection provenance is available for writable `stdClass` query export.
 
 ## Namespace
 
@@ -181,5 +181,5 @@ GitHub Actions runs `composer validate --strict` and `composer check` on PHP 8.3
 - `docs/orm/foundation.md` documents ORM foundation concepts, state primitives, representation lineage, sync conflicts, and relation guardrails.
 - `docs/orm/persistence.md` documents the ORM persistence pipeline, affected-row validation, Cycle command executor boundary, generated-key support, relation persistence planning boundary, and write-side limitations.
 - `docs/orm/representation-schema.md` documents representation schema, flat projection adoption, mapper/query/tracking boundaries, and scalar sync guardrails.
-- `docs/orm/mutable-select-query-projections.md` documents mutable `SelectQuery` projection provenance, flattened related-field updates, relation intent from queried objects, and current projection boundaries.
+- `docs/orm/writable-select-query-projections.md` documents writable `SelectQuery` projection provenance, flattened related-field updates, relation intent from queried objects, and current projection boundaries.
 - `docs/orm/session-save-api.md` documents `update` / `create` / `detach` / `sync` / `flush`, `SelectQuery::projection()`, and `RepresentationIntentStore`.

@@ -7,7 +7,7 @@ namespace Tests\ON\Data\ORM\Query;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
-use ON\Data\ORM\Representation\State\Query\MutableQueryResultTracker;
+use ON\Data\ORM\Representation\State\Query\WritableQueryResultTracker;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Session;
 use ON\Data\Query\Exception\ObjectExportException;
@@ -16,43 +16,43 @@ use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
 
-final class MutableQueryExportTest extends TestCase
+final class WritableQueryExportTest extends TestCase
 {
 	public function testToStdClassFetchAllRemainsUntracked(): void
 	{
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
-			new MutableExportRecordingExecutor(),
+			new WritableExportRecordingExecutor(),
 		);
 
 		$rows = $query->to(stdClass::class)->fetchAll();
 
 		self::assertInstanceOf(stdClass::class, $rows[0]);
-		self::assertFalse($query->isMutable());
-		self::assertNull($query->getMutableResultHandler());
+		self::assertFalse($query->isWritable());
+		self::assertNull($query->getWritableResultHandler());
 	}
 
-	public function testMutableWithoutToThrows(): void
+	public function testWritableWithoutToThrows(): void
 	{
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
-			new MutableExportRecordingExecutor(),
+			new WritableExportRecordingExecutor(),
 		);
 
 		$this->expectException(ObjectExportException::class);
-		$this->expectExceptionMessage('Mutable query export requires object export; call to(stdClass::class) before mutable().');
+		$this->expectExceptionMessage('Writable query export requires object export; call to(stdClass::class) before writable().');
 
-		$query->mutable($this->session());
+		$query->writable($this->session());
 	}
 
-	public function testMutableFetchAllReturnsStdClassObjects(): void
+	public function testWritableFetchAllReturnsStdClassObjects(): void
 	{
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
-			new MutableExportRecordingExecutor(),
+			new WritableExportRecordingExecutor(),
 		);
 
-		$rows = $query->to(stdClass::class)->mutable($this->session())->fetchAll();
+		$rows = $query->to(stdClass::class)->writable($this->session())->fetchAll();
 
 		self::assertCount(2, $rows);
 		self::assertInstanceOf(stdClass::class, $rows[0]);
@@ -69,7 +69,7 @@ final class MutableQueryExportTest extends TestCase
 		$users = $registry->getCollection('users');
 		$query = new SelectQuery(
 			$users,
-			new MutableExportRecordingExecutor(
+			new WritableExportRecordingExecutor(
 				fetchAllRows: [
 					['id' => 1, 'name' => 'Ada', 'postCount' => 2],
 				],
@@ -78,7 +78,7 @@ final class MutableQueryExportTest extends TestCase
 		);
 		$query->select($query->id, $query->name, $query->id->count()->as('postCount'));
 
-		$row = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		$row = $query->to(stdClass::class)->writable($session)->fetchOne();
 
 		self::assertInstanceOf(stdClass::class, $row);
 		self::assertSame(1, $row->id);
@@ -98,15 +98,15 @@ final class MutableQueryExportTest extends TestCase
 		self::assertFalse($state->hasFieldItem('postCount'));
 	}
 
-	public function testMutableFetchAllTracksAllRootObjectsWithEquivalentSchemas(): void
+	public function testWritableFetchAllTracksAllRootObjectsWithEquivalentSchemas(): void
 	{
 		$session = $this->session();
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
-			new MutableExportRecordingExecutor(),
+			new WritableExportRecordingExecutor(),
 		);
 
-		$rows = $query->to(stdClass::class)->mutable($session)->fetchAll();
+		$rows = $query->to(stdClass::class)->writable($session)->fetchAll();
 
 		$states = $this->representationStates($session, $rows[0], $rows[1]);
 
@@ -119,10 +119,10 @@ final class MutableQueryExportTest extends TestCase
 		$session = $this->session();
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
-			new MutableExportRecordingExecutor(),
+			new WritableExportRecordingExecutor(),
 		);
 
-		$rows = $query->to(stdClass::class)->mutable($session)->fetchAll();
+		$rows = $query->to(stdClass::class)->writable($session)->fetchAll();
 
 		$first = $session->getRepresentations()->get($rows[0]);
 		$second = $session->getRepresentations()->get($rows[1]);
@@ -150,7 +150,7 @@ final class MutableQueryExportTest extends TestCase
 
 		$session = new Session(new RecordingCommandExecutor());
 		$compilation = (new QueryRepresentationSchemaCompiler())->compileResult($query);
-		(new MutableQueryResultTracker($session))->trackOne($compilation, $user, ['id' => 1, 'name' => 'Ada']);
+		(new WritableQueryResultTracker($session))->trackOne($compilation, $user, ['id' => 1, 'name' => 'Ada']);
 
 		self::assertTrue($session->getRepresentations()->has($user));
 		self::assertTrue($session->getRepresentations()->has($post));
@@ -161,41 +161,41 @@ final class MutableQueryExportTest extends TestCase
 		$session = $this->session();
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
-			new MutableExportRecordingExecutor(),
+			new WritableExportRecordingExecutor(),
 		);
 
-		$rows = $query->to(stdClass::class)->mutable($session)->fetchAll();
+		$rows = $query->to(stdClass::class)->writable($session)->fetchAll();
 
-		self::assertSame($session, $query->getMutableResultHandler());
+		self::assertSame($session, $query->getWritableResultHandler());
 		self::assertTrue($session->getRepresentations()->has($rows[0]));
 		self::assertTrue($session->getRepresentations()->has($rows[1]));
 	}
 
-	public function testMutableFetchOneTracksSingleObject(): void
+	public function testWritableFetchOneTracksSingleObject(): void
 	{
 		$session = $this->session();
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
-			new MutableExportRecordingExecutor(),
+			new WritableExportRecordingExecutor(),
 		);
 
-		$row = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		$row = $query->to(stdClass::class)->writable($session)->fetchOne();
 
 		self::assertInstanceOf(stdClass::class, $row);
-		self::assertSame($session, $query->getMutableResultHandler());
+		self::assertSame($session, $query->getWritableResultHandler());
 		self::assertTrue($session->getRepresentations()->has($row));
 	}
 
-	public function testMutableFetchOneReturningNullDoesNotTrack(): void
+	public function testWritableFetchOneReturningNullDoesNotTrack(): void
 	{
 		$session = $this->session();
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
-			new MutableExportRecordingExecutor(fetchOneRow: null),
+			new WritableExportRecordingExecutor(fetchOneRow: null),
 		);
 
-		self::assertNull($query->to(stdClass::class)->mutable($session)->fetchOne());
-		self::assertSame($session, $query->getMutableResultHandler());
+		self::assertNull($query->to(stdClass::class)->writable($session)->fetchOne());
+		self::assertSame($session, $query->getWritableResultHandler());
 		self::assertSame([], iterator_to_array($session->getRepresentations()->getAll(), false));
 	}
 
@@ -203,26 +203,26 @@ final class MutableQueryExportTest extends TestCase
 	{
 		$session = $this->session();
 		$query = new SelectQuery($this->makeRegistry()->getCollection('users'));
-		$query->to(stdClass::class)->mutable($session);
+		$query->to(stdClass::class)->writable($session);
 
 		$copy = $query->copy();
 
-		self::assertTrue($copy->isMutable());
+		self::assertTrue($copy->isWritable());
 		self::assertSame(stdClass::class, $copy->getResultClass());
-		self::assertSame($session, $copy->getMutableResultHandler());
+		self::assertSame($session, $copy->getWritableResultHandler());
 	}
 
 	public function testUnsupportedClassCannotReachMutable(): void
 	{
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
-			new MutableExportRecordingExecutor(),
+			new WritableExportRecordingExecutor(),
 		);
 
 		$this->expectException(ObjectExportException::class);
 		$this->expectExceptionMessage('Object export class "App\\User" does not exist.');
 
-		$query->to('App\\User')->mutable($this->session());
+		$query->to('App\\User')->writable($this->session());
 	}
 
 	private function session(): Session
@@ -270,7 +270,7 @@ final class MutableQueryExportTest extends TestCase
 	}
 }
 
-final class MutableQueryResultTrackerTest extends TestCase
+final class WritableQueryResultTrackerTest extends TestCase
 {
 	public function testTrackAllReusesCompiledTemplateForRelatedSchemas(): void
 	{
@@ -281,7 +281,7 @@ final class MutableQueryResultTrackerTest extends TestCase
 		$query->posts->fields('title');
 
 		$session = new Session(new RecordingCommandExecutor());
-		$tracker = new MutableQueryResultTracker($session);
+		$tracker = new WritableQueryResultTracker($session);
 		$compilation = (new QueryRepresentationSchemaCompiler())->compileResult($query);
 
 		$first = $this->userWithPosts(1, 'Ada', 10, 'Hello');
@@ -311,7 +311,7 @@ final class MutableQueryResultTrackerTest extends TestCase
 		$query->select($query->name);
 
 		$session = new Session(new RecordingCommandExecutor());
-		$tracker = new MutableQueryResultTracker($session);
+		$tracker = new WritableQueryResultTracker($session);
 		$compilation = (new QueryRepresentationSchemaCompiler())->compileResult($query);
 
 		$first = $this->userObject(1, 'Ada');
@@ -338,7 +338,7 @@ final class MutableQueryResultTrackerTest extends TestCase
 		$query->select($query->name);
 
 		$session = new Session(new RecordingCommandExecutor());
-		$tracker = new MutableQueryResultTracker($session);
+		$tracker = new WritableQueryResultTracker($session);
 		$user = $this->userObject(1, 'Ada');
 		$compilation = (new QueryRepresentationSchemaCompiler())->compileResult($query);
 
@@ -397,7 +397,7 @@ final class MutableQueryResultTrackerTest extends TestCase
 	}
 }
 
-final class MutableExportRecordingExecutor implements QueryExecutorInterface
+final class WritableExportRecordingExecutor implements QueryExecutorInterface
 {
 	/**
 	 * @param list<array<string, mixed>> $fetchAllRows

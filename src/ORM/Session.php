@@ -20,7 +20,7 @@ use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\State\Projection\ProjectionRepresentationStateBuilder;
-use ON\Data\ORM\Representation\State\Query\MutableQueryResultTracker;
+use ON\Data\ORM\Representation\State\Query\WritableQueryResultTracker;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\ORM\Representation\Sync\AdoptionRecordResolver;
@@ -30,11 +30,11 @@ use ON\Data\ORM\Representation\Sync\RepresentationReader;
 use ON\Data\ORM\Representation\Sync\RepresentationStateAdoptionTrait;
 use ON\Data\ORM\Representation\Sync\RepresentationSyncer;
 use ON\Data\ORM\Representation\Sync\SyncResult;
-use ON\Data\Query\Result\MutablePreparation;
-use ON\Data\Query\Result\MutableResultHandler;
+use ON\Data\Query\Result\WritablePreparation;
+use ON\Data\Query\Result\WritableResultHandler;
 use ON\Data\Query\SelectQuery;
 
-final class Session implements MutableResultHandler
+final class Session implements WritableResultHandler
 {
 	use RepresentationStateAdoptionTrait;
 
@@ -43,7 +43,7 @@ final class Session implements MutableResultHandler
 	private FlushExecutor $flusher;
 	private RepresentationSyncer $syncer;
 	private ProjectionRepresentationStateBuilder $projectionStateBuilder;
-	private ?MutableQueryResultTracker $mutableResultTracker = null;
+	private ?WritableQueryResultTracker $writableResultTracker = null;
 
 	public function __construct(
 		CommandExecutorInterface $executor,
@@ -59,18 +59,18 @@ final class Session implements MutableResultHandler
 		$this->flusher = $flusher ?? new FlushExecutor($executor, $this->syncer);
 	}
 
-	public function prepare(SelectQuery $query): MutablePreparation
+	public function prepare(SelectQuery $query): WritablePreparation
 	{
-		return $this->mutableResultTracker()->prepare($query);
+		return $this->writableResultTracker()->prepare($query);
 	}
 
 	public function track(
 		SelectQuery $query,
-		MutablePreparation $preparation,
+		WritablePreparation $preparation,
 		array $rawRows,
 		array $objects,
 	): void {
-		$this->mutableResultTracker()->track($query, $preparation, $rawRows, $objects);
+		$this->writableResultTracker()->track($query, $preparation, $rawRows, $objects);
 	}
 
 	public function getRecords(): RecordStateStore
@@ -384,8 +384,8 @@ final class Session implements MutableResultHandler
 		);
 	}
 
-	private function mutableResultTracker(): MutableQueryResultTracker
+	private function writableResultTracker(): WritableQueryResultTracker
 	{
-		return $this->mutableResultTracker ??= new MutableQueryResultTracker($this);
+		return $this->writableResultTracker ??= new WritableQueryResultTracker($this);
 	}
 }

@@ -12,19 +12,19 @@ use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Sync\AdoptionRecordResolver;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
 use ON\Data\ORM\Session;
-use ON\Data\Query\Result\MutablePreparation;
-use ON\Data\Query\Result\MutableResultHandler;
+use ON\Data\Query\Result\WritablePreparation;
+use ON\Data\Query\Result\WritableResultHandler;
 use ON\Data\Query\SelectQuery;
 use RuntimeException;
 
 /**
- * Mutable query export bridge: compiles projections ({@see prepare()}) and routes
+ * Writable query export bridge: compiles projections ({@see prepare()}) and routes
  * results into Session tracking ({@see track()}).
  *
  * Stateless for preparations — the plan token is owned by the caller (SelectQuery
  * holds it for the duration of one fetch).
  */
-final class MutableQueryResultTracker implements MutableResultHandler
+final class WritableQueryResultTracker implements WritableResultHandler
 {
 	private RepresentationReader $reader;
 
@@ -45,20 +45,20 @@ final class MutableQueryResultTracker implements MutableResultHandler
 		$this->recordResolver = $recordResolver ?? new AdoptionRecordResolver();
 	}
 
-	public function prepare(SelectQuery $query): MutablePreparation
+	public function prepare(SelectQuery $query): WritablePreparation
 	{
 		return $this->compiler->compileResult($query);
 	}
 
 	public function track(
 		SelectQuery $query,
-		MutablePreparation $preparation,
+		WritablePreparation $preparation,
 		array $rawRows,
 		array $objects,
 	): void {
 		if (! $preparation instanceof QueryRepresentationPlan) {
 			throw new InvalidArgumentException(sprintf(
-				'MutableQueryResultTracker requires %s; %s was provided.',
+				'WritableQueryResultTracker requires %s; %s was provided.',
 				QueryRepresentationPlan::class,
 				$preparation::class,
 			));

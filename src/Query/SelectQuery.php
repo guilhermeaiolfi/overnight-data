@@ -31,8 +31,8 @@ use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Relation\RelationQueryPlanner;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelectionTree;
-use ON\Data\Query\Result\MutableResultHandler;
 use ON\Data\Query\Result\ObjectExportClassValidator;
+use ON\Data\Query\Result\WritableResultHandler;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\Sort\Sort;
@@ -93,7 +93,7 @@ final class SelectQuery implements QuerySourceInterface
 
 	private ?string $resultClass = null;
 
-	private ?MutableResultHandler $mutableHandler = null;
+	private ?WritableResultHandler $writableHandler = null;
 
 	private ?Relation\LoadRuntime $runtime = null;
 
@@ -317,7 +317,7 @@ final class SelectQuery implements QuerySourceInterface
 		$copy->limit = $this->limit;
 		$copy->offset = $this->offset;
 		$copy->resultClass = $this->resultClass;
-		$copy->mutableHandler = $this->mutableHandler;
+		$copy->writableHandler = $this->writableHandler;
 
 		$joinMap = [spl_object_id($this) => $copy];
 
@@ -508,29 +508,29 @@ final class SelectQuery implements QuerySourceInterface
 		return $this->resultClass;
 	}
 
-	public function mutable(MutableResultHandler $handler): self
+	public function writable(WritableResultHandler $handler): self
 	{
 		if ($this->resultClass === null) {
 			throw ObjectExportException::requiresObjectExport();
 		}
 
 		if ($this->resultClass !== stdClass::class) {
-			throw ObjectExportException::mutableRequiresStdClass($this->resultClass);
+			throw ObjectExportException::writableRequiresStdClass($this->resultClass);
 		}
 
-		$this->mutableHandler = $handler;
+		$this->writableHandler = $handler;
 
 		return $this;
 	}
 
-	public function isMutable(): bool
+	public function isWritable(): bool
 	{
-		return $this->mutableHandler !== null;
+		return $this->writableHandler !== null;
 	}
 
-	public function getMutableResultHandler(): ?MutableResultHandler
+	public function getWritableResultHandler(): ?WritableResultHandler
 	{
-		return $this->mutableHandler;
+		return $this->writableHandler;
 	}
 
 	public function getSelections(): SelectionList
@@ -654,7 +654,7 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	public function fetchAll(): array
 	{
-		$handler = $this->mutableHandler;
+		$handler = $this->writableHandler;
 		$preparation = $handler?->prepare($this);
 		$runtime = $this->getLoadRuntime(fresh: $handler !== null);
 		$rows = $runtime->fetchAll();
@@ -679,7 +679,7 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	public function fetchOne(): array|object|null
 	{
-		$handler = $this->mutableHandler;
+		$handler = $this->writableHandler;
 		$preparation = $handler?->prepare($this);
 		$runtime = $this->getLoadRuntime(fresh: $handler !== null);
 		$row = $runtime->fetchOne();
@@ -709,8 +709,8 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	public function iterate(): iterable
 	{
-		if ($this->mutableHandler !== null) {
-			throw ObjectExportException::mutableIterationUnsupported();
+		if ($this->writableHandler !== null) {
+			throw ObjectExportException::writableIterationUnsupported();
 		}
 
 		if (! $this->getRelationSelections()->isEmpty()) {

@@ -121,11 +121,11 @@ Public-property class export requirements:
 - Public result keys must match public properties (or constructor/promoted parameters via the mapper).
 - Nested typed object properties may be materialized into their declared classes when supported.
 - Array relation/list properties annotated as `@var list<stdClass>` (or another item class) receive arrays of those items; bare `array` properties keep nested arrays.
-- Mutable export is `stdClass`-only for now.
+- Writable export is `stdClass`-only for now.
 
-Read-only object export supports lazy iteration through `to(...)->iterate()`. `mutable(...)->iterate()` is intentionally unsupported.
+Read-only object export supports lazy iteration through `to(...)->iterate()`. `writable(...)->iterate()` is intentionally unsupported.
 
-Mutable export tracks query provenance in a `Session`:
+Writable export tracks query provenance in a `Session`:
 
 ```php
 $session = new Session($commandExecutor);
@@ -135,7 +135,7 @@ $u = $runtime->query($users);
 $user = $u
     ->select($u->id, $u->company->name->as('name'))
     ->to(stdClass::class)
-    ->mutable($session)
+    ->writable($session)
     ->fetchOne();
 ```
 
@@ -156,7 +156,7 @@ $rows = $u
     ->fetchAll();
 ```
 
-The runtime may still include hidden required fields for identity or mutable projection tracking. Selections tagged `SelectionTag::INTERNAL` are stripped from public array and object results.
+The runtime may still include hidden required fields for identity or writable projection tracking. Selections tagged `SelectionTag::INTERNAL` are stripped from public array and object results.
 
 Relation loading remains explicit through `RelationRef` branches. Prefer including them in `select()`:
 

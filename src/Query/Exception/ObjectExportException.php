@@ -40,21 +40,21 @@ final class ObjectExportException extends InvalidArgumentException
 		));
 	}
 
-	public static function mutableRequiresStdClass(string $class): self
+	public static function writableRequiresStdClass(string $class): self
 	{
 		return new self(sprintf(
-			'Mutable query export currently supports stdClass only; "%s" was requested.',
+			'Writable query export currently supports stdClass only; "%s" was requested.',
 			$class,
 		));
 	}
 
 	public static function requiresObjectExport(): self
 	{
-		return new self('Mutable query export requires object export; call to(stdClass::class) before mutable().');
+		return new self('Writable query export requires object export; call to(stdClass::class) before writable().');
 	}
 
-	public static function mutableIterationUnsupported(): self
+	public static function writableIterationUnsupported(): self
 	{
-		return new self('Mutable object export is not supported by iterate(); use fetchAll() or fetchOne().');
+		return new self('Writable object export is not supported by iterate(); use fetchAll() or fetchOne().');
 	}
 }

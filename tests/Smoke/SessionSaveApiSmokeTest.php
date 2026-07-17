@@ -176,7 +176,7 @@ final class SessionSaveApiSmokeTest extends TestCase
 		self::assertSame(['user_id' => 1, 'post_id' => 1], $harness->fetchRow('SELECT user_id, post_id FROM user_post'));
 	}
 
-	public function testOverlayExtendsQueryCreatedMutableObject(): void
+	public function testOverlayExtendsQueryCreatedWritableObject(): void
 	{
 		$harness = SqliteMemoryHarness::create();
 		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
@@ -188,7 +188,7 @@ final class SessionSaveApiSmokeTest extends TestCase
 		$query = $harness->database->query($users);
 		$query->select($query->id, $query->name);
 
-		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 		self::assertInstanceOf(stdClass::class, $user);
 		$user->newPostTitle = 'New post';
 
@@ -236,7 +236,7 @@ final class SessionSaveApiSmokeTest extends TestCase
 		$query = $harness->database->query($users);
 		$query->select($query->id, $query->name);
 
-		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 		self::assertInstanceOf(stdClass::class, $user);
 
 		$session->detach($session->identify($posts, ['id' => 3]), $user, 'posts');

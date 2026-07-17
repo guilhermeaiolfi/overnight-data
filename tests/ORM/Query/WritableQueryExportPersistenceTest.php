@@ -15,9 +15,9 @@ use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
 
-final class MutableQueryExportPersistenceTest extends TestCase
+final class WritableQueryExportPersistenceTest extends TestCase
 {
-	public function testMutableScalarEditFlushesUpdate(): void
+	public function testWritableScalarEditFlushesUpdate(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
@@ -25,7 +25,7 @@ final class MutableQueryExportPersistenceTest extends TestCase
 		$session = new Session($executor);
 		$query = new SelectQuery($users, new ScalarUserQueryExecutor());
 
-		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 		self::assertInstanceOf(stdClass::class, $user);
 
 		$user->name = 'Ada Lovelace';
@@ -43,7 +43,7 @@ final class MutableQueryExportPersistenceTest extends TestCase
 		self::assertSame(['name' => 'Ada Lovelace'], $command->getChanges());
 	}
 
-	public function testMutableRelatedObjectScalarEditFlushesUpdate(): void
+	public function testWritableRelatedObjectScalarEditFlushesUpdate(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
@@ -53,7 +53,7 @@ final class MutableQueryExportPersistenceTest extends TestCase
 		$query = new SelectQuery($users, new UserWithPostsQueryExecutor());
 		$query->posts->fields('id', 'title');
 
-		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 		self::assertInstanceOf(stdClass::class, $user);
 		self::assertIsArray($user->posts);
 		self::assertCount(1, $user->posts);
@@ -73,7 +73,7 @@ final class MutableQueryExportPersistenceTest extends TestCase
 		self::assertSame('Updated', $command->getChanges()['title']);
 	}
 
-	public function testMutableRelationAddFlushesInsertWithForeignKeyPropagation(): void
+	public function testWritableRelationAddFlushesInsertWithForeignKeyPropagation(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
@@ -83,7 +83,7 @@ final class MutableQueryExportPersistenceTest extends TestCase
 		$query = new SelectQuery($users, new UserWithEmptyPostsQueryExecutor());
 		$query->posts->fields('title');
 
-		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 		self::assertInstanceOf(stdClass::class, $user);
 		self::assertSame([], $user->posts);
 

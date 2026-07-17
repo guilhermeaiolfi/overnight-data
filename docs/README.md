@@ -33,5 +33,5 @@ The files linked below are the current reference material.
 - [`orm/foundation.md`](./orm/foundation.md): ORM foundation concepts, record-state persistence model, representation lineage, sync conflicts, and relation state.
 - [`orm/persistence.md`](./orm/persistence.md): Scalar ORM persistence pipeline, command planning, affected-row validation, Cycle command execution, generated primary-key merge, and write-side limits.
 - [`orm/representation-schema.md`](./orm/representation-schema.md): Recursive `RepresentationSchema` model, flat projection adoption, schema kinds, mapper/query/tracking boundaries, and scalar sync guardrails.
-- [`orm/mutable-select-query-projections.md`](./orm/mutable-select-query-projections.md): Mutable `SelectQuery` projection provenance, flattened related-field updates, relation intent from queried objects, `identify()`, and current projection boundaries.
+- [`orm/writable-select-query-projections.md`](./orm/writable-select-query-projections.md): Writable `SelectQuery` projection provenance, flattened related-field updates, relation intent from queried objects, `identify()`, and current projection boundaries.
 - [`orm/session-save-api.md`](./orm/session-save-api.md): `update` / `create` / `detach` / `sync` / `flush`, `SelectQuery::projection()`, nested and flat intents, and `RepresentationIntentStore`.

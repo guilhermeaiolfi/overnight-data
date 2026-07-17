@@ -17,9 +17,9 @@ use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
 
-final class MutableFlatRelatedFieldExportTest extends TestCase
+final class WritableFlatRelatedFieldExportTest extends TestCase
 {
-	public function testMutableFlatRelatedFieldEditFlushesUpdateToRelatedCollection(): void
+	public function testWritableFlatRelatedFieldEditFlushesUpdateToRelatedCollection(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
@@ -29,7 +29,7 @@ final class MutableFlatRelatedFieldExportTest extends TestCase
 		$query = new SelectQuery($users, new FlatCompanyUserQueryExecutor());
 		$query->select($query->id, $query->company->name->as('name'));
 
-		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 
 		self::assertInstanceOf(stdClass::class, $user);
 		self::assertSame(1, $user->id);
@@ -53,7 +53,7 @@ final class MutableFlatRelatedFieldExportTest extends TestCase
 		self::assertNotSame($users, $command->getCollection());
 	}
 
-	public function testMutableFlatRelatedFieldEditDoesNotProduceUsersNameUpdateOrInsert(): void
+	public function testWritableFlatRelatedFieldEditDoesNotProduceUsersNameUpdateOrInsert(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
@@ -62,7 +62,7 @@ final class MutableFlatRelatedFieldExportTest extends TestCase
 		$query = new SelectQuery($users, new FlatCompanyUserQueryExecutor());
 		$query->select($query->id, $query->company->name->as('name'));
 
-		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 		self::assertInstanceOf(stdClass::class, $user);
 
 		$user->name = 'Dell';
@@ -93,10 +93,10 @@ final class MutableFlatRelatedFieldExportTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("internal result key");
 
-		$query->to(stdClass::class)->mutable($session)->fetchOne();
+		$query->to(stdClass::class)->writable($session)->fetchOne();
 	}
 
-	public function testMutableFlatProjectionCompilesInternalIdentitySelectionBeforeExecutorFetch(): void
+	public function testWritableFlatProjectionCompilesInternalIdentitySelectionBeforeExecutorFetch(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
@@ -104,7 +104,7 @@ final class MutableFlatRelatedFieldExportTest extends TestCase
 		$query = new SelectQuery($users, new AssertingInternalCompanyIdSelectionExecutor());
 		$query->select($query->id, $query->company->name->as('name'));
 
-		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 
 		self::assertInstanceOf(stdClass::class, $user);
 		self::assertTrue($session->getRepresentations()->has($user));

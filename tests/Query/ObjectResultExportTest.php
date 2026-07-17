@@ -246,9 +246,9 @@ final class ObjectResultExportTest extends TestCase
 		);
 
 		$this->expectException(ObjectExportException::class);
-		$this->expectExceptionMessage('Mutable query export currently supports stdClass only');
+		$this->expectExceptionMessage('Writable query export currently supports stdClass only');
 
-		$query->to(ExportUserRow::class)->mutable(new Session(new RecordingCommandExecutor()));
+		$query->to(ExportUserRow::class)->writable(new Session(new RecordingCommandExecutor()));
 	}
 
 	public function testMaterializesRootUserDefinedPublicPropertyClass(): void
@@ -528,7 +528,7 @@ final class ObjectResultExportTest extends TestCase
 		self::assertSame(1, $executor->iteratedRows);
 	}
 
-	public function testMutableIterateThrowsClearException(): void
+	public function testWritableIterateThrowsClearException(): void
 	{
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
@@ -536,9 +536,9 @@ final class ObjectResultExportTest extends TestCase
 		);
 
 		$this->expectException(ObjectExportException::class);
-		$this->expectExceptionMessage('Mutable object export is not supported by iterate(); use fetchAll() or fetchOne().');
+		$this->expectExceptionMessage('Writable object export is not supported by iterate(); use fetchAll() or fetchOne().');
 
-		$query->to(stdClass::class)->mutable(new Session(new RecordingCommandExecutor()))->iterate();
+		$query->to(stdClass::class)->writable(new Session(new RecordingCommandExecutor()))->iterate();
 	}
 
 	private function makeRegistry(): Registry

@@ -80,14 +80,14 @@ Graph sync does not infer relations from collection definitions, object properti
 
 ## Flat projection adoption
 
-Object graphs and flat mutable projections use different adoption paths:
+Object graphs and flat writable projections use different adoption paths:
 
 - Graph-shaped objects are adopted internally by `Session::sync($object, $schema)` / `Session::sync($object)`: one representation object resolves to nested related objects, each with its own schema branch.
-- `QueryRepresentationStateBuilder` handles flat mutable projection rows: one representation object can be backed by multiple `RecordState` objects through compiled `RepresentationSource` entries.
+- `QueryRepresentationStateBuilder` handles flat writable projection rows: one representation object can be backed by multiple `RecordState` objects through compiled `RepresentationSource` entries.
 
-For flat projections, the compiler may add hidden identity selections tagged `SelectionTag::INTERNAL`. `QueryRepresentationIdentityColumns` maps source-path primary-key fields to result row keys, allowing adoption to read identity values and resolve `RecordState` keys. Internal selections are stripped from public query results, but they are required for mutable flat projection tracking.
+For flat projections, the compiler may add hidden identity selections tagged `SelectionTag::INTERNAL`. `QueryRepresentationIdentityColumns` maps source-path primary-key fields to result row keys, allowing adoption to read identity values and resolve `RecordState` keys. Internal selections are stripped from public query results, but they are required for writable flat projection tracking.
 
-Flat projection adoption is used by mutable `stdClass` query export and by `Session::update`/`create` with `SelectQuery::projection()`. See [`session-save-api.md`](./session-save-api.md).
+Flat projection adoption is used by writable `stdClass` query export and by `Session::update`/`create` with `SelectQuery::projection()`. See [`session-save-api.md`](./session-save-api.md).
 
 Inbound flat binds resolve `RecordState` per source via `ProjectionRepresentationStateBuilder` (keys from the DTO / flat ops, or `RecordState::new` for create). Relation add for flat `create('posts')` registers intent on `ToManyRelationState` / `ToOneRelationState`.
 

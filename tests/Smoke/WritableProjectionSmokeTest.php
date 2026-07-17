@@ -12,9 +12,9 @@ use stdClass;
 use Tests\ON\Data\Smoke\Support\SqliteMemoryHarness;
 
 #[RequiresPhpExtension('pdo_sqlite')]
-final class MutableProjectionSmokeTest extends TestCase
+final class WritableProjectionSmokeTest extends TestCase
 {
-	public function testMutableFlatProjectionUpdatesAliasedRelatedFieldInDatabase(): void
+	public function testWritableFlatProjectionUpdatesAliasedRelatedFieldInDatabase(): void
 	{
 		$harness = SqliteMemoryHarness::create();
 		$harness->exec('CREATE TABLE companies (id INTEGER PRIMARY KEY, name TEXT)');
@@ -47,7 +47,7 @@ final class MutableProjectionSmokeTest extends TestCase
 		$query = $harness->database->query($users);
 		$query->select($query->id, $query->company->name->as('name'));
 
-		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 
 		self::assertInstanceOf(stdClass::class, $user);
 		self::assertSame('Acme', $user->name);
@@ -60,7 +60,7 @@ final class MutableProjectionSmokeTest extends TestCase
 		self::assertSame(['name' => 'Dell'], $row);
 	}
 
-	public function testMutableSameCollectionFlatProjectionUpdatesTheCorrectRecord(): void
+	public function testWritableSameCollectionFlatProjectionUpdatesTheCorrectRecord(): void
 	{
 		$harness = SqliteMemoryHarness::create();
 		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, manager_id INTEGER, name TEXT)');
@@ -86,7 +86,7 @@ final class MutableProjectionSmokeTest extends TestCase
 		$query = $harness->database->query($users);
 		$query->select($query->id, $query->name, $query->manager->name->as('managerName'));
 
-		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 
 		self::assertInstanceOf(stdClass::class, $user);
 		self::assertSame('Ada', $user->name);

@@ -25,7 +25,8 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 - **Fail-closed flush** — `FlushExecutor` / `Session::flush()` require `TransactionalCommandExecutorInterface` and throw `NonTransactionalFlushException` otherwise. The unsafe non-transactional flush path is removed.
 - **Query object export** — `SelectQuery::to(...)` materializes rows through `map($row)->to(...)` (and `map($rows)->collection()->to(...)`) instead of a query-local hydrator. Constructor/readonly targets follow mapper rules; unknown keys are ignored.
-- **Mutable query export bridge** — `SelectQuery::mutable()` takes `MutableResultHandler` (implemented by `Session`). Compile/track live in `MutableQueryResultTracker`; Query no longer imports ORM types.
+- **`SelectQuery::writable()`** — renames `mutable()` / `isMutable()` / `getMutableResultHandler()` and related types (`WritableResultHandler`, `WritablePreparation`, `WritableQueryResultTracker`) for clearer opt-in write tracking.
+- **Writable query export bridge** — `SelectQuery::writable()` takes `WritableResultHandler` (implemented by `Session`). Compile/track live in `WritableQueryResultTracker`; Query no longer imports ORM types.
 - **SelectQuery fetch path** — `fetchAll()` / `fetchOne()` / `iterate()` resolve an executor once via `getLoadRuntime()` → `LoadRuntime` (empty-relation fast path inside it).
 - **Graph adoption intent** — untracked roots with a complete primary key are no longer adopted as clean/existing by default. Roots and related objects both default to `NEW` unless marked with `Session::update($object)` (or attached via `identify()` / query tracking).
 - **`SelectQuery::select(RelationRef)`** — relation refs are accepted for nested loading. Bare `$u->posts` is equivalent to `$u->posts->load()` (all visible fields); already-configured refs keep their options. Relation-only `select()` keeps default root fields. Foreign-query refs raise `RelationSelectionException::foreignQueryRelation()`.
@@ -63,7 +64,7 @@ ORM representation, projection, and database-adapter cleanup on top of the 1.0 f
 - **Database adapter boundary** — Cycle-backed runtime under `ON\Data\Database\Cycle\`, `DataRuntime`, and `CycleRuntimeFactory`; ADR documenting the adapter split.
 - **Existing-intent graph sync** — explicit adoption/attachment intent for graph sync, with focused tests.
 - **RelationCardinality** — shared cardinality helper replacing representation-specific cardinality types.
-- Smoke tests mirroring quickstart, persistence, and mutable `stdClass` projection examples.
+- Smoke tests mirroring quickstart, persistence, and writable `stdClass` projection examples.
 
 ### Changed
 
@@ -82,7 +83,7 @@ ORM representation, projection, and database-adapter cleanup on top of the 1.0 f
 
 ### Documentation
 
-- Docs for mutable SelectQuery projections and manual mutable projections.
+- Docs for writable SelectQuery projections and manual writable projections.
 - Representation schema docs replace the older representation-binding guide.
 - Clarified v1.0 wording in foundation docs; README formatting fix.
 - Architecture decision record for the database adapter boundary.
@@ -103,7 +104,7 @@ First stable public release of `guilhermeaiolfi/overnight-data`.
 - **Query model** — database-independent `SelectQuery` with field/relation refs, selections, aliases, expressions, aggregates, subqueries, joins, conditions, grouping, ordering, and pagination.
 - **Bound execution** — neutral `Database` facade, `ConnectionConfig`, and Cycle-backed `QueryExecutorInterface` integration.
 - **Relation loading** — structured relation selection with loader-owned join or separate-query execution for built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relations.
-- **Query result export** — array results by default; read-only `stdClass` and public-property class export; mutable `stdClass` export with flat projection provenance through `Session`.
+- **Query result export** — array results by default; read-only `stdClass` and public-property class export; writable `stdClass` export with flat projection provenance through `Session`.
 - **ORM persistence** — `RecordState`-backed scalar insert/update/delete planning, representation sync, relation persistence planning, `FlushExecutor` / `Session` orchestration, affected-row validation, and simple auto-increment primary-key merge after inserts.
 
 ### Documentation

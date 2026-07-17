@@ -235,6 +235,6 @@ This is deliberately not an `EntityManager`. There is no repository API, object 
 - No full database-default refresh beyond simple auto-increment primary keys.
 - No batch command execution.
 - No public SQL command API.
-- Mutable user-defined class export is not supported yet.
-- Mutable iteration is not supported yet.
-- Flat projection provenance is for mutable `stdClass` query export.
+- Writable user-defined class export is not supported yet.
+- Writable iteration is not supported yet.
+- Flat projection provenance is for writable `stdClass` query export.

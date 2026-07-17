@@ -27,7 +27,7 @@ final class StdClassRepresentationTest extends TestCase
 		$session = new Session($executor);
 		$query = new SelectQuery($users, new StdClassUserExecutor());
 
-		$user = $query->to(stdClass::class)->mutable($session)->fetchOne();
+		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 		self::assertInstanceOf(stdClass::class, $user);
 
 		$user->name = 'Ada Lovelace';

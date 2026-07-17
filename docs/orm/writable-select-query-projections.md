@@ -1,6 +1,6 @@
-# Mutable SelectQuery Projections
+# Writable SelectQuery Projections
 
-Mutable `SelectQuery` export is more than a convenient object shape. When data comes from a mutable query export, the executed query itself is the field-target declaration. For objects that did not come from a query, use [`session-save-api.md`](./session-save-api.md) (`update` / `create` with `SelectQuery::projection()`).
+Writable `SelectQuery` export is more than a convenient object shape. When data comes from a writable query export, the executed query itself is the field-target declaration. For objects that did not come from a query, use [`session-save-api.md`](./session-save-api.md) (`update` / `create` with `SelectQuery::projection()`).
 
 This page explains how query selection provenance and hidden internal identity selections let ON Data route public object writes to the correct `RecordState` fields — including flattened related fields, nested relation items, and relation intent created after the query runs.
 
@@ -14,7 +14,7 @@ See also:
 
 ## Core concept
 
-A mutable query projection is not just an object export. It carries provenance:
+A writable query projection is not just an object export. It carries provenance:
 
 ```text
 public object field
@@ -30,15 +30,15 @@ $user->profileName
   -> profiles#5.name
 ```
 
-The public object does not need to expose `profile_id`. The query/runtime may include hidden internal identity selections so the adopter can track the concrete record behind `profileName`. Selections tagged `SelectionTag::INTERNAL` are stripped from public array and object results, but they are required for mutable flat projection tracking.
+The public object does not need to expose `profile_id`. The query/runtime may include hidden internal identity selections so the adopter can track the concrete record behind `profileName`. Selections tagged `SelectionTag::INTERNAL` are stripped from public array and object results, but they are required for writable flat projection tracking.
 
-When a mutable projection is created by `SelectQuery`, the query is the field-target declaration.
+When a writable projection is created by `SelectQuery`, the query is the field-target declaration.
 
-Mutable export requirements:
+Writable export requirements:
 
 - `to(stdClass::class)` is required
-- an explicit `Session` is required (`Session` implements `MutableResultHandler`; that is the Query↔ORM bridge)
-- `prepare()` returns a `MutablePreparation` token (concretely `QueryRepresentationPlan`); the query holds it for that fetch and passes it to `track()`
+- an explicit `Session` is required (`Session` implements `WritableResultHandler`; that is the Query↔ORM bridge)
+- `prepare()` returns a `WritablePreparation` token (concretely `QueryRepresentationPlan`); the query holds it for that fetch and passes it to `track()`
 - one schema is compiled per fetch operation and reused across rows
 - each object still gets its own `RepresentationState`
 
@@ -61,7 +61,7 @@ $user = $u
         $u->profile->name->as('profileName'),
     )
     ->to(stdClass::class)
-    ->mutable($session)
+    ->writable($session)
     ->fetchOne();
 
 $user->profileName = 'Updated public profile';
@@ -89,9 +89,9 @@ The query/projection adopter must have enough hidden identity information to res
 
 ## Existing relation item from query
 
-An existing related object can come from another mutable query, then be added to a tracked relation.
+An existing related object can come from another writable query, then be added to a tracked relation.
 
-Assume `$user` was already loaded from a mutable query with a `posts` relation schema:
+Assume `$user` was already loaded from a writable query with a `posts` relation schema:
 
 ```php
 $p = $runtime->query($posts);
@@ -100,7 +100,7 @@ $post = $p
     ->select($p->id, $p->title)
     ->where(x()->eq($p->id, 'post-1'))
     ->to(stdClass::class)
-    ->mutable($session)
+    ->writable($session)
     ->fetchOne();
 
 $user->posts[] = $post;
@@ -112,7 +112,7 @@ $session->flush();
 Explanation:
 
 ```text
-$post is already tracked as an existing record because it came from a mutable query.
+$post is already tracked as an existing record because it came from a writable query.
 $user->posts[] creates relation intent when $user is synced.
 ```
 
@@ -130,7 +130,7 @@ $user = $u
     ->posts
     ->fields('id', 'title')
     ->to(stdClass::class)
-    ->mutable($session)
+    ->writable($session)
     ->fetchOne();
 
 $post = new stdClass();
@@ -190,7 +190,7 @@ $user = $u
     ->posts
     ->fields('id', 'title')
     ->to(stdClass::class)
-    ->mutable($session)
+    ->writable($session)
     ->fetchOne();
 
 $post = new stdClass();
@@ -211,7 +211,7 @@ $post = $p
     ->select($p->id, $p->title)
     ->where(x()->eq($p->id, 'post-1'))
     ->to(stdClass::class)
-    ->mutable($session)
+    ->writable($session)
     ->fetchOne();
 
 $user->posts[] = $post;
@@ -251,18 +251,18 @@ $session->update($user, $extra)->create('posts');
 $session->sync($user);
 ```
 
-A mutable query projection can update fields whose provenance the query declared. It can also admit new related objects through explicit relation schemas on a tracked root. Flat overlays that need a new related record use `update`/`create` with `SelectQuery::projection()` — see [`session-save-api.md`](./session-save-api.md).
+A writable query projection can update fields whose provenance the query declared. It can also admit new related objects through explicit relation schemas on a tracked root. Flat overlays that need a new related record use `update`/`create` with `SelectQuery::projection()` — see [`session-save-api.md`](./session-save-api.md).
 
 ## Rules
 
 ```text
-Data came from mutable SelectQuery:
+Data came from writable SelectQuery:
   query provenance + hidden identities can create field targets.
 
 New entity-shaped related object added to a tracked relation:
   relation schema gives context; object defaults to NEW.
 
-Existing object came from mutable SelectQuery:
+Existing object came from writable SelectQuery:
   already tracked; adding it to a relation creates relation intent.
 
 Existing key-only row:

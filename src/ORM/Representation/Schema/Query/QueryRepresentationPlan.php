@@ -6,20 +6,20 @@ namespace ON\Data\ORM\Representation\Schema\Query;
 
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
-use ON\Data\Query\Result\MutablePreparation;
+use ON\Data\Query\Result\WritablePreparation;
 
 /**
  * Query compilation result pairing the public RepresentationSchema with the
  * compiled structural RepresentationSource entries and QueryRepresentationIdentityColumns
- * needed to adopt flat mutable query rows.
+ * needed to adopt flat writable query rows.
  *
- * Also serves as the {@see MutablePreparation} token returned from mutable export
+ * Also serves as the {@see WritablePreparation} token returned from writable export
  * prepare() so SelectQuery can hold the plan locally without importing this type.
  *
- * Exists because mutable SelectQuery export must pass identity metadata to
+ * Exists because writable SelectQuery export must pass identity metadata to
  * QueryRepresentationStateBuilder separately from the user-visible schema.
  */
-final class QueryRepresentationPlan implements MutablePreparation
+final class QueryRepresentationPlan implements WritablePreparation
 {
 	/** @var list<RepresentationSource> */
 	private array $sources;
