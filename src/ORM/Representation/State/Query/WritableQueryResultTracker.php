@@ -10,7 +10,6 @@ use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Sync\AdoptionPolicy;
-use ON\Data\ORM\Representation\Sync\AdoptionRecordResolver;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionContext;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionEngine;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
@@ -38,15 +37,11 @@ final class WritableQueryResultTracker implements WritableResultHandler
 		private readonly Session $session,
 		?RepresentationReader $reader = null,
 		?QueryRepresentationSchemaCompiler $compiler = null,
-		?AdoptionRecordResolver $recordResolver = null,
 		?RepresentationAdoptionEngine $adoptionEngine = null,
 	) {
 		$this->reader = $reader ?? new RepresentationReader();
 		$this->compiler = $compiler ?? new QueryRepresentationSchemaCompiler();
-		$this->adoptionEngine = $adoptionEngine ?? new RepresentationAdoptionEngine(
-			$this->reader,
-			$recordResolver ?? new AdoptionRecordResolver(reader: $this->reader),
-		);
+		$this->adoptionEngine = $adoptionEngine ?? new RepresentationAdoptionEngine($this->reader);
 	}
 
 	public function prepare(SelectQuery $query): WritablePreparation

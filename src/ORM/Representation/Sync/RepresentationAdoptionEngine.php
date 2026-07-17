@@ -36,8 +36,12 @@ final class RepresentationAdoptionEngine
 	public function __construct(
 		private RepresentationReader $reader = new RepresentationReader(),
 		?AdoptionRecordResolver $recordResolver = null,
+		?RepresentationIntentStore $intents = null,
 	) {
-		$this->recordResolver = $recordResolver ?? new AdoptionRecordResolver(reader: $this->reader);
+		$this->recordResolver = $recordResolver ?? new AdoptionRecordResolver(
+			reader: $this->reader,
+			intents: $intents,
+		);
 	}
 
 	/**

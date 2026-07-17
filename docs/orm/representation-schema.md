@@ -152,7 +152,7 @@ Use `getRelatedSchema()` for both cardinalities. Do not introduce separate `getI
 `RepresentationSchema` stays structure-only. It is attached to concrete runtime state by services that create `RepresentationState` items:
 
 - `RepresentationState::fromRecords()` builds field and relation state items from a schema and concrete `RecordState` instances keyed by source path.
-- `RepresentationAdoptionEngine::attach()` builds flat projections or walks nested graphs, then stores into session maps. Resolves identities from the object, `RepresentationSourceIdentities`, and/or `AdoptionRecordResolver` (kept separate so the engine stays focused).
+- `RepresentationAdoptionEngine::attach()` builds flat projections or walks nested graphs, then stores into session maps. Graph identity uses `AdoptionRecordResolver` inside the engine. `Session::identify()` builds a clean record via `RepresentationReader::baselineValues()` then `adopt()`.
 
 These attachment steps do not mutate the reusable schema shape. `Session::sync($object, $schema)` is the explicit API that chooses related objects from relation path values, then uses each relation schema's `getRelatedSchema()` with the existing adoption path. Schema attachment still does not infer relations from objects or plan relation persistence.
 

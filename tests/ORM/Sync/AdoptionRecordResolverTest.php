@@ -197,28 +197,6 @@ final class AdoptionRecordResolverTest extends TestCase
 		self::assertSame('Ada', $record->getValue('name'));
 	}
 
-	public function testInitialValuesForKeyStartsFromKeyValuesAndMergesBoundPaths(): void
-	{
-		$key = $this->posts()->getKey(['id' => 123]);
-		$representation = $this->representation(['id' => 123, 'title' => 'Draft']);
-		$schema = $this->postSchemaWithId();
-
-		$values = $this->resolver()->initialValuesForKey($representation, $schema, $key);
-
-		self::assertSame(['id' => 123, 'title' => 'Draft'], $values);
-	}
-
-	public function testInitialValuesForKeyIgnoresMissingPaths(): void
-	{
-		$key = $this->posts()->getKey(['id' => 123]);
-		$representation = $this->representation(['id' => 123]);
-		$schema = $this->postSchemaWithId();
-
-		$values = $this->resolver()->initialValuesForKey($representation, $schema, $key);
-
-		self::assertSame(['id' => 123], $values);
-	}
-
 	public function testRelatedSchemaRejectsMultipleCollectionNames(): void
 	{
 		$schema = new RepresentationSchema($this->users());

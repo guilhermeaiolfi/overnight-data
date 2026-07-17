@@ -17,7 +17,7 @@ use ON\Data\ORM\Representation\Schema\RepresentationSchema;
  *
  * update intent = PATCH existing row (key-only clean baseline + present DTO fields).
  * create / unmarked = NEW record.
- * identify() stays separate (key-only, no field writes).
+ * Clean baselines use {@see RepresentationReader::baselineValues()}.
  */
 final class AdoptionRecordResolver
 {
@@ -104,31 +104,13 @@ final class AdoptionRecordResolver
 			return $existing;
 		}
 
-		$record = RecordState::clean($key, $this->initialValuesForKey($representation, $schema, $key));
+		$record = RecordState::clean(
+			$key,
+			$this->reader->baselineValues($representation, $schema, $key->getValues()),
+		);
 		$records->add($record);
 
 		return $record;
-	}
-
-	/**
-	 * @return array<string, mixed>
-	 */
-	public function initialValuesForKey(
-		object $representation,
-		RepresentationSchema $schema,
-		Key $key,
-	): array {
-		$values = $key->getValues();
-		foreach ($schema->getFields() as $fieldSchema) {
-			$fieldName = $fieldSchema->getFieldName();
-
-			try {
-				$values[$fieldName] = $this->reader->readPath($representation, $fieldSchema->getPath());
-			} catch (SyncException) {
-			}
-		}
-
-		return $values;
 	}
 
 	/**

@@ -23,7 +23,6 @@ use ON\Data\ORM\Representation\State\Query\WritableQueryResultTracker;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\ORM\Representation\Sync\AdoptionPolicy;
-use ON\Data\ORM\Representation\Sync\AdoptionRecordResolver;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionContext;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionEngine;
 use ON\Data\ORM\Representation\Sync\RepresentationAttachmentMode;
@@ -39,9 +38,9 @@ use ON\Data\Query\SelectQuery;
 final class Session implements WritableResultHandler
 {
 	private SessionContext $context;
-	private AdoptionRecordResolver $recordResolver;
 	private FlushExecutor $flusher;
 	private RepresentationSyncer $syncer;
+	private RepresentationReader $reader;
 	private RepresentationAdoptionEngine $adoptionEngine;
 	private ?WritableQueryResultTracker $writableResultTracker = null;
 
@@ -52,10 +51,10 @@ final class Session implements WritableResultHandler
 		?SessionContext $context = null,
 	) {
 		$this->context = $context ?? new SessionContext();
-		$this->recordResolver = new AdoptionRecordResolver(intents: $this->context->getIntents());
+		$this->reader = new RepresentationReader();
 		$this->adoptionEngine = new RepresentationAdoptionEngine(
-			new RepresentationReader(),
-			$this->recordResolver,
+			$this->reader,
+			intents: $this->context->getIntents(),
 		);
 		$this->syncer = $syncer ?? new RepresentationSyncer();
 		$this->flusher = $flusher ?? new FlushExecutor($executor, $this->syncer);
@@ -260,7 +259,10 @@ final class Session implements WritableResultHandler
 				));
 			}
 		} else {
-			$record = RecordState::clean($key, $this->recordResolver->initialValuesForKey($representation, $schema, $key));
+			$record = RecordState::clean(
+				$key,
+				$this->reader->baselineValues($representation, $schema, $key->getValues()),
+			);
 		}
 
 		$this->adopt(
@@ -432,6 +434,9 @@ final class Session implements WritableResultHandler
 
 	private function writableResultTracker(): WritableQueryResultTracker
 	{
-		return $this->writableResultTracker ??= new WritableQueryResultTracker($this);
+		return $this->writableResultTracker ??= new WritableQueryResultTracker(
+			$this,
+			adoptionEngine: $this->adoptionEngine,
+		);
 	}
 }

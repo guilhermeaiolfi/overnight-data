@@ -7,6 +7,7 @@ namespace ON\Data\ORM\Representation\Sync;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Session;
 use Throwable;
 
 final class RepresentationReader
@@ -20,6 +21,38 @@ final class RepresentationReader
 		foreach ($schema->getFields() as $fieldSchema) {
 			$path = $fieldSchema->getPath();
 			$values[$path] = $this->readPath($representation, $path);
+		}
+
+		return $values;
+	}
+
+	/**
+	 * Field-name values for clean baselines ({@see Session::identify()}, hydrate).
+	 *
+	 * Keeps names already present in $initialValues; soft-reads other schema fields.
+	 *
+	 * @param array<string, mixed> $initialValues
+	 *
+	 * @return array<string, mixed>
+	 */
+	public function baselineValues(
+		object $representation,
+		RepresentationSchema $schema,
+		array $initialValues = [],
+	): array {
+		$values = $initialValues;
+		foreach ($schema->getFields() as $fieldSchema) {
+			if (array_key_exists($fieldSchema->getFieldName(), $values)) {
+				continue;
+			}
+
+			try {
+				$values[$fieldSchema->getFieldName()] = $this->readPath(
+					$representation,
+					$fieldSchema->getPath(),
+				);
+			} catch (SyncException) {
+			}
 		}
 
 		return $values;

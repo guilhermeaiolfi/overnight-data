@@ -79,6 +79,39 @@ final class RepresentationReaderTest extends TestCase
 		$this->reader()->read($row, $this->fieldSchema('author.name'));
 	}
 
+	public function testBaselineValuesStartsFromSeedAndMergesNonKeyFields(): void
+	{
+		$key = $this->posts()->getKey(['id' => 123]);
+		$representation = $this->representation(['id' => 123, 'title' => 'Draft']);
+		$schema = $this->postSchemaWithId();
+
+		$values = $this->reader()->baselineValues($representation, $schema, $key->getValues());
+
+		self::assertSame(['id' => 123, 'title' => 'Draft'], $values);
+	}
+
+	public function testBaselineValuesIgnoresMissingNonKeyPaths(): void
+	{
+		$key = $this->posts()->getKey(['id' => 123]);
+		$representation = $this->representation(['id' => 123]);
+		$schema = $this->postSchemaWithId();
+
+		$values = $this->reader()->baselineValues($representation, $schema, $key->getValues());
+
+		self::assertSame(['id' => 123], $values);
+	}
+
+	public function testBaselineValuesDoesNotOverwriteSeedKeys(): void
+	{
+		$key = $this->posts()->getKey(['id' => 123]);
+		$representation = $this->representation(['id' => 999, 'title' => 'Draft']);
+		$schema = $this->postSchemaWithId();
+
+		$values = $this->reader()->baselineValues($representation, $schema, $key->getValues());
+
+		self::assertSame(['id' => 123, 'title' => 'Draft'], $values);
+	}
+
 	public function testRejectsIntermediateNonObjectPathSegment(): void
 	{
 		$row = new stdClass();
