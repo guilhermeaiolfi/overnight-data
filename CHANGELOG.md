@@ -14,6 +14,7 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 ### Removed
 
 - **Manual mutable projections** — `Session::projection()` Manual builder stack (`Representation\Schema\Manual`, `State\Manual`) and `Session::existing()` / `ExistingIntentStore` are removed in favor of the save API above.
+- **`IntentBuilder::from()`** — unused; root collection already comes from `RepresentationSchema` (`SelectQuery::projection()` / `schemaOf()`).
 
 ### Fixed
 

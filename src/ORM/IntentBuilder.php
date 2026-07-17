@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM;
 
-use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Sync\FlatIntentOp;
@@ -13,6 +12,10 @@ use ON\Data\ORM\Representation\Sync\RepresentationIntentLifecycle;
 
 /**
  * Fluent writer into RepresentationIntentStore for one representation.
+ *
+ * Root collection comes from the {@see RepresentationSchema} passed to
+ * Session::update/create (or from an already-tracked representation), not from
+ * a separate from() call.
  */
 final class IntentBuilder
 {
@@ -25,13 +28,6 @@ final class IntentBuilder
 	public function getRepresentation(): object
 	{
 		return $this->representation;
-	}
-
-	public function from(CollectionInterface $collection): self
-	{
-		$this->intent->setRootCollection($collection);
-
-		return $this;
 	}
 
 	/**

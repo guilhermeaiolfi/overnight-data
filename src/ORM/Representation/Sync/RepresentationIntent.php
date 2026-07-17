@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Sync;
 
-use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
@@ -23,7 +22,6 @@ final class RepresentationIntent
 	public function __construct(
 		private RepresentationIntentLifecycle $lifecycle,
 		private ?RepresentationSchema $schema = null,
-		private ?CollectionInterface $rootCollection = null,
 	) {
 	}
 
@@ -55,16 +53,6 @@ final class RepresentationIntent
 	public function setSchema(?RepresentationSchema $schema): void
 	{
 		$this->schema = $schema;
-	}
-
-	public function getRootCollection(): ?CollectionInterface
-	{
-		return $this->rootCollection;
-	}
-
-	public function setRootCollection(?CollectionInterface $rootCollection): void
-	{
-		$this->rootCollection = $rootCollection;
 	}
 
 	/**

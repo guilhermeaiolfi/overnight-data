@@ -174,11 +174,12 @@ final class RepresentationSchemaCompilationArchitectureTest extends TestCase
 		$map = $query->projection();
 		$dto = $this->representation(['id' => 10, 'name' => 'Ada']);
 
-		$builder = $session->update($dto, $map)->from($users);
+		$builder = $session->update($dto, $map);
 		$result = $session->sync($dto);
 
 		self::assertSame($dto, $builder->getRepresentation());
-		self::assertSame($users, $builder->getIntent()->getRootCollection());
+		self::assertSame($map, $builder->getIntent()->getSchema());
+		self::assertSame($users, $map->getCollection());
 		// DTO values are applied as dirty during flat adopt; sync may be a no-op.
 		self::assertFalse($result->hasChanges());
 

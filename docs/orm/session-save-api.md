@@ -15,9 +15,9 @@ Pending `update` / `create` intents live in `RepresentationIntentStore` until `s
 ```php
 $map = $runtime->query($users)
     ->select($u->id, $u->name, $u->profile->name->as('profileName'))
-    ->projection(); // compile only — no execute
+    ->projection(); // compile only — no execute; root collection is on $map
 
-$session->update($dto, $map)->from($users);
+$session->update($dto, $map);
 $session->sync($dto);
 $session->flush();
 ```
@@ -42,7 +42,7 @@ $session->flush();
 Optional root identity when the PK is not on the DTO:
 
 ```php
-$session->update($dto, $map)->from($users)->identity(['id' => 10]);
+$session->update($dto, $map)->identity(['id' => 10]);
 ```
 
 If both `identity()` and a readable PK on the DTO are present, they must agree.
@@ -50,7 +50,7 @@ If both `identity()` and a readable PK on the DTO are present, they must agree.
 Nested objects use the same verbs (lifecycle only until parent `sync`):
 
 ```php
-$session->update($dto, $map)->from($news);
+$session->update($dto, $map);
 foreach ($dto->images as $image) {
     $image->id ? $session->update($image) : $session->create($image);
 }
@@ -68,7 +68,7 @@ $session->sync($user);
 ## Flat related paths
 
 ```php
-$session->update($dto, $map)->from($users)
+$session->update($dto, $map)
     ->update('profile')                 // PK on map / DTO
     ->update('profile', ['id' => 5])    // explicit key
     ->create('posts');                  // NEW related + relation add
@@ -94,7 +94,7 @@ Owner must already be tracked (`sync` first).
 
 ```php
 $dto->profile = null;
-$session->update($dto, $map)->from($users);
+$session->update($dto, $map);
 $session->sync($dto);
 $session->flush();
 ```

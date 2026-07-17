@@ -28,7 +28,7 @@ final class SessionSaveApiSmokeTest extends TestCase
 
 		$q = new SelectQuery($users);
 		$map = $q->select($q->name)->projection();
-		$session->create($row, $map)->from($users);
+		$session->create($row, $map);
 		$session->sync($row);
 		$session->flush();
 
@@ -48,7 +48,7 @@ final class SessionSaveApiSmokeTest extends TestCase
 
 		$q = new SelectQuery($users);
 		$map = $q->select($q->id, $q->name)->projection();
-		$session->update($row, $map)->from($users);
+		$session->update($row, $map);
 		$session->sync($row);
 		$session->flush();
 
@@ -67,7 +67,7 @@ final class SessionSaveApiSmokeTest extends TestCase
 
 		$q = new SelectQuery($users);
 		$map = $q->select($q->name)->projection();
-		$session->update($row, $map)->from($users)->identity(['id' => 1]);
+		$session->update($row, $map)->identity(['id' => 1]);
 		$session->sync($row);
 		$session->flush();
 
@@ -86,7 +86,7 @@ final class SessionSaveApiSmokeTest extends TestCase
 
 		$q = new SelectQuery($users);
 		$map = $q->select($q->id, $q->name)->projection();
-		$session->create($row, $map)->from($users);
+		$session->create($row, $map);
 		$session->sync($row);
 		$session->flush();
 
@@ -106,7 +106,7 @@ final class SessionSaveApiSmokeTest extends TestCase
 
 		$q = new SelectQuery($users);
 		$map = $q->select($q->id, $q->name, $q->email)->projection();
-		$session->update($row, $map)->from($users);
+		$session->update($row, $map);
 		$session->sync($row);
 		$session->flush();
 
@@ -124,7 +124,7 @@ final class SessionSaveApiSmokeTest extends TestCase
 
 		$q = new SelectQuery($users);
 		$map = $q->select($q->name->as('displayName'))->projection();
-		$session->create($row, $map)->from($users);
+		$session->create($row, $map);
 		$session->sync($row);
 		$session->flush();
 
@@ -145,7 +145,7 @@ final class SessionSaveApiSmokeTest extends TestCase
 
 		$q = new SelectQuery($users);
 		$map = $q->select($q->id, $q->profile->name->as('profileName'))->projection();
-		$session->update($user, $map)->from($users)->create('profile');
+		$session->update($user, $map)->create('profile');
 		$session->sync($user);
 		$session->flush();
 
@@ -168,7 +168,7 @@ final class SessionSaveApiSmokeTest extends TestCase
 
 		$q = new SelectQuery($users);
 		$map = $q->select($q->id, $q->posts->title->as('newPostTitle'))->projection();
-		$session->update($user, $map)->from($users)->create('posts');
+		$session->update($user, $map)->create('posts');
 		$session->sync($user);
 		$session->flush();
 
@@ -216,7 +216,7 @@ final class SessionSaveApiSmokeTest extends TestCase
 
 		$q = new SelectQuery($users);
 		$map = $q->select($q->id, $q->name)->projection();
-		$session->update($row, $map)->from($users);
+		$session->update($row, $map);
 		$session->flush();
 
 		self::assertSame(['name' => 'Old'], $harness->fetchRow('SELECT name FROM users WHERE id = 1'));
