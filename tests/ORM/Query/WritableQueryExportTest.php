@@ -40,7 +40,7 @@ final class WritableQueryExportTest extends TestCase
 		);
 
 		$this->expectException(ObjectExportException::class);
-		$this->expectExceptionMessage('Writable query export requires object export; call to(stdClass::class) before writable().');
+		$this->expectExceptionMessage('Writable query export requires object export; call to(...) before writable().');
 
 		$query->writable($this->session());
 	}
