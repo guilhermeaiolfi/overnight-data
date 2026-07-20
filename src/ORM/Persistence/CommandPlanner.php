@@ -4,17 +4,24 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Persistence;
 
+use ON\Data\Definition\Field\Generator\When;
 use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Record\RecordState;
 
 final class CommandPlanner
 {
+	public function __construct(
+		private readonly FieldGeneratorApplier $fieldGenerators = new FieldGeneratorApplier(),
+	) {
+	}
+
 	public function plan(RecordState $record): ?CommandInterface
 	{
 		$record->resolveValueRefs();
 
 		if ($record->isNew()) {
-			$values = $record->getValues();
+			$this->fieldGenerators->apply($record, When::INSERT);
+			$values = $this->valuesForInsert($record);
 
 			return new InsertCommand($record->getCollection(), $values);
 		}
@@ -42,8 +49,31 @@ final class CommandPlanner
 		return null;
 	}
 
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function valuesForInsert(RecordState $record): array
+	{
+		$values = $record->getValues();
+		$collection = $record->getCollection();
+
+		foreach ($collection->getFields() as $field) {
+			if (! $field->isDatabaseGenerated() || ! $field->isGeneratedWhen(When::INSERT)) {
+				continue;
+			}
+
+			$fieldName = $field->getName();
+			if (array_key_exists($fieldName, $values) && $values[$fieldName] === null) {
+				unset($values[$fieldName]);
+			}
+		}
+
+		return $values;
+	}
+
 	private function planDirty(RecordState $record): ?UpdateCommand
 	{
+		$this->fieldGenerators->apply($record, When::UPDATE);
 		$changes = $record->getDirtyValues();
 
 		if ($changes === []) {

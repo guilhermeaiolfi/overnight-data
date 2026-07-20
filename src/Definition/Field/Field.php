@@ -46,6 +46,7 @@ class Field extends DefinitionNode implements FieldInterface
 			'data_type' => null,
 			'comment' => null,
 			'auto_increment' => false,
+			'generator' => null,
 			'filterable' => true,
 		];
 	}

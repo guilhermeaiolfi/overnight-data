@@ -9,6 +9,7 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 ### Added
 
+- **Field generators** — `Field::generator($classOrInstance, $arg = null, $when = null)` with `DatabaseGenerator` (DB-owned; sequence via string, `['sequence' => …]`, or instance) and `PhpFieldGeneratorInterface` (PHP-owned; `$arg` scalar/list/config). Instances flatten via `GeneratorDefinitionArgInterface`. `When::INSERT` / `When::UPDATE` bitmasks; `autoIncrement(true)` sugars `generator(DatabaseGenerator::class)`. PHP generators run in `CommandPlanner` above adapters; DB generators still return via `CommandResult` in executors.
 - **`SelectQuery::fetchOne($identity)`** — optional primary-key identity (scalar, composite array, or `Key`) applied as a temporary `ConditionTag::IDENTITY` constraint for that execution only; requires a collection-root query. Existing user `where()` clauses still AND. Docs: [`docs/query/bound-execution.md`](docs/query/bound-execution.md).
 - **Session save API** — `Session::update` / `create` / `detach` / `schemaOf` with `SelectQuery::projection()` shape compilation; pending intents in `RepresentationIntentStore` apply on `sync()` (not at flush). Flat related paths via `IntentBuilder::update($path)` / `create($path)`. Docs: [`docs/orm/session-save-api.md`](docs/orm/session-save-api.md).
 

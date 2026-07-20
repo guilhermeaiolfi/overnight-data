@@ -7,6 +7,8 @@ namespace ON\Data\Definition\Field;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Display\DisplayInterface;
 use ON\Data\Definition\Display\RawDisplay;
+use ON\Data\Definition\Field\Generator\FieldGeneratorInterface;
+use ON\Data\Definition\Field\Generator\When;
 use ON\Data\Definition\Interface\InterfaceInterface;
 
 interface FieldInterface
@@ -56,6 +58,29 @@ interface FieldInterface
 	public function autoIncrement(bool $autoIncrement): self;
 
 	public function isAutoIncrement(): bool;
+
+	/**
+	 * @param class-string<FieldGeneratorInterface>|FieldGeneratorInterface $generator
+	 * @param int|null $when Bitmask of {@see When} flags
+	 */
+	public function generator(
+		string|FieldGeneratorInterface $generator,
+		mixed $arg = null,
+		?int $when = null,
+	): self;
+
+	/**
+	 * @return array{class: class-string<FieldGeneratorInterface>, arg: mixed, when: int}|null
+	 */
+	public function getGenerator(): ?array;
+
+	public function hasGenerator(): bool;
+
+	public function isDatabaseGenerated(): bool;
+
+	public function isGeneratedWhen(int $when): bool;
+
+	public function getGeneratorSequence(): ?string;
 
 	public function nullable(bool $nullable): self;
 

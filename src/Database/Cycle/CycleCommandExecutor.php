@@ -8,6 +8,7 @@ use Cycle\Database\DatabaseInterface;
 use Cycle\Database\Query\QueryParameters;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
+use ON\Data\Definition\Field\Generator\When;
 use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
@@ -154,8 +155,11 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 		}
 
 		$field = $collection->getPrimaryKeyFields()[0];
+		if (! $field->isDatabaseGenerated() || ! $field->isGeneratedWhen(When::INSERT)) {
+			return null;
+		}
 
-		return $field->isAutoIncrement() ? $field : null;
+		return $field;
 	}
 
 	private function normalizeGeneratedId(mixed $id): mixed

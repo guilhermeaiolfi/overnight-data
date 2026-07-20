@@ -4,7 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Field;
 
+use InvalidArgumentException;
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\Field\Generator\DatabaseGenerator;
+use ON\Data\Definition\Field\Generator\FieldGeneratorInterface;
+use ON\Data\Definition\Field\Generator\GeneratorDefinitionArgInterface;
+use ON\Data\Definition\Field\Generator\PhpFieldGeneratorInterface;
+use ON\Data\Definition\Field\Generator\When;
 use ON\Data\Definition\Relation\RelationInterface;
 
 trait SchemaTrait
@@ -22,6 +28,7 @@ trait SchemaTrait
 			'data_type' => null,
 			'comment' => null,
 			'auto_increment' => false,
+			'generator' => null,
 			'filterable' => true,
 		];
 	}
@@ -42,12 +49,149 @@ trait SchemaTrait
 	{
 		$this->set('auto_increment', $auto_increment);
 
+		if ($auto_increment) {
+			return $this->generator(DatabaseGenerator::class, null, When::INSERT);
+		}
+
+		$config = $this->getGenerator();
+		if ($config !== null && is_a($config['class'], DatabaseGenerator::class, true)) {
+			$this->set('generator', null);
+		}
+
 		return $this;
 	}
 
 	public function isAutoIncrement(): bool
 	{
+		if ((bool) $this->get('auto_increment')) {
+			return true;
+		}
+
+		return $this->isDatabaseGenerated() && $this->isGeneratedWhen(When::INSERT);
+	}
+
+	/**
+	 * Declare how this field's value is produced.
+	 *
+	 * Definitions stay array-backed: instances are flattened to class + arg.
+	 * `$arg` may be a scalar, list (constructor args), or associative config array.
+	 *
+	 * @param class-string<FieldGeneratorInterface>|FieldGeneratorInterface $generator
+	 *        Use {@see DatabaseGenerator} for DB-owned values (optional $arg = sequence name).
+	 *        Use a {@see PhpFieldGeneratorInterface} for PHP values.
+	 * @param int|null $when Bitmask of {@see When} flags; defaults to {@see When::INSERT}
+	 */
+	public function generator(
+		string|FieldGeneratorInterface $generator,
+		mixed $arg = null,
+		?int $when = null,
+	): self {
+		if ($generator instanceof FieldGeneratorInterface) {
+			$class = $generator::class;
+			if ($arg === null) {
+				if (! $generator instanceof GeneratorDefinitionArgInterface) {
+					throw new InvalidArgumentException(sprintf(
+						'Generator instance "%s" must implement %s (or pass an explicit $arg) so definitions can be stored as arrays.',
+						$class,
+						GeneratorDefinitionArgInterface::class,
+					));
+				}
+
+				$arg = $generator->getDefinitionArg();
+			}
+		} else {
+			$class = trim($generator);
+		}
+
+		if ($class === '' || ! is_a($class, FieldGeneratorInterface::class, true)) {
+			throw new InvalidArgumentException(sprintf(
+				'Field generator must be a class implementing %s.',
+				FieldGeneratorInterface::class,
+			));
+		}
+
+		$when ??= When::INSERT;
+		if ($when <= 0) {
+			throw new InvalidArgumentException('Field generator $when must be a positive When bitmask.');
+		}
+
+		$this->set('generator', [
+			'class' => $class,
+			'arg' => $arg,
+			'when' => $when,
+		]);
+		$this->set('auto_increment', is_a($class, DatabaseGenerator::class, true));
+
+		return $this;
+	}
+
+	/**
+	 * @return array{class: class-string<FieldGeneratorInterface>, arg: mixed, when: int}|null
+	 */
+	public function getGenerator(): ?array
+	{
+		$config = $this->get('generator');
+		if (! is_array($config)) {
+			return null;
+		}
+
+		$class = $config['class'] ?? null;
+		$when = $config['when'] ?? null;
+		if (! is_string($class) || $class === '' || ! is_int($when) || $when <= 0) {
+			return null;
+		}
+
+		/** @var class-string<FieldGeneratorInterface> $class */
+		return [
+			'class' => $class,
+			'arg' => $config['arg'] ?? null,
+			'when' => $when,
+		];
+	}
+
+	public function hasGenerator(): bool
+	{
+		return $this->getGenerator() !== null;
+	}
+
+	public function isDatabaseGenerated(): bool
+	{
+		$config = $this->getGenerator();
+		if ($config !== null) {
+			return is_a($config['class'], DatabaseGenerator::class, true);
+		}
+
+		// Legacy definitions that only set auto_increment.
 		return (bool) $this->get('auto_increment');
+	}
+
+	public function isGeneratedWhen(int $when): bool
+	{
+		$config = $this->getGenerator();
+		if ($config !== null) {
+			return When::includes($config['when'], $when);
+		}
+
+		return (bool) $this->get('auto_increment') && $when === When::INSERT;
+	}
+
+	public function getGeneratorSequence(): ?string
+	{
+		$config = $this->getGenerator();
+		if ($config === null || ! is_a($config['class'], DatabaseGenerator::class, true)) {
+			return null;
+		}
+
+		$arg = $config['arg'];
+		if (is_string($arg) && $arg !== '') {
+			return $arg;
+		}
+
+		if (is_array($arg) && isset($arg['sequence']) && is_string($arg['sequence']) && $arg['sequence'] !== '') {
+			return $arg['sequence'];
+		}
+
+		return null;
 	}
 
 	public function isPrimaryKey(): bool

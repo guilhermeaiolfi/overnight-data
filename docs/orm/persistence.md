@@ -154,16 +154,46 @@ When the actual affected-row count does not match the command policy, flush rais
 
 `CommandResult` can carry generated values keyed by field name. `RecordFlusher` merges those values into the inserted `RecordState`, marks the record clean, and indexes it by `ON\Data\Key` when the key becomes complete.
 
+Field definitions declare generation with `->generator($classOrInstance, $arg = null, $when = null)`:
+
+```php
+use ON\Data\Definition\Field\Generator\DatabaseGenerator;
+use ON\Data\Definition\Field\Generator\When;
+
+->field('id', 'int')->generator(DatabaseGenerator::class)->end()
+// sugar:
+->field('id', 'int')->autoIncrement(true)->end()
+
+->field('balance', 'int')
+    ->generator(new DatabaseGenerator('user_balance_seq'))
+    // or ->generator(DatabaseGenerator::class, 'user_balance_seq')
+    // or ->generator(DatabaseGenerator::class, ['sequence' => 'user_balance_seq'])
+    ->end()
+
+->field('token', 'string')
+    ->generator(UuidGenerator::class, null, When::INSERT)
+    ->end()
+
+->field('updatedAt', 'datetime')
+    ->generator(NowGenerator::class, null, When::INSERT | When::UPDATE)
+    ->end()
+```
+
+- `DatabaseGenerator` — database-owned (identity / sequence / DB default). Optional `$arg` is a sequence name (string) or `['sequence' => '...']`. Executors fill `CommandResult` (Cycle currently via `lastInsertID()` for a simple PK).
+- `PhpFieldGeneratorInterface` — PHP-owned; `CommandPlanner` runs `generate()` above adapters before INSERT/UPDATE (`When` bitmask). `$arg` may be a scalar, a list of constructor args, or a single constructor value.
+- Instances are allowed when they implement `GeneratorDefinitionArgInterface` (or you pass an explicit `$arg`); they flatten into the array definition as `class` + `arg`.
+- `autoIncrement(true)` is sugar for `generator(DatabaseGenerator::class, null, When::INSERT)`.
+
 `CycleCommandExecutor` currently returns generated values only for this conservative case:
 
 - the collection has exactly one primary-key field
-- that primary-key field is marked `autoIncrement(true)`
+- that primary-key field is database-generated for insert (`DatabaseGenerator` / `autoIncrement`)
 - the insert command did not provide a non-null value for that field
 - the Cycle write driver returns a non-empty generated id from `lastInsertID()`
 
 Numeric integer strings are normalized to `int`. Generated values remain keyed by field name even when the primary-key column name differs.
 
-The executor does not support generated values for composite keys, non-auto-increment keys, generated non-primary fields, non-primary database defaults, explicit sequence names, or full row refresh.
+The executor does not yet support generated values for composite keys, generated non-primary database fields beyond the single AI PK path, explicit sequence `NEXTVAL` pre-allocation, or full row refresh. PHP generators for non-PK fields are supported through definition + `CommandPlanner`.
 
 Generated values are merged into in-memory record state as soon as the insert command succeeds so later dependent commands in the same flush can resolve concrete foreign-key values. When the flush transaction fails, `FlushExecutor` restores in-memory record snapshots so rolled-back generated values are not left exposed after failure. Relation change markers remain pending so a full retry can plan again.
 
@@ -201,7 +231,7 @@ $generatedId = $record->getValue('id');
 
 `CycleRuntimeFactory` wires `ConvertingCommandExecutor` around `CycleCommandExecutor` automatically.
 
-Generated ids are currently supported only for simple auto-increment primary keys. Relation persistence planning is limited to configured planners that produce scalar mutations and/or commands. Physical table and column mapping happens in `CycleCommandExecutor` using collection and field metadata.
+Generated database ids are currently returned only for simple database-generated primary keys (via `lastInsertID()`). PHP field generators are supported for any field through `->generator()`. Relation persistence planning is limited to configured planners that produce scalar mutations and/or commands. Physical table and column mapping happens in `CycleCommandExecutor` using collection and field metadata.
 
 ## Public Runtime
 
