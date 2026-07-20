@@ -10,6 +10,7 @@ use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
+use ON\Data\Key;
 use function ON\Data\Mapper\map;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
@@ -675,33 +676,68 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
+	 * Fetch at most one row. When $identity is provided, constrain by the root
+	 * collection primary key (AND with existing wheres) for this execution only.
+	 *
+	 * @param Key|array<string, mixed>|list<mixed>|string|int|float|bool|null $identity
+	 *
 	 * @return array<string, mixed>|object|null
 	 */
-	public function fetchOne(): array|object|null
+	public function fetchOne(Key|array|string|int|float|bool|null $identity = null): array|object|null
 	{
-		$handler = $this->writableHandler;
-		$preparation = $handler?->prepare($this);
-		$runtime = $this->getLoadRuntime(fresh: $handler !== null);
-		$row = $runtime->fetchOne();
-
-		if ($row === null) {
-			return null;
+		if ($identity !== null) {
+			$this->applyIdentityConstraint($identity);
 		}
 
-		$publicRow = $this->publicRow($row);
+		try {
+			$handler = $this->writableHandler;
+			$preparation = $handler?->prepare($this);
+			$runtime = $this->getLoadRuntime(fresh: $handler !== null || $identity !== null);
+			$row = $runtime->fetchOne();
 
-		if ($this->resultClass === null) {
-			$materialized = $publicRow;
-		} else {
-			/** @var object $materialized */
-			$materialized = map($publicRow)->to($this->resultClass);
+			if ($row === null) {
+				return null;
+			}
+
+			$publicRow = $this->publicRow($row);
+
+			if ($this->resultClass === null) {
+				$materialized = $publicRow;
+			} else {
+				/** @var object $materialized */
+				$materialized = map($publicRow)->to($this->resultClass);
+			}
+
+			if ($handler !== null && $preparation !== null && is_object($materialized)) {
+				$handler->track($this, $preparation, [$row], [$materialized]);
+			}
+
+			return $materialized;
+		} finally {
+			if ($identity !== null) {
+				$this->conditions->removeByTag(ConditionTag::IDENTITY);
+			}
+		}
+	}
+
+	/**
+	 * @param Key|array<string, mixed>|list<mixed>|string|int|float|bool $identity
+	 */
+	private function applyIdentityConstraint(Key|array|string|int|float|bool $identity): void
+	{
+		if ($this->hasAlias() || ! $this->source instanceof CollectionInterface) {
+			throw new InvalidArgumentException(
+				'SelectQuery::fetchOne($identity) requires a collection-root query; derived or nested query sources cannot resolve identity.',
+			);
 		}
 
-		if ($handler !== null && $preparation !== null && is_object($materialized)) {
-			$handler->track($this, $preparation, [$row], [$materialized]);
+		$key = $this->source->getKey($identity);
+		$conditions = [];
+		foreach ($key->getValues() as $fieldName => $value) {
+			$conditions[] = x()->eq($this->field($fieldName), $value);
 		}
 
-		return $materialized;
+		$this->conditions->replaceByTag(ConditionTag::IDENTITY, ...$conditions);
 	}
 
 	/**

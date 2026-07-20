@@ -9,6 +9,7 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 ### Added
 
+- **`SelectQuery::fetchOne($identity)`** — optional primary-key identity (scalar, composite array, or `Key`) applied as a temporary `ConditionTag::IDENTITY` constraint for that execution only; requires a collection-root query. Existing user `where()` clauses still AND. Docs: [`docs/query/bound-execution.md`](docs/query/bound-execution.md).
 - **Session save API** — `Session::update` / `create` / `detach` / `schemaOf` with `SelectQuery::projection()` shape compilation; pending intents in `RepresentationIntentStore` apply on `sync()` (not at flush). Flat related paths via `IntentBuilder::update($path)` / `create($path)`. Docs: [`docs/orm/session-save-api.md`](docs/orm/session-save-api.md).
 
 ### Removed

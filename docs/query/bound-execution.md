@@ -52,12 +52,26 @@ Bound queries return arrays by default. Object export is opt-in through `to(...)
 | --- | --- |
 | `$query->fetchAll()` | `list<array<string, mixed>>` |
 | `$query->fetchOne()` | `array<string, mixed>\|null` |
+| `$query->fetchOne($identity)` | same, with a temporary primary-key constraint (see below) |
 | `$query->iterate()` | `iterable<array<string, mixed>>` |
 | `$query->to(stdClass::class)->fetchAll()` | `list<stdClass>` |
 | `$query->to(UserRow::class)->fetchAll()` | `list<UserRow>` where `UserRow` is a no-required-constructor public-property class |
 | `$query->to(stdClass::class)->writable($session)->fetchAll()` | tracked writable `stdClass` objects |
 
 Read-only object export also supports lazy iteration: `to(...)->iterate()` yields objects one row at a time. `writable(...)->iterate()` is intentionally unsupported; use `fetchAll()` or `fetchOne()`.
+
+### Identity fetch
+
+`fetchOne($identity)` is sugar for constraining the root collection primary key for that execution only. `$identity` may be a scalar (single-column PK), an associative or positional composite array, or a `Key`. The constraint is tagged `ConditionTag::IDENTITY`, AND-combined with existing user `where()` clauses, and removed after the fetch returns.
+
+Identity fetch requires a collection-root query (`FROM` is a collection, not a derived/`as()` query source). Nested or aliased query sources raise `InvalidArgumentException`. Wrong arity or a `Key` for another collection raises the usual primary-key exceptions from `Collection::getKey()`.
+
+```php
+$row = $runtime->query($users)->fetchOne(2);
+$row = $runtime->query($users)->where(x()->eq($users->active, true))->fetchOne(2);
+$row = $runtime->query($postUser)->fetchOne(['post_id' => 1, 'user_id' => 2]);
+$row = $runtime->query($users)->fetchOne($users->getKey(2));
+```
 
 Selections tagged `SelectionTag::INTERNAL` are compiled into the query when writable flat projections need hidden identity values. They are stripped from public array and object results.
 
@@ -74,7 +88,7 @@ Writable export requirements:
 Bound queries expose:
 
 - `fetchAll()`
-- `fetchOne()`
+- `fetchOne(?$identity = null)`
 - `iterate()`
 
 `fetchAll()`, `fetchOne()`, and `iterate()` all go through `LoadRuntime` after the query resolves its executor (`getLoadRuntime()`). `LoadRuntime` uses a fast path when there are no relation selections; `iterate()` still rejects relation selections because structured loading may need the full parent batch.

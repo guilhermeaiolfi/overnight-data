@@ -14,6 +14,9 @@ final class ConditionTag
 	/** Separate-query parent-key IN / OR correlation (chunk-replaced). */
 	public const CORRELATION = 'correlation';
 
+	/** Temporary primary-key predicate for {@see SelectQuery::fetchOne()} identity sugar. */
+	public const IDENTITY = 'identity';
+
 	/** Reserved for definition scopes / soft-delete / tenant filters. */
 	public const SCOPE = 'scope';
 

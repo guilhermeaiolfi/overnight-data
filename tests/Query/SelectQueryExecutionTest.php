@@ -5,11 +5,20 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Query;
 
 use Generator;
+use InvalidArgumentException;
 use ON\Data\Database\Exception\QueryNotExecutableException;
 use ON\Data\Database\QueryExecutorInterface;
+use ON\Data\Definition\Exception\InvalidPrimaryKeyException;
 use ON\Data\Definition\Registry;
+use ON\Data\Key;
+use ON\Data\Query\Condition\ComparisonCondition;
+use ON\Data\Query\Condition\ConditionInterface;
+use ON\Data\Query\Condition\ConditionTag;
+use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\LiteralExpression;
 use function ON\Data\Query\query;
 use ON\Data\Query\SelectQuery;
+use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\Fixture\CustomRelation;
 
@@ -63,6 +72,96 @@ final class SelectQueryExecutionTest extends TestCase
 		self::assertNull($query->fetchOne());
 	}
 
+	public function testFetchOneIdentityAppliesTemporaryPrimaryKeyConstraint(): void
+	{
+		$users = $this->makeRegistry()->getCollection('users');
+		$executor = new RecordingExecutor(fetchOneRow: ['id' => 2, 'name' => 'Grace']);
+		$query = new SelectQuery($users, $executor);
+		$query->where(x()->eq($query->active, true));
+
+		self::assertSame(['id' => 2, 'name' => 'Grace'], $query->fetchOne(2));
+
+		self::assertCount(1, $executor->identityConditionsAtFetchOne);
+		$condition = $executor->identityConditionsAtFetchOne[0];
+		self::assertInstanceOf(ComparisonCondition::class, $condition);
+		self::assertInstanceOf(FieldRef::class, $condition->getLeft());
+		self::assertSame('id', $condition->getLeft()->getName());
+		self::assertInstanceOf(LiteralExpression::class, $condition->getRight());
+		self::assertSame(2, $condition->getRight()->getValue());
+
+		self::assertSame([], $query->getConditionList()->getByTag(ConditionTag::IDENTITY));
+		self::assertCount(1, $query->getConditionList()->getByTag(ConditionTag::USER));
+	}
+
+	public function testFetchOneIdentityAcceptsKeyAndCompositeValues(): void
+	{
+		$registry = new Registry();
+		$postUser = $registry->collection('post_user')
+			->primaryKey('post_id', 'user_id')
+			->field('post_id', 'int')->end()
+			->field('user_id', 'int')->end();
+
+		$executor = new RecordingExecutor(fetchOneRow: ['post_id' => 1, 'user_id' => 2]);
+		$query = new SelectQuery($postUser, $executor);
+
+		self::assertSame(['post_id' => 1, 'user_id' => 2], $query->fetchOne([1, 2]));
+		self::assertCount(2, $executor->identityConditionsAtFetchOne);
+
+		$key = $postUser->getKey(['post_id' => 3, 'user_id' => 4]);
+		$query->fetchOne($key);
+		self::assertCount(2, $executor->identityConditionsAtFetchOne);
+		self::assertSame([], $query->getConditionList()->getByTag(ConditionTag::IDENTITY));
+	}
+
+	public function testFetchOneIdentityRejectsDerivedAndNestedSources(): void
+	{
+		$users = $this->makeRegistry()->getCollection('users');
+		$executor = new RecordingExecutor();
+
+		$aliased = (new SelectQuery($users, $executor))->as('u');
+
+		try {
+			$aliased->fetchOne(1);
+			self::fail('Expected aliased query identity fetch to be rejected.');
+		} catch (InvalidArgumentException $exception) {
+			self::assertStringContainsString('collection-root query', $exception->getMessage());
+		}
+
+		$innerQuery = new SelectQuery($users, $executor);
+		$inner = $innerQuery->select($innerQuery->id)->as('inner_users');
+		$nested = new SelectQuery($inner, $executor);
+
+		try {
+			$nested->fetchOne(1);
+			self::fail('Expected nested query identity fetch to be rejected.');
+		} catch (InvalidArgumentException $exception) {
+			self::assertStringContainsString('collection-root query', $exception->getMessage());
+		}
+	}
+
+	public function testFetchOneIdentityRejectsInvalidPrimaryKeyInput(): void
+	{
+		$users = $this->makeRegistry()->getCollection('users');
+		$query = new SelectQuery($users, new RecordingExecutor());
+
+		$this->expectException(InvalidPrimaryKeyException::class);
+		$query->fetchOne(['id' => 1, 'extra' => 2]);
+	}
+
+	public function testFetchOneIdentityRejectsKeyFromAnotherCollection(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$posts = $registry->collection('posts')
+			->primaryKey('id')
+			->field('id', 'int')->end();
+
+		$query = new SelectQuery($users, new RecordingExecutor());
+
+		$this->expectException(InvalidPrimaryKeyException::class);
+		$query->fetchOne(new Key($posts, ['id' => 1]));
+	}
+
 	public function testUnboundExecutionMethodsThrow(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
@@ -93,9 +192,9 @@ final class SelectQueryExecutionTest extends TestCase
 
 		$query
 			->select($query->id, $query->name->as('display_name'))
-			->where(\ON\Data\Query\x()->eq($query->active, true))
+			->where(x()->eq($query->active, true))
 			->groupBy($query->name)
-			->having(\ON\Data\Query\x()->gt($query->id->count(), 0))
+			->having(x()->gt($query->id->count(), 0))
 			->orderBy($query->id->asc())
 			->limit(5)
 			->offset(10);
@@ -126,6 +225,7 @@ final class SelectQueryExecutionTest extends TestCase
 	{
 		$registry = new Registry();
 		$users = $registry->collection('users');
+		$users->primaryKey('id');
 		$users->field('id', 'int');
 		$users->field('name', 'string');
 		$users->field('active', 'bool');
@@ -143,6 +243,11 @@ final class RecordingExecutor implements QueryExecutorInterface
 	public array $calls = [];
 
 	public ?SelectQuery $lastQuery = null;
+
+	/**
+	 * @var list<ConditionInterface>
+	 */
+	public array $identityConditionsAtFetchOne = [];
 
 	/**
 	 * @param list<array<string, mixed>> $fetchAllRows
@@ -167,6 +272,7 @@ final class RecordingExecutor implements QueryExecutorInterface
 	{
 		$this->calls[] = 'fetchOne';
 		$this->lastQuery = $query;
+		$this->identityConditionsAtFetchOne = $query->getConditionList()->getConditionsByTag(ConditionTag::IDENTITY);
 
 		return $this->fetchOneRow;
 	}
