@@ -158,6 +158,8 @@ Field definitions declare generation with `->generator($classOrInstance, $arg = 
 
 ```php
 use ON\Data\Definition\Field\Generator\DatabaseGenerator;
+use ON\Data\Definition\Field\Generator\NowGenerator;
+use ON\Data\Definition\Field\Generator\UuidGenerator;
 use ON\Data\Definition\Field\Generator\When;
 
 ->field('id', 'int')->generator(DatabaseGenerator::class)->end()
@@ -175,13 +177,16 @@ use ON\Data\Definition\Field\Generator\When;
     ->end()
 
 ->field('updatedAt', 'datetime')
-    ->generator(NowGenerator::class, null, When::INSERT | When::UPDATE)
+    ->generator(NowGenerator::class, 'UTC', When::INSERT | When::UPDATE)
+    // or ->generator(new NowGenerator('UTC'), null, When::INSERT | When::UPDATE)
     ->end()
 ```
 
 - `DatabaseGenerator` — database-owned (identity / sequence / DB default). Optional `$arg` is a sequence name (string) or `['sequence' => '...']` used as schema metadata for the column default (and passed through to `lastInsertID($sequence)` on the non-RETURNING path). Executors fill `CommandResult`:
   - drivers whose insert builder implements Cycle `ReturningInterface` (Postgres) recover pending DB-generated insert fields via `RETURNING` (sequence name is not required for that read — the database default / identity produces the value);
   - otherwise the Cycle adapter recovers a single DB-generated primary key through `lastInsertID($sequence)`. Cycle’s stock `Driver::lastInsertID()` currently ignores the sequence argument and calls PDO without a name; passing the sequence is best-effort for custom/future drivers that honor it. MySQL/SQLite autoincrement typically does not need a sequence name.
+- `UuidGenerator` — PHP-owned RFC 4122 UUID v4 string (`xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`). No constructor arg.
+- `NowGenerator` — PHP-owned `DateTimeImmutable('now')`. Optional `$arg` is a timezone name (e.g. `UTC`) or pass `new NowGenerator('UTC')` / `new NowGenerator(new DateTimeZone('UTC'))`.
 - `PhpFieldGeneratorInterface` — PHP-owned; `CommandPlanner` runs `generate()` above adapters before INSERT/UPDATE (`When` bitmask). `$arg` may be a scalar, a list of constructor args, or a single constructor value.
 - Instances are allowed when they implement `GeneratorDefinitionArgInterface` (or you pass an explicit `$arg`); they flatten into the array definition as `class` + `arg`.
 - `autoIncrement(true)` is sugar for `generator(DatabaseGenerator::class, null, When::INSERT)`.

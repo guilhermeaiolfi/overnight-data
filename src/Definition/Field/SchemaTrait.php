@@ -9,7 +9,9 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\Generator\DatabaseGenerator;
 use ON\Data\Definition\Field\Generator\FieldGeneratorInterface;
 use ON\Data\Definition\Field\Generator\GeneratorDefinitionArgInterface;
+use ON\Data\Definition\Field\Generator\NowGenerator;
 use ON\Data\Definition\Field\Generator\PhpFieldGeneratorInterface;
+use ON\Data\Definition\Field\Generator\UuidGenerator;
 use ON\Data\Definition\Field\Generator\When;
 use ON\Data\Definition\Relation\RelationInterface;
 
@@ -78,7 +80,7 @@ trait SchemaTrait
 	 *
 	 * @param class-string<FieldGeneratorInterface>|FieldGeneratorInterface $generator
 	 *        Use {@see DatabaseGenerator} for DB-owned values (optional $arg = sequence name).
-	 *        Use a {@see PhpFieldGeneratorInterface} for PHP values.
+	 *        Use {@see UuidGenerator}, {@see NowGenerator}, or another {@see PhpFieldGeneratorInterface} for PHP values.
 	 * @param int|null $when Bitmask of {@see When} flags; defaults to {@see When::INSERT}
 	 */
 	public function generator(
