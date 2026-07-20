@@ -121,11 +121,11 @@ Public-property class export requirements:
 - Public result keys must match public properties (or constructor/promoted parameters via the mapper).
 - Nested typed object properties may be materialized into their declared classes when supported.
 - Array relation/list properties annotated as `@var list<stdClass>` (or another item class) receive arrays of those items; bare `array` properties keep nested arrays.
-- Writable export is `stdClass`-only for now.
+- Writable export supports `stdClass` and concrete mutable public-property classes (not readonly). Selection aliases are the schema-path contract: DTO properties / `MapFrom` must match those keys; avoid `MapTo` renaming them for sync reads.
 
 Read-only object export supports lazy iteration through `to(...)->iterate()`. `writable(...)->iterate()` is intentionally unsupported.
 
-Writable export tracks query provenance in a `Session`:
+Writable export tracks query provenance in a `Session` on the same object instance returned to the caller:
 
 ```php
 $session = new Session($commandExecutor);
@@ -134,7 +134,7 @@ $u = $runtime->query($users);
 
 $user = $u
     ->select($u->id, $u->company->name->as('name'))
-    ->to(stdClass::class)
+    ->to(UserRow::class) // or stdClass::class
     ->writable($session)
     ->fetchOne();
 ```

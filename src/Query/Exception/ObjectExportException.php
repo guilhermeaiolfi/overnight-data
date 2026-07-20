@@ -40,17 +40,31 @@ final class ObjectExportException extends InvalidArgumentException
 		));
 	}
 
-	public static function writableRequiresStdClass(string $class): self
+	public static function writableClassNotSupported(string $class): self
 	{
 		return new self(sprintf(
-			'Writable query export currently supports stdClass only; "%s" was requested.',
+			'Writable query export requires stdClass or a mutable public-property class; "%s" was requested.',
 			$class,
 		));
 	}
 
+	public static function writableReadonlyNotSupported(string $class): self
+	{
+		return new self(sprintf(
+			'Writable query export does not support readonly classes or readonly public properties; "%s" was requested.',
+			$class,
+		));
+	}
+
+	/** @deprecated Use writableClassNotSupported() / writableReadonlyNotSupported() */
+	public static function writableRequiresStdClass(string $class): self
+	{
+		return self::writableClassNotSupported($class);
+	}
+
 	public static function requiresObjectExport(): self
 	{
-		return new self('Writable query export requires object export; call to(stdClass::class) before writable().');
+		return new self('Writable query export requires object export; call to(...) before writable().');
 	}
 
 	public static function writableIterationUnsupported(): self

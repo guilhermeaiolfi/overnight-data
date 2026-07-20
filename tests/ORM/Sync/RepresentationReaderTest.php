@@ -168,6 +168,33 @@ final class RepresentationReaderTest extends TestCase
 		self::assertSame($target, $this->reader()->readTarget($representation, $this->profileRelationSchema(), $this->syncError(...)));
 	}
 
+	public function testRelationTargetPreservesLiveObjectIdentityOnDto(): void
+	{
+		$target = new PublicPropertyUser();
+		$target->name = 'Ada';
+		$dto = new PublicPropertyUserWithProfile();
+		$dto->profile = $target;
+
+		self::assertSame(
+			$target,
+			$this->reader()->readTarget($dto, $this->profileRelationSchema(), $this->syncError(...))
+		);
+	}
+
+	public function testMapBackedScalarReadDoesNotCloneRelationIntoFieldBag(): void
+	{
+		$target = new PublicPropertyUser();
+		$target->name = 'Ada';
+		$dto = new PublicPropertyUserWithProfile();
+		$dto->name = 'Root';
+		$dto->profile = $target;
+
+		$values = $this->reader()->read($dto, $this->fieldSchema('name'));
+
+		self::assertSame(['name' => 'Root'], $values);
+		self::assertSame($target, $dto->profile);
+	}
+
 	public function testTreatsNullSingleRelationAsNull(): void
 	{
 		$representation = $this->representation(['profile' => null]);
@@ -300,6 +327,12 @@ final class RepresentationReaderTest extends TestCase
 final class PublicPropertyUser
 {
 	public ?string $name = null;
+}
+
+final class PublicPropertyUserWithProfile
+{
+	public ?string $name = null;
+	public ?PublicPropertyUser $profile = null;
 }
 
 final class PublicPropertyPost

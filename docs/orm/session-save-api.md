@@ -115,6 +115,7 @@ $session->flush();
 
 ```php
 $user = $q->to(stdClass::class)->writable($session)->fetchOne();
+// or: $q->to(UserRow::class)->writable($session)->fetchOne();
 $user->name = 'Ada';
 $session->sync($user); // recommended; flush also syncs already-tracked objects
 $session->flush();

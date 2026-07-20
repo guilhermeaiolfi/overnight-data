@@ -265,6 +265,6 @@ This is deliberately not an `EntityManager`. There is no repository API, object 
 - No full database-default refresh beyond simple auto-increment primary keys.
 - No batch command execution.
 - No public SQL command API.
-- Writable user-defined class export is not supported yet.
+- Writable export supports `stdClass` and mutable public-property classes; readonly classes/properties are rejected. Sync reads scalars via the mapper (`map($dto)->to(stdClass::class)`); relation identity uses live object paths.
 - Writable iteration is not supported yet.
-- Flat projection provenance is for writable `stdClass` query export.
+- Flat projection provenance is for writable query export (`stdClass` or mutable DTO).

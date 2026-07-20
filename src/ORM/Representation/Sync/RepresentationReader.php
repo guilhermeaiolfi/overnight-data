@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Sync;
 
+use function ON\Data\Mapper\map;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Session;
+use stdClass;
 use Throwable;
 
 final class RepresentationReader
@@ -17,10 +19,11 @@ final class RepresentationReader
 	 */
 	public function read(object $representation, RepresentationSchema $schema): array
 	{
+		$bag = $this->mappedScalarBag($representation);
 		$values = [];
 		foreach ($schema->getFields() as $fieldSchema) {
 			$path = $fieldSchema->getPath();
-			$values[$path] = $this->readPath($representation, $path);
+			$values[$path] = $this->readPath($bag, $path);
 		}
 
 		return $values;
@@ -40,6 +43,7 @@ final class RepresentationReader
 		RepresentationSchema $schema,
 		array $initialValues = [],
 	): array {
+		$bag = $this->mappedScalarBag($representation);
 		$values = $initialValues;
 		foreach ($schema->getFields() as $fieldSchema) {
 			if (array_key_exists($fieldSchema->getFieldName(), $values)) {
@@ -48,7 +52,7 @@ final class RepresentationReader
 
 			try {
 				$values[$fieldSchema->getFieldName()] = $this->readPath(
-					$representation,
+					$bag,
 					$fieldSchema->getPath(),
 				);
 			} catch (SyncException) {
@@ -58,14 +62,17 @@ final class RepresentationReader
 		return $values;
 	}
 
-	public function readPath(object $representation, string $path): mixed
+	/**
+	 * Resolve a dotted path on an object (live representation or mapped scalar bag).
+	 */
+	public function readPath(object $source, string $path): mixed
 	{
-		$properties = get_object_vars($representation);
+		$properties = get_object_vars($source);
 		if (array_key_exists($path, $properties)) {
 			return $properties[$path];
 		}
 
-		$current = $representation;
+		$current = $source;
 		foreach (explode('.', $path) as $segment) {
 			$current = $this->readSegment($current, $segment, $path);
 		}
@@ -127,6 +134,14 @@ final class RepresentationReader
 			"Representation relation path '%s' must contain an object value or null.",
 			$schema->getPath()
 		));
+	}
+
+	private function mappedScalarBag(object $representation): object
+	{
+		/** @var object $bag */
+		$bag = map($representation)->to(stdClass::class);
+
+		return $bag;
 	}
 
 	private function readSegment(mixed $current, string $segment, string $path): mixed

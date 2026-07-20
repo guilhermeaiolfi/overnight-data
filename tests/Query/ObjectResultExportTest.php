@@ -238,7 +238,20 @@ final class ObjectResultExportTest extends TestCase
 		self::assertSame(2, $rows[1]->id);
 	}
 
-	public function testToUserRowMutableThrowsClearException(): void
+	public function testWritableAcceptsMutableUserRow(): void
+	{
+		$query = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new ObjectExportRecordingExecutor(),
+		);
+
+		$writable = $query->to(ExportUserRow::class)->writable(new Session(new RecordingCommandExecutor()));
+
+		self::assertTrue($writable->isWritable());
+		self::assertSame(ExportUserRow::class, $writable->getResultClass());
+	}
+
+	public function testWritableRejectsReadonlyClass(): void
 	{
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
@@ -246,9 +259,9 @@ final class ObjectResultExportTest extends TestCase
 		);
 
 		$this->expectException(ObjectExportException::class);
-		$this->expectExceptionMessage('Writable query export currently supports stdClass only');
+		$this->expectExceptionMessage('Writable query export does not support readonly classes or readonly public properties');
 
-		$query->to(ExportUserRow::class)->writable(new Session(new RecordingCommandExecutor()));
+		$query->to(ReadonlyExportUserRow::class)->writable(new Session(new RecordingCommandExecutor()));
 	}
 
 	public function testMaterializesRootUserDefinedPublicPropertyClass(): void
@@ -627,6 +640,15 @@ final class ExportUserRow
 
 	/** @var list<stdClass> */
 	public array $posts = [];
+}
+
+readonly class ReadonlyExportUserRow
+{
+	public function __construct(
+		public int $id,
+		public string $name,
+	) {
+	}
 }
 
 final class ExportProfileRow

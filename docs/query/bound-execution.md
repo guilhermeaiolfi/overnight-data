@@ -57,6 +57,7 @@ Bound queries return arrays by default. Object export is opt-in through `to(...)
 | `$query->to(stdClass::class)->fetchAll()` | `list<stdClass>` |
 | `$query->to(UserRow::class)->fetchAll()` | `list<UserRow>` where `UserRow` is a no-required-constructor public-property class |
 | `$query->to(stdClass::class)->writable($session)->fetchAll()` | tracked writable `stdClass` objects |
+| `$query->to(UserRow::class)->writable($session)->fetchAll()` | tracked writable mutable public-property DTOs |
 
 Read-only object export also supports lazy iteration: `to(...)->iterate()` yields objects one row at a time. `writable(...)->iterate()` is intentionally unsupported; use `fetchAll()` or `fetchOne()`.
 
@@ -77,8 +78,11 @@ Selections tagged `SelectionTag::INTERNAL` are compiled into the query when writ
 
 Writable export requirements:
 
-- requires `to(stdClass::class)`;
+- requires `to(stdClass::class)` or `to(MutableDto::class)` where the class is concrete and not readonly (mutable public properties);
 - requires an explicit `Session`;
+- tracks the same object instance returned to the caller (no shadow copy);
+- sync reads scalar field paths through `map($representation)->to(stdClass::class)`; relation targets stay live object paths so identity is preserved;
+- DTO property names (or `MapFrom`) must match selection aliases / schema paths; avoid `MapTo` that renames those keys on the way back to a bag;
 - compiles binding/provenance only for writable export, not for normal array queries or read-only object export;
 - compiles one binding per fetch operation and reuses it across rows;
 - still creates a distinct `RepresentationState` per object.

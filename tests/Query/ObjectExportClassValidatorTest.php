@@ -7,6 +7,7 @@ namespace Tests\ON\Data\Query;
 use ON\Data\Query\Exception\ObjectExportException;
 use ON\Data\Query\Result\ObjectExportClassValidator;
 use PHPUnit\Framework\TestCase;
+use stdClass;
 use Tests\ON\Data\Fixture\AbstractUserDto;
 use Tests\ON\Data\Fixture\AutoloadExportRow;
 use Tests\ON\Data\Fixture\RequiredCtorLoader;
@@ -75,5 +76,28 @@ final class ObjectExportClassValidatorTest extends TestCase
 		ObjectExportClassValidator::assertSupported($class);
 
 		self::assertTrue(class_exists($class, autoload: false));
+	}
+
+	public function testAssertWritableAcceptsStdClassAndMutableClass(): void
+	{
+		$this->expectNotToPerformAssertions();
+
+		ObjectExportClassValidator::assertWritable(stdClass::class);
+		ObjectExportClassValidator::assertWritable(AutoloadExportRow::class);
+	}
+
+	public function testAssertWritableRejectsReadonlyClass(): void
+	{
+		$this->expectException(ObjectExportException::class);
+		$this->expectExceptionMessage('Writable query export does not support readonly classes or readonly public properties');
+
+		ObjectExportClassValidator::assertWritable(ReadonlyWritableGateRow::class);
+	}
+}
+
+readonly class ReadonlyWritableGateRow
+{
+	public function __construct(public int $id)
+	{
 	}
 }

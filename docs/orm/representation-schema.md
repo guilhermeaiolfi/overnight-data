@@ -89,7 +89,7 @@ Object graphs and flat writable projections share `RepresentationAdoptionEngine:
 
 For flat projections, the compiler may add hidden identity selections tagged `SelectionTag::INTERNAL`. `QuerySourceIdentities` owns the query-local locators (`add(sourcePath, fieldName, resultKey)` / `getResultKey(sourcePath, fieldName)`) and is the adoption identity map for that prepared query on `QueryRepresentationPlan`; `getIdentity(sourcePath, $rawRow)` uses the row only as a lookup bag. Session flat intents build one `StaticSourceIdentities` per adoption from `identity()` / flat keys. There is no identity map per row.
 
-Flat projection adoption is used by writable `stdClass` query export and by `Session::update`/`create` with `SelectQuery::projection()`. See [`session-save-api.md`](./session-save-api.md).
+Flat projection adoption is used by writable query export (`stdClass` or mutable DTO) and by `Session::update`/`create` with `SelectQuery::projection()`. See [`session-save-api.md`](./session-save-api.md).
 
 Inbound flat binds resolve `RecordState` per source via the same engine (keys from the DTO / flat ops, or `RecordState::new` for create). Relation add for flat `create('posts')` registers intent on `ToManyRelationState` / `ToOneRelationState`.
 

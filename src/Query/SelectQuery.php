@@ -37,7 +37,6 @@ use ON\Data\Query\Result\WritableResultHandler;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\Sort\Sort;
-use stdClass;
 
 final class SelectQuery implements QuerySourceInterface
 {
@@ -515,9 +514,7 @@ final class SelectQuery implements QuerySourceInterface
 			throw ObjectExportException::requiresObjectExport();
 		}
 
-		if ($this->resultClass !== stdClass::class) {
-			throw ObjectExportException::writableRequiresStdClass($this->resultClass);
-		}
+		ObjectExportClassValidator::assertWritable($this->resultClass);
 
 		$this->writableHandler = $handler;
 

@@ -36,8 +36,11 @@ When a writable projection is created by `SelectQuery`, the query is the field-t
 
 Writable export requirements:
 
-- `to(stdClass::class)` is required
+- `to(stdClass::class)` or `to(MutableDto::class)` (concrete, non-readonly, mutable public properties)
 - an explicit `Session` is required (`Session` implements `WritableResultHandler`; that is the Query↔ORM bridge)
+- the returned object is what Session tracks (same identity)
+- scalar sync reads go through `map($representation)->to(stdClass::class)`; relation `ONE`/`MANY` targets are read from the live object so related instances stay tracked
+- selection aliases / schema paths are the contract: DTO properties (or `MapFrom`) must match them; avoid `MapTo` that renames those keys when mapping back to a bag
 - `prepare()` returns a `WritablePreparation` token (concretely `QueryRepresentationPlan`); the query holds it for that fetch and passes it to `track()`
 - one schema is compiled per fetch operation and reused across rows
 - each object still gets its own `RepresentationState`
@@ -60,7 +63,7 @@ $user = $u
         $u->name,
         $u->profile->name->as('profileName'),
     )
-    ->to(stdClass::class)
+    ->to(stdClass::class) // or a mutable DTO with public $id, $name, $profileName
     ->writable($session)
     ->fetchOne();
 
