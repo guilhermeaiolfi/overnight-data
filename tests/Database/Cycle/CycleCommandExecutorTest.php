@@ -12,6 +12,7 @@ use Cycle\Database\DatabaseManager;
 use DateTimeImmutable;
 use ON\Data\Database\Cycle\CycleCommandExecutor;
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\Field\Generator\DatabaseGenerator;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Persistence\CommandInterface;
@@ -125,6 +126,29 @@ final class CycleCommandExecutorTest extends TestCase
 		} finally {
 			self::assertNull($this->fetchUser(3));
 		}
+	}
+
+	public function testInsertCommandWithNamedSequenceStillRecoversAutoIncrementPrimaryKey(): void
+	{
+		$users = (new Registry())
+			->collection('users')
+			->table('app_users')
+			->primaryKey('id')
+			->field('id', 'int')->column('user_id')->generator(DatabaseGenerator::class, 'users_id_seq')->end()
+			->field('name', 'string')->column('full_name')->end()
+			->field('email', 'string')->column('email_address')->end();
+
+		$result = $this->executor->execute(new InsertCommand($users, [
+			'name' => 'Seq',
+			'email' => 'seq@example.test',
+		]));
+
+		self::assertSame(1, $result->getAffectedRows());
+		self::assertSame(['id' => 3], $result->getGeneratedValues());
+		self::assertSame(
+			['name' => 'Seq', 'email' => 'seq@example.test'],
+			$this->fetchUser(3),
+		);
 	}
 
 	public function testInsertCommandReturnsGeneratedAutoIncrementPrimaryKeyValueByFieldName(): void

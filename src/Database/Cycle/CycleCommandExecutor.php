@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace ON\Data\Database\Cycle;
 
 use Cycle\Database\DatabaseInterface;
+use Cycle\Database\Query\InsertQuery;
 use Cycle\Database\Query\QueryParameters;
+use Cycle\Database\Query\ReturningInterface;
+use Cycle\Database\StatementInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Field\Generator\When;
@@ -54,6 +57,11 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 			->insert($this->getTable($command))
 			->values($this->mapFieldValuesToColumns($command->getCollection(), $command->getValues()));
 
+		$pending = $this->pendingDatabaseGeneratedFields($command);
+		if ($pending !== [] && $insert instanceof ReturningInterface) {
+			return $this->insertWithReturning($insert, $pending);
+		}
+
 		// InsertQuery::run() returns lastInsertID and discards rowCount; execute for affected rows.
 		$parameters = new QueryParameters();
 		$affected = $this->affectedRows(
@@ -63,7 +71,84 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 			),
 		);
 
-		return new CommandResult($affected, $this->getGeneratedValueAfterInsert($command));
+		return new CommandResult($affected, $this->generatedValuesViaLastInsertId($command, $pending));
+	}
+
+	/**
+	 * @param list<FieldInterface> $fields
+	 */
+	private function insertWithReturning(ReturningInterface $insert, array $fields): CommandResult
+	{
+		if (! $insert instanceof InsertQuery) {
+			throw new InvalidCommandException(
+				'RETURNING insert recovery requires a Cycle InsertQuery builder.',
+			);
+		}
+
+		$columns = [];
+		$columnToField = [];
+		foreach ($fields as $field) {
+			$column = $field->getColumn();
+			$columns[] = $column;
+			$columnToField[strtolower($column)] = $field->getName();
+		}
+
+		$insert->returning(...$columns);
+
+		$parameters = new QueryParameters();
+		$statement = $this->database->getDriver()->query(
+			$insert->sqlStatement($parameters),
+			$parameters->getParameters(),
+		);
+
+		try {
+			$raw = count($columns) === 1
+				? $statement->fetchColumn()
+				: $statement->fetch(StatementInterface::FETCH_ASSOC);
+			$affected = $this->affectedRows($statement->rowCount());
+		} finally {
+			$statement->close();
+		}
+
+		return new CommandResult($affected, $this->mapReturningResult($raw, $fields, $columnToField));
+	}
+
+	/**
+	 * @param list<FieldInterface> $fields
+	 * @param array<string, string> $columnToField lowercase column → field name
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function mapReturningResult(mixed $raw, array $fields, array $columnToField): array
+	{
+		if ($fields === []) {
+			return [];
+		}
+
+		if (count($fields) === 1 && ! is_array($raw)) {
+			$value = $this->normalizeGeneratedId($raw);
+
+			return $value === null ? [] : [$fields[0]->getName() => $value];
+		}
+
+		if (! is_array($raw)) {
+			return [];
+		}
+
+		$generated = [];
+		foreach ($raw as $column => $value) {
+			$fieldName = $columnToField[strtolower((string) $column)] ?? null;
+			if ($fieldName === null) {
+				continue;
+			}
+
+			$normalized = $this->normalizeGeneratedId($value);
+			if ($normalized !== null) {
+				$generated[$fieldName] = $normalized;
+			}
+		}
+
+		return $generated;
 	}
 
 	private function update(UpdateCommand $command): CommandResult
@@ -126,26 +211,60 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 	}
 
 	/**
+	 * DB-generated insert fields the command did not supply (database must fill them).
+	 *
+	 * @return list<FieldInterface>
+	 */
+	private function pendingDatabaseGeneratedFields(InsertCommand $command): array
+	{
+		$values = $command->getValues();
+		$pending = [];
+
+		foreach ($command->getCollection()->getFields() as $field) {
+			if (! $field->isDatabaseGenerated() || ! $field->isGeneratedWhen(When::INSERT)) {
+				continue;
+			}
+
+			$fieldName = $field->getName();
+			if (array_key_exists($fieldName, $values) && $values[$fieldName] !== null) {
+				continue;
+			}
+
+			$pending[] = $field;
+		}
+
+		return $pending;
+	}
+
+	/**
+	 * @param list<FieldInterface> $pending
+	 *
 	 * @return array<string, mixed>
 	 */
-	private function getGeneratedValueAfterInsert(InsertCommand $command): array
+	private function generatedValuesViaLastInsertId(InsertCommand $command, array $pending): array
 	{
 		$field = $this->getGeneratedPrimaryKeyField($command->getCollection());
 		if ($field === null) {
 			return [];
 		}
 
-		$fieldName = $field->getName();
-		if (array_key_exists($fieldName, $command->getValues()) && $command->getValues()[$fieldName] !== null) {
+		$pendingNames = [];
+		foreach ($pending as $pendingField) {
+			$pendingNames[$pendingField->getName()] = true;
+		}
+
+		if (! isset($pendingNames[$field->getName()])) {
 			return [];
 		}
 
-		$generatedId = $this->normalizeGeneratedId($this->database->getDriver()->lastInsertID());
+		$generatedId = $this->normalizeGeneratedId(
+			$this->database->getDriver()->lastInsertID($field->getGeneratorSequence()),
+		);
 		if ($generatedId === null) {
 			return [];
 		}
 
-		return [$fieldName => $generatedId];
+		return [$field->getName() => $generatedId];
 	}
 
 	private function getGeneratedPrimaryKeyField(CollectionInterface $collection): ?FieldInterface
