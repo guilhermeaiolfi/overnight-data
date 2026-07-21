@@ -7,6 +7,8 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-21
+
 ### Added
 
 - **First-party PHP field generators** — `UuidGenerator` (RFC 4122 v4 string) and `NowGenerator` (`DateTimeImmutable`; optional timezone arg). Docs: [`docs/orm/persistence.md`](docs/orm/persistence.md).
@@ -125,7 +127,8 @@ First stable public release of `guilhermeaiolfi/overnight-data`.
 - Runtime database integration currently ships through Cycle Database.
 - See README **Current Limitations** for intentional non-goals such as lazy loading, repositories, and full cascade policy.
 
-[Unreleased]: https://github.com/guilhermeaiolfi/overnight-data/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/guilhermeaiolfi/overnight-data/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/guilhermeaiolfi/overnight-data/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/guilhermeaiolfi/overnight-data/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/guilhermeaiolfi/overnight-data/releases/tag/v1.1.0
 [1.0.0]: https://github.com/guilhermeaiolfi/overnight-data/releases/tag/v1.0.0
