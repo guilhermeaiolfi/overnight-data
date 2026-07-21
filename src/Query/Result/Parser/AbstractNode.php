@@ -535,11 +535,12 @@ abstract class AbstractNode
 
 		$records = $index->getRecordsByValues($criteria);
 
+		// Separate-query loaders can still surface orphan FK values (or historically
+		// int/string mismatched keys). Drop the child instead of failing the whole read.
 		if ($records === []) {
-			throw new ParserException(sprintf(
-				'Undefined reference for parent fields `%s`.',
-				implode(', ', $index->getFields()),
-			));
+			$empty = [];
+
+			return $empty;
 		}
 
 		return $records;

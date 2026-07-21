@@ -7,6 +7,12 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-07-21
+
+### Fixed
+
+- **Relation result parser int/string keys** — `IndexValueEncoder` now treats canonical base-10 integer strings (`"5"`) as the same reference key as PHP ints (`5`). PDO/MySQL derived tables (e.g. FirstOfMany window queries) often return FK columns as strings while parent PKs stay ints, which previously caused `Undefined reference for parent fields`. Missing parent refs soft-fail (orphan child dropped) instead of throwing.
+
 ## [1.2.1] - 2026-07-21
 
 ### Fixed
