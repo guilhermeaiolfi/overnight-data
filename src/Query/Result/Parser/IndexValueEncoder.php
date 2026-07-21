@@ -26,10 +26,9 @@ final class IndexValueEncoder
 
 	private static function encodeString(string $value): string
 	{
-		// PDO/MySQL (especially derived tables / window queries) often returns integer
+		// MySQL drivers (especially derived tables / window queries) often return integer
 		// columns as strings while parent rows keep native ints. Reference indexes must
-		// treat those as the same key or separate-query relation mounts fail with
-		// "Undefined reference for parent fields".
+		// treat those as the same key or separate-query relation mounts fail to attach.
 		if (preg_match('/^-?(0|[1-9]\d*)$/', $value) === 1) {
 			return 'n:' . $value;
 		}

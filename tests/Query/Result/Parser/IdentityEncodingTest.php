@@ -15,17 +15,31 @@ final class IdentityEncodingTest extends TestCase
 
 		foreach ([
 			[1, 'int'],
-			['1', 'string'],
+			['1', 'canonical-integer-string'], // same key as int 1
 			[1.0, 'float'],
 			[true, 'bool-true'],
 			[false, 'bool-false'],
 			[0, 'int-zero'],
 			['', 'empty-string'],
+			['01', 'leading-zero-string'],
 		] as $row) {
 			$node->parseRow(0, $row);
 		}
 
-		self::assertCount(7, $node->getResult());
+		$result = $node->getResult();
+
+		self::assertCount(7, $result);
+		self::assertSame('int', $result[0]['label']);
+	}
+
+	public function testCanonicalIntegerStringsShareIdentityWithInts(): void
+	{
+		$node = new RootNode(['id', 'label'], ['id']);
+
+		$node->parseRow(0, [5, 'from-int']);
+		$node->parseRow(0, ['5', 'from-string']);
+
+		self::assertSame([['id' => 5, 'label' => 'from-int']], $node->getResult());
 	}
 
 	public function testBinaryStringsAndSeparatorsDoNotCollide(): void

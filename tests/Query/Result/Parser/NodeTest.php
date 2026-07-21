@@ -97,8 +97,6 @@ final class NodeTest extends TestCase
 
 	public function testSingularInvalidReference(): void
 	{
-		$this->expectException(ParserException::class);
-
 		$node = new RootNode(['id', 'email'], ['id']);
 		$node->linkNode('balance', $child = $this->createSingularNode());
 
@@ -109,6 +107,12 @@ final class NodeTest extends TestCase
 		foreach ([[1, 1, 100], [2, -1, 200]] as $row) {
 			$child->parseRow(0, $row);
 		}
+
+		self::assertSame([
+			['id' => 1, 'email' => 'email@gmail.com', 'balance' => ['id' => 1, 'user_id' => 1, 'balance' => 100]],
+			['id' => 2, 'email' => 'other@gmail.com', 'balance' => null],
+			['id' => 3, 'email' => 'third@gmail.com', 'balance' => null],
+		], $node->getResult());
 	}
 
 	public function testInvalidColumnCount(): void
@@ -170,11 +174,15 @@ final class NodeTest extends TestCase
 			$node->parseRow(0, $row);
 		}
 
-		$this->expectException(ParserException::class);
-
 		foreach ([[1, 1, 100], [2, -1, 200]] as $row) {
 			$child->parseRow(0, $row);
 		}
+
+		self::assertSame([
+			['id' => 1, 'email' => 'email@gmail.com', 'balance' => [['id' => 1, 'user_id' => 1, 'balance' => 100]]],
+			['id' => 2, 'email' => 'other@gmail.com', 'balance' => []],
+			['id' => 3, 'email' => 'third@gmail.com', 'balance' => []],
+		], $node->getResult());
 	}
 
 	public function testCollectionParseWithoutParent(): void
