@@ -7,6 +7,10 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 ## [Unreleased]
 
+### Fixed
+
+- **Identify-then-update overlays** — `RepresentationAdoptionEngine::isFlatAttachment()` now treats root-only inbound projection maps as flat (aligned with `RepresentationIntent::isFlatProjection`). `Session::identify()` stubs can receive field overlays via `update()` + `sync()` instead of no-opping through graph attach.
+
 ## [1.2.0] - 2026-07-21
 
 ### Added

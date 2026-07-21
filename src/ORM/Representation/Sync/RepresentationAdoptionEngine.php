@@ -110,13 +110,18 @@ final class RepresentationAdoptionEngine
 			return true;
 		}
 
-		foreach ($context->getSources() as $source) {
+		$sources = $context->getSources();
+		foreach ($sources as $source) {
 			if (! $source->isRoot()) {
 				return true;
 			}
 		}
 
-		return false;
+		// Align with RepresentationIntent::isFlatProjection: root-only inbound save
+		// maps (SelectQuery::projection / schema overlay) use flat attachment.
+		// Otherwise Replace sync on an already-tracked identify() stub no-ops in
+		// attachGraph and field overlays never reach RecordState.
+		return $sources !== [];
 	}
 
 	/**
