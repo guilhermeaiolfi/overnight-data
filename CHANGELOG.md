@@ -7,6 +7,12 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-07-21
+
+### Changed
+
+- **stdClass nested objects** — under a `stdClass` target, concrete nested objects (non-`stdClass`) pass through as leaves by default, matching older overnight mapper behavior. Arrays and nested `stdClass` still recurse. Opt in to deep remapping with `->args(new ObjectMapperOptions(convertNestedObjects: true))`, same pattern as `ArrayMapperOptions`.
+
 ## [1.2.2] - 2026-07-21
 
 ### Fixed

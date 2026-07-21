@@ -262,6 +262,21 @@ map($source)
     ->to([]);
 ```
 
+Mapper argument options (same `->args(...)` channel):
+
+```php
+use ON\Data\Mapper\Mapper\ArrayMapperOptions;
+use ON\Data\Mapper\Mapper\ObjectMapperOptions;
+
+// Disable dotted-key expansion for array sources.
+map($row)->args(new ArrayMapperOptions(expandDottedKeys: false))->to([]);
+
+// Remap nested concrete objects under stdClass (off by default).
+map($row)->args(new ObjectMapperOptions(convertNestedObjects: true))->to(stdClass::class);
+```
+
+By default, `map(...)->to(stdClass::class)` still converts the **root** value into `stdClass`, and nested arrays / nested `stdClass` still recurse. Already-concrete nested objects (for example a `FileDescriptor`) stay as themselves unless `ObjectMapperOptions(convertNestedObjects: true)` is passed.
+
 ## Mapping execution model
 
 A mapper processes one source branch level at a time. It owns writer preparation, immediate child enumeration, node resolution, conversion, recursive branch dispatch, writing, and writer finalization. Concrete mappers only decide whether they can map a source value and how to enumerate that value's immediate children.

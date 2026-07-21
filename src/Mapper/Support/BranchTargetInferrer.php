@@ -7,6 +7,7 @@ namespace ON\Data\Mapper\Support;
 use BackedEnum;
 use DateTimeInterface;
 use ON\Data\Definition\DefinitionInterface;
+use ON\Data\Mapper\Mapper\ObjectMapperOptions;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ReflectionNamedType;
@@ -81,6 +82,38 @@ final class BranchTargetInferrer
 			&& ! $value instanceof DateTimeInterface
 			&& ! $value instanceof BackedEnum
 			&& ! $value instanceof RepresentationInterface;
+	}
+
+	/**
+	 * Values that rematerialize under a stdClass target when nested object
+	 * conversion is disabled: arrays and nested stdClass bags only.
+	 */
+	public static function isStdClassBagValue(mixed $value): bool
+	{
+		return is_array($value) || $value instanceof stdClass;
+	}
+
+	/**
+	 * @param list<mixed> $value
+	 */
+	public static function isStdClassBagList(array $value): bool
+	{
+		foreach ($value as $item) {
+			if ($item === null) {
+				continue;
+			}
+
+			if (! self::isStdClassBagValue($item)) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	public static function isStdClassTarget(mixed $target): bool
+	{
+		return $target instanceof stdClass || $target === stdClass::class;
 	}
 
 	/**
@@ -166,6 +199,14 @@ final class BranchTargetInferrer
 			return null;
 		}
 
+		if (
+			$genericTarget === stdClass::class
+			&& ! ObjectMapperOptions::fromArguments($node->getArguments())->convertsNestedObjects()
+			&& ! $this->shouldRemapUnderStdClass($node->getValue())
+		) {
+			return null;
+		}
+
 		$type = $property->getType();
 		if (! $type instanceof ReflectionNamedType) {
 			return $this->nestedTarget($genericTarget, false, $node->getArguments());
@@ -186,6 +227,15 @@ final class BranchTargetInferrer
 		}
 
 		return null;
+	}
+
+	private function shouldRemapUnderStdClass(mixed $value): bool
+	{
+		if (is_array($value) && array_is_list($value)) {
+			return $value !== [] && self::isStdClassBagList($value);
+		}
+
+		return self::isStdClassBagValue($value);
 	}
 
 	/**

@@ -39,6 +39,7 @@ Definition metadata describes structure, but runtime collection behavior still c
 - Cycle checks are applied at recursive dispatch boundaries.
 - Field conversion still routes through the `ConversionGateway`, even when the branch structure changes recursively.
 - `ObjectWriter` may delay target creation for constructor and readonly targets, buffer resolved values in writer state, instantiate from resolved constructor arguments, skip re-writing constructor-consumed values, and then apply any leftover writable values through the normal property path.
+- Under a `stdClass` target, concrete nested objects pass through by default. Pass `ObjectMapperOptions(convertNestedObjects: true)` through `->args(...)` to rematerialize them as `stdClass`. Nested arrays and nested `stdClass` still recurse either way.
 
 ## Current limits
 

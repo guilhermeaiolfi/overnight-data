@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper\Resolver;
 
+use ON\Data\Mapper\Mapper\ObjectMapperOptions;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingRuntime;
 use ON\Data\Mapper\Resolution\BranchNodeResolution;
@@ -25,21 +26,52 @@ final class GenericNodeResolver implements NodeResolverInterface
 		MappingRuntime $runtime,
 	): ?BranchNodeResolutionInterface {
 		$value = $node->getValue();
+		$parentTarget = $node->getParentTarget();
+		$convertNestedObjects = ObjectMapperOptions::fromArguments($node->getArguments())
+			->convertsNestedObjects();
+
+		if (
+			BranchTargetInferrer::isStdClassTarget($parentTarget)
+			&& ! $convertNestedObjects
+			&& is_object($value)
+			&& ! $value instanceof stdClass
+		) {
+			return null;
+		}
+
 		if (! BranchTargetInferrer::isStructuralValue($value)) {
 			return null;
 		}
 
 		$inferrer = $this->getInferrer($runtime);
 
-		$target = $inferrer->inferGenericTarget($node->getParentTarget());
+		$target = $inferrer->inferGenericTarget($parentTarget);
 		if ($target === null) {
 			return null;
 		}
 
 		// Keep PHP list arrays as arrays under stdClass. Scalar lists pass through as
 		// leaves; lists of structural items map as a collection of stdClass objects.
+		// With convertNestedObjects off, lists of concrete user objects also pass through.
 		if ($target === stdClass::class && is_array($value) && array_is_list($value)) {
-			if ($value === [] || ! $this->isStructuralList($value)) {
+			if ($value === []) {
+				return null;
+			}
+
+			if (! $convertNestedObjects) {
+				if (! BranchTargetInferrer::isStdClassBagList($value)) {
+					return null;
+				}
+
+				return BranchNodeResolution::named(
+					name: (string) $node->getName(),
+					target: $target,
+					arguments: $node->getArguments(),
+					collection: true,
+				);
+			}
+
+			if (! $this->isStructuralList($value)) {
 				return null;
 			}
 

@@ -14,6 +14,7 @@ use ON\Data\Mapper\Exception\NoMapperFoundException;
 use ON\Data\Mapper\Exception\NoWriterFoundException;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Mapper\ObjectMapper;
+use ON\Data\Mapper\Mapper\ObjectMapperOptions;
 use ON\Data\Mapper\MappingBranch;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
@@ -407,6 +408,64 @@ final class ObjectMappingTest extends TestCase
 		self::assertSame(10, $object->posts[0]->id);
 		self::assertInstanceOf(stdClass::class, $object->profile);
 		self::assertSame('Hi', $object->profile->bio);
+	}
+
+	public function testStdClassKeepsNestedConcreteObjectsByDefault(): void
+	{
+		$file = new MixedValueObject('cover.png');
+
+		$object = map([
+			'id' => 1,
+			'file' => $file,
+			'cover' => [
+				'alt' => 'Hero',
+				'file' => $file,
+			],
+			'files' => [$file],
+		])->to(stdClass::class);
+
+		self::assertSame($file, $object->file);
+		self::assertInstanceOf(stdClass::class, $object->cover);
+		self::assertSame('Hero', $object->cover->alt);
+		self::assertSame($file, $object->cover->file);
+		self::assertSame([$file], $object->files);
+	}
+
+	public function testObjectMapperOptionsCanConvertNestedConcreteObjectsUnderStdClass(): void
+	{
+		$file = new MixedValueObject('cover.png');
+
+		$object = map([
+			'id' => 1,
+			'file' => $file,
+			'files' => [$file],
+		])
+			->args(new ObjectMapperOptions(convertNestedObjects: true))
+			->to(stdClass::class);
+
+		self::assertInstanceOf(stdClass::class, $object->file);
+		self::assertSame('cover.png', $object->file->label);
+		self::assertNotSame($file, $object->file);
+		self::assertIsArray($object->files);
+		self::assertInstanceOf(stdClass::class, $object->files[0]);
+		self::assertSame('cover.png', $object->files[0]->label);
+	}
+
+	public function testRootDtoStillConvertsToStdClassWithoutNestedObjectConversion(): void
+	{
+		$dto = new UserOutputDto();
+		$dto->id = 10;
+		$dto->name = 'Ada';
+		$dto->age = 42;
+		$dto->profile = new MixedValueObject('admin');
+
+		$result = map($dto)->to(stdClass::class);
+
+		self::assertInstanceOf(stdClass::class, $result);
+		self::assertSame(10, $result->id);
+		self::assertSame('Ada', $result->full_name);
+		self::assertInstanceOf(MixedValueObject::class, $result->profile);
+		self::assertSame('admin', $result->profile->label);
 	}
 
 	public function testUnsupportedTargetsFailClearly(): void
