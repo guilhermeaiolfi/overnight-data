@@ -87,7 +87,7 @@ Object graphs and flat writable projections share `RepresentationAdoptionEngine:
 
 `Session::adopt()` remains the store-a-ready-`RepresentationState` API (session layer only — no `adoptRecord` / `adoptGraph`). Policy is explicit: `Hydrate` (writable query), `Patch` / `Create` (Session intents; graph resolve still honors update intent on the resolver).
 
-For flat projections, the compiler may add hidden identity selections tagged `SelectionTag::INTERNAL`. `QuerySourceIdentities` owns the query-local locators (`add(sourcePath, fieldName, resultKey)` / `getResultKey(sourcePath, fieldName)`) and is the adoption identity map for that prepared query on `QueryRepresentationPlan`; `getIdentity(sourcePath, $rawRow)` uses the row only as a lookup bag. Session flat intents build one `StaticSourceIdentities` per adoption from `identity()` / flat keys. There is no identity map per row.
+For flat projections, writable `prepare()` plans hidden identity selections tagged `SelectionTag::INTERNAL` via `QueryRepresentationIdentityPlanner` (schema compile itself does not mutate the query). `QuerySourceIdentities` owns the query-local locators (`add(sourcePath, fieldName, resultKey)` / `getResultKey(sourcePath, fieldName)`) and is the adoption identity map for that prepared query on `QueryRepresentationPlan`; `getIdentity(sourcePath, $rawRow)` uses the row only as a lookup bag. Session flat intents build one `StaticSourceIdentities` per adoption from `identity()` / flat keys. There is no identity map per row.
 
 Flat projection adoption is used by writable query export (`stdClass` or mutable DTO) and by `Session::update`/`create` with `SelectQuery::projection()`. See [`session-save-api.md`](./session-save-api.md).
 

@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Schema\Query;
 
+use InvalidArgumentException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
+use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationFieldShape;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSchemaAssembler;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSourceResolverInterface;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
+use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Selection\SelectionItem;
@@ -24,92 +24,57 @@ use ON\Data\Query\SelectQuery;
  * Compiles a SelectQuery selection graph into a structural RepresentationSchema
  * for flat mutable projection adoption.
  *
- * Exists as the query-side compiler: it normalizes selections, assembles scalar
- * field schemas, plans relation branches, and delegates shared field assembly
- * to RepresentationSchemaAssembler. Hidden identity selection planning is delegated
- * to QueryRepresentationIdentityPlanner.
+ * Does not plan identities or mutate the query — that belongs to
+ * {@see QueryRepresentationIdentityPlanner} at writable prepare time.
  */
 final class QueryRepresentationSchemaCompiler
 {
-	private QueryRepresentationSelectionNormalizer $selectionNormalizer;
-	private RepresentationSchemaAssembler $schemaAssembler;
-	private QueryRepresentationIdentityPlanner $identityPlanner;
-
-	public function __construct(
-		?QueryRepresentationSelectionNormalizer $selectionNormalizer = null,
-		?RepresentationSchemaAssembler $schemaAssembler = null,
-		?QueryRepresentationIdentityPlanner $identityPlanner = null,
-	) {
-		$this->selectionNormalizer = $selectionNormalizer ?? new QueryRepresentationSelectionNormalizer();
-		$this->schemaAssembler = $schemaAssembler ?? new RepresentationSchemaAssembler();
-		$this->identityPlanner = $identityPlanner ?? new QueryRepresentationIdentityPlanner();
-	}
-
 	public function compile(SelectQuery $query): RepresentationSchema
-	{
-		return $this->compileSchema($query);
-	}
-
-	public function compileSchema(SelectQuery $query): RepresentationSchema
 	{
 		$collection = $query->getCollection();
 		$schema = new RepresentationSchema($collection);
 
-		$sourceResolver = new QueryRepresentationSourceResolver($query);
-
-		$this->compileRootScalarFields($schema, $query, $collection, $sourceResolver);
-		$this->compileRelationSourcedFlatFields($schema, $query, $sourceResolver);
+		$this->compileRootScalarFields($schema, $query, $collection);
+		$this->compileRelationSourcedFlatFields($schema, $query);
 		$this->compileRelationSelections($schema, $query);
 
 		return $schema;
-	}
-
-	public function compileResult(SelectQuery $query): QueryRepresentationPlan
-	{
-		$schema = $this->compileSchema($query);
-		$sources = RepresentationSource::fromRepresentationSchema($schema);
-		$identities = $this->identityPlanner->plan($query, $sources);
-
-		return new QueryRepresentationPlan($schema, $sources, $identities);
 	}
 
 	private function compileRootScalarFields(
 		RepresentationSchema $schema,
 		SelectQuery $query,
 		CollectionInterface $collection,
-		QueryRepresentationSourceResolver $sourceResolver,
 	): void {
-		$shapes = $this->hasExplicitRootStarSelection($query)
-			? $this->schemaAssembler->defaultFieldShapes($collection, $query)
-			: $this->selectionNormalizer->normalizeSelections($this->getRootExplicitScalarSelections($query));
+		$fields = $this->hasExplicitRootStarSelection($query)
+			? $this->defaultFields($collection)
+			: $this->fieldsFromSelections($query, $this->getRootExplicitScalarSelections($query));
 
-		$this->schemaAssembler->assembleInto($schema, $shapes, $sourceResolver, skipWhenMissing: true);
-
-		$this->assemblePrimaryKeyFields($schema, $collection, $query, $sourceResolver);
+		$this->addFields($schema, $fields);
+		$this->assemblePrimaryKeyFields($schema, $collection);
 	}
 
 	/**
-	 * Adds primary-key field shapes that are not already bound for the root source
-	 * ([]). Dedup is by source path + field name so an explicit primary key
-	 * selection (including an aliased one) is not shadowed by a read-only copy.
+	 * Adds primary-key fields that are not already bound for the given source path.
+	 *
+	 * @param list<string> $sourcePath
 	 */
 	private function assemblePrimaryKeyFields(
 		RepresentationSchema $schema,
 		CollectionInterface $collection,
-		object $source,
-		RepresentationSourceResolverInterface $sourceResolver,
+		array $sourcePath = [],
 	): void {
-		$shapes = [];
+		$fields = [];
 
-		foreach ($this->schemaAssembler->primaryKeyFieldShapes($collection, $source) as $shape) {
-			if ($schema->hasFieldForSource([], $shape->getFieldName())) {
+		foreach ($this->primaryKeyFields($collection, $sourcePath) as $field) {
+			if ($schema->hasFieldForSource($sourcePath, $field->getFieldName())) {
 				continue;
 			}
 
-			$shapes[] = $shape;
+			$fields[] = $field;
 		}
 
-		$this->schemaAssembler->assembleInto($schema, $shapes, $sourceResolver, skipWhenMissing: true);
+		$this->addFields($schema, $fields);
 	}
 
 	/**
@@ -171,19 +136,13 @@ final class QueryRepresentationSchemaCompiler
 	private function compileRelationSourcedFlatFields(
 		RepresentationSchema $schema,
 		SelectQuery $query,
-		QueryRepresentationSourceResolver $sourceResolver,
 	): void {
 		foreach ($query->getSelections()->getExplicit() as $selection) {
 			if (! $this->isRelationSourcedFieldSelection($query, $selection)) {
 				continue;
 			}
 
-			$this->schemaAssembler->assembleInto(
-				$schema,
-				$this->selectionNormalizer->normalizeSelections([$selection]),
-				$sourceResolver,
-				skipWhenMissing: true,
-			);
+			$this->addFields($schema, $this->fieldsFromSelections($query, [$selection]));
 		}
 	}
 
@@ -266,31 +225,162 @@ final class QueryRepresentationSchemaCompiler
 	{
 		$targetCollection = $selection->getRelationRef()->getDefinition()->getCollection();
 		$schema = new RepresentationSchema($targetCollection);
-		$sourceResolver = new RootRepresentationSourceResolver($targetCollection);
 		$explicitFields = $selection->getFields();
 
-		$shapes = $explicitFields !== null
-			? $this->explicitFieldShapes($explicitFields, $targetCollection)
-			: $this->schemaAssembler->defaultFieldShapes($targetCollection, $targetCollection);
+		$fields = $explicitFields !== null
+			? $this->explicitFields($explicitFields, $targetCollection)
+			: $this->defaultFields($targetCollection);
 
-		$this->schemaAssembler->assembleInto($schema, $shapes, $sourceResolver, skipWhenMissing: true);
-		$this->assemblePrimaryKeyFields($schema, $targetCollection, $targetCollection, $sourceResolver);
+		$this->addFields($schema, $fields);
+		$this->assemblePrimaryKeyFields($schema, $targetCollection);
 
 		return $schema;
 	}
 
 	/**
-	 * @param list<string> $fieldNames
-	 * @return list<RepresentationFieldShape>
+	 * @param list<RepresentationFieldSchema> $fields
 	 */
-	private function explicitFieldShapes(array $fieldNames, object $source): array
+	private function addFields(RepresentationSchema $schema, array $fields): void
 	{
-		$shapes = [];
+		foreach ($fields as $field) {
+			if ($schema->hasField($field->getPath())) {
+				continue;
+			}
 
-		foreach ($fieldNames as $fieldName) {
-			$shapes[] = new RepresentationFieldShape($fieldName, $source, $fieldName);
+			$schema->addField($field);
+		}
+	}
+
+	/**
+	 * @param list<string> $sourcePath
+	 *
+	 * @return list<RepresentationFieldSchema>
+	 */
+	private function defaultFields(CollectionInterface $collection, array $sourcePath = []): array
+	{
+		$fields = [];
+
+		foreach ($collection->getFields() as $field) {
+			$fields[] = new RepresentationFieldSchema(
+				$field->getName(),
+				$collection,
+				$field->getName(),
+				writable: true,
+				skipWhenMissing: true,
+				sourcePath: $sourcePath,
+			);
 		}
 
-		return $shapes;
+		return $fields;
+	}
+
+	/**
+	 * @param list<string> $sourcePath
+	 *
+	 * @return list<RepresentationFieldSchema>
+	 */
+	private function primaryKeyFields(CollectionInterface $collection, array $sourcePath = []): array
+	{
+		$fields = [];
+
+		foreach ($collection->getPrimaryKey() as $fieldName) {
+			$fields[] = new RepresentationFieldSchema(
+				$fieldName,
+				$collection,
+				$fieldName,
+				writable: false,
+				skipWhenMissing: true,
+				sourcePath: $sourcePath,
+			);
+		}
+
+		return $fields;
+	}
+
+	/**
+	 * @param list<string> $fieldNames
+	 *
+	 * @return list<RepresentationFieldSchema>
+	 */
+	private function explicitFields(array $fieldNames, CollectionInterface $collection): array
+	{
+		$fields = [];
+
+		foreach ($fieldNames as $fieldName) {
+			$fields[] = new RepresentationFieldSchema(
+				$fieldName,
+				$collection,
+				$fieldName,
+				writable: true,
+				skipWhenMissing: true,
+			);
+		}
+
+		return $fields;
+	}
+
+	/**
+	 * @param list<SelectionItem> $selections
+	 *
+	 * @return list<RepresentationFieldSchema>
+	 */
+	private function fieldsFromSelections(SelectQuery $query, array $selections): array
+	{
+		$fields = [];
+
+		foreach ($selections as $selection) {
+			$field = $this->fieldFromSelection($query, $selection);
+			if ($field instanceof RepresentationFieldSchema) {
+				$fields[] = $field;
+			}
+		}
+
+		return $fields;
+	}
+
+	private function fieldFromSelection(SelectQuery $query, SelectionItem $selection): ?RepresentationFieldSchema
+	{
+		$expression = $selection->getExpression();
+		$publicPath = $selection->getSelectionKey();
+
+		if ($expression instanceof AliasedExpression) {
+			$publicPath = $expression->getAlias();
+			$expression = $expression->getExpression();
+		}
+
+		if (! $expression instanceof FieldRef) {
+			return null;
+		}
+
+		[$collection, $sourcePath] = $this->resolveFieldSource($query, $expression->getSource());
+
+		return new RepresentationFieldSchema(
+			$publicPath,
+			$collection,
+			$expression->getName(),
+			writable: true,
+			skipWhenMissing: true,
+			sourcePath: $sourcePath,
+		);
+	}
+
+	/**
+	 * @return array{0: CollectionInterface, 1: list<string>}
+	 */
+	private function resolveFieldSource(SelectQuery $query, object $source): array
+	{
+		if (! $source instanceof QuerySourceInterface) {
+			throw new InvalidArgumentException('Projection field sources must be query sources.');
+		}
+
+		if ($source === $query) {
+			return [$query->getCollection(), []];
+		}
+
+		if ($source instanceof RelationRef && $source->getQuery() === $query) {
+			return [$source->getCollection(), $source->getPath()];
+		}
+
+		throw new StateException('Cannot resolve projection source because it does not belong to this query.');
 	}
 }

@@ -7,7 +7,7 @@ namespace ON\Data\ORM\Representation\Schema\Query;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
+use ON\Data\ORM\Representation\Schema\RepresentationSource;
 use ON\Data\ORM\Representation\Sync\RepresentationSourceIdentities;
 
 /**

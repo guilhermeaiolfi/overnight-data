@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Schema\Query;
 
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
+use ON\Data\ORM\Representation\Schema\RepresentationSource;
 use ON\Data\Query\Result\WritablePreparation;
 
 /**
- * Query compilation result for one writable prepare(): schema, sources, and the
- * query-scoped {@see QuerySourceIdentities} map (locators for the whole fetch).
+ * Writable prepare() result: schema, sources, and the query-scoped
+ * {@see QuerySourceIdentities} map (locators for the whole fetch).
  *
  * Also serves as the {@see WritablePreparation} token so SelectQuery can hold the
  * plan without importing ORM adoption types into the query layer.

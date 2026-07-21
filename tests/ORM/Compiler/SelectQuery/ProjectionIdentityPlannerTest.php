@@ -8,7 +8,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityPlanner;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
+use ON\Data\ORM\Representation\Schema\RepresentationSource;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;

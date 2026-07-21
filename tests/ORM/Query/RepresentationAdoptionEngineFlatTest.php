@@ -14,7 +14,7 @@ use ON\Data\ORM\Representation\Schema\Query\QuerySourceIdentities;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
+use ON\Data\ORM\Representation\Schema\RepresentationSource;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\Sync\AdoptionPolicy;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionContext;

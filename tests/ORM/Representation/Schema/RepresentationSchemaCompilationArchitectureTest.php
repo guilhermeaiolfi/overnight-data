@@ -11,12 +11,9 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSelectionNormalizer;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSourceResolver;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSchemaAssembler;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Session;
 use ON\Data\Query\SelectQuery;
@@ -34,10 +31,15 @@ final class RepresentationSchemaCompilationArchitectureTest extends TestCase
 
 		self::assertDirectoryDoesNotExist($root . '/src/ORM/Binding');
 		self::assertFileDoesNotExist($root . '/src/ORM/ManualProjection/ManualProjectionIdentityProvider.php');
-		self::assertFalse(method_exists(QueryRepresentationSelectionNormalizer::class, 'fieldForSelection'));
 		self::assertFileDoesNotExist($root . '/src/ORM/Compiler/ProjectionSourceResolver.php');
-		self::assertFileExists($root . '/src/ORM/Representation/Schema/Shape/RepresentationSourceResolverInterface.php');
-		self::assertFileExists($root . '/src/ORM/Representation/Schema/Shape/ResolvedRepresentationSource.php');
+		self::assertFileDoesNotExist($root . '/src/ORM/Representation/Schema/Shape/RepresentationSourceResolverInterface.php');
+		self::assertFileDoesNotExist($root . '/src/ORM/Representation/Schema/Shape/ResolvedRepresentationSource.php');
+		self::assertFileDoesNotExist($root . '/src/ORM/Representation/Schema/Shape/RepresentationFieldShape.php');
+		self::assertFileDoesNotExist($root . '/src/ORM/Representation/Schema/Query/QueryRepresentationSourceResolver.php');
+		self::assertFileDoesNotExist($root . '/src/ORM/Representation/Schema/Query/RootRepresentationSourceResolver.php');
+		self::assertFileDoesNotExist($root . '/src/ORM/Representation/Schema/Query/QueryRepresentationSelectionNormalizer.php');
+		self::assertFileDoesNotExist($root . '/src/ORM/Representation/Schema/Shape/RepresentationSchemaAssembler.php');
+		self::assertDirectoryDoesNotExist($root . '/src/ORM/Representation/Schema/Shape');
 	}
 
 	public function testDeclarationWrapperClassesDoNotExist(): void
@@ -66,31 +68,30 @@ final class RepresentationSchemaCompilationArchitectureTest extends TestCase
 		}
 	}
 
-	public function testQuerySourceResolverDoesNotInspectAliasesOrBuildFieldSchemas(): void
+	public function testCompilerResolvesAliasedSelectionsToFieldSchemas(): void
 	{
-		$path = dirname(__DIR__, 4) . '/src/ORM/Representation/Schema/Query/QueryRepresentationSourceResolver.php';
-		$contents = (string) file_get_contents($path);
+		$users = $this->users();
+		$query = new SelectQuery($users);
+		$query->select($query->name->as('display_name'));
 
-		self::assertStringNotContainsString('AliasedExpression', $contents, $path);
-		self::assertStringNotContainsString('SelectionItem', $contents, $path);
-		self::assertStringNotContainsString('RepresentationFieldSchema', $contents, $path);
+		$schema = (new QueryRepresentationSchemaCompiler())->compile($query);
+
+		self::assertTrue($schema->hasField('display_name'));
+		self::assertSame('name', $schema->getField('display_name')->getFieldName());
+		self::assertSame('users', $schema->getField('display_name')->getCollectionName());
+		self::assertSame([], $schema->getField('display_name')->getSourcePath());
 	}
 
-	public function testRepresentationFieldSchemasAreCreatedBySchemaAssembler(): void
+	public function testRemovedShapeResolverLayerDoesNotExist(): void
 	{
 		$root = dirname(__DIR__, 4);
 
-		foreach ([
-			$root . '/src/ORM/Representation/Schema/Query/QueryRepresentationSelectionNormalizer.php',
-			$root . '/src/ORM/Representation/Schema/Shape/RepresentationFieldShape.php',
-			$root . '/src/ORM/Representation/Schema/Query/QueryRepresentationSourceResolver.php',
-			$root . '/src/ORM/Representation/Schema/Query/QueryRepresentationSchemaCompiler.php',
-		] as $path) {
-			self::assertStringNotContainsString('new RepresentationFieldSchema', (string) file_get_contents($path), $path);
-		}
-
-		$assembler = (string) file_get_contents($root . '/src/ORM/Representation/Schema/Shape/RepresentationSchemaAssembler.php');
-		self::assertStringContainsString('new RepresentationFieldSchema', $assembler);
+		self::assertFileDoesNotExist($root . '/src/ORM/Representation/Schema/Shape/RepresentationFieldShape.php');
+		self::assertFileDoesNotExist($root . '/src/ORM/Representation/Schema/Shape/RepresentationSourceResolverInterface.php');
+		self::assertFileDoesNotExist($root . '/src/ORM/Representation/Schema/Query/QueryRepresentationSourceResolver.php');
+		self::assertFileDoesNotExist($root . '/src/ORM/Representation/Schema/Query/QueryRepresentationSelectionNormalizer.php');
+		self::assertFileDoesNotExist($root . '/src/ORM/Representation/Schema/Shape/RepresentationSchemaAssembler.php');
+		self::assertDirectoryDoesNotExist($root . '/src/ORM/Representation/Schema/Shape');
 	}
 
 	public function testSessionDoesNotExposeDurableProjectionStores(): void
@@ -140,29 +141,10 @@ final class RepresentationSchemaCompilationArchitectureTest extends TestCase
 		$query->select($query->id, $query->name);
 
 		$viaProjection = $query->projection();
-		$viaCompiler = (new QueryRepresentationSchemaCompiler())->compileSchema($query);
+		$viaCompiler = (new QueryRepresentationSchemaCompiler())->compile($query);
 
 		self::assertSame($viaCompiler->getPaths(), $viaProjection->getPaths());
 		self::assertSame('name', $viaProjection->getField('name')->getFieldName());
-	}
-
-	public function testQueryProjectionUsesAssemblerPublicPaths(): void
-	{
-		$users = $this->users();
-		$normalizer = new QueryRepresentationSelectionNormalizer();
-		$assembler = new RepresentationSchemaAssembler();
-
-		$query = new SelectQuery($users);
-		$query->select($query->name->as('display_name'));
-		$querySchema = $assembler->assemble(
-			$normalizer->normalizeSelections($query->getSelections()->getExplicit()),
-			new QueryRepresentationSourceResolver($query),
-			$users,
-		);
-
-		self::assertSame(['display_name'], $querySchema->getPaths());
-		self::assertSame('name', $querySchema->getField('display_name')->getFieldName());
-		self::assertSame('users', $querySchema->getField('display_name')->getCollectionName());
 	}
 
 	public function testSessionUpdateFromSyncTracksDtoAsExisting(): void

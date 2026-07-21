@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
+use ON\Data\ORM\Representation\Schema\RepresentationSource;
 
 /**
  * Input for {@see RepresentationAdoptionEngine::attach()}.

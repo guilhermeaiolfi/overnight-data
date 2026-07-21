@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Representation\Schema;
 
 use ON\Data\Definition\Registry;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityPlanner;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationSource;
 use function ON\Data\Query\query;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
@@ -99,7 +101,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$query = query($users, fn (SelectQuery $query) => $query
 			->select($query->id, $query->company->name->as('name')));
 
-		$compilation = $this->compiler->compileResult($query);
+		$compilation = $this->preparePlan($query);
 		$schema = $compilation->getSchema();
 
 		self::assertTrue($schema->hasField('id'));
@@ -122,23 +124,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		);
 	}
 
-	public function testCompileSchemaReturnsRepresentationSchemaWithoutInternalSelections(): void
-	{
-		$registry = $this->makeRegistryWithCompany();
-		$users = $registry->getCollection('users');
-		$query = query($users, fn (SelectQuery $query) => $query
-			->select($query->id, $query->company->name->as('name')));
-
-		$schema = $this->compiler->compileSchema($query);
-
-		self::assertInstanceOf(RepresentationSchema::class, $schema);
-		self::assertTrue($schema->hasField('id'));
-		self::assertTrue($schema->hasField('name'));
-		self::assertSame(['company'], $schema->getField('name')->getSourcePath());
-		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
-	}
-
-	public function testCompileSchemaBehavesLikeCompileNotCompileResult(): void
+	public function testCompileReturnsRepresentationSchemaWithoutInternalSelections(): void
 	{
 		$registry = $this->makeRegistryWithCompany();
 		$users = $registry->getCollection('users');
@@ -148,35 +134,38 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$schema = $this->compiler->compile($query);
 
 		self::assertInstanceOf(RepresentationSchema::class, $schema);
+		self::assertTrue($schema->hasField('id'));
+		self::assertTrue($schema->hasField('name'));
+		self::assertSame(['company'], $schema->getField('name')->getSourcePath());
 		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
 	}
 
-	public function testCompileResultAddsInternalIdentitySelectionsWhenSchemaWouldNot(): void
+	public function testPreparePlanAddsInternalIdentitySelectionsWhenCompileWouldNot(): void
 	{
 		$registry = $this->makeRegistryWithCompany();
 		$users = $registry->getCollection('users');
 
 		$schemaQuery = query($users, fn (SelectQuery $query) => $query
 			->select($query->id, $query->company->name->as('name')));
-		$this->compiler->compileSchema($schemaQuery);
+		$this->compiler->compile($schemaQuery);
 		self::assertCount(0, $schemaQuery->getSelections()->getByTag(SelectionTag::INTERNAL));
 
 		$resultQuery = query($users, fn (SelectQuery $query) => $query
 			->select($query->id, $query->company->name->as('name')));
-		$compilation = $this->compiler->compileResult($resultQuery);
+		$compilation = $this->preparePlan($resultQuery);
 
 		self::assertCount(1, $resultQuery->getSelections()->getByTag(SelectionTag::INTERNAL));
 		self::assertNotNull($compilation->getIdentities()->getResultKey(['company'], 'id'));
 	}
 
-	public function testCompileResultReturnsQueryRepresentationPlanWithSourcePathKeyedIdentities(): void
+	public function testPreparePlanReturnsQueryRepresentationPlanWithSourcePathKeyedIdentities(): void
 	{
 		$registry = $this->makeRegistryWithCompany();
 		$users = $registry->getCollection('users');
 		$query = query($users, fn (SelectQuery $query) => $query
 			->select($query->id, $query->company->name->as('name')));
 
-		$compilation = $this->compiler->compileResult($query);
+		$compilation = $this->preparePlan($query);
 
 		self::assertInstanceOf(QueryRepresentationPlan::class, $compilation);
 		self::assertTrue($compilation->getSchema()->getField('name')->getSourcePath() === ['company']);
@@ -184,7 +173,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertNull($compilation->getIdentities()->getResultKey([], 'id'));
 	}
 
-	public function testCompileResultCarriesStructuralRepresentationSources(): void
+	public function testPreparePlanCarriesStructuralRepresentationSources(): void
 	{
 		$registry = $this->makeRegistryWithCompany();
 		$users = $registry->getCollection('users');
@@ -195,7 +184,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 				$query->company->id->as('companyId'),
 			));
 
-		$compilation = $this->compiler->compileResult($query);
+		$compilation = $this->preparePlan($query);
 		$sources = $compilation->getSources();
 
 		self::assertCount(2, $sources);
@@ -216,7 +205,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$users = $registry->getCollection('users');
 		$query = query($users, fn (SelectQuery $query) => $query->select($query->name, $query->id->count()->as('post_count')));
 
-		$compilation = $this->compiler->compileResult($query);
+		$compilation = $this->preparePlan($query);
 
 		self::assertFalse($compilation->getSchema()->hasField('post_count'));
 		self::assertCount(1, $compilation->getSources());
@@ -230,7 +219,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$query = query($users, fn (SelectQuery $query) => $query
 			->select($query->name, $query->manager->name->as('managerName')));
 
-		$compilation = $this->compiler->compileResult($query);
+		$compilation = $this->preparePlan($query);
 		$schema = $compilation->getSchema();
 
 		self::assertSame('users', $schema->getField('name')->getCollectionName());
@@ -254,7 +243,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$query = query($users, fn (SelectQuery $query) => $query
 			->select($query->company->name->as('company_name')));
 
-		$compilation = $this->compiler->compileResult($query);
+		$compilation = $this->preparePlan($query);
 		$schema = $compilation->getSchema();
 
 		self::assertTrue($schema->hasField('company_name'));
@@ -432,7 +421,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$query = query($users, fn (SelectQuery $query) => $query
 			->select($query->name, $query->manager->name->as('managerName')));
 
-		$schema = $this->compiler->compileSchema($query);
+		$schema = $this->compiler->compile($query);
 
 		self::assertTrue($schema->getField('name')->isWritable());
 		self::assertSame([], $schema->getField('name')->getSourcePath());
@@ -492,6 +481,15 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$second = $this->compiler->compile($query);
 
 		self::assertNotSame($first, $second);
+	}
+
+	private function preparePlan(SelectQuery $query): QueryRepresentationPlan
+	{
+		$schema = $this->compiler->compile($query);
+		$sources = RepresentationSource::fromRepresentationSchema($schema);
+		$identities = (new QueryRepresentationIdentityPlanner())->plan($query, $sources);
+
+		return new QueryRepresentationPlan($schema, $sources, $identities);
 	}
 
 	private function makeRegistry(): Registry

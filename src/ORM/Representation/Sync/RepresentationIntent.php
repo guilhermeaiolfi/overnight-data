@@ -6,7 +6,7 @@ namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\Key;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\ORM\Representation\Schema\Shape\RepresentationSource;
+use ON\Data\ORM\Representation\Schema\RepresentationSource;
 
 /**
  * Pending update/create intent for one representation until sync().

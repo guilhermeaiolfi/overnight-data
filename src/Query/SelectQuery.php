@@ -500,7 +500,7 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	public function projection(): RepresentationSchema
 	{
-		return (new QueryRepresentationSchemaCompiler())->compileSchema($this);
+		return (new QueryRepresentationSchemaCompiler())->compile($this);
 	}
 
 	public function getResultClass(): ?string

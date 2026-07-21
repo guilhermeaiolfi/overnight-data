@@ -6,9 +6,11 @@ namespace ON\Data\ORM\Representation\State\Query;
 
 use InvalidArgumentException;
 use ON\Data\ORM\Exception\SyncException;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityPlanner;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationSource;
 use ON\Data\ORM\Representation\Sync\AdoptionPolicy;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionContext;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionEngine;
@@ -31,22 +33,30 @@ final class WritableQueryResultTracker implements WritableResultHandler
 
 	private QueryRepresentationSchemaCompiler $compiler;
 
+	private QueryRepresentationIdentityPlanner $identityPlanner;
+
 	private RepresentationAdoptionEngine $adoptionEngine;
 
 	public function __construct(
 		private readonly Session $session,
 		?RepresentationReader $reader = null,
 		?QueryRepresentationSchemaCompiler $compiler = null,
+		?QueryRepresentationIdentityPlanner $identityPlanner = null,
 		?RepresentationAdoptionEngine $adoptionEngine = null,
 	) {
 		$this->reader = $reader ?? new RepresentationReader();
 		$this->compiler = $compiler ?? new QueryRepresentationSchemaCompiler();
+		$this->identityPlanner = $identityPlanner ?? new QueryRepresentationIdentityPlanner();
 		$this->adoptionEngine = $adoptionEngine ?? new RepresentationAdoptionEngine($this->reader);
 	}
 
 	public function prepare(SelectQuery $query): WritablePreparation
 	{
-		return $this->compiler->compileResult($query);
+		$schema = $this->compiler->compile($query);
+		$sources = RepresentationSource::fromRepresentationSchema($schema);
+		$identities = $this->identityPlanner->plan($query, $sources);
+
+		return new QueryRepresentationPlan($schema, $sources, $identities);
 	}
 
 	public function track(
