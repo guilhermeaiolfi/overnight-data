@@ -101,15 +101,19 @@ final class RepresentationAdoptionEngine
 
 	private function isFlatAttachment(RepresentationAdoptionContext $context): bool
 	{
+		$intent = $context->getIntent();
+		if ($intent instanceof RepresentationIntent) {
+			// Identify-then-update / projection overlays: Session routes Replace sync
+			// here when isFlatProjection is true (including root-only inbound maps).
+			return $intent->isFlatProjection($context->getSchema());
+		}
+
 		if ($context->getSchema()->getRelations() !== []) {
 			return false;
 		}
 
-		$intent = $context->getIntent();
-		if ($intent instanceof RepresentationIntent && $intent->getFlatOps() !== []) {
-			return true;
-		}
-
+		// Without intent, only multi-source / non-root projections are flat.
+		// Homogeneous root schemas use graph adoption (untracked root sync).
 		$sources = $context->getSources();
 		foreach ($sources as $source) {
 			if (! $source->isRoot()) {
@@ -117,11 +121,7 @@ final class RepresentationAdoptionEngine
 			}
 		}
 
-		// Align with RepresentationIntent::isFlatProjection: root-only inbound save
-		// maps (SelectQuery::projection / schema overlay) use flat attachment.
-		// Otherwise Replace sync on an already-tracked identify() stub no-ops in
-		// attachGraph and field overlays never reach RecordState.
-		return $sources !== [];
+		return count($sources) > 1;
 	}
 
 	/**

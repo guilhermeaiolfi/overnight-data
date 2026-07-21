@@ -7,6 +7,8 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-07-21
+
 ### Fixed
 
 - **Identify-then-update overlays** — `RepresentationAdoptionEngine::isFlatAttachment()` now treats root-only inbound projection maps as flat (aligned with `RepresentationIntent::isFlatProjection`). `Session::identify()` stubs can receive field overlays via `update()` + `sync()` instead of no-opping through graph attach.
@@ -131,7 +133,8 @@ First stable public release of `guilhermeaiolfi/overnight-data`.
 - Runtime database integration currently ships through Cycle Database.
 - See README **Current Limitations** for intentional non-goals such as lazy loading, repositories, and full cascade policy.
 
-[Unreleased]: https://github.com/guilhermeaiolfi/overnight-data/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/guilhermeaiolfi/overnight-data/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/guilhermeaiolfi/overnight-data/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/guilhermeaiolfi/overnight-data/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/guilhermeaiolfi/overnight-data/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/guilhermeaiolfi/overnight-data/releases/tag/v1.1.0
