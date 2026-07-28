@@ -17,6 +17,7 @@ final class RepresentationRelationSchema
 		private string $relationName,
 		private RepresentationSchema $relatedSchema,
 		private bool $skipWhenMissing = false,
+		private RelationLoadKnowledge $loadKnowledge = RelationLoadKnowledge::Unknown,
 	) {
 		if ($path === '') {
 			throw new StateException('Representation relation schema path cannot be empty.');
@@ -75,5 +76,10 @@ final class RepresentationRelationSchema
 	public function shouldSkipWhenMissing(): bool
 	{
 		return $this->skipWhenMissing;
+	}
+
+	public function getLoadKnowledge(): RelationLoadKnowledge
+	{
+		return $this->loadKnowledge;
 	}
 }

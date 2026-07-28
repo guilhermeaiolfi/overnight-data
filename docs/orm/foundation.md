@@ -353,6 +353,8 @@ Partial explicit selections must not overwrite missing fields during sync. A ful
 
 Lazy loading is dangerous and is not implemented. If it is supported later, it must be explicit and disableable. Accessing an unloaded relation in the default/strict mode should throw rather than silently treating the relation as empty.
 
+Query-driven structured loads already record membership completeness on `RepresentationRelationSchema` (`RelationLoadKnowledge`: Unknown / Partial / Full). Unqualified relation selections are Full; relation `where` / `limit` / `offset` are Partial. Only Full collections may replace/remove absent members on sync.
+
 ## Cascades
 
 `ON\Data` Session persistence does **not** interpret relation `cascade()` / `isCascade()` today. Built-in planners use `exclusive()` (and nullability) for unlink behavior instead.

@@ -8,6 +8,9 @@ use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\RelationStateInterface;
 use ON\Data\ORM\Relation\RelationStateStore;
+use ON\Data\ORM\Relation\ToManyRelationState;
+use ON\Data\ORM\Representation\Schema\RelationLoadKnowledge;
+use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\State\RepresentationRelationStateItem;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
@@ -86,8 +89,26 @@ final class RelationRepresentationSynchronizer
 			RelationCardinality::MANY,
 			$relationSchema->getRelatedSchema(),
 		);
+		$establishBaseline = $relation->isUnloaded()
+			&& $relationSchema->getLoadKnowledge() !== RelationLoadKnowledge::Unknown;
+		$this->applyLoadKnowledge($relation, $relationSchema);
 		$relation->syncFromItems($items);
+		if ($establishBaseline) {
+			// Query-loaded membership is a snapshot, not pending add/remove intent.
+			$relation->clearChanges();
+		}
 		$this->touch($relation, $touched, $touchedIds);
+	}
+
+	private function applyLoadKnowledge(
+		ToManyRelationState $relation,
+		RepresentationRelationSchema $relationSchema,
+	): void {
+		match ($relationSchema->getLoadKnowledge()) {
+			RelationLoadKnowledge::Full => $relation->markFullyLoaded(),
+			RelationLoadKnowledge::Partial => $relation->markPartiallyLoaded(),
+			RelationLoadKnowledge::Unknown => null,
+		};
 	}
 
 	/**

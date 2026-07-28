@@ -7,6 +7,7 @@ namespace Tests\ON\Data\ORM\State;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\Representation\Schema\RelationLoadKnowledge;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
@@ -25,6 +26,7 @@ final class RepresentationRelationSchemaTest extends TestCase
 		self::assertSame('posts', $schema->getRelationName());
 		self::assertSame($relatedSchema, $schema->getRelatedSchema());
 		self::assertTrue($schema->shouldSkipWhenMissing());
+		self::assertSame(RelationLoadKnowledge::Unknown, $schema->getLoadKnowledge());
 	}
 
 	public function testRejectsEmptyPath(): void

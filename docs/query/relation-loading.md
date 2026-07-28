@@ -199,4 +199,5 @@ Practical guidance:
 - Joined structured loading for built-in `M2M` is not implemented yet.
 - Relation-level `where` and `orderBy` are supported for separate-query loading first; joined relation conditions and ordering are rejected by built-in loaders.
 - Separate-query correlation uses `IN` (simple keys) or per-parent `OR`/`AND` (composite keys), chunked by parent-key batch (default 100); see [Batch size and separate-query correlation](#batch-size-and-separate-query-correlation).
+- Writable query export records relation membership completeness as Full (unqualified load) or Partial (relation `where` / `limit` / `offset`). Only Full collections may remove absent members on Session sync.
 - Future relation branch configuration should stay loader-owned and branch-local rather than moving relation-specific rules into the registry or generic runtime.

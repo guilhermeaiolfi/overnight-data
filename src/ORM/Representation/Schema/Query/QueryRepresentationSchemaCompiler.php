@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\Representation\Schema\RelationLoadKnowledge;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
@@ -195,10 +196,29 @@ final class QueryRepresentationSchemaCompiler
 				$ownerCollection,
 				$relationName,
 				$relatedSchema,
+				loadKnowledge: $this->loadKnowledgeForSelection($selection),
 			));
 
 			$schemasByPath[$pathKey] = $relatedSchema;
 		}
+	}
+
+	/**
+	 * Query relation selections are Full when they load the association as defined.
+	 * Any relation-level where / limit / offset means a subset → Partial.
+	 * Order and field lists do not affect membership completeness.
+	 */
+	private function loadKnowledgeForSelection(RelationSelection $selection): RelationLoadKnowledge
+	{
+		if (
+			$selection->getConditions() !== []
+			|| $selection->getLimit() !== null
+			|| $selection->hasOffset()
+		) {
+			return RelationLoadKnowledge::Partial;
+		}
+
+		return RelationLoadKnowledge::Full;
 	}
 
 	/**

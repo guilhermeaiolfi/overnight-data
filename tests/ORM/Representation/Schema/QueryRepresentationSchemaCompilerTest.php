@@ -8,6 +8,7 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityPlanner;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
+use ON\Data\ORM\Representation\Schema\RelationLoadKnowledge;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSource;
 use function ON\Data\Query\query;
@@ -270,6 +271,52 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertTrue($posts->getRelatedSchema()->hasField('title'));
 		self::assertTrue($posts->getRelatedSchema()->hasField('id'));
 		self::assertTrue($posts->getRelatedSchema()->getField('id')->isReadOnly());
+		self::assertSame(RelationLoadKnowledge::Full, $posts->getLoadKnowledge());
+	}
+
+	public function testUnqualifiedRelationLoadKnowledgeIsFull(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = query($users, fn (SelectQuery $query) => $query
+			->select($query->name)
+			->posts
+			->load());
+
+		$schema = $this->compiler->compile($query);
+
+		self::assertSame(RelationLoadKnowledge::Full, $schema->getRelation('posts')->getLoadKnowledge());
+	}
+
+	public function testRelationWhereMakesLoadKnowledgePartial(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = query($users, function (SelectQuery $query): void {
+			$query->select($query->name);
+			$query->posts->fields('title')->where(x()->eq($query->posts->title, 'Hello'));
+		});
+
+		$schema = $this->compiler->compile($query);
+
+		self::assertSame(RelationLoadKnowledge::Partial, $schema->getRelation('posts')->getLoadKnowledge());
+	}
+
+	public function testRelationLimitMakesLoadKnowledgePartial(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = query($users, function (SelectQuery $query): void {
+			$query->select($query->name);
+			$query->posts
+				->fields('id', 'title')
+				->orderBy($query->posts->id->asc())
+				->limit(1);
+		});
+
+		$schema = $this->compiler->compile($query);
+
+		self::assertSame(RelationLoadKnowledge::Partial, $schema->getRelation('posts')->getLoadKnowledge());
 	}
 
 	public function testRelationWithLoadAndNoFieldsFallsBackToTargetDefinitionFields(): void

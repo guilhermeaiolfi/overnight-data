@@ -11,6 +11,7 @@ use ON\Data\ORM\Relation\RelationStateInterface;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
+use ON\Data\ORM\Representation\Schema\RelationLoadKnowledge;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
@@ -237,6 +238,73 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		self::assertSame([$kept], $collection->getItems());
 	}
 
+	public function testSchemaFullLoadKnowledgeMarksCollectionAndRemovesAbsentItems(): void
+	{
+		$kept = new stdClass();
+		$removed = new stdClass();
+		$owner = RecordState::new($this->users());
+
+		$touched = $this->sync(
+			$this->trackedMapWithRelated(
+				$this->trackedWithRelation($owner, ['posts' => [$kept, $removed]], true),
+				$kept,
+				$removed,
+			),
+		);
+		self::assertTrue($touched[0]->isFullyLoaded());
+		self::assertSame([], $touched[0]->getAdded());
+		self::assertSame([], $touched[0]->getRemoved());
+
+		$this->sync(
+			$this->trackedMapWithRelated(
+				$this->trackedWithRelation($owner, ['posts' => [$kept]], true),
+				$kept,
+			),
+			$this->manyStates($touched[0]),
+		);
+
+		self::assertSame([], $touched[0]->getAdded());
+		self::assertSame([$removed], $touched[0]->getRemoved());
+		self::assertSame([$kept], $touched[0]->getItems());
+	}
+
+	public function testSchemaPartialLoadKnowledgeDoesNotRemoveAbsentItems(): void
+	{
+		$kept = new stdClass();
+		$removed = new stdClass();
+		$owner = RecordState::new($this->users());
+		$schema = new RepresentationSchema($this->users());
+		$schema->addRelation(new RepresentationRelationSchema(
+			'posts',
+			$owner->getCollection(),
+			'posts',
+			$this->postSchema(),
+			loadKnowledge: RelationLoadKnowledge::Partial,
+		));
+
+		$touched = $this->sync(
+			$this->trackedMapWithRelated(
+				$this->tracked($this->representation(['posts' => [$kept, $removed]]), $schema, [$owner]),
+				$kept,
+				$removed,
+			),
+		);
+		self::assertTrue($touched[0]->isPartiallyLoaded());
+		self::assertSame([], $touched[0]->getAdded());
+
+		$this->sync(
+			$this->trackedMapWithRelated(
+				$this->tracked($this->representation(['posts' => [$kept]]), $schema, [$owner]),
+				$kept,
+			),
+			$this->manyStates($touched[0]),
+		);
+
+		self::assertTrue($touched[0]->isPartiallyLoaded());
+		self::assertSame([], $touched[0]->getRemoved());
+		self::assertEqualsCanonicalizing([$kept, $removed], $touched[0]->getItems());
+	}
+
 	public function testFullyLoadedManyRelationKeepsUnchangedKnownObjectsUnchanged(): void
 	{
 		$known = new stdClass();
@@ -439,6 +507,9 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 			$owner->getCollection(),
 			'posts',
 			$this->postSchema(),
+			loadKnowledge: $fullyLoaded
+				? RelationLoadKnowledge::Full
+				: RelationLoadKnowledge::Unknown,
 		);
 	}
 

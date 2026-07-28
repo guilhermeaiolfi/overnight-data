@@ -10,6 +10,7 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 ### Changed
 
 - **Adoption entry unification** — `RepresentationAdoptionEngine::isFlatAttachment()` is the single flat-vs-graph rule (`RepresentationIntent::isFlatProjection()` delegates). `Session::identify()` routes through the engine with `AdoptionPolicy::Identify` instead of a hand-rolled `adopt()` path. Writable mutable DTO docs aligned in README.
+- **Relation load completeness** — query-compiled `RepresentationRelationSchema` carries `RelationLoadKnowledge` (`Full` without relation where/limit/offset, otherwise `Partial`). `RelationRepresentationSynchronizer` marks `ToManyRelationState` accordingly and treats the first Full/Partial query projection as a loaded snapshot (`clearChanges()`), so full loads can remove absent members on later sync while filtered/sliced loads stay add-only.
 
 ## [1.2.3] - 2026-07-21
 

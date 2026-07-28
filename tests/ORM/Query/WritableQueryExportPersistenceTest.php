@@ -9,8 +9,10 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
+use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Session;
 use ON\Data\Query\SelectQuery;
+use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
@@ -106,6 +108,60 @@ final class WritableQueryExportPersistenceTest extends TestCase
 		self::assertSame(1, $command->getValues()['user_id']);
 	}
 
+	public function testWritableFullRelationLoadMarksCollectionFullyLoadedAndTracksRemoval(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$query = new SelectQuery($users, new UserWithTwoPostsQueryExecutor());
+		$query->posts->fields('id', 'title');
+
+		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
+		self::assertInstanceOf(stdClass::class, $user);
+		self::assertCount(2, $user->posts);
+
+		$owner = $session->getRepresentations()->get($user)?->requireRootRecord();
+		$relation = $session->getRelations()->get($owner, 'posts');
+		self::assertInstanceOf(ToManyRelationState::class, $relation);
+		self::assertTrue($relation->isFullyLoaded());
+
+		$kept = $user->posts[0];
+		$user->posts = [$kept];
+		$session->sync($user);
+
+		self::assertCount(1, $relation->getRemoved());
+	}
+
+	public function testWritablePartialRelationLoadDoesNotRemoveAbsentMembers(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$query = new SelectQuery($users, new UserWithTwoPostsQueryExecutor());
+		$query->posts
+			->fields('id', 'title')
+			->where(x()->eq($query->posts->title, 'Hello'));
+
+		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
+		self::assertInstanceOf(stdClass::class, $user);
+		self::assertNotEmpty($user->posts);
+
+		$owner = $session->getRepresentations()->get($user)?->requireRootRecord();
+		$relation = $session->getRelations()->get($owner, 'posts');
+		self::assertInstanceOf(ToManyRelationState::class, $relation);
+		self::assertTrue($relation->isPartiallyLoaded());
+
+		$before = $relation->countKnown();
+		$kept = $user->posts[0];
+		$user->posts = [$kept];
+		$session->sync($user);
+
+		self::assertSame([], $relation->getRemoved());
+		self::assertSame($before, $relation->countKnown());
+	}
+
 	private function makeRegistry(): Registry
 	{
 		$registry = new Registry();
@@ -155,6 +211,35 @@ final class UserWithPostsQueryExecutor implements QueryExecutorInterface
 		return match ($query->getCollection()->getName()) {
 			'users' => [['id' => 1, 'name' => 'Ada']],
 			'posts' => [['id' => 10, 'title' => 'Hello', 'user_id' => 1]],
+			default => [],
+		};
+	}
+
+	public function fetchOne(SelectQuery $query): ?array
+	{
+		if ($query->getCollection()->getName() !== 'users') {
+			return null;
+		}
+
+		return ['id' => 1, 'name' => 'Ada'];
+	}
+
+	public function iterate(SelectQuery $query): iterable
+	{
+		yield from $this->fetchAll($query);
+	}
+}
+
+final class UserWithTwoPostsQueryExecutor implements QueryExecutorInterface
+{
+	public function fetchAll(SelectQuery $query): array
+	{
+		return match ($query->getCollection()->getName()) {
+			'users' => [['id' => 1, 'name' => 'Ada']],
+			'posts' => [
+				['id' => 10, 'title' => 'Hello', 'user_id' => 1],
+				['id' => 11, 'title' => 'World', 'user_id' => 1],
+			],
 			default => [],
 		};
 	}
