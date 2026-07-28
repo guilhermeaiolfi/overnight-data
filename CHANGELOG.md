@@ -7,6 +7,10 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 ## [Unreleased]
 
+### Changed
+
+- **Adoption entry unification** — `RepresentationAdoptionEngine::isFlatAttachment()` is the single flat-vs-graph rule (`RepresentationIntent::isFlatProjection()` delegates). `Session::identify()` routes through the engine with `AdoptionPolicy::Identify` instead of a hand-rolled `adopt()` path. Writable mutable DTO docs aligned in README.
+
 ## [1.2.3] - 2026-07-21
 
 ### Changed

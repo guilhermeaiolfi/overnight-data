@@ -16,7 +16,6 @@ use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\RelationTarget;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\State\Query\WritableQueryResultTracker;
@@ -249,27 +248,15 @@ final class Session implements WritableResultHandler
 			return $representation;
 		}
 
-		$record = $this->getRecords()->getByKey($key);
-		if ($record instanceof RecordState) {
-			if ($record->isRemoved()) {
-				throw new StateException(sprintf(
-					"Cannot identify collection '%s' key '%s' because it is already tracked as removed.",
-					$collection->getName(),
-					$key->getDebugString()
-				));
-			}
-		} else {
-			$record = RecordState::clean(
-				$key,
-				$this->reader->baselineValues($representation, $schema, $key->getValues()),
-			);
-		}
-
-		$this->adopt(
+		$this->adoptionEngine->attach(
 			$representation,
-			RepresentationState::fromRecords($schema, [
-				RepresentationFieldSchema::sourcePathKey([]) => $record,
-			]),
+			new RepresentationAdoptionContext(
+				schema: $schema,
+				policy: AdoptionPolicy::Identify,
+				identities: StaticSourceIdentities::forRoot($key),
+			),
+			$this->getRecords(),
+			$this->getRepresentations(),
 		);
 
 		return $representation;
@@ -322,7 +309,7 @@ final class Session implements WritableResultHandler
 				? $this->getRepresentations()->get($representation)?->getSchema()
 				: null);
 
-		if ($intent !== null && $intent->isFlatProjection($resolvedSchema)) {
+		if ($intent !== null && RepresentationAdoptionEngine::isFlatAttachment($resolvedSchema, $intent)) {
 			if (! $resolvedSchema instanceof RepresentationSchema) {
 				throw new SyncException('Cannot synchronize a flat projection intent without a RepresentationSchema.');
 			}

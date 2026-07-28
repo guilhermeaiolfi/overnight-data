@@ -22,7 +22,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for release history and [`docs/quickstart.md`
 - Bound execution: optional execution binding through `ON\Data\Database\QueryExecutorInterface`, plus `DataRuntime` / `CycleRuntimeFactory` and `ConnectionConfig`.
 - Relation loading: structured relation selection for nested results, loader-owned join or separate-query execution, and parser-backed result assembly for built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relations.
 - ORM persistence: `RecordState`-backed scalar insert/update/delete planning, scalar and relation representation synchronization, configured relation persistence planning, `FlushExecutor` / `Session` orchestration, Cycle-backed command execution, affected-row validation, and simple auto-increment primary-key merge after inserts.
-- Query result export: array results by default, read-only `stdClass` and public-property class export, and writable `stdClass` query export with flat projection provenance.
+- Query result export: array results by default, read-only `stdClass` and public-property class export, and writable `stdClass` or mutable public-property DTO query export with flat projection provenance.
 - Session save API: `update` / `create` / `detach` with `SelectQuery::projection()` or `schemaOf()` for inbound shapes; pending intents apply on `sync()`, then `flush()`.
 
 ## Query shape and persistence source are independent
@@ -49,7 +49,7 @@ $session->flush();
 // Updates companies.name.
 ```
 
-For objects that did not come from a query, compile shape with `SelectQuery::projection()` (or reuse `Session::schemaOf($tracked)`), then bind with `Session::update` / `create`, call `sync()`, and `flush()`. See [`docs/orm/session-save-api.md`](docs/orm/session-save-api.md). Writable export is `stdClass`-only for now. User-defined classes are supported for read-only export only.
+For objects that did not come from a query, compile shape with `SelectQuery::projection()` (or reuse `Session::schemaOf($tracked)`), then bind with `Session::update` / `create`, call `sync()`, and `flush()`. See [`docs/orm/session-save-api.md`](docs/orm/session-save-api.md). Writable export accepts `stdClass` or a concrete non-readonly public-property class. User-defined classes are also supported for read-only export.
 
 ## Query result modes
 
@@ -74,6 +74,9 @@ $query->to(UserRow::class)->fetchAll()
 
 $query->to(stdClass::class)->writable($session)->fetchAll()
     // tracked writable stdClass objects
+
+$query->to(UserRow::class)->writable($session)->fetchAll()
+    // tracked writable mutable public-property DTOs (concrete, non-readonly)
 ```
 
 Read-only object export also supports lazy iteration: `to(...)->iterate()` yields objects one row at a time. `writable(...)->iterate()` is intentionally unsupported; use `fetchAll()` or `fetchOne()`.
@@ -110,7 +113,7 @@ Public-property class export requirements:
 
 ## Writable export requirements
 
-- Writable export requires `to(stdClass::class)`.
+- Writable export requires `to(stdClass::class)` or `to(MutableDto::class)` (concrete, non-readonly, mutable public properties).
 - Writable export requires an explicit `Session`.
 - Binding and provenance are compiled only for writable export, not for normal fast array queries or read-only object export.
 - One binding is compiled per fetch operation and reused across rows.
@@ -126,9 +129,8 @@ Public-property class export requirements:
 - No lazy loading.
 - No repositories, `EntityManager`, `UnitOfWork`, events, proxies, or generated model layer.
 - No full database-default refresh beyond simple auto-increment primary keys.
-- Writable user-defined class export is not supported yet.
 - Writable iteration is not supported yet.
-- Flat projection provenance is available for writable `stdClass` query export.
+- Flat projection provenance is available for writable `stdClass` and mutable public-property DTO query export.
 
 ## Namespace
 

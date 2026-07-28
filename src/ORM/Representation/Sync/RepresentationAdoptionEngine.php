@@ -26,7 +26,7 @@ use ON\Data\ORM\Session;
  * {@see RepresentationState}. This entry builds flat state or walks a graph,
  * then stores the result.
  *
- * Policy ({@see AdoptionPolicy}): Hydrate | Patch | Create.
+ * Policy ({@see AdoptionPolicy}): Hydrate | Identify | Patch | Create.
  * Flat external PKs come from {@see RepresentationSourceIdentities}.
  */
 final class RepresentationAdoptionEngine
@@ -56,7 +56,7 @@ final class RepresentationAdoptionEngine
 		RepresentationAttachmentMode $mode = RepresentationAttachmentMode::Add,
 	): RepresentationState {
 		if ($mode === RepresentationAttachmentMode::Add && $reps->has($representation)) {
-			if ($this->isFlatAttachment($context)) {
+			if (self::isFlatAttachment($context->getSchema(), $context->getIntent())) {
 				$tracked = $reps->get($representation);
 				if (! $tracked instanceof RepresentationState) {
 					throw new StateException('Tracked representation is missing state.');
@@ -74,7 +74,7 @@ final class RepresentationAdoptionEngine
 			return $tracked;
 		}
 
-		if ($this->isFlatAttachment($context)) {
+		if (self::isFlatAttachment($context->getSchema(), $context->getIntent())) {
 			$state = $this->buildFlat($representation, $context, $records, $relations);
 
 			foreach ($state->getUniqueRecords() as $record) {
@@ -99,22 +99,36 @@ final class RepresentationAdoptionEngine
 		return $tracked;
 	}
 
-	private function isFlatAttachment(RepresentationAdoptionContext $context): bool
-	{
-		$intent = $context->getIntent();
-		if ($intent instanceof RepresentationIntent) {
-			// Identify-then-update / projection overlays: Session routes Replace sync
-			// here when isFlatProjection is true (including root-only inbound maps).
-			return $intent->isFlatProjection($context->getSchema());
+	/**
+	 * Whether attach should use the flat projection binder instead of graph adoption.
+	 *
+	 * Single owner for flat-vs-graph rules (Session and intent helpers must not diverge).
+	 */
+	public static function isFlatAttachment(
+		?RepresentationSchema $schema,
+		?RepresentationIntent $intent = null,
+	): bool {
+		if ($intent instanceof RepresentationIntent && $intent->getFlatOps() !== []) {
+			return true;
 		}
 
-		if ($context->getSchema()->getRelations() !== []) {
+		if (! $schema instanceof RepresentationSchema) {
 			return false;
+		}
+
+		if ($schema->getRelations() !== []) {
+			return false;
+		}
+
+		// Inbound save maps (SelectQuery::projection / schema overlay) without relation
+		// branches use the flat projection binder — including single-collection roots.
+		if ($intent instanceof RepresentationIntent && $intent->getSchema() instanceof RepresentationSchema) {
+			return true;
 		}
 
 		// Without intent, only multi-source / non-root projections are flat.
 		// Homogeneous root schemas use graph adoption (untracked root sync).
-		$sources = $context->getSources();
+		$sources = RepresentationSource::fromRepresentationSchema($schema);
 		foreach ($sources as $source) {
 			if (! $source->isRoot()) {
 				return true;
@@ -210,6 +224,7 @@ final class RepresentationAdoptionEngine
 				$reps,
 				isRoot: true,
 				policy: $context->getPolicy(),
+				identity: $this->rootIdentity($context),
 			);
 			$adopted = [$state];
 		} else {
@@ -313,13 +328,16 @@ final class RepresentationAdoptionEngine
 		RepresentationStateStore $reps,
 		bool $isRoot,
 		AdoptionPolicy $policy,
+		?Key $identity = null,
 	): RepresentationState {
 		$record = match ($policy) {
-			AdoptionPolicy::Hydrate => $this->recordResolver->resolveClean(
+			AdoptionPolicy::Hydrate,
+			AdoptionPolicy::Identify => $this->recordResolver->resolveClean(
 				$representation,
 				$schema,
 				$records,
 				$isRoot,
+				$policy === AdoptionPolicy::Identify ? $identity : null,
 			),
 			AdoptionPolicy::Patch,
 			AdoptionPolicy::Create => $this->recordResolver->resolve(
@@ -341,6 +359,15 @@ final class RepresentationAdoptionEngine
 		$reps->add($representation, $state);
 
 		return $state;
+	}
+
+	private function rootIdentity(RepresentationAdoptionContext $context): ?Key
+	{
+		if ($context->getPolicy() !== AdoptionPolicy::Identify) {
+			return null;
+		}
+
+		return $context->getIdentities()?->getIdentity([]);
 	}
 
 	/**
@@ -385,7 +412,7 @@ final class RepresentationAdoptionEngine
 			return $record;
 		}
 
-		if ($policy === AdoptionPolicy::Hydrate) {
+		if ($policy === AdoptionPolicy::Hydrate || $policy === AdoptionPolicy::Identify) {
 			return $this->resolveHydrateRecord($representation, $source, $context, $records);
 		}
 

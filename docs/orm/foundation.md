@@ -83,8 +83,8 @@ $row->userName = 'New user';
 $row->postTitle = 'New post';
 $row->authorName = 'New author';
 
-$em->sync($row);
-$em->flush();
+$session->sync($row);
+$session->flush();
 ```
 
 This is valid only when the ORM knows lineage:
@@ -102,8 +102,8 @@ authorName -> authors[id].name
 Use `sync()` for both new and changed representations:
 
 ```php
-$em->sync($user);
-$em->flush();
+$session->sync($user);
+$session->flush();
 ```
 
 Do not design a public `persist()` API for create/update. The ORM decides whether the representation is new, whether it points at a new record, or whether it mutates already-known record state.
@@ -111,8 +111,8 @@ Do not design a public `persist()` API for create/update. The ORM decides whethe
 Deletion remains explicit:
 
 ```php
-$em->remove($user);
-$em->flush();
+$session->remove($user);
+$session->flush();
 ```
 
 The exact deletion method name may remain open until the write API is designed.
@@ -139,12 +139,12 @@ Representation 1 baseline = A1
 Representation 2 baseline = A1
 
 Representation 2 changes A1 -> A2
-$em->sync($representation2)
+$session->sync($representation2)
 
 RecordState value = A2
 
 Representation 1 changes A1 -> A3
-$em->sync($representation1)
+$session->sync($representation1)
 ```
 
 The default result is conflict. The ORM must not silently overwrite `A2` with `A3` because representation 1 was based on stale data.
@@ -152,8 +152,8 @@ The default result is conflict. The ORM must not silently overwrite `A2` with `A
 Future explicit policies may exist:
 
 ```php
-$em->sync($representation, ConflictPolicy::OVERWRITE);
-$em->refresh($representation);
+$session->sync($representation, ConflictPolicy::OVERWRITE);
+$session->refresh($representation);
 ```
 
 Default `sync()` remains safe.
@@ -351,13 +351,7 @@ Partial explicit selections must not overwrite missing fields during sync. A ful
 
 ## Lazy Loading
 
-Lazy loading is dangerous and is not implemented in v1.0. The documented default is:
-
-```php
-LazyLoadingPolicy::PREVENT
-```
-
-If lazy loading is supported later, it must be explicit and disableable. Accessing an unloaded relation in strict/default mode should throw.
+Lazy loading is dangerous and is not implemented. If it is supported later, it must be explicit and disableable. Accessing an unloaded relation in the default/strict mode should throw rather than silently treating the relation as empty.
 
 ## Cascades
 
@@ -416,12 +410,7 @@ $user->posts->add($post);
 $user->posts->remove($post);
 ```
 
-or a future explicit EntityManager API:
-
-```php
-$em->add($user, 'posts', $post);
-$em->removeFrom($user, 'posts', $post);
-```
+A future explicit Session API may also expose relation mutations without a collection wrapper.
 
 The intended object concept is `ToManyRelationState`.
 

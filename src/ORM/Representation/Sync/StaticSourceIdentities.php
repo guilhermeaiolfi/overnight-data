@@ -24,6 +24,16 @@ final class StaticSourceIdentities implements RepresentationSourceIdentities
 	) {
 	}
 
+	/**
+	 * Single root-source identity (for example {@see Session::identify()}).
+	 */
+	public static function forRoot(Key $key): self
+	{
+		return new self([
+			RepresentationFieldSchema::sourcePathKey([]) => $key,
+		]);
+	}
+
 	public static function fromIntent(
 		RepresentationSchema $schema,
 		RepresentationIntent $intent,

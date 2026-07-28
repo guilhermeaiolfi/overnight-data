@@ -6,7 +6,6 @@ namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\Key;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSource;
 
 /**
  * Pending update/create intent for one representation until sync().
@@ -91,27 +90,6 @@ final class RepresentationIntent
 	 */
 	public function isFlatProjection(?RepresentationSchema $schema = null): bool
 	{
-		if ($this->flatOps !== []) {
-			return true;
-		}
-
-		$schema ??= $this->schema;
-		if (! $schema instanceof RepresentationSchema) {
-			return false;
-		}
-
-		if ($schema->getRelations() !== []) {
-			return false;
-		}
-
-		// Inbound save maps (SelectQuery::projection / schema overlay) without relation
-		// branches use the flat projection binder — including single-collection roots.
-		if ($this->schema instanceof RepresentationSchema) {
-			return true;
-		}
-
-		$sources = RepresentationSource::fromRepresentationSchema($schema);
-
-		return count($sources) > 1 || ($sources !== [] && ! $sources[0]->isRoot());
+		return RepresentationAdoptionEngine::isFlatAttachment($schema ?? $this->schema, $this);
 	}
 }

@@ -73,25 +73,22 @@ final class AdoptionRecordResolver
 	}
 
 	/**
-	 * Adopt an existing row as a clean snapshot of present schema values (query hydrate).
+	 * Adopt an existing row as a clean snapshot of present schema values (query hydrate / identify).
 	 * Unlike update-intent resolve, this does not PATCH / dirty present fields.
+	 *
+	 * When $identity is provided (Session::identify), it is the authoritative key and may supply
+	 * PK values that are not readable on the representation. The identity collection must match
+	 * the schema collection.
 	 */
 	public function resolveClean(
 		object $representation,
 		RepresentationSchema $schema,
 		RecordStateStore $records,
 		bool $isRoot = true,
+		?Key $identity = null,
 	): RecordState {
 		$collection = $schema->requireHomogeneousCollection($isRoot);
-		$keyValues = $this->completeKeyValues($representation, $schema, $collection, $isRoot);
-		if ($keyValues === null) {
-			throw new StateException(sprintf(
-				"Cannot adopt clean representation for collection '%s' because its primary key cannot be read through the schema.",
-				$collection->getName(),
-			));
-		}
-
-		$key = $collection->getKey($keyValues);
+		$key = $this->resolveCleanKey($representation, $schema, $collection, $isRoot, $identity);
 		$existing = $records->getActive(
 			$key,
 			sprintf(
@@ -111,6 +108,47 @@ final class AdoptionRecordResolver
 		$records->add($record);
 
 		return $record;
+	}
+
+	private function resolveCleanKey(
+		object $representation,
+		RepresentationSchema $schema,
+		CollectionInterface $collection,
+		bool $isRoot,
+		?Key $identity,
+	): Key {
+		if ($identity instanceof Key) {
+			if ($identity->getCollection()->getName() !== $collection->getName()) {
+				throw new StateException(sprintf(
+					"Cannot identify collection '%s' with a schema targeting collection '%s'.",
+					$identity->getCollection()->getName(),
+					$collection->getName(),
+				));
+			}
+
+			$conflict = $identity->conflictingIdentityField(
+				$this->readablePrimaryKeyValues($representation, $schema, $collection),
+			);
+			if ($conflict !== null) {
+				throw new StateException(sprintf(
+					"Cannot adopt clean representation for collection '%s' because identity field '%s' disagrees with the representation.",
+					$collection->getName(),
+					$conflict,
+				));
+			}
+
+			return $identity;
+		}
+
+		$keyValues = $this->completeKeyValues($representation, $schema, $collection, $isRoot);
+		if ($keyValues === null) {
+			throw new StateException(sprintf(
+				"Cannot adopt clean representation for collection '%s' because its primary key cannot be read through the schema.",
+				$collection->getName(),
+			));
+		}
+
+		return $collection->getKey($keyValues);
 	}
 
 	/**
