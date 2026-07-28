@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace ON\Data\Mapper\Mapper;
 
 use ON\Data\Mapper\Exception\MappingException;
+use ON\Data\Mapper\MapBuilder;
 
 /**
  * Mapping argument controlling how concrete objects nest under stdClass targets.
  *
- * Pass via {@see \ON\Data\Mapper\MapBuilder::args()} the same way as
+ * Pass via {@see MapBuilder::args()} the same way as
  * {@see ArrayMapperOptions}:
  *
  * ```php
