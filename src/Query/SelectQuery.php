@@ -287,59 +287,55 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function copy(): self
 	{
-		$copy = new self($this->source, $this->executor);
-		$copy->selections->removeByTag(SelectionTag::DEFAULT);
+		return $this->rebind(SourceMap::empty());
+	}
 
-		foreach ($this->selections->getAll() as $selection) {
-			$copy->selections->add(
-				$this->copySelectionExpression($selection->getExpression(), $copy),
-				$selection->getTags(),
-				$selection->isExplicit(),
-			);
+	/**
+	 * Allocate local join counterparts, compose them with the inherited anchor
+	 * map, then rebind payloads. Nested relation sources resolve structurally
+	 * from the anchored query when touched.
+	 */
+	public function rebind(SourceMap $sources): self
+	{
+		$copy = new self($this->source, $this->executor);
+		$map = $sources->with($this, $copy);
+
+		foreach ($this->joins as $join) {
+			$source = $map->remap($join->getSource());
+			$copiedJoin = new Join($copy, $source, $join->getCollection(), $join->getType(), $join->getName());
+			$copy->joins[] = $copiedJoin;
+			$map = $map->with($join, $copiedJoin);
 		}
 
+		$copy->selections->clear();
+		$copy->selections->merge($this->selections->projectTo($map));
 		$copy->conditions->clear();
-		foreach ($this->conditions->bindTo($copy, $this)->getItems() as $item) {
+		foreach ($this->conditions->rebind($map)->getItems() as $item) {
 			$copy->conditions->add($item->getCondition(), ...$item->getTags());
 		}
+
+		foreach ($this->joins as $join) {
+			$join->rebind($map);
+		}
+
 		$copy->groups = array_map(
-			fn (ValueExpressionInterface $group): ValueExpressionInterface => $group->bindTo($copy, from: $this),
-			$this->groups,
+			static fn (ValueExpressionInterface $group): ValueExpressionInterface => $group->rebind($map),
+			$this->groups
 		);
 		$copy->havingConditions = array_map(
-			fn (ConditionInterface $condition): ConditionInterface => $condition->bindTo($copy, from: $this),
-			$this->havingConditions,
+			static fn (ConditionInterface $condition): ConditionInterface => $condition->rebind($map),
+			$this->havingConditions
 		);
-		$copy->sorts = array_map(
-			fn (Sort $sort): Sort => $sort->bindTo($copy, from: $this),
-			$this->sorts,
-		);
+		$copy->sorts = array_map(static fn (Sort $sort): Sort => $sort->rebind($map), $this->sorts);
+
+		foreach ($this->relationRefs as $relation) {
+			$relation->rebind($map);
+		}
+
 		$copy->limit = $this->limit;
 		$copy->offset = $this->offset;
 		$copy->resultClass = $this->resultClass;
 		$copy->writableHandler = $this->writableHandler;
-
-		$joinMap = [spl_object_id($this) => $copy];
-
-		foreach ($this->joins as $join) {
-			$source = $join->getSource();
-			$copiedSource = $source instanceof Join
-				? $joinMap[spl_object_id($source)] ?? $copy
-				: $copy;
-			$copiedJoin = new Join($copy, $copiedSource, $join->getCollection(), $join->getType(), $join->getName());
-
-			foreach ($join->getConditions() as $condition) {
-				$copiedJoin->on(...$this->rebindConditions($condition, $copy, $joinMap, $join));
-			}
-
-			$copy->joins[] = $copiedJoin;
-			$joinMap[spl_object_id($join)] = $copiedJoin;
-		}
-
-		foreach ($this->relationRefs as $name => $relationRef) {
-			$copy->relationRefs[$name] = $this->copyRelationRef($relationRef, $copy, null, $joinMap);
-		}
-
 		$copy->alias = $this->alias;
 
 		return $copy;
@@ -433,32 +429,6 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		array_push($this->sorts, ...$sorts);
-
-		return $this;
-	}
-
-	public function bindConditions(QuerySourceInterface $from, ConditionInterface ...$conditions): self
-	{
-		if ($conditions === []) {
-			throw new InvalidArgumentException('SelectQuery::bindConditions() requires at least one condition.');
-		}
-
-		foreach ($conditions as $condition) {
-			$this->where($condition->bindTo($this, from: $from));
-		}
-
-		return $this;
-	}
-
-	public function bindSorts(QuerySourceInterface $from, Sort ...$sorts): self
-	{
-		if ($sorts === []) {
-			throw new InvalidArgumentException('SelectQuery::bindSorts() requires at least one sort.');
-		}
-
-		foreach ($sorts as $sort) {
-			$this->orderBy($sort->bindTo($this, from: $from));
-		}
 
 		return $this;
 	}
@@ -959,127 +929,5 @@ final class SelectQuery implements QuerySourceInterface
 	private function generateAutoAlias(): string
 	{
 		return 'd' . self::$nextAutoAlias++;
-	}
-
-	private function copySelectionExpression(
-		ValueExpressionInterface|AliasedExpression|StarExpression $expression,
-		self $copy,
-	): ValueExpressionInterface|AliasedExpression|StarExpression {
-		if ($expression instanceof AliasedExpression) {
-			$inner = $expression->getExpression();
-
-			if ($inner instanceof StarExpression) {
-				return $inner->bindTo($copy, from: $this);
-			}
-
-			return $inner->bindTo($copy, from: $this)->as($expression->getAlias());
-		}
-
-		return $expression->bindTo($copy, from: $this);
-	}
-
-	private function copyRelationRef(
-		RelationRef $relationRef,
-		self $copy,
-		?RelationRef $parent,
-		array $joinMap,
-	): RelationRef {
-		$copied = new RelationRef($copy, $relationRef->getDefinition(), $parent);
-
-		if ($relationRef->getFields() !== null) {
-			$copied->fields($relationRef->getFields());
-		} elseif ($relationRef->isSelected()) {
-			$copied->load();
-		}
-
-		$copied->visible($relationRef->isVisible());
-
-		if ($relationRef->getConditions() !== []) {
-			$copied->where(...array_map(
-				fn (ConditionInterface $condition): ConditionInterface => $this->rebindCondition($condition, $copy, $joinMap),
-				$relationRef->getConditions(),
-			));
-		}
-
-		if ($relationRef->getSorts() !== []) {
-			$copied->orderBy(...array_map(
-				fn (Sort $sort): Sort => $this->rebindSort($sort, $copy, $joinMap),
-				$relationRef->getSorts(),
-			));
-		}
-
-		if ($relationRef->getStrategy() !== null) {
-			$copied->strategy($relationRef->getStrategy());
-		}
-
-		if ($relationRef->getLimit() !== null) {
-			$copied->limit($relationRef->getLimit());
-		}
-
-		if ($relationRef->hasOffset()) {
-			$copied->offset($relationRef->getOffset());
-		}
-
-		foreach ($relationRef->getRelationRefs() as $child) {
-			$copied->relation($child->getName());
-			$copy->relationRefs[$relationRef->getName()] = $copied;
-			$this->copyRelationRef($child, $copy, $copied, $joinMap);
-		}
-
-		return $copied;
-	}
-
-	/**
-	 * @return list<ConditionInterface>
-	 */
-	private function rebindConditions(
-		ConditionInterface $condition,
-		self $copy,
-		array $joinMap,
-		Join $join,
-	): array {
-		return [$this->rebindCondition($condition, $copy, [spl_object_id($this) => $copy, spl_object_id($join) => $joinMap[spl_object_id($join)] ?? $copy] + $joinMap)];
-	}
-
-	private function rebindCondition(ConditionInterface $condition, self $copy, array $sourceMap): ConditionInterface
-	{
-		$rebound = $condition->bindTo($copy, from: $this);
-
-		foreach ($sourceMap as $sourceId => $target) {
-			if ($sourceId === spl_object_id($this) || ! $target instanceof QuerySourceInterface) {
-				continue;
-			}
-
-			foreach ($this->joins as $join) {
-				if (spl_object_id($join) !== $sourceId) {
-					continue;
-				}
-
-				$rebound = $rebound->bindTo($target, from: $join);
-			}
-		}
-
-		return $rebound;
-	}
-
-	private function rebindSort(Sort $sort, self $copy, array $sourceMap): Sort
-	{
-		$rebound = $sort->bindTo($copy, from: $this);
-
-		foreach ($sourceMap as $sourceId => $target) {
-			if ($sourceId === spl_object_id($this) || ! $target instanceof QuerySourceInterface) {
-				continue;
-			}
-
-			foreach ($this->joins as $join) {
-				if (spl_object_id($join) !== $sourceId) {
-					continue;
-				}
-
-				$rebound = $rebound->bindTo($target, from: $join);
-			}
-		}
-
-		return $rebound;
 	}
 }

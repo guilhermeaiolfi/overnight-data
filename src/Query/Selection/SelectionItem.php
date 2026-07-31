@@ -9,8 +9,7 @@ use LogicException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
-use ON\Data\Query\QuerySourceInterface;
-use ON\Data\Query\SelectQuery;
+use ON\Data\Query\SourceMap;
 
 final class SelectionItem
 {
@@ -46,22 +45,14 @@ final class SelectionItem
 		return $this->selectionKey ?? $this->expression->getSelectionKey();
 	}
 
-	public function getProjectedExpression(
-		?QuerySourceInterface $from = null,
-		?QuerySourceInterface $to = null,
-	): ValueExpressionInterface|AliasedExpression|StarExpression {
+	public function getProjectedExpression(?SourceMap $sources = null): ValueExpressionInterface|AliasedExpression|StarExpression
+	{
 		$expression = $this->expression instanceof AliasedExpression
 			? $this->expression->getExpression()
 			: $this->expression;
 
-		if ($from !== null && $to !== null) {
-			if ($from instanceof SelectQuery && $from->hasAlias()) {
-				$expression = $expression instanceof StarExpression
-					? $from->all()
-					: $from->field($this->getSelectionKey());
-			} else {
-				$expression = $expression->bindTo($to, from: $from);
-			}
+		if ($sources !== null) {
+			$expression = $expression->rebind($sources);
 		}
 
 		if ($expression instanceof StarExpression) {

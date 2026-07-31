@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Expression;
 
 use InvalidArgumentException;
-use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\SourceMap;
 
 final class AggregateExpression extends AbstractValueExpression
 {
@@ -36,13 +36,13 @@ final class AggregateExpression extends AbstractValueExpression
 		return $this->expression;
 	}
 
-	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	public function rebind(SourceMap $sources): self
 	{
 		if ($this->expression instanceof StarExpression) {
 			return $this;
 		}
 
-		$expression = $this->expression->bindTo($target, from: $from);
+		$expression = $this->expression->rebind($sources);
 
 		if ($expression === $this->expression) {
 			return $this;

@@ -8,8 +8,8 @@ use LogicException;
 use ON\Data\Query\Condition\ComparisonCondition;
 use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\ExpressionFactory;
-use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Sort\Sort;
+use ON\Data\Query\SourceMap;
 use function ON\Data\Query\x;
 
 abstract class AbstractValueExpression implements ValueExpressionInterface
@@ -22,7 +22,7 @@ abstract class AbstractValueExpression implements ValueExpressionInterface
 		));
 	}
 
-	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	public function rebind(SourceMap $sources): self
 	{
 		return $this;
 	}

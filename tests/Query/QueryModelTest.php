@@ -28,6 +28,7 @@ use ON\Data\Query\Expression\AggregateFunction;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\LiteralExpression;
+use ON\Data\Query\Expression\SourceFieldExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
@@ -45,6 +46,7 @@ use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
 use ON\Data\Query\Sort\SortDirection;
+use ON\Data\Query\SourceMap;
 use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -1001,6 +1003,23 @@ final class QueryModelTest extends TestCase
 		self::assertSame($posts->getOffset(), $copy->getOffset());
 	}
 
+	public function testRebindCreatesProjectedFieldForMappedSourceBeforeItsAliasIsCopied(): void
+	{
+		$posts = query($this->makeRegistry()->getCollection('posts'));
+		$ranked = $posts->select($posts->id->as('post_id'))->as('ranked_posts');
+		$field = $ranked->field('post_id');
+		$copy = $ranked->copy();
+
+		self::assertInstanceOf(SourceFieldExpression::class, $field);
+
+		$bound = $field->rebind(SourceMap::of($ranked, $copy));
+
+		self::assertInstanceOf(SourceFieldExpression::class, $bound);
+		self::assertNotSame($field, $bound);
+		self::assertSame($copy, $bound->getSource());
+		self::assertSame('post_id', $bound->getName());
+	}
+
 	public function testWindowFunctionNamespaceAndOverNormalization(): void
 	{
 		$posts = query($this->makeRegistry()->getCollection('posts'));
@@ -1522,7 +1541,7 @@ final class QueryModelTest extends TestCase
 		$outer->getSelections()->merge(
 			$inner->getSelections()
 				->filterByTag(SelectionTag::COLUMN)
-				->projectTo(from: $ranked, to: $outer),
+				->projectDerivedTo($ranked, $outer),
 		);
 
 		$columnSelections = array_values(array_filter(
@@ -1554,7 +1573,7 @@ final class QueryModelTest extends TestCase
 		$outer->getSelections()->merge(
 			$inner->getSelections()
 				->filterByTag(SelectionTag::COLUMN)
-				->projectTo(from: $ranked, to: $outer),
+				->projectDerivedTo($ranked, $outer),
 		);
 
 		self::assertSame(

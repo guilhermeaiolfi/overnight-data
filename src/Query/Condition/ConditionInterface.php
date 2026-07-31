@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Condition;
 
-use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\SourceMap;
 
 interface ConditionInterface
 {
-	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self;
+	public function rebind(SourceMap $sources): self;
 }

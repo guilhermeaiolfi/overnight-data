@@ -6,6 +6,7 @@ namespace Tests\ON\Data\Query;
 
 use Error;
 use InvalidArgumentException;
+use LogicException;
 use ON\Data\Definition\Registry;
 use ON\Data\Query\Condition\ComparisonCondition;
 use ON\Data\Query\Condition\InCondition;
@@ -20,11 +21,14 @@ use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\LiteralExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Expression\ValueOperationExpression;
+use ON\Data\Query\JoinType;
 use function ON\Data\Query\query;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Query\SourceMap;
+use ON\Data\Query\SourceMapBuilder;
 use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -813,14 +817,16 @@ final class RelationRefTest extends TestCase
 		$users->select($other->posts);
 	}
 
-	public function testConditionBindToCopiesFieldsWithoutMutatingOriginalCondition(): void
+	public function testConditionRebindCopiesFieldsWithoutMutatingOriginalCondition(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $this->makeQuery('users', $registry);
 		$otherUsers = $this->makeQuery('users', $registry);
 		$condition = $users->posts->title->eq('Hello');
 
-		$bound = $condition->bindTo($otherUsers, from: $users);
+		$bound = $condition->rebind(
+			SourceMap::of($users, $otherUsers)->with($users->posts, $otherUsers->posts),
+		);
 
 		self::assertNotSame($condition, $bound);
 		self::assertInstanceOf(ComparisonCondition::class, $condition);
@@ -833,14 +839,16 @@ final class RelationRefTest extends TestCase
 		self::assertSame(['posts', 'title'], $bound->getLeft()->getPath());
 	}
 
-	public function testConditionBindToPreservesPathRelativeToRootSource(): void
+	public function testConditionRebindPreservesPathRelativeToRootSource(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $this->makeQuery('users', $registry);
 		$otherUsers = $this->makeQuery('users', $registry);
 		$condition = $users->posts->title->eq('Hello');
 
-		$bound = $condition->bindTo($otherUsers, from: $users);
+		$bound = $condition->rebind(
+			SourceMap::of($users, $otherUsers)->with($users->posts, $otherUsers->posts),
+		);
 
 		self::assertInstanceOf(ComparisonCondition::class, $bound);
 		self::assertInstanceOf(FieldRef::class, $bound->getLeft());
@@ -848,14 +856,14 @@ final class RelationRefTest extends TestCase
 		self::assertSame(['posts', 'title'], $bound->getLeft()->getPath());
 	}
 
-	public function testConditionBindToPreservesPathRelativeToRelationSource(): void
+	public function testConditionRebindPreservesPathRelativeToRelationSource(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $this->makeQuery('users', $registry);
 		$posts = $this->makeQuery('posts', $registry);
 		$condition = $users->posts->title->eq('Hello');
 
-		$bound = $condition->bindTo($posts, from: $users->posts);
+		$bound = $condition->rebind(SourceMap::of($users->posts, $posts));
 
 		self::assertInstanceOf(ComparisonCondition::class, $bound);
 		self::assertInstanceOf(FieldRef::class, $bound->getLeft());
@@ -863,14 +871,14 @@ final class RelationRefTest extends TestCase
 		self::assertSame(['title'], $bound->getLeft()->getPath());
 	}
 
-	public function testSortBindToPreservesPathRelativeToRelationSource(): void
+	public function testSortRebindPreservesPathRelativeToRelationSource(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $this->makeQuery('users', $registry);
 		$posts = $this->makeQuery('posts', $registry);
 		$sort = $users->posts->createdAt->desc();
 
-		$bound = $sort->bindTo($posts, from: $users->posts);
+		$bound = $sort->rebind(SourceMap::of($users->posts, $posts));
 
 		self::assertNotSame($sort, $bound);
 		self::assertInstanceOf(FieldRef::class, $bound->getExpression());
@@ -879,7 +887,7 @@ final class RelationRefTest extends TestCase
 		self::assertSame($users->posts, $sort->getExpression()->getSource());
 	}
 
-	public function testBindToRecursivelyCopiesNestedConditionsAndValueExpressions(): void
+	public function testRebindRecursivelyCopiesNestedConditionsAndValueExpressions(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $this->makeQuery('users', $registry);
@@ -892,7 +900,7 @@ final class RelationRefTest extends TestCase
 			),
 		);
 
-		$bound = $condition->bindTo($posts, from: $users->posts);
+		$bound = $condition->rebind(SourceMap::of($users->posts, $posts));
 
 		self::assertInstanceOf(LogicalCondition::class, $bound);
 		$first = $bound->getConditions()[0];
@@ -917,7 +925,7 @@ final class RelationRefTest extends TestCase
 		self::assertSame($users->posts, $condition->getConditions()[0]->getLeft()->getArguments()[0]->getSource());
 	}
 
-	public function testBindToRecursivelyCopiesNotConditionsAndInExpressionLists(): void
+	public function testRebindRecursivelyCopiesNotConditionsAndInExpressionLists(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $this->makeQuery('users', $registry);
@@ -930,7 +938,7 @@ final class RelationRefTest extends TestCase
 			],
 		));
 
-		$bound = $condition->bindTo($posts, from: $users->posts);
+		$bound = $condition->rebind(SourceMap::of($users->posts, $posts));
 
 		self::assertInstanceOf(NotCondition::class, $bound);
 		self::assertInstanceOf(InCondition::class, $bound->getCondition());
@@ -951,7 +959,7 @@ final class RelationRefTest extends TestCase
 		self::assertSame($users->posts, $condition->getCondition()->getExpression()->getSource());
 	}
 
-	public function testWindowExpressionBindToRecursivelyBindsWindowSpec(): void
+	public function testWindowExpressionRebindRecursivelyBindsWindowSpec(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $this->makeQuery('users', $registry);
@@ -961,7 +969,7 @@ final class RelationRefTest extends TestCase
 			orderBy: $users->posts->title->desc(),
 		);
 
-		$bound = $rank->bindTo($posts, from: $users->posts);
+		$bound = $rank->rebind(SourceMap::of($users->posts, $posts));
 
 		$partition = $bound->getWindow()->getPartitionBy()[0];
 		$order = $bound->getWindow()->getOrderings()[0]->getExpression();
@@ -975,13 +983,13 @@ final class RelationRefTest extends TestCase
 		self::assertSame($users->posts, $rank->getWindow()->getPartitionBy()[0]->getSource());
 	}
 
-	public function testBindConditionsBindsRelationFieldsToTargetQuery(): void
+	public function testRebindMapsRelationFieldsToTargetQuery(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $this->makeQuery('users', $registry);
 		$posts = $this->makeQuery('posts', $registry);
 
-		$posts->bindConditions($users->posts, x()->eq($users->posts->published, true));
+		$posts->where(x()->eq($users->posts->published, true)->rebind(SourceMap::of($users->posts, $posts)));
 
 		$condition = $posts->getConditions()[0];
 		self::assertInstanceOf(ComparisonCondition::class, $condition);
@@ -990,13 +998,15 @@ final class RelationRefTest extends TestCase
 		self::assertSame(['published'], $condition->getLeft()->getPath());
 	}
 
-	public function testBindConditionsBindsNestedRelationFieldsToTargetQuery(): void
+	public function testRebindMapsNestedRelationFieldsToTargetQuery(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $this->makeQuery('users', $registry);
 		$posts = $this->makeQuery('posts', $registry);
 
-		$posts->bindConditions($users->posts, x()->eq($users->posts->author->name, 'Ada'));
+		$posts->where(x()->eq($users->posts->author->name, 'Ada')->rebind(
+			SourceMap::of($users->posts, $posts),
+		));
 
 		$condition = $posts->getConditions()[0];
 		self::assertInstanceOf(ComparisonCondition::class, $condition);
@@ -1005,13 +1015,13 @@ final class RelationRefTest extends TestCase
 		self::assertSame(['author', 'name'], $condition->getLeft()->getPath());
 	}
 
-	public function testBindSortsBindsSortExpressions(): void
+	public function testRebindMapsSortExpressionsToTargetQuery(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $this->makeQuery('users', $registry);
 		$posts = $this->makeQuery('posts', $registry);
 
-		$posts->bindSorts($users->posts, $users->posts->title->asc());
+		$posts->orderBy($users->posts->title->asc()->rebind(SourceMap::of($users->posts, $posts)));
 
 		$expression = $posts->getSorts()[0]->getExpression();
 		self::assertInstanceOf(FieldRef::class, $expression);
@@ -1025,10 +1035,9 @@ final class RelationRefTest extends TestCase
 		$users = $this->makeQuery('users', $registry);
 		$posts = $this->makeQuery('posts', $registry);
 
-		$posts->bindConditions(
-			$users->posts,
-			x()->eq($users->posts->id->sum(), $users->posts->title->upper()),
-		);
+		$posts->where(x()->eq($users->posts->id->sum(), $users->posts->title->upper())->rebind(
+			SourceMap::of($users->posts, $posts),
+		));
 
 		$condition = $posts->getConditions()[0];
 		self::assertInstanceOf(ComparisonCondition::class, $condition);
@@ -1048,8 +1057,160 @@ final class RelationRefTest extends TestCase
 		$literal = x()->literal('Ada');
 
 		self::assertInstanceOf(LiteralExpression::class, $literal);
-		self::assertSame($literal, $literal->bindTo($posts, from: $users->posts));
-		self::assertSame($users->name, $users->name->bindTo($posts, from: $users->posts));
+		self::assertSame($literal, $literal->rebind(SourceMap::of($users->posts, $posts)));
+		self::assertSame($users->name, $users->name->rebind(SourceMap::of($users->posts, $posts)));
+	}
+
+	public function testSourceMapStructurallyResolvesNestedRelationsUnderAnchoredQuery(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$otherUsers = $this->makeQuery('users', $registry);
+		$condition = $users->posts->author->name->eq('Ada');
+
+		$bound = $condition->rebind(SourceMap::of($users, $otherUsers));
+
+		self::assertInstanceOf(ComparisonCondition::class, $bound);
+		self::assertInstanceOf(FieldRef::class, $bound->getLeft());
+		self::assertSame($otherUsers->posts->author, $bound->getLeft()->getSource());
+	}
+
+	public function testSourceMapResolvesSiblingRelationsThroughSharedParent(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$otherUsers = $this->makeQuery('users', $registry);
+		$condition = x()->eq($users->posts->author->id, $users->posts->comments->id);
+
+		$bound = $condition->rebind(SourceMap::of($users, $otherUsers));
+
+		self::assertInstanceOf(ComparisonCondition::class, $bound);
+		self::assertSame($otherUsers->posts->author, $bound->getLeft()->getSource());
+		self::assertSame($otherUsers->posts->comments, $bound->getRight()->getSource());
+		self::assertSame($otherUsers->posts, $bound->getLeft()->getSource()->getParentRelation());
+		self::assertSame($otherUsers->posts, $bound->getRight()->getSource()->getParentRelation());
+	}
+
+	public function testExplicitRelationPairOverridesStructuralResolution(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$otherUsers = $this->makeQuery('users', $registry);
+		$thirdUsers = $this->makeQuery('users', $registry);
+		$map = SourceMap::of($users, $otherUsers)->with($users->posts, $thirdUsers->posts);
+
+		self::assertSame($thirdUsers->posts, $map->remap($users->posts));
+		self::assertSame($thirdUsers->posts->author, $map->remap($users->posts->author));
+	}
+
+	public function testRelationUnderUnmappedExternalQueryStaysUnchanged(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$external = $this->makeQuery('users', $registry);
+		$copy = $this->makeQuery('users', $registry);
+		$map = SourceMap::of($users, $copy);
+
+		self::assertSame($external->posts, $map->remap($external->posts));
+		self::assertSame($external->posts->author, $map->remap($external->posts->author));
+	}
+
+	public function testSourceMapBuilderCannotMutateAfterSealing(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$otherUsers = $this->makeQuery('users', $registry);
+		$builder = new SourceMapBuilder();
+		$builder->map($users, $otherUsers);
+		$map = $builder->seal();
+
+		self::assertSame($otherUsers, $map->remap($users));
+
+		$this->expectException(LogicException::class);
+		$builder->map($users->posts, $otherUsers->posts);
+	}
+
+	public function testCopyReconnectsMaterializedRelationJoinWithoutCreatingAnotherJoin(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$sourceJoin = $users->join($registry->getCollection('posts'), JoinType::INNER, 'posts');
+		$users->posts->setJoinedSource($sourceJoin);
+
+		$copy = $users->copy();
+
+		self::assertCount(1, $copy->getJoins());
+		self::assertSame($copy->getJoins()[0], $copy->posts->getJoinedSource());
+	}
+
+	public function testMaterializedRelationJoinIsAdoptedByStructurallyResolvedCounterpart(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$postsJoin = $users->join($registry->getCollection('posts'), JoinType::INNER, 'posts');
+		$authorJoin = $users->join($registry->getCollection('users'), JoinType::INNER, 'posts.author', $postsJoin);
+		$users->posts->setJoinedSource($postsJoin);
+		$users->posts->author->setJoinedSource($authorJoin);
+
+		$copy = $users->copy();
+
+		self::assertSame($copy->getJoins()[0], $copy->posts->getJoinedSource());
+		self::assertSame($copy->getJoins()[1], $copy->posts->author->getJoinedSource());
+		self::assertSame($copy->getJoins()[0], $copy->getJoins()[1]->getSource());
+	}
+
+	public function testSourceMapCompositionDoesNotMutateTheOriginalMap(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$otherUsers = $this->makeQuery('users', $registry);
+		$thirdUsers = $this->makeQuery('users', $registry);
+		$map = SourceMap::of($users, $otherUsers);
+		$extended = $map->with($users->posts, $thirdUsers->posts);
+
+		self::assertSame($otherUsers->posts, $map->remap($users->posts));
+		self::assertSame($thirdUsers->posts, $extended->remap($users->posts));
+		self::assertSame($otherUsers->posts, $map->remap($users->posts));
+
+		self::assertSame($thirdUsers, $map->with($users, $thirdUsers)->remap($users));
+	}
+
+	public function testCopyRebindsChainedJoinSourcesAndOnConditions(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$otherUsers = $this->makeQuery('users', $registry);
+		$posts = $users->join($registry->getCollection('posts'), JoinType::INNER, 'posts');
+		$posts->on(x()->eq($users->id, $posts->id));
+		$comments = $users->join($registry->getCollection('comments'), JoinType::INNER, 'comments', $posts);
+		$comments->on(x()->eq($posts->id, $comments->id));
+
+		$otherUsers = $users->copy();
+
+		$copiedPosts = $otherUsers->getJoins()[0];
+		$copiedComments = $otherUsers->getJoins()[1];
+		self::assertSame($copiedPosts, $copiedComments->getSource());
+		self::assertSame($otherUsers, $copiedPosts->getConditions()[0]->getLeft()->getSource());
+		self::assertSame($copiedPosts, $copiedComments->getConditions()[0]->getLeft()->getSource());
+	}
+
+	public function testJoinRebindWritesConditionsToItsExplicitCounterpart(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $this->makeQuery('users', $registry);
+		$otherUsers = $this->makeQuery('users', $registry);
+		$sourceJoin = $users->join($registry->getCollection('posts'), JoinType::INNER, 'posts');
+		$sourceJoin->on(x()->eq($users->id, $sourceJoin->id));
+		$targetJoin = $otherUsers->join($registry->getCollection('posts'), JoinType::INNER, 'posts');
+		$targetCondition = x()->eq($targetJoin->id, $otherUsers->id);
+		$targetJoin->on($targetCondition);
+
+		$sourceJoin->rebind(
+			SourceMap::of($users, $otherUsers)->with($sourceJoin, $targetJoin),
+		);
+
+		self::assertNotSame($targetCondition, $targetJoin->getConditions()[0]);
+		self::assertSame($otherUsers, $targetJoin->getConditions()[0]->getLeft()->getSource());
 	}
 
 	private function makeRegistry(): Registry

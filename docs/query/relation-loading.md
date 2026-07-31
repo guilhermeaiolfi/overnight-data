@@ -191,6 +191,10 @@ Practical guidance:
 - SQL dialect differences should be delegated to Cycle Database or Doctrine DBAL rather than hand-coded in the data layer.
 - The data layer must remain useful without the optional ORM.
 
+## Relation source identity during copies
+
+Each cached relation branch is its own query source. When a query is copied, relation-owned conditions and sorts are rebound through the same `SourceMap` as the rest of the graph. Explicit pairs are anchors; under an anchored query or parent, descendant branches resolve to the same-named cached relations on that counterpart. Only branches whose owning query/ancestor chain is not anchored remain unchanged. Copying does not invent branches from path strings alone—structural resolve uses parent links and `relation($name)`.
+
 ## Current Limits
 
 - Structured loading is not the same as arbitrary related-field projection in flat scalar selections.

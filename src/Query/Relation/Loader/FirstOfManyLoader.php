@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation\Loader;
 
+use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Expression\StarExpression;
 use function ON\Data\Query\query;
@@ -19,6 +20,7 @@ use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
 use ON\Data\Query\Sort\SortDirection;
+use ON\Data\Query\SourceMap;
 use function ON\Data\Query\x;
 
 final class FirstOfManyLoader extends AbstractLoader
@@ -102,10 +104,13 @@ final class FirstOfManyLoader extends AbstractLoader
 			return;
 		}
 
-		$branch->getQuery()->bindConditions(
-			$branch->getRelationRef(),
-			...$conditions,
-		);
+		$query = $branch->getQuery();
+		$query->where(...array_map(
+			static fn (ConditionInterface $condition): ConditionInterface => $condition->rebind(
+				SourceMap::of($branch->getRelationRef(), $query),
+			),
+			$conditions,
+		));
 	}
 
 	/**
@@ -113,31 +118,21 @@ final class FirstOfManyLoader extends AbstractLoader
 	 */
 	private function rankedQuery(RelationLoadBranch $branch, SelectQuery $childQuery, array $orderBy): SelectQuery
 	{
-		$inner = query($childQuery->getCollection());
+		$inner = $childQuery->copy();
 		$partitionBy = [];
 
 		foreach ($branch->getRelationRef()->getDefinition()->getKeyPairing()->getRightFields() as $fieldName) {
 			$partitionBy[] = $inner->field($fieldName);
 		}
 
-		// SelectQuery starts with DEFAULT *; keeping it alongside projected columns
-		// makes MySQL reject the derived table (Duplicate column name).
+		// Keeping the default star alongside projected columns makes MySQL reject
+		// the derived table (Duplicate column name).
 		$inner->getSelections()->removeByTag(SelectionTag::DEFAULT);
-		$inner->getSelections()->merge(
-			$childQuery->getSelections()
-				->filter(static fn (SelectionItem $selection): bool => ! $selection->getExpression() instanceof StarExpression)
-				->projectTo(from: $childQuery, to: $inner),
-		);
-
-		if ($childQuery->getConditions() !== []) {
-			$inner->bindConditions($childQuery, ...$childQuery->getConditions());
-		}
-
 		$inner->getSelections()->ensureInternalExpression(
 			x()->fn()->rowNumber()->over(
 				partitionBy: $partitionBy,
 				orderBy: array_map(
-					static fn (Sort $sort): Sort => $sort->bindTo($inner, from: $childQuery),
+					static fn (Sort $sort): Sort => $sort->rebind(SourceMap::of($childQuery, $inner)),
 					$orderBy,
 				),
 			),
@@ -152,7 +147,7 @@ final class FirstOfManyLoader extends AbstractLoader
 			$inner->getSelections()
 				->filterByTag(SelectionTag::COLUMN)
 				->filter(static fn (SelectionItem $selection): bool => ! $selection->getExpression() instanceof StarExpression)
-				->projectTo(from: $ranked, to: $outer),
+				->projectDerivedTo($ranked, $outer),
 		);
 
 		return $outer->where($ranked->field(self::RANK_ALIAS)->eq(1));

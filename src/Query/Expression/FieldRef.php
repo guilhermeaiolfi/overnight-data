@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Expression;
 
-use InvalidArgumentException;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Query\SourceMap;
 
 final class FieldRef extends AbstractAggregateableExpression
 {
@@ -53,32 +53,10 @@ final class FieldRef extends AbstractAggregateableExpression
 		];
 	}
 
-	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self|SourceFieldExpression
+	public function rebind(SourceMap $sources): self|SourceFieldExpression
 	{
-		if ($from === null) {
-			throw new InvalidArgumentException('FieldRef::bindTo() requires an explicit source.');
-		}
+		$source = $sources->remap($this->source);
 
-		$fromPath = $from->getPath();
-		$fieldPath = $this->getPath();
-
-		if (array_slice($fieldPath, 0, count($fromPath)) !== $fromPath) {
-			return $this;
-		}
-
-		$relativePath = array_slice($fieldPath, count($fromPath));
-
-		if ($relativePath === []) {
-			return $this;
-		}
-
-		$fieldName = array_pop($relativePath);
-		$source = $target;
-
-		foreach ($relativePath as $relationName) {
-			$source = $source->relation($relationName);
-		}
-
-		return $source->field($fieldName);
+		return $source === $this->source ? $this : $source->field($this->getName());
 	}
 }

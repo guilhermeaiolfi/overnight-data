@@ -8,7 +8,7 @@ use ArrayIterator;
 use Countable;
 use InvalidArgumentException;
 use IteratorAggregate;
-use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\SourceMap;
 use Traversable;
 
 /**
@@ -117,13 +117,13 @@ final class ConditionList implements IteratorAggregate, Countable
 	}
 
 	/**
-	 * Rebind every condition onto $to (for SelectQuery::copy()).
+	 * Rebind every condition through a frozen source map.
 	 */
-	public function bindTo(QuerySourceInterface $to, QuerySourceInterface $from): self
+	public function rebind(SourceMap $sources): self
 	{
 		return $this->map(
 			static fn (ConditionItem $entry): ConditionItem => $entry->withCondition(
-				$entry->getCondition()->bindTo($to, from: $from),
+				$entry->getCondition()->rebind($sources),
 			),
 		);
 	}

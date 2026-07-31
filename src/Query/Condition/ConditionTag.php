@@ -8,7 +8,7 @@ use ON\Data\Query\SelectQuery;
 
 final class ConditionTag
 {
-	/** Caller {@see SelectQuery::where()} / bindConditions(). */
+	/** Caller {@see SelectQuery::where()}. */
 	public const USER = 'user';
 
 	/** Separate-query parent-key IN / OR correlation (chunk-replaced). */

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Expression;
 
-use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\SourceMap;
 
 final class FunctionCallExpression extends AbstractAggregateableExpression
 {
@@ -40,13 +40,13 @@ final class FunctionCallExpression extends AbstractAggregateableExpression
 		return $this->arguments;
 	}
 
-	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	public function rebind(SourceMap $sources): self
 	{
 		$changed = false;
 		$arguments = [];
 
 		foreach ($this->arguments as $argument) {
-			$bound = $argument->bindTo($target, from: $from);
+			$bound = $argument->rebind($sources);
 			$changed = $changed || $bound !== $argument;
 			$arguments[] = $bound;
 		}

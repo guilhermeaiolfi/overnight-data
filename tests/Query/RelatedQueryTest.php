@@ -11,10 +11,12 @@ use ON\Data\Query\Condition\ComparisonCondition;
 use ON\Data\Query\Condition\ComparisonOperator;
 use ON\Data\Query\Condition\ExistsCondition;
 use ON\Data\Query\Exception\RelationQueryException;
+use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
 use function ON\Data\Query\query;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Query\SourceMap;
 use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 
@@ -182,6 +184,95 @@ final class RelatedQueryTest extends TestCase
 
 		$copiedRelated = $copy->relatedQuery($copy->posts);
 		self::assertSame($copy, $copiedRelated->getConditions()[0]->getRight()->getSource());
+	}
+
+	public function testExistsConditionRebindRebindsOuterCorrelation(): void
+	{
+		$users = $this->makeQuery('users');
+		$exists = x()->exists(
+			$users->relatedQuery(
+				$users->posts,
+				fn (SelectQuery $posts) => $posts->where(x()->eq($posts->published, true)),
+			),
+		);
+
+		$other = $this->makeQuery('users');
+		$bound = $exists->rebind(SourceMap::of($users, $other));
+
+		self::assertNotSame($exists, $bound);
+		self::assertNotSame($exists->getQuery(), $bound->getQuery());
+
+		$correlation = $bound->getQuery()->getConditions()[0];
+		self::assertSame($other, $correlation->getRight()->getSource());
+		self::assertSame($bound->getQuery(), $correlation->getLeft()->getSource());
+	}
+
+	public function testExistsConditionRebindRebindsM2MOuterCorrelation(): void
+	{
+		$users = $this->makeQuery('users');
+		$exists = x()->exists(
+			$users->relatedQuery(
+				$users->roles,
+				fn (SelectQuery $roles) => $roles->where(x()->eq($roles->name, 'Editor')),
+			),
+		);
+
+		$other = $this->makeQuery('users');
+		$bound = $exists->rebind(SourceMap::of($users, $other));
+
+		$correlation = null;
+		foreach ($bound->getQuery()->getConditions() as $condition) {
+			if (! $condition instanceof ComparisonCondition) {
+				continue;
+			}
+			if ($condition->getRight()->getSource() === $other) {
+				$correlation = $condition;
+
+				break;
+			}
+		}
+
+		self::assertNotNull($correlation);
+		self::assertSame($other, $correlation->getRight()->getSource());
+	}
+
+	public function testSubqueryExpressionRebindRebindsOuterCorrelation(): void
+	{
+		$users = $this->makeQuery('users');
+		$related = $users->relatedQuery(
+			$users->posts,
+			fn (SelectQuery $posts) => $posts->select($posts->id)->where(x()->eq($posts->published, true)),
+		);
+		$subquery = new SubqueryExpression($related);
+
+		$other = $this->makeQuery('users');
+		$bound = $subquery->rebind(SourceMap::of($users, $other));
+
+		self::assertNotSame($subquery, $bound);
+		$correlation = $bound->getQuery()->getConditions()[0];
+		self::assertInstanceOf(ComparisonCondition::class, $correlation);
+		self::assertSame($other, $correlation->getRight()->getSource());
+	}
+
+	public function testInConditionRebindRebindsSubquerySet(): void
+	{
+		$users = $this->makeQuery('users');
+		$related = $users->relatedQuery(
+			$users->posts,
+			fn (SelectQuery $posts) => $posts->select($posts->id),
+		);
+		$condition = x()->in($users->id, $related);
+
+		$other = $this->makeQuery('users');
+		$bound = $condition->rebind(SourceMap::of($users, $other));
+
+		self::assertNotSame($condition, $bound);
+		$set = $bound->getSet();
+		self::assertInstanceOf(SubqueryExpression::class, $set);
+		$correlation = $set->getQuery()->getConditions()[0];
+		self::assertInstanceOf(ComparisonCondition::class, $correlation);
+		self::assertSame($other, $correlation->getRight()->getSource());
+		self::assertSame($other, $bound->getExpression()->getSource());
 	}
 
 	private function makeQuery(string $collection): SelectQuery

@@ -212,6 +212,12 @@ $query = query($ranked)
 
 Omitting the alias is allowed; the backend assigns a stable internal alias. Derived sources expose `field()` and `all()`, but they do not expose relation loading.
 
+## Copying and source identity
+
+Query copies preserve source ownership by rebinding expressions through an internal, immutable `SourceMap`. A source is identified by its object identity, not by its definition name or path: two queries over `users` are different sources.
+
+Explicit map pairs are anchors. Under an anchored query or parent, unmapped `RelationRef` descendants resolve to the same-named cached relation on that counterpart (`relation($name)`). Only sources with no anchored ancestor remain unchanged. The map does not invent relations from field-path strings; structural resolve walks already-owned parent links.
+
 ## Inspecting the model
 
 Use getters to inspect the built query:

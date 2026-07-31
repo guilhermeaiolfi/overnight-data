@@ -13,7 +13,8 @@ use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\SourceFieldExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
-use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\SelectQuery;
+use ON\Data\Query\SourceMap;
 use Traversable;
 
 /**
@@ -172,13 +173,43 @@ final class SelectionList implements IteratorAggregate, Countable
 		}
 	}
 
-	public function projectTo(QuerySourceInterface $from, QuerySourceInterface $to): self
+	public function projectTo(SourceMap $sources): self
 	{
 		$projected = new self();
 
 		foreach ($this->entries as $entry) {
 			$projected->add(
-				$entry->getProjectedExpression($from, $to),
+				$entry->getProjectedExpression($sources),
+				$entry->getTags(),
+				$entry->isExplicit(),
+			);
+		}
+
+		return $projected;
+	}
+
+	/**
+	 * Project selected columns out of a derived source.
+	 *
+	 * The outer query may only reference the derived query's selection keys; it
+	 * must not inherit joins or relation sources from the inner query.
+	 */
+	public function projectDerivedTo(SelectQuery $derived, SelectQuery $target): self
+	{
+		if ($target->getFrom() !== $derived) {
+			throw new InvalidArgumentException('Derived projection targets must select from the supplied derived query.');
+		}
+
+		$projected = new self();
+
+		foreach ($this->entries as $entry) {
+			$expression = $entry->getExpression();
+			if ($expression instanceof StarExpression) {
+				continue;
+			}
+
+			$projected->add(
+				$target->field($entry->getSelectionKey())->as($entry->getSelectionKey()),
 				$entry->getTags(),
 				$entry->isExplicit(),
 			);
@@ -315,6 +346,12 @@ final class SelectionList implements IteratorAggregate, Countable
 			static fn (SelectionItem $entry): bool => ! $entry->hasTag($tag),
 		));
 		$this->rebuildNamedExpressions();
+	}
+
+	public function clear(): void
+	{
+		$this->entries = [];
+		$this->namedExpressions = [];
 	}
 
 	/**

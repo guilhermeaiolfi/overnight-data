@@ -6,6 +6,7 @@ namespace ON\Data\Query\Relation\Loader;
 
 use LogicException;
 use ON\Data\Definition\Relation\RelationKeyPairing;
+use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Condition\ConditionTag;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationLoaderException;
@@ -20,6 +21,8 @@ use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Query\Sort\Sort;
+use ON\Data\Query\SourceMap;
 
 abstract class AbstractLoader implements LoaderInterface
 {
@@ -134,13 +137,23 @@ abstract class AbstractLoader implements LoaderInterface
 		$conditions = $selection->getConditions();
 
 		if ($conditions !== []) {
-			$query->bindConditions($from, ...$conditions);
+			$query->where(...array_map(
+				static fn (ConditionInterface $condition): ConditionInterface => $condition->rebind(
+					SourceMap::of($from, $query),
+				),
+				$conditions,
+			));
 		}
 
 		$sorts = $selection->getSorts();
 
 		if ($sorts !== []) {
-			$query->bindSorts($from, ...$sorts);
+			$query->orderBy(...array_map(
+				static fn (Sort $sort): Sort => $sort->rebind(
+					SourceMap::of($from, $query),
+				),
+				$sorts,
+			));
 		}
 	}
 

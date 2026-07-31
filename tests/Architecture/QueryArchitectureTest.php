@@ -444,8 +444,14 @@ final class QueryArchitectureTest extends TestCase
 
 		self::assertFalse(method_exists(SelectQuery::class, 'adopt' . 'Conditions'));
 		self::assertFalse(method_exists(SelectQuery::class, 'adopt' . 'Sorts'));
-		self::assertTrue(method_exists(SelectQuery::class, 'bindConditions'));
-		self::assertTrue(method_exists(SelectQuery::class, 'bindSorts'));
+		self::assertFalse(method_exists(SelectQuery::class, 'rebindOuter'));
+		foreach ([ConditionInterface::class, ValueExpressionInterface::class, FieldRef::class, Sort::class, SelectQuery::class] as $class) {
+			self::assertTrue(method_exists($class, 'rebind'), $class);
+			self::assertFalse(method_exists($class, 'bindTo'), $class);
+		}
+
+		self::assertFalse(method_exists(SelectQuery::class, 'bindConditions'));
+		self::assertFalse(method_exists(SelectQuery::class, 'bindSorts'));
 	}
 
 	public function testQuerySourceCodeUsesOnlyBindingTerminology(): void
@@ -465,6 +471,33 @@ final class QueryArchitectureTest extends TestCase
 			],
 			'Legacy binding vocabulary "%s" found in %s',
 		);
+	}
+
+	public function testFieldRefRebindingUsesSourceIdentityWithoutPathRemounting(): void
+	{
+		$contents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Expression/FieldRef.php');
+
+		self::assertStringContainsString('$sources->remap($this->source)', $contents);
+		self::assertStringNotContainsString('->relation(', $contents);
+		self::assertStringNotContainsString('array_slice(', $contents);
+	}
+
+	public function testProductionQueryCodeHasNoLegacyBindingCallers(): void
+	{
+		$iterator = new RecursiveIteratorIterator(
+			new RecursiveDirectoryIterator(dirname(__DIR__, 2) . '/src/Query'),
+		);
+
+		foreach ($iterator as $file) {
+			if (! $file instanceof SplFileInfo || $file->getExtension() !== 'php') {
+				continue;
+			}
+
+			$contents = (string) file_get_contents($file->getPathname());
+			self::assertSame(0, preg_match('/(?:function|->)\s*bindTo\s*\(/', $contents), $file->getPathname());
+			self::assertSame(0, preg_match('/(?:function|->)\s*bindConditions\s*\(/', $contents), $file->getPathname());
+			self::assertSame(0, preg_match('/(?:function|->)\s*bindSorts\s*\(/', $contents), $file->getPathname());
+		}
 	}
 
 	public function testBuiltInLoadersUseRelationKeyPairingsForPairedOperations(): void

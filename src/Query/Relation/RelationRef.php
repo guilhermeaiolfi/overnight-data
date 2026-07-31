@@ -22,6 +22,7 @@ use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
+use ON\Data\Query\SourceMap;
 use ReflectionClass;
 use ReflectionException;
 
@@ -117,11 +118,31 @@ final class RelationRef implements QuerySourceInterface
 	}
 
 	/**
+	 * @param list<ConditionInterface> $conditions
+	 */
+	public function setConditions(array $conditions): self
+	{
+		$this->conditions = array_values($conditions);
+
+		return $this;
+	}
+
+	/**
 	 * @return list<Sort>
 	 */
 	public function getSorts(): array
 	{
 		return $this->sorts;
+	}
+
+	/**
+	 * @param list<Sort> $sorts
+	 */
+	public function setSorts(array $sorts): self
+	{
+		$this->sorts = array_values($sorts);
+
+		return $this;
 	}
 
 	public function getStrategy(): ?LoadStrategy
@@ -158,6 +179,73 @@ final class RelationRef implements QuerySourceInterface
 	public function hasJoinedSource(): bool
 	{
 		return $this->joinedSource !== null;
+	}
+
+	/**
+	 * Install an already materialized relation join on this branch.
+	 *
+	 * Separate from {@see getJoinedSource()}: copying must attach the mapped
+	 * join without asking a loader to create another one.
+	 */
+	public function setJoinedSource(QuerySourceInterface $source): void
+	{
+		if ($this->joinedSource !== null && $this->joinedSource !== $source) {
+			throw new LogicException('A relation reference cannot set two joined sources.');
+		}
+
+		$this->joinedSource = $source;
+	}
+
+	public function rebind(SourceMap $sources): self
+	{
+		$target = $sources->remap($this);
+
+		if (! $target instanceof self) {
+			throw new LogicException(sprintf(
+				'RelationRef::rebind() requires a RelationRef counterpart, got %s.',
+				$target::class,
+			));
+		}
+
+		if ($this->hasJoinedSource()) {
+			$joinedSource = $sources->remap($this->getJoinedSource());
+			$target->setJoinedSource($joinedSource);
+		}
+
+		$target->visible($this->visible);
+
+		if ($this->fields !== null) {
+			$target->fields($this->fields);
+		} elseif ($this->selected) {
+			$target->load();
+		}
+
+		$target->setConditions(array_map(
+			static fn (ConditionInterface $condition): ConditionInterface => $condition->rebind($sources),
+			$this->conditions,
+		));
+		$target->setSorts(array_map(
+			static fn (Sort $sort): Sort => $sort->rebind($sources),
+			$this->sorts
+		));
+
+		if ($this->strategy !== null) {
+			$target->strategy($this->strategy);
+		}
+
+		if ($this->limit !== null) {
+			$target->limit($this->limit);
+		}
+
+		if ($this->offset !== null) {
+			$target->offset($this->offset);
+		}
+
+		foreach ($this->relationRefs as $relation) {
+			$relation->rebind($sources);
+		}
+
+		return $target;
 	}
 
 	public function getCollection(): CollectionInterface

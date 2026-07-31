@@ -17,6 +17,7 @@ use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Exception\RelationSelectionException;
+use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
@@ -27,6 +28,7 @@ use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Relation\RootLoadBranch;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Query\SourceMap;
 use function ON\Data\Query\x;
 use PDO;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
@@ -1548,6 +1550,157 @@ final class CycleJoinExecutionTest extends TestCase
 			->fetchAll();
 
 		self::assertSame([['name' => 'Ada'], ['name' => 'Grace']], $profileRows);
+	}
+
+	public function testExistsRebindKeepsCorrelatedCountExecutable(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->where(x()->exists(
+			$users->relatedQuery(
+				$users->posts,
+				fn (SelectQuery $posts) => $posts->where(x()->eq($posts->published, true)),
+			),
+		));
+
+		$filtered = $this->database->query($this->registry->getCollection('users'));
+		foreach ($users->getConditions() as $condition) {
+			$filtered->where($condition->rebind(SourceMap::of($users, $filtered)));
+		}
+
+		$row = $filtered
+			->select(x()->count($filtered->all())->as('aggregate_count'))
+			->fetchOne();
+
+		self::assertSame(2, (int) ($row['aggregate_count'] ?? 0));
+	}
+
+	public function testRebindRemountsCorrelatedSelectAndExecutes(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$scalar = $users->related($this->registry->getCollection('posts'));
+		$scalar
+			->select($users->id->as('owner_id'))
+			->where(x()->eq($scalar->userId, $users->id))
+			->limit(1);
+
+		$filtered = $this->database->query($this->registry->getCollection('users'));
+		$bound = $scalar->rebind(SourceMap::of($users, $filtered));
+		$ownerSelection = $bound->getSelections()->getAll()[0]->getExpression();
+		self::assertInstanceOf(AliasedExpression::class, $ownerSelection);
+		self::assertSame($filtered, $ownerSelection->getExpression()->getSource());
+
+		$filtered
+			->select(
+				$filtered->name,
+				(new SubqueryExpression($bound))->as('owner_id'),
+			)
+			->orderBy($filtered->id->asc());
+
+		$rows = $filtered->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'owner_id' => 1],
+			['name' => 'Grace', 'owner_id' => 2],
+			['name' => 'Linus', 'owner_id' => null],
+		], $rows);
+	}
+
+	public function testRebindRemountsCorrelatedJoinOnAndExecutes(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$related = $users->related($this->registry->getCollection('posts'));
+		$companies = $related->join(
+			$this->registry->getCollection('companies'),
+			JoinType::INNER,
+			'owner_company',
+		);
+		$companies->on(x()->eq($companies->id, $users->companyId));
+		$related->where(x()->eq($related->userId, $users->id));
+
+		$filtered = $this->database->query($this->registry->getCollection('users'));
+		$bound = $related->rebind(SourceMap::of($users, $filtered));
+		$filtered
+			->select($filtered->name)
+			->where(x()->exists($bound))
+			->orderBy($filtered->id->asc());
+
+		$rows = $filtered->fetchAll();
+
+		$joinOn = $bound->getJoins()[0]->getConditions()[0];
+		self::assertSame($filtered, $joinOn->getRight()->getSource());
+		self::assertSame([['name' => 'Ada'], ['name' => 'Grace']], $rows);
+	}
+
+	public function testRebindRemountsInSubqueryAndExecutesCount(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$related = $users->relatedQuery(
+			$users->posts,
+			fn (SelectQuery $posts) => $posts->select($posts->userId)->where(x()->eq($posts->published, true)),
+		);
+		$users->where(x()->in($users->id, $related));
+
+		$filtered = $this->database->query($this->registry->getCollection('users'));
+		foreach ($users->getConditions() as $condition) {
+			$filtered->where($condition->rebind(SourceMap::of($users, $filtered)));
+		}
+
+		$row = $filtered
+			->select(x()->count($filtered->all())->as('aggregate_count'))
+			->fetchOne();
+
+		self::assertSame(2, (int) ($row['aggregate_count'] ?? 0));
+	}
+
+	public function testRebindRemountsNestedExistsAndExecutesCount(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->where(x()->exists(
+			$users->relatedQuery(
+				$users->posts,
+				function (SelectQuery $posts): void {
+					$posts->where(x()->exists(
+						$posts->relatedQuery(
+							$posts->comments,
+							fn (SelectQuery $comments) => $comments->where(x()->eq($comments->body, 'First')),
+						),
+					));
+				},
+			),
+		));
+
+		$filtered = $this->database->query($this->registry->getCollection('users'));
+		foreach ($users->getConditions() as $condition) {
+			$filtered->where($condition->rebind(SourceMap::of($users, $filtered)));
+		}
+
+		$row = $filtered
+			->select(x()->count($filtered->all())->as('aggregate_count'))
+			->fetchOne();
+
+		self::assertSame(1, (int) ($row['aggregate_count'] ?? 0));
+	}
+
+	public function testRebindRemountsM2MExistsAndExecutesCount(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->where(x()->exists(
+			$users->relatedQuery(
+				$users->roles,
+				fn (SelectQuery $roles) => $roles->where(x()->eq($roles->name, 'Editor')),
+			),
+		));
+
+		$filtered = $this->database->query($this->registry->getCollection('users'));
+		foreach ($users->getConditions() as $condition) {
+			$filtered->where($condition->rebind(SourceMap::of($users, $filtered)));
+		}
+
+		$row = $filtered
+			->select(x()->count($filtered->all())->as('aggregate_count'))
+			->fetchOne();
+
+		self::assertSame(1, (int) ($row['aggregate_count'] ?? 0));
 	}
 
 	public function testRelatedQueryNotExistsAndNullableKeys(): void

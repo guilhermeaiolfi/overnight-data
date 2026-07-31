@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Condition;
 
 use ON\Data\Query\Expression\ValueExpressionInterface;
-use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\SourceMap;
 
 final class ComparisonCondition implements ConditionInterface
 {
@@ -31,10 +31,10 @@ final class ComparisonCondition implements ConditionInterface
 		return $this->right;
 	}
 
-	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	public function rebind(SourceMap $sources): self
 	{
-		$left = $this->left->bindTo($target, from: $from);
-		$right = $this->right->bindTo($target, from: $from);
+		$left = $this->left->rebind($sources);
+		$right = $this->right->rebind($sources);
 
 		if ($left === $this->left && $right === $this->right) {
 			return $this;

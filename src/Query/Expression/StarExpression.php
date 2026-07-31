@@ -7,6 +7,7 @@ namespace ON\Data\Query\Expression;
 use ON\Data\Query\ExpressionFactory;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Query\SourceMap;
 use function ON\Data\Query\x;
 
 final class StarExpression
@@ -31,13 +32,11 @@ final class StarExpression
 		return implode('.', [...$this->source->getPath(), '*']);
 	}
 
-	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	public function rebind(SourceMap $sources): self
 	{
-		if ($from !== null && $this->source === $from) {
-			return $target->all();
-		}
+		$source = $sources->remap($this->source);
 
-		return $this;
+		return $source === $this->source ? $this : $source->all();
 	}
 
 	public function count(): AggregateExpression

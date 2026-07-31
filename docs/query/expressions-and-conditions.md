@@ -229,3 +229,7 @@ The expression model intentionally does not perform whole-query validation for:
 - subquery projection shape.
 
 Those checks belong to the execution or translation boundary, not the query AST itself.
+
+## Rebinding expressions
+
+When a query is copied, its expressions and conditions are rebound through an internal, immutable `SourceMap`. Explicit pairs are anchors: a mapped field is recreated for its paired source. Under an anchored query or parent, unmapped nested `RelationRef` sources resolve to the same-named cached child on that counterpart. Only fields whose source has no anchored ancestor remain unchanged (for example correlated or otherwise external sources). Leaves ask the map for a source counterpart; they do not walk relation paths themselves.

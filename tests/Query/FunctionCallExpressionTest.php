@@ -15,6 +15,7 @@ use ON\Data\Query\QueryFunction\FunctionCompilationContextInterface;
 use ON\Data\Query\QueryFunction\InvalidQueryFunctionException;
 use ON\Data\Query\QueryFunction\QueryFunctionInterface;
 use ON\Data\Query\QueryFunction\Standard\Temporal\Year;
+use ON\Data\Query\SourceMap;
 use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -51,13 +52,13 @@ final class FunctionCallExpressionTest extends TestCase
 		x()->fn()->call(FunctionWithRequiredConstructor::class);
 	}
 
-	public function testBindToRebindsNestedArguments(): void
+	public function testRebindRebindsNestedArguments(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = query($registry->getCollection('users'));
 		$posts = query($registry->getCollection('posts'));
 		$expression = x()->fn()->call(Year::class, $users->createdAt);
-		$bound = $expression->bindTo($posts, from: $users);
+		$bound = $expression->rebind(SourceMap::of($users, $posts));
 
 		self::assertNotSame($expression, $bound);
 		self::assertSame(['createdAt'], $bound->getArguments()[0]->getPath());

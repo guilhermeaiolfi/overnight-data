@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Expression;
 
 use InvalidArgumentException;
-use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\SourceMap;
 
 final class AliasedExpression
 {
@@ -37,9 +37,9 @@ final class AliasedExpression
 		return $this->alias;
 	}
 
-	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	public function rebind(SourceMap $sources): self
 	{
-		$expression = $this->expression->bindTo($target, from: $from);
+		$expression = $this->expression->rebind($sources);
 
 		if ($expression === $this->expression) {
 			return $this;

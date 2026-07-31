@@ -8,7 +8,7 @@ use InvalidArgumentException;
 use ON\Data\Query\Expression\AggregateExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
-use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\SourceMap;
 
 final class InCondition implements ConditionInterface
 {
@@ -61,9 +61,9 @@ final class InCondition implements ConditionInterface
 		return $this->negated;
 	}
 
-	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	public function rebind(SourceMap $sources): self
 	{
-		$expression = $this->expression->bindTo($target, from: $from);
+		$expression = $this->expression->rebind($sources);
 		$set = $this->set;
 		$changed = $expression !== $this->expression;
 
@@ -71,11 +71,15 @@ final class InCondition implements ConditionInterface
 			$boundSet = [];
 
 			foreach ($set as $item) {
-				$bound = $item->bindTo($target, from: $from);
+				$bound = $item->rebind($sources);
 				$changed = $changed || $bound !== $item;
 				$boundSet[] = $bound;
 			}
 
+			$set = $boundSet;
+		} else {
+			$boundSet = $set->rebind($sources);
+			$changed = $changed || $boundSet !== $set;
 			$set = $boundSet;
 		}
 

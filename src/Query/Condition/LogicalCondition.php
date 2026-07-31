@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Condition;
 
 use InvalidArgumentException;
-use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\SourceMap;
 
 final class LogicalCondition implements ConditionInterface
 {
@@ -34,13 +34,13 @@ final class LogicalCondition implements ConditionInterface
 		return $this->conditions;
 	}
 
-	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	public function rebind(SourceMap $sources): self
 	{
 		$changed = false;
 		$conditions = [];
 
 		foreach ($this->conditions as $condition) {
-			$bound = $condition->bindTo($target, from: $from);
+			$bound = $condition->rebind($sources);
 			$changed = $changed || $bound !== $condition;
 			$conditions[] = $bound;
 		}

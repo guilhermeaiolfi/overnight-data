@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Expression;
 
-use InvalidArgumentException;
 use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\SourceMap;
 
 final class SourceFieldExpression extends AbstractAggregateableExpression
 {
@@ -41,34 +41,10 @@ final class SourceFieldExpression extends AbstractAggregateableExpression
 		];
 	}
 
-	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	public function rebind(SourceMap $sources): self
 	{
-		if ($from === null) {
-			throw new InvalidArgumentException('SourceFieldExpression::bindTo() requires an explicit source.');
-		}
+		$source = $sources->remap($this->source);
 
-		$fromPath = $from->getPath();
-		$fieldPath = $this->getPath();
-
-		if (array_slice($fieldPath, 0, count($fromPath)) !== $fromPath) {
-			return $this;
-		}
-
-		$relativePath = array_slice($fieldPath, count($fromPath));
-
-		if ($relativePath === []) {
-			return $this;
-		}
-
-		$fieldName = array_pop($relativePath);
-		$source = $target;
-
-		foreach ($relativePath as $relationName) {
-			$source = $source->relation($relationName);
-		}
-
-		$field = $source->field($fieldName);
-
-		return $field instanceof self ? $field : $this;
+		return $source === $this->source ? $this : new self($source, $this->name);
 	}
 }

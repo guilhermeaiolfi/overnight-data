@@ -83,6 +83,29 @@ final class Join implements QuerySourceInterface
 		return $this->conditions;
 	}
 
+	/**
+	 * @param list<ConditionInterface> $conditions
+	 */
+	public function setConditions(array $conditions): self
+	{
+		$this->conditions = array_values($conditions);
+
+		return $this;
+	}
+
+	public function rebind(SourceMap $sources): self
+	{
+		/** @var self $target */
+		$target = $sources->remap($this);
+
+		$target->setConditions(array_map(
+			static fn (ConditionInterface $condition): ConditionInterface => $condition->rebind($sources),
+			$this->conditions,
+		));
+
+		return $target;
+	}
+
 	public function field(string $name): FieldRef
 	{
 		if (isset($this->fieldRefs[$name])) {

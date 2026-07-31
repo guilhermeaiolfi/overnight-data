@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Expression;
 
-use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Sort\Sort;
+use ON\Data\Query\SourceMap;
 
 final class WindowSpec
 {
@@ -35,13 +35,13 @@ final class WindowSpec
 		return $this->orderBy;
 	}
 
-	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	public function rebind(SourceMap $sources): self
 	{
 		$changed = false;
 		$partitionBy = [];
 
 		foreach ($this->partitionBy as $partition) {
-			$bound = $partition->bindTo($target, from: $from);
+			$bound = $partition->rebind($sources);
 			$changed = $changed || $bound !== $partition;
 			$partitionBy[] = $bound;
 		}
@@ -49,7 +49,7 @@ final class WindowSpec
 		$orderBy = [];
 
 		foreach ($this->orderBy as $sort) {
-			$bound = $sort->bindTo($target, from: $from);
+			$bound = $sort->rebind($sources);
 			$changed = $changed || $bound !== $sort;
 			$orderBy[] = $bound;
 		}

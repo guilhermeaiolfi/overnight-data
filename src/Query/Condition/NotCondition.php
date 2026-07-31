@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Condition;
 
-use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\SourceMap;
 
 final class NotCondition implements ConditionInterface
 {
@@ -18,9 +18,9 @@ final class NotCondition implements ConditionInterface
 		return $this->condition;
 	}
 
-	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	public function rebind(SourceMap $sources): self
 	{
-		$condition = $this->condition->bindTo($target, from: $from);
+		$condition = $this->condition->rebind($sources);
 
 		if ($condition === $this->condition) {
 			return $this;

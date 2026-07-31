@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Sort;
 
 use ON\Data\Query\Expression\ValueExpressionInterface;
-use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\SourceMap;
 
 final class Sort
 {
@@ -25,9 +25,9 @@ final class Sort
 		return $this->direction;
 	}
 
-	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	public function rebind(SourceMap $sources): self
 	{
-		$expression = $this->expression->bindTo($target, from: $from);
+		$expression = $this->expression->rebind($sources);
 
 		if ($expression === $this->expression) {
 			return $this;

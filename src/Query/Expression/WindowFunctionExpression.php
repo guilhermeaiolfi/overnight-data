@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Expression;
 
-use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Sort\Sort;
+use ON\Data\Query\SourceMap;
 
 final class WindowFunctionExpression extends AbstractValueExpression
 {
@@ -25,9 +25,9 @@ final class WindowFunctionExpression extends AbstractValueExpression
 		return $this->window;
 	}
 
-	public function bindTo(QuerySourceInterface $target, ?QuerySourceInterface $from = null): self
+	public function rebind(SourceMap $sources): self
 	{
-		$window = $this->window?->bindTo($target, from: $from);
+		$window = $this->window?->rebind($sources);
 
 		if ($window === $this->window) {
 			return $this;
