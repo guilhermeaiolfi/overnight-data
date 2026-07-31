@@ -17,6 +17,7 @@ use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Condition\ConditionList;
 use ON\Data\Query\Condition\ConditionTag;
+use ON\Data\Query\Exception\CountRequiresRootIdentityException;
 use ON\Data\Query\Exception\ObjectExportException;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Exception\UnknownQueryExpressionException;
@@ -40,6 +41,12 @@ use ON\Data\Query\Sort\Sort;
 
 final class SelectQuery implements QuerySourceInterface
 {
+	private const COUNT_AGGREGATE_ALIAS = '__count';
+
+	private const COUNT_DERIVED_ALIAS = 'count_rows';
+
+	private const COUNT_ROW_LITERAL_ALIAS = '__count_row';
+
 	private static int $nextAutoAlias = 0;
 
 	/**
@@ -200,7 +207,12 @@ final class SelectQuery implements QuerySourceInterface
 				return $this->projectedFieldRefs[$name] ??= new SourceFieldExpression($this, $name);
 			}
 
-			throw UnknownQueryFieldException::forDefinition($name, $this->getSourceName());
+			// Aliased collection-root subqueries still resolve real collection columns for
+			// join materialization while their own body is compiled. Unselected names that
+			// are not collection fields stay unknown (derived-FROM projection surface).
+			if (! $this->source instanceof CollectionInterface || ! $this->source->hasField($name)) {
+				throw UnknownQueryFieldException::forDefinition($name, $this->getSourceName());
+			}
 		}
 
 		if ($this->source instanceof SelectQuery) {
@@ -643,6 +655,47 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
+	 * Count matching root rows (or groups) for the current filters without mutating this query.
+	 *
+	 * Copies the query, applies scalar count normalization (no result class, writable
+	 * handler, order/limit/offset, or relation loading), reshapes to an aggregate
+	 * select, then runs ordinary {@see fetchOne()}. Requires a usable root primary
+	 * key unless GROUP BY/HAVING is present. Executors must translate ordinary
+	 * aggregate / derived-FROM selects; there is no executor-specific count API.
+	 */
+	public function count(): int
+	{
+		if ($this->executor === null) {
+			throw QueryNotExecutableException::forQuery($this);
+		}
+
+		$countQuery = $this->copy();
+		$this->normalizeForScalarCount($countQuery);
+
+		if ($countQuery->groups !== [] || $countQuery->havingConditions !== []) {
+			$executable = $this->shapeGroupedCount($countQuery);
+		} else {
+			$primaryKeyFields = $this->rootPrimaryKeyFields($countQuery);
+
+			if ($primaryKeyFields === []) {
+				throw CountRequiresRootIdentityException::forQuery($this);
+			}
+
+			$executable = count($primaryKeyFields) === 1
+				? $this->shapeDistinctKeyCount($countQuery, $primaryKeyFields[0])
+				: $this->shapeCompositeKeyCount($countQuery, $primaryKeyFields);
+		}
+
+		$row = $executable->fetchOne();
+
+		if (! is_array($row) || ! array_key_exists(self::COUNT_AGGREGATE_ALIAS, $row) || $row[self::COUNT_AGGREGATE_ALIAS] === null) {
+			return 0;
+		}
+
+		return (int) $row[self::COUNT_AGGREGATE_ALIAS];
+	}
+
+	/**
 	 * Fetch at most one row. When $identity is provided, constrain by the root
 	 * collection primary key (AND with existing wheres) for this execution only.
 	 *
@@ -705,6 +758,91 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		$this->conditions->replaceByTag(ConditionTag::IDENTITY, ...$conditions);
+	}
+
+	private function normalizeForScalarCount(self $query): void
+	{
+		$query->sorts = [];
+		$query->limit = null;
+		$query->offset = null;
+		$query->resultClass = null;
+		$query->writableHandler = null;
+		$query->runtime = null;
+
+		foreach ($query->relationRefs as $relation) {
+			$relation->clearLoadSelection();
+		}
+	}
+
+	private function shapeGroupedCount(self $inner): self
+	{
+		$inner->replaceCountSelections(x()->literal(1)->as(self::COUNT_ROW_LITERAL_ALIAS));
+
+		return $this->wrapCountDerived($inner);
+	}
+
+	private function shapeDistinctKeyCount(self $query, FieldRef $primaryKey): self
+	{
+		$query->replaceCountSelections($primaryKey->countDistinct()->as(self::COUNT_AGGREGATE_ALIAS));
+
+		return $query;
+	}
+
+	/**
+	 * @param non-empty-list<FieldRef> $primaryKeyFields
+	 */
+	private function shapeCompositeKeyCount(self $inner, array $primaryKeyFields): self
+	{
+		$inner->replaceCountSelections(x()->literal(1)->as(self::COUNT_ROW_LITERAL_ALIAS));
+		$inner->groups = $primaryKeyFields;
+
+		return $this->wrapCountDerived($inner);
+	}
+
+	private function wrapCountDerived(self $inner): self
+	{
+		$derived = $inner->as(self::COUNT_DERIVED_ALIAS);
+		$outer = $this->newBoundQuery($derived);
+		$outer->replaceCountSelections(x()->count($outer->all())->as(self::COUNT_AGGREGATE_ALIAS));
+
+		return $outer;
+	}
+
+	private function newBoundQuery(CollectionInterface|self $source): self
+	{
+		return new self($source, $this->executor);
+	}
+
+	private function replaceCountSelections(ValueExpressionInterface|AliasedExpression|StarExpression $expression): void
+	{
+		$this->selections->clear();
+		$this->selections->addExplicit([$expression]);
+	}
+
+	/**
+	 * @return list<FieldRef>
+	 */
+	private function rootPrimaryKeyFields(self $query): array
+	{
+		$from = $query->getFrom();
+
+		if (! $from instanceof CollectionInterface || ! $from->hasPrimaryKey()) {
+			return [];
+		}
+
+		$fields = [];
+
+		foreach ($from->getPrimaryKey() as $fieldName) {
+			$field = $query->field($fieldName);
+
+			if (! $field instanceof FieldRef) {
+				return [];
+			}
+
+			$fields[] = $field;
+		}
+
+		return $fields;
 	}
 
 	/**

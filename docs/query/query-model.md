@@ -216,7 +216,28 @@ Omitting the alias is allowed; the backend assigns a stable internal alias. Deri
 
 Query copies preserve source ownership by rebinding expressions through an internal, immutable `SourceMap`. A source is identified by its object identity, not by its definition name or path: two queries over `users` are different sources.
 
+`SelectQuery::copy()` is the product-facing deep remount (`rebind(SourceMap::empty())`). `rebind(SourceMap)` is the same cascade with outer anchors (loaders, correlation, transplants). Owned topology remounts: joins, relation shells, and nested queries held by the AST (EXISTS, scalar subqueries, subquery `IN`). An input derived `FROM` `SelectQuery` is shared by reference, not deep-copied.
+
 Explicit map pairs are anchors. Under an anchored query or parent, unmapped `RelationRef` descendants resolve to the same-named cached relation on that counterpart (`relation($name)`). Only sources with no anchored ancestor remain unchanged. The map does not invent relations from field-path strings; structural resolve walks already-owned parent links.
+
+## Counting matching rows
+
+Use `SelectQuery::count()` when you need the number of matching root rows (or groups) for the current filters:
+
+```php
+$total = $users
+    ->where(x()->exists($users->relatedQuery($users->posts)))
+    ->count();
+```
+
+Count copies the query, normalizes that copy for scalar execution (clears order/limit/offset, result class, writable tracking, and relation **load** selection while keeping relation references used by filters/joins), reshapes to an aggregate select, then runs ordinary `fetchOne()`. The receiver is not mutated.
+
+- Ungrouped collection roots with a single-column primary key use `COUNT(DISTINCT pk)`.
+- Composite primary keys are deduplicated via a derived `SELECT 1 … GROUP BY` all PK columns, then outer `COUNT(*)`.
+- `GROUP BY` / `HAVING` wrap a `SELECT 1` grouped subquery and count remaining groups.
+- Ungrouped queries without a usable root primary key throw `CountRequiresRootIdentityException` (no silent `COUNT(*)` fallback).
+
+There is no executor-specific count API. Bound executors must translate ordinary aggregate expressions and derived `FROM` selects the same way they would for a hand-built query.
 
 ## Inspecting the model
 

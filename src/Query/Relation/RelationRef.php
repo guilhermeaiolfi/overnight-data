@@ -442,6 +442,25 @@ final class RelationRef implements QuerySourceInterface
 		throw UnknownQueryMemberException::forDefinition($name, $collection->getName());
 	}
 
+	/**
+	 * Clear load/export selection without dropping join or filter configuration.
+	 *
+	 * Used by {@see SelectQuery::count()} scalar normalization so relation
+	 * references remain usable in WHERE/joins while {@see SelectQuery::getRelationSelections()}
+	 * stays empty.
+	 *
+	 * @internal
+	 */
+	public function clearLoadSelection(): void
+	{
+		$this->selected = false;
+		$this->fields = null;
+
+		foreach ($this->relationRefs as $relation) {
+			$relation->clearLoadSelection();
+		}
+	}
+
 	private function markSelected(): void
 	{
 		$this->assertSelectable();

@@ -1552,6 +1552,70 @@ final class CycleJoinExecutionTest extends TestCase
 		self::assertSame([['name' => 'Ada'], ['name' => 'Grace']], $profileRows);
 	}
 
+	public function testCountReturnsMatchingRootsWithoutMutatingTheQuery(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users
+			->where(x()->exists(
+				$users->relatedQuery(
+					$users->posts,
+					fn (SelectQuery $posts) => $posts->where(x()->eq($posts->published, true)),
+				),
+			))
+			->orderBy($users->name->desc())
+			->limit(1);
+
+		self::assertSame(2, $users->count());
+		self::assertSame(
+			[['name' => 'Grace']],
+			$users->select($users->name)->fetchAll(),
+		);
+	}
+
+	public function testCountUsesDistinctPrimaryKeyWhenJoinsMultiplyRows(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users
+			->where(x()->isNotNull($users->posts->id))
+			->orderBy($users->id->asc());
+
+		self::assertSame(2, $users->count());
+		self::assertSame(3, count($users->select($users->id, $users->posts->title)->fetchAll()));
+	}
+
+	public function testCountDeduplicatesCompositePrimaryKeysWhenJoinsMultiplyRows(): void
+	{
+		$employees = $this->database->query($this->registry->getCollection('employees'));
+		$employees
+			->where(x()->isNotNull($employees->badges->badgeId))
+			->orderBy($employees->name->asc());
+
+		self::assertSame(3, $employees->count());
+		self::assertSame(
+			5,
+			count($employees->select($employees->name, $employees->badges->badgeId)->fetchAll()),
+		);
+	}
+
+	public function testCountPreservesGroupByAndHavingViaDerivedTable(): void
+	{
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+		$posts
+			->select(
+				$posts->author->name->upper()->as('author_name'),
+				$posts->id->count()->as('post_count'),
+			)
+			->groupBy($posts->author->name->upper())
+			->having(x()->gt($posts->id->count(), 1))
+			->orderBy($posts->author->name->upper()->asc())
+			->limit(10);
+
+		self::assertSame(1, $posts->count());
+		self::assertSame([
+			['author_name' => 'ADA', 'post_count' => 2],
+		], $posts->fetchAll());
+	}
+
 	public function testExistsRebindKeepsCorrelatedCountExecutable(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));

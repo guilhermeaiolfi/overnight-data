@@ -12,7 +12,7 @@ $u = query($users);
 $u->isExecutable(); // false
 ```
 
-Calling `fetchAll()`, `fetchOne()`, or `iterate()` on an unbound query throws `QueryNotExecutableException`.
+Calling `fetchAll()`, `fetchOne()`, `iterate()`, or `count()` on an unbound query throws `QueryNotExecutableException`.
 
 ## Bound queries
 
@@ -47,6 +47,8 @@ $runtime = (new CycleRuntimeFactory())->create($cycleDatabase);
 ## Result modes
 
 Bound queries return arrays by default. Object export is opt-in through `to(...)`.
+
+`SelectQuery::count()` always executes as a scalar aggregate path: it does not apply `to(...)`, `writable(...)`, or relation loading on the count copy. See [`query-model.md`](./query-model.md#counting-matching-rows).
 
 | Call | Result |
 | --- | --- |
