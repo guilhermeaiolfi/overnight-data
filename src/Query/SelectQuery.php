@@ -670,29 +670,49 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		$countQuery = $this->copy();
-		$this->normalizeForScalarCount($countQuery);
+		$countQuery->sorts = [];
+		$countQuery->limit = null;
+		$countQuery->offset = null;
+		$countQuery->resultClass = null;
+		$countQuery->writableHandler = null;
+		$countQuery->runtime = null;
+
+		foreach ($countQuery->relationRefs as $relation) {
+			$relation->clearSelection();
+		}
+
+		$countQuery->selections->clear();
+		$executable = $countQuery;
 
 		if ($countQuery->groups !== [] || $countQuery->havingConditions !== []) {
-			$executable = $this->shapeGroupedCount($countQuery);
+			// Count groups after HAVING: SELECT 1 … GROUP BY/HAVING, then outer COUNT(*).
+			$countQuery->selections->addExplicit([x()->literal(1)->as(self::COUNT_ROW_LITERAL_ALIAS)]);
+			$executable = new self($countQuery->as(self::COUNT_DERIVED_ALIAS), $this->executor);
+			$executable->select(x()->count($executable->all())->as(self::COUNT_AGGREGATE_ALIAS));
 		} else {
-			$primaryKeyFields = $this->rootPrimaryKeyFields($countQuery);
+			$primaryKeyFields = $this->getRootPrimaryKeyFields($countQuery);
 
 			if ($primaryKeyFields === []) {
 				throw CountRequiresRootIdentityException::forQuery($this);
 			}
 
-			$executable = count($primaryKeyFields) === 1
-				? $this->shapeDistinctKeyCount($countQuery, $primaryKeyFields[0])
-				: $this->shapeCompositeKeyCount($countQuery, $primaryKeyFields);
+			if (count($primaryKeyFields) === 1) {
+				// Single PK: COUNT(DISTINCT pk) so joins do not inflate the total.
+				$countQuery->selections->addExplicit([
+					$primaryKeyFields[0]->countDistinct()->as(self::COUNT_AGGREGATE_ALIAS),
+				]);
+			} else {
+				// Composite PK: GROUP BY every PK column, then outer COUNT(*).
+				$countQuery->selections->addExplicit([x()->literal(1)->as(self::COUNT_ROW_LITERAL_ALIAS)]);
+				$countQuery->groups = $primaryKeyFields;
+				$executable = new self($countQuery->as(self::COUNT_DERIVED_ALIAS), $this->executor);
+				$executable->select(x()->count($executable->all())->as(self::COUNT_AGGREGATE_ALIAS));
+			}
 		}
 
 		$row = $executable->fetchOne();
 
-		if (! is_array($row) || ! array_key_exists(self::COUNT_AGGREGATE_ALIAS, $row) || $row[self::COUNT_AGGREGATE_ALIAS] === null) {
-			return 0;
-		}
-
-		return (int) $row[self::COUNT_AGGREGATE_ALIAS];
+		return is_array($row) ? (int) ($row[self::COUNT_AGGREGATE_ALIAS] ?? 0) : 0;
 	}
 
 	/**
@@ -760,69 +780,10 @@ final class SelectQuery implements QuerySourceInterface
 		$this->conditions->replaceByTag(ConditionTag::IDENTITY, ...$conditions);
 	}
 
-	private function normalizeForScalarCount(self $query): void
-	{
-		$query->sorts = [];
-		$query->limit = null;
-		$query->offset = null;
-		$query->resultClass = null;
-		$query->writableHandler = null;
-		$query->runtime = null;
-
-		foreach ($query->relationRefs as $relation) {
-			$relation->clearLoadSelection();
-		}
-	}
-
-	private function shapeGroupedCount(self $inner): self
-	{
-		$inner->replaceCountSelections(x()->literal(1)->as(self::COUNT_ROW_LITERAL_ALIAS));
-
-		return $this->wrapCountDerived($inner);
-	}
-
-	private function shapeDistinctKeyCount(self $query, FieldRef $primaryKey): self
-	{
-		$query->replaceCountSelections($primaryKey->countDistinct()->as(self::COUNT_AGGREGATE_ALIAS));
-
-		return $query;
-	}
-
-	/**
-	 * @param non-empty-list<FieldRef> $primaryKeyFields
-	 */
-	private function shapeCompositeKeyCount(self $inner, array $primaryKeyFields): self
-	{
-		$inner->replaceCountSelections(x()->literal(1)->as(self::COUNT_ROW_LITERAL_ALIAS));
-		$inner->groups = $primaryKeyFields;
-
-		return $this->wrapCountDerived($inner);
-	}
-
-	private function wrapCountDerived(self $inner): self
-	{
-		$derived = $inner->as(self::COUNT_DERIVED_ALIAS);
-		$outer = $this->newBoundQuery($derived);
-		$outer->replaceCountSelections(x()->count($outer->all())->as(self::COUNT_AGGREGATE_ALIAS));
-
-		return $outer;
-	}
-
-	private function newBoundQuery(CollectionInterface|self $source): self
-	{
-		return new self($source, $this->executor);
-	}
-
-	private function replaceCountSelections(ValueExpressionInterface|AliasedExpression|StarExpression $expression): void
-	{
-		$this->selections->clear();
-		$this->selections->addExplicit([$expression]);
-	}
-
 	/**
 	 * @return list<FieldRef>
 	 */
-	private function rootPrimaryKeyFields(self $query): array
+	private function getRootPrimaryKeyFields(self $query): array
 	{
 		$from = $query->getFrom();
 

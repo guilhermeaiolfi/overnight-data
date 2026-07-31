@@ -443,21 +443,20 @@ final class RelationRef implements QuerySourceInterface
 	}
 
 	/**
-	 * Clear load/export selection without dropping join or filter configuration.
+	 * Clear selection/load intent without dropping join or filter configuration.
 	 *
-	 * Used by {@see SelectQuery::count()} scalar normalization so relation
-	 * references remain usable in WHERE/joins while {@see SelectQuery::getRelationSelections()}
-	 * stays empty.
+	 * Used by {@see SelectQuery::count()} so relation references remain usable in
+	 * WHERE/joins while {@see SelectQuery::getRelationSelections()} stays empty.
 	 *
 	 * @internal
 	 */
-	public function clearLoadSelection(): void
+	public function clearSelection(): void
 	{
 		$this->selected = false;
 		$this->fields = null;
 
 		foreach ($this->relationRefs as $relation) {
-			$relation->clearLoadSelection();
+			$relation->clearSelection();
 		}
 	}
 
