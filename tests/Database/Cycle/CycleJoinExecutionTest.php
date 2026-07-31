@@ -14,6 +14,8 @@ use ON\Data\DataRuntime;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\FirstOfManyRelation;
 use ON\Data\Definition\Relation\M2MRelation;
+use ON\Data\Query\DerivedSelectQuery;
+use ON\Data\Query\Exception\DuplicateDerivedOutputColumnException;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Exception\RelationSelectionException;
@@ -102,6 +104,42 @@ final class CycleJoinExecutionTest extends TestCase
 			['id' => 1, 'company.name' => 'Acme'],
 			['id' => 2, 'company.name' => 'Acme'],
 			['id' => 3, 'company.name' => null],
+		], $rows);
+	}
+
+	public function testDerivedRejectsCollidingRootAndRelatedFieldNames(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$root = $users
+			->select($users->id, $users->company->id)
+			->where(x()->eq($users->id, 1));
+
+		self::assertSame([
+			['id' => 1, 'company.id' => 1],
+		], $root->fetchAll());
+
+		$this->expectException(DuplicateDerivedOutputColumnException::class);
+		$this->expectExceptionMessage("duplicate output column 'id'");
+
+		$root->as('user_company');
+	}
+
+	public function testDerivedAcceptsAliasedRootAndRelatedFieldNames(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$derived = $users
+			->select($users->id, $users->company->id->as('company_id'))
+			->where(x()->eq($users->id, 1))
+			->as('user_company');
+
+		$rows = $this->database->query($derived)
+			->select($derived->field('id'), $derived->field('company_id'))
+			->fetchAll();
+
+		self::assertSame([
+			['id' => 1, 'company_id' => 1],
 		], $rows);
 	}
 
@@ -1572,6 +1610,17 @@ final class CycleJoinExecutionTest extends TestCase
 		);
 	}
 
+	public function testCountMatchesLiveQueryIncludingLoaderJoins(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->profile->load();
+		$loaded = $users->select($users->name)->fetchAll();
+
+		self::assertNotSame([], $users->getJoins());
+		self::assertCount(2, $loaded);
+		self::assertSame(2, $users->count());
+	}
+
 	public function testCountUsesDistinctPrimaryKeyWhenJoinsMultiplyRows(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
@@ -2256,7 +2305,7 @@ final class RecordingQueryExecutor implements QueryExecutorInterface
 
 	public function fetchAll(SelectQuery $query): array
 	{
-		if ($query->getFrom() instanceof SelectQuery) {
+		if ($query->getFrom() instanceof DerivedSelectQuery) {
 			$this->derivedSql[] = ($this->compileSql)($query);
 		}
 
@@ -2318,7 +2367,7 @@ final class FirstOfManyFallbackExecutor implements QueryExecutorInterface
 {
 	public function fetchAll(SelectQuery $query): array
 	{
-		if ($query->getFrom() instanceof SelectQuery) {
+		if ($query->getFrom() instanceof DerivedSelectQuery) {
 			throw UnsupportedQueryException::forQuery(
 				$query,
 				'FirstOfMany windowed loading requires subquery-source and window-expression support from the query executor',

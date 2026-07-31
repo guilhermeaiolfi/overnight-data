@@ -96,8 +96,11 @@ Bound queries expose:
 - `fetchAll()`
 - `fetchOne(?$identity = null)`
 - `iterate()`
+- `count()`
 
 `fetchAll()`, `fetchOne()`, and `iterate()` all go through `LoadRuntime` after the query resolves its executor (`getLoadRuntime()`). `LoadRuntime` uses a fast path when there are no relation selections; `iterate()` still rejects relation selections because structured loading may need the full parent batch.
+
+`count()` copies and reshapes the live query, then runs ordinary `fetchOne()` on an aggregate select. Bound executors must translate ordinary aggregate expressions. Grouped and composite-key counts also emit a derived `FROM` (`SelectQuery::as(...)`) that the executor must support. There is no executor-specific count API.
 
 Built-in relation loaders keep ownership of join versus separate-query execution decisions.
 

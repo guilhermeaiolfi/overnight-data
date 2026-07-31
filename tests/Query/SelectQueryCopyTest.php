@@ -7,7 +7,8 @@ namespace Tests\ON\Data\Query;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Query\Condition\ExistsCondition;
-use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Exception\DuplicateDerivedOutputColumnException;
+use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Expression\SourceFieldExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use function ON\Data\Query\query;
@@ -67,11 +68,12 @@ final class SelectQueryCopyTest extends TestCase
 	public function testCopySharesDerivedFromInstance(): void
 	{
 		$inner = $this->makeQuery('users')->select(x()->literal(1)->as('marker'));
-		$outer = query($inner->as('derived_users'));
+		$derived = $inner->as('derived_users');
+		$outer = query($derived);
 		$copy = $outer->copy();
 
-		self::assertSame($inner, $outer->getFrom());
-		self::assertSame($inner, $copy->getFrom());
+		self::assertSame($derived, $outer->getFrom());
+		self::assertSame($outer->getFrom(), $copy->getFrom());
 	}
 
 	public function testCopyRemountsExistsSubquery(): void
@@ -101,16 +103,77 @@ final class SelectQueryCopyTest extends TestCase
 		self::assertNotSame($scalar, $expression->getQuery());
 	}
 
-	public function testAliasedCollectionRootStillResolvesCollectionFields(): void
+	public function testAliasedQueryRejectsUnprojectedCollectionFields(): void
 	{
 		$users = $this->makeQuery('users')->select(x()->literal(1)->as('marker'));
-		$users->as('count_rows');
+		$derived = $users->as('count_rows');
 
-		$field = $users->field('id');
-		self::assertInstanceOf(FieldRef::class, $field);
-		self::assertSame('id', $field->getName());
-		self::assertSame($users, $field->getSource());
-		self::assertInstanceOf(SourceFieldExpression::class, $users->field('marker'));
+		$this->expectException(UnknownQueryFieldException::class);
+		$derived->field('id');
+	}
+
+	public function testDerivedDefaultStarExposesVisibleFieldNames(): void
+	{
+		$posts = $this->makeQuery('posts');
+		$derived = $posts->as('posts_view');
+
+		self::assertInstanceOf(SourceFieldExpression::class, $derived->field('id'));
+		self::assertSame('id', $derived->field('id')->getName());
+		self::assertContains('id', $derived->selectionNames());
+		self::assertContains('title', $derived->selectionNames());
+		self::assertNotContains('*', $derived->selectionNames());
+	}
+
+	public function testNestedDerivedExposesCanonicalFieldNames(): void
+	{
+		$posts = $this->makeQuery('posts');
+		$first = $posts->as('first');
+		$middle = query($first)->select($first->field('id'));
+		$second = $middle->as('second');
+
+		self::assertInstanceOf(SourceFieldExpression::class, $second->field('id'));
+		self::assertSame(['id'], $second->selectionNames());
+	}
+
+	public function testDerivedRelatedFieldRefExposesFieldNameNotPathKey(): void
+	{
+		$users = $this->makeQuery('users');
+		$derived = $users->select($users->company->id)->as('users_view');
+
+		self::assertSame('company.id', $users->company->id->getSelectionKey());
+		self::assertSame(['id'], $derived->selectionNames());
+		self::assertInstanceOf(SourceFieldExpression::class, $derived->field('id'));
+	}
+
+	public function testDerivedRejectsCollidingCanonicalOutputNames(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$this->expectException(DuplicateDerivedOutputColumnException::class);
+		$this->expectExceptionMessage("duplicate output column 'id'");
+
+		$users
+			->select($users->id, $users->company->id)
+			->as('user_company');
+	}
+
+	public function testDerivedAcceptsAliasedCollidingFieldNames(): void
+	{
+		$users = $this->makeQuery('users');
+		$derived = $users
+			->select($users->id, $users->company->id->as('company_id'))
+			->as('user_company');
+
+		self::assertSame(['id', 'company_id'], $derived->selectionNames());
+		self::assertInstanceOf(SourceFieldExpression::class, $derived->field('company_id'));
+	}
+
+	public function testAliasedQueryExposesProjectedSelectionKeys(): void
+	{
+		$users = $this->makeQuery('users')->select(x()->literal(1)->as('marker'));
+		$derived = $users->as('count_rows');
+
+		self::assertInstanceOf(SourceFieldExpression::class, $derived->field('marker'));
 	}
 
 	public function testCopyPreservesSelectedRelations(): void

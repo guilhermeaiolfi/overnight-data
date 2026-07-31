@@ -28,6 +28,8 @@ use ON\Data\Query\Condition\LogicalOperator;
 use ON\Data\Query\Condition\NotCondition;
 use ON\Data\Query\Condition\NullCondition;
 use ON\Data\Query\Condition\NullOperator;
+use ON\Data\Query\DerivedOutputColumns;
+use ON\Data\Query\DerivedSelectQuery;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Expression\AggregateExpression;
 use ON\Data\Query\Expression\AggregateFunction;
@@ -107,14 +109,22 @@ final class CycleQueryTranslator
 	/**
 	 * @return array{0: list<string|FragmentInterface>, 1: list<CycleResultColumn>}
 	 */
-	private function translateSelections(SelectQuery $query, CycleTranslationContext $context, bool $root): array
-	{
+	private function translateSelections(
+		SelectQuery $query,
+		CycleTranslationContext $context,
+		bool $root,
+		bool $derived = false,
+	): array {
 		$selections = $query->getSelections()->getAll();
 
 		$columns = [];
 		$resultColumns = [];
 		$usedNames = [];
 		$implicitCounter = 0;
+
+		if ($derived) {
+			DerivedOutputColumns::assertUniqueNames($query);
+		}
 
 		if ($root) {
 			foreach ($selections as $selection) {
@@ -156,14 +166,17 @@ final class CycleQueryTranslator
 			$visible = ! $root || $selection->isExplicit();
 
 			if ($expression instanceof StarExpression) {
-				if (! $root && $query->hasAlias()) {
-					$columnsToExpand = $expression->getSource() === $query
-						&& $query->getFrom() instanceof CollectionInterface
-						&& ! $query->isDerivedSource()
-						? $this->expandCollectionStar($query, $context)
-						: $this->expandSourceStar($expression, $context);
-
+				if (
+					$derived
+					&& $expression->getSource() instanceof SelectQuery
+					&& $expression->getSource()->getFrom() instanceof CollectionInterface
+				) {
+					$columnsToExpand = $this->expandCollectionStar($expression->getSource(), $context);
 					foreach ($columnsToExpand as $column) {
+						$columns[] = $column->toCycleFragment();
+					}
+				} elseif ($root && $expression->getSource() instanceof DerivedSelectQuery) {
+					foreach ($this->expandSourceStar($expression, $context) as $column) {
 						$columns[] = $column->toCycleFragment();
 					}
 				} else {
@@ -186,7 +199,7 @@ final class CycleQueryTranslator
 
 			$sql = $this->translateExpression($expression, $context);
 
-			if ($root || $aliased) {
+			if ($root || $aliased || $derived) {
 				if ($root && $selection->isImplicit()) {
 					if ($aliased) {
 						$logicalName = $selection->getSelectionKey();
@@ -195,7 +208,10 @@ final class CycleQueryTranslator
 					$backendName = $this->allocateImplicitAlias($usedNames, $implicitCounter);
 				}
 
-				$alias = $backendName ?? $selectionExpression->getAlias();
+				$alias = $backendName
+					?? ($aliased
+						? $selectionExpression->getAlias()
+						: (DerivedOutputColumns::expressionOutputName($expression) ?? $selection->getSelectionKey()));
 
 				$columns[] = SqlFragment::withParameters(
 					$sql->sql() . ' AS ' . $this->quoteResultAlias($alias),
@@ -537,7 +553,7 @@ final class CycleQueryTranslator
 	{
 		$source = $expression->getSource();
 
-		if ($source instanceof SelectQuery && ! $source->hasAlias() && ! $source->isDerivedSource()) {
+		if ($source instanceof SelectQuery && ! $source->isDerivedSource()) {
 			$columns = [];
 
 			foreach ($source->getCollection()->getVisibleFields() as $fieldName) {
@@ -548,7 +564,7 @@ final class CycleQueryTranslator
 			return $columns;
 		}
 
-		if ($source instanceof SelectQuery) {
+		if ($source instanceof SelectQuery || $source instanceof DerivedSelectQuery) {
 			return array_map(
 				static fn (string $name): CycleResultColumn => new CycleResultColumn($name, $name, true),
 				$this->derivedSelectionNames($source),
@@ -561,51 +577,13 @@ final class CycleQueryTranslator
 	/**
 	 * @return list<string>
 	 */
-	private function derivedSelectionNames(SelectQuery $source): array
+	private function derivedSelectionNames(SelectQuery|DerivedSelectQuery $source): array
 	{
-		$names = [];
-
-		foreach ($source->getSelections()->getExplicit() as $selection) {
-			$expression = $selection->getExpression();
-			if ($expression instanceof AliasedExpression) {
-				$names[] = $expression->getAlias();
-
-				continue;
-			}
-
-			if ($expression instanceof FieldRef) {
-				$names[] = $selection->getSelectionKey();
-
-				continue;
-			}
-
-			if ($expression instanceof SourceFieldExpression) {
-				$names[] = $expression->getName();
-
-				continue;
-			}
-
-			if (
-				$expression instanceof StarExpression
-				&& $expression->getSource() === $source
-				&& $source->getFrom() instanceof CollectionInterface
-				&& ! $source->isDerivedSource()
-			) {
-				foreach ($source->getFrom()->getVisibleFields() as $fieldName) {
-					$names[] = $source->getFrom()->getField($fieldName)->getName();
-				}
-
-				continue;
-			}
-
-			if ($expression instanceof StarExpression && $expression->getSource() instanceof SelectQuery) {
-				foreach ($this->starResultColumns($expression) as $column) {
-					$names[] = $column->logicalName();
-				}
-			}
+		if ($source instanceof DerivedSelectQuery) {
+			return DerivedOutputColumns::names($source->getInnerQuery());
 		}
 
-		return array_values(array_unique($names));
+		return DerivedOutputColumns::names($source);
 	}
 
 	private function translateRawSql(RawSqlExpression $expression): SqlFragment
@@ -813,12 +791,16 @@ final class CycleQueryTranslator
 	/**
 	 * @return array{0: CycleSelectQuery, 1: list<string|FragmentInterface>, 2: list<CycleResultColumn>}
 	 */
-	private function compileCycleSelect(SelectQuery $query, CycleTranslationContext $context, bool $root): array
-	{
+	private function compileCycleSelect(
+		SelectQuery $query,
+		CycleTranslationContext $context,
+		bool $root,
+		bool $derived = false,
+	): array {
 		$cycle = $this->database->select();
 		$cycle->from($this->fromSource($query, $context));
 
-		[$columns, $resultColumns] = $this->translateSelections($query, $context, $root);
+		[$columns, $resultColumns] = $this->translateSelections($query, $context, $root, $derived);
 		$cycle->columns($columns === [] ? [SqlFragment::raw('1')->toCycleFragment()] : $columns);
 
 		foreach ($query->getConditions() as $condition) {
@@ -850,11 +832,12 @@ final class CycleQueryTranslator
 
 	private function fromSource(SelectQuery $query, CycleTranslationContext $context): FragmentInterface
 	{
-		if ($query->getFrom() instanceof SelectQuery) {
+		if ($query->getFrom() instanceof DerivedSelectQuery) {
 			$derived = $query->getFrom();
+			$innerQuery = $derived->getInnerQuery();
 			$inner = $context->within(
-				$derived,
-				fn (): CycleSelectQuery => $this->compileCycleSelect($derived, $context, false)[0],
+				$innerQuery,
+				fn (): CycleSelectQuery => $this->compileCycleSelect($innerQuery, $context, false, true)[0],
 			);
 
 			return new SubQuery($inner, $derived->requireAlias());

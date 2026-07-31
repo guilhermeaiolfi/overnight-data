@@ -47,8 +47,6 @@ final class SelectQuery implements QuerySourceInterface
 
 	private const COUNT_ROW_LITERAL_ALIAS = '__count_row';
 
-	private static int $nextAutoAlias = 0;
-
 	/**
 	 * @var array<string, FieldRef>
 	 */
@@ -89,13 +87,6 @@ final class SelectQuery implements QuerySourceInterface
 
 	private ?int $offset = null;
 
-	/**
-	 * @var array<string, SourceFieldExpression>
-	 */
-	private array $projectedFieldRefs = [];
-
-	private ?string $alias = null;
-
 	private ?StarExpression $sourceStar = null;
 
 	private ?string $resultClass = null;
@@ -105,13 +96,9 @@ final class SelectQuery implements QuerySourceInterface
 	private ?Relation\LoadRuntime $runtime = null;
 
 	public function __construct(
-		private readonly CollectionInterface|SelectQuery $source,
+		private readonly CollectionInterface|DerivedSelectQuery $source,
 		private ?QueryExecutorInterface $executor = null,
 	) {
-		if ($source instanceof self && ! $source->hasAlias()) {
-			throw new InvalidArgumentException('SelectQuery sources must be aliased with as() before they are used in FROM.');
-		}
-
 		$this->selections = new SelectionList();
 		$this->selections->add($this->all(), SelectionTag::DEFAULT, true);
 		$this->conditions = new ConditionList();
@@ -124,66 +111,35 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function getCollection(): CollectionInterface
 	{
-		if ($this->hasAlias()) {
-			throw new InvalidArgumentException('Derived query sources do not expose collection metadata.');
-		}
-
 		if ($this->source instanceof CollectionInterface) {
 			return $this->source;
 		}
 
-		return $this->source->getCollection();
+		throw new InvalidArgumentException('Derived query sources do not expose collection metadata.');
 	}
 
-	public function getFrom(): CollectionInterface|SelectQuery
+	public function getFrom(): CollectionInterface|DerivedSelectQuery
 	{
 		return $this->source;
 	}
 
 	public function getSourceName(): string
 	{
-		if ($this->hasAlias()) {
-			return $this->alias;
-		}
-
 		if ($this->source instanceof CollectionInterface) {
 			return $this->source->getName();
 		}
 
-		return $this->source->getAlias() ?? 'derived query';
+		return $this->source->getAlias();
 	}
 
 	public function getPath(): array
 	{
-		if ($this->hasAlias()) {
-			return [$this->alias];
-		}
-
 		return [];
-	}
-
-	public function getAlias(): ?string
-	{
-		return $this->alias;
-	}
-
-	public function requireAlias(): string
-	{
-		if ($this->alias === null) {
-			throw new InvalidArgumentException('SelectQuery does not have an alias.');
-		}
-
-		return $this->alias;
-	}
-
-	public function hasAlias(): bool
-	{
-		return $this->alias !== null;
 	}
 
 	public function isExecutable(): bool
 	{
-		return ! $this->hasAlias() && $this->source instanceof CollectionInterface && $this->executor instanceof QueryExecutorInterface;
+		return $this->source instanceof CollectionInterface && $this->executor instanceof QueryExecutorInterface;
 	}
 
 	public function detach(): self
@@ -202,20 +158,7 @@ final class SelectQuery implements QuerySourceInterface
 			throw new InvalidArgumentException('SelectQuery::field() requires a non-empty field name.');
 		}
 
-		if ($this->hasAlias()) {
-			if ($this->selections->hasSelectionKey($name)) {
-				return $this->projectedFieldRefs[$name] ??= new SourceFieldExpression($this, $name);
-			}
-
-			// Aliased collection-root subqueries still resolve real collection columns for
-			// join materialization while their own body is compiled. Unselected names that
-			// are not collection fields stay unknown (derived-FROM projection surface).
-			if (! $this->source instanceof CollectionInterface || ! $this->source->hasField($name)) {
-				throw UnknownQueryFieldException::forDefinition($name, $this->getSourceName());
-			}
-		}
-
-		if ($this->source instanceof SelectQuery) {
+		if ($this->source instanceof DerivedSelectQuery) {
 			return $this->source->field($name);
 		}
 
@@ -251,10 +194,10 @@ final class SelectQuery implements QuerySourceInterface
 		return $this->relationRefs[$name] = new RelationRef($this, $relation);
 	}
 
-	public function __get(string $name): FieldRef|RelationRef
+	public function __get(string $name): FieldRef|RelationRef|ValueExpressionInterface
 	{
-		if (! $this->canLoadRelations()) {
-			throw new InvalidArgumentException('Derived query sources do not support magic member access; use field() for selected fields.');
+		if ($this->source instanceof DerivedSelectQuery) {
+			return $this->field($name);
 		}
 
 		if ($this->source->hasField($name)) {
@@ -270,12 +213,8 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function star(): StarExpression
 	{
-		if ($this->source instanceof self) {
+		if ($this->source instanceof DerivedSelectQuery) {
 			return $this->sourceStar ??= new StarExpression($this->source);
-		}
-
-		if ($this->hasAlias()) {
-			return $this->sourceStar ??= new StarExpression($this);
 		}
 
 		return $this->star ??= new StarExpression($this);
@@ -286,15 +225,11 @@ final class SelectQuery implements QuerySourceInterface
 		return $this->star();
 	}
 
-	public function as(?string $alias = null): self
+	public function as(?string $alias = null): DerivedSelectQuery
 	{
-		if ($alias !== null && trim($alias) === '') {
-			throw new InvalidArgumentException('Derived query source aliases cannot be empty.');
-		}
+		DerivedOutputColumns::assertUniqueNames($this);
 
-		$this->alias = $alias === null ? $this->generateAutoAlias() : trim($alias);
-
-		return $this;
+		return new DerivedSelectQuery($this, $alias);
 	}
 
 	public function copy(): self
@@ -348,7 +283,6 @@ final class SelectQuery implements QuerySourceInterface
 		$copy->offset = $this->offset;
 		$copy->resultClass = $this->resultClass;
 		$copy->writableHandler = $this->writableHandler;
-		$copy->alias = $this->alias;
 
 		return $copy;
 	}
@@ -655,13 +589,13 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
-	 * Count matching root rows (or groups) for the current filters without mutating this query.
+	 * Count matching root rows (or groups) for the current live query without mutating it.
 	 *
 	 * Copies the query, applies scalar count normalization (no result class, writable
-	 * handler, order/limit/offset, or relation loading), reshapes to an aggregate
-	 * select, then runs ordinary {@see fetchOne()}. Requires a usable root primary
-	 * key unless GROUP BY/HAVING is present. Executors must translate ordinary
-	 * aggregate / derived-FROM selects; there is no executor-specific count API.
+	 * handler, order/limit/offset, or relation hydration), keeps joins already on the
+	 * query, reshapes to an aggregate select, then runs ordinary {@see fetchOne()}.
+	 * Grouped and composite-key shapes wrap via {@see as()} + outer `COUNT(*)`.
+	 * Joins needed by predicates/grouping rematerialize during normal translation.
 	 */
 	public function count(): int
 	{
@@ -765,7 +699,7 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	private function applyIdentityConstraint(Key|array|string|int|float|bool $identity): void
 	{
-		if ($this->hasAlias() || ! $this->source instanceof CollectionInterface) {
+		if (! $this->source instanceof CollectionInterface) {
 			throw new InvalidArgumentException(
 				'SelectQuery::fetchOne($identity) requires a collection-root query; derived or nested query sources cannot resolve identity.',
 			);
@@ -882,17 +816,17 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function exposesField(string $name): bool
 	{
-		return $this->selections->hasSelectionKey($name);
+		return DerivedOutputColumns::exposes($this, $name);
 	}
 
 	public function isDerivedSource(): bool
 	{
-		return $this->source instanceof SelectQuery;
+		return $this->source instanceof DerivedSelectQuery;
 	}
 
 	public function canLoadRelations(): bool
 	{
-		return $this->source instanceof CollectionInterface && ! $this->hasAlias();
+		return $this->source instanceof CollectionInterface;
 	}
 
 	private function normalizeValueExpression(ValueExpressionInterface|SelectQuery $expression): ValueExpressionInterface
@@ -1023,10 +957,5 @@ final class SelectQuery implements QuerySourceInterface
 		foreach ($relation->getRelationRefs() as $child) {
 			$this->collectRelationSelections($child, $tree);
 		}
-	}
-
-	private function generateAutoAlias(): string
-	{
-		return 'd' . self::$nextAutoAlias++;
 	}
 }

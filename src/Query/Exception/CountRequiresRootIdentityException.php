@@ -19,7 +19,7 @@ final class CountRequiresRootIdentityException extends LogicException
 	{
 		return new self(
 			'SelectQuery::count() requires a usable root identity. '
-			. 'Count a collection-root query or project a root identity first.'
+			. 'Count a collection-root query.'
 		);
 	}
 }

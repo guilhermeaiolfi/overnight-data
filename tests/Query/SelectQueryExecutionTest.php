@@ -119,24 +119,21 @@ final class SelectQueryExecutionTest extends TestCase
 		$executor = new RecordingExecutor();
 
 		$aliased = (new SelectQuery($users, $executor))->as('u');
-
-		try {
-			$aliased->fetchOne(1);
-			self::fail('Expected aliased query identity fetch to be rejected.');
-		} catch (InvalidArgumentException $exception) {
-			self::assertStringContainsString('collection-root query', $exception->getMessage());
-		}
+		$derived = new SelectQuery($aliased, $executor);
 
 		$innerQuery = new SelectQuery($users, $executor);
 		$inner = $innerQuery->select($innerQuery->id)->as('inner_users');
 		$nested = new SelectQuery($inner, $executor);
 
 		try {
-			$nested->fetchOne(1);
-			self::fail('Expected nested query identity fetch to be rejected.');
+			$derived->fetchOne(1);
+			self::fail('Expected derived query identity fetch to be rejected.');
 		} catch (InvalidArgumentException $exception) {
 			self::assertStringContainsString('collection-root query', $exception->getMessage());
 		}
+
+		$this->expectException(InvalidArgumentException::class);
+		$nested->fetchOne(1);
 	}
 
 	public function testFetchOneIdentityRejectsInvalidPrimaryKeyInput(): void

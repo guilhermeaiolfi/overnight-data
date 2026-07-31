@@ -7,6 +7,7 @@ namespace ON\Data;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
+use ON\Data\Query\DerivedSelectQuery;
 use ON\Data\Query\SelectQuery;
 
 final class DataRuntime
@@ -17,7 +18,7 @@ final class DataRuntime
 	) {
 	}
 
-	public function query(CollectionInterface|SelectQuery $source): SelectQuery
+	public function query(CollectionInterface|DerivedSelectQuery $source): SelectQuery
 	{
 		return new SelectQuery($source, $this->queryExecutor);
 	}

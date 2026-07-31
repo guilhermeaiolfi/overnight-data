@@ -8,6 +8,8 @@ use ArrayIterator;
 use Countable;
 use InvalidArgumentException;
 use IteratorAggregate;
+use ON\Data\Query\DerivedOutputColumns;
+use ON\Data\Query\DerivedSelectQuery;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\SourceFieldExpression;
@@ -194,7 +196,7 @@ final class SelectionList implements IteratorAggregate, Countable
 	 * The outer query may only reference the derived query's selection keys; it
 	 * must not inherit joins or relation sources from the inner query.
 	 */
-	public function projectDerivedTo(SelectQuery $derived, SelectQuery $target): self
+	public function projectDerivedTo(DerivedSelectQuery $derived, SelectQuery $target): self
 	{
 		if ($target->getFrom() !== $derived) {
 			throw new InvalidArgumentException('Derived projection targets must select from the supplied derived query.');
@@ -203,16 +205,17 @@ final class SelectionList implements IteratorAggregate, Countable
 		$projected = new self();
 
 		foreach ($this->entries as $entry) {
-			$expression = $entry->getExpression();
-			if ($expression instanceof StarExpression) {
+			if ($entry->getExpression() instanceof StarExpression) {
 				continue;
 			}
 
-			$projected->add(
-				$target->field($entry->getSelectionKey())->as($entry->getSelectionKey()),
-				$entry->getTags(),
-				$entry->isExplicit(),
-			);
+			foreach (DerivedOutputColumns::namesForSelection($entry) as $outputName) {
+				$projected->add(
+					$target->field($outputName)->as($outputName),
+					$entry->getTags(),
+					$entry->isExplicit(),
+				);
+			}
 		}
 
 		return $projected;

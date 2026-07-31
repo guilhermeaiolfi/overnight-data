@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use ON\Data\Definition\Relation\RelationKeyPairing;
 use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Condition\ConditionTag;
+use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Join;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
@@ -22,9 +23,14 @@ final class RelationKeyQuery
 	): void {
 		foreach ($pairing->getPairs() as $pair) {
 			$join->on(
-				x()->eq($leftSource->field($pair['left']), $join->field($pair['right'])),
+				x()->eq(self::leftField($leftSource, $pair['left']), $join->field($pair['right'])),
 			);
 		}
+	}
+
+	private static function leftField(QuerySourceInterface $leftSource, string $name): ValueExpressionInterface
+	{
+		return $leftSource->field($name);
 	}
 
 	/**

@@ -413,9 +413,35 @@ final class CycleQueryExecutionTest extends TestCase
 
 		self::assertMatchesRegularExpression('/FROM\s+\(\s*SELECT/', $sql);
 		self::assertStringContainsString('AS "ranked_posts"', $sql);
-		self::assertStringContainsString('"ranked_posts".*', $sql);
+		self::assertStringContainsString('"ranked_posts"."id" AS "id"', $sql);
 		self::assertStringContainsString('"ranked_posts"."__rank"', $sql);
 		self::assertStringNotContainsString('"ranked_posts.__rank"', $sql);
+	}
+
+	public function testNestedDerivedUsesCanonicalOutputColumnNames(): void
+	{
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+		$first = $posts->as('first');
+		$middle = $this->database->query($first)->select($first->field('id'));
+		$second = $middle->as('second');
+
+		$query = $this->database->query($second)
+			->select($second->field('id'))
+			->orderBy($second->field('id')->asc());
+
+		$sql = $this->compileSql($query);
+
+		self::assertStringContainsString('AS "id"', $sql);
+		self::assertStringNotContainsString('AS "first.id"', $sql);
+		self::assertStringContainsString('"second"."id"', $sql);
+
+		$rows = $query->fetchAll();
+
+		self::assertSame([
+			['id' => 1],
+			['id' => 2],
+			['id' => 3],
+		], $rows);
 	}
 
 	public function testAutomaticDerivedSourceAliasIsStableInGeneratedSql(): void
@@ -439,9 +465,10 @@ final class CycleQueryExecutionTest extends TestCase
 
 		$sql = $this->compileSql($query);
 
-		self::assertMatchesRegularExpression('/AS "d\d+"/', $sql);
-		self::assertMatchesRegularExpression('/"d\d+"\.\*/', $sql);
-		self::assertMatchesRegularExpression('/"d\d+"\."__rank" = \?/', $sql);
+		$alias = preg_quote($ranked->getAlias(), '/');
+		self::assertMatchesRegularExpression('/AS "' . $alias . '"/', $sql);
+		self::assertMatchesRegularExpression('/"' . $alias . '"\."id" AS "id"/', $sql);
+		self::assertMatchesRegularExpression('/"' . $alias . '"\."__rank" = \?/', $sql);
 	}
 
 	public function testRankDenseRankCompositePartitionAndAutomaticDerivedAliasExecute(): void

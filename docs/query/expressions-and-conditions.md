@@ -117,7 +117,10 @@ $ranked = $inner->as('ranked_posts');
 $topPerGroup = query($ranked)
     ->select($ranked->all())
     ->where($ranked->field('rank')->eq(1));
+    // or: ->where($ranked->rank->eq(1));
 ```
+
+Derived sources accept the same magic field UX as collection roots (`$ranked->rank` → `field('rank')`) for **projected** keys only. Relation loading is not available on the wrapper.
 
 Built-in `FirstOfMany` relation loading uses this same row-number-over-derived-query pattern internally: it partitions by the child-side relation keys, orders by the relation definition order plus primary-key tie breakers, and filters the derived source to rank `1`.
 

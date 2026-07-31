@@ -958,7 +958,7 @@ final class QueryModelTest extends TestCase
 		self::assertSame($posts, $posts->get('pair_key')->getArguments()[0]->getQuery());
 	}
 
-	public function testDirectSubquerySelectionNormalizesToSubqueryExpressionAndAsMutatesQueryAlias(): void
+	public function testDirectSubquerySelectionNormalizesToSubqueryExpressionAndAsReturnsDerivedSource(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = query($registry->getCollection('users'));
@@ -973,13 +973,13 @@ final class QueryModelTest extends TestCase
 		self::assertCount(2, $selections);
 		self::assertInstanceOf(SubqueryExpression::class, $selections[1]->getExpression());
 		self::assertSame($posts, $selections[1]->getExpression()->getQuery());
-		self::assertSame($posts, $aliased);
+		self::assertSame($posts, $aliased->getInnerQuery());
 		self::assertSame('post_count', $aliased->getAlias());
 		self::assertCount(1, $selections[1]->getExpression()->getQuery()->getSelections());
 		self::assertFalse(is_a($posts, ValueExpressionInterface::class));
 	}
 
-	public function testCopyPreservesSelectionsConditionsSortsAndAliasIndependently(): void
+	public function testCopyPreservesSelectionsConditionsSortsBeforeDerivedWrapping(): void
 	{
 		$posts = query($this->makeRegistry()->getCollection('posts'));
 		$posts
@@ -989,13 +989,13 @@ final class QueryModelTest extends TestCase
 			->limit(2)
 			->offset(1);
 
-		$posts->as('source_posts');
-
-		$copy = $posts->copy()->as('ranked_posts');
+		$source = $posts->as('source_posts');
+		$copy = $posts->copy();
+		$ranked = $copy->as('ranked_posts');
 
 		self::assertNotSame($posts, $copy);
-		self::assertSame('source_posts', $posts->getAlias());
-		self::assertSame('ranked_posts', $copy->getAlias());
+		self::assertSame('source_posts', $source->getAlias());
+		self::assertSame('ranked_posts', $ranked->getAlias());
 		self::assertCount(count($posts->getSelections()->getAll()), $copy->getSelections()->getAll());
 		self::assertCount(count($posts->getConditions()), $copy->getConditions());
 		self::assertCount(count($posts->getSorts()), $copy->getSorts());
@@ -1003,12 +1003,12 @@ final class QueryModelTest extends TestCase
 		self::assertSame($posts->getOffset(), $copy->getOffset());
 	}
 
-	public function testRebindCreatesProjectedFieldForMappedSourceBeforeItsAliasIsCopied(): void
+	public function testRebindCreatesProjectedFieldForMappedDerivedSource(): void
 	{
 		$posts = query($this->makeRegistry()->getCollection('posts'));
 		$ranked = $posts->select($posts->id->as('post_id'))->as('ranked_posts');
 		$field = $ranked->field('post_id');
-		$copy = $ranked->copy();
+		$copy = $posts->copy()->as('ranked_posts');
 
 		self::assertInstanceOf(SourceFieldExpression::class, $field);
 
@@ -1063,6 +1063,9 @@ final class QueryModelTest extends TestCase
 		self::assertSame('ranked_posts', $ranked->getAlias());
 		self::assertSame($ranked->all(), $outer->getSelections()->getAll()[0]->getExpression());
 		self::assertSame('__rank', $ranked->field('__rank')->getName());
+		self::assertSame('id', $ranked->field('id')->getName());
+		self::assertContains('id', $ranked->selectionNames());
+		self::assertContains('__rank', $ranked->selectionNames());
 	}
 
 	public function testDerivedSourceNamedExpressionLookupAndRelationsFailClearly(): void
@@ -1086,11 +1089,14 @@ final class QueryModelTest extends TestCase
 			self::assertSame('Derived query sources do not support relation loading.', $exception->getMessage());
 		}
 
+		self::assertSame('__rank', $query->__rank->getName());
+		self::assertSame('__rank', $ranked->__rank->getName());
+
 		try {
 			$query->posts;
-			self::fail('Expected magic member access on a derived source to fail.');
-		} catch (InvalidArgumentException $exception) {
-			self::assertSame('Derived query sources do not support magic member access; use field() for selected fields.', $exception->getMessage());
+			self::fail('Expected unknown projected member access on a derived source to fail.');
+		} catch (UnknownQueryFieldException $exception) {
+			self::assertSame("Unknown query field 'posts' on definition 'ranked_posts'.", $exception->getMessage());
 		}
 	}
 
@@ -1535,6 +1541,7 @@ final class QueryModelTest extends TestCase
 		$inner->getSelections()->add($inner->amount, SelectionTag::PUBLIC);
 		$inner->getSelections()->add($inner->userId, SelectionTag::REQUIRED);
 		$inner->getSelections()->add($inner->id, SelectionTag::RELATION);
+		$inner->getSelections()->removeByTag(SelectionTag::DEFAULT);
 		$ranked = $inner->as('ranked_posts');
 		$outer = query($ranked);
 
@@ -1567,6 +1574,7 @@ final class QueryModelTest extends TestCase
 		);
 		$inner->getSelections()->add($inner->amount, SelectionTag::PUBLIC);
 		$inner->getSelections()->ensureInternalExpression($rank, '__ondata_rank');
+		$inner->getSelections()->removeByTag(SelectionTag::DEFAULT);
 		$ranked = $inner->as('ranked_posts');
 		$outer = query($ranked);
 
@@ -1615,14 +1623,15 @@ final class QueryModelTest extends TestCase
 		self::assertFalse(method_exists(SelectionList::class, 'getIdentityItems'));
 	}
 
-	public function testLocalDerivedSourceAliasingDoesNotRequireCopy(): void
+	public function testLocalDerivedSourceAliasingWrapsTheInnerQuery(): void
 	{
 		$inner = query($this->makeRegistry()->getCollection('posts'));
 		$inner->getSelections()->add($inner->amount, SelectionTag::PUBLIC);
+		$inner->getSelections()->removeByTag(SelectionTag::DEFAULT);
 		$ranked = $inner->as('ranked_posts');
 
-		self::assertSame($inner, $ranked);
-		self::assertSame('ranked_posts', $inner->getAlias());
+		self::assertSame($inner, $ranked->getInnerQuery());
+		self::assertSame('ranked_posts', $ranked->getAlias());
 	}
 
 	public function testSelectionItemDoesNotExposeRoleSpecificApis(): void

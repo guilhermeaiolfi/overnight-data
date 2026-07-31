@@ -200,7 +200,9 @@ $company->on(x()->eq($u->companyId, $company->id));
 
 ## Derived sources
 
-`SelectQuery::as()` turns a query into a derived source for use in another query:
+`SelectQuery::as()` returns a `DerivedSelectQuery` wrapper for use in another query.
+It does not mutate the inner `SelectQuery`, which remains available for building and
+compiling the subquery:
 
 ```php
 $ranked = $inner->as('ranked_posts');
@@ -208,15 +210,16 @@ $ranked = $inner->as('ranked_posts');
 $query = query($ranked)
     ->select($ranked->all())
     ->where($ranked->field('__rank')->eq(1));
+// same as: ->where($ranked->__rank->eq(1));
 ```
 
-Omitting the alias is allowed; the backend assigns a stable internal alias. Derived sources expose `field()` and `all()`, but they do not expose relation loading.
+Omitting the alias is allowed; the backend assigns a stable internal alias. Derived sources expose projected columns via `field()` and `all()` (and the same magic UX as roots: `$ranked->__rank` routes to `field('__rank')`). They do not expose relation loading — `$ranked->posts` fails unless `posts` is a projected selection key.
 
 ## Copying and source identity
 
 Query copies preserve source ownership by rebinding expressions through an internal, immutable `SourceMap`. A source is identified by its object identity, not by its definition name or path: two queries over `users` are different sources.
 
-`SelectQuery::copy()` is the product-facing deep remount (`rebind(SourceMap::empty())`). `rebind(SourceMap)` is the same cascade with outer anchors (loaders, correlation, transplants). Owned topology remounts: joins, relation shells, and nested queries held by the AST (EXISTS, scalar subqueries, subquery `IN`). An input derived `FROM` `SelectQuery` is shared by reference, not deep-copied.
+`SelectQuery::copy()` is the product-facing deep remount (`rebind(SourceMap::empty())`). `rebind(SourceMap)` is the same cascade with outer anchors (loaders, correlation, transplants). Owned topology remounts: joins, relation shells, and nested queries held by the AST (EXISTS, scalar subqueries, subquery `IN`). An input derived `FROM` `DerivedSelectQuery` is shared by reference, not deep-copied.
 
 Explicit map pairs are anchors. Under an anchored query or parent, unmapped `RelationRef` descendants resolve to the same-named cached relation on that counterpart (`relation($name)`). Only sources with no anchored ancestor remain unchanged. The map does not invent relations from field-path strings; structural resolve walks already-owned parent links.
 
@@ -230,7 +233,7 @@ $total = $users
     ->count();
 ```
 
-Count copies the query, normalizes that copy for scalar execution (clears order/limit/offset, result class, writable tracking, and relation **load** selection while keeping relation references used by filters/joins), reshapes to an aggregate select, then runs ordinary `fetchOne()`. The receiver is not mutated.
+Count copies the query, normalizes that copy for scalar execution (clears order/limit/offset, result class, writable tracking, and relation **load** selection), and keeps joins already on the live query. The receiver is not mutated. `count()` answers the live query’s root/group cardinality, not a privately scrubbed reshape.
 
 - Ungrouped collection roots with a single-column primary key use `COUNT(DISTINCT pk)`.
 - Composite primary keys are deduplicated via a derived `SELECT 1 … GROUP BY` all PK columns, then outer `COUNT(*)`.

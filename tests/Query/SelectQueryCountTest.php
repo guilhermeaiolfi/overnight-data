@@ -88,7 +88,8 @@ final class SelectQueryCountTest extends TestCase
 			->select(x()->literal(1)->as('marker'))
 			->where(x()->eq(x()->literal(1), 1))
 			->groupBy(x()->literal(1));
-		$outer = new SelectQuery($inner->as('derived_users'), $executor);
+		$derived = $inner->as('derived_users');
+		$outer = new SelectQuery($derived, $executor);
 
 		try {
 			$outer->count();
@@ -96,19 +97,19 @@ final class SelectQueryCountTest extends TestCase
 		} catch (CountRequiresRootIdentityException $exception) {
 			self::assertSame(
 				'SelectQuery::count() requires a usable root identity. '
-				. 'Count a collection-root query or project a root identity first.',
+				. 'Count a collection-root query.',
 				$exception->getMessage(),
 			);
 		}
 
-		self::assertSame($inner, $outer->getFrom());
-		self::assertSame($inner, $outer->copy()->getFrom());
+		self::assertSame($derived, $outer->getFrom());
+		self::assertSame($derived, $outer->copy()->getFrom());
 		$marker = $inner->getSelections()->getAll()[0]->getExpression();
 		self::assertInstanceOf(AliasedExpression::class, $marker);
 		self::assertSame('marker', $marker->getAlias());
 		self::assertCount(1, $inner->getConditions());
 		self::assertCount(1, $inner->getGroups());
-		self::assertSame('derived_users', $inner->getAlias());
+		self::assertSame('derived_users', $derived->getAlias());
 		self::assertSame([], $executor->calls);
 	}
 

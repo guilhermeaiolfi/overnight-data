@@ -33,6 +33,10 @@ abstract class AbstractLoader implements LoaderInterface
 
 	public function join(RelationRef $relation): QuerySourceInterface
 	{
+		if ($relation->hasJoinedSource()) {
+			return $relation->getJoinedSource();
+		}
+
 		$this->assertSupportedRelationPath($relation);
 		$this->assertSupportedRelationConstraints($relation);
 
@@ -53,6 +57,7 @@ abstract class AbstractLoader implements LoaderInterface
 		);
 
 		RelationKeyQuery::addJoinConditions($keyPairing, $join, $source);
+		$relation->setJoinedSource($join);
 
 		return $join;
 	}
