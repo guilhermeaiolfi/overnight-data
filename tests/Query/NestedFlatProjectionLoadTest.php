@@ -9,7 +9,6 @@ use ON\Data\Definition\Registry;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Relation\Loader\BelongsToLoader;
 use ON\Data\Query\Relation\Loader\HasManyLoader;
-use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 
@@ -100,7 +99,7 @@ final class NestedFlatProjectionLoadTest extends TestCase
 		self::assertSame('Ada', $rows[0]['name']);
 	}
 
-	public function testNestedFlatFieldIsRegisteredAsPublicSelectionOnPostsBranch(): void
+	public function testNestedFlatFieldIsPlacedFromFetchPlanSchema(): void
 	{
 		$users = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
@@ -114,25 +113,14 @@ final class NestedFlatProjectionLoadTest extends TestCase
 			)
 			->separate();
 
-		$users->fetchAll();
+		$rows = $users->fetchAll();
+		$plan = $users->getFetchPlan();
 
-		$postsSelection = null;
-
-		foreach ($users->getRelationSelections()->getAll() as $selection) {
-			if ($selection->getPath() === ['posts']) {
-				$postsSelection = $selection;
-
-				break;
-			}
-		}
-
-		self::assertNotNull($postsSelection);
-		$publicKeys = array_map(
-			static fn ($item) => $item->getSelectionKey(),
-			$postsSelection->getSelections()->getByTag(SelectionTag::PUBLIC),
-		);
-		self::assertContains('id', $publicKeys);
-		self::assertContains('authorName', $publicKeys);
+		self::assertNotNull($plan);
+		$postsSchema = $plan->getSchema()->getRelation('posts')->getRelatedSchema();
+		self::assertTrue($postsSchema->hasField('authorName'));
+		self::assertSame(['author'], $postsSchema->getField('authorName')->getSourcePath());
+		self::assertSame('Ana', $rows[0]['posts'][0]['authorName']);
 	}
 
 	private function makeRegistry(): Registry

@@ -146,11 +146,12 @@ final class RelationLoadBranch extends LoadBranch
 				continue;
 			}
 
+			// Fetch-only: place keys come from RepresentationSchema (proposal 0003 Phase 2).
 			[$fieldRef, $publicAlias] = $flatField;
 			$this->selections->add(
 				$fieldRef->as($publicAlias),
-				SelectionTag::PUBLIC,
-				true,
+				SelectionTag::COLUMN,
+				false,
 			);
 		}
 

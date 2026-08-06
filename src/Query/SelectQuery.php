@@ -836,7 +836,7 @@ final class SelectQuery implements QuerySourceInterface
 
 		$executor = $this->executor ?? throw QueryNotExecutableException::forQuery($this);
 
-		return $this->runtime = new Relation\LoadRuntime($this, $executor);
+		return $this->runtime = new Relation\LoadRuntime($this, $executor, $this->fetchPlan);
 	}
 
 	/**

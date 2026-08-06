@@ -68,10 +68,12 @@ select()
 
 `SelectQuery::fetchAll()` / `fetchOne()` call `beginFetch()` first: compile `RepresentationSchema` + `LoadGraph` into a {@see FetchPlan} before `LoadRuntime`. Writable `prepare()` attaches `LoadGraph` to `QueryRepresentationPlan` after identity planning; the fetch plan reuses that snapshot.
 
-### Phase 2 — assemble flats from schema
+### Phase 2 — assemble flats from schema ✅
 
 1. Drive flat placement from schema `path`/`sourcePath` while parser remains mostly as today.  
 2. Shrink ad-hoc flat handling in output registration.
+
+`RelationOutputProcessor` places scalar keys from `RepresentationSchema` field paths (via `FetchPlan`) when present; nested flats no longer need to be `PUBLIC` on the load branch — they register as fetch `COLUMN` only. Parser `valueAliases` still use the place alias as the load key for now (Phase 3 will go load-local).
 
 ### Phase 3 — parser ← LoadGraph only
 
@@ -96,6 +98,12 @@ select()
 - [x] Every `fetchAll` / `fetchOne` builds a `FetchPlan` (schema + LoadGraph) before LoadRuntime.  
 - [x] Writable prepare exposes LoadGraph on `QueryRepresentationPlan` (post-identity).  
 - [x] `SelectQuery::getFetchPlan()` available after fetch begins; output shape unchanged.
+
+## Acceptance (Phase 2)
+
+- [x] Nested/root visible scalars are placed from schema field paths when `FetchPlan` schema is present.  
+- [x] Nested flat related fields register as load-branch `COLUMN` (not place `PUBLIC`); output still exposes schema `path`.  
+- [x] Existing nested flat + writable flat tests keep passing.
 
 ## References
 

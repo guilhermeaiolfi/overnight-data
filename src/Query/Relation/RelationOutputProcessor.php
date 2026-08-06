@@ -4,25 +4,50 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
+use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionTag;
 
 final class RelationOutputProcessor
 {
+	public function __construct(
+		private readonly ?RepresentationSchema $schema = null,
+	) {
+	}
+
 	/**
 	 * @return list<array<string, mixed>>
 	 */
 	public function processRoot(RootLoadBranch $root): array
 	{
 		$records = [];
-		$publicColumns = array_fill_keys($this->rootSelectionKeys($root->getSelections()->getByTag(SelectionTag::PUBLIC)), true);
+		$publicColumns = array_fill_keys($this->rootPlaceKeys($root), true);
 
 		foreach ($root->getRootNode()->getResult() as $record) {
 			$records[] = $this->processRootRecord($root, $record, $publicColumns);
 		}
 
 		return $records;
+	}
+
+	/**
+	 * Public own-level keys stay on PUBLIC selections; schema only adds COLUMN-only
+	 * flats (non-empty sourcePath). Full schema fields include PK backfill for
+	 * adoption and must not drive public place.
+	 *
+	 * @return list<string>
+	 */
+	private function rootPlaceKeys(RootLoadBranch $root): array
+	{
+		$keys = $this->rootSelectionKeys($root->getSelections()->getByTag(SelectionTag::PUBLIC));
+
+		if (! $this->schema instanceof RepresentationSchema) {
+			return $keys;
+		}
+
+		return $this->mergeFlatSchemaPaths($keys, $this->schema);
 	}
 
 	/**
@@ -119,9 +144,9 @@ final class RelationOutputProcessor
 		$item = [];
 
 		if ($branch->getSelection()->isLoaded()) {
-			foreach ($branch->getSelections()->getByTag(SelectionTag::PUBLIC) as $selection) {
-				$fieldName = $selection->getSelectionKey();
+			$placeKeys = $this->branchPlaceKeys($branch);
 
+			foreach ($placeKeys as $fieldName) {
 				if (array_key_exists($fieldName, $record)) {
 					$item[$fieldName] = $record[$fieldName];
 				}
@@ -156,6 +181,71 @@ final class RelationOutputProcessor
 		}
 
 		return $item;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function branchPlaceKeys(RelationLoadBranch $branch): array
+	{
+		$keys = [];
+
+		foreach ($branch->getSelections()->getByTag(SelectionTag::PUBLIC) as $selection) {
+			$keys[] = $selection->getSelectionKey();
+		}
+
+		$levelSchema = $this->schemaForBranch($branch);
+
+		if ($levelSchema instanceof RepresentationSchema) {
+			$keys = $this->mergeFlatSchemaPaths($keys, $levelSchema);
+		}
+
+		return $keys;
+	}
+
+	/**
+	 * @param list<string> $keys
+	 * @return list<string>
+	 */
+	private function mergeFlatSchemaPaths(array $keys, RepresentationSchema $schema): array
+	{
+		foreach ($schema->getFields() as $field) {
+			if (! $this->isFlatPlaceField($field)) {
+				continue;
+			}
+
+			$path = $field->getPath();
+
+			if (! in_array($path, $keys, true)) {
+				$keys[] = $path;
+			}
+		}
+
+		return $keys;
+	}
+
+	private function isFlatPlaceField(RepresentationFieldSchema $field): bool
+	{
+		return $field->getSourcePath() !== [];
+	}
+
+	private function schemaForBranch(RelationLoadBranch $branch): ?RepresentationSchema
+	{
+		if (! $this->schema instanceof RepresentationSchema) {
+			return null;
+		}
+
+		$current = $this->schema;
+
+		foreach ($branch->getRelationRef()->getPath() as $segment) {
+			if (! $current->hasRelation($segment)) {
+				return null;
+			}
+
+			$current = $current->getRelation($segment)->getRelatedSchema();
+		}
+
+		return $current;
 	}
 
 	/**

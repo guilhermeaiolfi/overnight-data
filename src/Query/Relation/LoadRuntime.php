@@ -10,6 +10,7 @@ use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Load\FetchPlan;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Selection\SelectionItem;
@@ -50,12 +51,13 @@ final class LoadRuntime
 	public function __construct(
 		private readonly SelectQuery $rootQuery,
 		private readonly QueryExecutorInterface $executor,
+		private readonly ?FetchPlan $fetchPlan = null,
 	) {
 		$this->rootBranch = new RootLoadBranch(
 			$rootQuery,
 			fn (string $fieldName): string => $this->allocateAlias(['root', 'required'], $fieldName),
 		);
-		$this->outputProcessor = new RelationOutputProcessor();
+		$this->outputProcessor = new RelationOutputProcessor($fetchPlan?->getSchema());
 	}
 
 	public function fetchAll(): array
