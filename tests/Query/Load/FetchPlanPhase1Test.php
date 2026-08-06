@@ -145,7 +145,7 @@ final class FetchPlanPhase1Executor implements QueryExecutorInterface
 			'userId' => 1,
 			'authorId' => 7,
 			'title' => 'Hello',
-			'authorName' => 'Ana',
+			'author__name' => 'Ana',
 		];
 
 		foreach ($query->getSelections()->getAll() as $selection) {

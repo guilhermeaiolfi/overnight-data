@@ -146,19 +146,22 @@ final class RelationOutputProcessor
 		if ($branch->getSelection()->isLoaded()) {
 			$placeKeys = $this->branchPlaceKeys($branch);
 
-			foreach ($placeKeys as $fieldName) {
-				if (array_key_exists($fieldName, $record)) {
-					$item[$fieldName] = $record[$fieldName];
+			foreach ($placeKeys as $placeKey) {
+				$loadKey = $branch->loadKeyForPlace($placeKey);
+
+				if (array_key_exists($loadKey, $record)) {
+					$item[$placeKey] = $record[$loadKey];
 				}
 			}
 
 			// Keep INTERNAL identity keys in nested payloads for writable track();
 			// SelectQuery::publicRow strips them before object export.
 			foreach ($branch->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
-				$fieldName = $selection->getSelectionKey();
+				$placeKey = $selection->getSelectionKey();
+				$loadKey = $branch->loadKeyForPlace($placeKey);
 
-				if (array_key_exists($fieldName, $record)) {
-					$item[$fieldName] = $record[$fieldName];
+				if (array_key_exists($loadKey, $record)) {
+					$item[$placeKey] = $record[$loadKey];
 				}
 			}
 		}

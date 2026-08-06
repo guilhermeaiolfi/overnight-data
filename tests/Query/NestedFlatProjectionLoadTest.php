@@ -172,8 +172,7 @@ final class NestedFlatProjectionExecutor implements QueryExecutorInterface
 				'userId' => 1,
 				'authorId' => 7,
 				'title' => 'Hello',
-				'headline' => 'Hello',
-				'authorName' => 'Ana',
+				'author__name' => 'Ana',
 			]],
 			'authors' => [[
 				'id' => 7,

@@ -44,6 +44,15 @@ final class SingularNode extends AbstractNode
 		$this->setIdentityFields($this->validateFieldList($identityFields, 'Identity fields'));
 	}
 
+	/**
+	 * @param array<string, string> $placeToLoad
+	 */
+	protected function remapLoadLocalColumnReferences(array $placeToLoad): void
+	{
+		parent::remapLoadLocalColumnReferences($placeToLoad);
+		$this->childFields = $this->remapFieldList($this->childFields, $placeToLoad);
+	}
+
 	protected function push(array &$data): void
 	{
 		if ($this->parent === null) {

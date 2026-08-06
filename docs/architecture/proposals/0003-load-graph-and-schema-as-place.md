@@ -75,11 +75,13 @@ select()
 
 `RelationOutputProcessor` places scalar keys from `RepresentationSchema` field paths (via `FetchPlan`) when present; nested flats no longer need to be `PUBLIC` on the load branch — they register as fetch `COLUMN` only. Parser `valueAliases` still use the place alias as the load key for now (Phase 3 will go load-local).
 
-### Phase 3 — parser ← LoadGraph only
+### Phase 3 — parser ← LoadGraph only ✅
 
 1. Parser `valueAliases` use load-local keys.  
 2. `assemble(schema, loadTree)` owns all public naming / visibility.  
 3. JOIN attach is “same LoadGraph, different edge mode.”
+
+Relation branch columns bind `placeKey → loadKey` on the load branch. Own fields load as the field name; flats as a stable relative key (`author__name`); INTERNAL keys stay as planned. `RelationOutputProcessor` reads load keys and writes place paths. JOIN still allocates `__on_data_*` load keys and maps them the same way.
 
 ### Phase 4 — collapse dual compile/identity paths
 
@@ -104,6 +106,12 @@ select()
 - [x] Nested/root visible scalars are placed from schema field paths when `FetchPlan` schema is present.  
 - [x] Nested flat related fields register as load-branch `COLUMN` (not place `PUBLIC`); output still exposes schema `path`.  
 - [x] Existing nested flat + writable flat tests keep passing.
+
+## Acceptance (Phase 3)
+
+- [x] Relation parser value aliases use load-local keys (field name / `author__name` / allocated JOIN alias).  
+- [x] Output assemble maps load keys → place paths via branch place→load binding.  
+- [x] Nested flat + renamed own-field + writable INTERNAL tests keep passing.
 
 ## References
 

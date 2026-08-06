@@ -250,24 +250,64 @@ final class LoadRuntime
 					continue;
 				}
 
-				$publicAlias = $selection->getSelectionKey();
-				$source = $this->resolveSelectionSource($branch, $fieldRef);
+				$placeKey = $selection->getSelectionKey();
+				$fieldName = $fieldRef->getField()->getName();
 				$path = $fieldRef->getSource() instanceof RelationRef
 					? $fieldRef->getSource()->getPath()
 					: $branch->getRelationRef()->getPath();
+				$loadKey = $this->branchLoadKey($branch, $selection, $fieldRef, $fieldName);
+				$source = $this->resolveSelectionSource($branch, $fieldRef);
 
-				$aliases[] = $this->ensureBranchFieldSelection(
+				$sqlKey = $this->ensureBranchFieldSelection(
 					$branch,
 					$branch->getQuery(),
 					$source,
 					$path,
-					$fieldRef->getField()->getName(),
-					$publicAlias,
+					$fieldName,
+					$loadKey,
 				);
+
+				$branch->bindPlaceToLoadKey($placeKey, $sqlKey);
+				$aliases[] = $sqlKey;
 			}
 
 			$branch->getPublicNode()->setValueAliases($aliases);
 		}
+	}
+
+	/**
+	 * Load-local parser key for a branch column (proposal 0003 Phase 3).
+	 * INTERNAL keys stay as planned; own fields use the field name; flats use a
+	 * stable relative path key — place aliases are applied later by assemble.
+	 */
+	private function branchLoadKey(
+		RelationLoadBranch $branch,
+		SelectionItem $selection,
+		FieldRef $fieldRef,
+		string $fieldName,
+	): string {
+		if ($selection->hasTag(SelectionTag::INTERNAL)) {
+			return $selection->getSelectionKey();
+		}
+
+		$level = $branch->getRelationRef();
+
+		if ($fieldRef->getSource() === $level) {
+			return $fieldName;
+		}
+
+		if (
+			! $fieldRef->getSource() instanceof RelationRef
+			|| $fieldRef->getSource()->getQuery() !== $level->getQuery()
+		) {
+			return $fieldName;
+		}
+
+		$levelPath = $level->getPath();
+		$sourcePath = $fieldRef->getSource()->getPath();
+		$relative = array_values(array_slice($sourcePath, count($levelPath)));
+
+		return implode('__', [...$relative, $fieldName]);
 	}
 
 	public function registerBranch(RelationLoadBranch $branch): AbstractNode
@@ -500,30 +540,30 @@ final class LoadRuntime
 		QuerySourceInterface $source,
 		array $path,
 		string $fieldName,
-		?string $publicAlias = null,
+		?string $loadAlias = null,
 	): string {
-		$publicAlias ??= $fieldName;
+		$loadAlias ??= $fieldName;
 
 		if ($source === $query) {
-			if ($publicAlias === $fieldName) {
+			if ($loadAlias === $fieldName) {
 				$query->select($query->field($fieldName));
-			} elseif (! $query->getSelections()->hasNamedExpression($publicAlias)) {
-				$query->select($query->field($fieldName)->as($publicAlias));
+			} elseif (! $query->getSelections()->hasNamedExpression($loadAlias)) {
+				$query->select($query->field($fieldName)->as($loadAlias));
 			}
 
-			return $publicAlias;
+			return $loadAlias;
 		}
 
-		// SEPARATE branch query: flat joins can use the public alias as the result key.
+		// SEPARATE branch query: load-local aliases are safe on the level query.
 		// JOIN attachment onto a parent query keeps allocated aliases to avoid root collisions.
 		if (
 			$branch->getSource() === $query
-			&& $publicAlias !== ''
-			&& ! $query->getSelections()->hasNamedExpression($publicAlias)
+			&& $loadAlias !== ''
+			&& ! $query->getSelections()->hasNamedExpression($loadAlias)
 		) {
-			$query->select($source->field($fieldName)->as($publicAlias));
+			$query->select($source->field($fieldName)->as($loadAlias));
 
-			return $publicAlias;
+			return $loadAlias;
 		}
 
 		$alias = $this->allocateAlias($path, $fieldName);

@@ -29,6 +29,23 @@ abstract class LoadBranch
 	 */
 	private array $children = [];
 
+	/**
+	 * Place path / selection key → parser/load record key (proposal 0003 Phase 3).
+	 *
+	 * @var array<string, string>
+	 */
+	private array $placeToLoadKeys = [];
+
+	public function bindPlaceToLoadKey(string $placeKey, string $loadKey): void
+	{
+		$this->placeToLoadKeys[$placeKey] = $loadKey;
+	}
+
+	public function loadKeyForPlace(string $placeKey): string
+	{
+		return $this->placeToLoadKeys[$placeKey] ?? $placeKey;
+	}
+
 	public function setNode(AbstractNode $node): void
 	{
 		$this->node = $node;

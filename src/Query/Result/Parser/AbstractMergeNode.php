@@ -47,6 +47,15 @@ abstract class AbstractMergeNode extends AbstractNode
 		$this->setIdentityFields($this->validateFieldList($identityFields, 'Identity fields'));
 	}
 
+	/**
+	 * @param array<string, string> $placeToLoad
+	 */
+	protected function remapLoadLocalColumnReferences(array $placeToLoad): void
+	{
+		parent::remapLoadLocalColumnReferences($placeToLoad);
+		$this->childFields = $this->remapFieldList($this->childFields, $placeToLoad);
+	}
+
 	public function mergeInheritanceNodes(bool $includeDiscriminator = false): void
 	{
 		if ($this->parent === null) {

@@ -588,7 +588,7 @@ final class SelectQuery implements QuerySourceInterface
 	{
 		$handler = $this->writableHandler;
 		$preparation = $this->beginFetch($handler);
-		$runtime = $this->getLoadRuntime(fresh: $handler !== null);
+		$runtime = $this->getLoadRuntime(fresh: true);
 		$rows = $runtime->fetchAll();
 		$publicRows = $this->publicRows($rows);
 
@@ -684,7 +684,7 @@ final class SelectQuery implements QuerySourceInterface
 		try {
 			$handler = $this->writableHandler;
 			$preparation = $this->beginFetch($handler);
-			$runtime = $this->getLoadRuntime(fresh: $handler !== null || $identity !== null);
+			$runtime = $this->getLoadRuntime(fresh: true);
 			$row = $runtime->fetchOne();
 
 			if ($row === null) {

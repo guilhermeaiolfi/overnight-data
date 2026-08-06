@@ -175,11 +175,65 @@ abstract class AbstractNode
 	}
 
 	/**
+	 * Bind SQL/result keys and store parsed records under the same load-local keys.
+	 * Place aliases are applied later by RelationOutputProcessor via place→load binding.
+	 *
 	 * @param list<string> $aliases
 	 */
 	public function setValueAliases(array $aliases): void
 	{
-		$this->valueAliases = $aliases;
+		if (count($aliases) !== count($this->columns)) {
+			throw new ParserException(sprintf(
+				'Value alias count (%d) must match configured column count (%d).',
+				count($aliases),
+				count($this->columns),
+			));
+		}
+
+		/** @var array<string, string> $placeToLoad */
+		$placeToLoad = [];
+
+		foreach ($this->columns as $index => $placeKey) {
+			$loadKey = $aliases[$index];
+
+			if (! is_string($loadKey) || $loadKey === '') {
+				throw new ParserException('Value aliases must be non-empty strings.');
+			}
+
+			$placeToLoad[$placeKey] = $loadKey;
+		}
+
+		$this->columns = array_values($aliases);
+		$this->valueAliases = array_values($aliases);
+		$this->remapLoadLocalColumnReferences($placeToLoad);
+	}
+
+	/**
+	 * @param array<string, string> $placeToLoad
+	 */
+	protected function remapLoadLocalColumnReferences(array $placeToLoad): void
+	{
+		if ($this->identityFields === []) {
+			return;
+		}
+
+		$this->identityFields = $this->remapFieldList($this->identityFields, $placeToLoad);
+	}
+
+	/**
+	 * @param list<string> $fields
+	 * @param array<string, string> $placeToLoad
+	 * @return list<string>
+	 */
+	protected function remapFieldList(array $fields, array $placeToLoad): array
+	{
+		$mapped = [];
+
+		foreach ($fields as $field) {
+			$mapped[] = $placeToLoad[$field] ?? $field;
+		}
+
+		return $mapped;
 	}
 
 	/**
