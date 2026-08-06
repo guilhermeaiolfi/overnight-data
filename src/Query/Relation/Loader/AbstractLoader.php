@@ -10,6 +10,9 @@ use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Condition\ConditionTag;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationLoaderException;
+use ON\Data\Query\Expression\AliasedExpression;
+use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
@@ -131,6 +134,44 @@ abstract class AbstractLoader implements LoaderInterface
 		if ($selection->getSorts() !== []) {
 			throw RelationLoaderException::relationOrderByNotSupported($relation);
 		}
+
+		$this->assertNoJoinedRichNestedSelection($branch);
+	}
+
+	/**
+	 * JOIN keeps same-level FieldRef projection (own fields, any alias) and defaults.
+	 * Flat related fields and non-field expressions require SEPARATE_QUERY.
+	 */
+	protected function assertNoJoinedRichNestedSelection(RelationLoadBranch $branch): void
+	{
+		$relation = $branch->getRelationRef();
+
+		foreach ($branch->getSelection()->getSelections()->getAll() as $item) {
+			if ($item->hasTag(SelectionTag::DEFAULT)) {
+				continue;
+			}
+
+			if ($this->isJoinCompatibleNestedSelection($item, $relation)) {
+				continue;
+			}
+
+			throw RelationLoaderException::richNestedSelectionRequiresSeparate($relation);
+		}
+	}
+
+	private function isJoinCompatibleNestedSelection(SelectionItem $item, RelationRef $level): bool
+	{
+		$expression = $item->getExpression();
+
+		if ($expression instanceof AliasedExpression) {
+			$expression = $expression->getExpression();
+		}
+
+		if ($expression instanceof StarExpression) {
+			return true;
+		}
+
+		return $expression instanceof FieldRef && $expression->getSource() === $level;
 	}
 
 	protected function applySeparateQueryOptions(RelationLoadBranch $branch): void

@@ -6,6 +6,7 @@ namespace Tests\ON\Data\Query;
 
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
+use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Relation\Loader\BelongsToLoader;
 use ON\Data\Query\Relation\Loader\HasManyLoader;
 use ON\Data\Query\Selection\SelectionTag;
@@ -61,6 +62,42 @@ final class NestedFlatProjectionLoadTest extends TestCase
 		self::assertArrayHasKey('authorName', $post);
 		self::assertArrayNotHasKey('author', $post);
 		self::assertSame('Ana', $post['authorName']);
+	}
+
+	public function testJoinedFlatRelatedNestedSelectionIsRejected(): void
+	{
+		$users = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new NestedFlatProjectionExecutor(),
+		);
+
+		$users->posts
+			->select(
+				$users->posts->id,
+				$users->posts->author->name->as('authorName'),
+			)
+			->join();
+
+		$this->expectException(RelationLoaderException::class);
+		$this->expectExceptionMessage('cannot use JOIN loading with flat related fields');
+		$users->fetchAll();
+	}
+
+	public function testBelongsToJoinAllowsSameLevelAliasSelect(): void
+	{
+		$users = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new NestedFlatProjectionExecutor(),
+		);
+
+		$users->posts->select('id', 'title')->separate();
+		$users->posts->author->select(
+			$users->posts->author->name->as('displayName'),
+		);
+
+		// BelongsTo defaults to JOIN; same-level aliases are allowed.
+		$rows = $users->fetchAll();
+		self::assertSame('Ada', $rows[0]['name']);
 	}
 
 	public function testNestedFlatFieldIsRegisteredAsPublicSelectionOnPostsBranch(): void

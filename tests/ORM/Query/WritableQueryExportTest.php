@@ -137,7 +137,7 @@ final class WritableQueryExportTest extends TestCase
 		$users = $registry->getCollection('users');
 		$query = new SelectQuery($users);
 		$query->select($query->name);
-		$query->posts->fields('title');
+		$query->posts->select('title');
 
 		$user = new stdClass();
 		$user->id = 1;
@@ -278,7 +278,7 @@ final class WritableQueryResultTrackerTest extends TestCase
 		$users = $registry->getCollection('users');
 		$query = new SelectQuery($users);
 		$query->select($query->name);
-		$query->posts->fields('title');
+		$query->posts->select('title');
 
 		$session = new Session(new RecordingCommandExecutor());
 		$tracker = new WritableQueryResultTracker($session);

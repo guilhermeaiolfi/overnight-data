@@ -91,7 +91,7 @@ final class QuickstartSmokeTest extends TestCase
 		$relationQuery = $harness->database->query($users);
 		$relationQuery
 			->posts
-			->fields('id', 'title')
+			->select('id', 'title')
 			->where(x()->eq($relationQuery->posts->published, true));
 
 		$withPosts = $relationQuery

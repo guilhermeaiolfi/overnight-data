@@ -104,7 +104,7 @@ $rows = $query
         $query->id,
         $query->name,
         $query->posts
-            ->fields('id', 'title')
+            ->select('id', 'title')
             ->where(x()->eq($query->posts->published, true)),
     )
     ->orderBy($query->id->asc())

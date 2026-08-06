@@ -53,7 +53,7 @@ final class WritableQueryExportPersistenceTest extends TestCase
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
 		$query = new SelectQuery($users, new UserWithPostsQueryExecutor());
-		$query->posts->fields('id', 'title');
+		$query->posts->select('id', 'title');
 
 		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 		self::assertInstanceOf(stdClass::class, $user);
@@ -83,7 +83,7 @@ final class WritableQueryExportPersistenceTest extends TestCase
 		$executor = new RecordingCommandExecutor(new CommandResult(1, ['id' => 20]));
 		$session = new Session($executor);
 		$query = new SelectQuery($users, new UserWithEmptyPostsQueryExecutor());
-		$query->posts->fields('title');
+		$query->posts->select('title');
 
 		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 		self::assertInstanceOf(stdClass::class, $user);
@@ -115,7 +115,7 @@ final class WritableQueryExportPersistenceTest extends TestCase
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);
 		$query = new SelectQuery($users, new UserWithTwoPostsQueryExecutor());
-		$query->posts->fields('id', 'title');
+		$query->posts->select('id', 'title');
 
 		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
 		self::assertInstanceOf(stdClass::class, $user);
@@ -141,7 +141,7 @@ final class WritableQueryExportPersistenceTest extends TestCase
 		$session = new Session($executor);
 		$query = new SelectQuery($users, new UserWithTwoPostsQueryExecutor());
 		$query->posts
-			->fields('id', 'title')
+			->select('id', 'title')
 			->where(x()->eq($query->posts->title, 'Hello'));
 
 		$user = $query->to(stdClass::class)->writable($session)->fetchOne();

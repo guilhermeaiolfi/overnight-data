@@ -121,7 +121,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testRequestedPublicFieldsRemainSeparateFromInternallyRequiredNodeColumns(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
-		$users->posts->fields('title');
+		$users->posts->select('title');
 		$runtime = $this->prepareRuntime($users);
 		$branches = $this->readProperty($runtime, 'branches');
 		$branch = array_values($branches)[0];
@@ -142,7 +142,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testBranchesExposeSelectionListsDirectly(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
-		$users->posts->fields('title');
+		$users->posts->select('title');
 		$runtime = $this->prepareRuntime($users);
 		$rootBranch = $this->readProperty($runtime, 'rootBranch');
 		$branch = array_values($this->readProperty($runtime, 'branches'))[0];
@@ -185,7 +185,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testCompositePrimaryKeyDeduplicationStillWorksWhenPublicKeyFieldsAreOmitted(): void
 	{
 		$employees = new SelectQuery($this->makeCompositeDedupRegistry()->getCollection('employees'), new CompositeDedupExecutor());
-		$employees->badges->fields('label');
+		$employees->badges->select('label');
 		$employees->select($employees->tenantId, $employees->name);
 
 		self::assertSame([
@@ -590,7 +590,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	public function testRootBranchOwnsIdentityAliasesForRootPrimaryKey(): void
 	{
 		$users = new SelectQuery($this->makeCompositeDedupRegistry()->getCollection('employees'), new CompositeDedupExecutor());
-		$users->badges->fields('label');
+		$users->badges->select('label');
 		$users->select($users->tenantId, $users->name);
 		$runtime = $this->prepareRuntime($users);
 		$rootBranch = $this->readProperty($runtime, 'rootBranch');

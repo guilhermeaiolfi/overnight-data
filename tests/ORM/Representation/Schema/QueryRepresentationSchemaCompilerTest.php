@@ -259,7 +259,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$query = query($users, fn (SelectQuery $query) => $query
 			->select($query->name)
 			->posts
-			->fields('title'));
+			->select('title'));
 
 		$schema = $this->compiler->compile($query);
 		$posts = $schema->getRelation('posts');
@@ -323,7 +323,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$users = $registry->getCollection('users');
 		$query = query($users, function (SelectQuery $query): void {
 			$query->select($query->name);
-			$query->posts->fields('title')->where(x()->eq($query->posts->title, 'Hello'));
+			$query->posts->select('title')->where(x()->eq($query->posts->title, 'Hello'));
 		});
 
 		$schema = $this->compiler->compile($query);
@@ -338,7 +338,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$query = query($users, function (SelectQuery $query): void {
 			$query->select($query->name);
 			$query->posts
-				->fields('id', 'title')
+				->select('id', 'title')
 				->orderBy($query->posts->id->asc())
 				->limit(1);
 		});
@@ -402,7 +402,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$query = query($users, fn (SelectQuery $query) => $query
 			->select($query->name)
 			->posts
-			->fields('title')
+			->select('title')
 			->offset(10));
 
 		$schema = $this->compiler->compile($query);
@@ -416,7 +416,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$users = $registry->getCollection('users');
 		$query = query($users, function (SelectQuery $query): void {
 			$query->select($query->name);
-			$query->posts->fields('title')->where(x()->eq($query->posts->title, 'Hello'));
+			$query->posts->select('title')->where(x()->eq($query->posts->title, 'Hello'));
 		});
 
 		$schema = $this->compiler->compile($query);
@@ -447,7 +447,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 			->select($query->name)
 			->posts
 			->comments
-			->fields('body'));
+			->select('body'));
 
 		$schema = $this->compiler->compile($query);
 
@@ -536,7 +536,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$query = query($users, fn (SelectQuery $query) => $query
 			->select($query->name)
 			->posts
-			->fields('title'));
+			->select('title'));
 
 		$schema = $this->compiler->compile($query);
 		$posts = $schema->getRelation('posts')->getRelatedSchema();

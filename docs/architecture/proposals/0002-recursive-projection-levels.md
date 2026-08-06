@@ -6,7 +6,7 @@ Relates to: [`0001-representation-schema-as-reusable-model.md`](./0001-represent
 
 This document captures the design for unifying root and nested relation projection so every level shares one selection model.
 
-**Landed so far:** `RelationRef::select()`, `fields()` sugar over a per-level `SelectionList`, relation selection tree/load branch registration of own-level aliases, recursive schema compile for nested aliases + relative flat `sourcePath`, per-level alias/relation name collisions, SEPARATE_QUERY nested flat field fetch onto the level payload, and nested INTERNAL identity planning for writable flats (Phase C). Deferred: nested expressions (0001), JOIN parity for rich nested projection.
+**Landed so far:** `RelationRef::select()` (including string short form `select('id','title')`) over a per-level `SelectionList`, relation selection tree/load branch registration of own-level aliases, recursive schema compile for nested aliases + relative flat `sourcePath`, per-level alias/relation name collisions, SEPARATE_QUERY nested flat field fetch onto the level payload, and nested INTERNAL identity planning for writable flats (Phase C). JOIN allows same-level field selections (including aliases); flat related fields and non-field expressions require `separate()`. `RelationRef::fields()` was removed. Deferred: nested expressions (0001), JOIN parity for cross-level / expression nested projection (Phase D).
 
 ## Problem
 
@@ -28,7 +28,7 @@ $u->select(
     $u->id,
     $u->profile->name->as('profileName'),
     x()->mul($u->qty, $u->price)->as('lineTotal'),
-    $u->posts->fields('id', 'title'), // nested: names only
+    $u->posts->select('id', 'title'), // nested: names only
 );
 
 // Not expressible today on the posts level:
@@ -42,7 +42,7 @@ $u->select(
 
 That dual model adds complexity:
 
-- two authoring APIs (`select(...)` vs `fields(...)`)
+- one authoring API (`select(...)`; former `fields()` sugar removed)
 - two stores (`SelectionList` vs `list<string>`)
 - three compiler passes at root vs a fields-only nested compile
 - docs that must explain two projection rules
@@ -111,7 +111,7 @@ $u->select(
 
 Compatibility intent:
 
-- `$rel->fields('id', 'title')` remains valid as **sugar** for selecting those direct fields (identity aliases).
+- `$rel->select('id', 'title')` is the short form for selecting those direct fields (identity aliases). Former `$rel->fields(...)` was removed.
 - Bare `$rel` / `$rel->load()` keeps “all visible fields” defaults.
 - Existing root `select($u->profile->name->as('profileName'))` remains valid (flat projection onto the **current** level — root today, any level after this work).
 
@@ -123,7 +123,6 @@ Compatibility intent:
 |---|---|---|
 | `SelectQuery` | `SelectionList` | unchanged role (root level selections) |
 | `RelationSelection` | `?list<string> $fields` | selection list (expressions + aliases + stars + relation-sourced field refs), not only names |
-| `RelationRef::fields()` | writes name list | populates that selection list (sugar) |
 
 Nested relation loads still register child `RelationRef` / selection-tree edges; scalar richness moves into per-level selections.
 
@@ -172,7 +171,7 @@ Target: **per level** — a public selection path must not collide with a child 
 
 **Removed (ongoing):**
 
-- Dual projection APIs as the *real* model (fields becomes sugar).
+- Dual projection APIs as the *real* model (`fields()` removed; `select()` covers both short names and rich projection).
 - Dual nested vs root compile field assembly.
 - Docs/rules that say “only direct fields under relations.”
 
@@ -211,11 +210,11 @@ Until 0001, 0002 may still compile nested field/flat-field schemas fully and eit
 ### Phase A — model + field/alias parity
 
 1. Replace nested `list<string>` with a selection list capable of `FieldRef` + aliases (+ star).
-2. `fields(...)` sugar → that list.
+2. String-name `select('id', 'title')` → that list (former `fields()` sugar removed).
 3. Recursive compiler for field + flat related-field schemas at every level.
 4. Load/output identity and aliased field names at nested levels.
 5. Per-level collision checks.
-6. Tests: nested aliases; nested flat grandchild field; schema `sourcePath` relative to nested schema; backward-compatible `fields()`.
+6. Tests: nested aliases; nested flat grandchild field; schema `sourcePath` relative to nested schema; string-name `select()` short form.
 
 ### Phase B — expressions / subqueries at nested levels
 
@@ -230,14 +229,14 @@ Until 0001, 0002 may still compile nested field/flat-field schemas fully and eit
 
 ### Phase D — JOIN loader parity (if needed)
 
-1. Close gaps where JOIN strategy cannot yet express nested projection richness.
-2. Or document “full nested projection requires SEPARATE_QUERY” until parity.
+1. Close gaps where JOIN strategy cannot yet express nested projection richness (today: JOIN rejects rich nested `select()`).
+2. Or keep documenting “full nested projection requires SEPARATE_QUERY”.
 
 ## Compatibility / migration
 
-- Existing `$rel->fields('a', 'b')` and `$rel->load()` keep working.
+- Existing `$rel->select('a', 'b')` and `$rel->load()` keep working.
 - Root flat projections unchanged.
-- Nested result keys that were field names stay field names when using `fields()` sugar.
+- Nested result keys that were field names stay field names when using string-name `select('id', 'title')`.
 - New aliases at nested levels are opt-in via explicit `.as(...)` / nested select.
 - Schema consumers that assumed nested related schemas only contain same-name fields must tolerate aliases and (later) expression paths.
 
@@ -261,12 +260,12 @@ $u->posts->select(
     $u->posts->title->as('headline'),
 );
 
-// Keep fields() as sugar for the common “just these column names” case
-$u->posts->fields('id', 'title');
+// String names are the short form for the common “just these column names” case
+$u->posts->select('id', 'title');
 // ≡ select($u->posts->id, $u->posts->title) with identity aliases
 ```
 
-So everyday nested shapes stay short via `fields()` sugar; full projection power goes through `select()`.
+So everyday nested shapes stay short via `select('id', 'title')`; full projection power (aliases, flats, nested refs) uses the same `select()` API. Former `fields()` was removed.
 
 ### 2. Default fields — clear like root
 
@@ -293,7 +292,7 @@ $u->posts->select(
 // $u->posts->author->select($u->posts->author->name);
 ```
 
-Calling `select()` on a level puts that level in play. Deep traverse without `select()`/`fields()`/`load()` on the ancestor keeps today’s intermediate container behavior.
+Calling `select()` on a level puts that level in play. Deep traverse without `select()`/`load()` on the ancestor keeps today’s intermediate container behavior.
 Rationale: one rule everywhere. Surprising “silent defaults” after an explicit scalar `select()` is worse than making people write `$level->all()` / star when they want everything plus extras.
 
 ### 3. Star / `all()` at nested levels
@@ -309,9 +308,9 @@ $u->posts->select(
 
 ### 4. JOIN vs SEPARATE — Phase A/B MVP
 
-**Minimum viable:** deliver full nested projection richness on **SEPARATE_QUERY** first.
+**Delivered:** full nested projection richness on **SEPARATE_QUERY** only.
 
-JOIN may keep today’s narrower nested projection until a later phase (document the limit). Do not block Phase A/B on JOIN parity.
+JOIN keeps same-level FieldRef projection (own fields including renamed aliases, plus defaults). Flat related fields and non-field expressions with JOIN throw `RelationLoaderException::richNestedSelectionRequiresSeparate` until Phase D parity — use `separate()`.
 
 ### 5. Expression schema timing
 
@@ -328,7 +327,7 @@ This is existing relation-loading behavior, not a new concept. Clarified below; 
 When you configure a deep path without loading the middle collection’s own fields:
 
 ```php
-$u->posts->author->fields('name');
+$u->posts->author->select('name');
 // or later: $u->posts->author->select($u->posts->author->name);
 ```
 
@@ -347,7 +346,7 @@ So `posts` appears as a structural container (no post columns), and `author` is 
 **Decision for nested `select()`:**
 
 - Configuring / selecting on a **deeper** relation does **not** by itself clear or load ancestors’ scalars.
-- Ancestors keep today’s traverse defaults (`load=false`, `visible=true`) unless that ancestor level itself gets `select()` / `fields()` / `load()`.
+- Ancestors keep today’s traverse defaults (`load=false`, `visible=true`) unless that ancestor level itself gets `select()` / `load()`.
 - Calling `select(...)` on a level marks **that** level loaded and applies that level’s default-clearing rules only.
 
 ```php
@@ -366,7 +365,7 @@ $u->posts->select(
 
 - [x] Nested level can select direct fields with aliases different from field names; results and schema paths use the alias.
 - [x] Nested level can flat-project a related field onto that level’s payload with correct relative `sourcePath` in `RepresentationSchema`.
-- [x] `$rel->fields('id', 'title')` behavior unchanged for callers.
+- [x] `$rel->select('id', 'title')` short form; former `fields()` removed.
 - [x] Schema compilation for nested branches shares the same field/flat-field logic path as root (no fields-name-only special case for the happy path).
 - [x] Per-level path collision with child relation names is rejected.
 - [x] Docs: `relation-loading.md` updated for recursive projection; this proposal linked from the docs index.
@@ -379,7 +378,7 @@ $u->posts->select(
 
 ## References
 
-- [`docs/query/relation-loading.md`](../../query/relation-loading.md) — current nested `fields()` model
+- [`docs/query/relation-loading.md`](../../query/relation-loading.md) — current nested `select()` model (string short form; `fields()` removed)
 - [`docs/query/query-model.md`](../../query/query-model.md) — root `select()` vocabulary
 - [`docs/orm/representation-schema.md`](../../orm/representation-schema.md) — already-recursive schema
 - [`docs/orm/writable-select-query-projections.md`](../../orm/writable-select-query-projections.md) — root flat writable projections

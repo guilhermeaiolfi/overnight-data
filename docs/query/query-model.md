@@ -53,7 +53,7 @@ $u->select(
     $u->id,
     $u->email->as('contact_email'),
     $u->posts,
-    $u->profile->fields('avatar'),
+    $u->profile->select('avatar'),
     $postCountQuery,
 );
 ```
@@ -167,7 +167,7 @@ $users = $u
     ->select(
         $u->id,
         $u->name,
-        $u->posts->fields('id', 'title'),
+        $u->posts->select('id', 'title'),
     )
     ->to(stdClass::class)
     ->fetchAll();

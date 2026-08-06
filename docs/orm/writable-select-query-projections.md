@@ -160,7 +160,7 @@ $u = $runtime->query($users);
 $user = $u
     ->select($u->id, $u->name)
     ->posts
-    ->fields('id', 'title')
+    ->select('id', 'title')
     ->to(stdClass::class)
     ->writable($session)
     ->fetchOne();
@@ -220,7 +220,7 @@ $u = $runtime->query($users);
 $user = $u
     ->select($u->id, $u->name)
     ->posts
-    ->fields('id', 'title')
+    ->select('id', 'title')
     ->to(stdClass::class)
     ->writable($session)
     ->fetchOne();

@@ -111,9 +111,8 @@ final class RelationRef implements QuerySourceInterface
 	 * Backward-compatible view of explicit direct-field selections.
 	 *
 	 * Returns null while this level still uses its default (visible-fields)
-	 * selection. Once {@see select()}/{@see fields()} narrow the selection,
-	 * this returns the names of any identity-aliased own fields (i.e. what
-	 * {@see fields()} would have produced); aliases, star, and flat related
+	 * selection. Once {@see select()} narrows the selection, this returns the
+	 * names of any identity-aliased own fields; aliases, star, and flat related
 	 * fields are not representable as plain field names and are omitted —
 	 * use {@see getSelections()} for the full picture.
 	 *
@@ -370,11 +369,18 @@ final class RelationRef implements QuerySourceInterface
 	 * Select this level's own visible/star projection, aliases, or child
 	 * relations — mirrors {@see SelectQuery::select()} for a nested level.
 	 *
+	 * String field names (and list arrays of names) are identity-aliased own
+	 * fields at this level — the short form for everyday projections:
+	 * `select('id', 'title')` ≡ `select($this->id, $this->title)`.
+	 *
 	 * Selecting a child relation only marks it loaded/visible; it does not
 	 * clear this level's default field selection (traversal-only intent),
 	 * matching {@see SelectQuery::select()}'s handling of bare RelationRefs.
+	 * Any scalar/value argument replaces this level's scalar projection.
+	 *
+	 * @param string|list<string|FieldRef>|ValueExpressionInterface|AliasedExpression|StarExpression|self ...$expressions
 	 */
-	public function select(ValueExpressionInterface|AliasedExpression|StarExpression|self ...$expressions): self
+	public function select(string|array|ValueExpressionInterface|AliasedExpression|StarExpression|self ...$expressions): self
 	{
 		$this->assertSelectable();
 
@@ -383,8 +389,9 @@ final class RelationRef implements QuerySourceInterface
 		}
 
 		$normalized = [];
+		$seenOwnFields = [];
 
-		foreach ($expressions as $expression) {
+		foreach ($this->expandSelectArguments($expressions) as $expression) {
 			if ($expression instanceof self) {
 				if ($expression->getQuery() !== $this->query) {
 					throw RelationSelectionException::foreignQueryRelation($expression, $this->query);
@@ -397,36 +404,43 @@ final class RelationRef implements QuerySourceInterface
 				continue;
 			}
 
-			$normalized[] = $this->normalizeSelectExpression($expression);
+			if (is_string($expression)) {
+				$fieldName = $this->normalizeOwnFieldName($expression);
+
+				if (isset($seenOwnFields[$fieldName])) {
+					continue;
+				}
+
+				$seenOwnFields[$fieldName] = true;
+				$normalized[] = $this->field($fieldName)->as($fieldName);
+
+				continue;
+			}
+
+			$item = $this->normalizeSelectExpression($expression);
+
+			if (
+				$item instanceof AliasedExpression
+				&& $item->getExpression() instanceof FieldRef
+				&& $item->getExpression()->getSource() === $this
+				&& $item->getExpression()->getField()->getName() === $item->getAlias()
+			) {
+				$fieldName = $item->getExpression()->getField()->getName();
+
+				if (isset($seenOwnFields[$fieldName])) {
+					continue;
+				}
+
+				$seenOwnFields[$fieldName] = true;
+			}
+
+			$normalized[] = $item;
 		}
 
 		if ($normalized !== []) {
-			$this->selections->removeByTag(SelectionTag::DEFAULT);
+			$this->selections->clear();
 			$this->selections->addExplicit($normalized);
 		}
-
-		$this->markSelected();
-
-		return $this;
-	}
-
-	/**
-	 * Sugar for identity-aliased direct field selection. Replaces this level's
-	 * scalar projection (same as a full {@see select()} of those fields).
-	 */
-	public function fields(string|FieldRef|array ...$fields): self
-	{
-		$this->assertSelectable();
-
-		$names = $this->normalizeSelectionFields($this->normalizeFieldArguments($fields));
-		$expressions = [];
-
-		foreach ($names as $name) {
-			$expressions[] = $this->field($name)->as($name);
-		}
-
-		$this->selections->clear();
-		$this->selections->addExplicit($expressions);
 
 		$this->markSelected();
 
@@ -598,79 +612,70 @@ final class RelationRef implements QuerySourceInterface
 	}
 
 	/**
-	 * @param list<mixed> $fields
-	 * @return list<string>
+	 * @param list<string|array|ValueExpressionInterface|AliasedExpression|StarExpression|self> $arguments
+	 * @return list<string|ValueExpressionInterface|AliasedExpression|StarExpression|self>
 	 */
-	private function normalizeSelectionFields(array $fields): array
+	private function expandSelectArguments(array $arguments): array
 	{
-		if ($fields === []) {
-			throw RelationSelectionException::emptyRelationFields($this->getPath());
-		}
+		$expanded = [];
 
-		$normalized = [];
-		$seen = [];
+		foreach ($arguments as $argument) {
+			if (is_array($argument)) {
+				if ($argument === []) {
+					throw RelationSelectionException::emptyRelationFields($this->getPath());
+				}
 
-		foreach ($fields as $field) {
-			$fieldName = $this->normalizeFieldSelectionValue($field);
-
-			if (trim($fieldName) === '') {
-				throw RelationSelectionException::invalidRelationFieldName($this->getPath(), $fieldName);
-			}
-
-			if (! $this->getCollection()->hasField($fieldName)) {
-				throw RelationSelectionException::unknownRelationField($this->getPath(), $fieldName);
-			}
-
-			$field = $this->getCollection()->getField($fieldName);
-
-			$canonicalName = $field->getName();
-
-			if (isset($seen[$canonicalName])) {
-				continue;
-			}
-
-			$seen[$canonicalName] = true;
-			$normalized[] = $canonicalName;
-		}
-
-		return $normalized;
-	}
-
-	/**
-	 * @param list<string|FieldRef|array<mixed>> $fields
-	 * @return list<string|FieldRef>
-	 */
-	private function normalizeFieldArguments(array $fields): array
-	{
-		$normalized = [];
-
-		foreach ($fields as $field) {
-			if (is_array($field)) {
-				if (! array_is_list($field)) {
+				if (! array_is_list($argument)) {
 					throw RelationSelectionException::invalidRelationFieldsType($this->getPath());
 				}
 
-				array_push($normalized, ...$field);
+				foreach ($argument as $item) {
+					if (is_string($item)) {
+						$expanded[] = $item;
+
+						continue;
+					}
+
+					if ($item instanceof FieldRef) {
+						$name = $this->normalizeOwnFieldReference($item);
+						$expanded[] = $this->field($name)->as($name);
+
+						continue;
+					}
+
+					throw RelationSelectionException::invalidRelationFieldName($this->getPath(), $item);
+				}
 
 				continue;
 			}
 
-			$normalized[] = $field;
+			if ($argument instanceof FieldRef) {
+				$expanded[] = $argument;
+
+				continue;
+			}
+
+			$expanded[] = $argument;
 		}
 
-		return $normalized;
+		return $expanded;
 	}
 
-	private function normalizeFieldSelectionValue(mixed $field): string
+	private function normalizeOwnFieldName(string $fieldName): string
 	{
-		if (is_string($field)) {
-			return $field;
+		if (trim($fieldName) === '') {
+			throw RelationSelectionException::invalidRelationFieldName($this->getPath(), $fieldName);
 		}
 
-		if (! $field instanceof FieldRef) {
-			throw RelationSelectionException::invalidRelationFieldName($this->getPath(), $field);
+		if (! $this->getCollection()->hasField($fieldName)) {
+			throw RelationSelectionException::unknownRelationField($this->getPath(), $fieldName);
 		}
 
+		return $this->getCollection()->getField($fieldName)->getName();
+	}
+
+	private function normalizeOwnFieldReference(FieldRef $field): string
+	{
 		$source = $field->getSource();
 
 		if (

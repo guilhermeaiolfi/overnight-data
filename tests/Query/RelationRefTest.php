@@ -107,7 +107,7 @@ final class RelationRefTest extends TestCase
 	{
 		$users = $this->makeQuery('users');
 		$default = $users->posts;
-		$fields = $default->fields('id', 'title', 'id');
+		$fields = $default->select('id', 'title', 'id');
 
 		self::assertTrue($default->isLoaded());
 		self::assertTrue($default->isVisible());
@@ -116,28 +116,28 @@ final class RelationRefTest extends TestCase
 		self::assertSame($default, $fields);
 	}
 
-	public function testFieldsAcceptListsAndSamePathFieldRefs(): void
+	public function testSelectAcceptListsAndSamePathFieldRefs(): void
 	{
 		$users = $this->makeQuery('users');
-		$fromArray = $users->posts->fields(['title']);
-		$fromRefs = $users->posts->fields($users->posts->id, $users->posts->title);
+		$fromArray = $users->posts->select(['title']);
+		$fromRefs = $users->posts->select($users->posts->id, $users->posts->title);
 
 		self::assertSame(['id', 'title'], $fromArray->getFields());
 		self::assertSame(['id', 'title'], $fromRefs->getFields());
 		self::assertSame(['id', 'title'], $users->posts->getFields());
 	}
 
-	public function testFieldsRejectInvalidSelectionInputs(): void
+	public function testSelectRejectInvalidSelectionInputs(): void
 	{
 		$users = $this->makeQuery('users');
 
 		foreach ([
-			static fn () => $users->posts->fields(),
-			static fn () => $users->posts->fields(''),
-			static fn () => $users->posts->fields(['id' => 'title']),
-			static fn () => $users->posts->fields([new stdClass()]),
-			static fn () => $users->posts->fields($users->name),
-			static fn () => $users->posts->fields('missing'),
+			static fn () => $users->posts->select(),
+			static fn () => $users->posts->select(''),
+			static fn () => $users->posts->select(['id' => 'title']),
+			static fn () => $users->posts->select([new stdClass()]),
+			static fn () => $users->posts->select('missing'),
+			static fn () => $users->posts->select([$users->name]),
 		] as $call) {
 			try {
 				$call();
@@ -250,7 +250,7 @@ final class RelationRefTest extends TestCase
 	{
 		$users = $this->makeQuery('users');
 
-		$users->select($users->id, $users->posts->fields('id', 'title'));
+		$users->select($users->id, $users->posts->select('id', 'title'));
 
 		self::assertSame([
 			['posts', true, true, ['id', 'title']],
@@ -267,7 +267,7 @@ final class RelationRefTest extends TestCase
 	{
 		$users = $this->makeQuery('users');
 
-		$users->posts->fields('id', 'title');
+		$users->posts->select('id', 'title');
 
 		$selections = $users->getSelections()->getAll();
 		self::assertCount(1, $selections);
@@ -325,7 +325,7 @@ final class RelationRefTest extends TestCase
 	{
 		$users = $this->makeQuery('users');
 		$users->select($users->name->as('posts'));
-		$users->posts->fields('id', 'title');
+		$users->posts->select('id', 'title');
 
 		$this->expectException(RelationSelectionException::class);
 		$users->getRelationSelections();
@@ -334,7 +334,7 @@ final class RelationRefTest extends TestCase
 	public function testNestedConfiguredRelationIsCollectedWithParentBranch(): void
 	{
 		$users = $this->makeQuery('users');
-		$users->posts->author->fields('name');
+		$users->posts->author->select('name');
 
 		self::assertSame([
 			['posts', false, true, null],
@@ -481,8 +481,8 @@ final class RelationRefTest extends TestCase
 	{
 		$users = $this->makeQuery('users');
 
-		$users->posts->fields('id');
-		$users->posts->fields('title', 'id');
+		$users->posts->select('id');
+		$users->posts->select('title', 'id');
 
 		self::assertSame([
 			['posts', true, true, ['title', 'id']],
@@ -497,8 +497,8 @@ final class RelationRefTest extends TestCase
 		$firstSort = $users->posts->title->asc();
 		$secondSort = $users->posts->id->desc();
 
-		$users->posts->fields('id')->where($firstCondition)->orderBy($firstSort);
-		$users->posts->fields('title')->where($secondCondition)->orderBy($secondSort);
+		$users->posts->select('id')->where($firstCondition)->orderBy($firstSort);
+		$users->posts->select('title')->where($secondCondition)->orderBy($secondSort);
 
 		$selection = $users->getRelationSelections()->getAll()[0];
 		self::assertSame(['title'], $selection->getFields());
@@ -511,7 +511,7 @@ final class RelationRefTest extends TestCase
 		$users = $this->makeQuery('users');
 		$condition = x()->eq($users->posts->published, true);
 
-		$users->posts->where($condition)->comments->fields('id');
+		$users->posts->where($condition)->comments->select('id');
 
 		$selection = $users->getRelationSelections()->getAll()[0];
 		self::assertSame(['posts'], $selection->getPath());
@@ -523,7 +523,7 @@ final class RelationRefTest extends TestCase
 		$users = $this->makeQuery('users');
 		$sort = $users->posts->title->asc();
 
-		$users->posts->orderBy($sort)->comments->fields('id');
+		$users->posts->orderBy($sort)->comments->select('id');
 
 		$selection = $users->getRelationSelections()->getAll()[0];
 		self::assertSame(['posts'], $selection->getPath());
@@ -556,7 +556,7 @@ final class RelationRefTest extends TestCase
 	{
 		$users = $this->makeQuery('users');
 
-		$users->posts->fields('title')->separate();
+		$users->posts->select('title')->separate();
 
 		self::assertSame([
 			['posts', true, true, ['title']],
@@ -568,7 +568,7 @@ final class RelationRefTest extends TestCase
 		$users = $this->makeQuery('users');
 
 		$this->expectException(RelationSelectionException::class);
-		$users->posts->fields('id')->hidden();
+		$users->posts->select('id')->hidden();
 	}
 
 	public function testSelectedRelationCannotBeHidden(): void
@@ -579,12 +579,12 @@ final class RelationRefTest extends TestCase
 		$users->posts->separate()->hidden();
 	}
 
-	public function testHiddenRelationCannotBeSelectedByFields(): void
+	public function testHiddenRelationCannotBeSelectedBySelect(): void
 	{
 		$users = $this->makeQuery('users');
 
 		$this->expectException(RelationSelectionException::class);
-		$users->posts->hidden()->fields('id');
+		$users->posts->hidden()->select('id');
 	}
 
 	public function testHiddenRelationCannotBeLoaded(): void
@@ -708,7 +708,7 @@ final class RelationRefTest extends TestCase
 			}
 		}
 
-		$users->posts->fields('id');
+		$users->posts->select('id');
 
 		$selection = $users->getRelationSelections()->getAll()[0];
 		self::assertSame(['id'], $selection->getFields());
@@ -755,8 +755,8 @@ final class RelationRefTest extends TestCase
 	public function testConfiguredParentFieldsRemainIntactWhenSelectingNestedChildren(): void
 	{
 		$users = $this->makeQuery('users');
-		$configuredPosts = $users->posts->fields('id', 'title');
-		$comments = $configuredPosts->comments->fields('id', 'body');
+		$configuredPosts = $users->posts->select('id', 'title');
+		$comments = $configuredPosts->comments->select('id', 'body');
 
 		self::assertSame(['id', 'title'], $configuredPosts->getFields());
 		self::assertSame(['posts', 'comments'], $comments->getPath());
@@ -796,14 +796,14 @@ final class RelationRefTest extends TestCase
 		self::assertSame('getRelation', $field->getField()->getName());
 	}
 
-	public function testFieldsRejectFieldRefsFromAnotherQueryEvenWithTheSamePath(): void
+	public function testSelectRejectFieldRefsFromAnotherQueryEvenWithTheSamePath(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $this->makeQuery('users', $registry);
 		$otherUsers = $this->makeQuery('users', $registry);
 
 		$this->expectException(RelationSelectionException::class);
-		$users->posts->fields($otherUsers->posts->title);
+		$users->posts->select([$otherUsers->posts->title]);
 	}
 
 	public function testSelectingAForeignRelationIsRejected(): void
@@ -1316,11 +1316,11 @@ final class RelationRefTest extends TestCase
 		], $state);
 	}
 
-	public function testFieldsRemainsSugarOverSelect(): void
+	public function testSelectWithStringNamesSetsIdentitySelections(): void
 	{
 		$users = $this->makeQuery('users');
 
-		$users->posts->fields('id', 'title');
+		$users->posts->select('id', 'title');
 
 		$keys = array_map(
 			static fn ($selection) => $selection->getSelectionKey(),

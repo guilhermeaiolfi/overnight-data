@@ -21,7 +21,7 @@ $model = $runtime->query($orderItems)
         $q->price,
         x()->mul($q->qty, $q->price)->as('lineTotal'),
         $q->product->name->as('productName'),
-        $q->posts->fields('id', 'title'),
+        $q->posts->select('id', 'title'),
     )
     ->projection();
 
@@ -144,7 +144,7 @@ Semantics of reopen:
 1. `new SelectQuery($schema->getCollection())` (bound executor policy TBD — see Open questions).
 2. Apply field schemas as field/alias selections (including flat `sourcePath` fields via relation field refs).
 3. Apply expression schemas as `select($expression->as($path))` after **rebind** onto the new query’s sources/refs.
-4. Apply relation schemas as relation load / `fields(...)` configuration.
+4. Apply relation schemas as relation load / `select(...)` configuration.
 5. Leave root conditions, sorts, limit, offset empty.
 6. Do not attach writable handler or result class unless explicitly decided later.
 

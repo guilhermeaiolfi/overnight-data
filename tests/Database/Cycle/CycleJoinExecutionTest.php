@@ -334,10 +334,10 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testFieldsRestrictBelongsToProjectionWithoutExposingJoinKeys(): void
+	public function testSelectRestrictBelongsToProjectionWithoutExposingJoinKeys(): void
 	{
 		$posts = $this->database->query($this->registry->getCollection('posts'));
-		$posts->author->fields('name');
+		$posts->author->select('name');
 
 		$rows = $posts
 			->select($posts->id)
@@ -424,7 +424,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$recording = new CountingQueryExecutor($executor);
 		$database = $this->runtimeForExecutor($recording);
 		$users = $database->query($this->registry->getCollection('users'));
-		$users->posts->fields('title');
+		$users->posts->select('title');
 
 		$rows = $users
 			->select($users->name)
@@ -442,7 +442,7 @@ final class CycleJoinExecutionTest extends TestCase
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 		$users->posts
-			->fields('title')
+			->select('title')
 			->where(x()->eq($users->posts->published, true))
 			->orderBy($users->posts->title->desc());
 
@@ -462,7 +462,7 @@ final class CycleJoinExecutionTest extends TestCase
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 		$users->posts
-			->fields('title')
+			->select('title')
 			->orderBy($users->posts->title->desc())
 			->limit(1);
 
@@ -482,7 +482,7 @@ final class CycleJoinExecutionTest extends TestCase
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 		$users->posts
-			->fields('title')
+			->select('title')
 			->orderBy($users->posts->title->desc())
 			->limit(2);
 
@@ -500,7 +500,7 @@ final class CycleJoinExecutionTest extends TestCase
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 		$users->posts
-			->fields('title')
+			->select('title')
 			->orderBy($users->posts->title->desc())
 			->offset(1)
 			->limit(1);
@@ -521,7 +521,7 @@ final class CycleJoinExecutionTest extends TestCase
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 		$users->posts
-			->fields('title')
+			->select('title')
 			->orderBy($users->posts->title->desc())
 			->offset(1);
 
@@ -540,7 +540,7 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testHasManySeparateLimitRequiresSelectionOrderBy(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
-		$users->posts->fields('title')->limit(1);
+		$users->posts->select('title')->limit(1);
 
 		$this->expectException(RelationLoaderException::class);
 		$this->expectExceptionMessage('cannot use limit/offset without deterministic orderBy()');
@@ -570,7 +570,7 @@ final class CycleJoinExecutionTest extends TestCase
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 		$users->posts
-			->fields('title')
+			->select('title')
 			->where(x()->eq($users->posts->published, true))
 			->orderBy($users->posts->id->desc())
 			->limit(1);
@@ -591,10 +591,10 @@ final class CycleJoinExecutionTest extends TestCase
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 		$users->posts
-			->fields('title')
+			->select('title')
 			->orderBy($users->posts->id->desc())
 			->limit(1)
-			->author->fields('name');
+			->author->select('name');
 
 		$rows = $users
 			->select($users->name)
@@ -619,7 +619,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$database = $this->runtimeForExecutor($recording);
 		$users = $database->query($this->registry->getCollection('users'));
 		$users->posts
-			->fields('id', 'title')
+			->select('id', 'title')
 			->orderBy($users->posts->title->desc())
 			->offset(1)
 			->limit(1);
@@ -646,7 +646,7 @@ final class CycleJoinExecutionTest extends TestCase
 	{
 		$employees = $this->database->query($this->registry->getCollection('employees'));
 		$employees->badges
-			->fields('badgeId', 'label')
+			->select('badgeId', 'label')
 			->orderBy($employees->badges->label->desc())
 			->limit(2);
 
@@ -667,7 +667,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$posts = $this->database->query($this->registry->getCollection('posts'));
 		$posts->author
 			->separate()
-			->fields('name')
+			->select('name')
 			->where(x()->eq($posts->author->name, 'Ada'));
 
 		$rows = $posts
@@ -682,10 +682,10 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testFieldsLoadTheRelationAndRestrictPublicFields(): void
+	public function testSelectLoadTheRelationAndRestrictPublicFields(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
-		$users->posts->fields('title');
+		$users->posts->select('title');
 
 		$rows = $users
 			->select($users->name)
@@ -776,7 +776,7 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testM2MStructuredLoadingUsesThroughRowsToAttachSharedTargets(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
-		$users->roles->fields('name');
+		$users->roles->select('name');
 
 		$rows = $users
 			->select($users->name)
@@ -860,12 +860,12 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testFieldsRejectExplicitEmptyLists(): void
+	public function testSelectRejectExplicitEmptyLists(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
 		$this->expectException(RelationSelectionException::class);
-		$users->posts->fields([]);
+		$users->posts->select([]);
 	}
 
 	public function testItKeepsIntermediateRelationsVisibleButStructuralByDefault(): void
@@ -902,7 +902,7 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testNestedRelationBranchesCanUseIndependentFieldLists(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
-		$users->posts->fields('title')->author->fields('name');
+		$users->posts->select('title')->author->select('name');
 
 		$rows = $users
 			->select($users->name)
@@ -933,8 +933,8 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testItMergesRepeatedRelationSelections(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
-		$users->posts->fields('id');
-		$users->posts->fields('title');
+		$users->posts->select('id');
+		$users->posts->select('title');
 
 		$rows = $users
 			->select($users->name)
@@ -965,7 +965,7 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testStrategyConfigurationKeepsStructuredFieldSelection(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
-		$users->posts->fields('title')->separate();
+		$users->posts->select('title')->separate();
 
 		$rows = $users
 			->select($users->name)
@@ -1120,7 +1120,7 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testFirstOfManySeparateLoadingReturnsSingleOrderedChildPerParent(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
-		$users->latestPost->fields('id', 'title');
+		$users->latestPost->select('id', 'title');
 
 		$rows = $users
 			->select($users->name)
@@ -1143,7 +1143,7 @@ final class CycleJoinExecutionTest extends TestCase
 		);
 		$database = $this->runtimeForExecutor($recording);
 		$users = $database->query($this->registry->getCollection('users'));
-		$users->latestPost->fields('id', 'title', 'createdAt');
+		$users->latestPost->select('id', 'title', 'createdAt');
 
 		$users
 			->select($users->name)
@@ -1179,7 +1179,7 @@ final class CycleJoinExecutionTest extends TestCase
 	{
 		$database = $this->runtimeForExecutor(new FirstOfManyFallbackExecutor());
 		$users = $database->query($this->registry->getCollection('users'));
-		$users->latestPost->fields('id', 'title');
+		$users->latestPost->select('id', 'title');
 
 		$this->expectException(UnsupportedQueryException::class);
 		$this->expectExceptionMessage('subquery-source and window-expression support');
@@ -1192,7 +1192,7 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testFirstOfManyWindowedLoadingKeepsInternalFieldsOutOfPublicOutput(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
-		$users->latestPost->fields('title');
+		$users->latestPost->select('title');
 
 		$rows = $users
 			->select($users->name)
@@ -1206,7 +1206,7 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testFirstOfManyNestedLoadingAttachesBelowSingleChild(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
-		$users->latestPost->fields('title')->author->fields('name');
+		$users->latestPost->select('title')->author->select('name');
 
 		$rows = $users
 			->select($users->name)
@@ -1229,7 +1229,7 @@ final class CycleJoinExecutionTest extends TestCase
 		);
 		$database = $this->runtimeForExecutor($recording);
 		$users = $database->query($this->registry->getCollection('users'));
-		$users->latestPost->author->fields('id', 'name');
+		$users->latestPost->author->select('id', 'name');
 
 		$rows = $users
 			->select($users->name)
@@ -1257,7 +1257,7 @@ final class CycleJoinExecutionTest extends TestCase
 		);
 		$database = $this->runtimeForExecutor($recording);
 		$users = $database->query($this->registry->getCollection('users'));
-		$users->latestPost->fields('id', 'title', 'authorId')->author->fields('id', 'name');
+		$users->latestPost->select('id', 'title', 'authorId')->author->select('id', 'name');
 
 		$rows = $users
 			->select($users->id, $users->name)
@@ -1308,7 +1308,7 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testFirstOfManyRequiresDefinitionOrderMetadata(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
-		$users->latestPostMissingOrder->fields('title');
+		$users->latestPostMissingOrder->select('title');
 
 		$this->expectException(RelationLoaderException::class);
 		$this->expectExceptionMessage('requires deterministic orderBy metadata');
@@ -1322,7 +1322,7 @@ final class CycleJoinExecutionTest extends TestCase
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 		$users->latestPost
-			->fields('title')
+			->select('title')
 			->where(x()->eq($users->latestPost->title, 'Zulu'));
 
 		$rows = $users
@@ -1338,7 +1338,7 @@ final class CycleJoinExecutionTest extends TestCase
 
 		$users = $this->database->query($this->registry->getCollection('users'));
 		$users->latestPost
-			->fields('title')
+			->select('title')
 			->orderBy($users->latestPost->title->desc());
 
 		$this->expectException(RelationLoaderException::class);
@@ -1352,7 +1352,7 @@ final class CycleJoinExecutionTest extends TestCase
 	public function testFirstOfManySupportsCompositeRelationKeysAndCompositePrimaryKeys(): void
 	{
 		$employees = $this->database->query($this->registry->getCollection('employees'));
-		$employees->latestBadge->fields('badgeId', 'label');
+		$employees->latestBadge->select('badgeId', 'label');
 
 		$rows = $employees
 			->select($employees->name)

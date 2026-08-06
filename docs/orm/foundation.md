@@ -220,7 +220,7 @@ $u = query($users);
 
 $users = $u
     ->select(
-        $u->posts->fields('id', 'title'),
+        $u->posts->select('id', 'title'),
     )
     ->to(User::class)
     ->fetchAll();

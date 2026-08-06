@@ -11,7 +11,7 @@ $u->select($u->id, $u->name, $u->posts);
 
 $u->select(
     $u->id,
-    $u->posts->fields('id', 'title'),
+    $u->posts->select('id', 'title'),
 );
 
 $u->posts->select(
@@ -21,33 +21,33 @@ $u->posts->select(
 
 $users->posts->load();
 
-$users->posts->fields('id', 'title');
+$users->posts->select('id', 'title');
 
 $users->posts->where(x()->eq($users->posts->published, true));
 
 $users->posts->separate();
 
 $u->posts
-    ->fields('id', 'title')
+    ->select('id', 'title')
     ->where(x()->eq($u->posts->published, true))
     ->orderBy($u->posts->createdAt->desc())
     ->separate();
 
 $u->profile
-    ->fields('avatar')
+    ->select('avatar')
     ->join();
 ```
 
-`RelationRef::select(...)` mirrors root `SelectQuery::select()` for that relation level (own fields, aliases, star/`all()`, and child relation refs). `fields(...)` remains sugar for identity-aliased direct fields and replaces that level's scalar projection.
+`RelationRef::select(...)` mirrors root `SelectQuery::select()` for that relation level (own fields, aliases, star/`all()`, and child relation refs). String names such as `select('id', 'title')` are the short form for identity-aliased direct fields and replace that level's scalar projection. The former `fields()` helper was removed.
 
 Scalar/`all()` selections at a level clear that level's default visible fields (same rule as root). Selecting only child relations keeps the level's default scalars. Traversing `$u->posts->author->select(...)` without selecting on `posts` leaves `posts` as a visible unloaded intermediate container.
 
-Nested flat related fields (for example `$u->posts->author->name->as('authorName')` inside `$u->posts->select(...)`) compile into the nested `RepresentationSchema` with a relative `sourcePath`. On **SEPARATE_QUERY** loads, the runtime joins that related table into the level query and projects the value onto the nested payload under the alias — without creating a nested relation container unless that relation is also selected/loaded.
+Nested flat related fields (for example `$u->posts->author->name->as('authorName')` inside `$u->posts->select(...)`) compile into the nested `RepresentationSchema` with a relative `sourcePath`. **Cross-level** flats and non-field expressions require **SEPARATE_QUERY** (`separate()`). JOIN allows same-level field selections including renamed aliases (`select('id', $rel->title->as('headline'))`); attempting flat related fields or expressions with JOIN throws `RelationLoaderException`. On SEPARATE loads, the runtime joins that related table into the level query and projects the value onto the nested payload under the alias — without creating a nested relation container unless that relation is also selected/loaded.
 
 Nested traversal works through dynamic relation refs:
 
 ```php
-$u->posts->author->fields('id', 'name');
+$u->posts->author->select('id', 'name');
 ```
 
 That automatically registers missing ancestors. In this example:
@@ -58,10 +58,10 @@ That automatically registers missing ancestors. In this example:
 Root scalars and relations can be selected together, or configured separately:
 
 ```php
-$u->select($u->id, $u->name, $u->posts->fields('title'));
+$u->select($u->id, $u->name, $u->posts->select('title'));
 
 // equivalent:
-$u->posts->fields('title');
+$u->posts->select('title');
 $u->select($u->id, $u->name);
 ```
 
@@ -75,7 +75,6 @@ The public configuration API on `RelationRef` is:
 - `load()`
 - `visible(bool $visible = true)`
 - `hidden()`
-- `fields(string|FieldRef|array ...$fields)` — sugar over `select()` of identity-aliased own fields
 - `where(ConditionInterface ...$conditions)`
 - `orderBy(Sort ...$sorts)`
 - `limit(int $limit)`
@@ -84,11 +83,11 @@ The public configuration API on `RelationRef` is:
 - `join()`
 - `separate()`
 
-`select(...)`, `load()`, `fields(...)`, `where(...)`, `orderBy(...)`, `limit(...)`, `offset(...)`, and strategy helpers select/load the relation. `visible(...)` and `hidden()` control result shape for configured paths and intermediate traversal.
+`select(...)`, `load()`, `where(...)`, `orderBy(...)`, `limit(...)`, `offset(...)`, and strategy helpers select/load the relation. `visible(...)` and `hidden()` control result shape for configured paths and intermediate traversal.
 
 `load()` selects the relation with default public fields and the loader's default strategy. It does not change fields, conditions, sorts, strategy, or visibility.
 
-`fields(...)` restricts public relation fields to the listed field names (identity aliases).
+`select('id', 'title')` (and other string / same-path `FieldRef` inputs) restricts public relation fields to the listed field names (identity aliases).
 
 `where(...)` and `orderBy(...)` configure the relation query. Built-in loaders apply these options to separate-query relation loading. Joined relation loading rejects relation-level conditions and ordering for now because those options can change root row filtering or row order in surprising ways.
 
@@ -116,7 +115,7 @@ A hidden terminal relation is rejected.
 
 ## Field Restriction Rules
 
-`fields(...)` accepts:
+`select(...)` with string / `FieldRef` / list inputs accepts:
 
 - field names as strings;
 - `FieldRef` objects from the same relation path and same root query;
@@ -131,7 +130,7 @@ The current rules are intentionally strict:
 - `FieldRef` values from another query or another path are rejected;
 - repeated field names are deduplicated in stable order.
 
-Because relation refs are cached mutable branch proxies, repeated calls configure the same branch. Conditions and sorts append in call order; field lists are replaced by the latest `fields(...)` call; strategy uses the latest call.
+Because relation refs are cached mutable branch proxies, repeated calls configure the same branch. Conditions and sorts append in call order; field lists are replaced by the latest `select(...)` call; strategy uses the latest call.
 
 ## Result Shapes
 
@@ -143,7 +142,7 @@ Built-in structured relation loading currently projects:
 - `FirstOfMany`: nested record or `null`
 - `M2M`: list of target records or `[]`
 
-When a loaded relation does not specify `fields(...)`, the public projection uses that relation collection's visible fields.
+When a loaded relation does not specify `select(...)` field names, the public projection uses that relation collection's visible fields.
 
 Built-in `FirstOfMany` loading is separate-query-only. JOIN loading is intentionally unsupported because the loader must choose one ordered child per parent without changing root row shape. The relation definition must provide deterministic `orderBy` metadata; the loader appends any missing target primary-key fields as stable tie breakers. SQL backends with the modeled window-expression and derived-source APIs load it by ranking children with `ROW_NUMBER() OVER (PARTITION BY child relation keys ORDER BY definition order, primary key tie breakers)` and filtering the derived source to rank `1`.
 
@@ -155,7 +154,7 @@ Example:
 
 ```php
 $users->posts
-    ->fields('id', 'title')
+    ->select('id', 'title')
     ->orderBy($users->posts->createdAt->desc())
     ->limit(3);
 ```
@@ -214,6 +213,7 @@ Each cached relation branch is its own query source. When a query is copied, rel
 - Structured loading for built-in `HasMany` supports relation-level `limit(...)` and `offset(...)` only in separate-query mode, applies them per parent, and requires deterministic selection-level `orderBy(...)`.
 - Joined structured loading for built-in `M2M` is not implemented yet.
 - Relation-level `where` and `orderBy` are supported for separate-query loading first; joined relation conditions and ordering are rejected by built-in loaders.
+- Flat related fields and non-field expressions in nested `select()` require `separate()`; JOIN allows same-level field selections (including aliases) and default own-field projection.
 - Separate-query correlation uses `IN` (simple keys) or per-parent `OR`/`AND` (composite keys), chunked by parent-key batch (default 100); see [Batch size and separate-query correlation](#batch-size-and-separate-query-correlation).
 - Writable query export records relation membership completeness as Full (unqualified load) or Partial (relation `where` / `limit` / `offset`). Only Full collections may remove absent members on Session sync.
 - Future relation branch configuration should stay loader-owned and branch-local rather than moving relation-specific rules into the registry or generic runtime.
