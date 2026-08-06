@@ -20,6 +20,9 @@ final class QueryRepresentationPlan implements WritablePreparation
 	/** @var list<RepresentationSource> */
 	private array $sources;
 
+	/** @var array<string, QuerySourceIdentities> */
+	private array $relationIdentities = [];
+
 	/**
 	 * @param list<RepresentationSource> $sources
 	 */
@@ -45,11 +48,27 @@ final class QueryRepresentationPlan implements WritablePreparation
 	}
 
 	/**
-	 * One identity map for the prepared query; reuse across all tracked rows.
+	 * One identity map for the prepared query root; reuse across all tracked rows.
 	 */
 	public function getIdentities(): QuerySourceIdentities
 	{
 		return $this->identities;
+	}
+
+	/**
+	 * @param list<string> $relationPath
+	 */
+	public function setRelationIdentities(array $relationPath, QuerySourceIdentities $identities): void
+	{
+		$this->relationIdentities[$this->pathKey($relationPath)] = $identities;
+	}
+
+	/**
+	 * @param list<string> $relationPath
+	 */
+	public function getRelationIdentities(array $relationPath): ?QuerySourceIdentities
+	{
+		return $this->relationIdentities[$this->pathKey($relationPath)] ?? null;
 	}
 
 	public function hasNonRootSources(): bool
@@ -61,5 +80,13 @@ final class QueryRepresentationPlan implements WritablePreparation
 		}
 
 		return false;
+	}
+
+	/**
+	 * @param list<string> $path
+	 */
+	private function pathKey(array $path): string
+	{
+		return json_encode(array_values($path), JSON_THROW_ON_ERROR);
 	}
 }

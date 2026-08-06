@@ -90,6 +90,35 @@ $user->profileName
 
 The query/projection adopter must have enough hidden identity information to resolve `profiles#5`. For a flattened related field, the compiler adds internal identity selections for the related record. If that identity is missing from the executed query result, projection adoption fails rather than guessing the target row.
 
+## Nested flattened related field
+
+The same flat-writable rules apply recursively on nested relation items. A posts branch can project a grandchild field onto each post without nesting an `author` container:
+
+```php
+$u = $runtime->query($users);
+
+$user = $u
+    ->select(
+        $u->id,
+        $u->name,
+        $u->posts->select(
+            $u->posts->id,
+            $u->posts->title,
+            $u->posts->author->name->as('authorName'),
+        ),
+    )
+    ->to(stdClass::class)
+    ->writable($session)
+    ->fetchOne();
+
+$user->posts[0]->authorName = 'Updated author';
+
+$session->sync($user);
+$session->flush();
+```
+
+Intended meaning: `authorName` writes to `authors.name` for the author row identified by hidden INTERNAL selections on the posts-level payload. Those keys stay off the public nested objects (`stripInternalKeys` walks nested arrays). Graph attach alone cannot adopt multi-source nested flats; the writable tracker flat-hydrates those nested items first using per-relation identities from `QueryRepresentationIdentityPlanner::planLevel()`.
+
 ## Existing relation item from query
 
 An existing related object can come from another writable query, then be added to a tracked relation.

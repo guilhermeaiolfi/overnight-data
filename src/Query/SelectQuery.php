@@ -880,6 +880,43 @@ final class SelectQuery implements QuerySourceInterface
 			unset($public[$selection->getSelectionKey()]);
 		}
 
+		return $this->stripInternalKeys($public);
+	}
+
+	/**
+	 * @param array<string, mixed> $row
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function stripInternalKeys(array $row): array
+	{
+		$public = [];
+
+		foreach ($row as $key => $value) {
+			if (is_string($key) && str_starts_with($key, '_od_internal_')) {
+				continue;
+			}
+
+			if (is_array($value)) {
+				if ($value !== [] && array_is_list($value)) {
+					$public[$key] = array_map(
+						function (mixed $item): mixed {
+							return is_array($item) ? $this->stripInternalKeys($item) : $item;
+						},
+						$value,
+					);
+
+					continue;
+				}
+
+				$public[$key] = $this->stripInternalKeys($value);
+
+				continue;
+			}
+
+			$public[$key] = $value;
+		}
+
 		return $public;
 	}
 

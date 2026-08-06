@@ -44,6 +44,22 @@ final class QueryRepresentationIdentityPlanner
 		return $identities;
 	}
 
+	/**
+	 * Plan INTERNAL identity selections onto a nested relation level's selection list.
+	 *
+	 * @param list<RepresentationSource> $sources sources relative to that level's schema
+	 */
+	public function planLevel(RelationRef $level, array $sources): QuerySourceIdentities
+	{
+		$identities = new QuerySourceIdentities($sources);
+
+		foreach ($sources as $source) {
+			$this->ensureLevelIdentitySelections($level, $source, $identities);
+		}
+
+		return $identities;
+	}
+
 	private function ensureIdentitySelections(
 		SelectQuery $query,
 		RepresentationSource $source,
@@ -61,9 +77,40 @@ final class QueryRepresentationIdentityPlanner
 				continue;
 			}
 
-			$resultKey = $this->generateInternalResultKey($query);
+			$resultKey = $this->generateInternalResultKey(
+				static fn (string $key): bool => $query->getSelections()->hasSelectionKey($key),
+			);
 			$fieldRef = $this->resolveFieldRef($query, $sourcePath, $fieldName, $collection);
 			$query->getSelections()->add(
+				$fieldRef->as($resultKey),
+				SelectionTag::INTERNAL,
+			);
+			$identities->add($sourcePath, $fieldName, $resultKey);
+		}
+	}
+
+	private function ensureLevelIdentitySelections(
+		RelationRef $level,
+		RepresentationSource $source,
+		QuerySourceIdentities $identities,
+	): void {
+		$sourcePath = $source->getPath();
+		$collection = $source->getCollection();
+
+		foreach ($collection->getPrimaryKey() as $fieldName) {
+			if ($source->hasField($fieldName)) {
+				continue;
+			}
+
+			if ($identities->getResultKey($sourcePath, $fieldName) !== null) {
+				continue;
+			}
+
+			$resultKey = $this->generateInternalResultKey(
+				static fn (string $key): bool => $level->getSelections()->hasSelectionKey($key),
+			);
+			$fieldRef = $this->resolveLevelFieldRef($level, $sourcePath, $fieldName, $collection);
+			$level->getSelections()->add(
 				$fieldRef->as($resultKey),
 				SelectionTag::INTERNAL,
 			);
@@ -112,11 +159,45 @@ final class QueryRepresentationIdentityPlanner
 		return $relationRef->field($fieldName);
 	}
 
-	private function generateInternalResultKey(SelectQuery $query): string
+	/**
+	 * @param list<string> $sourcePath
+	 */
+	private function resolveLevelFieldRef(
+		RelationRef $level,
+		array $sourcePath,
+		string $fieldName,
+		CollectionInterface $collection,
+	): FieldRef {
+		if ($sourcePath === []) {
+			return $level->field($fieldName);
+		}
+
+		$relationRef = $level;
+
+		foreach ($sourcePath as $segment) {
+			$relationRef = $relationRef->relation($segment);
+		}
+
+		if ($relationRef->getCollection()->getName() !== $collection->getName()) {
+			throw new StateException(sprintf(
+				"Cannot plan projection identity for collection '%s' because source path '%s' resolved to '%s'.",
+				$collection->getName(),
+				implode('.', $sourcePath),
+				$relationRef->getCollection()->getName(),
+			));
+		}
+
+		return $relationRef->field($fieldName);
+	}
+
+	/**
+	 * @param callable(string): bool $keyExists
+	 */
+	private function generateInternalResultKey(callable $keyExists): string
 	{
 		do {
 			$key = '_od_internal_' . ++$this->internalResultKeyCounter;
-		} while ($query->getSelections()->hasSelectionKey($key));
+		} while ($keyExists($key));
 
 		return $key;
 	}

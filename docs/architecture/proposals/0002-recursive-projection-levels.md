@@ -1,12 +1,12 @@
 # Proposal 0002: Recursive projection levels
 
-Status: **Proposed** — Phase A implementation in progress on `feat/recursive-projection-levels`
+Status: **Proposed** — Phase A + Phase C landed on `feat/recursive-projection-levels`
 
 Relates to: [`0001-representation-schema-as-reusable-model.md`](./0001-representation-schema-as-reusable-model.md) (should inform / precede 0001).
 
 This document captures the design for unifying root and nested relation projection so every level shares one selection model.
 
-**Phase A landed so far:** `RelationRef::select()`, `fields()` sugar over a per-level `SelectionList`, relation selection tree/load branch registration of own-level aliases, recursive schema compile for nested aliases + relative flat `sourcePath`, per-level alias/relation name collisions, and SEPARATE_QUERY nested flat field fetch onto the level payload. Deferred: nested INTERNAL identity planning for writable flats (Phase C), nested expressions (0001), JOIN parity for rich nested projection.
+**Landed so far:** `RelationRef::select()`, `fields()` sugar over a per-level `SelectionList`, relation selection tree/load branch registration of own-level aliases, recursive schema compile for nested aliases + relative flat `sourcePath`, per-level alias/relation name collisions, SEPARATE_QUERY nested flat field fetch onto the level payload, and nested INTERNAL identity planning for writable flats (Phase C). Deferred: nested expressions (0001), JOIN parity for rich nested projection.
 
 ## Problem
 
@@ -152,7 +152,7 @@ compileLevel(RepresentationSchema $schema, ProjectionLevel $level):
 
 Flat related fields at a nested level get `sourcePath` **relative to that nested schema**, not only on the query root schema.
 
-Identity planning for writable nested flat projections must follow the same relative-source rules (extend `QueryRepresentationIdentityPlanner` / prepare path beyond root-only flat sources).
+Identity planning for writable nested flat projections follows the same relative-source rules via `QueryRepresentationIdentityPlanner::planLevel()` and per-relation identities on the prepare plan.
 
 ### Collision rules
 
@@ -223,10 +223,10 @@ Until 0001, 0002 may still compile nested field/flat-field schemas fully and eit
 2. Loader/translator support for nested computed columns.
 3. Align with 0001 expression schema nodes (or land them here).
 
-### Phase C — writable nested flat projections
+### Phase C — writable nested flat projections ✅
 
-1. Extend identity planning / adoption for nested-level flat `sourcePath`s.
-2. Document writable boundaries per level (same rules as root, recursively).
+1. Extend identity planning / adoption for nested-level flat `sourcePath`s — `QueryRepresentationIdentityPlanner::planLevel()`, per-relation identities on `QueryRepresentationPlan`, pre-attach flat hydrate in `WritableQueryResultTracker`, branch INTERNAL registration, recursive strip of `_od_internal_*` from public nested payloads.
+2. Document writable boundaries per level (same rules as root, recursively) — see [`writable-select-query-projections.md`](../../orm/writable-select-query-projections.md).
 
 ### Phase D — JOIN loader parity (if needed)
 
@@ -364,12 +364,18 @@ $u->posts->select(
 
 ## Acceptance criteria (Phase A)
 
-- [ ] Nested level can select direct fields with aliases different from field names; results and schema paths use the alias.
-- [ ] Nested level can flat-project a related field onto that level’s payload with correct relative `sourcePath` in `RepresentationSchema`.
-- [ ] `$rel->fields('id', 'title')` behavior unchanged for callers.
-- [ ] Schema compilation for nested branches shares the same field/flat-field logic path as root (no fields-name-only special case for the happy path).
-- [ ] Per-level path collision with child relation names is rejected.
-- [ ] Docs: `relation-loading.md` updated for recursive projection; this proposal linked from the docs index.
+- [x] Nested level can select direct fields with aliases different from field names; results and schema paths use the alias.
+- [x] Nested level can flat-project a related field onto that level’s payload with correct relative `sourcePath` in `RepresentationSchema`.
+- [x] `$rel->fields('id', 'title')` behavior unchanged for callers.
+- [x] Schema compilation for nested branches shares the same field/flat-field logic path as root (no fields-name-only special case for the happy path).
+- [x] Per-level path collision with child relation names is rejected.
+- [x] Docs: `relation-loading.md` updated for recursive projection; this proposal linked from the docs index.
+
+## Acceptance criteria (Phase C)
+
+- [x] Nested-level flat related fields get INTERNAL identity selections planned onto that relation’s selection list.
+- [x] Writable export of nested items with flat related fields hydrates related records and flushes updates to the correct source collection.
+- [x] Public nested payloads strip `_od_internal_*` keys recursively.
 
 ## References
 

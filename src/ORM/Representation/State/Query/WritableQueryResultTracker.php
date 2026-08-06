@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\State\Query;
 
 use InvalidArgumentException;
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityPlanner;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
+use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSource;
 use ON\Data\ORM\Representation\Sync\AdoptionPolicy;
@@ -16,6 +18,7 @@ use ON\Data\ORM\Representation\Sync\RepresentationAdoptionContext;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionEngine;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
 use ON\Data\ORM\Session;
+use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Result\WritablePreparation;
 use ON\Data\Query\Result\WritableResultHandler;
 use ON\Data\Query\SelectQuery;
@@ -55,8 +58,13 @@ final class WritableQueryResultTracker implements WritableResultHandler
 		$schema = $this->compiler->compile($query);
 		$sources = RepresentationSource::fromRepresentationSchema($schema);
 		$identities = $this->identityPlanner->plan($query, $sources);
+		$plan = new QueryRepresentationPlan($schema, $sources, $identities);
 
-		return new QueryRepresentationPlan($schema, $sources, $identities);
+		foreach ($query->getRelationSelections()->getAll() as $selection) {
+			$this->planRelationLevel($plan, $schema, $selection);
+		}
+
+		return $plan;
 	}
 
 	public function track(
@@ -109,6 +117,8 @@ final class WritableQueryResultTracker implements WritableResultHandler
 		QueryRepresentationPlan $compilation,
 		array $sourceRow,
 	): void {
+		$this->preAttachNestedFlatRelations($object, $compilation, $sourceRow);
+
 		if ($compilation->hasNonRootSources()) {
 			$this->adoptionEngine->attach(
 				$object,
@@ -144,6 +154,176 @@ final class WritableQueryResultTracker implements WritableResultHandler
 		}
 
 		$this->session->sync($object, $schema);
+	}
+
+	/**
+	 * Flat-attach nested relation items whose related schema has non-root sources
+	 * (e.g. posts.authorName → authors) before graph attachment walks the root.
+	 *
+	 * @param array<string, mixed> $sourceRow
+	 */
+	private function preAttachNestedFlatRelations(
+		object $object,
+		QueryRepresentationPlan $compilation,
+		array $sourceRow,
+	): void {
+		$this->preAttachNestedFlatRelationsAt(
+			$object,
+			$compilation->getSchema(),
+			$compilation,
+			$sourceRow,
+			[],
+		);
+	}
+
+	/**
+	 * @param list<string> $relationPathPrefix
+	 * @param array<string, mixed> $sourceRow
+	 */
+	private function preAttachNestedFlatRelationsAt(
+		object $object,
+		RepresentationSchema $schema,
+		QueryRepresentationPlan $compilation,
+		array $sourceRow,
+		array $relationPathPrefix,
+	): void {
+		foreach ($schema->getRelations() as $relationSchema) {
+			$path = [...$relationPathPrefix, $relationSchema->getPath()];
+			$relatedSchema = $relationSchema->getRelatedSchema();
+			$rawChildren = $sourceRow[$relationSchema->getPath()] ?? null;
+
+			if ($this->schemaNeedsFlatHydrate($relatedSchema)) {
+				$identities = $compilation->getRelationIdentities($path);
+				if ($identities === null) {
+					continue;
+				}
+
+				$items = $relationSchema->isMany()
+					? $this->reader->readItems($object, $relationSchema, static fn (string $message): StateException => new StateException($message))
+					: array_values(array_filter([
+						$this->reader->readTarget($object, $relationSchema, static fn (string $message): StateException => new StateException($message)),
+					]));
+
+				foreach ($items as $index => $item) {
+					if ($this->session->getRepresentations()->has($item)) {
+						continue;
+					}
+
+					$childRow = is_array($rawChildren)
+						? ($relationSchema->isMany() ? ($rawChildren[$index] ?? []) : $rawChildren)
+						: [];
+
+					if (! is_array($childRow)) {
+						$childRow = [];
+					}
+
+					$this->adoptionEngine->attach(
+						$item,
+						new RepresentationAdoptionContext(
+							schema: $relatedSchema,
+							policy: AdoptionPolicy::Hydrate,
+							identities: $identities,
+							sourceRow: $childRow,
+						),
+						$this->session->getRecords(),
+						$this->session->getRepresentations(),
+					);
+				}
+			}
+
+			if ($relatedSchema->getRelations() === []) {
+				continue;
+			}
+
+			$items = $relationSchema->isMany()
+				? $this->reader->readItems($object, $relationSchema, static fn (string $message): StateException => new StateException($message))
+				: array_values(array_filter([
+					$this->reader->readTarget($object, $relationSchema, static fn (string $message): StateException => new StateException($message)),
+				]));
+
+			foreach ($items as $index => $item) {
+				$childRow = is_array($rawChildren)
+					? ($relationSchema->isMany() ? ($rawChildren[$index] ?? []) : $rawChildren)
+					: [];
+
+				if (! is_array($childRow)) {
+					$childRow = [];
+				}
+
+				$this->preAttachNestedFlatRelationsAt(
+					$item,
+					$relatedSchema,
+					$compilation,
+					$childRow,
+					$path,
+				);
+			}
+		}
+	}
+
+	private function planRelationLevel(
+		QueryRepresentationPlan $plan,
+		RepresentationSchema $rootSchema,
+		RelationSelection $selection,
+	): void {
+		if (! $selection->isLoaded()) {
+			return;
+		}
+
+		$relatedSchema = $this->relatedSchemaAtPath($rootSchema, $selection->getPath());
+		if (! $relatedSchema instanceof RepresentationSchema) {
+			return;
+		}
+
+		$sources = RepresentationSource::fromRepresentationSchema($relatedSchema);
+		if (! $this->sourcesNeedIdentityPlan($sources)) {
+			return;
+		}
+
+		$identities = $this->identityPlanner->planLevel($selection->getRelationRef(), $sources);
+		$plan->setRelationIdentities($selection->getPath(), $identities);
+	}
+
+	/**
+	 * @param list<string> $path
+	 */
+	private function relatedSchemaAtPath(RepresentationSchema $schema, array $path): ?RepresentationSchema
+	{
+		$current = $schema;
+
+		foreach ($path as $segment) {
+			if (! $current->hasRelation($segment)) {
+				return null;
+			}
+
+			$relation = $current->getRelation($segment);
+			if (! $relation instanceof RepresentationRelationSchema) {
+				return null;
+			}
+
+			$current = $relation->getRelatedSchema();
+		}
+
+		return $current;
+	}
+
+	/**
+	 * @param list<RepresentationSource> $sources
+	 */
+	private function sourcesNeedIdentityPlan(array $sources): bool
+	{
+		foreach ($sources as $source) {
+			if (! $source->isRoot()) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function schemaNeedsFlatHydrate(RepresentationSchema $schema): bool
+	{
+		return RepresentationAdoptionEngine::isFlatAttachment($schema);
 	}
 
 	private function hasReadableRootPrimaryKey(object $representation, RepresentationSchema $schema): bool

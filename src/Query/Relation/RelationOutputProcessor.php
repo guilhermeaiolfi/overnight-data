@@ -126,6 +126,16 @@ final class RelationOutputProcessor
 					$item[$fieldName] = $record[$fieldName];
 				}
 			}
+
+			// Keep INTERNAL identity keys in nested payloads for writable track();
+			// SelectQuery::publicRow strips them before object export.
+			foreach ($branch->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
+				$fieldName = $selection->getSelectionKey();
+
+				if (array_key_exists($fieldName, $record)) {
+					$item[$fieldName] = $record[$fieldName];
+				}
+			}
 		}
 
 		foreach ($branch->getChildren() as $child) {

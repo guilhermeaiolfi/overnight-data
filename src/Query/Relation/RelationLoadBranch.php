@@ -153,6 +153,41 @@ final class RelationLoadBranch extends LoadBranch
 				true,
 			);
 		}
+
+		$this->registerInternalSelections();
+	}
+
+	/**
+	 * Fetch INTERNAL identity columns planned for nested flat writable adoption.
+	 */
+	private function registerInternalSelections(): void
+	{
+		foreach ($this->selection->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
+			$ownField = $this->ownFieldSelection($selection);
+
+			if ($ownField !== null) {
+				[$fieldName, $publicAlias] = $ownField;
+				$this->selections->add(
+					$this->getRelationRef()->field($fieldName)->as($publicAlias),
+					[SelectionTag::INTERNAL, SelectionTag::COLUMN],
+				);
+				$this->requireFields([$fieldName]);
+
+				continue;
+			}
+
+			$flatField = $this->descendantFieldSelection($selection);
+
+			if ($flatField === null) {
+				continue;
+			}
+
+			[$fieldRef, $alias] = $flatField;
+			$this->selections->add(
+				$fieldRef->as($alias),
+				[SelectionTag::INTERNAL, SelectionTag::COLUMN],
+			);
+		}
 	}
 
 	/**
