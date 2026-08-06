@@ -42,7 +42,7 @@ $u->profile
 
 Scalar/`all()` selections at a level clear that level's default visible fields (same rule as root). Selecting only child relations keeps the level's default scalars. Traversing `$u->posts->author->select(...)` without selecting on `posts` leaves `posts` as a visible unloaded intermediate container.
 
-Nested flat related fields (for example `$u->posts->author->name->as('authorName')` inside `$u->posts->select(...)`) compile into the nested `RepresentationSchema` with a relative `sourcePath`. SEPARATE_QUERY load/output supports own-level aliases; nested flat fetch at load time is still being completed (schema compile is ready).
+Nested flat related fields (for example `$u->posts->author->name->as('authorName')` inside `$u->posts->select(...)`) compile into the nested `RepresentationSchema` with a relative `sourcePath`. On **SEPARATE_QUERY** loads, the runtime joins that related table into the level query and projects the value onto the nested payload under the alias — without creating a nested relation container unless that relation is also selected/loaded.
 
 Nested traversal works through dynamic relation refs:
 

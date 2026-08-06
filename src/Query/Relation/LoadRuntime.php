@@ -242,18 +242,24 @@ final class LoadRuntime
 			$aliases = [];
 
 			foreach ($branch->getSelections()->getByTag(SelectionTag::COLUMN) as $selection) {
-				$fieldName = $this->columnFieldName($selection);
-				$publicAlias = $selection->getSelectionKey();
+				$fieldRef = $this->columnFieldRef($selection);
 
-				if ($fieldName === null) {
+				if (! $fieldRef instanceof FieldRef) {
 					continue;
 				}
 
+				$publicAlias = $selection->getSelectionKey();
+				$source = $this->resolveSelectionSource($branch, $fieldRef);
+				$path = $fieldRef->getSource() instanceof RelationRef
+					? $fieldRef->getSource()->getPath()
+					: $branch->getRelationRef()->getPath();
+
 				$aliases[] = $this->ensureBranchFieldSelection(
+					$branch,
 					$branch->getQuery(),
-					$branch->getSource(),
-					$branch->getRelationRef()->getPath(),
-					$fieldName,
+					$source,
+					$path,
+					$fieldRef->getField()->getName(),
 					$publicAlias,
 				);
 			}
@@ -410,17 +416,72 @@ final class LoadRuntime
 
 	private function columnFieldName(SelectionItem $selection): ?string
 	{
+		$fieldRef = $this->columnFieldRef($selection);
+
+		return $fieldRef?->getField()->getName();
+	}
+
+	private function columnFieldRef(SelectionItem $selection): ?FieldRef
+	{
 		$expression = $selection->getExpression();
 
 		if ($expression instanceof AliasedExpression) {
 			$expression = $expression->getExpression();
 		}
 
-		if (! $expression instanceof FieldRef) {
-			return null;
+		return $expression instanceof FieldRef ? $expression : null;
+	}
+
+	/**
+	 * Resolve the query source that should provide a branch column selection.
+	 * Own-level fields use the branch source; flat related fields join under this level.
+	 */
+	private function resolveSelectionSource(RelationLoadBranch $branch, FieldRef $field): QuerySourceInterface
+	{
+		$fieldSource = $field->getSource();
+		$level = $branch->getRelationRef();
+
+		if ($fieldSource === $level) {
+			return $branch->getSource();
 		}
 
-		return $expression->getField()->getName();
+		if (
+			! $fieldSource instanceof RelationRef
+			|| $fieldSource->getQuery() !== $level->getQuery()
+		) {
+			throw LoadRuntimeException::queryNotConfigured($level);
+		}
+
+		$levelPath = $level->getPath();
+		$sourcePath = $fieldSource->getPath();
+
+		if (
+			count($sourcePath) <= count($levelPath)
+			|| array_slice($sourcePath, 0, count($levelPath)) !== $levelPath
+		) {
+			throw LoadRuntimeException::queryNotConfigured($level);
+		}
+
+		// JOIN attachment (and other same-query graphs): reuse the original relation joins.
+		if ($fieldSource->getQuery() === $branch->getQuery()) {
+			return $fieldSource->getJoinedSource();
+		}
+
+		// SEPARATE query rooted at this level: remap the relative relation path.
+		$relative = array_values(array_slice($sourcePath, count($levelPath)));
+		$relation = null;
+
+		foreach ($relative as $name) {
+			$relation = $relation === null
+				? $branch->getQuery()->relation($name)
+				: $relation->relation($name);
+		}
+
+		if (! $relation instanceof RelationRef) {
+			throw LoadRuntimeException::queryNotConfigured($level);
+		}
+
+		return $relation->getJoinedSource();
 	}
 
 	/**
@@ -432,6 +493,7 @@ final class LoadRuntime
 	}
 
 	private function ensureBranchFieldSelection(
+		RelationLoadBranch $branch,
 		SelectQuery $query,
 		QuerySourceInterface $source,
 		array $path,
@@ -446,6 +508,18 @@ final class LoadRuntime
 			} elseif (! $query->getSelections()->hasNamedExpression($publicAlias)) {
 				$query->select($query->field($fieldName)->as($publicAlias));
 			}
+
+			return $publicAlias;
+		}
+
+		// SEPARATE branch query: flat joins can use the public alias as the result key.
+		// JOIN attachment onto a parent query keeps allocated aliases to avoid root collisions.
+		if (
+			$branch->getSource() === $query
+			&& $publicAlias !== ''
+			&& ! $query->getSelections()->hasNamedExpression($publicAlias)
+		) {
+			$query->select($source->field($fieldName)->as($publicAlias));
 
 			return $publicAlias;
 		}

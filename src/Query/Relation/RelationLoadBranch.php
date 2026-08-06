@@ -128,18 +128,30 @@ final class RelationLoadBranch extends LoadBranch
 
 			$ownField = $this->ownFieldSelection($selection);
 
-			if ($ownField === null) {
-				// Flat / non-field selections: Phase A registers own-level FieldRefs only for fetch.
+			if ($ownField !== null) {
+				[$fieldName, $publicAlias] = $ownField;
+				$this->selections->add(
+					$this->getRelationRef()->field($fieldName)->as($publicAlias),
+					SelectionTag::PUBLIC,
+					true,
+				);
+				$this->requireFields([$fieldName]);
+
 				continue;
 			}
 
-			[$fieldName, $publicAlias] = $ownField;
+			$flatField = $this->descendantFieldSelection($selection);
+
+			if ($flatField === null) {
+				continue;
+			}
+
+			[$fieldRef, $publicAlias] = $flatField;
 			$this->selections->add(
-				$this->getRelationRef()->field($fieldName)->as($publicAlias),
+				$fieldRef->as($publicAlias),
 				SelectionTag::PUBLIC,
 				true,
 			);
-			$this->requireFields([$fieldName]);
 		}
 	}
 
@@ -216,5 +228,49 @@ final class RelationLoadBranch extends LoadBranch
 		}
 
 		return [$expression->getField()->getName(), $publicAlias];
+	}
+
+	/**
+	 * Flat related FieldRef under this level (e.g. posts.author.name as authorName).
+	 *
+	 * @return ?array{0: FieldRef, 1: string}
+	 */
+	private function descendantFieldSelection(SelectionItem $selection): ?array
+	{
+		$expression = $selection->getExpression();
+		$publicAlias = $selection->getSelectionKey();
+
+		if ($expression instanceof AliasedExpression) {
+			$publicAlias = $expression->getAlias();
+			$expression = $expression->getExpression();
+		}
+
+		if (! $expression instanceof FieldRef) {
+			return null;
+		}
+
+		$source = $expression->getSource();
+
+		if (
+			! $source instanceof RelationRef
+			|| $source->getQuery() !== $this->getRelationRef()->getQuery()
+			|| ! $this->isRelationUnderLevel($this->getRelationRef(), $source)
+		) {
+			return null;
+		}
+
+		return [$expression, $publicAlias];
+	}
+
+	private function isRelationUnderLevel(RelationRef $level, RelationRef $source): bool
+	{
+		$levelPath = $level->getPath();
+		$sourcePath = $source->getPath();
+
+		if (count($sourcePath) <= count($levelPath)) {
+			return false;
+		}
+
+		return array_slice($sourcePath, 0, count($levelPath)) === $levelPath;
 	}
 }

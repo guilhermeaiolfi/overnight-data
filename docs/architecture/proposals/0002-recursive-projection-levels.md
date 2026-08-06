@@ -6,7 +6,7 @@ Relates to: [`0001-representation-schema-as-reusable-model.md`](./0001-represent
 
 This document captures the design for unifying root and nested relation projection so every level shares one selection model.
 
-**Phase A landed so far:** `RelationRef::select()`, `fields()` sugar over a per-level `SelectionList`, relation selection tree/load branch registration of own-level aliases, recursive schema compile for nested aliases + relative flat `sourcePath`, per-level alias/relation name collisions. Deferred: nested flat *fetch* at load time, nested expressions (0001), JOIN parity for rich nested projection.
+**Phase A landed so far:** `RelationRef::select()`, `fields()` sugar over a per-level `SelectionList`, relation selection tree/load branch registration of own-level aliases, recursive schema compile for nested aliases + relative flat `sourcePath`, per-level alias/relation name collisions, and SEPARATE_QUERY nested flat field fetch onto the level payload. Deferred: nested INTERNAL identity planning for writable flats (Phase C), nested expressions (0001), JOIN parity for rich nested projection.
 
 ## Problem
 
