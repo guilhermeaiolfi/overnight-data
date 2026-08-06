@@ -12,6 +12,7 @@ use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Key;
 use function ON\Data\Mapper\map;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Condition\ConditionInterface;
@@ -30,11 +31,14 @@ use ON\Data\Query\Expression\SourceFieldExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
+use ON\Data\Query\Load\FetchPlan;
+use ON\Data\Query\Load\LoadGraphBuilder;
 use ON\Data\Query\Relation\RelationQueryPlanner;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Relation\RelationSelectionTree;
 use ON\Data\Query\Result\ObjectExportClassValidator;
+use ON\Data\Query\Result\WritablePreparation;
 use ON\Data\Query\Result\WritableResultHandler;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Selection\SelectionTag;
@@ -95,6 +99,8 @@ final class SelectQuery implements QuerySourceInterface
 	private ?WritableResultHandler $writableHandler = null;
 
 	private ?Relation\LoadRuntime $runtime = null;
+
+	private ?FetchPlan $fetchPlan = null;
 
 	public function __construct(
 		private readonly CollectionInterface|DerivedSelectQuery $source,
@@ -284,6 +290,7 @@ final class SelectQuery implements QuerySourceInterface
 		$copy->offset = $this->offset;
 		$copy->resultClass = $this->resultClass;
 		$copy->writableHandler = $this->writableHandler;
+		$copy->fetchPlan = null;
 
 		return $copy;
 	}
@@ -448,6 +455,16 @@ final class SelectQuery implements QuerySourceInterface
 		return $this->writableHandler;
 	}
 
+	/**
+	 * Place + fetch snapshot from the last {@see fetchAll()} / {@see fetchOne()} begin.
+	 *
+	 * Compiled before LoadRuntime runs (proposal 0003 Phase 1). Null until a fetch starts.
+	 */
+	public function getFetchPlan(): ?FetchPlan
+	{
+		return $this->fetchPlan;
+	}
+
 	public function getSelections(): SelectionList
 	{
 		return $this->selections;
@@ -570,7 +587,7 @@ final class SelectQuery implements QuerySourceInterface
 	public function fetchAll(): array
 	{
 		$handler = $this->writableHandler;
-		$preparation = $handler?->prepare($this);
+		$preparation = $this->beginFetch($handler);
 		$runtime = $this->getLoadRuntime(fresh: $handler !== null);
 		$rows = $runtime->fetchAll();
 		$publicRows = $this->publicRows($rows);
@@ -666,7 +683,7 @@ final class SelectQuery implements QuerySourceInterface
 
 		try {
 			$handler = $this->writableHandler;
-			$preparation = $handler?->prepare($this);
+			$preparation = $this->beginFetch($handler);
 			$runtime = $this->getLoadRuntime(fresh: $handler !== null || $identity !== null);
 			$row = $runtime->fetchOne();
 
@@ -693,6 +710,50 @@ final class SelectQuery implements QuerySourceInterface
 				$this->conditions->removeByTag(ConditionTag::IDENTITY);
 			}
 		}
+	}
+
+	/**
+	 * Compile place schema + LoadGraph before LoadRuntime (proposal 0003 Phase 1).
+	 *
+	 * Writable prepares first (identity planning may mutate selections); LoadGraph is
+	 * taken from that plan when present. Read-only fetches compile a local FetchPlan.
+	 */
+	private function beginFetch(?WritableResultHandler $handler): ?WritablePreparation
+	{
+		if ($handler !== null) {
+			$preparation = $handler->prepare($this);
+
+			if (
+				$preparation instanceof QueryRepresentationPlan
+				&& $preparation->getLoadGraph() !== null
+			) {
+				$this->fetchPlan = new FetchPlan(
+					$preparation->getSchema(),
+					$preparation->getLoadGraph(),
+				);
+			} else {
+				$this->fetchPlan = new FetchPlan(
+					(new QueryRepresentationSchemaCompiler())->compile($this),
+					(new LoadGraphBuilder())->fromQuery($this),
+				);
+			}
+
+			return $preparation;
+		}
+
+		// Count wrappers and other derived sources have no collection place schema.
+		if ($this->isDerivedSource()) {
+			$this->fetchPlan = null;
+
+			return null;
+		}
+
+		$this->fetchPlan = new FetchPlan(
+			(new QueryRepresentationSchemaCompiler())->compile($this),
+			(new LoadGraphBuilder())->fromQuery($this),
+		);
+
+		return null;
 	}
 
 	/**

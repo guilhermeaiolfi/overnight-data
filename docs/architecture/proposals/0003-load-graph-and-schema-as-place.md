@@ -61,10 +61,12 @@ select()
 2. Add `LoadGraph` / `LoadGraphNode` / builder that **derives** a read-only fetch view from `SelectQuery` (no runtime behavior change).  
 3. Tests: root fields, nested `select`, flat related field appears under the **source** node (`posts.author`), not only under `posts`.
 
-### Phase 1 — schema available before assemble
+### Phase 1 — schema available before assemble ✅
 
 1. Ensure schema compile runs before fetch on paths that will assemble from schema (writable already `prepare()`s first; extend as needed).  
 2. Keep current output processor behavior.
+
+`SelectQuery::fetchAll()` / `fetchOne()` call `beginFetch()` first: compile `RepresentationSchema` + `LoadGraph` into a {@see FetchPlan} before `LoadRuntime`. Writable `prepare()` attaches `LoadGraph` to `QueryRepresentationPlan` after identity planning; the fetch plan reuses that snapshot.
 
 ### Phase 2 — assemble flats from schema
 
@@ -88,6 +90,12 @@ select()
 - [x] `LoadGraphBuilder::fromQuery(SelectQuery)` builds nodes keyed by source path.  
 - [x] Flat `$posts->author->name->as('authorName')` adds field `name` to node `posts.author` (and posts own fields to `posts`).  
 - [x] No change to fetch results in Phase 0.
+
+## Acceptance (Phase 1)
+
+- [x] Every `fetchAll` / `fetchOne` builds a `FetchPlan` (schema + LoadGraph) before LoadRuntime.  
+- [x] Writable prepare exposes LoadGraph on `QueryRepresentationPlan` (post-identity).  
+- [x] `SelectQuery::getFetchPlan()` available after fetch begins; output shape unchanged.
 
 ## References
 

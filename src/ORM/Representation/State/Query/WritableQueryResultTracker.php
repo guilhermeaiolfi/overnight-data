@@ -18,6 +18,7 @@ use ON\Data\ORM\Representation\Sync\RepresentationAdoptionContext;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionEngine;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
 use ON\Data\ORM\Session;
+use ON\Data\Query\Load\LoadGraphBuilder;
 use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Result\WritablePreparation;
 use ON\Data\Query\Result\WritableResultHandler;
@@ -63,6 +64,9 @@ final class WritableQueryResultTracker implements WritableResultHandler
 		foreach ($query->getRelationSelections()->getAll() as $selection) {
 			$this->planRelationLevel($plan, $schema, $selection);
 		}
+
+		// After INTERNAL identity selections are planned onto the query/relations.
+		$plan->setLoadGraph((new LoadGraphBuilder())->fromQuery($query));
 
 		return $plan;
 	}
