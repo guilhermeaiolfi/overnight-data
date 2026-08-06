@@ -274,6 +274,35 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertSame(RelationLoadKnowledge::Full, $posts->getLoadKnowledge());
 	}
 
+	public function testCompilesNestedAliasedAndFlatFieldsOnRelationLevel(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$posts = $registry->getCollection('posts');
+		$posts->belongsTo('author', 'users')->innerKey('user_id')->outerKey('id');
+
+		$query = query($users, function (SelectQuery $query): void {
+			$query->select($query->id);
+			$query->posts->select(
+				$query->posts->title->as('headline'),
+				$query->posts->author->name->as('authorName'),
+			);
+		});
+
+		$schema = $this->compiler->compile($query);
+		$postsSchema = $schema->getRelation('posts')->getRelatedSchema();
+
+		self::assertTrue($postsSchema->hasField('headline'));
+		self::assertFalse($postsSchema->hasField('title'));
+		self::assertSame('title', $postsSchema->getField('headline')->getFieldName());
+		self::assertSame([], $postsSchema->getField('headline')->getSourcePath());
+
+		self::assertTrue($postsSchema->hasField('authorName'));
+		self::assertSame('name', $postsSchema->getField('authorName')->getFieldName());
+		self::assertSame(['author'], $postsSchema->getField('authorName')->getSourcePath());
+		self::assertSame('users', $postsSchema->getField('authorName')->getCollectionName());
+	}
+
 	public function testUnqualifiedRelationLoadKnowledgeIsFull(): void
 	{
 		$registry = $this->makeRegistry();

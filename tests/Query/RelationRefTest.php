@@ -1265,6 +1265,71 @@ final class RelationRefTest extends TestCase
 		return query($registry->getCollection($collection));
 	}
 
+	public function testSelectSupportsAliasedOwnFields(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$users->posts->select(
+			$users->posts->id,
+			$users->posts->title->as('headline'),
+		);
+
+		self::assertTrue($users->posts->isSelected());
+		self::assertFalse($users->posts->hasDefaultSelection());
+		self::assertSame(['id'], $users->posts->getFields());
+
+		$keys = array_map(
+			static fn ($selection) => $selection->getSelectionKey(),
+			$users->posts->getSelections()->getExplicit(),
+		);
+		self::assertSame(['id', 'headline'], $keys);
+
+		$schema = $users->getRelationSelections()->getAll()[0];
+		self::assertSame(['id'], $schema->getFields());
+		self::assertFalse($schema->hasDefaultSelection());
+	}
+
+	public function testSelectWithOnlyChildRelationKeepsDefaultFields(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$users->posts->select($users->posts->author->select($users->posts->author->name));
+
+		self::assertTrue($users->posts->isSelected());
+		self::assertTrue($users->posts->hasDefaultSelection());
+		self::assertNull($users->posts->getFields());
+		self::assertTrue($users->posts->author->isSelected());
+		self::assertFalse($users->posts->author->hasDefaultSelection());
+		self::assertSame(['name'], $users->posts->author->getFields());
+	}
+
+	public function testTraverseOnlyAuthorDoesNotLoadPostsScalars(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$users->posts->author->select($users->posts->author->name);
+
+		$state = $this->selectionState($users);
+		self::assertSame([
+			['posts', false, true, null],
+			['posts.author', true, true, ['name']],
+		], $state);
+	}
+
+	public function testFieldsRemainsSugarOverSelect(): void
+	{
+		$users = $this->makeQuery('users');
+
+		$users->posts->fields('id', 'title');
+
+		$keys = array_map(
+			static fn ($selection) => $selection->getSelectionKey(),
+			$users->posts->getSelections()->getExplicit(),
+		);
+		self::assertSame(['id', 'title'], $keys);
+		self::assertSame(['id', 'title'], $users->posts->getFields());
+	}
+
 	/**
 	 * @return list<array{0: string, 1: bool, 2: bool, 3: ?array}>
 	 */

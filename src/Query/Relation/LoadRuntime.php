@@ -8,8 +8,11 @@ use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationSelectionException;
+use ON\Data\Query\Expression\AliasedExpression;
+use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
+use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use ReflectionMethod;
@@ -190,7 +193,7 @@ final class LoadRuntime
 				? $this->rootBranch
 				: $this->branches[$selection->getParentPathKey()] ?? throw LoadRuntimeException::parentBranchMissing($selection->getRelationRef());
 
-			$this->branches[$key] = new RelationLoadBranch($selection, $parent, $selection->getRelationRef()->getLoader(), $this->publicFieldsForSelection($selection));
+			$this->branches[$key] = new RelationLoadBranch($selection, $parent, $selection->getRelationRef()->getLoader());
 		}
 	}
 
@@ -239,11 +242,19 @@ final class LoadRuntime
 			$aliases = [];
 
 			foreach ($branch->getSelections()->getByTag(SelectionTag::COLUMN) as $selection) {
+				$fieldName = $this->columnFieldName($selection);
+				$publicAlias = $selection->getSelectionKey();
+
+				if ($fieldName === null) {
+					continue;
+				}
+
 				$aliases[] = $this->ensureBranchFieldSelection(
 					$branch->getQuery(),
 					$branch->getSource(),
 					$branch->getRelationRef()->getPath(),
-					$selection->getSelectionKey(),
+					$fieldName,
+					$publicAlias,
 				);
 			}
 
@@ -378,11 +389,38 @@ final class LoadRuntime
 			return [];
 		}
 
-		if ($selection->getFields() !== null) {
-			return $selection->getFields();
+		if ($selection->hasDefaultSelection()) {
+			return $selection->getRelationRef()->getCollection()->getVisibleFields();
 		}
 
-		return $selection->getRelationRef()->getCollection()->getVisibleFields();
+		$names = [];
+
+		foreach ($selection->getSelections()->getExplicit() as $item) {
+			$fieldName = $this->columnFieldName($item);
+
+			if ($fieldName === null) {
+				continue;
+			}
+
+			$names[] = $fieldName;
+		}
+
+		return array_values(array_unique($names));
+	}
+
+	private function columnFieldName(SelectionItem $selection): ?string
+	{
+		$expression = $selection->getExpression();
+
+		if ($expression instanceof AliasedExpression) {
+			$expression = $expression->getExpression();
+		}
+
+		if (! $expression instanceof FieldRef) {
+			return null;
+		}
+
+		return $expression->getField()->getName();
 	}
 
 	/**
@@ -398,11 +436,18 @@ final class LoadRuntime
 		QuerySourceInterface $source,
 		array $path,
 		string $fieldName,
+		?string $publicAlias = null,
 	): string {
-		if ($source === $query) {
-			$query->select($query->field($fieldName));
+		$publicAlias ??= $fieldName;
 
-			return $fieldName;
+		if ($source === $query) {
+			if ($publicAlias === $fieldName) {
+				$query->select($query->field($fieldName));
+			} elseif (! $query->getSelections()->hasNamedExpression($publicAlias)) {
+				$query->select($query->field($fieldName)->as($publicAlias));
+			}
+
+			return $publicAlias;
 		}
 
 		$alias = $this->allocateAlias($path, $fieldName);

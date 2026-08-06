@@ -5,21 +5,30 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation;
 
 use ON\Data\Query\Condition\ConditionInterface;
+use ON\Data\Query\Expression\AliasedExpression;
+use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Sort\Sort;
 
 final class RelationSelection
 {
+	private readonly SelectionList $selections;
+
+	private readonly bool $defaultSelection;
+
 	public function __construct(
 		private readonly RelationRef $relationRef,
 		private readonly bool $load,
 		private readonly bool $visible,
-		private readonly ?array $fields,
+		?SelectionList $selections,
 		private readonly array $conditions = [],
 		private readonly array $sorts = [],
 		private readonly ?int $limit = null,
 		private readonly ?int $offset = null,
 		private readonly ?LoadStrategy $strategy = null,
 	) {
+		$this->defaultSelection = $selections === null;
+		$this->selections = $selections ?? new SelectionList();
 	}
 
 	public function getRelationRef(): RelationRef
@@ -63,9 +72,50 @@ final class RelationSelection
 		return $this->visible;
 	}
 
+	public function hasDefaultSelection(): bool
+	{
+		return $this->defaultSelection;
+	}
+
+	public function getSelections(): SelectionList
+	{
+		return $this->selections;
+	}
+
+	/**
+	 * Identity-aliased own-field names when this level has an explicit projection.
+	 *
+	 * @return ?list<string>
+	 */
 	public function getFields(): ?array
 	{
-		return $this->fields;
+		if ($this->defaultSelection) {
+			return null;
+		}
+
+		$names = [];
+
+		foreach ($this->selections->getExplicit() as $selection) {
+			$expression = $selection->getExpression();
+
+			if (! $expression instanceof AliasedExpression) {
+				continue;
+			}
+
+			$inner = $expression->getExpression();
+
+			if (
+				! $inner instanceof FieldRef
+				|| $inner->getSource() !== $this->relationRef
+				|| $inner->getField()->getName() !== $expression->getAlias()
+			) {
+				continue;
+			}
+
+			$names[] = $inner->getField()->getName();
+		}
+
+		return $names === [] ? null : $names;
 	}
 
 	/**
@@ -109,32 +159,19 @@ final class RelationSelection
 		$sameRelationRef = $this->relationRef === $incoming->relationRef;
 		$load = $this->load || $incoming->load;
 		$visible = $this->visible || $incoming->visible || $load;
-		$fields = $this->mergeFields($incoming);
+		$defaultSelection = $this->mergeDefaultSelection($incoming);
+		$selections = $defaultSelection ? null : $this->mergeSelections($incoming);
 		$conditions = $sameRelationRef ? $incoming->conditions : [...$this->conditions, ...$incoming->conditions];
 		$sorts = $sameRelationRef ? $incoming->sorts : [...$this->sorts, ...$incoming->sorts];
 		$limit = $this->mergeLimit($incoming, $sameRelationRef);
 		[$offset, $hasOffset] = $this->mergeOffset($incoming, $sameRelationRef);
 		$strategy = $this->mergeStrategy($incoming);
 
-		if (
-			$load === $this->load
-			&& $visible === $this->visible
-			&& $fields === $this->fields
-			&& $conditions === $this->conditions
-			&& $sorts === $this->sorts
-			&& $limit === $this->limit
-			&& $hasOffset === $this->hasOffset()
-			&& $offset === $this->getOffset()
-			&& $strategy === $this->strategy
-		) {
-			return $this;
-		}
-
 		return new self(
 			$this->relationRef,
 			$load,
 			$visible,
-			$fields,
+			$selections,
 			$conditions,
 			$sorts,
 			$limit,
@@ -143,23 +180,27 @@ final class RelationSelection
 		);
 	}
 
-	private function mergeFields(self $incoming): ?array
+	private function mergeDefaultSelection(self $incoming): bool
 	{
-		if ($this->fields === null || $incoming->fields === null) {
-			return null;
+		if ($this->relationRef === $incoming->relationRef) {
+			return $incoming->defaultSelection;
 		}
 
-		$merged = $this->fields;
-		$seen = array_fill_keys($merged, true);
+		return $this->defaultSelection || $incoming->defaultSelection;
+	}
 
-		foreach ($incoming->fields as $fieldName) {
-			if (isset($seen[$fieldName])) {
-				continue;
-			}
+	private function mergeSelections(self $incoming): SelectionList
+	{
+		if ($this->relationRef === $incoming->relationRef) {
+			$copy = new SelectionList();
+			$copy->merge($incoming->selections);
 
-			$seen[$fieldName] = true;
-			$merged[] = $fieldName;
+			return $copy;
 		}
+
+		$merged = new SelectionList();
+		$merged->merge($this->selections);
+		$merged->merge($incoming->selections);
 
 		return $merged;
 	}

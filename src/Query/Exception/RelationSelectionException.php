@@ -28,6 +28,29 @@ final class RelationSelectionException extends InvalidArgumentException
 		));
 	}
 
+	/**
+	 * @param list<string> $path
+	 */
+	public static function levelAliasCollision(array $path, string $name): self
+	{
+		return new self(sprintf(
+			'Relation "%s" result name "%s" collides with a selected child relation container.',
+			implode('.', $path),
+			$name,
+		));
+	}
+
+	/**
+	 * @param list<string> $path
+	 */
+	public static function emptyRelationSelection(array $path): self
+	{
+		return new self(sprintf(
+			'Relation "%s" selection option "select" must select at least one expression.',
+			implode('.', $path),
+		));
+	}
+
 	public static function iterateNotSupported(): self
 	{
 		return new self(

@@ -8,6 +8,7 @@ use ArrayIterator;
 use Countable;
 use IteratorAggregate;
 use ON\Data\Query\Exception\RelationSelectionException;
+use ON\Data\Query\Selection\SelectionList;
 use Traversable;
 
 /**
@@ -37,11 +38,14 @@ final class RelationSelectionTree implements IteratorAggregate, Countable
 
 		foreach ($segments as $index => $segment) {
 			$key = $this->identityFor($segment);
+			$selections = $segment->hasDefaultSelection()
+				? null
+				: $this->copySelections($segment);
 			$selection = new RelationSelection(
 				$segment,
 				$index === $terminalIndex ? true : $segment->isLoaded(),
 				$index === $terminalIndex ? true : $segment->isVisible(),
-				$segment->getFields(),
+				$selections,
 				$segment->getConditions(),
 				$segment->getSorts(),
 				$segment->getLimit(),
@@ -53,6 +57,14 @@ final class RelationSelectionTree implements IteratorAggregate, Countable
 				? $this->relations[$key]->merge($selection)
 				: $selection;
 		}
+	}
+
+	private function copySelections(RelationRef $segment): SelectionList
+	{
+		$copy = new SelectionList();
+		$copy->merge($segment->getSelections());
+
+		return $copy;
 	}
 
 	/**

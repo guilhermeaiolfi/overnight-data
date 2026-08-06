@@ -14,6 +14,11 @@ $u->select(
     $u->posts->fields('id', 'title'),
 );
 
+$u->posts->select(
+    $u->posts->id,
+    $u->posts->title->as('headline'),
+);
+
 $users->posts->load();
 
 $users->posts->fields('id', 'title');
@@ -32,6 +37,12 @@ $u->profile
     ->fields('avatar')
     ->join();
 ```
+
+`RelationRef::select(...)` mirrors root `SelectQuery::select()` for that relation level (own fields, aliases, star/`all()`, and child relation refs). `fields(...)` remains sugar for identity-aliased direct fields and replaces that level's scalar projection.
+
+Scalar/`all()` selections at a level clear that level's default visible fields (same rule as root). Selecting only child relations keeps the level's default scalars. Traversing `$u->posts->author->select(...)` without selecting on `posts` leaves `posts` as a visible unloaded intermediate container.
+
+Nested flat related fields (for example `$u->posts->author->name->as('authorName')` inside `$u->posts->select(...)`) compile into the nested `RepresentationSchema` with a relative `sourcePath`. SEPARATE_QUERY load/output supports own-level aliases; nested flat fetch at load time is still being completed (schema compile is ready).
 
 Nested traversal works through dynamic relation refs:
 
@@ -60,10 +71,11 @@ Relation-only `select($u->posts)` keeps default root fields.
 
 The public configuration API on `RelationRef` is:
 
+- `select(...)`
 - `load()`
 - `visible(bool $visible = true)`
 - `hidden()`
-- `fields(string|FieldRef|array ...$fields)`
+- `fields(string|FieldRef|array ...$fields)` — sugar over `select()` of identity-aliased own fields
 - `where(ConditionInterface ...$conditions)`
 - `orderBy(Sort ...$sorts)`
 - `limit(int $limit)`
@@ -72,11 +84,11 @@ The public configuration API on `RelationRef` is:
 - `join()`
 - `separate()`
 
-`load()`, `fields(...)`, `where(...)`, `orderBy(...)`, `limit(...)`, `offset(...)`, and strategy helpers select/load the relation. `visible(...)` and `hidden()` control result shape for configured paths and intermediate traversal.
+`select(...)`, `load()`, `fields(...)`, `where(...)`, `orderBy(...)`, `limit(...)`, `offset(...)`, and strategy helpers select/load the relation. `visible(...)` and `hidden()` control result shape for configured paths and intermediate traversal.
 
 `load()` selects the relation with default public fields and the loader's default strategy. It does not change fields, conditions, sorts, strategy, or visibility.
 
-`fields(...)` restricts public relation fields to the listed field names.
+`fields(...)` restricts public relation fields to the listed field names (identity aliases).
 
 `where(...)` and `orderBy(...)` configure the relation query. Built-in loaders apply these options to separate-query relation loading. Joined relation loading rejects relation-level conditions and ordering for now because those options can change root row filtering or row order in surprising ways.
 

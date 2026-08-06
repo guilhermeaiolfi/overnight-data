@@ -10,6 +10,13 @@ The files linked below are the current reference material.
 - [`../CHANGELOG.md`](../CHANGELOG.md): Release history.
 - [`../UPGRADE.md`](../UPGRADE.md): What docs mean, upgrade expectations, no compatibility promise.
 
+## Architecture proposals
+
+Proposed designs (not implemented until accepted and built):
+
+- [`architecture/proposals/0001-representation-schema-as-reusable-model.md`](./architecture/proposals/0001-representation-schema-as-reusable-model.md): Extend `RepresentationSchema` into a reusable select shape (`query($schema)`), including expression nodes.
+- [`architecture/proposals/0002-recursive-projection-levels.md`](./architecture/proposals/0002-recursive-projection-levels.md): Unify root and nested relation projections so every level shares one selection model (should inform / precede 0001).
+
 ## Definitions
 
 - [`definition-api.md`](./definition-api.md): Canonical registry storage, naming rules, export, restoration, and the public definition wrappers.

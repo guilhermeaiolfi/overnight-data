@@ -243,18 +243,118 @@ final class QueryRepresentationSchemaCompiler
 
 	private function compileRelationSchema(RelationSelection $selection): RepresentationSchema
 	{
-		$targetCollection = $selection->getRelationRef()->getDefinition()->getCollection();
+		$relationRef = $selection->getRelationRef();
+		$targetCollection = $relationRef->getDefinition()->getCollection();
 		$schema = new RepresentationSchema($targetCollection);
-		$explicitFields = $selection->getFields();
 
-		$fields = $explicitFields !== null
-			? $this->explicitFields($explicitFields, $targetCollection)
-			: $this->defaultFields($targetCollection);
+		if ($selection->hasDefaultSelection()) {
+			$this->addFields($schema, $this->defaultFields($targetCollection));
+		} else {
+			$this->addFields(
+				$schema,
+				$this->fieldsFromLevelSelections($relationRef, $selection->getSelections()->getExplicit()),
+			);
+		}
 
-		$this->addFields($schema, $fields);
 		$this->assemblePrimaryKeyFields($schema, $targetCollection);
 
 		return $schema;
+	}
+
+	/**
+	 * @param list<SelectionItem> $selections
+	 *
+	 * @return list<RepresentationFieldSchema>
+	 */
+	private function fieldsFromLevelSelections(RelationRef $level, array $selections): array
+	{
+		$fields = [];
+
+		foreach ($selections as $selection) {
+			$expression = $selection->getExpression();
+
+			if ($expression instanceof StarExpression && $expression->getSource() === $level) {
+				return $this->defaultFields($level->getCollection());
+			}
+
+			$field = $this->fieldFromLevelSelection($level, $selection);
+
+			if ($field instanceof RepresentationFieldSchema) {
+				$fields[] = $field;
+			}
+		}
+
+		return $fields;
+	}
+
+	private function fieldFromLevelSelection(RelationRef $level, SelectionItem $selection): ?RepresentationFieldSchema
+	{
+		$expression = $selection->getExpression();
+		$publicPath = $selection->getSelectionKey();
+
+		if ($expression instanceof AliasedExpression) {
+			$publicPath = $expression->getAlias();
+			$expression = $expression->getExpression();
+		}
+
+		if (! $expression instanceof FieldRef) {
+			return null;
+		}
+
+		[$collection, $sourcePath] = $this->resolveLevelFieldSource($level, $expression->getSource());
+
+		return new RepresentationFieldSchema(
+			$publicPath,
+			$collection,
+			$expression->getName(),
+			writable: true,
+			skipWhenMissing: true,
+			sourcePath: $sourcePath,
+		);
+	}
+
+	/**
+	 * @return array{0: CollectionInterface, 1: list<string>}
+	 */
+	private function resolveLevelFieldSource(RelationRef $level, object $source): array
+	{
+		if (! $source instanceof QuerySourceInterface) {
+			throw new InvalidArgumentException('Projection field sources must be query sources.');
+		}
+
+		if ($source === $level) {
+			return [$level->getCollection(), []];
+		}
+
+		if (
+			$source instanceof RelationRef
+			&& $source->getQuery() === $level->getQuery()
+			&& $this->isRelationUnderLevel($level, $source)
+		) {
+			return [$source->getCollection(), $this->relativeRelationPath($level, $source)];
+		}
+
+		throw new StateException('Cannot resolve projection source because it does not belong to this relation level.');
+	}
+
+	private function isRelationUnderLevel(RelationRef $level, RelationRef $source): bool
+	{
+		$levelPath = $level->getPath();
+		$sourcePath = $source->getPath();
+
+		if (count($sourcePath) <= count($levelPath)) {
+			return false;
+		}
+
+		return array_slice($sourcePath, 0, count($levelPath)) === $levelPath;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function relativeRelationPath(RelationRef $level, RelationRef $source): array
+	{
+		return array_values(array_slice($source->getPath(), count($level->getPath())));
 	}
 
 	/**

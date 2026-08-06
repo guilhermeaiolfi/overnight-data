@@ -8,6 +8,8 @@ use LogicException;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\Definition\Relation\M2MThrough;
 use ON\Data\Query\Exception\RelationLoaderException;
+use ON\Data\Query\Expression\AliasedExpression;
+use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
@@ -252,7 +254,19 @@ final class M2MLoader extends AbstractLoader
 	private function publicFieldNames(RelationLoadBranch $branch): array
 	{
 		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
+			static function (SelectionItem $selection): string {
+				$expression = $selection->getExpression();
+
+				if ($expression instanceof AliasedExpression) {
+					$expression = $expression->getExpression();
+				}
+
+				if ($expression instanceof FieldRef) {
+					return $expression->getField()->getName();
+				}
+
+				return $selection->getSelectionKey();
+			},
 			$branch->getSelections()->getByTag(SelectionTag::PUBLIC),
 		);
 	}

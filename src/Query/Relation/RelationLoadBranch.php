@@ -7,7 +7,10 @@ namespace ON\Data\Query\Relation;
 use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Expression\AliasedExpression;
+use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
+use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
@@ -22,18 +25,14 @@ final class RelationLoadBranch extends LoadBranch
 
 	private ?bool $joinedAttachment = null;
 
-	/**
-	 * @param list<string> $publicFields
-	 */
 	public function __construct(
 		private readonly RelationSelection $selection,
 		private readonly LoadBranch $parent,
 		private readonly LoaderInterface $loader,
-		array $publicFields,
 	) {
 		$this->selections = new SelectionList();
 		$this->parent->addChild($this);
-		$this->addPublicFields($publicFields);
+		$this->registerPublicSelections();
 	}
 
 	public function getSelection(): RelationSelection
@@ -103,6 +102,48 @@ final class RelationLoadBranch extends LoadBranch
 	}
 
 	/**
+	 * Register this level's public projection onto the load-branch selection list.
+	 * Loaders still fetch tables; runtime owns how public keys are assembled.
+	 */
+	public function registerPublicSelections(): void
+	{
+		if (! $this->selection->isLoaded()) {
+			return;
+		}
+
+		if ($this->selection->hasDefaultSelection()) {
+			$this->addPublicFields($this->getRelationRef()->getCollection()->getVisibleFields());
+
+			return;
+		}
+
+		foreach ($this->selection->getSelections()->getExplicit() as $selection) {
+			$expression = $selection->getExpression();
+
+			if ($expression instanceof StarExpression && $expression->getSource() === $this->getRelationRef()) {
+				$this->addPublicFields($this->getRelationRef()->getCollection()->getVisibleFields());
+
+				continue;
+			}
+
+			$ownField = $this->ownFieldSelection($selection);
+
+			if ($ownField === null) {
+				// Flat / non-field selections: Phase A registers own-level FieldRefs only for fetch.
+				continue;
+			}
+
+			[$fieldName, $publicAlias] = $ownField;
+			$this->selections->add(
+				$this->getRelationRef()->field($fieldName)->as($publicAlias),
+				SelectionTag::PUBLIC,
+				true,
+			);
+			$this->requireFields([$fieldName]);
+		}
+	}
+
+	/**
 	 * @return list<array<string, mixed>>
 	 */
 	public function getReferenceValues(): array
@@ -155,5 +196,25 @@ final class RelationLoadBranch extends LoadBranch
 	private function relationFieldSelection(string $fieldName): AliasedExpression
 	{
 		return $this->getRelationRef()->field($fieldName)->as($fieldName);
+	}
+
+	/**
+	 * @return ?array{0: string, 1: string} field name + public alias
+	 */
+	private function ownFieldSelection(SelectionItem $selection): ?array
+	{
+		$expression = $selection->getExpression();
+		$publicAlias = $selection->getSelectionKey();
+
+		if ($expression instanceof AliasedExpression) {
+			$publicAlias = $expression->getAlias();
+			$expression = $expression->getExpression();
+		}
+
+		if (! $expression instanceof FieldRef || $expression->getSource() !== $this->getRelationRef()) {
+			return null;
+		}
+
+		return [$expression->getField()->getName(), $publicAlias];
 	}
 }

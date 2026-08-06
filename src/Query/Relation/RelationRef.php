@@ -16,10 +16,14 @@ use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Exception\UnknownQueryFieldException;
 use ON\Data\Query\Exception\UnknownQueryMemberException;
 use ON\Data\Query\Exception\UnknownQueryRelationException;
+use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
+use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
+use ON\Data\Query\Selection\SelectionList;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
 use ON\Data\Query\SourceMap;
@@ -46,10 +50,7 @@ final class RelationRef implements QuerySourceInterface
 
 	private bool $visible = true;
 
-	/**
-	 * @var ?list<string>
-	 */
-	private ?array $fields = null;
+	private readonly SelectionList $selections;
 
 	/**
 	 * @var list<ConditionInterface>
@@ -72,6 +73,8 @@ final class RelationRef implements QuerySourceInterface
 		private readonly RelationInterface $relation,
 		private readonly ?self $parentRelation = null,
 	) {
+		$this->selections = new SelectionList();
+		$this->selections->add($this->all(), SelectionTag::DEFAULT, true);
 	}
 
 	public function getQuery(): SelectQuery
@@ -104,9 +107,57 @@ final class RelationRef implements QuerySourceInterface
 		return $this->visible;
 	}
 
+	/**
+	 * Backward-compatible view of explicit direct-field selections.
+	 *
+	 * Returns null while this level still uses its default (visible-fields)
+	 * selection. Once {@see select()}/{@see fields()} narrow the selection,
+	 * this returns the names of any identity-aliased own fields (i.e. what
+	 * {@see fields()} would have produced); aliases, star, and flat related
+	 * fields are not representable as plain field names and are omitted —
+	 * use {@see getSelections()} for the full picture.
+	 *
+	 * @return ?list<string>
+	 */
 	public function getFields(): ?array
 	{
-		return $this->fields;
+		if ($this->hasDefaultSelection()) {
+			return null;
+		}
+
+		$names = [];
+
+		foreach ($this->selections->getExplicit() as $selection) {
+			$expression = $selection->getExpression();
+
+			if (! $expression instanceof AliasedExpression) {
+				continue;
+			}
+
+			$inner = $expression->getExpression();
+
+			if (
+				! $inner instanceof FieldRef
+				|| $inner->getSource() !== $this
+				|| $inner->getField()->getName() !== $expression->getAlias()
+			) {
+				continue;
+			}
+
+			$names[] = $inner->getField()->getName();
+		}
+
+		return $names === [] ? null : $names;
+	}
+
+	public function getSelections(): SelectionList
+	{
+		return $this->selections;
+	}
+
+	public function hasDefaultSelection(): bool
+	{
+		return $this->selections->getByTag(SelectionTag::DEFAULT) !== [];
 	}
 
 	/**
@@ -214,11 +265,9 @@ final class RelationRef implements QuerySourceInterface
 
 		$target->visible($this->visible);
 
-		if ($this->fields !== null) {
-			$target->fields($this->fields);
-		} elseif ($this->selected) {
-			$target->load();
-		}
+		$target->selections->clear();
+		$target->selections->merge($this->selections->projectTo($sources));
+		$target->selected = $this->selected;
 
 		$target->setConditions(array_map(
 			static fn (ConditionInterface $condition): ConditionInterface => $condition->rebind($sources),
@@ -317,10 +366,68 @@ final class RelationRef implements QuerySourceInterface
 		return array_values($this->relationRefs);
 	}
 
+	/**
+	 * Select this level's own visible/star projection, aliases, or child
+	 * relations — mirrors {@see SelectQuery::select()} for a nested level.
+	 *
+	 * Selecting a child relation only marks it loaded/visible; it does not
+	 * clear this level's default field selection (traversal-only intent),
+	 * matching {@see SelectQuery::select()}'s handling of bare RelationRefs.
+	 */
+	public function select(ValueExpressionInterface|AliasedExpression|StarExpression|self ...$expressions): self
+	{
+		$this->assertSelectable();
+
+		if ($expressions === []) {
+			throw RelationSelectionException::emptyRelationSelection($this->getPath());
+		}
+
+		$normalized = [];
+
+		foreach ($expressions as $expression) {
+			if ($expression instanceof self) {
+				if ($expression->getQuery() !== $this->query) {
+					throw RelationSelectionException::foreignQueryRelation($expression, $this->query);
+				}
+
+				if (! $expression->isSelected()) {
+					$expression->load();
+				}
+
+				continue;
+			}
+
+			$normalized[] = $this->normalizeSelectExpression($expression);
+		}
+
+		if ($normalized !== []) {
+			$this->selections->removeByTag(SelectionTag::DEFAULT);
+			$this->selections->addExplicit($normalized);
+		}
+
+		$this->markSelected();
+
+		return $this;
+	}
+
+	/**
+	 * Sugar for identity-aliased direct field selection. Replaces this level's
+	 * scalar projection (same as a full {@see select()} of those fields).
+	 */
 	public function fields(string|FieldRef|array ...$fields): self
 	{
 		$this->assertSelectable();
-		$this->fields = $this->normalizeSelectionFields($this->normalizeFieldArguments($fields));
+
+		$names = $this->normalizeSelectionFields($this->normalizeFieldArguments($fields));
+		$expressions = [];
+
+		foreach ($names as $name) {
+			$expressions[] = $this->field($name)->as($name);
+		}
+
+		$this->selections->clear();
+		$this->selections->addExplicit($expressions);
+
 		$this->markSelected();
 
 		return $this;
@@ -453,7 +560,8 @@ final class RelationRef implements QuerySourceInterface
 	public function clearSelection(): void
 	{
 		$this->selected = false;
-		$this->fields = null;
+		$this->selections->clear();
+		$this->selections->add($this->all(), SelectionTag::DEFAULT, true);
 
 		foreach ($this->relationRefs as $relation) {
 			$relation->clearSelection();
@@ -471,6 +579,22 @@ final class RelationRef implements QuerySourceInterface
 		if (! $this->visible) {
 			throw RelationSelectionException::hiddenLoadedRelation($this->getPath());
 		}
+	}
+
+	/**
+	 * Bare own-level FieldRefs get an identity alias so their selection key
+	 * is the plain field name (matching root, whose empty path already makes
+	 * bare FieldRef selection keys plain); every other expression (aliases,
+	 * star, flat related FieldRefs) is used as-is.
+	 */
+	private function normalizeSelectExpression(
+		ValueExpressionInterface|AliasedExpression|StarExpression $expression,
+	): ValueExpressionInterface|AliasedExpression|StarExpression {
+		if ($expression instanceof FieldRef && $expression->getSource() === $this) {
+			return $expression->as($expression->getName());
+		}
+
+		return $expression;
 	}
 
 	/**
