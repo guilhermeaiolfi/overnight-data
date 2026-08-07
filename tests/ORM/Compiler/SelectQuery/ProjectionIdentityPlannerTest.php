@@ -35,7 +35,7 @@ final class ProjectionIdentityPlannerTest extends TestCase
 			),
 		];
 
-		$identities = $this->planner->plan($query, $sources);
+		$identities = $this->planner->planIdentities($query, $sources);
 
 		self::assertNull($identities->getResultKey([], 'id'));
 		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
@@ -53,7 +53,7 @@ final class ProjectionIdentityPlannerTest extends TestCase
 			),
 		];
 
-		$identities = $this->planner->plan($query, $sources);
+		$identities = $this->planner->planIdentities($query, $sources);
 
 		$internal = $query->getSelections()->getByTag(SelectionTag::INTERNAL);
 		self::assertCount(1, $internal);
@@ -79,7 +79,7 @@ final class ProjectionIdentityPlannerTest extends TestCase
 			),
 		];
 
-		$identities = $this->planner->plan($query, $sources);
+		$identities = $this->planner->planIdentities($query, $sources);
 
 		$internal = $query->getSelections()->getByTag(SelectionTag::INTERNAL);
 		self::assertCount(1, $internal);
@@ -106,7 +106,7 @@ final class ProjectionIdentityPlannerTest extends TestCase
 			),
 		];
 
-		$identities = $this->planner->plan($query, $sources);
+		$identities = $this->planner->planIdentities($query, $sources);
 
 		self::assertCount(1, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
 		self::assertNotNull($identities->getResultKey(['manager'], 'id'));
@@ -130,7 +130,7 @@ final class ProjectionIdentityPlannerTest extends TestCase
 			),
 		];
 
-		$identities = $this->planner->plan($query, $sources);
+		$identities = $this->planner->planIdentities($query, $sources);
 
 		self::assertNull($identities->getResultKey([], 'id'));
 		self::assertNull($identities->getResultKey(['manager'], 'id'));
@@ -154,7 +154,7 @@ final class ProjectionIdentityPlannerTest extends TestCase
 			),
 		];
 
-		$identities = $this->planner->plan($query, $sources);
+		$identities = $this->planner->planIdentities($query, $sources);
 
 		self::assertCount(1, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
 		self::assertNotNull($identities->getResultKey(['manager', 'manager'], 'id'));

@@ -88,13 +88,13 @@ Relation branch columns bind `placeKey → loadKey` on the load branch. Own fiel
 1. Identity planning and schema compile share source-path helpers with LoadGraph.  
 2. Remove `plan` / `planLevel` fork once levels are “nodes in one graph.”
 
-`RelationRef::isUnder()` / `relativeTo()` answer under-level / relative-path questions for schema compile, load-branch flat detection, and load-local key naming (ancestor may be a nested `RelationRef` or the root `SelectQuery`). `QueryRepresentationIdentityPlanner::planIdentities(SelectQuery|RelationRef, …)` is the single ensure/resolve path; `plan()` / `planLevel()` remain thin wrappers for existing call sites/tests.
+`RelationRef::isUnder()` / `relativeTo()` answer under-level / relative-path questions for schema compile, load-branch flat detection, and load-local key naming (ancestor may be a nested `RelationRef` or the root `SelectQuery`). `QueryRepresentationIdentityPlanner::planIdentities(SelectQuery|RelationRef, …)` is the single ensure/resolve path.
 
-### Cleanup pass (after Phase 4)
+### Cleanup pass (after Phase 4) ✅
 
-- Collapse duplicate `remapLoadLocalColumnReferences()` overrides on parser nodes that own `childFields` (`CollectionNode` / `SingularNode` / `AbstractMergeNode`) into one shared hook/trait.  
-- Broader tidy: LoadGraph/schema helper duplication, root load-local parity if still lagging relation branches.
-- Consider deleting `plan()` / `planLevel()` wrappers once callers only use `planIdentities()`.
+- [x] Collapse duplicate `remapLoadLocalColumnReferences()` overrides via `RemapsLoadLocalChildFields`.  
+- [x] Delete `plan()` / `planLevel()` wrappers; callers use `planIdentities()`.  
+- Deferred: root load-local parity with relation branches (root still binds place keys as parser aliases via `RootLoadBranch::createNode()`).
 
 ## Acceptance (Phase 0)
 

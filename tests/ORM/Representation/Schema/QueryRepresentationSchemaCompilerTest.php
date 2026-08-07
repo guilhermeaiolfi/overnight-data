@@ -563,7 +563,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 	{
 		$schema = $this->compiler->compile($query);
 		$sources = RepresentationSource::fromRepresentationSchema($schema);
-		$identities = (new QueryRepresentationIdentityPlanner())->plan($query, $sources);
+		$identities = (new QueryRepresentationIdentityPlanner())->planIdentities($query, $sources);
 
 		return new QueryRepresentationPlan($schema, $sources, $identities);
 	}

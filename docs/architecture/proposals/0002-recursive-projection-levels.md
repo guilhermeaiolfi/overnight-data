@@ -224,7 +224,7 @@ Until 0001, 0002 may still compile nested field/flat-field schemas fully and eit
 
 ### Phase C — writable nested flat projections ✅
 
-1. Extend identity planning / adoption for nested-level flat `sourcePath`s — `QueryRepresentationIdentityPlanner::planLevel()`, per-relation identities on `QueryRepresentationPlan`, pre-attach flat hydrate in `WritableQueryResultTracker`, branch INTERNAL registration, recursive strip of `_od_internal_*` from public nested payloads.
+1. Extend identity planning / adoption for nested-level flat `sourcePath`s — `QueryRepresentationIdentityPlanner::planIdentities()`, per-relation identities on `QueryRepresentationPlan`, pre-attach flat hydrate in `WritableQueryResultTracker`, branch INTERNAL registration, recursive strip of `_od_internal_*` from public nested payloads.
 2. Document writable boundaries per level (same rules as root, recursively) — see [`writable-select-query-projections.md`](../../orm/writable-select-query-projections.md).
 
 ### Phase D — JOIN loader parity (if needed)

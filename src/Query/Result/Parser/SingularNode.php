@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Result\Parser;
 
+use ON\Data\Query\Result\Parser\Traits\RemapsLoadLocalChildFields;
+
 /**
  * Adapted from Cycle ORM parser code.
  *
@@ -14,6 +16,8 @@ namespace ON\Data\Query\Result\Parser;
  */
 final class SingularNode extends AbstractNode
 {
+	use RemapsLoadLocalChildFields;
+
 	/**
 	 * @param list<string> $columns
 	 * @param list<string> $identityFields
@@ -42,15 +46,6 @@ final class SingularNode extends AbstractNode
 		}
 
 		$this->setIdentityFields($this->validateFieldList($identityFields, 'Identity fields'));
-	}
-
-	/**
-	 * @param array<string, string> $placeToLoad
-	 */
-	protected function remapLoadLocalColumnReferences(array $placeToLoad): void
-	{
-		parent::remapLoadLocalColumnReferences($placeToLoad);
-		$this->childFields = $this->remapFieldList($this->childFields, $placeToLoad);
 	}
 
 	protected function push(array &$data): void

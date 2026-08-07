@@ -54,22 +54,6 @@ final class QueryRepresentationIdentityPlanner
 		return $identities;
 	}
 
-	/**
-	 * @param list<RepresentationSource> $sources
-	 */
-	public function plan(SelectQuery $query, array $sources): QuerySourceIdentities
-	{
-		return $this->planIdentities($query, $sources, resetCounter: true);
-	}
-
-	/**
-	 * @param list<RepresentationSource> $sources sources relative to that level's schema
-	 */
-	public function planLevel(RelationRef $level, array $sources): QuerySourceIdentities
-	{
-		return $this->planIdentities($level, $sources);
-	}
-
 	private function ensureIdentitySelections(
 		SelectQuery|RelationRef $level,
 		SelectionList $selections,
