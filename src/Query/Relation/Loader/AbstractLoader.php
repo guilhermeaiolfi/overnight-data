@@ -251,17 +251,14 @@ abstract class AbstractLoader implements LoaderInterface
 	}
 
 	/**
-	 * Require fields on a branch and resolve their load-local parser keys.
+	 * Require fields on a branch (emits SQL when query context exists) and return load keys.
 	 *
 	 * @param list<string> $fieldNames
 	 * @return list<string>
 	 */
-	protected function requireLoadKeys(LoadBranch $branch, array $fieldNames): array
+	protected function requireLoadKeys(LoadBranch $branch, LoadRuntime $runtime, array $fieldNames): array
 	{
-		return array_map(
-			static fn (string $placeKey): string => $branch->loadKeyForPlace($placeKey),
-			$branch->requireFields($fieldNames),
-		);
+		return $runtime->requireFields($branch, $fieldNames);
 	}
 
 	/**

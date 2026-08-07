@@ -33,9 +33,9 @@ final class HasManyLoader extends AbstractLoader
 		$definition = $relationRef->getDefinition();
 		$parentToChild = $definition->getKeyPairing();
 		$parentBranch = $branch->getParent();
-		$identity = $this->requireLoadKeys($branch, $relationRef->getCollection()->getPrimaryKey());
-		$child = $this->requireLoadKeys($branch, $parentToChild->getRightFields());
-		$parent = $this->requireLoadKeys($parentBranch, $parentToChild->getLeftFields());
+		$identity = $this->requireLoadKeys($branch, $runtime, $relationRef->getCollection()->getPrimaryKey());
+		$child = $this->requireLoadKeys($branch, $runtime, $parentToChild->getRightFields());
+		$parent = $this->requireLoadKeys($parentBranch, $runtime, $parentToChild->getLeftFields());
 
 		return new CollectionNode(
 			$this->columnSelectionKeys($branch),
@@ -51,10 +51,6 @@ final class HasManyLoader extends AbstractLoader
 		$definition = $relationRef->getDefinition();
 		$parentToChild = $definition->getKeyPairing();
 		$parentBranch = $branch->getParent();
-		$branch->requireFields($relationRef->getCollection()->getPrimaryKey());
-		$branch->requireFields($parentToChild->getRightFields());
-		$parentBranch->requireFields($parentToChild->getLeftFields());
-
 		$strategy = $runtime->getLoadStrategy($branch);
 		$branch->setJoinedAttachment($strategy === LoadStrategy::JOIN);
 
@@ -66,16 +62,19 @@ final class HasManyLoader extends AbstractLoader
 			$this->assertNoJoinedSelectionOptions($branch);
 			$queryRelation = $runtime->getQueryRelation($branch);
 			$source = $this->join($queryRelation);
-
 			$runtime->setQueryContext($branch, $queryRelation->getQuery(), $source, $queryRelation);
-
-			return;
+		} else {
+			$query = $runtime->createQuery($relationRef->getCollection());
+			$runtime->setQueryContext($branch, $query, $query);
 		}
 
-		$query = $runtime->createQuery($relationRef->getCollection());
+		$runtime->requireFields($branch, $relationRef->getCollection()->getPrimaryKey());
+		$runtime->requireFields($branch, $parentToChild->getRightFields());
+		$runtime->requireFields($parentBranch, $parentToChild->getLeftFields());
 
-		$runtime->setQueryContext($branch, $query, $query);
-		$runtime->continueWith($branch, 'loadData');
+		if ($strategy !== LoadStrategy::JOIN) {
+			$runtime->continueWith($branch, 'loadData');
+		}
 	}
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void

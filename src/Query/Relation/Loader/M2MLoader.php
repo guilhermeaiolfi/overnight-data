@@ -42,10 +42,10 @@ final class M2MLoader extends AbstractLoader
 		$throughInnerKeys = $through->getInnerKeys();
 		$throughOuterKeys = $through->getOuterKeys();
 		$parent = $branch->getParent();
-		$targetIdentity = $this->requireLoadKeys($branch, $relation->getCollection()->getPrimaryKey());
-		$this->requireLoadKeys($branch, $this->publicFieldNames($branch));
-		$targetOuterKeyColumns = $this->requireLoadKeys($branch, $throughToTarget->getRightFields());
-		$parentInnerKeyColumns = $this->requireLoadKeys($parent, $parentToThrough->getLeftFields());
+		$targetIdentity = $this->requireLoadKeys($branch, $runtime, $relation->getCollection()->getPrimaryKey());
+		$this->requireLoadKeys($branch, $runtime, $this->publicFieldNames($branch));
+		$targetOuterKeyColumns = $this->requireLoadKeys($branch, $runtime, $throughToTarget->getRightFields());
+		$parentInnerKeyColumns = $this->requireLoadKeys($parent, $runtime, $parentToThrough->getLeftFields());
 		$throughFieldNames = array_values(array_unique([
 			...$throughInnerKeys,
 			...$throughOuterKeys,
@@ -100,10 +100,6 @@ final class M2MLoader extends AbstractLoader
 		$parentToThrough = $definition->getKeyPairing();
 		$throughToTarget = $through->getKeyPairing();
 		$parent = $branch->getParent();
-		$branch->requireFields($relation->getCollection()->getPrimaryKey());
-		$branch->requireFields($this->publicFieldNames($branch));
-		$branch->requireFields($throughToTarget->getRightFields());
-		$parent->requireFields($parentToThrough->getLeftFields());
 
 		if ($through->getWhere() !== []) {
 			throw RelationLoaderException::throughWhereNotSupported($relation);
@@ -120,6 +116,10 @@ final class M2MLoader extends AbstractLoader
 
 		$branch->setJoinedAttachment(false);
 		$runtime->setQueryContext($branch, $query, $query);
+		$runtime->requireFields($branch, $relation->getCollection()->getPrimaryKey());
+		$runtime->requireFields($branch, $this->publicFieldNames($branch));
+		$runtime->requireFields($branch, $throughToTarget->getRightFields());
+		$runtime->requireFields($parent, $parentToThrough->getLeftFields());
 		$runtime->continueWith($branch, 'loadData');
 	}
 
@@ -208,10 +208,12 @@ final class M2MLoader extends AbstractLoader
 		$aliasesByField = [];
 
 		foreach ($fieldNames as $fieldName) {
-			$alias = sprintf(
-				'__on_data_%s_%s',
-				strtolower(preg_replace('/[^a-z0-9_]+/i', '_', implode('_', [...$relation->getPath(), '__through', $fieldName])) ?? 'field'),
-				count($aliasesByField),
+			$alias = 'l_' . strtolower(
+				preg_replace(
+					'/[^a-z0-9_]+/i',
+					'_',
+					implode('_', [...$relation->getPath(), 'through', $fieldName]),
+				) ?? 'field',
 			);
 
 			if (! $query->getSelections()->hasNamedExpression($alias)) {

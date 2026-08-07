@@ -23,9 +23,9 @@ final class BelongsToLoader extends AbstractLoader
 		$definition = $relationRef->getDefinition();
 		$ownerToTarget = $definition->getKeyPairing();
 		$parentBranch = $branch->getParent();
-		$identity = $this->requireLoadKeys($branch, $relationRef->getCollection()->getPrimaryKey());
-		$child = $this->requireLoadKeys($branch, $ownerToTarget->getRightFields());
-		$parent = $this->requireLoadKeys($parentBranch, $ownerToTarget->getLeftFields());
+		$identity = $this->requireLoadKeys($branch, $runtime, $relationRef->getCollection()->getPrimaryKey());
+		$child = $this->requireLoadKeys($branch, $runtime, $ownerToTarget->getRightFields());
+		$parent = $this->requireLoadKeys($parentBranch, $runtime, $ownerToTarget->getLeftFields());
 
 		return new SingularNode(
 			$this->columnSelectionKeys($branch),
@@ -41,28 +41,26 @@ final class BelongsToLoader extends AbstractLoader
 		$definition = $relationRef->getDefinition();
 		$ownerToTarget = $definition->getKeyPairing();
 		$parentBranch = $branch->getParent();
-		$branch->requireFields($relationRef->getCollection()->getPrimaryKey());
-		$branch->requireFields($ownerToTarget->getRightFields());
-		$parentBranch->requireFields($ownerToTarget->getLeftFields());
-
 		$strategy = $runtime->getLoadStrategy($branch);
 		$branch->setJoinedAttachment($strategy === LoadStrategy::JOIN);
 
 		if ($strategy === LoadStrategy::SEPARATE_QUERY) {
 			$query = $runtime->createQuery($relationRef->getCollection());
-
 			$runtime->setQueryContext($branch, $query, $query);
-			$runtime->continueWith($branch, 'loadData');
-
-			return;
+		} else {
+			$this->assertNoJoinedSelectionOptions($branch);
+			$queryRelation = $runtime->getQueryRelation($branch);
+			$source = $this->join($queryRelation);
+			$runtime->setQueryContext($branch, $queryRelation->getQuery(), $source, $queryRelation);
 		}
 
-		$this->assertNoJoinedSelectionOptions($branch);
+		$runtime->requireFields($branch, $relationRef->getCollection()->getPrimaryKey());
+		$runtime->requireFields($branch, $ownerToTarget->getRightFields());
+		$runtime->requireFields($parentBranch, $ownerToTarget->getLeftFields());
 
-		$queryRelation = $runtime->getQueryRelation($branch);
-		$source = $this->join($queryRelation);
-
-		$runtime->setQueryContext($branch, $queryRelation->getQuery(), $source, $queryRelation);
+		if ($strategy === LoadStrategy::SEPARATE_QUERY) {
+			$runtime->continueWith($branch, 'loadData');
+		}
 	}
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void

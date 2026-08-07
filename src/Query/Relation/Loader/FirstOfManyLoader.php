@@ -38,9 +38,9 @@ final class FirstOfManyLoader extends AbstractLoader
 		$definition = $relationRef->getDefinition();
 		$parentToChild = $definition->getKeyPairing();
 		$parentBranch = $branch->getParent();
-		$identity = $this->requireLoadKeys($branch, $relationRef->getCollection()->getPrimaryKey());
-		$child = $this->requireLoadKeys($branch, $parentToChild->getRightFields());
-		$parent = $this->requireLoadKeys($parentBranch, $parentToChild->getLeftFields());
+		$identity = $this->requireLoadKeys($branch, $runtime, $relationRef->getCollection()->getPrimaryKey());
+		$child = $this->requireLoadKeys($branch, $runtime, $parentToChild->getRightFields());
+		$parent = $this->requireLoadKeys($parentBranch, $runtime, $parentToChild->getLeftFields());
 
 		return new SingularNode(
 			$this->columnSelectionKeys($branch),
@@ -56,10 +56,6 @@ final class FirstOfManyLoader extends AbstractLoader
 		$definition = $relationRef->getDefinition();
 		$parentToChild = $definition->getKeyPairing();
 		$parentBranch = $branch->getParent();
-		$branch->requireFields($relationRef->getCollection()->getPrimaryKey());
-		$branch->requireFields($parentToChild->getRightFields());
-		$parentBranch->requireFields($parentToChild->getLeftFields());
-
 		$strategy = $runtime->getLoadStrategy($branch);
 
 		if ($strategy === LoadStrategy::JOIN) {
@@ -71,10 +67,11 @@ final class FirstOfManyLoader extends AbstractLoader
 		}
 
 		$branch->setJoinedAttachment(false);
-
 		$query = $runtime->createQuery($relationRef->getCollection());
-
 		$runtime->setQueryContext($branch, $query, $query);
+		$runtime->requireFields($branch, $relationRef->getCollection()->getPrimaryKey());
+		$runtime->requireFields($branch, $parentToChild->getRightFields());
+		$runtime->requireFields($parentBranch, $parentToChild->getLeftFields());
 		$runtime->continueWith($branch, 'loadData');
 	}
 

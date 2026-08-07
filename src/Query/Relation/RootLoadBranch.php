@@ -74,7 +74,11 @@ final class RootLoadBranch extends LoadBranch
 			}
 
 			if (! $this->query->getSelections()->hasNamedExpression($alias)) {
-				$this->query->select($this->query->field($normalized)->as($alias));
+				$this->query->getSelections()->add(
+					$this->query->field($normalized)->as($alias),
+					[SelectionTag::INTERNAL, SelectionTag::COLUMN, SelectionTag::SQL_ONLY],
+					true,
+				);
 			}
 
 			$this->selections->add(
@@ -198,8 +202,14 @@ final class RootLoadBranch extends LoadBranch
 
 	private function isInternalSelection(mixed $expression): bool
 	{
-		return $expression instanceof AliasedExpression
-			&& str_starts_with($expression->getAlias(), '__on_data_');
+		if (! $expression instanceof AliasedExpression) {
+			return false;
+		}
+
+		$alias = $expression->getAlias();
+
+		return str_starts_with($alias, '__on_data_')
+			|| str_starts_with($alias, 'l_');
 	}
 
 	/**

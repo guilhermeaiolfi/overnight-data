@@ -1156,7 +1156,10 @@ final class CycleJoinExecutionTest extends TestCase
 		self::assertStringContainsString('PARTITION BY', $sql);
 		self::assertStringContainsString('ORDER BY', $sql);
 		self::assertStringContainsString('"q1"."created_at" AS "createdAt"', $sql);
-		self::assertStringContainsString('"__ondata_first_of_many"."createdAt" AS "createdAt"', $sql);
+		self::assertMatchesRegularExpression(
+			'/"__ondata_first_of_many"\."createdAt"\s+AS\s+"createdAt"/',
+			$sql,
+		);
 		self::assertStringNotContainsString('"__ondata_first_of_many"."created_at"', $sql);
 		self::assertStringContainsString('__ondata_rank', $sql);
 		self::assertStringContainsString('WHERE "__ondata_first_of_many"."__ondata_rank" = ?', $sql);
@@ -1300,8 +1303,8 @@ final class CycleJoinExecutionTest extends TestCase
 		self::assertStringContainsString('JOIN "users" AS', $sql);
 		self::assertStringContainsString('ROW_NUMBER() OVER', $sql);
 		self::assertStringContainsString('WHERE "__ondata_first_of_many"."__ondata_rank" = ?', $sql);
-		self::assertStringContainsString('"j0"."id" AS "__on_data_latestpost_author_id_0"', $sql);
-		self::assertStringContainsString('"__ondata_first_of_many"."__on_data_latestpost_author_id_0" AS "__on_data_latestpost_author_id_0"', $sql);
+		self::assertStringContainsString('"j0"."id" AS "l_latestpost_author_id"', $sql);
+		self::assertStringContainsString('"__ondata_first_of_many"."l_latestpost_author_id" AS "l_latestpost_author_id"', $sql);
 		self::assertStringNotContainsString('"__ondata_first_of_many"."author_id"', $sql);
 	}
 
@@ -2376,9 +2379,9 @@ final class FirstOfManyFallbackExecutor implements QueryExecutorInterface
 
 		return match ($query->getCollection()->getName()) {
 			'users' => [
-				['id' => 1, '__on_data_root_required_id_0' => 1, 'name' => 'Ada'],
-				['id' => 2, '__on_data_root_required_id_0' => 2, 'name' => 'Grace'],
-				['id' => 3, '__on_data_root_required_id_0' => 3, 'name' => 'Linus'],
+				['id' => 1, 'l_root_required_id' => 1, 'name' => 'Ada'],
+				['id' => 2, 'l_root_required_id' => 2, 'name' => 'Grace'],
+				['id' => 3, 'l_root_required_id' => 3, 'name' => 'Linus'],
 			],
 			'first_posts' => [
 				['id' => 11, 'userId' => 1, 'title' => 'Alpha'],

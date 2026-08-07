@@ -43,8 +43,6 @@ final class LoadRuntime
 
 	private bool $flushingPendingContinuations = false;
 
-	private int $aliasCounter = 0;
-
 	private RootLoadBranch $rootBranch;
 
 	private RelationOutputProcessor $outputProcessor;
@@ -56,7 +54,7 @@ final class LoadRuntime
 	) {
 		$this->rootBranch = new RootLoadBranch(
 			$rootQuery,
-			fn (string $fieldName): string => $this->allocateAlias(['root', 'required'], $fieldName),
+			fn (string $fieldName): string => $this->stableJoinedAlias(['root', 'required'], $fieldName),
 		);
 		$this->outputProcessor = new RelationOutputProcessor($fetchPlan?->getSchema());
 	}
@@ -207,6 +205,56 @@ final class LoadRuntime
 	{
 		return $branch->getSelection()->getStrategy()
 			?? $branch->getLoader()->getDefaultLoadStrategy();
+	}
+
+	/**
+	 * Register required fields and, when query context exists, emit SQL columns now.
+	 *
+	 * @param list<string> $fieldNames
+	 * @return list<string> load-local parser keys
+	 */
+	public function requireFields(LoadBranch $branch, array $fieldNames): array
+	{
+		if ($branch instanceof RootLoadBranch) {
+			// Root already emits SQL and returns load-local keys.
+			return $branch->requireFields($fieldNames);
+		}
+
+		$placeKeys = $branch->requireFields($fieldNames);
+
+		if (! $branch->hasQueryContext() || $fieldNames === []) {
+			return array_map(
+				static fn (string $placeKey): string => $branch->loadKeyForPlace($placeKey),
+				$placeKeys,
+			);
+		}
+
+		$level = $branch->getProjectionLevel();
+		$ownsQuery = $branch->getSource() === $branch->getQuery();
+		$loadKeys = [];
+
+		foreach ($placeKeys as $index => $placeKey) {
+			$fieldName = $fieldNames[$index] ?? $placeKey;
+			$normalized = $branch->getCollection()->getField($fieldName)->getName();
+			$fieldRef = $level instanceof RelationRef
+				? $level->field($normalized)
+				: $branch->getQuery()->field($normalized);
+			$path = $level instanceof RelationRef ? $level->getPath() : [];
+			$preferred = $branch->loadKeyForPlace($placeKey);
+			if ($preferred === $placeKey) {
+				// SEPARATE/root-owned queries can use the field name; JOIN onto a
+				// shared parent query needs a path-stable alias (parent may already
+				// expose the same field name).
+				$preferred = $ownsQuery
+					? $normalized
+					: $this->stableJoinedAlias($path, $normalized);
+			}
+			$sqlKey = $this->ensureLevelFieldSelection($branch, $fieldRef, $placeKey, $preferred, $path);
+			$branch->bindPlaceToLoadKey($placeKey, $sqlKey);
+			$loadKeys[] = $sqlKey;
+		}
+
+		return $loadKeys;
 	}
 
 	private function prepare(): void
@@ -528,6 +576,7 @@ final class LoadRuntime
 		$query = $branch->getQuery();
 		$source = $this->resolveSelectionSource($branch, $fieldRef);
 		$fieldName = $fieldRef->getField()->getName();
+		$ownsSelect = $branch->getSource() === $query;
 
 		// Authoring place alias already on this query (typical root): keep it and
 		// add a load-local SQL column for the parser.
@@ -549,12 +598,22 @@ final class LoadRuntime
 			return $loadKey;
 		}
 
-		// Already selected under the load key (incl. place≡load on the live query).
-		if (
-			$query->getSelections()->hasSelectionKey($loadKey)
+		$alreadySelected = $query->getSelections()->hasSelectionKey($loadKey)
+			|| $query->getSelections()->hasNamedExpression($loadKey)
 			|| (
 				$placeKey === $loadKey
 				&& $query->getSelections()->hasSelectionKey($placeKey)
+			);
+
+		// Reuse an existing load key when it cannot collide with a parent column:
+		// this branch owns the SELECT, the expression source is the query itself,
+		// or the key is already namespaced (flats / l_* JOIN aliases).
+		if (
+			$alreadySelected
+			&& (
+				$ownsSelect
+				|| $source === $query
+				|| $loadKey !== $fieldName
 			)
 		) {
 			return $loadKey;
@@ -570,10 +629,11 @@ final class LoadRuntime
 			return $loadKey;
 		}
 
-		// SEPARATE level query: load-local aliases are safe here.
-		// JOIN attachment onto a parent query keeps allocated aliases to avoid collisions.
+		// SEPARATE level query (branch owns the SELECT): preferred load keys are safe
+		// (own fields and flats like author__name). JOIN onto a shared parent query
+		// needs Cycle-like path-stable aliases to avoid collisions.
 		if (
-			$branch->getSource() === $query
+			$ownsSelect
 			&& $loadKey !== ''
 			&& ! $query->getSelections()->hasNamedExpression($loadKey)
 		) {
@@ -582,7 +642,9 @@ final class LoadRuntime
 			return $loadKey;
 		}
 
-		$alias = $this->allocateAlias($path, $fieldName);
+		$alias = $loadKey !== '' && str_starts_with($loadKey, 'l_')
+			? $loadKey
+			: $this->stableJoinedAlias($path, $fieldName);
 
 		if (! $query->getSelections()->hasNamedExpression($alias)) {
 			$query->select($source->field($fieldName)->as($alias));
@@ -592,15 +654,18 @@ final class LoadRuntime
 	}
 
 	/**
+	 * Cycle-style stable column alias for columns mounted onto a shared JOIN query.
+	 * Unique per relation path + field; callers reuse the same name on re-require.
+	 *
 	 * @param list<string> $path
 	 */
-	private function allocateAlias(array $path, string $fieldName): string
+	private function stableJoinedAlias(array $path, string $fieldName): string
 	{
-		return sprintf(
-			'__on_data_%s_%d',
-			strtolower(preg_replace('/[^a-z0-9_]+/i', '_', implode('_', [...$path, $fieldName])) ?? 'field'),
-			$this->aliasCounter++,
+		$slug = strtolower(
+			preg_replace('/[^a-z0-9_]+/i', '_', implode('_', [...$path, $fieldName])) ?? 'field',
 		);
+
+		return 'l_' . $slug;
 	}
 
 	private function assertContinuableMethod(RelationLoadBranch $branch, string $method): void

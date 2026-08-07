@@ -118,6 +118,11 @@ abstract class LoadBranch
 		$this->queryLocalRelation = $queryLocalRelation;
 	}
 
+	public function hasQueryContext(): bool
+	{
+		return $this->query !== null;
+	}
+
 	public function getQuery(): SelectQuery
 	{
 		return $this->query ?? throw new LogicException('Load branch query context is not configured.');

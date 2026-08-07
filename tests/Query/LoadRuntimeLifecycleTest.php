@@ -270,7 +270,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$rootBranch = $this->readProperty($runtime, 'rootBranch');
 		$columns = $this->readProperty($rootBranch->getNode(), 'columns');
 
-		self::assertContains('__on_data_root_required_secret_0', $columns);
+		self::assertContains('l_root_required_secret', $columns);
 		self::assertSame([[
 			'id' => 1,
 			'name' => 'Ada',
@@ -289,7 +289,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$selections = $this->readProperty($rootBranch, 'selections');
 		$titleSelection = $selections->getByTag(SelectionTag::PUBLIC)[0];
 
-		self::assertSame(['name', '__on_data_root_required_id_0'], $columns);
+		self::assertSame(['name', 'l_root_required_id'], $columns);
 		self::assertSame(['name'], LifecycleEvents::$plannedRootColumns);
 		self::assertTrue($titleSelection->hasTag(SelectionTag::PUBLIC));
 		self::assertTrue($titleSelection->hasTag(SelectionTag::REQUIRED));
@@ -738,7 +738,7 @@ final class ExplicitRootSelectionExecutor implements QueryExecutorInterface
 		return match ($query->getCollection()->getName()) {
 			'users' => [[
 				'name' => 'Ada',
-				'__on_data_root_required_id_0' => 1,
+				'l_root_required_id' => 1,
 			]],
 			'posts' => [['id' => 10, 'userId' => 1, 'title' => 'Hello']],
 			default => [],
@@ -763,7 +763,7 @@ final class AliasedRootSelectionExecutor implements QueryExecutorInterface
 		return match ($query->getCollection()->getName()) {
 			'users' => [[
 				'name' => 'Ada',
-				'__on_data_root_required_id_0' => 1,
+				'l_root_required_id' => 1,
 			]],
 			'posts' => [['id' => 10, 'userId' => 1, 'title' => 'Hello']],
 			default => [],
@@ -789,7 +789,7 @@ final class HiddenRootRequirementExecutor implements QueryExecutorInterface
 			'users' => [[
 				'id' => 1,
 				'name' => 'Ada',
-				'__on_data_root_required_secret_0' => 'shh',
+				'l_root_required_secret' => 'shh',
 			]],
 			'posts' => [],
 			default => [],
@@ -844,8 +844,8 @@ final class NestedLifecycleExecutor implements QueryExecutorInterface
 				'userId' => 1,
 				'authorId' => 7,
 				'title' => 'Hello',
-				'__on_data_posts_author_id_0' => 7,
-				'__on_data_posts_author_name_1' => 'Ana',
+				'l_posts_author_id' => 7,
+				'l_posts_author_name' => 'Ana',
 			]],
 			default => [],
 		};
@@ -869,10 +869,10 @@ final class MixedAttachmentExecutor implements QueryExecutorInterface
 		return match ($query->getCollection()->getName()) {
 			'users' => [[
 				'name' => 'Ada',
-				'__on_data_root_required_id_0' => 1,
-				'__on_data_profile_id_1' => 50,
-				'__on_data_profile_userid_2' => 1,
-				'__on_data_profile_bio_3' => 'Bio',
+				'l_root_required_id' => 1,
+				'l_profile_id' => 50,
+				'l_profile_userid' => 1,
+				'l_profile_bio' => 'Bio',
 			]],
 			'posts' => [['id' => 10, 'userId' => 1, 'title' => 'Hello']],
 			default => [],
@@ -904,8 +904,8 @@ final class NestedAttachmentExecutor implements QueryExecutorInterface
 				'userId' => 1,
 				'authorId' => 7,
 				'title' => 'Hello',
-				'__on_data_posts_author_id_0' => 7,
-				'__on_data_posts_author_name_1' => 'Ana',
+				'l_posts_author_id' => 7,
+				'l_posts_author_name' => 'Ana',
 			]],
 			'comments' => [[
 				'id' => 100,
@@ -997,12 +997,12 @@ abstract class LifecycleTestLoader extends AbstractLoader
 		$relation = $branch->getRelationRef();
 		$definition = $relation->getDefinition();
 		$parentBranch = $branch->getParent();
-		$identity = $branch->requireFields($relation->getCollection()->getPrimaryKey());
-		$child = $branch->requireFields($definition->getOuterKeys());
-		$parent = $parentBranch->requireFields($definition->getInnerKeys());
+		$identity = $this->requireLoadKeys($branch, $runtime, $relation->getCollection()->getPrimaryKey());
+		$child = $this->requireLoadKeys($branch, $runtime, $definition->getOuterKeys());
+		$parent = $this->requireLoadKeys($parentBranch, $runtime, $definition->getInnerKeys());
 
 		$node = new CollectionNode(
-			$this->parserFieldNames($branch),
+			$this->columnSelectionKeys($branch),
 			$identity,
 			$child,
 			$parent,
@@ -1011,7 +1011,7 @@ abstract class LifecycleTestLoader extends AbstractLoader
 		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
 		LifecycleEvents::$returnedNodes[] = $node;
-		LifecycleEvents::$registerColumns[$relation->getName()] = $this->parserFieldNames($branch);
+		LifecycleEvents::$registerColumns[$relation->getName()] = $this->columnSelectionKeys($branch);
 
 		return $node;
 	}
