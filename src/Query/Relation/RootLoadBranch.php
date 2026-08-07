@@ -57,7 +57,7 @@ final class RootLoadBranch extends LoadBranch
 
 			if ($existing instanceof SelectionItem) {
 				$this->selections->add($existing->getExpression(), SelectionTag::REQUIRED);
-				$aliases[] = $this->selectionKey($existing);
+				$aliases[] = $this->loadKeyForPlace($this->selectionKey($existing));
 
 				continue;
 			}
@@ -110,15 +110,17 @@ final class RootLoadBranch extends LoadBranch
 
 	public function createNode(): RootNode
 	{
-		$columns = $this->selectionKeys(
+		$placeColumns = $this->selectionKeys(
 			$this->selections->getByTag(SelectionTag::COLUMN),
 		);
-		$identityAliases = $this->selectionKeys(
+		$placeIdentities = $this->selectionKeys(
 			$this->selections->getByTag(SelectionTag::IDENTITY),
 		);
+		$loadColumns = array_map($this->loadKeyForPlace(...), $placeColumns);
+		$loadIdentities = array_map($this->loadKeyForPlace(...), $placeIdentities);
 
-		$node = new RootNode($columns, $identityAliases);
-		$node->setValueAliases($columns);
+		$node = new RootNode($loadColumns, $loadIdentities);
+		$node->setValueAliases($loadColumns);
 		$this->setNode($node);
 
 		return $node;
@@ -173,6 +175,19 @@ final class RootLoadBranch extends LoadBranch
 
 			$this->selections->add($selection->getExpression(), SelectionTag::PUBLIC, $selection->isExplicit());
 		}
+
+		$this->registerInternalSelections();
+	}
+
+	private function registerInternalSelections(): void
+	{
+		foreach ($this->query->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
+			$this->selections->add(
+				$selection->getExpression(),
+				[SelectionTag::INTERNAL, SelectionTag::COLUMN],
+				$selection->isExplicit(),
+			);
+		}
 	}
 
 	/**
@@ -204,7 +219,9 @@ final class RootLoadBranch extends LoadBranch
 	{
 		return array_values(array_filter(
 			$this->query->getSelections()->getExplicit(),
-			fn (SelectionItem $selection): bool => ! $this->isInternalSelection($selection->getExpression()),
+			fn (SelectionItem $selection): bool => ! $selection->hasTag(SelectionTag::INTERNAL)
+				&& ! $selection->hasTag(SelectionTag::SQL_ONLY)
+				&& ! $this->isInternalSelection($selection->getExpression()),
 		));
 	}
 

@@ -954,7 +954,10 @@ final class SelectQuery implements QuerySourceInterface
 		$public = [];
 
 		foreach ($row as $key => $value) {
-			if (is_string($key) && str_starts_with($key, '_od_internal_')) {
+			if (is_string($key) && (
+				str_starts_with($key, '_od_internal_')
+				|| str_starts_with($key, '__on_data_')
+			)) {
 				continue;
 			}
 

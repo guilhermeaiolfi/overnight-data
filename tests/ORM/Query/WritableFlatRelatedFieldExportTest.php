@@ -91,7 +91,7 @@ final class WritableFlatRelatedFieldExportTest extends TestCase
 		$query->select($query->id, $query->company->name->as('name'));
 
 		$this->expectException(StateException::class);
-		$this->expectExceptionMessage("internal result key");
+		$this->expectExceptionMessage("primary key field 'id' is missing or incomplete");
 
 		$query->to(stdClass::class)->writable($session)->fetchOne();
 	}
@@ -161,7 +161,7 @@ final class FlatCompanyUserQueryExecutor implements QueryExecutorInterface
 	{
 		return InternalSelectionRowFactory::withInternalCompanyId($query, [
 			'id' => 1,
-			'name' => 'Acme',
+			'company__name' => 'Acme',
 		]);
 	}
 
@@ -182,7 +182,7 @@ final class FlatCompanyUserQueryExecutorWithoutCompanyId implements QueryExecuto
 	{
 		return [
 			'id' => 1,
-			'name' => 'Acme',
+			'company__name' => 'Acme',
 		];
 	}
 
@@ -215,7 +215,7 @@ final class AssertingInternalCompanyIdSelectionExecutor implements QueryExecutor
 
 		return InternalSelectionRowFactory::withInternalCompanyId($query, [
 			'id' => 1,
-			'name' => 'Acme',
+			'company__name' => 'Acme',
 		]);
 	}
 

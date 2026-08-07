@@ -51,7 +51,6 @@ final class RelationOutputProcessor
 	}
 
 	/**
-	 * @param array<string, bool> $publicColumns
 	 * @param array<string, mixed> $record
 	 * @return array<string, mixed>
 	 */
@@ -59,9 +58,21 @@ final class RelationOutputProcessor
 	{
 		$item = [];
 
-		foreach ($record as $key => $value) {
-			if (isset($publicColumns[$key])) {
-				$item[$key] = $value;
+		foreach (array_keys($publicColumns) as $placeKey) {
+			$loadKey = $root->loadKeyForPlace($placeKey);
+
+			if (array_key_exists($loadKey, $record)) {
+				$item[$placeKey] = $record[$loadKey];
+			}
+		}
+
+		// Keep INTERNAL identity keys for writable track(); SelectQuery::publicRow strips them.
+		foreach ($root->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
+			$placeKey = $selection->getSelectionKey();
+			$loadKey = $root->loadKeyForPlace($placeKey);
+
+			if (array_key_exists($loadKey, $record)) {
+				$item[$placeKey] = $record[$loadKey];
 			}
 		}
 

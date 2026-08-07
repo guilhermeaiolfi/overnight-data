@@ -116,7 +116,10 @@ final class InternalSelectionPublicOutputExecutor implements QueryExecutorInterf
 			'name' => 'Ada',
 		];
 
-		if ($query->getSelections()->hasSelectionKey('__od.foo')) {
+		if (
+			$query->getSelections()->hasSelectionKey('__od.foo')
+			&& ! $query->getSelections()->hasSelectionKey('name')
+		) {
 			$row['__od.foo'] = 'Ada';
 			unset($row['name']);
 		}

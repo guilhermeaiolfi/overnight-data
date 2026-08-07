@@ -94,7 +94,7 @@ Relation branch columns bind `placeKey → loadKey` on the load branch. Own fiel
 
 - [x] Collapse duplicate `remapLoadLocalColumnReferences()` overrides via `RemapsLoadLocalChildFields`.  
 - [x] Delete `plan()` / `planLevel()` wrappers; callers use `planIdentities()`.  
-- Deferred: root load-local parity with relation branches (root still binds place keys as parser aliases via `RootLoadBranch::createNode()`).
+- [x] Root load-local parity: same place→load bind + assemble as nested levels when place≠load (`selectRootFields`); simple place≡load root fetches may still short-circuit.
 
 ## Acceptance (Phase 0)
 

@@ -289,8 +289,8 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$selections = $this->readProperty($rootBranch, 'selections');
 		$titleSelection = $selections->getByTag(SelectionTag::PUBLIC)[0];
 
-		self::assertSame(['title', '__on_data_root_required_id_0'], $columns);
-		self::assertSame(['title'], LifecycleEvents::$plannedRootColumns);
+		self::assertSame(['name', '__on_data_root_required_id_0'], $columns);
+		self::assertSame(['name'], LifecycleEvents::$plannedRootColumns);
 		self::assertTrue($titleSelection->hasTag(SelectionTag::PUBLIC));
 		self::assertTrue($titleSelection->hasTag(SelectionTag::REQUIRED));
 		self::assertSame([[
@@ -762,7 +762,7 @@ final class AliasedRootSelectionExecutor implements QueryExecutorInterface
 	{
 		return match ($query->getCollection()->getName()) {
 			'users' => [[
-				'title' => 'Ada',
+				'name' => 'Ada',
 				'__on_data_root_required_id_0' => 1,
 			]],
 			'posts' => [['id' => 10, 'userId' => 1, 'title' => 'Hello']],

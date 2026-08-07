@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
+use LogicException;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Exception\LoadRuntimeException;
@@ -62,7 +63,7 @@ final class LoadRuntime
 
 	public function fetchAll(): array
 	{
-		if ($this->rootQuery->getRelationSelections()->isEmpty()) {
+		if ($this->canShortCircuitRootFetch()) {
 			return $this->executor->fetchAll($this->rootQuery);
 		}
 
@@ -75,7 +76,7 @@ final class LoadRuntime
 
 	public function fetchOne(): ?array
 	{
-		if ($this->rootQuery->getRelationSelections()->isEmpty()) {
+		if ($this->canShortCircuitRootFetch()) {
 			return $this->executor->fetchOne($this->rootQuery);
 		}
 
@@ -90,6 +91,43 @@ final class LoadRuntime
 		$this->runContinuationsFor($this->rootQuery);
 
 		return $this->outputProcessor->processRoot($this->rootBranch)[0] ?? null;
+	}
+
+	/**
+	 * Skip root parser/assemble when there are no relation loads and every root
+	 * field already uses place≡load keys (legacy simple fetch path).
+	 */
+	private function canShortCircuitRootFetch(): bool
+	{
+		if (! $this->rootQuery->getRelationSelections()->isEmpty()) {
+			return false;
+		}
+
+		foreach ($this->rootQuery->getSelections()->getExplicit() as $selection) {
+			if ($selection->hasTag(SelectionTag::SQL_ONLY)) {
+				continue;
+			}
+
+			$fieldRef = $this->columnFieldRef($selection);
+
+			if (! $fieldRef instanceof FieldRef) {
+				continue;
+			}
+
+			$placeKey = $selection->getSelectionKey();
+			$loadKey = $this->levelLoadKey(
+				$this->rootQuery,
+				$selection,
+				$fieldRef,
+				$fieldRef->getField()->getName(),
+			);
+
+			if ($placeKey !== $loadKey) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**
@@ -174,17 +212,96 @@ final class LoadRuntime
 			return;
 		}
 
-		$this->prepareRootBranch();
+		$this->rootBranch->registerPublicSelections();
+		$this->rootBranch->requirePrimaryKey();
+		$this->selectRootFields();
 		$this->createBranches();
 		$this->configureBranches();
 		$this->createParserTree();
 		$this->selectBranchFields();
 	}
 
-	private function prepareRootBranch(): void
+	/**
+	 * Bind root place keys to load-local SQL/parser keys and rewrite the root query
+	 * aliases before branch requireFields / parser nodes read them.
+	 */
+	private function selectRootFields(): void
 	{
-		$this->rootBranch->registerPublicSelections();
-		$this->rootBranch->requirePrimaryKey();
+		foreach ($this->rootBranch->getSelections()->getByTag(SelectionTag::COLUMN) as $selection) {
+			$fieldRef = $this->columnFieldRef($selection);
+			$placeKey = $selection->getSelectionKey();
+
+			if (! $fieldRef instanceof FieldRef) {
+				$this->rootBranch->bindPlaceToLoadKey($placeKey, $placeKey);
+
+				continue;
+			}
+
+			$fieldName = $fieldRef->getField()->getName();
+			$loadKey = $this->levelLoadKey($this->rootQuery, $selection, $fieldRef, $fieldName);
+			$sqlKey = $this->ensureRootFieldSelection($fieldRef, $placeKey, $loadKey);
+			$this->rootBranch->bindPlaceToLoadKey($placeKey, $sqlKey);
+		}
+	}
+
+	private function ensureRootFieldSelection(
+		FieldRef $fieldRef,
+		string $placeKey,
+		string $loadKey,
+	): string {
+		$query = $this->rootQuery;
+
+		if (
+			$placeKey === $loadKey
+			|| $query->getSelections()->hasSelectionKey($loadKey)
+			|| $query->getSelections()->hasNamedExpression($loadKey)
+		) {
+			return $loadKey;
+		}
+
+		// Keep the place alias on the live query (schema / authoring). Add a
+		// load-local SQL column for the parser — same split as relation branches.
+		$source = $this->resolveRootSelectionSource($fieldRef);
+		$query->getSelections()->add(
+			$source->field($fieldRef->getField()->getName())->as($loadKey),
+			[SelectionTag::SQL_ONLY, SelectionTag::COLUMN],
+			true,
+		);
+
+		return $loadKey;
+	}
+
+	private function resolveRootSelectionSource(FieldRef $field): QuerySourceInterface
+	{
+		$fieldSource = $field->getSource();
+		$level = $this->rootQuery;
+
+		if ($fieldSource === $level) {
+			return $level;
+		}
+
+		if (! $fieldSource instanceof RelationRef || ! $fieldSource->isUnder($level)) {
+			throw new LogicException('Root projection field source must belong to the root query.');
+		}
+
+		if ($fieldSource->getQuery() === $level) {
+			return $fieldSource->getJoinedSource();
+		}
+
+		$relative = $fieldSource->relativeTo($level);
+		$relation = null;
+
+		foreach ($relative as $name) {
+			$relation = $relation === null
+				? $level->relation($name)
+				: $relation->relation($name);
+		}
+
+		if (! $relation instanceof RelationRef) {
+			throw new LogicException('Root projection field source could not be remapped onto the root query.');
+		}
+
+		return $relation->getJoinedSource();
 	}
 
 	private function createBranches(): void
@@ -255,7 +372,7 @@ final class LoadRuntime
 				$path = $fieldRef->getSource() instanceof RelationRef
 					? $fieldRef->getSource()->getPath()
 					: $branch->getRelationRef()->getPath();
-				$loadKey = $this->branchLoadKey($branch, $selection, $fieldRef, $fieldName);
+				$loadKey = $this->levelLoadKey($branch->getRelationRef(), $selection, $fieldRef, $fieldName);
 				$source = $this->resolveSelectionSource($branch, $fieldRef);
 
 				$sqlKey = $this->ensureBranchFieldSelection(
@@ -276,12 +393,12 @@ final class LoadRuntime
 	}
 
 	/**
-	 * Load-local parser key for a branch column (proposal 0003 Phase 3).
+	 * Load-local parser key for a level column (proposal 0003).
 	 * INTERNAL keys stay as planned; own fields use the field name; flats use a
 	 * stable relative path key — place aliases are applied later by assemble.
 	 */
-	private function branchLoadKey(
-		RelationLoadBranch $branch,
+	private function levelLoadKey(
+		SelectQuery|RelationRef $level,
 		SelectionItem $selection,
 		FieldRef $fieldRef,
 		string $fieldName,
@@ -289,8 +406,6 @@ final class LoadRuntime
 		if ($selection->hasTag(SelectionTag::INTERNAL)) {
 			return $selection->getSelectionKey();
 		}
-
-		$level = $branch->getRelationRef();
 
 		if ($fieldRef->getSource() === $level) {
 			return $fieldName;
