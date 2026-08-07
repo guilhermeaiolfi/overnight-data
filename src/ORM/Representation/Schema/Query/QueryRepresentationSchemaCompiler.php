@@ -182,7 +182,7 @@ final class QueryRepresentationSchemaCompiler
 
 		foreach ($relationSelections as $selection) {
 			$path = $selection->getPath();
-			$pathKey = json_encode($path, JSON_THROW_ON_ERROR);
+			$pathKey = RelationSelection::pathKey($path);
 			$parentPathKey = $selection->getParentPathKey();
 			$parentSchema = $parentPathKey === null
 				? $rootSchema

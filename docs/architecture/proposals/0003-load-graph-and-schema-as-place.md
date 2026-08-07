@@ -109,7 +109,7 @@ Originally added a read-only `LoadGraph` keyed by source path, including unloade
 1. Drive flat placement from schema `path`/`sourcePath` while parser remains mostly as today.  
 2. Shrink ad-hoc flat handling in output registration.
 
-`RelationOutputProcessor` places scalar keys from `RepresentationSchema` field paths when present; nested flats no longer need to be `PUBLIC` on the load branch — they register as fetch `COLUMN` only. Parser `valueAliases` still use the place alias as the load key for now (Phase 3 will go load-local).
+`RelationOutputProcessor` places scalar keys from explicit own-level selections plus schema fields with non-empty `sourcePath` (flats). Nested flats register as fetch `COLUMN` only on the parent branch (not as own-level place from tags). Parser `valueAliases` still use the place alias as the load key for now (Phase 3 will go load-local).
 
 ### Phase 3 — parser ← load-local keys only ✅
 
@@ -130,7 +130,7 @@ Relation branch columns bind `placeKey → loadKey` on the load branch. Own fiel
 
 - [x] Collapse duplicate `remapLoadLocalColumnReferences()` overrides via `RemapsLoadLocalChildFields`.  
 - [x] Delete `plan()` / `planLevel()` wrappers; callers use `planIdentities()`.  
-- [x] Root load-local parity: one `selectLevelFields` / `ensureLevelFieldSelection` path for every `LoadBranch` (root is just the empty-path level); simple place≡load root fetches may still short-circuit.
+- [x] Root load-local parity: one `selectLevelFields` / `ensureLevelFieldSelection` path for every `LoadBranch` (root is just the empty-path level). When `RelationSelectionTree` is empty, `LoadRuntime` returns executor rows directly (avoids RootNode collapsing flat has-many joins by identity).
 
 ### Load/place simplification (post Phase 4) ✅
 
@@ -147,9 +147,22 @@ Same smell as the old root special-case: unfinished dual paths, not domain rules
 - [x] Remove `LoadGraph` / `LoadGraphNode` / `LoadGraphBuilder` (unused for fetch; invented unloaded flat nodes).  
 - [x] Remove `FetchPlan` wrapper; thread `RepresentationSchema` via `SelectQuery::getFetchSchema()` / `WritablePreparation::getFetchSchema()` / `LoadRuntime`.  
 - [x] Document destination pipeline + flat fetch-home rules (this proposal).  
-- [x] Flat reuse of an existing loaded to-one source destination (fetch home + assemble bag).  
+- [x] Flat reuse of an existing loaded to-one source destination (fetch home + assemble bag).
 
-**Still deferred** (higher risk / separate pass): collapsing `ensureLevelFieldSelection` JOIN/SEPARATE arms; full root↔nested `requireFields` unify; removing `canShortCircuitRootFetch` without changing always-`requirePrimaryKey`.
+### Selection tags (place / fetch / SQL)
+
+| Tag | Role |
+|---|---|
+| `EXPLICIT` | User-authored selection (replaces the old `SelectionItem::$explicit` bool). Does **not** by itself mean “visible in place.” |
+| `COLUMN` | Fetch/hydration scalar on a destination (own field or flat under this level). |
+| `INTERNAL` | Opt out of public place / user output; still fetched when required (PK, FKs). Default visibility is public. |
+| `SQL_ONLY` | Load-local SQL alias (not a place key); kept in Cycle mapped rows for parsers; stripped by `SelectQuery::publicRow`. |
+| `IDENTITY` / `REQUIRED` | Parser / loader bookkeeping. |
+| `DEFAULT` | Initial star selection before the first `select()`. |
+
+`PUBLIC` is retired. Assemble (`placeKeysFor`): explicit non-`INTERNAL`/`SQL_ONLY` selections, plus schema flats (`sourcePath !== []`). Schema still backfills PK fields for adoption — those must not alone drive public place.
+
+**Still deferred** (higher risk / separate pass): collapsing `ensureLevelFieldSelection` JOIN/SEPARATE arms; full root↔nested `requireFields` unify; driving all own-level place keys from schema (excluding identity backfill) instead of `EXPLICIT` tags.
 
 ## Acceptance (Phase 0) — superseded
 
@@ -166,7 +179,7 @@ Same smell as the old root special-case: unfinished dual paths, not domain rules
 ## Acceptance (Phase 2)
 
 - [x] Nested/root visible scalars are placed from schema field paths when fetch schema is present.  
-- [x] Nested flat related fields register as load-branch `COLUMN` (not place `PUBLIC`); output still exposes schema `path`.  
+- [x] Nested flat related fields register as load-branch `COLUMN` (not own-level place from tags); output still exposes schema `path`.  
 - [x] Existing nested flat + writable flat tests keep passing.
 
 ## Acceptance (Phase 3)

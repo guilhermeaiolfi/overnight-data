@@ -59,7 +59,9 @@ final class LoadRuntime
 
 	public function fetchAll(): array
 	{
-		if ($this->canShortCircuitRootFetch()) {
+		// No relation loads: executor already returns place keys (including flat
+		// related columns). RootNode would collapse has-many flat joins by identity.
+		if ($this->rootQuery->getRelationSelections()->isEmpty()) {
 			return $this->executor->fetchAll($this->rootQuery);
 		}
 
@@ -72,7 +74,7 @@ final class LoadRuntime
 
 	public function fetchOne(): ?array
 	{
-		if ($this->canShortCircuitRootFetch()) {
+		if ($this->rootQuery->getRelationSelections()->isEmpty()) {
 			return $this->executor->fetchOne($this->rootQuery);
 		}
 
@@ -87,18 +89,6 @@ final class LoadRuntime
 		$this->runContinuationsFor($this->rootQuery);
 
 		return $this->outputProcessor->processRoot($this->rootBranch)[0] ?? null;
-	}
-
-	/**
-	 * Skip root parser/assemble when there are no relation loads.
-	 *
-	 * Cycle already returns EXPLICIT selection keys (including flat related
-	 * columns like posts.title). Routing those through RootNode would collapse
-	 * has-many flat joins by root identity.
-	 */
-	private function canShortCircuitRootFetch(): bool
-	{
-		return $this->rootQuery->getRelationSelections()->isEmpty();
 	}
 
 	/**
@@ -262,7 +252,7 @@ final class LoadRuntime
 	private function createBranches(): void
 	{
 		foreach ($this->rootQuery->getRelationSelections()->getAll() as $selection) {
-			$key = $this->branchKey($selection->getPath());
+			$key = RelationSelection::pathKey($selection->getPath());
 			$parent = $selection->getParentPathKey() === null
 				? $this->rootBranch
 				: $this->branches[$selection->getParentPathKey()] ?? throw LoadRuntimeException::parentBranchMissing($selection->getRelationRef());
@@ -413,14 +403,6 @@ final class LoadRuntime
 		} finally {
 			$this->flushingPendingContinuations = false;
 		}
-	}
-
-	/**
-	 * @param list<string> $path
-	 */
-	private function branchKey(array $path): string
-	{
-		return json_encode($path, JSON_THROW_ON_ERROR);
 	}
 
 	/**

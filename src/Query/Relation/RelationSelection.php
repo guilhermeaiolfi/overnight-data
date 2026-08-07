@@ -47,17 +47,27 @@ final class RelationSelection
 		return $this->relationRef->getPath();
 	}
 
+	/**
+	 * Dot-joined relation path key (`posts.author`), matching schema sourcePath keys.
+	 *
+	 * @param list<string> $path
+	 */
+	public static function pathKey(array $path): string
+	{
+		return implode('.', $path);
+	}
+
 	public function getParentPathKey(): ?string
 	{
 		$path = $this->getPath();
 
-		if (count($path) === 1) {
+		if (count($path) <= 1) {
 			return null;
 		}
 
 		array_pop($path);
 
-		return json_encode($path, JSON_THROW_ON_ERROR);
+		return self::pathKey($path);
 	}
 
 	public function isLoaded(): bool

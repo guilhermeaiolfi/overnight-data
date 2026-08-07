@@ -127,6 +127,6 @@ final class RelationSelectionTree implements IteratorAggregate, Countable
 
 	private function identityFor(RelationRef $relation): string
 	{
-		return json_encode($relation->getPath(), JSON_THROW_ON_ERROR);
+		return RelationSelection::pathKey($relation->getPath());
 	}
 }

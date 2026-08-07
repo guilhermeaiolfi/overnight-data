@@ -6,6 +6,7 @@ namespace ON\Data\ORM\Representation\Schema\Query;
 
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSource;
+use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Result\WritablePreparation;
 
 /**
@@ -84,6 +85,6 @@ final class QueryRepresentationPlan implements WritablePreparation
 	 */
 	private function pathKey(array $path): string
 	{
-		return json_encode(array_values($path), JSON_THROW_ON_ERROR);
+		return RelationSelection::pathKey(array_values($path));
 	}
 }
