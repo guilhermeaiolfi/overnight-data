@@ -33,6 +33,11 @@ final class RootLoadBranch extends LoadBranch
 		return $this->query->getCollection();
 	}
 
+	public function getProjectionLevel(): SelectQuery
+	{
+		return $this->query;
+	}
+
 	public function getSelections(): SelectionList
 	{
 		return $this->selections;

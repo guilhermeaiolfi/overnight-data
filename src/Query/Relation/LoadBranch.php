@@ -8,6 +8,7 @@ use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
+use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\SelectQuery;
 
 abstract class LoadBranch
@@ -62,6 +63,13 @@ abstract class LoadBranch
 	}
 
 	abstract public function getCollection(): CollectionInterface;
+
+	/**
+	 * Projection level this branch places onto: root {@see SelectQuery} or nested {@see RelationRef}.
+	 */
+	abstract public function getProjectionLevel(): SelectQuery|RelationRef;
+
+	abstract public function getSelections(): SelectionList;
 
 	/**
 	 * @param list<string> $fieldNames

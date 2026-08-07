@@ -45,6 +45,11 @@ final class RelationLoadBranch extends LoadBranch
 		return $this->selection->getRelationRef();
 	}
 
+	public function getProjectionLevel(): RelationRef
+	{
+		return $this->getRelationRef();
+	}
+
 	public function getParent(): LoadBranch
 	{
 		return $this->parent;
