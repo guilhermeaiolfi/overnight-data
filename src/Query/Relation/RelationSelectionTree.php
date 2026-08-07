@@ -75,6 +75,38 @@ final class RelationSelectionTree implements IteratorAggregate, Countable
 		return array_values($this->relations);
 	}
 
+	/**
+	 * Direct child relation selections under `$parent` (root children when null).
+	 *
+	 * @return array<string, RelationSelection> keyed by relation name
+	 */
+	public function childrenOf(?RelationSelection $parent = null): array
+	{
+		$parentPath = $parent?->getPath();
+		$children = [];
+
+		foreach ($this->relations as $selection) {
+			$path = $selection->getPath();
+
+			if ($parentPath === null) {
+				if (count($path) === 1) {
+					$children[$selection->getName()] = $selection;
+				}
+
+				continue;
+			}
+
+			if (
+				count($path) === count($parentPath) + 1
+				&& array_slice($path, 0, -1) === $parentPath
+			) {
+				$children[$selection->getName()] = $selection;
+			}
+		}
+
+		return $children;
+	}
+
 	public function isEmpty(): bool
 	{
 		return $this->relations === [];

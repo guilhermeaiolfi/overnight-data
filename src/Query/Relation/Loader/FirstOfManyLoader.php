@@ -38,9 +38,9 @@ final class FirstOfManyLoader extends AbstractLoader
 		$definition = $relationRef->getDefinition();
 		$parentToChild = $definition->getKeyPairing();
 		$parentBranch = $branch->getParent();
-		$identity = $this->requireLoadKeys($branch, $runtime, $relationRef->getCollection()->getPrimaryKey());
-		$child = $this->requireLoadKeys($branch, $runtime, $parentToChild->getRightFields());
-		$parent = $this->requireLoadKeys($parentBranch, $runtime, $parentToChild->getLeftFields());
+		$identity = $runtime->requireFields($branch, $relationRef->getCollection()->getPrimaryKey());
+		$child = $runtime->requireFields($branch, $parentToChild->getRightFields());
+		$parent = $runtime->requireFields($parentBranch, $parentToChild->getLeftFields());
 
 		return new SingularNode(
 			$this->columnSelectionKeys($branch),

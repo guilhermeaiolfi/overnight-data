@@ -78,6 +78,18 @@ final class InternalSelectionPublicOutputTest extends TestCase
 		self::assertSame(['id' => 1, '__od.foo' => 'Ada'], $row);
 	}
 
+	public function testPublicAliasLookingLikeLoadKeyIsNotStrippedUnlessTaggedInternal(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = new SelectQuery($users, new InternalSelectionPublicOutputExecutor());
+		$query->select($query->id, $query->name->as('l_custom_name'));
+
+		$row = $query->fetchOne();
+
+		self::assertSame(['id' => 1, 'l_custom_name' => 'Ada'], $row);
+	}
+
 	private function queryWithInternalSelection(): SelectQuery
 	{
 		$registry = $this->makeRegistry();
@@ -116,12 +128,14 @@ final class InternalSelectionPublicOutputExecutor implements QueryExecutorInterf
 			'name' => 'Ada',
 		];
 
-		if (
-			$query->getSelections()->hasSelectionKey('__od.foo')
-			&& ! $query->getSelections()->hasSelectionKey('name')
-		) {
-			$row['__od.foo'] = 'Ada';
-			unset($row['name']);
+		foreach (['__od.foo', 'l_custom_name'] as $alias) {
+			if (
+				$query->getSelections()->hasSelectionKey($alias)
+				&& ! $query->getSelections()->hasSelectionKey('name')
+			) {
+				$row[$alias] = 'Ada';
+				unset($row['name']);
+			}
 		}
 
 		foreach ($query->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {

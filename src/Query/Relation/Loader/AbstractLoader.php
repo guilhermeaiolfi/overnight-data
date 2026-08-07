@@ -15,7 +15,6 @@ use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
-use ON\Data\Query\Relation\LoadBranch;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationKeyQuery;
@@ -248,17 +247,6 @@ abstract class AbstractLoader implements LoaderInterface
 	protected function separateQueryBatchSize(): int
 	{
 		return self::SEPARATE_QUERY_BATCH_SIZE;
-	}
-
-	/**
-	 * Require fields on a branch (emits SQL when query context exists) and return load keys.
-	 *
-	 * @param list<string> $fieldNames
-	 * @return list<string>
-	 */
-	protected function requireLoadKeys(LoadBranch $branch, LoadRuntime $runtime, array $fieldNames): array
-	{
-		return $runtime->requireFields($branch, $fieldNames);
 	}
 
 	/**

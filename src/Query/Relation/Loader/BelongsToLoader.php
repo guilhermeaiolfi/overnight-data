@@ -23,9 +23,9 @@ final class BelongsToLoader extends AbstractLoader
 		$definition = $relationRef->getDefinition();
 		$ownerToTarget = $definition->getKeyPairing();
 		$parentBranch = $branch->getParent();
-		$identity = $this->requireLoadKeys($branch, $runtime, $relationRef->getCollection()->getPrimaryKey());
-		$child = $this->requireLoadKeys($branch, $runtime, $ownerToTarget->getRightFields());
-		$parent = $this->requireLoadKeys($parentBranch, $runtime, $ownerToTarget->getLeftFields());
+		$identity = $runtime->requireFields($branch, $relationRef->getCollection()->getPrimaryKey());
+		$child = $runtime->requireFields($branch, $ownerToTarget->getRightFields());
+		$parent = $runtime->requireFields($parentBranch, $ownerToTarget->getLeftFields());
 
 		return new SingularNode(
 			$this->columnSelectionKeys($branch),

@@ -625,7 +625,8 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(ExecutingLifecycleLoader::class)->getCollection('users'), new InternalExplicitRootExecutor());
 		$users->posts->separate();
-		$users->select($users->name->as('__on_data_manual_name'));
+		$users->select($users->id, $users->name);
+		$users->getSelections()->add($users->name->as('__on_data_manual_name'), SelectionTag::INTERNAL);
 
 		self::assertSame([[
 			'id' => 1,
@@ -997,9 +998,9 @@ abstract class LifecycleTestLoader extends AbstractLoader
 		$relation = $branch->getRelationRef();
 		$definition = $relation->getDefinition();
 		$parentBranch = $branch->getParent();
-		$identity = $this->requireLoadKeys($branch, $runtime, $relation->getCollection()->getPrimaryKey());
-		$child = $this->requireLoadKeys($branch, $runtime, $definition->getOuterKeys());
-		$parent = $this->requireLoadKeys($parentBranch, $runtime, $definition->getInnerKeys());
+		$identity = $runtime->requireFields($branch, $relation->getCollection()->getPrimaryKey());
+		$child = $runtime->requireFields($branch, $definition->getOuterKeys());
+		$parent = $runtime->requireFields($parentBranch, $definition->getInnerKeys());
 
 		$node = new CollectionNode(
 			$this->columnSelectionKeys($branch),

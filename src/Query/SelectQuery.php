@@ -919,57 +919,84 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
+	 * Drop INTERNAL / SQL_ONLY selection keys from a result row (and nested relation payloads).
+	 *
 	 * @param array<string, mixed> $row
 	 *
 	 * @return array<string, mixed>
 	 */
 	private function publicRow(array $row): array
 	{
-		$public = $row;
+		$relations = $this->getRelationSelections();
 
-		foreach ($this->selections->getByTag(SelectionTag::INTERNAL) as $selection) {
-			unset($public[$selection->getSelectionKey()]);
-		}
-
-		return $this->stripInternalKeys($public);
+		return $this->stripTaggedPrivateKeys(
+			$row,
+			$this->selections,
+			$relations->childrenOf(null),
+			$relations,
+		);
 	}
 
 	/**
 	 * @param array<string, mixed> $row
+	 * @param array<string, RelationSelection> $childRelations relation name => selection
 	 *
 	 * @return array<string, mixed>
 	 */
-	private function stripInternalKeys(array $row): array
-	{
+	private function stripTaggedPrivateKeys(
+		array $row,
+		SelectionList $selections,
+		array $childRelations,
+		RelationSelectionTree $relations,
+	): array {
+		$privateKeys = [];
+
+		foreach ([SelectionTag::INTERNAL, SelectionTag::SQL_ONLY] as $tag) {
+			foreach ($selections->getByTag($tag) as $selection) {
+				$privateKeys[$selection->getSelectionKey()] = true;
+			}
+		}
+
 		$public = [];
 
 		foreach ($row as $key => $value) {
-			if (is_string($key) && (
-				str_starts_with($key, '_od_internal_')
-				|| str_starts_with($key, '__on_data_')
-				|| str_starts_with($key, 'l_')
-			)) {
+			if (is_string($key) && isset($privateKeys[$key])) {
 				continue;
 			}
 
-			if (is_array($value)) {
-				if ($value !== [] && array_is_list($value)) {
-					$public[$key] = array_map(
-						function (mixed $item): mixed {
-							return is_array($item) ? $this->stripInternalKeys($item) : $item;
-						},
-						$value,
-					);
-
-					continue;
-				}
-
-				$public[$key] = $this->stripInternalKeys($value);
+			if (! is_string($key) || ! is_array($value) || ! isset($childRelations[$key])) {
+				$public[$key] = $value;
 
 				continue;
 			}
 
-			$public[$key] = $value;
+			$child = $childRelations[$key];
+			$grandchildren = $relations->childrenOf($child);
+
+			if ($value !== [] && array_is_list($value)) {
+				$public[$key] = array_map(
+					function (mixed $item) use ($child, $grandchildren, $relations): mixed {
+						return is_array($item)
+							? $this->stripTaggedPrivateKeys(
+								$item,
+								$child->getSelections(),
+								$grandchildren,
+								$relations,
+							)
+							: $item;
+					},
+					$value,
+				);
+
+				continue;
+			}
+
+			$public[$key] = $this->stripTaggedPrivateKeys(
+				$value,
+				$child->getSelections(),
+				$grandchildren,
+				$relations,
+			);
 		}
 
 		return $public;

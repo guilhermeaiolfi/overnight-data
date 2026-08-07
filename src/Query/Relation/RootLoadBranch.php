@@ -200,18 +200,6 @@ final class RootLoadBranch extends LoadBranch
 		}
 	}
 
-	private function isInternalSelection(mixed $expression): bool
-	{
-		if (! $expression instanceof AliasedExpression) {
-			return false;
-		}
-
-		$alias = $expression->getAlias();
-
-		return str_starts_with($alias, '__on_data_')
-			|| str_starts_with($alias, 'l_');
-	}
-
 	/**
 	 * @return list<SelectionItem>
 	 */
@@ -219,9 +207,8 @@ final class RootLoadBranch extends LoadBranch
 	{
 		return array_values(array_filter(
 			$this->query->getSelections()->getExplicit(),
-			fn (SelectionItem $selection): bool => ! $selection->hasTag(SelectionTag::INTERNAL)
-				&& ! $selection->hasTag(SelectionTag::SQL_ONLY)
-				&& ! $this->isInternalSelection($selection->getExpression()),
+			static fn (SelectionItem $selection): bool => ! $selection->hasTag(SelectionTag::INTERNAL)
+				&& ! $selection->hasTag(SelectionTag::SQL_ONLY),
 		));
 	}
 

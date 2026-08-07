@@ -42,10 +42,10 @@ final class M2MLoader extends AbstractLoader
 		$throughInnerKeys = $through->getInnerKeys();
 		$throughOuterKeys = $through->getOuterKeys();
 		$parent = $branch->getParent();
-		$targetIdentity = $this->requireLoadKeys($branch, $runtime, $relation->getCollection()->getPrimaryKey());
-		$this->requireLoadKeys($branch, $runtime, $this->publicFieldNames($branch));
-		$targetOuterKeyColumns = $this->requireLoadKeys($branch, $runtime, $throughToTarget->getRightFields());
-		$parentInnerKeyColumns = $this->requireLoadKeys($parent, $runtime, $parentToThrough->getLeftFields());
+		$targetIdentity = $runtime->requireFields($branch, $relation->getCollection()->getPrimaryKey());
+		$runtime->requireFields($branch, $this->publicFieldNames($branch));
+		$targetOuterKeyColumns = $runtime->requireFields($branch, $throughToTarget->getRightFields());
+		$parentInnerKeyColumns = $runtime->requireFields($parent, $parentToThrough->getLeftFields());
 		$throughFieldNames = array_values(array_unique([
 			...$throughInnerKeys,
 			...$throughOuterKeys,
