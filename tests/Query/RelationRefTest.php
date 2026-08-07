@@ -95,6 +95,25 @@ final class RelationRefTest extends TestCase
 		self::assertSame($users, $name->getQuery());
 	}
 
+	public function testIsUnderAndRelativeToAnswerPathQuestions(): void
+	{
+		$users = $this->makeQuery('users');
+		$posts = $users->posts;
+		$author = $posts->author;
+		$other = $this->makeQuery('users')->posts;
+
+		self::assertTrue($posts->isUnder($users));
+		self::assertTrue($author->isUnder($users));
+		self::assertTrue($author->isUnder($posts));
+		self::assertFalse($posts->isUnder($author));
+		self::assertFalse($posts->isUnder($posts));
+		self::assertFalse($author->isUnder($other));
+
+		self::assertSame(['posts'], $posts->relativeTo($users));
+		self::assertSame(['author'], $author->relativeTo($posts));
+		self::assertSame(['posts', 'author'], $author->relativeTo($users));
+	}
+
 	public function testNestedCacheIdentityMatchesExplicitLookup(): void
 	{
 		$users = $this->makeQuery('users');

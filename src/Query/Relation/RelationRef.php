@@ -317,6 +317,36 @@ final class RelationRef implements QuerySourceInterface
 		return $path;
 	}
 
+	/**
+	 * True when this relation is a strict nested path under $ancestor on the same query.
+	 * A root {@see SelectQuery} (empty path) matches any relation on that query.
+	 */
+	public function isUnder(QuerySourceInterface $ancestor): bool
+	{
+		if ($this->getQuery() !== $ancestor->getQuery()) {
+			return false;
+		}
+
+		$ancestorPath = $ancestor->getPath();
+		$path = $this->getPath();
+
+		if (count($path) <= count($ancestorPath)) {
+			return false;
+		}
+
+		return array_slice($path, 0, count($ancestorPath)) === $ancestorPath;
+	}
+
+	/**
+	 * Path segments of this relation relative to $ancestor (requires {@see isUnder()}).
+	 *
+	 * @return list<string>
+	 */
+	public function relativeTo(QuerySourceInterface $ancestor): array
+	{
+		return array_values(array_slice($this->getPath(), count($ancestor->getPath())));
+	}
+
 	public function field(string $name): FieldRef
 	{
 		if (isset($this->fieldRefs[$name])) {

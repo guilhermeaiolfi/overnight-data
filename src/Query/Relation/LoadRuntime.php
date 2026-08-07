@@ -296,14 +296,12 @@ final class LoadRuntime
 			return $fieldName;
 		}
 
-		if (
-			! $fieldRef->getSource() instanceof RelationRef
-			|| ! RelationPaths::isUnder($level, $fieldRef->getSource())
-		) {
+		$source = $fieldRef->getSource();
+		if (! $source instanceof RelationRef || ! $source->isUnder($level)) {
 			return $fieldName;
 		}
 
-		return implode('__', [...RelationPaths::relativeTo($level, $fieldRef->getSource()), $fieldName]);
+		return implode('__', [...$source->relativeTo($level), $fieldName]);
 	}
 
 	public function registerBranch(RelationLoadBranch $branch): AbstractNode
@@ -483,20 +481,7 @@ final class LoadRuntime
 			return $branch->getSource();
 		}
 
-		if (
-			! $fieldSource instanceof RelationRef
-			|| $fieldSource->getQuery() !== $level->getQuery()
-		) {
-			throw LoadRuntimeException::queryNotConfigured($level);
-		}
-
-		$levelPath = $level->getPath();
-		$sourcePath = $fieldSource->getPath();
-
-		if (
-			count($sourcePath) <= count($levelPath)
-			|| array_slice($sourcePath, 0, count($levelPath)) !== $levelPath
-		) {
+		if (! $fieldSource instanceof RelationRef || ! $fieldSource->isUnder($level)) {
 			throw LoadRuntimeException::queryNotConfigured($level);
 		}
 
@@ -506,7 +491,7 @@ final class LoadRuntime
 		}
 
 		// SEPARATE query rooted at this level: remap the relative relation path.
-		$relative = array_values(array_slice($sourcePath, count($levelPath)));
+		$relative = $fieldSource->relativeTo($level);
 		$relation = null;
 
 		foreach ($relative as $name) {

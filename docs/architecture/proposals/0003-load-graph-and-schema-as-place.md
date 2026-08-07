@@ -88,7 +88,7 @@ Relation branch columns bind `placeKey → loadKey` on the load branch. Own fiel
 1. Identity planning and schema compile share source-path helpers with LoadGraph.  
 2. Remove `plan` / `planLevel` fork once levels are “nodes in one graph.”
 
-`RelationPaths` (`isUnder` / `relativeTo`) is shared by schema compile, load-branch flat detection, and load-local key naming. `QueryRepresentationIdentityPlanner::planIdentities(SelectQuery|RelationRef, …)` is the single ensure/resolve path; `plan()` / `planLevel()` remain thin wrappers for existing call sites/tests.
+`RelationRef::isUnder()` / `relativeTo()` answer under-level / relative-path questions for schema compile, load-branch flat detection, and load-local key naming (ancestor may be a nested `RelationRef` or the root `SelectQuery`). `QueryRepresentationIdentityPlanner::planIdentities(SelectQuery|RelationRef, …)` is the single ensure/resolve path; `plan()` / `planLevel()` remain thin wrappers for existing call sites/tests.
 
 ### Cleanup pass (after Phase 4)
 
@@ -123,7 +123,7 @@ Relation branch columns bind `placeKey → loadKey` on the load branch. Own fiel
 
 ## Acceptance (Phase 4)
 
-- [x] `RelationPaths` shared for under-level / relative path checks.  
+- [x] `RelationRef::isUnder()` / `relativeTo()` own under-level / relative path checks.  
 - [x] Identity planning uses one `planIdentities(SelectQuery|RelationRef)` ensure/resolve path.  
 - [x] Writable prepare + existing identity planner tests keep passing.
 

@@ -16,7 +16,6 @@ use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\QuerySourceInterface;
-use ON\Data\Query\Relation\RelationPaths;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Selection\SelectionItem;
@@ -327,12 +326,8 @@ final class QueryRepresentationSchemaCompiler
 			return [$level->getCollection(), []];
 		}
 
-		if (
-			$source instanceof RelationRef
-			&& $source->getQuery() === $level->getQuery()
-			&& RelationPaths::isUnder($level, $source)
-		) {
-			return [$source->getCollection(), RelationPaths::relativeTo($level, $source)];
+		if ($source instanceof RelationRef && $source->isUnder($level)) {
+			return [$source->getCollection(), $source->relativeTo($level)];
 		}
 
 		throw new StateException('Cannot resolve projection source because it does not belong to this relation level.');

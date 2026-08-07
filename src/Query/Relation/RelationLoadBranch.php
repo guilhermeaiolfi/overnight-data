@@ -289,8 +289,7 @@ final class RelationLoadBranch extends LoadBranch
 
 		if (
 			! $source instanceof RelationRef
-			|| $source->getQuery() !== $this->getRelationRef()->getQuery()
-			|| ! RelationPaths::isUnder($this->getRelationRef(), $source)
+			|| ! $source->isUnder($this->getRelationRef())
 		) {
 			return null;
 		}
