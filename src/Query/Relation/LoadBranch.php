@@ -37,14 +37,39 @@ abstract class LoadBranch
 	 */
 	private array $placeToLoadKeys = [];
 
+	/**
+	 * Place keys satisfied from a loaded child destination (relative path under this branch).
+	 *
+	 * @var array<string, list<string>>
+	 */
+	private array $placeChildPaths = [];
+
 	public function bindPlaceToLoadKey(string $placeKey, string $loadKey): void
 	{
 		$this->placeToLoadKeys[$placeKey] = $loadKey;
+		unset($this->placeChildPaths[$placeKey]);
+	}
+
+	/**
+	 * @param list<string> $relativePath relation names from this branch to the child destination
+	 */
+	public function bindPlaceToChildDestination(string $placeKey, array $relativePath, string $loadKey): void
+	{
+		$this->placeToLoadKeys[$placeKey] = $loadKey;
+		$this->placeChildPaths[$placeKey] = array_values($relativePath);
 	}
 
 	public function loadKeyForPlace(string $placeKey): string
 	{
 		return $this->placeToLoadKeys[$placeKey] ?? $placeKey;
+	}
+
+	/**
+	 * @return list<string>|null
+	 */
+	public function childPathForPlace(string $placeKey): ?array
+	{
+		return $this->placeChildPaths[$placeKey] ?? null;
 	}
 
 	public function setNode(AbstractNode $node): void

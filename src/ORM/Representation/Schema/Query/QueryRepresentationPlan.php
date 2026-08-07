@@ -6,7 +6,6 @@ namespace ON\Data\ORM\Representation\Schema\Query;
 
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSource;
-use ON\Data\Query\Load\FetchPlan;
 use ON\Data\Query\Result\WritablePreparation;
 
 /**
@@ -16,8 +15,8 @@ use ON\Data\Query\Result\WritablePreparation;
  * Also serves as the {@see WritablePreparation} token so SelectQuery can hold the
  * plan without importing ORM adoption types into the query layer.
  *
- * Phase 1 (proposal 0003): also carries the {@see FetchPlan} snapshot built
- * after identity planning.
+ * Place schema is available via {@see getFetchSchema()} so beginFetch reuses the
+ * post-identity compile (proposal 0003).
  */
 final class QueryRepresentationPlan implements WritablePreparation
 {
@@ -26,8 +25,6 @@ final class QueryRepresentationPlan implements WritablePreparation
 
 	/** @var array<string, QuerySourceIdentities> */
 	private array $relationIdentities = [];
-
-	private ?FetchPlan $fetchPlan = null;
 
 	/**
 	 * @param list<RepresentationSource> $sources
@@ -41,6 +38,11 @@ final class QueryRepresentationPlan implements WritablePreparation
 	}
 
 	public function getSchema(): RepresentationSchema
+	{
+		return $this->schema;
+	}
+
+	public function getFetchSchema(): ?RepresentationSchema
 	{
 		return $this->schema;
 	}
@@ -59,16 +61,6 @@ final class QueryRepresentationPlan implements WritablePreparation
 	public function getIdentities(): QuerySourceIdentities
 	{
 		return $this->identities;
-	}
-
-	public function setFetchPlan(FetchPlan $fetchPlan): void
-	{
-		$this->fetchPlan = $fetchPlan;
-	}
-
-	public function getFetchPlan(): ?FetchPlan
-	{
-		return $this->fetchPlan;
 	}
 
 	/**

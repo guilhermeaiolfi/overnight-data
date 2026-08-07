@@ -14,13 +14,13 @@ use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
 
-final class FetchPlanPhase1Test extends TestCase
+final class FetchSchemaPhase1Test extends TestCase
 {
-	public function testReadFetchCompilesSchemaAndLoadGraphBeforeResults(): void
+	public function testReadFetchCompilesPlaceSchemaBeforeResults(): void
 	{
 		$users = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
-			new FetchPlanPhase1Executor(),
+			new FetchSchemaPhase1Executor(),
 		);
 
 		$users->select($users->id, $users->name);
@@ -31,25 +31,25 @@ final class FetchPlanPhase1Test extends TestCase
 			)
 			->separate();
 
-		self::assertNull($users->getFetchPlan());
+		self::assertNull($users->getFetchSchema());
 
 		$rows = $users->fetchAll();
-		$plan = $users->getFetchPlan();
+		$schema = $users->getFetchSchema();
 
-		self::assertNotNull($plan);
-		self::assertTrue($plan->getSchema()->hasField('id'));
-		self::assertTrue($plan->getSchema()->hasRelation('posts'));
-		self::assertSame(['id'], $plan->getLoadGraph()->get(['posts'])?->getFields());
-		self::assertSame(['name'], $plan->getLoadGraph()->get(['posts', 'author'])?->getFields());
+		self::assertNotNull($schema);
+		self::assertTrue($schema->hasField('id'));
+		self::assertTrue($schema->hasRelation('posts'));
+		self::assertTrue($schema->getRelation('posts')->getRelatedSchema()->hasField('authorName'));
+		self::assertSame(['author'], $schema->getRelation('posts')->getRelatedSchema()->getField('authorName')->getSourcePath());
 		self::assertSame('Ana', $rows[0]['posts'][0]['authorName']);
 	}
 
-	public function testWritablePrepareExposesLoadGraphOnPlanAndFetchPlan(): void
+	public function testWritablePrepareReusesPlaceSchemaOnFetch(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$users = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
-			new FetchPlanPhase1Executor(),
+			new FetchSchemaPhase1Executor(),
 		);
 
 		$users->select($users->id, $users->name);
@@ -62,12 +62,11 @@ final class FetchPlanPhase1Test extends TestCase
 
 		$users->to(stdClass::class)->writable($session);
 		$user = $users->fetchOne();
-		$plan = $users->getFetchPlan();
+		$schema = $users->getFetchSchema();
 
 		self::assertInstanceOf(stdClass::class, $user);
-		self::assertNotNull($plan);
-		self::assertSame(['name', 'id'], $plan->getLoadGraph()->get(['posts', 'author'])?->getFields());
-		self::assertTrue($plan->getSchema()->getRelation('posts')->getRelatedSchema()->hasField('authorName'));
+		self::assertNotNull($schema);
+		self::assertTrue($schema->getRelation('posts')->getRelatedSchema()->hasField('authorName'));
 	}
 
 	private function makeRegistry(): Registry
@@ -105,7 +104,7 @@ final class FetchPlanPhase1Test extends TestCase
 	}
 }
 
-final class FetchPlanPhase1Executor implements QueryExecutorInterface
+final class FetchSchemaPhase1Executor implements QueryExecutorInterface
 {
 	public function fetchAll(SelectQuery $query): array
 	{

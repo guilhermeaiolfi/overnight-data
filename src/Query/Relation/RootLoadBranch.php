@@ -119,10 +119,18 @@ final class RootLoadBranch extends LoadBranch
 
 	public function createNode(): RootNode
 	{
-		$placeColumns = array_map(
-			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$this->selections->getByTag(SelectionTag::COLUMN),
-		);
+		$placeColumns = [];
+
+		foreach ($this->selections->getByTag(SelectionTag::COLUMN) as $selection) {
+			$placeKey = $selection->getSelectionKey();
+
+			if ($this->childPathForPlace($placeKey) !== null) {
+				continue;
+			}
+
+			$placeColumns[] = $placeKey;
+		}
+
 		$placeIdentities = array_map(
 			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
 			$this->selections->getByTag(SelectionTag::IDENTITY),

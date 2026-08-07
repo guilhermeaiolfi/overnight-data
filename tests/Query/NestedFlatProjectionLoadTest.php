@@ -99,7 +99,7 @@ final class NestedFlatProjectionLoadTest extends TestCase
 		self::assertSame('Ada', $rows[0]['name']);
 	}
 
-	public function testNestedFlatFieldIsPlacedFromFetchPlanSchema(): void
+	public function testNestedFlatFieldIsPlacedFromFetchSchema(): void
 	{
 		$users = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
@@ -114,13 +114,68 @@ final class NestedFlatProjectionLoadTest extends TestCase
 			->separate();
 
 		$rows = $users->fetchAll();
-		$plan = $users->getFetchPlan();
+		$schema = $users->getFetchSchema();
 
-		self::assertNotNull($plan);
-		$postsSchema = $plan->getSchema()->getRelation('posts')->getRelatedSchema();
+		self::assertNotNull($schema);
+		$postsSchema = $schema->getRelation('posts')->getRelatedSchema();
 		self::assertTrue($postsSchema->hasField('authorName'));
 		self::assertSame(['author'], $postsSchema->getField('authorName')->getSourcePath());
 		self::assertSame('Ana', $rows[0]['posts'][0]['authorName']);
+	}
+
+	public function testFlatAuthorNameReusesLoadedSeparateAuthorDestination(): void
+	{
+		$executor = new NestedFlatReuseExecutor();
+		$users = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			$executor,
+		);
+
+		$users->select($users->id, $users->name);
+		$users->posts
+			->select(
+				$users->posts->id,
+				$users->posts->author->name->as('authorName'),
+			)
+			->separate();
+		// Author attach exists; name is not public on author — flat should require it there.
+		$users->posts->author->select($users->posts->author->id)->separate();
+
+		$rows = $users->fetchAll();
+		$post = $rows[0]['posts'][0];
+
+		self::assertSame('Ana', $post['authorName']);
+		self::assertSame(['id' => 7], $post['author']);
+
+		foreach ($executor->queries as $query) {
+			if ($query->getCollection()->getName() !== 'posts') {
+				continue;
+			}
+
+			self::assertFalse(
+				$query->getSelections()->hasSelectionKey('author__name'),
+				'Flat must not JOIN author onto posts when an author destination exists',
+			);
+		}
+	}
+
+	public function testFlatAuthorNameStillWorksWhenAuthorDestinationOmitsName(): void
+	{
+		$executor = new NestedFlatReuseExecutor();
+		$users = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			$executor,
+		);
+
+		$users->posts
+			->select(
+				$users->posts->id,
+				$users->posts->author->name->as('authorName'),
+			)
+			->separate();
+		$users->posts->author->select('id')->separate();
+
+		self::assertSame('Ana', $users->fetchAll()[0]['posts'][0]['authorName']);
 	}
 
 	private function makeRegistry(): Registry
@@ -173,6 +228,50 @@ final class NestedFlatProjectionExecutor implements QueryExecutorInterface
 				'authorId' => 7,
 				'title' => 'Hello',
 				'author__name' => 'Ana',
+			]],
+			'authors' => [[
+				'id' => 7,
+				'name' => 'Ana',
+			]],
+			default => [],
+		};
+	}
+
+	public function fetchOne(SelectQuery $query): ?array
+	{
+		$rows = $this->fetchAll($query);
+
+		return $rows[0] ?? null;
+	}
+
+	public function iterate(SelectQuery $query): iterable
+	{
+		return $this->fetchAll($query);
+	}
+}
+
+/**
+ * Posts rows intentionally omit author__name — reuse must read name from the author destination.
+ */
+final class NestedFlatReuseExecutor implements QueryExecutorInterface
+{
+	/** @var list<SelectQuery> */
+	public array $queries = [];
+
+	public function fetchAll(SelectQuery $query): array
+	{
+		$this->queries[] = $query;
+
+		return match ($query->getCollection()->getName()) {
+			'users' => [[
+				'id' => 1,
+				'name' => 'Ada',
+			]],
+			'posts' => [[
+				'id' => 10,
+				'userId' => 1,
+				'authorId' => 7,
+				'title' => 'Hello',
 			]],
 			'authors' => [[
 				'id' => 7,

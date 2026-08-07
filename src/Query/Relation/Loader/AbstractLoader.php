@@ -254,9 +254,19 @@ abstract class AbstractLoader implements LoaderInterface
 	 */
 	protected function columnSelectionKeys(RelationLoadBranch $branch): array
 	{
-		return array_map(
-			static fn (SelectionItem $selection): string => $branch->loadKeyForPlace($selection->getSelectionKey()),
-			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
-		);
+		$keys = [];
+
+		foreach ($branch->getSelections()->getByTag(SelectionTag::COLUMN) as $selection) {
+			$placeKey = $selection->getSelectionKey();
+
+			// Satisfied from a child destination — not a column on this parser node.
+			if ($branch->childPathForPlace($placeKey) !== null) {
+				continue;
+			}
+
+			$keys[] = $branch->loadKeyForPlace($placeKey);
+		}
+
+		return $keys;
 	}
 }

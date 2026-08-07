@@ -146,24 +146,105 @@ final class RelationOutputProcessor
 		$item = [];
 
 		foreach ($placeKeys as $placeKey) {
-			$loadKey = $branch->loadKeyForPlace($placeKey);
-
-			if (array_key_exists($loadKey, $record)) {
-				$item[$placeKey] = $record[$loadKey];
-			}
+			$this->assignPlaceValue($item, $branch, $record, $placeKey);
 		}
 
 		// Keep INTERNAL identity keys for writable track(); SelectQuery::publicRow strips them.
 		foreach ($branch->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
 			$placeKey = $selection->getSelectionKey();
-			$loadKey = $branch->loadKeyForPlace($placeKey);
-
-			if (array_key_exists($loadKey, $record)) {
-				$item[$placeKey] = $record[$loadKey];
-			}
+			$this->assignPlaceValue($item, $branch, $record, $placeKey);
 		}
 
 		return $item;
+	}
+
+	/**
+	 * @param array<string, mixed> $item
+	 * @param array<string, mixed> $record
+	 */
+	private function assignPlaceValue(array &$item, LoadBranch $branch, array $record, string $placeKey): bool
+	{
+		$loadKey = $branch->loadKeyForPlace($placeKey);
+		$childPath = $branch->childPathForPlace($placeKey);
+
+		if ($childPath !== null) {
+			$fromChild = $this->scalarFromChildPath($branch, $record, $childPath, $loadKey);
+
+			if ($fromChild['found']) {
+				$item[$placeKey] = $fromChild['value'];
+
+				return true;
+			}
+
+			return false;
+		}
+
+		if (array_key_exists($loadKey, $record)) {
+			$item[$placeKey] = $record[$loadKey];
+
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * @param array<string, mixed> $record
+	 * @param list<string> $relativePath
+	 * @return array{found: bool, value: mixed}
+	 */
+	private function scalarFromChildPath(
+		LoadBranch $branch,
+		array $record,
+		array $relativePath,
+		string $loadKey,
+	): array {
+		$currentRecord = $record;
+		$currentBranch = $branch;
+
+		foreach ($relativePath as $segment) {
+			$child = $this->childBranchNamed($currentBranch, $segment);
+
+			if (! $child instanceof RelationLoadBranch) {
+				return ['found' => false, 'value' => null];
+			}
+
+			$raw = $currentRecord[$segment] ?? null;
+
+			if ($raw === null) {
+				return ['found' => true, 'value' => null];
+			}
+
+			if (! is_array($raw) || $child->returnsMany()) {
+				return ['found' => false, 'value' => null];
+			}
+
+			$payload = $this->payloadRecord($child, $raw);
+
+			if ($payload === null) {
+				return ['found' => true, 'value' => null];
+			}
+
+			$currentRecord = $payload;
+			$currentBranch = $child;
+		}
+
+		if (array_key_exists($loadKey, $currentRecord)) {
+			return ['found' => true, 'value' => $currentRecord[$loadKey]];
+		}
+
+		return ['found' => false, 'value' => null];
+	}
+
+	private function childBranchNamed(LoadBranch $parent, string $name): ?RelationLoadBranch
+	{
+		foreach ($parent->getChildren() as $child) {
+			if ($child->getRelationRef()->getName() === $name) {
+				return $child;
+			}
+		}
+
+		return null;
 	}
 
 	/**

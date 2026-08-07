@@ -7,11 +7,11 @@ namespace ON\Data\Query\Relation;
 use LogicException;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
-use ON\Data\Query\Load\FetchPlan;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Selection\SelectionItem;
@@ -50,13 +50,13 @@ final class LoadRuntime
 	public function __construct(
 		private readonly SelectQuery $rootQuery,
 		private readonly QueryExecutorInterface $executor,
-		?FetchPlan $fetchPlan = null,
+		?RepresentationSchema $schema = null,
 	) {
 		$this->rootBranch = new RootLoadBranch(
 			$rootQuery,
 			fn (string $fieldName): string => $this->stableJoinedAlias(['root', 'required'], $fieldName),
 		);
-		$this->outputProcessor = new RelationOutputProcessor($fetchPlan?->getSchema());
+		$this->outputProcessor = new RelationOutputProcessor($schema);
 	}
 
 	public function fetchAll(): array
@@ -265,18 +265,24 @@ final class LoadRuntime
 
 		$this->rootBranch->registerPublicSelections();
 		$this->rootBranch->requirePrimaryKey();
-		$this->selectLevelFields($this->rootBranch);
+		// Own-level root columns before relation load (loaders may inspect the root query).
+		$this->selectLevelFields($this->rootBranch, includeCrossLevelFlats: false);
 		$this->createBranches();
 		$this->configureBranches();
 
+		// Flats after destinations exist so loaded to-one children can be reused.
+		$this->selectLevelFields($this->rootBranch, includeCrossLevelFlats: true);
+
 		foreach ($this->relationBranchesByDepth() as $branch) {
-			$this->selectLevelFields($branch);
+			$this->selectLevelFields($branch, includeCrossLevelFlats: true);
 		}
 
 		$this->createParserTree();
 
+		$this->selectLevelFields($this->rootBranch, includeCrossLevelFlats: true);
+
 		foreach ($this->relationBranchesByDepth() as $branch) {
-			$this->selectLevelFields($branch);
+			$this->selectLevelFields($branch, includeCrossLevelFlats: true);
 		}
 	}
 
@@ -341,8 +347,15 @@ final class LoadRuntime
 
 	/**
 	 * Bind place keys to load-local SQL/parser keys for one projection level.
+	 *
+	 * Flat related fields join under this destination unless a loaded to-one child
+	 * destination already covers that source path — then require the field there
+	 * and assemble from the child bag (no redundant parent JOIN).
+	 *
+	 * @param bool $includeCrossLevelFlats when false, skip FieldRefs whose source is
+	 *        under this level (used for the early root pass before child branches exist)
 	 */
-	private function selectLevelFields(LoadBranch $branch): void
+	private function selectLevelFields(LoadBranch $branch, bool $includeCrossLevelFlats = true): void
 	{
 		$level = $branch->getProjectionLevel();
 		$aliases = [];
@@ -359,8 +372,27 @@ final class LoadRuntime
 			}
 
 			$fieldName = $fieldRef->getField()->getName();
-			$path = $fieldRef->getSource() instanceof RelationRef
-				? $fieldRef->getSource()->getPath()
+			$source = $fieldRef->getSource();
+			$isCrossLevelFlat = $source instanceof RelationRef && $source->isUnder($level);
+
+			if ($isCrossLevelFlat && ! $includeCrossLevelFlats) {
+				continue;
+			}
+
+			if ($isCrossLevelFlat) {
+				$relative = $source->relativeTo($level);
+				$destination = $this->findLoadedToOneChildDestination($branch, $relative);
+
+				if ($destination instanceof RelationLoadBranch) {
+					$loadKeys = $this->requireFields($destination, [$fieldName]);
+					$branch->bindPlaceToChildDestination($placeKey, $relative, $loadKeys[0] ?? $fieldName);
+
+					continue;
+				}
+			}
+
+			$path = $source instanceof RelationRef
+				? $source->getPath()
 				: ($level instanceof RelationRef ? $level->getPath() : []);
 			$loadKey = $this->levelLoadKey($level, $selection, $fieldRef, $fieldName);
 			$sqlKey = $this->ensureLevelFieldSelection($branch, $fieldRef, $placeKey, $loadKey, $path);
@@ -371,6 +403,44 @@ final class LoadRuntime
 		if ($branch->hasNode()) {
 			$branch->getPublicNode()->setValueAliases($aliases);
 		}
+	}
+
+	/**
+	 * Loaded to-one child destination for a relative relation path, or null when
+	 * missing / many-valued (scalar flat cannot reuse a collection bag).
+	 *
+	 * @param list<string> $relativePath
+	 */
+	private function findLoadedToOneChildDestination(LoadBranch $parent, array $relativePath): ?RelationLoadBranch
+	{
+		if ($relativePath === []) {
+			return null;
+		}
+
+		$current = $parent;
+
+		foreach ($relativePath as $segment) {
+			$next = null;
+
+			foreach ($current->getChildren() as $child) {
+				if (
+					$child->getRelationRef()->getName() === $segment
+					&& $child->getSelection()->isLoaded()
+				) {
+					$next = $child;
+
+					break;
+				}
+			}
+
+			if (! $next instanceof RelationLoadBranch || $next->returnsMany()) {
+				return null;
+			}
+
+			$current = $next;
+		}
+
+		return $current instanceof RelationLoadBranch ? $current : null;
 	}
 
 	/**

@@ -30,8 +30,6 @@ use ON\Data\Query\Expression\SourceFieldExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
-use ON\Data\Query\Load\FetchPlan;
-use ON\Data\Query\Load\LoadGraphBuilder;
 use ON\Data\Query\Relation\RelationQueryPlanner;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelection;
@@ -99,7 +97,7 @@ final class SelectQuery implements QuerySourceInterface
 
 	private ?Relation\LoadRuntime $runtime = null;
 
-	private ?FetchPlan $fetchPlan = null;
+	private ?RepresentationSchema $fetchSchema = null;
 
 	public function __construct(
 		private readonly CollectionInterface|DerivedSelectQuery $source,
@@ -289,7 +287,7 @@ final class SelectQuery implements QuerySourceInterface
 		$copy->offset = $this->offset;
 		$copy->resultClass = $this->resultClass;
 		$copy->writableHandler = $this->writableHandler;
-		$copy->fetchPlan = null;
+		$copy->fetchSchema = null;
 
 		return $copy;
 	}
@@ -455,13 +453,13 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
-	 * Place + fetch snapshot from the last {@see fetchAll()} / {@see fetchOne()} begin.
+	 * Place schema from the last {@see fetchAll()} / {@see fetchOne()} begin.
 	 *
-	 * Compiled before LoadRuntime runs (proposal 0003 Phase 1). Null until a fetch starts.
+	 * Compiled before LoadRuntime runs (proposal 0003). Null until a fetch starts.
 	 */
-	public function getFetchPlan(): ?FetchPlan
+	public function getFetchSchema(): ?RepresentationSchema
 	{
-		return $this->fetchPlan;
+		return $this->fetchSchema;
 	}
 
 	public function getSelections(): SelectionList
@@ -712,38 +710,35 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
-	 * Compile place schema + LoadGraph before LoadRuntime (proposal 0003 Phase 1).
+	 * Compile place schema before LoadRuntime (proposal 0003).
 	 *
 	 * Writable prepares first (identity planning may mutate selections). When prepare
-	 * already supplies a FetchPlan, reuse it; otherwise compile once locally.
+	 * already supplies a schema, reuse it; otherwise compile once locally.
 	 */
 	private function beginFetch(?WritableResultHandler $handler): ?WritablePreparation
 	{
 		if ($handler !== null) {
 			$preparation = $handler->prepare($this);
-			$this->fetchPlan = $preparation->getFetchPlan() ?? $this->compileFetchPlan();
+			$this->fetchSchema = $preparation->getFetchSchema() ?? $this->compileFetchSchema();
 
 			return $preparation;
 		}
 
 		// Count wrappers and other derived sources have no collection place schema.
 		if ($this->isDerivedSource()) {
-			$this->fetchPlan = null;
+			$this->fetchSchema = null;
 
 			return null;
 		}
 
-		$this->fetchPlan = $this->compileFetchPlan();
+		$this->fetchSchema = $this->compileFetchSchema();
 
 		return null;
 	}
 
-	private function compileFetchPlan(): FetchPlan
+	private function compileFetchSchema(): RepresentationSchema
 	{
-		return new FetchPlan(
-			(new QueryRepresentationSchemaCompiler())->compile($this),
-			(new LoadGraphBuilder())->fromQuery($this),
-		);
+		return (new QueryRepresentationSchemaCompiler())->compile($this);
 	}
 
 	/**
@@ -826,7 +821,7 @@ final class SelectQuery implements QuerySourceInterface
 
 		$executor = $this->executor ?? throw QueryNotExecutableException::forQuery($this);
 
-		return $this->runtime = new Relation\LoadRuntime($this, $executor, $this->fetchPlan);
+		return $this->runtime = new Relation\LoadRuntime($this, $executor, $this->fetchSchema);
 	}
 
 	/**
