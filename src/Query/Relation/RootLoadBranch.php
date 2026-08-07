@@ -62,7 +62,7 @@ final class RootLoadBranch extends LoadBranch
 
 			if ($existing instanceof SelectionItem) {
 				$this->selections->add($existing->getExpression(), SelectionTag::REQUIRED);
-				$aliases[] = $this->loadKeyForPlace($this->selectionKey($existing));
+				$aliases[] = $this->loadKeyForPlace($existing->getSelectionKey());
 
 				continue;
 			}
@@ -115,10 +115,12 @@ final class RootLoadBranch extends LoadBranch
 
 	public function createNode(): RootNode
 	{
-		$placeColumns = $this->selectionKeys(
+		$placeColumns = array_map(
+			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
 			$this->selections->getByTag(SelectionTag::COLUMN),
 		);
-		$placeIdentities = $this->selectionKeys(
+		$placeIdentities = array_map(
+			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
 			$this->selections->getByTag(SelectionTag::IDENTITY),
 		);
 		$loadColumns = array_map($this->loadKeyForPlace(...), $placeColumns);
@@ -194,22 +196,6 @@ final class RootLoadBranch extends LoadBranch
 		}
 	}
 
-	/**
-	 * @param array<string, mixed> $row
-	 * @param list<string> $aliases
-	 * @return list<mixed>
-	 */
-	private function orderedValues(array $row, array $aliases): array
-	{
-		$ordered = [];
-
-		foreach ($aliases as $alias) {
-			$ordered[] = $row[$alias] ?? null;
-		}
-
-		return $ordered;
-	}
-
 	private function isInternalSelection(mixed $expression): bool
 	{
 		return $expression instanceof AliasedExpression
@@ -248,19 +234,5 @@ final class RootLoadBranch extends LoadBranch
 		}
 
 		return null;
-	}
-
-	private function selectionKey(SelectionItem $selection): string
-	{
-		return $selection->getSelectionKey();
-	}
-
-	/**
-	 * @param list<SelectionItem> $selections
-	 * @return list<string>
-	 */
-	private function selectionKeys(array $selections): array
-	{
-		return array_map($this->selectionKey(...), $selections);
 	}
 }

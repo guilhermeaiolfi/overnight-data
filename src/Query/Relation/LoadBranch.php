@@ -145,4 +145,20 @@ abstract class LoadBranch
 	{
 		$this->children[] = $child;
 	}
+
+	/**
+	 * @param array<string, mixed> $row
+	 * @param list<string> $aliases
+	 * @return list<mixed>
+	 */
+	final public static function orderedValues(array $row, array $aliases): array
+	{
+		$ordered = [];
+
+		foreach ($aliases as $alias) {
+			$ordered[] = $row[$alias] ?? null;
+		}
+
+		return $ordered;
+	}
 }

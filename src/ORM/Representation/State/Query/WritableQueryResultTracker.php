@@ -199,47 +199,18 @@ final class WritableQueryResultTracker implements WritableResultHandler
 			$path = [...$relationPathPrefix, $relationSchema->getPath()];
 			$relatedSchema = $relationSchema->getRelatedSchema();
 			$rawChildren = $sourceRow[$relationSchema->getPath()] ?? null;
+			$needsFlatAttach = RepresentationAdoptionEngine::isFlatAttachment($relatedSchema);
+			$needsRecurse = $relatedSchema->getRelations() !== [];
 
-			if (RepresentationAdoptionEngine::isFlatAttachment($relatedSchema)) {
-				$identities = $compilation->getRelationIdentities($path);
-				if ($identities === null) {
-					continue;
-				}
-
-				$items = $relationSchema->isMany()
-					? $this->reader->readItems($object, $relationSchema, static fn (string $message): StateException => new StateException($message))
-					: array_values(array_filter([
-						$this->reader->readTarget($object, $relationSchema, static fn (string $message): StateException => new StateException($message)),
-					]));
-
-				foreach ($items as $index => $item) {
-					if ($this->session->getRepresentations()->has($item)) {
-						continue;
-					}
-
-					$childRow = is_array($rawChildren)
-						? ($relationSchema->isMany() ? ($rawChildren[$index] ?? []) : $rawChildren)
-						: [];
-
-					if (! is_array($childRow)) {
-						$childRow = [];
-					}
-
-					$this->adoptionEngine->attach(
-						$item,
-						new RepresentationAdoptionContext(
-							schema: $relatedSchema,
-							policy: AdoptionPolicy::Hydrate,
-							identities: $identities,
-							sourceRow: $childRow,
-						),
-						$this->session->getRecords(),
-						$this->session->getRepresentations(),
-					);
-				}
+			if (! $needsFlatAttach && ! $needsRecurse) {
+				continue;
 			}
 
-			if ($relatedSchema->getRelations() === []) {
+			$identities = $needsFlatAttach
+				? $compilation->getRelationIdentities($path)
+				: null;
+
+			if ($needsFlatAttach && $identities === null) {
 				continue;
 			}
 
@@ -258,13 +229,29 @@ final class WritableQueryResultTracker implements WritableResultHandler
 					$childRow = [];
 				}
 
-				$this->preAttachNestedFlatRelationsAt(
-					$item,
-					$relatedSchema,
-					$compilation,
-					$childRow,
-					$path,
-				);
+				if ($needsFlatAttach && $identities !== null && ! $this->session->getRepresentations()->has($item)) {
+					$this->adoptionEngine->attach(
+						$item,
+						new RepresentationAdoptionContext(
+							schema: $relatedSchema,
+							policy: AdoptionPolicy::Hydrate,
+							identities: $identities,
+							sourceRow: $childRow,
+						),
+						$this->session->getRecords(),
+						$this->session->getRepresentations(),
+					);
+				}
+
+				if ($needsRecurse) {
+					$this->preAttachNestedFlatRelationsAt(
+						$item,
+						$relatedSchema,
+						$compilation,
+						$childRow,
+						$path,
+					);
+				}
 			}
 		}
 	}

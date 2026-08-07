@@ -7,7 +7,6 @@ namespace ON\Data\ORM\Representation\Schema\Query;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSource;
 use ON\Data\Query\Load\FetchPlan;
-use ON\Data\Query\Load\LoadGraph;
 use ON\Data\Query\Result\WritablePreparation;
 
 /**
@@ -70,11 +69,6 @@ final class QueryRepresentationPlan implements WritablePreparation
 	public function getFetchPlan(): ?FetchPlan
 	{
 		return $this->fetchPlan;
-	}
-
-	public function getLoadGraph(): ?LoadGraph
-	{
-		return $this->fetchPlan?->getLoadGraph();
 	}
 
 	/**

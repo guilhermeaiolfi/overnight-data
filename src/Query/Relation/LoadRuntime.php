@@ -52,7 +52,7 @@ final class LoadRuntime
 	public function __construct(
 		private readonly SelectQuery $rootQuery,
 		private readonly QueryExecutorInterface $executor,
-		private readonly ?FetchPlan $fetchPlan = null,
+		?FetchPlan $fetchPlan = null,
 	) {
 		$this->rootBranch = new RootLoadBranch(
 			$rootQuery,
@@ -192,7 +192,10 @@ final class LoadRuntime
 		$rows = $this->executor->fetchAll($query);
 
 		foreach ($rows as $row) {
-			$branch->getNode()->parseRow(0, $this->orderedValues($row, $this->branchAliasTraversal($branch)));
+			$branch->getNode()->parseRow(
+				0,
+				LoadBranch::orderedValues($row, $branch->getNode()->getValueAliasTraversal()),
+			);
 		}
 
 		$continuationQuery = $branch->getQuery();
@@ -439,32 +442,11 @@ final class LoadRuntime
 
 				$query = $this->pendingContinuationQueries[$key];
 				unset($this->pendingContinuationQueries[$key]);
-
-				if (! $query instanceof SelectQuery) {
-					continue;
-				}
-
 				$this->runContinuationsFor($query);
 			}
 		} finally {
 			$this->flushingPendingContinuations = false;
 		}
-	}
-
-	/**
-	 * @param array<string, mixed> $row
-	 * @param list<string> $aliases
-	 * @return list<mixed>
-	 */
-	private function orderedValues(array $row, array $aliases): array
-	{
-		$ordered = [];
-
-		foreach ($aliases as $alias) {
-			$ordered[] = $row[$alias] ?? null;
-		}
-
-		return $ordered;
 	}
 
 	private function columnFieldRef(SelectionItem $selection): ?FieldRef
@@ -619,14 +601,6 @@ final class LoadRuntime
 			strtolower(preg_replace('/[^a-z0-9_]+/i', '_', implode('_', [...$path, $fieldName])) ?? 'field'),
 			$this->aliasCounter++,
 		);
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	private function branchAliasTraversal(RelationLoadBranch $branch): array
-	{
-		return $branch->getNode()->getValueAliasTraversal();
 	}
 
 	private function assertContinuableMethod(RelationLoadBranch $branch, string $method): void

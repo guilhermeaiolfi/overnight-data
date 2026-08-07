@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation\Loader;
 
-use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Expression\StarExpression;
 use function ON\Data\Query\query;
@@ -94,23 +93,6 @@ final class FirstOfManyLoader extends AbstractLoader
 	public function join(RelationRef $relation): QuerySourceInterface
 	{
 		throw RelationLoaderException::firstOfManyJoinNotSupported($relation);
-	}
-
-	private function applySeparateQueryConditions(RelationLoadBranch $branch): void
-	{
-		$conditions = $branch->getSelection()->getConditions();
-
-		if ($conditions === []) {
-			return;
-		}
-
-		$query = $branch->getQuery();
-		$query->where(...array_map(
-			static fn (ConditionInterface $condition): ConditionInterface => $condition->rebind(
-				SourceMap::of($branch->getRelationRef(), $query),
-			),
-			$conditions,
-		));
 	}
 
 	/**

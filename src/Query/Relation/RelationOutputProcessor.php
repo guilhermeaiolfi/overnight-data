@@ -8,6 +8,11 @@ use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Selection\SelectionTag;
 
+/**
+ * @phpstan-type HiddenPromotionItem array{identity: string, value: mixed}
+ * @phpstan-type HiddenPromotion array{branch: RelationLoadBranch, collection: bool, value: mixed, items: list<HiddenPromotionItem>}
+ * @phpstan-type HiddenPromotions array<string, HiddenPromotion>
+ */
 final class RelationOutputProcessor
 {
 	public function __construct(
@@ -60,7 +65,7 @@ final class RelationOutputProcessor
 	}
 
 	/**
-	 * @return array<string, array{branch: RelationLoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}>
+	 * @return HiddenPromotions
 	 */
 	private function collectHiddenOutput(RelationLoadBranch $branch, mixed $value): array
 	{
@@ -235,7 +240,7 @@ final class RelationOutputProcessor
 
 	/**
 	 * @param array<string, mixed> $record
-	 * @return array<string, array{branch: RelationLoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}>
+	 * @return HiddenPromotions
 	 */
 	private function collectHiddenRecordOutput(RelationLoadBranch $branch, array $record): array
 	{
@@ -271,7 +276,7 @@ final class RelationOutputProcessor
 	}
 
 	/**
-	 * @return array<string, array{branch: RelationLoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}>
+	 * @return HiddenPromotions
 	 */
 	private function defaultHiddenPromotions(RelationLoadBranch $branch, bool $forceCollection = false): array
 	{
@@ -305,7 +310,7 @@ final class RelationOutputProcessor
 	}
 
 	/**
-	 * @return list<array{identity: string, value: mixed}>
+	 * @return list<HiddenPromotionItem>
 	 */
 	private function projectPromotionItems(RelationLoadBranch $branch, mixed $value): array
 	{
@@ -355,7 +360,7 @@ final class RelationOutputProcessor
 
 	/**
 	 * @param array<string, mixed> $item
-	 * @param array<string, array{branch: RelationLoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}> $promotions
+	 * @param HiddenPromotions $promotions
 	 */
 	private function mergePromotions(array &$item, array $promotions, string $parentPath): void
 	{
@@ -369,8 +374,8 @@ final class RelationOutputProcessor
 	}
 
 	/**
-	 * @param array<string, array{branch: RelationLoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}> $target
-	 * @param array<string, array{branch: RelationLoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}> $incoming
+	 * @param HiddenPromotions $target
+	 * @param HiddenPromotions $incoming
 	 */
 	private function mergeHiddenNameMaps(array &$target, array $incoming, string $parentPath): void
 	{
@@ -384,8 +389,8 @@ final class RelationOutputProcessor
 	}
 
 	/**
-	 * @param array<string, array{branch: RelationLoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}> $target
-	 * @param array<string, array{branch: RelationLoadBranch, collection: bool, value: mixed, items: list<array{identity: string, value: mixed}>}> $incoming
+	 * @param HiddenPromotions $target
+	 * @param HiddenPromotions $incoming
 	 */
 	private function mergeHiddenCollectionPromotions(array &$target, array $incoming): void
 	{
@@ -413,7 +418,7 @@ final class RelationOutputProcessor
 	}
 
 	/**
-	 * @param list<array{identity: string, value: mixed}> $existing
+	 * @param list<HiddenPromotionItem> $existing
 	 */
 	private function containsPromotionItem(array $existing, string $candidateIdentity): bool
 	{

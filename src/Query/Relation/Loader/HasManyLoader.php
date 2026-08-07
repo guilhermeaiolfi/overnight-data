@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation\Loader;
 
-use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
@@ -105,23 +104,6 @@ final class HasManyLoader extends AbstractLoader
 		$selection = $branch->getSelection();
 
 		return $selection->getLimit() !== null || $selection->hasOffset();
-	}
-
-	private function applySeparateQueryConditions(RelationLoadBranch $branch): void
-	{
-		$conditions = $branch->getSelection()->getConditions();
-
-		if ($conditions === []) {
-			return;
-		}
-
-		$query = $branch->getQuery();
-		$query->where(...array_map(
-			static fn (ConditionInterface $condition): ConditionInterface => $condition->rebind(
-				SourceMap::of($branch->getRelationRef(), $query),
-			),
-			$conditions,
-		));
 	}
 
 	/**

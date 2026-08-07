@@ -175,24 +175,31 @@ abstract class AbstractLoader implements LoaderInterface
 		return $expression instanceof FieldRef && $expression->getSource() === $level;
 	}
 
+	protected function applySeparateQueryConditions(RelationLoadBranch $branch): void
+	{
+		$conditions = $branch->getSelection()->getConditions();
+
+		if ($conditions === []) {
+			return;
+		}
+
+		$query = $branch->getQuery();
+		$query->where(...array_map(
+			static fn (ConditionInterface $condition): ConditionInterface => $condition->rebind(
+				SourceMap::of($branch->getRelationRef(), $query),
+			),
+			$conditions,
+		));
+	}
+
 	protected function applySeparateQueryOptions(RelationLoadBranch $branch): void
 	{
 		$query = $branch->getQuery();
-		$selection = $branch->getSelection();
 		$from = $branch->getRelationRef();
 
-		$conditions = $selection->getConditions();
+		$this->applySeparateQueryConditions($branch);
 
-		if ($conditions !== []) {
-			$query->where(...array_map(
-				static fn (ConditionInterface $condition): ConditionInterface => $condition->rebind(
-					SourceMap::of($from, $query),
-				),
-				$conditions,
-			));
-		}
-
-		$sorts = $selection->getSorts();
+		$sorts = $branch->getSelection()->getSorts();
 
 		if ($sorts !== []) {
 			$query->orderBy(...array_map(

@@ -116,7 +116,7 @@ final class RelationLoadBranch extends LoadBranch
 	}
 
 	/**
-	 * Register this level's public projection onto the load-branch selection list.
+	 * Register this level's public + INTERNAL projection onto the load-branch selection list.
 	 * Loaders still fetch tables; runtime owns how public keys are assembled.
 	 */
 	public function registerPublicSelections(): void
@@ -132,77 +132,65 @@ final class RelationLoadBranch extends LoadBranch
 		}
 
 		foreach ($this->selection->getSelections()->getExplicit() as $selection) {
-			$expression = $selection->getExpression();
-
-			if ($expression instanceof StarExpression && $expression->getSource() === $this->getRelationRef()) {
-				$this->addPublicFields($this->getRelationRef()->getCollection()->getVisibleFields());
-
-				continue;
-			}
-
-			$ownField = $this->ownFieldSelection($selection);
-
-			if ($ownField !== null) {
-				[$fieldName, $publicAlias] = $ownField;
-				$this->selections->add(
-					$this->getRelationRef()->field($fieldName)->as($publicAlias),
-					SelectionTag::PUBLIC,
-					true,
-				);
-				$this->requireFields([$fieldName]);
-
-				continue;
-			}
-
-			$flatField = $this->descendantFieldSelection($selection);
-
-			if ($flatField === null) {
-				continue;
-			}
-
-			// Fetch-only: place keys come from RepresentationSchema (proposal 0003 Phase 2).
-			[$fieldRef, $publicAlias] = $flatField;
-			$this->selections->add(
-				$fieldRef->as($publicAlias),
-				SelectionTag::COLUMN,
-				false,
-			);
+			$this->registerLevelSelection($selection, [SelectionTag::PUBLIC], explicit: true, flatsAsColumnOnly: true);
 		}
 
-		$this->registerInternalSelections();
+		foreach ($this->selection->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
+			$this->registerLevelSelection(
+				$selection,
+				[SelectionTag::INTERNAL, SelectionTag::COLUMN],
+				explicit: false,
+				flatsAsColumnOnly: false,
+			);
+		}
 	}
 
 	/**
-	 * Fetch INTERNAL identity columns planned for nested flat writable adoption.
+	 * @param list<string> $tags
 	 */
-	private function registerInternalSelections(): void
-	{
-		foreach ($this->selection->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
-			$ownField = $this->ownFieldSelection($selection);
+	private function registerLevelSelection(
+		SelectionItem $selection,
+		array $tags,
+		bool $explicit,
+		bool $flatsAsColumnOnly,
+	): void {
+		$expression = $selection->getExpression();
 
-			if ($ownField !== null) {
-				[$fieldName, $publicAlias] = $ownField;
-				$this->selections->add(
-					$this->getRelationRef()->field($fieldName)->as($publicAlias),
-					[SelectionTag::INTERNAL, SelectionTag::COLUMN],
-				);
-				$this->requireFields([$fieldName]);
+		if ($expression instanceof StarExpression && $expression->getSource() === $this->getRelationRef()) {
+			$this->addPublicFields($this->getRelationRef()->getCollection()->getVisibleFields());
 
-				continue;
-			}
-
-			$flatField = $this->descendantFieldSelection($selection);
-
-			if ($flatField === null) {
-				continue;
-			}
-
-			[$fieldRef, $alias] = $flatField;
-			$this->selections->add(
-				$fieldRef->as($alias),
-				[SelectionTag::INTERNAL, SelectionTag::COLUMN],
-			);
+			return;
 		}
+
+		[$fieldRef, $alias] = $this->unwrapFieldSelection($selection) ?? [null, null];
+
+		if (! $fieldRef instanceof FieldRef) {
+			return;
+		}
+
+		if ($fieldRef->getSource() === $this->getRelationRef()) {
+			$this->selections->add(
+				$this->getRelationRef()->field($fieldRef->getField()->getName())->as($alias),
+				$tags,
+				$explicit,
+			);
+			$this->requireFields([$fieldRef->getField()->getName()]);
+
+			return;
+		}
+
+		$source = $fieldRef->getSource();
+
+		if (! $source instanceof RelationRef || ! $source->isUnder($this->getRelationRef())) {
+			return;
+		}
+
+		// Fetch-only flats: place keys come from RepresentationSchema (proposal 0003 Phase 2).
+		$this->selections->add(
+			$fieldRef->as($alias),
+			$flatsAsColumnOnly ? SelectionTag::COLUMN : $tags,
+			$explicit && ! $flatsAsColumnOnly,
+		);
 	}
 
 	/**
@@ -258,9 +246,13 @@ final class RelationLoadBranch extends LoadBranch
 	private function findOwnFieldSelection(string $fieldName): ?SelectionItem
 	{
 		foreach ($this->selections->getAll() as $selection) {
-			$own = $this->ownFieldSelection($selection);
+			[$fieldRef] = $this->unwrapFieldSelection($selection) ?? [null];
 
-			if ($own !== null && $own[0] === $fieldName) {
+			if (
+				$fieldRef instanceof FieldRef
+				&& $fieldRef->getSource() === $this->getRelationRef()
+				&& $fieldRef->getField()->getName() === $fieldName
+			) {
 				return $selection;
 			}
 		}
@@ -274,53 +266,18 @@ final class RelationLoadBranch extends LoadBranch
 	}
 
 	/**
-	 * @return ?array{0: string, 1: string} field name + public alias
-	 */
-	private function ownFieldSelection(SelectionItem $selection): ?array
-	{
-		$expression = $selection->getExpression();
-		$publicAlias = $selection->getSelectionKey();
-
-		if ($expression instanceof AliasedExpression) {
-			$publicAlias = $expression->getAlias();
-			$expression = $expression->getExpression();
-		}
-
-		if (! $expression instanceof FieldRef || $expression->getSource() !== $this->getRelationRef()) {
-			return null;
-		}
-
-		return [$expression->getField()->getName(), $publicAlias];
-	}
-
-	/**
-	 * Flat related FieldRef under this level (e.g. posts.author.name as authorName).
-	 *
 	 * @return ?array{0: FieldRef, 1: string}
 	 */
-	private function descendantFieldSelection(SelectionItem $selection): ?array
+	private function unwrapFieldSelection(SelectionItem $selection): ?array
 	{
 		$expression = $selection->getExpression();
-		$publicAlias = $selection->getSelectionKey();
+		$alias = $selection->getSelectionKey();
 
 		if ($expression instanceof AliasedExpression) {
-			$publicAlias = $expression->getAlias();
+			$alias = $expression->getAlias();
 			$expression = $expression->getExpression();
 		}
 
-		if (! $expression instanceof FieldRef) {
-			return null;
-		}
-
-		$source = $expression->getSource();
-
-		if (
-			! $source instanceof RelationRef
-			|| ! $source->isUnder($this->getRelationRef())
-		) {
-			return null;
-		}
-
-		return [$expression, $publicAlias];
+		return $expression instanceof FieldRef ? [$expression, $alias] : null;
 	}
 }
