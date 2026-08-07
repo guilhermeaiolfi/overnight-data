@@ -53,6 +53,7 @@ use ON\Data\Query\QueryFunction\QueryFunctionInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Selection\SelectionItem;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\SortDirection;
 
@@ -163,7 +164,12 @@ final class CycleQueryTranslator
 			$logicalName = null;
 			$backendName = null;
 			$field = $expression instanceof FieldRef ? $expression->getField() : null;
-			$visible = ! $root || $selection->isExplicit();
+			// Keep SQL_ONLY / INTERNAL keys in the mapped row for LoadRuntime parsers;
+			// SelectQuery::publicRow strips them from user-facing output.
+			$visible = ! $root
+				|| $selection->isExplicit()
+				|| $selection->hasTag(SelectionTag::SQL_ONLY)
+				|| $selection->hasTag(SelectionTag::INTERNAL);
 
 			if ($expression instanceof StarExpression) {
 				if (
@@ -195,12 +201,25 @@ final class CycleQueryTranslator
 			if ($root && $selection->isExplicit()) {
 				$logicalName = $this->resolveRootResultName($query, $selection, $expression);
 				$backendName = $logicalName;
+			} elseif (
+				$root
+				&& $aliased
+				&& (
+					$selection->hasTag(SelectionTag::SQL_ONLY)
+					|| $selection->hasTag(SelectionTag::INTERNAL)
+				)
+			) {
+				// Load-local aliases (SQL_ONLY / INTERNAL) keep their selection keys as
+				// SQL result names so LoadRuntime parsers bind without remapping.
+				$logicalName = $selection->getSelectionKey();
+				$backendName = $logicalName;
+				$usedNames[$backendName] = true;
 			}
 
 			$sql = $this->translateExpression($expression, $context);
 
 			if ($root || $aliased || $derived) {
-				if ($root && $selection->isImplicit()) {
+				if ($root && $selection->isImplicit() && $backendName === null) {
 					if ($aliased) {
 						$logicalName = $selection->getSelectionKey();
 					}

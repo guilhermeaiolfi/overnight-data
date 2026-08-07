@@ -208,7 +208,6 @@ final class LoadFieldPlanner
 				$query->getSelections()->add(
 					$source->field($fieldName)->as($loadKey),
 					[SelectionTag::SQL_ONLY, SelectionTag::COLUMN],
-					true,
 				);
 			}
 

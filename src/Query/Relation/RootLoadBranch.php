@@ -77,7 +77,6 @@ final class RootLoadBranch extends LoadBranch
 				$this->query->getSelections()->add(
 					$this->query->field($normalized)->as($alias),
 					[SelectionTag::INTERNAL, SelectionTag::COLUMN, SelectionTag::SQL_ONLY],
-					true,
 				);
 			}
 
@@ -107,7 +106,8 @@ final class RootLoadBranch extends LoadBranch
 
 			$tags = [SelectionTag::IDENTITY, SelectionTag::REQUIRED];
 
-			if (! $selection->hasTag(SelectionTag::PUBLIC)) {
+			// User-authored PK stays visible; required-only PK is INTERNAL.
+			if (! $selection->isExplicit()) {
 				$tags[] = SelectionTag::INTERNAL;
 			}
 
@@ -185,13 +185,17 @@ final class RootLoadBranch extends LoadBranch
 
 			if ($expression instanceof StarExpression && $expression->getSource() === $this->query) {
 				foreach ($this->query->getCollection()->getVisibleFields() as $fieldName) {
-					$this->selections->add($this->query->field($fieldName), SelectionTag::PUBLIC, $selection->isExplicit());
+					$this->selections->add(
+						$this->query->field($fieldName),
+						$selection->isExplicit() ? [SelectionTag::EXPLICIT] : [],
+					);
 				}
 
 				continue;
 			}
 
-			$this->selections->add($selection->getExpression(), SelectionTag::PUBLIC, $selection->isExplicit());
+			$tags = $selection->isExplicit() ? [SelectionTag::EXPLICIT] : [];
+			$this->selections->add($selection->getExpression(), $tags);
 		}
 
 		$this->registerInternalSelections();
@@ -200,11 +204,12 @@ final class RootLoadBranch extends LoadBranch
 	private function registerInternalSelections(): void
 	{
 		foreach ($this->query->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
-			$this->selections->add(
-				$selection->getExpression(),
-				[SelectionTag::INTERNAL, SelectionTag::COLUMN],
-				$selection->isExplicit(),
-			);
+			$tags = [SelectionTag::INTERNAL, SelectionTag::COLUMN];
+			if ($selection->isExplicit()) {
+				$tags[] = SelectionTag::EXPLICIT;
+			}
+
+			$this->selections->add($selection->getExpression(), $tags);
 		}
 	}
 

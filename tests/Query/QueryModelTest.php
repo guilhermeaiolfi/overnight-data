@@ -196,13 +196,13 @@ final class QueryModelTest extends TestCase
 		self::assertInstanceOf(SelectionItem::class, $selections[0]);
 		self::assertSame($field, $selections[0]->getExpression());
 		self::assertTrue($selections[0]->isExplicit());
-		self::assertSame([SelectionTag::COLUMN, SelectionTag::PUBLIC], $selections[0]->getTags());
+		self::assertSame([SelectionTag::EXPLICIT, SelectionTag::COLUMN], $selections[0]->getTags());
 	}
 
 	public function testSelectionConstructorNormalizesAndDeduplicatesTags(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
-		$selection = new SelectionItem($query->id, false, [' relation-key ', 'relation-key', ' result-grouping-key ']);
+		$selection = new SelectionItem($query->id, [' relation-key ', 'relation-key', ' result-grouping-key ']);
 
 		self::assertSame(['relation-key', 'result-grouping-key'], $selection->getTags());
 		self::assertTrue($selection->hasTag('relation-key'));
@@ -1349,12 +1349,12 @@ final class QueryModelTest extends TestCase
 
 		self::assertTrue($selection->isExplicit());
 		self::assertTrue($selection->hasTag(SelectionTag::COLUMN));
-		self::assertTrue($selection->hasTag(SelectionTag::PUBLIC));
+		self::assertTrue($selection->hasTag(SelectionTag::EXPLICIT));
 	}
 
-	public function testSelectionTagDoesNotExposeLegacyExplicitConstant(): void
+	public function testSelectionTagExposesExplicitConstant(): void
 	{
-		self::assertFalse(defined(SelectionTag::class . '::EXPLICIT'));
+		self::assertTrue(defined(SelectionTag::class . '::EXPLICIT'));
 	}
 
 	public function testSelectionListPromotesImplicitFieldToExplicitAndPreservesTags(): void
@@ -1369,7 +1369,7 @@ final class QueryModelTest extends TestCase
 
 		self::assertTrue($selection->isExplicit());
 		self::assertTrue($selection->hasTag(SelectionTag::COLUMN));
-		self::assertTrue($selection->hasTag(SelectionTag::PUBLIC));
+		self::assertTrue($selection->hasTag(SelectionTag::EXPLICIT));
 		self::assertTrue($selection->hasTag(SelectionTag::INTERNAL));
 	}
 
@@ -1378,7 +1378,7 @@ final class QueryModelTest extends TestCase
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$list = new SelectionList();
 
-		$list->add($query->name, SelectionTag::PUBLIC);
+		$list->add($query->name, SelectionTag::EXPLICIT);
 		$list->add($query->email, SelectionTag::REQUIRED);
 		$list->add($query->id, SelectionTag::RELATION);
 		$list->add($query->title, SelectionTag::IDENTITY);
@@ -1400,7 +1400,7 @@ final class QueryModelTest extends TestCase
 
 		self::assertTrue($selection->hasTag(SelectionTag::COLUMN));
 		self::assertTrue($selection->hasTag(SelectionTag::INTERNAL));
-		self::assertFalse($selection->hasTag(SelectionTag::PUBLIC));
+		self::assertFalse($selection->hasTag(SelectionTag::EXPLICIT));
 	}
 
 	public function testSqlOnlyFieldSelectionsAreNotReturnedAsColumnSelections(): void
@@ -1438,7 +1438,7 @@ final class QueryModelTest extends TestCase
 		self::assertTrue($selection->hasTag(SelectionTag::SQL_ONLY));
 		self::assertTrue($selection->hasTag(SelectionTag::INTERNAL));
 		self::assertFalse($selection->hasTag(SelectionTag::COLUMN));
-		self::assertFalse($selection->hasTag(SelectionTag::PUBLIC));
+		self::assertFalse($selection->hasTag(SelectionTag::EXPLICIT));
 	}
 
 	public function testEnsureInternalExpressionIsNotReturnedAsAColumnSelection(): void
@@ -1471,12 +1471,12 @@ final class QueryModelTest extends TestCase
 		$list = new SelectionList();
 
 		$list->add($query->id, SelectionTag::REQUIRED);
-		$list->add($query->name, SelectionTag::PUBLIC);
-		$list->add($query->id, SelectionTag::PUBLIC);
+		$list->add($query->name, SelectionTag::EXPLICIT);
+		$list->add($query->id, SelectionTag::EXPLICIT);
 
 		self::assertSame(
 			[$query->name, $query->id],
-			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getByTag(SelectionTag::PUBLIC)),
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getByTag(SelectionTag::EXPLICIT)),
 		);
 	}
 
@@ -1501,15 +1501,15 @@ final class QueryModelTest extends TestCase
 		$list = new SelectionList();
 
 		$list->add($query->id, SelectionTag::REQUIRED);
-		$list->add($query->name, SelectionTag::PUBLIC);
-		$list->add($query->id, SelectionTag::PUBLIC);
+		$list->add($query->name, SelectionTag::EXPLICIT);
+		$list->add($query->id, SelectionTag::EXPLICIT);
 		$list->add($query->title, SelectionTag::IDENTITY);
 
 		$filtered = $list->filter(static fn (SelectionItem $selection): bool => $selection->getExpression() !== $query->name);
 
 		self::assertSame(
 			[$query->id],
-			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $filtered->getByTag(SelectionTag::PUBLIC)),
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $filtered->getByTag(SelectionTag::EXPLICIT)),
 		);
 		self::assertSame(
 			[$query->id, $query->title],
@@ -1526,19 +1526,19 @@ final class QueryModelTest extends TestCase
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$list = new SelectionList();
 
-		$list->add($query->id, SelectionTag::PUBLIC);
-		$list->add($query->id, SelectionTag::PUBLIC);
+		$list->add($query->id, SelectionTag::EXPLICIT);
+		$list->add($query->id, SelectionTag::EXPLICIT);
 
 		self::assertSame(
 			[$query->id],
-			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getByTag(SelectionTag::PUBLIC)),
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getByTag(SelectionTag::EXPLICIT)),
 		);
 	}
 
 	public function testSelectionListColumnProjectionPreservesTagsWithoutForcingExplicit(): void
 	{
 		$inner = query($this->makeRegistry()->getCollection('posts'));
-		$inner->getSelections()->add($inner->amount, SelectionTag::PUBLIC);
+		$inner->getSelections()->add($inner->amount);
 		$inner->getSelections()->add($inner->userId, SelectionTag::REQUIRED);
 		$inner->getSelections()->add($inner->id, SelectionTag::RELATION);
 		$inner->getSelections()->removeByTag(SelectionTag::DEFAULT);
@@ -1572,7 +1572,7 @@ final class QueryModelTest extends TestCase
 			partitionBy: $inner->userId,
 			orderBy: $inner->id->asc(),
 		);
-		$inner->getSelections()->add($inner->amount, SelectionTag::PUBLIC);
+		$inner->getSelections()->add($inner->amount);
 		$inner->getSelections()->ensureInternalExpression($rank, '__ondata_rank');
 		$inner->getSelections()->removeByTag(SelectionTag::DEFAULT);
 		$ranked = $inner->as('ranked_posts');
@@ -1602,7 +1602,7 @@ final class QueryModelTest extends TestCase
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$list = new SelectionList();
 
-		$list->add($query->name, SelectionTag::PUBLIC);
+		$list->add($query->name, SelectionTag::EXPLICIT);
 		$list->ensureInternalExpression($query->name->upper(), '__ondata_rank');
 
 		self::assertSame(
@@ -1626,7 +1626,7 @@ final class QueryModelTest extends TestCase
 	public function testLocalDerivedSourceAliasingWrapsTheInnerQuery(): void
 	{
 		$inner = query($this->makeRegistry()->getCollection('posts'));
-		$inner->getSelections()->add($inner->amount, SelectionTag::PUBLIC);
+		$inner->getSelections()->add($inner->amount);
 		$inner->getSelections()->removeByTag(SelectionTag::DEFAULT);
 		$ranked = $inner->as('ranked_posts');
 
@@ -1681,7 +1681,7 @@ final class QueryModelTest extends TestCase
 		$selections = $query->getSelections()->getAll();
 		self::assertCount(1, $selections);
 		self::assertTrue($selections[0]->isExplicit());
-		self::assertSame(['relation-key', SelectionTag::COLUMN, SelectionTag::PUBLIC], $selections[0]->getTags());
+		self::assertSame(['relation-key', SelectionTag::COLUMN, SelectionTag::EXPLICIT], $selections[0]->getTags());
 
 		$query->select($query->id);
 		$selections = $query->getSelections()->getAll();

@@ -20,9 +20,11 @@ final class SelectionItem
 
 	private readonly ?string $selectionKey;
 
+	/**
+	 * @param list<string> $tags
+	 */
 	public function __construct(
 		private readonly ValueExpressionInterface|AliasedExpression|StarExpression $expression,
-		private readonly bool $explicit = false,
 		array $tags = [],
 	) {
 		try {
@@ -70,7 +72,7 @@ final class SelectionItem
 
 	public function isExplicit(): bool
 	{
-		return $this->explicit;
+		return $this->hasTag(SelectionTag::EXPLICIT);
 	}
 
 	public function isImplicit(): bool
@@ -93,15 +95,6 @@ final class SelectionItem
 		return in_array($tag, $this->tags, true);
 	}
 
-	public function withExplicit(): self
-	{
-		if ($this->explicit) {
-			return $this;
-		}
-
-		return new self($this->expression, true, $this->tags);
-	}
-
 	public function withTag(string $tag): self
 	{
 		$tag = $this->normalizeTag($tag);
@@ -110,7 +103,7 @@ final class SelectionItem
 			return $this;
 		}
 
-		return new self($this->expression, $this->explicit, [...$this->tags, $tag]);
+		return new self($this->expression, [...$this->tags, $tag]);
 	}
 
 	/**

@@ -64,7 +64,7 @@ final class SelectionList implements IteratorAggregate, Countable
 
 		foreach ($expressions as $expression) {
 			$promoted = false;
-			$explicitTags = $this->inferTags($expression, [], true);
+			$explicitTags = $this->inferTags($expression, [SelectionTag::EXPLICIT]);
 
 			foreach ($pendingEntries as $index => $entry) {
 				if ($entry->isExplicit()) {
@@ -75,16 +75,14 @@ final class SelectionList implements IteratorAggregate, Countable
 					continue;
 				}
 
-				$pendingEntries[$index] = $entry
-					->withTags($explicitTags)
-					->withExplicit();
+				$pendingEntries[$index] = $entry->withTags($explicitTags);
 				$promoted = true;
 
 				break;
 			}
 
 			if (! $promoted) {
-				$pendingEntries[] = new SelectionItem($expression, true, $explicitTags);
+				$pendingEntries[] = new SelectionItem($expression, $explicitTags);
 			}
 		}
 
@@ -102,9 +100,8 @@ final class SelectionList implements IteratorAggregate, Countable
 	public function add(
 		ValueExpressionInterface|AliasedExpression|StarExpression $expression,
 		string|array $tags = [],
-		bool $explicit = false,
 	): SelectionItem {
-		$normalizedTags = $this->inferTags($expression, $this->normalizeTags($tags), $explicit);
+		$normalizedTags = $this->inferTags($expression, $this->normalizeTags($tags));
 
 		foreach ($this->entries as $index => $entry) {
 			if (! $this->expressionsMatch($entry->getExpression(), $expression)) {
@@ -112,11 +109,6 @@ final class SelectionList implements IteratorAggregate, Countable
 			}
 
 			$updated = $entry->withTags($normalizedTags);
-
-			if ($explicit) {
-				$updated = $updated->withExplicit();
-			}
-
 			$this->entries[$index] = $updated;
 
 			return $updated;
@@ -126,7 +118,7 @@ final class SelectionList implements IteratorAggregate, Countable
 			throw new InvalidArgumentException(sprintf("Query expression alias '%s' is already selected.", $expression->getAlias()));
 		}
 
-		$item = new SelectionItem($expression, $explicit, $normalizedTags);
+		$item = new SelectionItem($expression, $normalizedTags);
 		$this->appendItem($item);
 
 		return $item;
@@ -164,14 +156,21 @@ final class SelectionList implements IteratorAggregate, Countable
 		$this->add($expression, $tag);
 	}
 
-	public function merge(self $other, ?bool $explicit = null): void
+	public function merge(self $other, ?bool $forceExplicit = null): void
 	{
 		foreach ($other->getAll() as $selection) {
-			$this->add(
-				$selection->getExpression(),
-				$selection->getTags(),
-				$explicit ?? $selection->isExplicit(),
-			);
+			$tags = $selection->getTags();
+
+			if ($forceExplicit === true && ! in_array(SelectionTag::EXPLICIT, $tags, true)) {
+				$tags[] = SelectionTag::EXPLICIT;
+			} elseif ($forceExplicit === false) {
+				$tags = array_values(array_filter(
+					$tags,
+					static fn (string $tag): bool => $tag !== SelectionTag::EXPLICIT,
+				));
+			}
+
+			$this->add($selection->getExpression(), $tags);
 		}
 	}
 
@@ -183,7 +182,6 @@ final class SelectionList implements IteratorAggregate, Countable
 			$projected->add(
 				$entry->getProjectedExpression($sources),
 				$entry->getTags(),
-				$entry->isExplicit(),
 			);
 		}
 
@@ -213,7 +211,6 @@ final class SelectionList implements IteratorAggregate, Countable
 				$projected->add(
 					$target->field($outputName)->as($outputName),
 					$entry->getTags(),
-					$entry->isExplicit(),
 				);
 			}
 		}
@@ -234,7 +231,12 @@ final class SelectionList implements IteratorAggregate, Countable
 			}
 
 			if ($entry->isExplicit() || $entry->getExpression() instanceof AliasedExpression) {
-				return $this->add($entry->getExpression(), SelectionTag::INTERNAL, $entry->isExplicit());
+				$tags = [SelectionTag::INTERNAL];
+				if ($entry->isExplicit()) {
+					$tags[] = SelectionTag::EXPLICIT;
+				}
+
+				return $this->add($entry->getExpression(), $tags);
 			}
 
 			break;
@@ -478,13 +480,17 @@ final class SelectionList implements IteratorAggregate, Countable
 	private function inferTags(
 		ValueExpressionInterface|AliasedExpression|StarExpression $expression,
 		array $callerTags,
-		bool $explicit,
 	): array {
 		$inferred = $callerTags;
 
-		if ($explicit) {
+		// EXPLICIT means user-authored; field-like explicit selections are also COLUMNs.
+		// Visibility defaults to public — INTERNAL opts out (do not infer PUBLIC).
+		if (
+			in_array(SelectionTag::EXPLICIT, $inferred, true)
+			&& ! in_array(SelectionTag::SQL_ONLY, $inferred, true)
+			&& $this->isFieldLike($expression)
+		) {
 			$inferred[] = SelectionTag::COLUMN;
-			$inferred[] = SelectionTag::PUBLIC;
 		}
 
 		if (

@@ -20,7 +20,6 @@ use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
 use ON\Data\Query\Selection\SelectionItem;
-use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 
 final class M2MLoader extends AbstractLoader
@@ -263,7 +262,7 @@ final class M2MLoader extends AbstractLoader
 
 				return $selection->getSelectionKey();
 			},
-			$branch->getSelections()->getByTag(SelectionTag::PUBLIC),
+			$branch->getSelections()->getExplicit(),
 		);
 	}
 }

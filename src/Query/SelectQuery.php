@@ -104,7 +104,7 @@ final class SelectQuery implements QuerySourceInterface
 		private ?QueryExecutorInterface $executor = null,
 	) {
 		$this->selections = new SelectionList();
-		$this->selections->add($this->all(), SelectionTag::DEFAULT, true);
+		$this->selections->add($this->all(), [SelectionTag::DEFAULT, SelectionTag::EXPLICIT]);
 		$this->conditions = new ConditionList();
 	}
 

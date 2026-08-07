@@ -106,7 +106,7 @@ final class RelationLoadBranch extends LoadBranch
 
 		foreach ($fieldNames as $fieldName) {
 			$canonical = $this->fieldSelectionName($fieldName);
-			$this->selections->add($this->relationFieldSelection($canonical), SelectionTag::PUBLIC);
+			$this->selections->add($this->relationFieldSelection($canonical), SelectionTag::EXPLICIT);
 			$added[] = $canonical;
 		}
 
@@ -132,14 +132,13 @@ final class RelationLoadBranch extends LoadBranch
 		}
 
 		foreach ($this->selection->getSelections()->getExplicit() as $selection) {
-			$this->registerLevelSelection($selection, [SelectionTag::PUBLIC], explicit: true, flatsAsColumnOnly: true);
+			$this->registerLevelSelection($selection, [SelectionTag::EXPLICIT], flatsAsColumnOnly: true);
 		}
 
 		foreach ($this->selection->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
 			$this->registerLevelSelection(
 				$selection,
 				[SelectionTag::INTERNAL, SelectionTag::COLUMN],
-				explicit: false,
 				flatsAsColumnOnly: false,
 			);
 		}
@@ -151,7 +150,6 @@ final class RelationLoadBranch extends LoadBranch
 	private function registerLevelSelection(
 		SelectionItem $selection,
 		array $tags,
-		bool $explicit,
 		bool $flatsAsColumnOnly,
 	): void {
 		$expression = $selection->getExpression();
@@ -172,7 +170,6 @@ final class RelationLoadBranch extends LoadBranch
 			$this->selections->add(
 				$this->getRelationRef()->field($fieldRef->getField()->getName())->as($alias),
 				$tags,
-				$explicit,
 			);
 			$this->requireFields([$fieldRef->getField()->getName()]);
 
@@ -185,11 +182,11 @@ final class RelationLoadBranch extends LoadBranch
 			return;
 		}
 
-		// Fetch-only flats: place keys come from RepresentationSchema (proposal 0003 Phase 2).
+		// Fetch-only flats: place keys come from RepresentationSchema.
+		// Keep EXPLICIT off flats so they are not treated as own-level place from tags.
 		$this->selections->add(
 			$fieldRef->as($alias),
 			$flatsAsColumnOnly ? SelectionTag::COLUMN : $tags,
-			$explicit && ! $flatsAsColumnOnly,
 		);
 	}
 

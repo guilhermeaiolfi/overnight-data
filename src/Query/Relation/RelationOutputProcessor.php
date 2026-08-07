@@ -248,9 +248,9 @@ final class RelationOutputProcessor
 	}
 
 	/**
-	 * Public own-level keys stay on PUBLIC selections; schema only adds COLUMN-only
-	 * flats (non-empty sourcePath). Full schema fields include PK backfill for
-	 * adoption and must not drive public place.
+	 * Visible place keys: explicit own-level selections (unless INTERNAL/SQL_ONLY),
+	 * plus schema flats (non-empty sourcePath). Default visibility is public;
+	 * INTERNAL opts out.
 	 *
 	 * @return list<string>
 	 */
@@ -258,7 +258,14 @@ final class RelationOutputProcessor
 	{
 		$keys = [];
 
-		foreach ($branch->getSelections()->getByTag(SelectionTag::PUBLIC) as $selection) {
+		foreach ($branch->getSelections()->getExplicit() as $selection) {
+			if (
+				$selection->hasTag(SelectionTag::INTERNAL)
+				|| $selection->hasTag(SelectionTag::SQL_ONLY)
+			) {
+				continue;
+			}
+
 			$keys[] = $selection->getSelectionKey();
 		}
 

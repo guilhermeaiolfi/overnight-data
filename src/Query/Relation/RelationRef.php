@@ -74,7 +74,7 @@ final class RelationRef implements QuerySourceInterface
 		private readonly ?self $parentRelation = null,
 	) {
 		$this->selections = new SelectionList();
-		$this->selections->add($this->all(), SelectionTag::DEFAULT, true);
+		$this->selections->add($this->all(), [SelectionTag::DEFAULT, SelectionTag::EXPLICIT]);
 	}
 
 	public function getQuery(): SelectQuery
@@ -563,7 +563,7 @@ final class RelationRef implements QuerySourceInterface
 	{
 		$this->selected = false;
 		$this->selections->clear();
-		$this->selections->add($this->all(), SelectionTag::DEFAULT, true);
+		$this->selections->add($this->all(), [SelectionTag::DEFAULT, SelectionTag::EXPLICIT]);
 
 		foreach ($this->relationRefs as $relation) {
 			$relation->clearSelection();

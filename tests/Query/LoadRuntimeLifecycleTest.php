@@ -287,11 +287,11 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$rootBranch = $this->readProperty($runtime, 'rootBranch');
 		$columns = $this->readProperty($rootBranch->getNode(), 'columns');
 		$selections = $this->readProperty($rootBranch, 'selections');
-		$titleSelection = $selections->getByTag(SelectionTag::PUBLIC)[0];
+		$titleSelection = $selections->getByTag(SelectionTag::EXPLICIT)[0];
 
 		self::assertSame(['name', 'l_root_required_id'], $columns);
 		self::assertSame(['name'], LifecycleEvents::$plannedRootColumns);
-		self::assertTrue($titleSelection->hasTag(SelectionTag::PUBLIC));
+		self::assertTrue($titleSelection->hasTag(SelectionTag::EXPLICIT));
 		self::assertTrue($titleSelection->hasTag(SelectionTag::REQUIRED));
 		self::assertSame([[
 			'title' => 'Ada',
@@ -663,7 +663,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	{
 		return array_map(
 			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getByTag(SelectionTag::PUBLIC),
+			$branch->getSelections()->getByTag(SelectionTag::EXPLICIT),
 		);
 	}
 }

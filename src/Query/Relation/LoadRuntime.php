@@ -9,12 +9,8 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationSelectionException;
-use ON\Data\Query\Expression\AliasedExpression;
-use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
-use ON\Data\Query\Selection\SelectionItem;
-use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use ReflectionMethod;
 
@@ -94,40 +90,15 @@ final class LoadRuntime
 	}
 
 	/**
-	 * Skip root parser/assemble when there are no relation loads and every root
-	 * field already uses place≡load keys (legacy simple fetch path).
+	 * Skip root parser/assemble when there are no relation loads.
+	 *
+	 * Cycle already returns EXPLICIT selection keys (including flat related
+	 * columns like posts.title). Routing those through RootNode would collapse
+	 * has-many flat joins by root identity.
 	 */
 	private function canShortCircuitRootFetch(): bool
 	{
-		if (! $this->rootQuery->getRelationSelections()->isEmpty()) {
-			return false;
-		}
-
-		foreach ($this->rootQuery->getSelections()->getExplicit() as $selection) {
-			if ($selection->hasTag(SelectionTag::SQL_ONLY)) {
-				continue;
-			}
-
-			$fieldRef = $this->columnFieldRef($selection);
-
-			if (! $fieldRef instanceof FieldRef) {
-				continue;
-			}
-
-			$placeKey = $selection->getSelectionKey();
-			$loadKey = $this->levelLoadKey(
-				$this->rootQuery,
-				$selection,
-				$fieldRef,
-				$fieldRef->getField()->getName(),
-			);
-
-			if ($placeKey !== $loadKey) {
-				return false;
-			}
-		}
-
-		return true;
+		return $this->rootQuery->getRelationSelections()->isEmpty();
 	}
 
 	/**
@@ -450,45 +421,6 @@ final class LoadRuntime
 	private function branchKey(array $path): string
 	{
 		return json_encode($path, JSON_THROW_ON_ERROR);
-	}
-
-	/**
-	 * Used only by {@see canShortCircuitRootFetch()} — full planning lives on {@see LoadFieldPlanner}.
-	 */
-	private function columnFieldRef(SelectionItem $selection): ?FieldRef
-	{
-		$expression = $selection->getExpression();
-
-		if ($expression instanceof AliasedExpression) {
-			$expression = $expression->getExpression();
-		}
-
-		return $expression instanceof FieldRef ? $expression : null;
-	}
-
-	/**
-	 * Used only by {@see canShortCircuitRootFetch()} — full planning lives on {@see LoadFieldPlanner}.
-	 */
-	private function levelLoadKey(
-		SelectQuery|RelationRef $level,
-		SelectionItem $selection,
-		FieldRef $fieldRef,
-		string $fieldName,
-	): string {
-		if ($selection->hasTag(SelectionTag::INTERNAL)) {
-			return $selection->getSelectionKey();
-		}
-
-		if ($fieldRef->getSource() === $level) {
-			return $fieldName;
-		}
-
-		$source = $fieldRef->getSource();
-		if (! $source instanceof RelationRef || ! $source->isUnder($level)) {
-			return $fieldName;
-		}
-
-		return implode('__', [...$source->relativeTo($level), $fieldName]);
 	}
 
 	/**

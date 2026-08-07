@@ -9,15 +9,19 @@ use ON\Data\Definition\Registry;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 
+/**
+ * Without relation loads, LoadRuntime short-circuits to the executor. Cycle (and
+ * this stub) emit place/selection keys directly — no load-local remapping.
+ */
 final class RootLoadLocalProjectionTest extends TestCase
 {
-	public function testRootRenamedOwnFieldAssemblesFromLoadLocalKey(): void
+	public function testRootRenamedOwnFieldUsesPlaceSelectionKey(): void
 	{
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
 			new RootLoadLocalExecutor([
 				'id' => 1,
-				'name' => 'Ada',
+				'displayName' => 'Ada',
 			]),
 		);
 		$query->select($query->id, $query->name->as('displayName'));
@@ -28,13 +32,13 @@ final class RootLoadLocalProjectionTest extends TestCase
 		]], $query->fetchAll());
 	}
 
-	public function testRootFlatRelatedFieldAssemblesFromLoadLocalKey(): void
+	public function testRootFlatRelatedFieldUsesPlaceSelectionKey(): void
 	{
 		$query = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
 			new RootLoadLocalExecutor([
 				'id' => 1,
-				'company__name' => 'Acme',
+				'companyName' => 'Acme',
 			]),
 		);
 		$query->select($query->id, $query->company->name->as('companyName'));
