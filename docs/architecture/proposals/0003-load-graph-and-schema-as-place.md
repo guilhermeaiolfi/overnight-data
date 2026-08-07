@@ -53,11 +53,12 @@ RelationSelectionTree     ← which attaches exist
 LoadBranch tree           ← runtime destination per attach (+ root)
         │
         ▼
-resolveSelectionSource    ← own table vs JOIN under this level (does not create destinations)
-ensureLevelFieldSelection ← emit SQL onto that destination’s query
+LoadFieldPlanner          ← group place-level COLUMNs by fetch home
+  assign: local | child destination | skip
+  emit:   SQL on that destination + place binds
         │
         ▼
-RelationOutputProcessor   ← place keys from schema; read via placeToLoadKeys
+RelationOutputProcessor   ← place keys from schema; read via placeToLoadKeys / child paths
 ```
 
 **Invariant:** destination = RelationSelection attaches (+ root), **not** every schema `sourcePath`. Flat `$posts->author->name` does not create an author attach.
