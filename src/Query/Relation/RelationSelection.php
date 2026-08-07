@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation;
 
 use ON\Data\Query\Condition\ConditionInterface;
-use ON\Data\Query\Expression\AliasedExpression;
-use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Sort\Sort;
 
@@ -80,42 +78,6 @@ final class RelationSelection
 	public function getSelections(): SelectionList
 	{
 		return $this->selections;
-	}
-
-	/**
-	 * Identity-aliased own-field names when this level has an explicit projection.
-	 *
-	 * @return ?list<string>
-	 */
-	public function getFields(): ?array
-	{
-		if ($this->defaultSelection) {
-			return null;
-		}
-
-		$names = [];
-
-		foreach ($this->selections->getExplicit() as $selection) {
-			$expression = $selection->getExpression();
-
-			if (! $expression instanceof AliasedExpression) {
-				continue;
-			}
-
-			$inner = $expression->getExpression();
-
-			if (
-				! $inner instanceof FieldRef
-				|| $inner->getSource() !== $this->relationRef
-				|| $inner->getField()->getName() !== $expression->getAlias()
-			) {
-				continue;
-			}
-
-			$names[] = $inner->getField()->getName();
-		}
-
-		return $names === [] ? null : $names;
 	}
 
 	/**

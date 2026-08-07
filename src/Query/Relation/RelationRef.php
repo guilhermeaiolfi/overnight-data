@@ -107,48 +107,6 @@ final class RelationRef implements QuerySourceInterface
 		return $this->visible;
 	}
 
-	/**
-	 * Backward-compatible view of explicit direct-field selections.
-	 *
-	 * Returns null while this level still uses its default (visible-fields)
-	 * selection. Once {@see select()} narrows the selection, this returns the
-	 * names of any identity-aliased own fields; aliases, star, and flat related
-	 * fields are not representable as plain field names and are omitted —
-	 * use {@see getSelections()} for the full picture.
-	 *
-	 * @return ?list<string>
-	 */
-	public function getFields(): ?array
-	{
-		if ($this->hasDefaultSelection()) {
-			return null;
-		}
-
-		$names = [];
-
-		foreach ($this->selections->getExplicit() as $selection) {
-			$expression = $selection->getExpression();
-
-			if (! $expression instanceof AliasedExpression) {
-				continue;
-			}
-
-			$inner = $expression->getExpression();
-
-			if (
-				! $inner instanceof FieldRef
-				|| $inner->getSource() !== $this
-				|| $inner->getField()->getName() !== $expression->getAlias()
-			) {
-				continue;
-			}
-
-			$names[] = $inner->getField()->getName();
-		}
-
-		return $names === [] ? null : $names;
-	}
-
 	public function getSelections(): SelectionList
 	{
 		return $this->selections;

@@ -25,6 +25,7 @@ use ON\Data\Query\JoinType;
 use function ON\Data\Query\query;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationRef;
+use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\SourceMap;
@@ -130,7 +131,7 @@ final class RelationRefTest extends TestCase
 
 		self::assertTrue($default->isLoaded());
 		self::assertTrue($default->isVisible());
-		self::assertSame(['id', 'title'], $fields->getFields());
+		self::assertSame(['id', 'title'], $this->explicitSelectionKeys($fields));
 		self::assertSame($default, $users->posts);
 		self::assertSame($default, $fields);
 	}
@@ -141,9 +142,9 @@ final class RelationRefTest extends TestCase
 		$fromArray = $users->posts->select(['title']);
 		$fromRefs = $users->posts->select($users->posts->id, $users->posts->title);
 
-		self::assertSame(['id', 'title'], $fromArray->getFields());
-		self::assertSame(['id', 'title'], $fromRefs->getFields());
-		self::assertSame(['id', 'title'], $users->posts->getFields());
+		self::assertSame(['id', 'title'], $this->explicitSelectionKeys($fromArray));
+		self::assertSame(['id', 'title'], $this->explicitSelectionKeys($fromRefs));
+		self::assertSame(['id', 'title'], $this->explicitSelectionKeys($users->posts));
 	}
 
 	public function testSelectRejectInvalidSelectionInputs(): void
@@ -255,7 +256,7 @@ final class RelationRefTest extends TestCase
 
 		self::assertTrue($users->posts->isSelected());
 		self::assertTrue($users->posts->isLoaded());
-		self::assertNull($users->posts->getFields());
+		self::assertNull($this->explicitSelectionKeys($users->posts));
 		self::assertSame([
 			['posts', true, true, null],
 		], $this->selectionState($users));
@@ -322,7 +323,7 @@ final class RelationRefTest extends TestCase
 
 		$users->posts->load();
 
-		self::assertNull($users->posts->getFields());
+		self::assertNull($this->explicitSelectionKeys($users->posts));
 		self::assertSame([], $users->posts->getConditions());
 		self::assertSame([], $users->posts->getSorts());
 		self::assertNull($users->posts->getStrategy());
@@ -520,7 +521,7 @@ final class RelationRefTest extends TestCase
 		$users->posts->select('title')->where($secondCondition)->orderBy($secondSort);
 
 		$selection = $users->getRelationSelections()->getAll()[0];
-		self::assertSame(['title'], $selection->getFields());
+		self::assertSame(['title'], $this->explicitSelectionKeys($selection));
 		self::assertSame([$firstCondition, $secondCondition], $selection->getConditions());
 		self::assertSame([$firstSort, $secondSort], $selection->getSorts());
 	}
@@ -730,7 +731,7 @@ final class RelationRefTest extends TestCase
 		$users->posts->select('id');
 
 		$selection = $users->getRelationSelections()->getAll()[0];
-		self::assertSame(['id'], $selection->getFields());
+		self::assertSame(['id'], $this->explicitSelectionKeys($selection));
 		self::assertSame([], $selection->getConditions());
 		self::assertSame([], $selection->getSorts());
 		self::assertNull($selection->getLimit());
@@ -777,9 +778,9 @@ final class RelationRefTest extends TestCase
 		$configuredPosts = $users->posts->select('id', 'title');
 		$comments = $configuredPosts->comments->select('id', 'body');
 
-		self::assertSame(['id', 'title'], $configuredPosts->getFields());
+		self::assertSame(['id', 'title'], $this->explicitSelectionKeys($configuredPosts));
 		self::assertSame(['posts', 'comments'], $comments->getPath());
-		self::assertSame(['id', 'body'], $comments->getFields());
+		self::assertSame(['id', 'body'], $this->explicitSelectionKeys($comments));
 
 		self::assertSame([
 			['posts', true, true, ['id', 'title']],
@@ -1295,7 +1296,6 @@ final class RelationRefTest extends TestCase
 
 		self::assertTrue($users->posts->isSelected());
 		self::assertFalse($users->posts->hasDefaultSelection());
-		self::assertSame(['id'], $users->posts->getFields());
 
 		$keys = array_map(
 			static fn ($selection) => $selection->getSelectionKey(),
@@ -1304,7 +1304,7 @@ final class RelationRefTest extends TestCase
 		self::assertSame(['id', 'headline'], $keys);
 
 		$schema = $users->getRelationSelections()->getAll()[0];
-		self::assertSame(['id'], $schema->getFields());
+		self::assertSame(['id', 'headline'], $this->explicitSelectionKeys($schema));
 		self::assertFalse($schema->hasDefaultSelection());
 	}
 
@@ -1316,10 +1316,10 @@ final class RelationRefTest extends TestCase
 
 		self::assertTrue($users->posts->isSelected());
 		self::assertTrue($users->posts->hasDefaultSelection());
-		self::assertNull($users->posts->getFields());
+		self::assertNull($this->explicitSelectionKeys($users->posts));
 		self::assertTrue($users->posts->author->isSelected());
 		self::assertFalse($users->posts->author->hasDefaultSelection());
-		self::assertSame(['name'], $users->posts->author->getFields());
+		self::assertSame(['name'], $this->explicitSelectionKeys($users->posts->author));
 	}
 
 	public function testTraverseOnlyAuthorDoesNotLoadPostsScalars(): void
@@ -1346,20 +1346,35 @@ final class RelationRefTest extends TestCase
 			$users->posts->getSelections()->getExplicit(),
 		);
 		self::assertSame(['id', 'title'], $keys);
-		self::assertSame(['id', 'title'], $users->posts->getFields());
+		self::assertSame(['id', 'title'], $this->explicitSelectionKeys($users->posts));
 	}
 
 	/**
-	 * @return list<array{0: string, 1: bool, 2: bool, 3: ?array}>
+	 * @return list<string>|null
+	 */
+	private function explicitSelectionKeys(RelationRef|RelationSelection $level): ?array
+	{
+		if ($level->hasDefaultSelection()) {
+			return null;
+		}
+
+		return array_values(array_map(
+			static fn ($selection): string => $selection->getSelectionKey(),
+			$level->getSelections()->getExplicit(),
+		));
+	}
+
+	/**
+	 * @return list<array{0: string, 1: bool, 2: bool, 3: ?list<string>}>
 	 */
 	private function selectionState(SelectQuery $query): array
 	{
 		return array_map(
-			static fn ($selection): array => [
+			fn ($selection): array => [
 				implode('.', $selection->getPath()),
 				$selection->isLoaded(),
 				$selection->isVisible(),
-				$selection->getFields(),
+				$this->explicitSelectionKeys($selection),
 			],
 			$query->getRelationSelections()->getAll(),
 		);
