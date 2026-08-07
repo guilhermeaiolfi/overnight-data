@@ -42,35 +42,42 @@ final class M2MLoader extends AbstractLoader
 		$throughInnerKeys = $through->getInnerKeys();
 		$throughOuterKeys = $through->getOuterKeys();
 		$parent = $branch->getParent();
-		$targetIdentity = $branch->requireFields($relation->getCollection()->getPrimaryKey());
-		$branch->requireFields($this->publicFieldNames($branch));
-		$targetOuterKeyColumns = $branch->requireFields($throughToTarget->getRightFields());
-		$parentInnerKeyColumns = $parent->requireFields($parentToThrough->getLeftFields());
-		$throughColumns = array_values(array_unique([
+		$targetIdentity = $this->requireLoadKeys($branch, $relation->getCollection()->getPrimaryKey());
+		$this->requireLoadKeys($branch, $this->publicFieldNames($branch));
+		$targetOuterKeyColumns = $this->requireLoadKeys($branch, $throughToTarget->getRightFields());
+		$parentInnerKeyColumns = $this->requireLoadKeys($parent, $parentToThrough->getLeftFields());
+		$throughFieldNames = array_values(array_unique([
 			...$throughInnerKeys,
 			...$throughOuterKeys,
 		]));
+		$throughAliasesByField = $this->allocateThroughAliases($branch, $throughFieldNames);
+		$throughColumns = array_values($throughAliasesByField);
+		$throughInnerLoadKeys = array_map(
+			static fn (string $field): string => $throughAliasesByField[$field],
+			$throughInnerKeys,
+		);
+		$throughOuterLoadKeys = array_map(
+			static fn (string $field): string => $throughAliasesByField[$field],
+			$throughOuterKeys,
+		);
 
 		$targetNode = new SingularNode(
 			$this->columnSelectionKeys($branch),
 			$targetIdentity,
 			$targetOuterKeyColumns,
-			$throughOuterKeys,
+			$throughOuterLoadKeys,
 		);
 		$branch->setPublicNode($targetNode);
 		$branch->setPublicPayloadChild(self::THROUGH_CONTAINER);
 
-		$throughNode = new M2MThroughNode(
+		return new M2MThroughNode(
 			$throughColumns,
 			$throughColumns,
-			$throughInnerKeys,
+			$throughInnerLoadKeys,
 			$parentInnerKeyColumns,
 			self::THROUGH_CONTAINER,
 			$targetNode,
 		);
-		$this->selectThroughFields($branch, $runtime, $throughNode);
-
-		return $throughNode;
 	}
 
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
@@ -187,28 +194,34 @@ final class M2MLoader extends AbstractLoader
 		}
 	}
 
-	private function selectThroughFields(RelationLoadBranch $branch, LoadRuntime $runtime, M2MThroughNode $throughNode): void
-	{
+	/**
+	 * @param list<string> $fieldNames
+	 * @return array<string, string> field name → load alias
+	 */
+	private function allocateThroughAliases(
+		RelationLoadBranch $branch,
+		array $fieldNames,
+	): array {
 		$relation = $branch->getRelationRef();
 		$query = $branch->getQuery();
 		$source = $this->throughSource($relation, $query);
-		$aliases = [];
+		$aliasesByField = [];
 
-		foreach ($this->throughColumns($relation) as $fieldName) {
+		foreach ($fieldNames as $fieldName) {
 			$alias = sprintf(
 				'__on_data_%s_%s',
 				strtolower(preg_replace('/[^a-z0-9_]+/i', '_', implode('_', [...$relation->getPath(), '__through', $fieldName])) ?? 'field'),
-				count($aliases),
+				count($aliasesByField),
 			);
 
 			if (! $query->getSelections()->hasNamedExpression($alias)) {
 				$query->select($source->field($fieldName)->as($alias));
 			}
 
-			$aliases[] = $alias;
+			$aliasesByField[$fieldName] = $alias;
 		}
 
-		$throughNode->setValueAliases($aliases);
+		return $aliasesByField;
 	}
 
 	private function throughSource(RelationRef $relation, SelectQuery $query): QuerySourceInterface
@@ -227,25 +240,6 @@ final class M2MLoader extends AbstractLoader
 	private function throughJoinName(RelationRef $relation): string
 	{
 		return implode('.', $relation->getPath()) . '@through';
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	private function throughColumns(RelationRef $relation): array
-	{
-		$definition = $relation->getDefinition();
-
-		if (! $definition instanceof M2MRelation) {
-			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');
-		}
-
-		$through = $this->through($relation, $definition);
-
-		return array_values(array_unique([
-			...$through->getInnerKeys(),
-			...$through->getOuterKeys(),
-		]));
 	}
 
 	/**

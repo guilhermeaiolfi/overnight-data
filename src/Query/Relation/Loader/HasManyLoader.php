@@ -34,9 +34,9 @@ final class HasManyLoader extends AbstractLoader
 		$definition = $relationRef->getDefinition();
 		$parentToChild = $definition->getKeyPairing();
 		$parentBranch = $branch->getParent();
-		$identity = $branch->requireFields($relationRef->getCollection()->getPrimaryKey());
-		$child = $branch->requireFields($parentToChild->getRightFields());
-		$parent = $parentBranch->requireFields($parentToChild->getLeftFields());
+		$identity = $this->requireLoadKeys($branch, $relationRef->getCollection()->getPrimaryKey());
+		$child = $this->requireLoadKeys($branch, $parentToChild->getRightFields());
+		$parent = $this->requireLoadKeys($parentBranch, $parentToChild->getLeftFields());
 
 		return new CollectionNode(
 			$this->columnSelectionKeys($branch),

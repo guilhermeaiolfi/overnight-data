@@ -66,7 +66,7 @@ select()
 1. Ensure schema compile runs before fetch on paths that will assemble from schema (writable already `prepare()`s first; extend as needed).  
 2. Keep current output processor behavior.
 
-`SelectQuery::fetchAll()` / `fetchOne()` call `beginFetch()` first: compile `RepresentationSchema` + `LoadGraph` into a {@see FetchPlan} before `LoadRuntime`. Writable `prepare()` attaches `LoadGraph` to `QueryRepresentationPlan` after identity planning; the fetch plan reuses that snapshot.
+`SelectQuery::fetchAll()` / `fetchOne()` call `beginFetch()` first: compile `RepresentationSchema` + `LoadGraph` into a {@see FetchPlan} before `LoadRuntime`. Writable `prepare()` attaches a full `FetchPlan` to `QueryRepresentationPlan` after identity planning; `beginFetch` reuses that plan via `WritablePreparation::getFetchPlan()` (no second compile).
 
 ### Phase 2 — assemble flats from schema ✅
 
@@ -96,6 +96,18 @@ Relation branch columns bind `placeKey → loadKey` on the load branch. Own fiel
 - [x] Delete `plan()` / `planLevel()` wrappers; callers use `planIdentities()`.  
 - [x] Root load-local parity: one `selectLevelFields` / `ensureLevelFieldSelection` path for every `LoadBranch` (root is just the empty-path level); simple place≡load root fetches may still short-circuit.
 
+### Load/place simplification (post Phase 4) ✅
+
+Same smell as the old root special-case: unfinished dual paths, not domain rules.
+
+- [x] One assemble path: `RelationOutputProcessor` shares `projectScalars` / `placeKeysFor` for root and nested.  
+- [x] Parser nodes are born on **load** keys (no place→load remap trait); `setValueAliases` only binds SQL column order. Keep `LoadBranch::placeToLoadKeys` as the intentional assemble bridge.  
+- [x] One schema field pipeline: `fieldsFromSelections` / `fieldFromSelection` / `resolveFieldSource` take `SelectQuery|RelationRef` (root = empty path).  
+- [x] One FetchPlan construction path: writable `prepare()` attaches `FetchPlan` on `QueryRepresentationPlan`; `beginFetch` reuses `WritablePreparation::getFetchPlan()` or compiles once locally — no `instanceof` dual.  
+- [x] Dead helpers removed (`publicFieldsForSelection`, `columnFieldName`, `explicitFields`, thin wrappers).
+
+**Still deferred** (higher risk / separate pass): LoadGraph driving fetch SQL; collapsing `ensureLevelFieldSelection` JOIN/SEPARATE arms; full root↔nested `requireFields` unify; removing `canShortCircuitRootFetch` without changing always-`requirePrimaryKey`.
+
 ## Acceptance (Phase 0)
 
 - [x] Proposal linked from docs index.  
@@ -106,7 +118,7 @@ Relation branch columns bind `placeKey → loadKey` on the load branch. Own fiel
 ## Acceptance (Phase 1)
 
 - [x] Every `fetchAll` / `fetchOne` builds a `FetchPlan` (schema + LoadGraph) before LoadRuntime.  
-- [x] Writable prepare exposes LoadGraph on `QueryRepresentationPlan` (post-identity).  
+- [x] Writable prepare exposes `FetchPlan` on `QueryRepresentationPlan` (post-identity).  
 - [x] `SelectQuery::getFetchPlan()` available after fetch begins; output shape unchanged.
 
 ## Acceptance (Phase 2)

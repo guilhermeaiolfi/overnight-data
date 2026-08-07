@@ -66,6 +66,7 @@ abstract class AbstractNode
 	) {
 		$this->columns = $this->validateColumns($columns);
 		$this->parentFields = $this->validateFieldList($parentFields ?? [], 'Parent reference fields');
+		$this->valueAliases = $this->columns;
 	}
 
 	public function parseRow(int $offset, array $row): int
@@ -175,8 +176,8 @@ abstract class AbstractNode
 	}
 
 	/**
-	 * Bind SQL/result keys and store parsed records under the same load-local keys.
-	 * Place aliases are applied later by RelationOutputProcessor via place→load binding.
+	 * Bind the SQL/result key order for this node. Columns are already load-local;
+	 * place aliases are applied later by RelationOutputProcessor via place→load binding.
 	 *
 	 * @param list<string> $aliases
 	 */
@@ -190,50 +191,14 @@ abstract class AbstractNode
 			));
 		}
 
-		/** @var array<string, string> $placeToLoad */
-		$placeToLoad = [];
-
-		foreach ($this->columns as $index => $placeKey) {
-			$loadKey = $aliases[$index];
-
-			if (! is_string($loadKey) || $loadKey === '') {
+		foreach ($aliases as $alias) {
+			if (! is_string($alias) || $alias === '') {
 				throw new ParserException('Value aliases must be non-empty strings.');
 			}
-
-			$placeToLoad[$placeKey] = $loadKey;
 		}
 
 		$this->columns = array_values($aliases);
 		$this->valueAliases = array_values($aliases);
-		$this->remapLoadLocalColumnReferences($placeToLoad);
-	}
-
-	/**
-	 * @param array<string, string> $placeToLoad
-	 */
-	protected function remapLoadLocalColumnReferences(array $placeToLoad): void
-	{
-		if ($this->identityFields === []) {
-			return;
-		}
-
-		$this->identityFields = $this->remapFieldList($this->identityFields, $placeToLoad);
-	}
-
-	/**
-	 * @param list<string> $fields
-	 * @param array<string, string> $placeToLoad
-	 * @return list<string>
-	 */
-	protected function remapFieldList(array $fields, array $placeToLoad): array
-	{
-		$mapped = [];
-
-		foreach ($fields as $field) {
-			$mapped[] = $placeToLoad[$field] ?? $field;
-		}
-
-		return $mapped;
 	}
 
 	/**

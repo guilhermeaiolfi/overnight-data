@@ -18,6 +18,7 @@ use ON\Data\ORM\Representation\Sync\RepresentationAdoptionContext;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionEngine;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
 use ON\Data\ORM\Session;
+use ON\Data\Query\Load\FetchPlan;
 use ON\Data\Query\Load\LoadGraphBuilder;
 use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Result\WritablePreparation;
@@ -66,7 +67,10 @@ final class WritableQueryResultTracker implements WritableResultHandler
 		}
 
 		// After INTERNAL identity selections are planned onto the query/relations.
-		$plan->setLoadGraph((new LoadGraphBuilder())->fromQuery($query));
+		$plan->setFetchPlan(new FetchPlan(
+			$schema,
+			(new LoadGraphBuilder())->fromQuery($query),
+		));
 
 		return $plan;
 	}
@@ -123,7 +127,7 @@ final class WritableQueryResultTracker implements WritableResultHandler
 	): void {
 		$this->preAttachNestedFlatRelations($object, $compilation, $sourceRow);
 
-		if ($compilation->hasNonRootSources()) {
+		if (RepresentationSource::listHasNonRoot($compilation->getSources())) {
 			$this->adoptionEngine->attach(
 				$object,
 				new RepresentationAdoptionContext(
@@ -196,7 +200,7 @@ final class WritableQueryResultTracker implements WritableResultHandler
 			$relatedSchema = $relationSchema->getRelatedSchema();
 			$rawChildren = $sourceRow[$relationSchema->getPath()] ?? null;
 
-			if ($this->schemaNeedsFlatHydrate($relatedSchema)) {
+			if (RepresentationAdoptionEngine::isFlatAttachment($relatedSchema)) {
 				$identities = $compilation->getRelationIdentities($path);
 				if ($identities === null) {
 					continue;
@@ -280,7 +284,7 @@ final class WritableQueryResultTracker implements WritableResultHandler
 		}
 
 		$sources = RepresentationSource::fromRepresentationSchema($relatedSchema);
-		if (! $this->sourcesNeedIdentityPlan($sources)) {
+		if (! RepresentationSource::listHasNonRoot($sources)) {
 			return;
 		}
 
@@ -309,25 +313,6 @@ final class WritableQueryResultTracker implements WritableResultHandler
 		}
 
 		return $current;
-	}
-
-	/**
-	 * @param list<RepresentationSource> $sources
-	 */
-	private function sourcesNeedIdentityPlan(array $sources): bool
-	{
-		foreach ($sources as $source) {
-			if (! $source->isRoot()) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	private function schemaNeedsFlatHydrate(RepresentationSchema $schema): bool
-	{
-		return RepresentationAdoptionEngine::isFlatAttachment($schema);
 	}
 
 	private function hasReadableRootPrimaryKey(object $representation, RepresentationSchema $schema): bool

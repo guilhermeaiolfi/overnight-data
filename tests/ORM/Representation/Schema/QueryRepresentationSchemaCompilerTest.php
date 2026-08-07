@@ -189,7 +189,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$sources = $compilation->getSources();
 
 		self::assertCount(2, $sources);
-		self::assertTrue($compilation->hasNonRootSources());
+		self::assertTrue(RepresentationSource::listHasNonRoot($sources));
 		self::assertSame([], $sources[0]->getPath());
 		self::assertSame(['company'], $sources[1]->getPath());
 		self::assertSame('companies', $sources[1]->getCollection()->getName());

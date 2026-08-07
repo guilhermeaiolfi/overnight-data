@@ -50,7 +50,7 @@ final class QuerySourceIdentities implements RepresentationSourceIdentities
 	 */
 	public function add(array $sourcePath, string $fieldName, string $resultKey): void
 	{
-		$this->locators[$this->sourcePathKey($sourcePath)][$fieldName] = $resultKey;
+		$this->locators[RepresentationFieldSchema::sourcePathKey($sourcePath)][$fieldName] = $resultKey;
 	}
 
 	/**
@@ -58,7 +58,7 @@ final class QuerySourceIdentities implements RepresentationSourceIdentities
 	 */
 	public function getResultKey(array $sourcePath, string $fieldName): ?string
 	{
-		return $this->locators[$this->sourcePathKey($sourcePath)][$fieldName] ?? null;
+		return $this->locators[RepresentationFieldSchema::sourcePathKey($sourcePath)][$fieldName] ?? null;
 	}
 
 	/**
@@ -114,13 +114,5 @@ final class QuerySourceIdentities implements RepresentationSourceIdentities
 		}
 
 		return $collection->getKey($values);
-	}
-
-	/**
-	 * @param list<string> $sourcePath
-	 */
-	private function sourcePathKey(array $sourcePath): string
-	{
-		return RepresentationFieldSchema::sourcePathKey($sourcePath);
 	}
 }

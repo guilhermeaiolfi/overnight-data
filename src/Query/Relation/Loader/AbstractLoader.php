@@ -15,6 +15,7 @@ use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\Relation\LoadBranch;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationKeyQuery;
@@ -243,12 +244,26 @@ abstract class AbstractLoader implements LoaderInterface
 	}
 
 	/**
+	 * Require fields on a branch and resolve their load-local parser keys.
+	 *
+	 * @param list<string> $fieldNames
+	 * @return list<string>
+	 */
+	protected function requireLoadKeys(LoadBranch $branch, array $fieldNames): array
+	{
+		return array_map(
+			static fn (string $placeKey): string => $branch->loadKeyForPlace($placeKey),
+			$branch->requireFields($fieldNames),
+		);
+	}
+
+	/**
 	 * @return list<string>
 	 */
 	protected function columnSelectionKeys(RelationLoadBranch $branch): array
 	{
 		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
+			static fn (SelectionItem $selection): string => $branch->loadKeyForPlace($selection->getSelectionKey()),
 			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
 		);
 	}

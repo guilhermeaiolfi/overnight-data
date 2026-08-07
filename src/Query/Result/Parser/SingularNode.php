@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Result\Parser;
 
-use ON\Data\Query\Result\Parser\Traits\RemapsLoadLocalChildFields;
-
 /**
  * Adapted from Cycle ORM parser code.
  *
@@ -16,8 +14,6 @@ use ON\Data\Query\Result\Parser\Traits\RemapsLoadLocalChildFields;
  */
 final class SingularNode extends AbstractNode
 {
-	use RemapsLoadLocalChildFields;
-
 	/**
 	 * @param list<string> $columns
 	 * @param list<string> $identityFields

@@ -125,7 +125,6 @@ final class RootLoadBranch extends LoadBranch
 		$loadIdentities = array_map($this->loadKeyForPlace(...), $placeIdentities);
 
 		$node = new RootNode($loadColumns, $loadIdentities);
-		$node->setValueAliases($loadColumns);
 		$this->setNode($node);
 
 		return $node;

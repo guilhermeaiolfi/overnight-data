@@ -217,6 +217,11 @@ final class LoadRuntime
 		$this->selectLevelFields($this->rootBranch);
 		$this->createBranches();
 		$this->configureBranches();
+
+		foreach ($this->relationBranchesByDepth() as $branch) {
+			$this->selectLevelFields($branch);
+		}
+
 		$this->createParserTree();
 
 		foreach ($this->relationBranchesByDepth() as $branch) {
@@ -460,41 +465,6 @@ final class LoadRuntime
 		}
 
 		return $ordered;
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	private function publicFieldsForSelection(RelationSelection $selection): array
-	{
-		if (! $selection->isLoaded()) {
-			return [];
-		}
-
-		if ($selection->hasDefaultSelection()) {
-			return $selection->getRelationRef()->getCollection()->getVisibleFields();
-		}
-
-		$names = [];
-
-		foreach ($selection->getSelections()->getExplicit() as $item) {
-			$fieldName = $this->columnFieldName($item);
-
-			if ($fieldName === null) {
-				continue;
-			}
-
-			$names[] = $fieldName;
-		}
-
-		return array_values(array_unique($names));
-	}
-
-	private function columnFieldName(SelectionItem $selection): ?string
-	{
-		$fieldRef = $this->columnFieldRef($selection);
-
-		return $fieldRef?->getField()->getName();
 	}
 
 	private function columnFieldRef(SelectionItem $selection): ?FieldRef

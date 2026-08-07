@@ -80,6 +80,15 @@ final class RelationLoadBranch extends LoadBranch
 
 		foreach ($fieldNames as $fieldName) {
 			$canonical = $this->fieldSelectionName($fieldName);
+			$existing = $this->findOwnFieldSelection($canonical);
+
+			if ($existing instanceof SelectionItem) {
+				$this->selections->add($existing->getExpression(), SelectionTag::REQUIRED);
+				$added[] = $existing->getSelectionKey();
+
+				continue;
+			}
+
 			$this->selections->add($this->relationFieldSelection($canonical), SelectionTag::REQUIRED);
 			$added[] = $canonical;
 		}
@@ -244,6 +253,19 @@ final class RelationLoadBranch extends LoadBranch
 	private function fieldSelectionName(string $fieldName): string
 	{
 		return $this->getRelationRef()->field($fieldName)->getField()->getName();
+	}
+
+	private function findOwnFieldSelection(string $fieldName): ?SelectionItem
+	{
+		foreach ($this->selections->getAll() as $selection) {
+			$own = $this->ownFieldSelection($selection);
+
+			if ($own !== null && $own[0] === $fieldName) {
+				return $selection;
+			}
+		}
+
+		return null;
 	}
 
 	private function relationFieldSelection(string $fieldName): AliasedExpression

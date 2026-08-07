@@ -10,6 +10,7 @@ use ON\Data\Query\Exception\CountRequiresRootIdentityException;
 use ON\Data\Query\Expression\AggregateExpression;
 use ON\Data\Query\Expression\AggregateFunction;
 use ON\Data\Query\Expression\AliasedExpression;
+use ON\Data\Query\Load\FetchPlan;
 use function ON\Data\Query\query;
 use ON\Data\Query\Result\WritablePreparation;
 use ON\Data\Query\Result\WritableResultHandler;
@@ -192,7 +193,12 @@ final class CountingWritableHandler implements WritableResultHandler
 	{
 		++$this->prepareCalls;
 
-		return new class () implements WritablePreparation {};
+		return new class () implements WritablePreparation {
+			public function getFetchPlan(): ?FetchPlan
+			{
+				return null;
+			}
+		};
 	}
 
 	public function track(

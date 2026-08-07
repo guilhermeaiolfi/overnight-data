@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
-use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Exception\RelationSelectionException;
-use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionTag;
 
 final class RelationOutputProcessor
@@ -22,74 +20,14 @@ final class RelationOutputProcessor
 	 */
 	public function processRoot(RootLoadBranch $root): array
 	{
+		$placeKeys = $this->placeKeysFor($root);
 		$records = [];
-		$publicColumns = array_fill_keys($this->rootPlaceKeys($root), true);
 
 		foreach ($root->getRootNode()->getResult() as $record) {
-			$records[] = $this->processRootRecord($root, $record, $publicColumns);
+			$records[] = $this->projectLevelRecord($root, $record, $placeKeys, projectScalars: true, promotionParent: 'root');
 		}
 
 		return $records;
-	}
-
-	/**
-	 * Public own-level keys stay on PUBLIC selections; schema only adds COLUMN-only
-	 * flats (non-empty sourcePath). Full schema fields include PK backfill for
-	 * adoption and must not drive public place.
-	 *
-	 * @return list<string>
-	 */
-	private function rootPlaceKeys(RootLoadBranch $root): array
-	{
-		$keys = $this->rootSelectionKeys($root->getSelections()->getByTag(SelectionTag::PUBLIC));
-
-		if (! $this->schema instanceof RepresentationSchema) {
-			return $keys;
-		}
-
-		return $this->mergeFlatSchemaPaths($keys, $this->schema);
-	}
-
-	/**
-	 * @param array<string, mixed> $record
-	 * @return array<string, mixed>
-	 */
-	private function processRootRecord(RootLoadBranch $root, array $record, array $publicColumns): array
-	{
-		$item = [];
-
-		foreach (array_keys($publicColumns) as $placeKey) {
-			$loadKey = $root->loadKeyForPlace($placeKey);
-
-			if (array_key_exists($loadKey, $record)) {
-				$item[$placeKey] = $record[$loadKey];
-			}
-		}
-
-		// Keep INTERNAL identity keys for writable track(); SelectQuery::publicRow strips them.
-		foreach ($root->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
-			$placeKey = $selection->getSelectionKey();
-			$loadKey = $root->loadKeyForPlace($placeKey);
-
-			if (array_key_exists($loadKey, $record)) {
-				$item[$placeKey] = $record[$loadKey];
-			}
-		}
-
-		foreach ($root->getChildren() as $child) {
-			$name = $child->getRelationRef()->getName();
-			$value = $record[$name] ?? ($child->returnsMany() ? [] : null);
-
-			if ($child->getSelection()->isVisible()) {
-				$item[$name] = $this->buildVisibleOutput($child, $value);
-
-				continue;
-			}
-
-			$this->mergePromotions($item, $this->collectHiddenOutput($child, $value), 'root');
-		}
-
-		return $item;
 	}
 
 	private function buildVisibleOutput(RelationLoadBranch $branch, mixed $value): mixed
@@ -152,30 +90,30 @@ final class RelationOutputProcessor
 	 */
 	private function buildVisibleRecord(RelationLoadBranch $branch, array $record): array
 	{
-		$item = [];
+		return $this->projectLevelRecord(
+			$branch,
+			$record,
+			$this->placeKeysFor($branch),
+			projectScalars: $branch->getSelection()->isLoaded(),
+			promotionParent: $this->promotionPath($branch),
+		);
+	}
 
-		if ($branch->getSelection()->isLoaded()) {
-			$placeKeys = $this->branchPlaceKeys($branch);
-
-			foreach ($placeKeys as $placeKey) {
-				$loadKey = $branch->loadKeyForPlace($placeKey);
-
-				if (array_key_exists($loadKey, $record)) {
-					$item[$placeKey] = $record[$loadKey];
-				}
-			}
-
-			// Keep INTERNAL identity keys in nested payloads for writable track();
-			// SelectQuery::publicRow strips them before object export.
-			foreach ($branch->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
-				$placeKey = $selection->getSelectionKey();
-				$loadKey = $branch->loadKeyForPlace($placeKey);
-
-				if (array_key_exists($loadKey, $record)) {
-					$item[$placeKey] = $record[$loadKey];
-				}
-			}
-		}
+	/**
+	 * @param list<string> $placeKeys
+	 * @param array<string, mixed> $record
+	 * @return array<string, mixed>
+	 */
+	private function projectLevelRecord(
+		LoadBranch $branch,
+		array $record,
+		array $placeKeys,
+		bool $projectScalars,
+		string $promotionParent,
+	): array {
+		$item = $projectScalars
+			? $this->projectScalars($branch, $record, $placeKeys)
+			: [];
 
 		foreach ($branch->getChildren() as $child) {
 			$name = $child->getRelationRef()->getName();
@@ -187,20 +125,50 @@ final class RelationOutputProcessor
 				continue;
 			}
 
-			$this->mergePromotions(
-				$item,
-				$this->collectHiddenOutput($child, $value),
-				$this->promotionPath($branch),
-			);
+			$this->mergePromotions($item, $this->collectHiddenOutput($child, $value), $promotionParent);
 		}
 
 		return $item;
 	}
 
 	/**
+	 * @param list<string> $placeKeys
+	 * @param array<string, mixed> $record
+	 * @return array<string, mixed>
+	 */
+	private function projectScalars(LoadBranch $branch, array $record, array $placeKeys): array
+	{
+		$item = [];
+
+		foreach ($placeKeys as $placeKey) {
+			$loadKey = $branch->loadKeyForPlace($placeKey);
+
+			if (array_key_exists($loadKey, $record)) {
+				$item[$placeKey] = $record[$loadKey];
+			}
+		}
+
+		// Keep INTERNAL identity keys for writable track(); SelectQuery::publicRow strips them.
+		foreach ($branch->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
+			$placeKey = $selection->getSelectionKey();
+			$loadKey = $branch->loadKeyForPlace($placeKey);
+
+			if (array_key_exists($loadKey, $record)) {
+				$item[$placeKey] = $record[$loadKey];
+			}
+		}
+
+		return $item;
+	}
+
+	/**
+	 * Public own-level keys stay on PUBLIC selections; schema only adds COLUMN-only
+	 * flats (non-empty sourcePath). Full schema fields include PK backfill for
+	 * adoption and must not drive public place.
+	 *
 	 * @return list<string>
 	 */
-	private function branchPlaceKeys(RelationLoadBranch $branch): array
+	private function placeKeysFor(LoadBranch $branch): array
 	{
 		$keys = [];
 
@@ -208,7 +176,7 @@ final class RelationOutputProcessor
 			$keys[] = $selection->getSelectionKey();
 		}
 
-		$levelSchema = $this->schemaForBranch($branch);
+		$levelSchema = $this->schemaForLevel($branch);
 
 		if ($levelSchema instanceof RepresentationSchema) {
 			$keys = $this->mergeFlatSchemaPaths($keys, $levelSchema);
@@ -224,7 +192,7 @@ final class RelationOutputProcessor
 	private function mergeFlatSchemaPaths(array $keys, RepresentationSchema $schema): array
 	{
 		foreach ($schema->getFields() as $field) {
-			if (! $this->isFlatPlaceField($field)) {
+			if ($field->getSourcePath() === []) {
 				continue;
 			}
 
@@ -238,14 +206,17 @@ final class RelationOutputProcessor
 		return $keys;
 	}
 
-	private function isFlatPlaceField(RepresentationFieldSchema $field): bool
-	{
-		return $field->getSourcePath() !== [];
-	}
-
-	private function schemaForBranch(RelationLoadBranch $branch): ?RepresentationSchema
+	private function schemaForLevel(LoadBranch $branch): ?RepresentationSchema
 	{
 		if (! $this->schema instanceof RepresentationSchema) {
+			return null;
+		}
+
+		if ($branch instanceof RootLoadBranch) {
+			return $this->schema;
+		}
+
+		if (! $branch instanceof RelationLoadBranch) {
 			return null;
 		}
 
@@ -472,19 +443,5 @@ final class RelationOutputProcessor
 	private function promotionPath(RelationLoadBranch $branch): string
 	{
 		return implode('.', $branch->getRelationRef()->getPath());
-	}
-
-	/**
-	 * @param list<SelectionItem> $selections
-	 * @return list<string>
-	 */
-	private function rootSelectionKeys(array $selections): array
-	{
-		return array_map($this->rootSelectionKey(...), $selections);
-	}
-
-	private function rootSelectionKey(SelectionItem $selection): string
-	{
-		return $selection->getSelectionKey();
 	}
 }

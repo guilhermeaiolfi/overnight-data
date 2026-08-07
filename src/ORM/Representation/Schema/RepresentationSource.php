@@ -106,4 +106,18 @@ final class RepresentationSource
 
 		return $sources;
 	}
+
+	/**
+	 * @param list<self> $sources
+	 */
+	public static function listHasNonRoot(array $sources): bool
+	{
+		foreach ($sources as $source) {
+			if (! $source->isRoot()) {
+				return true;
+			}
+		}
+
+		return false;
+	}
 }

@@ -12,7 +12,6 @@ use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Key;
 use function ON\Data\Mapper\map;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Condition\ConditionInterface;
@@ -715,28 +714,14 @@ final class SelectQuery implements QuerySourceInterface
 	/**
 	 * Compile place schema + LoadGraph before LoadRuntime (proposal 0003 Phase 1).
 	 *
-	 * Writable prepares first (identity planning may mutate selections); LoadGraph is
-	 * taken from that plan when present. Read-only fetches compile a local FetchPlan.
+	 * Writable prepares first (identity planning may mutate selections). When prepare
+	 * already supplies a FetchPlan, reuse it; otherwise compile once locally.
 	 */
 	private function beginFetch(?WritableResultHandler $handler): ?WritablePreparation
 	{
 		if ($handler !== null) {
 			$preparation = $handler->prepare($this);
-
-			if (
-				$preparation instanceof QueryRepresentationPlan
-				&& $preparation->getLoadGraph() !== null
-			) {
-				$this->fetchPlan = new FetchPlan(
-					$preparation->getSchema(),
-					$preparation->getLoadGraph(),
-				);
-			} else {
-				$this->fetchPlan = new FetchPlan(
-					(new QueryRepresentationSchemaCompiler())->compile($this),
-					(new LoadGraphBuilder())->fromQuery($this),
-				);
-			}
+			$this->fetchPlan = $preparation->getFetchPlan() ?? $this->compileFetchPlan();
 
 			return $preparation;
 		}
@@ -748,12 +733,17 @@ final class SelectQuery implements QuerySourceInterface
 			return null;
 		}
 
-		$this->fetchPlan = new FetchPlan(
+		$this->fetchPlan = $this->compileFetchPlan();
+
+		return null;
+	}
+
+	private function compileFetchPlan(): FetchPlan
+	{
+		return new FetchPlan(
 			(new QueryRepresentationSchemaCompiler())->compile($this),
 			(new LoadGraphBuilder())->fromQuery($this),
 		);
-
-		return null;
 	}
 
 	/**
