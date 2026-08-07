@@ -151,7 +151,7 @@ compileLevel(RepresentationSchema $schema, ProjectionLevel $level):
 
 Flat related fields at a nested level get `sourcePath` **relative to that nested schema**, not only on the query root schema.
 
-Identity planning for writable nested flat projections follows the same relative-source rules via `QueryRepresentationIdentityPlanner::planLevel()` and per-relation identities on the prepare plan.
+Identity planning for writable nested flat projections follows the same relative-source rules via `QueryRepresentationIdentityPlanner::planIdentities()` (root or nested level) and per-relation identities on the prepare plan.
 
 ### Collision rules
 

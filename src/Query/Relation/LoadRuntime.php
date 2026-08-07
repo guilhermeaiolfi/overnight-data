@@ -298,16 +298,12 @@ final class LoadRuntime
 
 		if (
 			! $fieldRef->getSource() instanceof RelationRef
-			|| $fieldRef->getSource()->getQuery() !== $level->getQuery()
+			|| ! RelationPaths::isUnder($level, $fieldRef->getSource())
 		) {
 			return $fieldName;
 		}
 
-		$levelPath = $level->getPath();
-		$sourcePath = $fieldRef->getSource()->getPath();
-		$relative = array_values(array_slice($sourcePath, count($levelPath)));
-
-		return implode('__', [...$relative, $fieldName]);
+		return implode('__', [...RelationPaths::relativeTo($level, $fieldRef->getSource()), $fieldName]);
 	}
 
 	public function registerBranch(RelationLoadBranch $branch): AbstractNode

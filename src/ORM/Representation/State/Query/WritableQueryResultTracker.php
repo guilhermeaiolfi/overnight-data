@@ -58,7 +58,7 @@ final class WritableQueryResultTracker implements WritableResultHandler
 	{
 		$schema = $this->compiler->compile($query);
 		$sources = RepresentationSource::fromRepresentationSchema($schema);
-		$identities = $this->identityPlanner->plan($query, $sources);
+		$identities = $this->identityPlanner->planIdentities($query, $sources, resetCounter: true);
 		$plan = new QueryRepresentationPlan($schema, $sources, $identities);
 
 		foreach ($query->getRelationSelections()->getAll() as $selection) {
@@ -284,7 +284,7 @@ final class WritableQueryResultTracker implements WritableResultHandler
 			return;
 		}
 
-		$identities = $this->identityPlanner->planLevel($selection->getRelationRef(), $sources);
+		$identities = $this->identityPlanner->planIdentities($selection->getRelationRef(), $sources);
 		$plan->setRelationIdentities($selection->getPath(), $identities);
 	}
 

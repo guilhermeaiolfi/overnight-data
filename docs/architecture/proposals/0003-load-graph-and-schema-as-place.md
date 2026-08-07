@@ -83,10 +83,18 @@ select()
 
 Relation branch columns bind `placeKey → loadKey` on the load branch. Own fields load as the field name; flats as a stable relative key (`author__name`); INTERNAL keys stay as planned. `RelationOutputProcessor` reads load keys and writes place paths. JOIN still allocates `__on_data_*` load keys and maps them the same way.
 
-### Phase 4 — collapse dual compile/identity paths
+### Phase 4 — collapse dual compile/identity paths ✅
 
 1. Identity planning and schema compile share source-path helpers with LoadGraph.  
 2. Remove `plan` / `planLevel` fork once levels are “nodes in one graph.”
+
+`RelationPaths` (`isUnder` / `relativeTo`) is shared by schema compile, load-branch flat detection, and load-local key naming. `QueryRepresentationIdentityPlanner::planIdentities(SelectQuery|RelationRef, …)` is the single ensure/resolve path; `plan()` / `planLevel()` remain thin wrappers for existing call sites/tests.
+
+### Cleanup pass (after Phase 4)
+
+- Collapse duplicate `remapLoadLocalColumnReferences()` overrides on parser nodes that own `childFields` (`CollectionNode` / `SingularNode` / `AbstractMergeNode`) into one shared hook/trait.  
+- Broader tidy: LoadGraph/schema helper duplication, root load-local parity if still lagging relation branches.
+- Consider deleting `plan()` / `planLevel()` wrappers once callers only use `planIdentities()`.
 
 ## Acceptance (Phase 0)
 
@@ -112,6 +120,12 @@ Relation branch columns bind `placeKey → loadKey` on the load branch. Own fiel
 - [x] Relation parser value aliases use load-local keys (field name / `author__name` / allocated JOIN alias).  
 - [x] Output assemble maps load keys → place paths via branch place→load binding.  
 - [x] Nested flat + renamed own-field + writable INTERNAL tests keep passing.
+
+## Acceptance (Phase 4)
+
+- [x] `RelationPaths` shared for under-level / relative path checks.  
+- [x] Identity planning uses one `planIdentities(SelectQuery|RelationRef)` ensure/resolve path.  
+- [x] Writable prepare + existing identity planner tests keep passing.
 
 ## References
 

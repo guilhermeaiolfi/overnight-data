@@ -290,23 +290,11 @@ final class RelationLoadBranch extends LoadBranch
 		if (
 			! $source instanceof RelationRef
 			|| $source->getQuery() !== $this->getRelationRef()->getQuery()
-			|| ! $this->isRelationUnderLevel($this->getRelationRef(), $source)
+			|| ! RelationPaths::isUnder($this->getRelationRef(), $source)
 		) {
 			return null;
 		}
 
 		return [$expression, $publicAlias];
-	}
-
-	private function isRelationUnderLevel(RelationRef $level, RelationRef $source): bool
-	{
-		$levelPath = $level->getPath();
-		$sourcePath = $source->getPath();
-
-		if (count($sourcePath) <= count($levelPath)) {
-			return false;
-		}
-
-		return array_slice($sourcePath, 0, count($levelPath)) === $levelPath;
 	}
 }
