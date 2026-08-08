@@ -7,6 +7,7 @@ namespace ON\Data\Query\Selection;
 use InvalidArgumentException;
 use LogicException;
 use ON\Data\Query\Expression\AliasedExpression;
+use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\SourceMap;
@@ -40,6 +41,18 @@ final class SelectionItem
 	public function getExpression(): ValueExpressionInterface|AliasedExpression|StarExpression
 	{
 		return $this->expression;
+	}
+
+	/**
+	 * Underlying {@see FieldRef} when this selection is a field (optionally aliased).
+	 */
+	public function getFieldRef(): ?FieldRef
+	{
+		$expression = $this->expression instanceof AliasedExpression
+			? $this->expression->getExpression()
+			: $this->expression;
+
+		return $expression instanceof FieldRef ? $expression : null;
 	}
 
 	public function getSelectionKey(): string

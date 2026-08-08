@@ -229,7 +229,7 @@ Until 0001, 0002 may still compile nested field/flat-field schemas fully and eit
 
 ### Phase D — JOIN loader parity (nested flats) ✅
 
-1. Nested flat FieldRefs work under JOIN as well as SEPARATE (same `LoadFieldPlanner` emit path).  
+1. Nested flat FieldRefs work under JOIN as well as SEPARATE (same `LoadFieldPlanner` path).  
 2. Non-field expressions in nested `select()` still require `separate()` (align with 0001 expression schema when landed).
 
 ## Compatibility / migration

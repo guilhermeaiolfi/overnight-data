@@ -51,7 +51,7 @@ final class LoadRuntime
 	) {
 		$this->rootBranch = new RootLoadBranch(
 			$rootQuery,
-			fn (string $fieldName): string => $this->stableJoinedAlias(['root', 'required'], $fieldName),
+			fn (string $fieldName): string => $this->getJoinedAlias(['root', 'required'], $fieldName),
 		);
 		$this->outputProcessor = new RelationOutputProcessor($schema);
 		$this->fieldPlanner = new LoadFieldPlanner($this);
@@ -210,9 +210,9 @@ final class LoadRuntime
 				// expose the same field name).
 				$preferred = $ownsQuery
 					? $normalized
-					: $this->stableJoinedAlias($path, $normalized);
+					: $this->getJoinedAlias($path, $normalized);
 			}
-			$sqlKey = $this->fieldPlanner->ensureLevelFieldSelection($branch, $fieldRef, $placeKey, $preferred, $path);
+			$sqlKey = $this->fieldPlanner->selectField($branch, $fieldRef, $placeKey, $preferred, $path);
 			$branch->bindPlaceToLoadKey($placeKey, $sqlKey);
 			$loadKeys[] = $sqlKey;
 		}
@@ -229,23 +229,23 @@ final class LoadRuntime
 		$this->rootBranch->registerPublicSelections();
 		$this->rootBranch->requirePrimaryKey();
 		// Own-level root columns before relation load (loaders may inspect the root query).
-		$this->fieldPlanner->bindLevel($this->rootBranch, includeCrossLevelFlats: false);
+		$this->fieldPlanner->bindBranch($this->rootBranch, includeCrossLevelFlats: false);
 		$this->createBranches();
 		$this->configureBranches();
 
 		// Flats after destinations exist so loaded to-one children can be reused.
-		$this->fieldPlanner->bindLevel($this->rootBranch, includeCrossLevelFlats: true);
+		$this->fieldPlanner->bindBranch($this->rootBranch, includeCrossLevelFlats: true);
 
 		foreach ($this->relationBranchesByDepth() as $branch) {
-			$this->fieldPlanner->bindLevel($branch, includeCrossLevelFlats: true);
+			$this->fieldPlanner->bindBranch($branch, includeCrossLevelFlats: true);
 		}
 
 		$this->createParserTree();
 
-		$this->fieldPlanner->bindLevel($this->rootBranch, includeCrossLevelFlats: true);
+		$this->fieldPlanner->bindBranch($this->rootBranch, includeCrossLevelFlats: true);
 
 		foreach ($this->relationBranchesByDepth() as $branch) {
-			$this->fieldPlanner->bindLevel($branch, includeCrossLevelFlats: true);
+			$this->fieldPlanner->bindBranch($branch, includeCrossLevelFlats: true);
 		}
 	}
 
@@ -406,12 +406,12 @@ final class LoadRuntime
 	}
 
 	/**
-	 * Cycle-style stable column alias for columns mounted onto a shared JOIN query.
+	 * Column alias for fields mounted onto a shared JOIN query.
 	 * Unique per relation path + field; callers reuse the same name on re-require.
 	 *
 	 * @param list<string> $path
 	 */
-	public function stableJoinedAlias(array $path, string $fieldName): string
+	public function getJoinedAlias(array $path, string $fieldName): string
 	{
 		$slug = strtolower(
 			preg_replace('/[^a-z0-9_]+/i', '_', implode('_', [...$path, $fieldName])) ?? 'field',

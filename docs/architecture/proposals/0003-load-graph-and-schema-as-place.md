@@ -53,7 +53,7 @@ RelationSelectionTree     ← which attaches exist
 LoadBranch tree           ← runtime destination per attach (+ root)
         │
         ▼
-LoadFieldPlanner          ← group place-level COLUMNs by fetch home
+LoadFieldPlanner          ← bind place-level COLUMNs (getFetches → applyFetches)
   assign: local | child destination | skip
   emit:   SQL on that destination + place binds
         │
@@ -130,7 +130,7 @@ Relation branch columns bind `placeKey → loadKey` on the load branch. Own fiel
 
 - [x] Collapse duplicate `remapLoadLocalColumnReferences()` overrides via `RemapsLoadLocalChildFields`.  
 - [x] Delete `plan()` / `planLevel()` wrappers; callers use `planIdentities()`.  
-- [x] Root load-local parity: one `selectLevelFields` / `ensureLevelFieldSelection` path for every `LoadBranch` (root is just the empty-path level). When `RelationSelectionTree` is empty, `LoadRuntime` returns executor rows directly (avoids RootNode collapsing flat has-many joins by identity).
+- [x] Root load-local parity: one `selectField` path for every `LoadBranch` (root is just the empty-path level). When `RelationSelectionTree` is empty, `LoadRuntime` returns executor rows directly (avoids RootNode collapsing flat has-many joins by identity).
 
 ### Load/place simplification (post Phase 4) ✅
 

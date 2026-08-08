@@ -6,7 +6,6 @@ namespace ON\Data\Query\Relation;
 
 use LogicException;
 use ON\Data\Query\Exception\LoadRuntimeException;
-use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Selection\SelectionItem;
@@ -14,20 +13,10 @@ use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 
 /**
- * Assigns each place-level COLUMN field to a fetch destination, then emits SQL / binds.
+ * For each place-level COLUMN, choose where it is fetched, select SQL, and bind place→load.
  *
  * Destinations are existing {@see LoadBranch} nodes (this level, or a loaded to-one child).
  * Does not invent attaches for flats.
- *
- * @phpstan-type FetchHome array{
- *     placeKey: string,
- *     selection: SelectionItem,
- *     fieldRef: ?FieldRef,
- *     mode: 'local'|'child'|'skip',
- *     childPath?: list<string>,
- *     child?: RelationLoadBranch,
- *     fieldName?: string,
- * }
  */
 final class LoadFieldPlanner
 {
@@ -37,15 +26,15 @@ final class LoadFieldPlanner
 	}
 
 	/**
-	 * Group this place level's COLUMN fields by fetch destination and bind/emit them.
+	 * Bind this branch's COLUMN fields: plan fetches, select SQL, set parser aliases.
 	 *
-	 * @param bool $includeCrossLevelFlats when false, defer FieldRefs whose source is under
+	 * @param bool $includeCrossLevelFlats when false, omit FieldRefs whose source is under
 	 *        this level (early root pass before child destinations exist)
 	 */
-	public function bindLevel(LoadBranch $branch, bool $includeCrossLevelFlats = true): void
+	public function bindBranch(LoadBranch $branch, bool $includeCrossLevelFlats = true): void
 	{
-		$homes = $this->assignFetchHomes($branch, $includeCrossLevelFlats);
-		$aliases = $this->emitFetchHomes($branch, $homes);
+		$fetches = $this->getFetches($branch, $includeCrossLevelFlats);
+		$aliases = $this->applyFetches($branch, $fetches);
 
 		if ($branch->hasNode()) {
 			$branch->getPublicNode()->setValueAliases($aliases);
@@ -53,21 +42,27 @@ final class LoadFieldPlanner
 	}
 
 	/**
-	 * Decide fetch home for each COLUMN on the place-level branch.
-	 *
-	 * @return list<FetchHome>
+	 * @return list<array{
+	 *     placeKey: string,
+	 *     selection: SelectionItem,
+	 *     fieldRef: ?FieldRef,
+	 *     mode: 'local'|'child'|'skip',
+	 *     childPath?: list<string>,
+	 *     child?: RelationLoadBranch,
+	 *     fieldName?: string,
+	 * }>
 	 */
-	private function assignFetchHomes(LoadBranch $branch, bool $includeCrossLevelFlats): array
+	private function getFetches(LoadBranch $branch, bool $includeCrossLevelFlats): array
 	{
 		$level = $branch->getProjectionLevel();
-		$homes = [];
+		$fetches = [];
 
 		foreach ($branch->getSelections()->getByTag(SelectionTag::COLUMN) as $selection) {
 			$placeKey = $selection->getSelectionKey();
-			$fieldRef = $this->columnFieldRef($selection);
+			$fieldRef = $selection->getFieldRef();
 
 			if (! $fieldRef instanceof FieldRef) {
-				$homes[] = [
+				$fetches[] = [
 					'placeKey' => $placeKey,
 					'selection' => $selection,
 					'fieldRef' => null,
@@ -82,7 +77,7 @@ final class LoadFieldPlanner
 			$isCrossLevelFlat = $source instanceof RelationRef && $source->isUnder($level);
 
 			if ($isCrossLevelFlat && ! $includeCrossLevelFlats) {
-				$homes[] = [
+				$fetches[] = [
 					'placeKey' => $placeKey,
 					'selection' => $selection,
 					'fieldRef' => $fieldRef,
@@ -95,10 +90,10 @@ final class LoadFieldPlanner
 
 			if ($isCrossLevelFlat) {
 				$relative = $source->relativeTo($level);
-				$child = $this->findLoadedToOneChildDestination($branch, $relative);
+				$child = $this->getChildForFlat($branch, $relative);
 
 				if ($child instanceof RelationLoadBranch) {
-					$homes[] = [
+					$fetches[] = [
 						'placeKey' => $placeKey,
 						'selection' => $selection,
 						'fieldRef' => $fieldRef,
@@ -112,7 +107,7 @@ final class LoadFieldPlanner
 				}
 			}
 
-			$homes[] = [
+			$fetches[] = [
 				'placeKey' => $placeKey,
 				'selection' => $selection,
 				'fieldRef' => $fieldRef,
@@ -121,32 +116,40 @@ final class LoadFieldPlanner
 			];
 		}
 
-		return $homes;
+		return $fetches;
 	}
 
 	/**
-	 * @param list<FetchHome> $homes
+	 * @param list<array{
+	 *     placeKey: string,
+	 *     selection: SelectionItem,
+	 *     fieldRef: ?FieldRef,
+	 *     mode: 'local'|'child'|'skip',
+	 *     childPath?: list<string>,
+	 *     child?: RelationLoadBranch,
+	 *     fieldName?: string,
+	 * }> $fetches
 	 * @return list<string> load-local parser aliases for this place branch’s node
 	 */
-	private function emitFetchHomes(LoadBranch $branch, array $homes): array
+	private function applyFetches(LoadBranch $branch, array $fetches): array
 	{
 		$level = $branch->getProjectionLevel();
 		$aliases = [];
 
-		foreach ($homes as $home) {
-			$placeKey = $home['placeKey'];
+		foreach ($fetches as $fetch) {
+			$placeKey = $fetch['placeKey'];
 
-			if ($home['mode'] === 'skip') {
+			if ($fetch['mode'] === 'skip') {
 				continue;
 			}
 
-			if ($home['mode'] === 'child') {
-				$child = $home['child'] ?? null;
-				$fieldName = $home['fieldName'] ?? '';
-				$childPath = $home['childPath'] ?? [];
+			if ($fetch['mode'] === 'child') {
+				$child = $fetch['child'] ?? null;
+				$fieldName = $fetch['fieldName'] ?? '';
+				$childPath = $fetch['childPath'] ?? [];
 
 				if (! $child instanceof RelationLoadBranch || $fieldName === '' || $childPath === []) {
-					throw new LogicException('Child fetch home is incomplete.');
+					throw new LogicException('Child fetch is incomplete.');
 				}
 
 				$loadKeys = $this->runtime->requireFields($child, [$fieldName]);
@@ -155,7 +158,7 @@ final class LoadFieldPlanner
 				continue;
 			}
 
-			$fieldRef = $home['fieldRef'];
+			$fieldRef = $fetch['fieldRef'];
 
 			if (! $fieldRef instanceof FieldRef) {
 				$branch->bindPlaceToLoadKey($placeKey, $placeKey);
@@ -164,13 +167,13 @@ final class LoadFieldPlanner
 				continue;
 			}
 
-			$fieldName = $home['fieldName'] ?? $fieldRef->getField()->getName();
+			$fieldName = $fetch['fieldName'] ?? $fieldRef->getField()->getName();
 			$source = $fieldRef->getSource();
 			$path = $source instanceof RelationRef
 				? $source->getPath()
 				: ($level instanceof RelationRef ? $level->getPath() : []);
-			$loadKey = $this->levelLoadKey($level, $home['selection'], $fieldRef, $fieldName);
-			$sqlKey = $this->ensureLevelFieldSelection($branch, $fieldRef, $placeKey, $loadKey, $path);
+			$loadKey = $this->getLoadKey($level, $fetch['selection'], $fieldRef, $fieldName);
+			$sqlKey = $this->selectField($branch, $fieldRef, $placeKey, $loadKey, $path);
 			$branch->bindPlaceToLoadKey($placeKey, $sqlKey);
 			$aliases[] = $sqlKey;
 		}
@@ -179,11 +182,11 @@ final class LoadFieldPlanner
 	}
 
 	/**
-	 * Emit one own-level / flat-under-this-destination column onto the branch query.
+	 * Select one own-level / flat-under-this-destination column onto the branch query.
 	 *
 	 * @param list<string> $path
 	 */
-	public function ensureLevelFieldSelection(
+	public function selectField(
 		LoadBranch $branch,
 		FieldRef $fieldRef,
 		string $placeKey,
@@ -191,10 +194,10 @@ final class LoadFieldPlanner
 		array $path,
 	): string {
 		$query = $branch->getQuery();
-		$source = $this->resolveSelectionSource($branch, $fieldRef);
+		$source = $this->getSelectionSource($branch, $fieldRef);
 		$fieldName = $fieldRef->getField()->getName();
 		$ownsSelect = $branch->getSource() === $query;
-		$sqlKey = $this->sqlAliasForLevelField($loadKey, $fieldName, $path, $ownsSelect);
+		$sqlKey = $this->getLoadAlias($loadKey, $fieldName, $path, $ownsSelect);
 
 		// Authoring place alias already on this query (typical root): keep it and
 		// add a load-local SQL column for the parser.
@@ -202,7 +205,7 @@ final class LoadFieldPlanner
 			$placeKey !== $sqlKey
 			&& $query->getSelections()->hasSelectionKey($placeKey)
 		) {
-			$this->ensureAliasedColumn($query, $source, $fieldName, $sqlKey, sqlOnly: true);
+			$this->selectAs($query, $source, $fieldName, $sqlKey, sqlOnly: true);
 
 			return $sqlKey;
 		}
@@ -224,36 +227,36 @@ final class LoadFieldPlanner
 			return $sqlKey;
 		}
 
-		$this->ensureAliasedColumn($query, $source, $fieldName, $sqlKey, sqlOnly: false);
+		$this->selectAs($query, $source, $fieldName, $sqlKey, sqlOnly: false);
 
 		return $sqlKey;
 	}
 
 	/**
-	 * Prefer the planned load key when safe; otherwise a path-stable JOIN alias.
+	 * Prefer the planned load key when safe; otherwise a path-based JOIN alias.
 	 *
 	 * Safe: branch owns the SELECT (SEPARATE / root), or the key is already
 	 * namespaced (flats like author__name, existing l_* aliases).
 	 *
 	 * @param list<string> $path
 	 */
-	private function sqlAliasForLevelField(
+	private function getLoadAlias(
 		string $loadKey,
 		string $fieldName,
 		array $path,
 		bool $ownsSelect,
 	): string {
-		$preferred = $loadKey !== '' ? $loadKey : $this->runtime->stableJoinedAlias($path, $fieldName);
+		$preferred = $loadKey !== '' ? $loadKey : $this->runtime->getJoinedAlias($path, $fieldName);
 
 		if ($ownsSelect || $preferred !== $fieldName) {
 			return $preferred;
 		}
 
 		// JOIN onto a shared parent query with a bare field name — avoid collisions.
-		return $this->runtime->stableJoinedAlias($path, $fieldName);
+		return $this->runtime->getJoinedAlias($path, $fieldName);
 	}
 
-	private function ensureAliasedColumn(
+	private function selectAs(
 		SelectQuery $query,
 		QuerySourceInterface $source,
 		string $fieldName,
@@ -282,10 +285,10 @@ final class LoadFieldPlanner
 	}
 
 	/**
-	 * Resolve the query source that should provide a level column selection.
+	 * Query source that provides a level column selection.
 	 * Own-level fields use the branch source; flat related fields join under this level.
 	 */
-	private function resolveSelectionSource(LoadBranch $branch, FieldRef $field): QuerySourceInterface
+	private function getSelectionSource(LoadBranch $branch, FieldRef $field): QuerySourceInterface
 	{
 		$fieldSource = $field->getSource();
 		$level = $branch->getProjectionLevel();
@@ -329,12 +332,12 @@ final class LoadFieldPlanner
 	}
 
 	/**
-	 * Loaded to-one child destination for a relative relation path, or null when
-	 * missing / many-valued (scalar flat cannot reuse a collection bag).
+	 * Loaded to-one child for a relative path, or null when missing / many-valued
+	 * (a scalar flat cannot reuse a collection bag).
 	 *
 	 * @param list<string> $relativePath
 	 */
-	private function findLoadedToOneChildDestination(LoadBranch $parent, array $relativePath): ?RelationLoadBranch
+	private function getChildForFlat(LoadBranch $parent, array $relativePath): ?RelationLoadBranch
 	{
 		if ($relativePath === []) {
 			return null;
@@ -369,9 +372,9 @@ final class LoadFieldPlanner
 	/**
 	 * Load-local parser key for a level column (proposal 0003).
 	 * INTERNAL keys stay as planned; own fields use the field name; flats use a
-	 * stable relative path key — place aliases are applied later by assemble.
+	 * relative path key — place aliases are applied later by assemble.
 	 */
-	private function levelLoadKey(
+	private function getLoadKey(
 		SelectQuery|RelationRef $level,
 		SelectionItem $selection,
 		FieldRef $fieldRef,
@@ -391,16 +394,5 @@ final class LoadFieldPlanner
 		}
 
 		return implode('__', [...$source->relativeTo($level), $fieldName]);
-	}
-
-	private function columnFieldRef(SelectionItem $selection): ?FieldRef
-	{
-		$expression = $selection->getExpression();
-
-		if ($expression instanceof AliasedExpression) {
-			$expression = $expression->getExpression();
-		}
-
-		return $expression instanceof FieldRef ? $expression : null;
 	}
 }
