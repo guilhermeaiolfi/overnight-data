@@ -6,7 +6,7 @@ Relates to: [`0001-representation-schema-as-reusable-model.md`](./0001-represent
 
 This document captures the design for unifying root and nested relation projection so every level shares one selection model.
 
-**Landed so far:** `RelationRef::select()` (including string short form `select('id','title')`) over a per-level `SelectionList`, relation selection tree/load branch registration of own-level aliases, recursive schema compile for nested aliases + relative flat `sourcePath`, per-level alias/relation name collisions, SEPARATE_QUERY nested flat field fetch onto the level payload, and nested INTERNAL identity planning for writable flats (Phase C). JOIN allows same-level field selections (including aliases); flat related fields and non-field expressions require `separate()`. `RelationRef::fields()` was removed. Deferred: nested expressions (0001), JOIN parity for cross-level / expression nested projection (Phase D).
+**Landed so far:** `RelationRef::select()` (including string short form `select('id','title')`) over a per-level `SelectionList`, relation selection tree/load branch registration of own-level aliases, recursive schema compile for nested aliases + relative flat `sourcePath`, per-level alias/relation name collisions, nested flat field fetch onto the level payload (JOIN and SEPARATE), and nested INTERNAL identity planning for writable flats (Phase C). JOIN allows same-level field selections (including aliases) and nested flat FieldRefs; non-field expressions still require `separate()`. `RelationRef::fields()` was removed. Deferred: nested expressions (0001).
 
 ## Problem
 
@@ -227,10 +227,10 @@ Until 0001, 0002 may still compile nested field/flat-field schemas fully and eit
 1. Extend identity planning / adoption for nested-level flat `sourcePath`s — `QueryRepresentationIdentityPlanner::planIdentities()`, per-relation identities on `QueryRepresentationPlan`, pre-attach flat hydrate in `WritableQueryResultTracker`, branch INTERNAL registration, recursive strip of `_od_internal_*` from public nested payloads.
 2. Document writable boundaries per level (same rules as root, recursively) — see [`writable-select-query-projections.md`](../../orm/writable-select-query-projections.md).
 
-### Phase D — JOIN loader parity (if needed)
+### Phase D — JOIN loader parity (nested flats) ✅
 
-1. Close gaps where JOIN strategy cannot yet express nested projection richness (today: JOIN rejects rich nested `select()`).
-2. Or keep documenting “full nested projection requires SEPARATE_QUERY”.
+1. Nested flat FieldRefs work under JOIN as well as SEPARATE (same `LoadFieldPlanner` emit path).  
+2. Non-field expressions in nested `select()` still require `separate()` (align with 0001 expression schema when landed).
 
 ## Compatibility / migration
 
@@ -306,11 +306,11 @@ $u->posts->select(
 );
 ```
 
-### 4. JOIN vs SEPARATE — Phase A/B MVP
+### 4. JOIN vs SEPARATE — Phase A/B + D
 
-**Delivered:** full nested projection richness on **SEPARATE_QUERY** only.
+**Delivered:** nested field + alias + flat FieldRef projection on **JOIN** and **SEPARATE_QUERY**.
 
-JOIN keeps same-level FieldRef projection (own fields including renamed aliases, plus defaults). Flat related fields and non-field expressions with JOIN throw `RelationLoaderException::richNestedSelectionRequiresSeparate` until Phase D parity — use `separate()`.
+Non-field expressions with JOIN still throw `RelationLoaderException::richNestedSelectionRequiresSeparate` — use `separate()` until expression Phase / 0001.
 
 ### 5. Expression schema timing
 

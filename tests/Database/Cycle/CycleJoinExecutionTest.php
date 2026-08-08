@@ -174,6 +174,40 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testHasManyJoinCanFlatProjectAuthorNameOntoPostRows(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts
+			->select(
+				$users->posts->id,
+				$users->posts->title,
+				$users->posts->author->name->as('authorName'),
+			)
+			->join();
+
+		$rows = $users
+			->select($users->name)
+			->orderBy($users->id->asc(), $users->posts->title->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'posts' => [
+					['id' => 1, 'title' => 'Hello', 'authorName' => 'Ada'],
+					['id' => 2, 'title' => 'World', 'authorName' => 'Ada'],
+				],
+			],
+			[
+				'name' => 'Grace',
+				'posts' => [
+					['id' => 3, 'title' => 'Graph', 'authorName' => 'Grace'],
+				],
+			],
+		], $rows);
+		self::assertArrayNotHasKey('author', $rows[0]['posts'][0]);
+	}
+
 	public function testManyToManyCreatesFlatMultipliedRows(): void
 	{
 		$articles = $this->database->query($this->registry->getCollection('articles'));

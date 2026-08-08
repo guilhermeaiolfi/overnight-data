@@ -194,79 +194,91 @@ final class LoadFieldPlanner
 		$source = $this->resolveSelectionSource($branch, $fieldRef);
 		$fieldName = $fieldRef->getField()->getName();
 		$ownsSelect = $branch->getSource() === $query;
+		$sqlKey = $this->sqlAliasForLevelField($loadKey, $fieldName, $path, $ownsSelect);
 
 		// Authoring place alias already on this query (typical root): keep it and
 		// add a load-local SQL column for the parser.
 		if (
-			$placeKey !== $loadKey
+			$placeKey !== $sqlKey
 			&& $query->getSelections()->hasSelectionKey($placeKey)
 		) {
-			if (
-				! $query->getSelections()->hasSelectionKey($loadKey)
-				&& ! $query->getSelections()->hasNamedExpression($loadKey)
-			) {
-				$query->getSelections()->add(
-					$source->field($fieldName)->as($loadKey),
-					[SelectionTag::SQL_ONLY, SelectionTag::COLUMN],
-				);
-			}
+			$this->ensureAliasedColumn($query, $source, $fieldName, $sqlKey, sqlOnly: true);
 
-			return $loadKey;
+			return $sqlKey;
 		}
 
-		$alreadySelected = $query->getSelections()->hasSelectionKey($loadKey)
-			|| $query->getSelections()->hasNamedExpression($loadKey)
-			|| (
-				$placeKey === $loadKey
-				&& $query->getSelections()->hasSelectionKey($placeKey)
-			);
-
-		// Reuse an existing load key when it cannot collide with a parent column:
-		// this branch owns the SELECT, the expression source is the query itself,
-		// or the key is already namespaced (flats / l_* JOIN aliases).
 		if (
-			$alreadySelected
-			&& (
-				$ownsSelect
-				|| $source === $query
-				|| $loadKey !== $fieldName
+			$query->getSelections()->hasSelectionKey($sqlKey)
+			|| $query->getSelections()->hasNamedExpression($sqlKey)
+			|| (
+				$placeKey === $sqlKey
+				&& $query->getSelections()->hasSelectionKey($placeKey)
 			)
 		) {
-			return $loadKey;
+			return $sqlKey;
 		}
 
-		if ($source === $query) {
-			if ($loadKey === $fieldName) {
-				$query->select($query->field($fieldName));
-			} elseif (! $query->getSelections()->hasNamedExpression($loadKey)) {
-				$query->select($query->field($fieldName)->as($loadKey));
-			}
+		if ($source === $query && $sqlKey === $fieldName) {
+			$query->select($query->field($fieldName));
 
-			return $loadKey;
+			return $sqlKey;
 		}
 
-		// SEPARATE level query (branch owns the SELECT): preferred load keys are safe
-		// (own fields and flats like author__name). JOIN onto a shared parent query
-		// needs Cycle-like path-stable aliases to avoid collisions.
+		$this->ensureAliasedColumn($query, $source, $fieldName, $sqlKey, sqlOnly: false);
+
+		return $sqlKey;
+	}
+
+	/**
+	 * Prefer the planned load key when safe; otherwise a path-stable JOIN alias.
+	 *
+	 * Safe: branch owns the SELECT (SEPARATE / root), or the key is already
+	 * namespaced (flats like author__name, existing l_* aliases).
+	 *
+	 * @param list<string> $path
+	 */
+	private function sqlAliasForLevelField(
+		string $loadKey,
+		string $fieldName,
+		array $path,
+		bool $ownsSelect,
+	): string {
+		$preferred = $loadKey !== '' ? $loadKey : $this->runtime->stableJoinedAlias($path, $fieldName);
+
+		if ($ownsSelect || $preferred !== $fieldName) {
+			return $preferred;
+		}
+
+		// JOIN onto a shared parent query with a bare field name — avoid collisions.
+		return $this->runtime->stableJoinedAlias($path, $fieldName);
+	}
+
+	private function ensureAliasedColumn(
+		SelectQuery $query,
+		QuerySourceInterface $source,
+		string $fieldName,
+		string $alias,
+		bool $sqlOnly,
+	): void {
 		if (
-			$ownsSelect
-			&& $loadKey !== ''
-			&& ! $query->getSelections()->hasNamedExpression($loadKey)
+			$query->getSelections()->hasSelectionKey($alias)
+			|| $query->getSelections()->hasNamedExpression($alias)
 		) {
-			$query->select($source->field($fieldName)->as($loadKey));
-
-			return $loadKey;
+			return;
 		}
 
-		$alias = $loadKey !== '' && str_starts_with($loadKey, 'l_')
-			? $loadKey
-			: $this->runtime->stableJoinedAlias($path, $fieldName);
+		$expression = $source->field($fieldName)->as($alias);
 
-		if (! $query->getSelections()->hasNamedExpression($alias)) {
-			$query->select($source->field($fieldName)->as($alias));
+		if ($sqlOnly) {
+			$query->getSelections()->add(
+				$expression,
+				[SelectionTag::SQL_ONLY, SelectionTag::COLUMN],
+			);
+
+			return;
 		}
 
-		return $alias;
+		$query->select($expression);
 	}
 
 	/**

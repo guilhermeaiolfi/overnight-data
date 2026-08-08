@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Query;
 
+use LogicException;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Relation\Loader\BelongsToLoader;
 use ON\Data\Query\Relation\Loader\HasManyLoader;
 use ON\Data\Query\SelectQuery;
+use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 
 final class NestedFlatProjectionLoadTest extends TestCase
@@ -63,7 +65,38 @@ final class NestedFlatProjectionLoadTest extends TestCase
 		self::assertSame('Ana', $post['authorName']);
 	}
 
-	public function testJoinedFlatRelatedNestedSelectionIsRejected(): void
+	public function testJoinedPostsSelectCanFlatProjectAuthorNameOntoPostRows(): void
+	{
+		$executor = new NestedJoinedFlatProjectionExecutor();
+		$users = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			$executor,
+		);
+
+		$users->select($users->id, $users->name);
+		$users->posts
+			->select(
+				$users->posts->id,
+				$users->posts->title->as('headline'),
+				$users->posts->author->name->as('authorName'),
+			)
+			->join();
+
+		$rows = $users->fetchAll();
+
+		self::assertSame([[
+			'id' => 1,
+			'name' => 'Ada',
+			'posts' => [[
+				'id' => 10,
+				'headline' => 'Hello',
+				'authorName' => 'Ana',
+			]],
+		]], $rows);
+		self::assertArrayNotHasKey('author', $rows[0]['posts'][0]);
+	}
+
+	public function testJoinedNonFieldExpressionNestedSelectionIsRejected(): void
 	{
 		$users = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
@@ -73,12 +106,12 @@ final class NestedFlatProjectionLoadTest extends TestCase
 		$users->posts
 			->select(
 				$users->posts->id,
-				$users->posts->author->name->as('authorName'),
+				x()->literal(1)->as('one'),
 			)
 			->join();
 
 		$this->expectException(RelationLoaderException::class);
-		$this->expectExceptionMessage('cannot use JOIN loading with flat related fields');
+		$this->expectExceptionMessage('cannot use JOIN loading with non-field expressions');
 		$users->fetchAll();
 	}
 
@@ -235,6 +268,40 @@ final class NestedFlatProjectionExecutor implements QueryExecutorInterface
 			]],
 			default => [],
 		};
+	}
+
+	public function fetchOne(SelectQuery $query): ?array
+	{
+		$rows = $this->fetchAll($query);
+
+		return $rows[0] ?? null;
+	}
+
+	public function iterate(SelectQuery $query): iterable
+	{
+		return $this->fetchAll($query);
+	}
+}
+
+/**
+ * Single-query JOIN shape: root + joined posts columns (+ flat author) in one row.
+ */
+final class NestedJoinedFlatProjectionExecutor implements QueryExecutorInterface
+{
+	public function fetchAll(SelectQuery $query): array
+	{
+		if ($query->getCollection()->getName() !== 'users') {
+			throw new LogicException('Joined flat fixture only serves the root users query.');
+		}
+
+		return [[
+			'id' => 1,
+			'name' => 'Ada',
+			'l_posts_id' => 10,
+			'l_posts_userid' => 1,
+			'l_posts_title' => 'Hello',
+			'author__name' => 'Ana',
+		]];
 	}
 
 	public function fetchOne(SelectQuery $query): ?array

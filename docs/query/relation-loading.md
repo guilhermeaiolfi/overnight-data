@@ -42,7 +42,7 @@ $u->profile
 
 Scalar/`all()` selections at a level clear that level's default visible fields (same rule as root). Selecting only child relations keeps the level's default scalars. Traversing `$u->posts->author->select(...)` without selecting on `posts` leaves `posts` as a visible unloaded intermediate container.
 
-Nested flat related fields (for example `$u->posts->author->name->as('authorName')` inside `$u->posts->select(...)`) compile into the nested `RepresentationSchema` with a relative `sourcePath`. **Cross-level** flats and non-field expressions require **SEPARATE_QUERY** (`separate()`). JOIN allows same-level field selections including renamed aliases (`select('id', $rel->title->as('headline'))`); attempting flat related fields or expressions with JOIN throws `RelationLoaderException`. On SEPARATE loads, the runtime joins that related table into the level query and projects the value onto the nested payload under the alias — without creating a nested relation container unless that relation is also selected/loaded.
+Nested flat related fields (for example `$u->posts->author->name->as('authorName')` inside `$u->posts->select(...)`) compile into the nested `RepresentationSchema` with a relative `sourcePath`. **Non-field expressions** in nested `select()` require **SEPARATE_QUERY** (`separate()`). JOIN allows same-level field selections (including renamed aliases) and nested flat FieldRefs; attempting non-field expressions with JOIN throws `RelationLoaderException`. On both JOIN and SEPARATE loads, the runtime joins that related table into the level query (or reuses a loaded to-one child destination) and projects the value onto the nested payload under the alias — without creating a nested relation container unless that relation is also selected/loaded.
 
 Nested traversal works through dynamic relation refs:
 
@@ -213,7 +213,7 @@ Each cached relation branch is its own query source. When a query is copied, rel
 - Structured loading for built-in `HasMany` supports relation-level `limit(...)` and `offset(...)` only in separate-query mode, applies them per parent, and requires deterministic selection-level `orderBy(...)`.
 - Joined structured loading for built-in `M2M` is not implemented yet.
 - Relation-level `where` and `orderBy` are supported for separate-query loading first; joined relation conditions and ordering are rejected by built-in loaders.
-- Flat related fields and non-field expressions in nested `select()` require `separate()`; JOIN allows same-level field selections (including aliases) and default own-field projection.
+- Flat related FieldRefs in nested `select()` work with JOIN or SEPARATE; non-field expressions still require `separate()`. JOIN allows same-level field selections (including aliases) and default own-field projection.
 - Separate-query correlation uses `IN` (simple keys) or per-parent `OR`/`AND` (composite keys), chunked by parent-key batch (default 100); see [Batch size and separate-query correlation](#batch-size-and-separate-query-correlation).
 - Writable query export records relation membership completeness as Full (unqualified load) or Partial (relation `where` / `limit` / `offset`). Only Full collections may remove absent members on Session sync.
 - Future relation branch configuration should stay loader-owned and branch-local rather than moving relation-specific rules into the registry or generic runtime.

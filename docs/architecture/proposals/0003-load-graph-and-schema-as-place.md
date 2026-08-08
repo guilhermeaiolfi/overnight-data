@@ -162,7 +162,7 @@ Same smell as the old root special-case: unfinished dual paths, not domain rules
 
 `PUBLIC` is retired. Assemble (`placeKeysFor`): explicit non-`INTERNAL`/`SQL_ONLY` selections, plus schema flats (`sourcePath !== []`). Schema still backfills PK fields for adoption — those must not alone drive public place.
 
-**Still deferred** (higher risk / separate pass): collapsing `ensureLevelFieldSelection` JOIN/SEPARATE arms; full root↔nested `requireFields` unify; driving all own-level place keys from schema (excluding identity backfill) instead of `EXPLICIT` tags.
+**Still deferred** (higher risk / separate pass): full root↔nested `requireFields` unify; driving all own-level place keys from schema (excluding identity backfill) instead of `EXPLICIT` tags.
 
 ## Acceptance (Phase 0) — superseded
 

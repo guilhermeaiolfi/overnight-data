@@ -139,8 +139,8 @@ abstract class AbstractLoader implements LoaderInterface
 	}
 
 	/**
-	 * JOIN keeps same-level FieldRef projection (own fields, any alias) and defaults.
-	 * Flat related fields and non-field expressions require SEPARATE_QUERY.
+	 * JOIN allows same-level FieldRefs (any alias) and nested flat FieldRefs under
+	 * this level. Non-field expressions still require SEPARATE_QUERY.
 	 */
 	protected function assertNoJoinedRichNestedSelection(RelationLoadBranch $branch): void
 	{
@@ -171,7 +171,17 @@ abstract class AbstractLoader implements LoaderInterface
 			return true;
 		}
 
-		return $expression instanceof FieldRef && $expression->getSource() === $level;
+		if (! $expression instanceof FieldRef) {
+			return false;
+		}
+
+		$source = $expression->getSource();
+
+		if ($source === $level) {
+			return true;
+		}
+
+		return $source instanceof RelationRef && $source->isUnder($level);
 	}
 
 	protected function applySeparateQueryConditions(RelationLoadBranch $branch): void
