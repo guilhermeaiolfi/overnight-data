@@ -1562,7 +1562,6 @@ final class CycleJoinExecutionTest extends TestCase
 			new RelationSelection($users->posts, false, true, null),
 			new RootLoadBranch($users, static fn (string $fieldName): string => $fieldName),
 			$users->posts->getLoader(),
-			[],
 		);
 
 		$this->expectException(LoadRuntimeException::class);

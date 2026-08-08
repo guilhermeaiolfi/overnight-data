@@ -10,7 +10,6 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityPlanner;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
-use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSource;
 use ON\Data\ORM\Representation\Sync\AdoptionPolicy;
@@ -276,22 +275,7 @@ final class WritableQueryResultTracker implements WritableResultHandler
 	 */
 	private function relatedSchemaAtPath(RepresentationSchema $schema, array $path): ?RepresentationSchema
 	{
-		$current = $schema;
-
-		foreach ($path as $segment) {
-			if (! $current->hasRelation($segment)) {
-				return null;
-			}
-
-			$relation = $current->getRelation($segment);
-			if (! $relation instanceof RepresentationRelationSchema) {
-				return null;
-			}
-
-			$current = $relation->getRelatedSchema();
-		}
-
-		return $current;
+		return $schema->findRelatedSchemaAt($path);
 	}
 
 	private function hasReadableRootPrimaryKey(object $representation, RepresentationSchema $schema): bool

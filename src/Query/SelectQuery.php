@@ -12,6 +12,7 @@ use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Key;
 use function ON\Data\Mapper\map;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Condition\ConditionInterface;
@@ -30,6 +31,7 @@ use ON\Data\Query\Expression\SourceFieldExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
+use ON\Data\Query\Projection\ProjectionLayout;
 use ON\Data\Query\Relation\RelationQueryPlanner;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelection;
@@ -98,6 +100,13 @@ final class SelectQuery implements QuerySourceInterface
 	private ?Relation\LoadRuntime $runtime = null;
 
 	private ?RepresentationSchema $fetchSchema = null;
+
+	private ?ProjectionLayout $fetchLayout = null;
+
+	/**
+	 * Cached once per fetch for {@see publicRow()} nested cleanup.
+	 */
+	private ?RelationSelectionTree $publicRowRelations = null;
 
 	public function __construct(
 		private readonly CollectionInterface|DerivedSelectQuery $source,
@@ -288,6 +297,8 @@ final class SelectQuery implements QuerySourceInterface
 		$copy->resultClass = $this->resultClass;
 		$copy->writableHandler = $this->writableHandler;
 		$copy->fetchSchema = null;
+		$copy->fetchLayout = null;
+		$copy->publicRowRelations = null;
 
 		return $copy;
 	}
@@ -455,11 +466,20 @@ final class SelectQuery implements QuerySourceInterface
 	/**
 	 * Place schema from the last {@see fetchAll()} / {@see fetchOne()} begin.
 	 *
-	 * Compiled before LoadRuntime runs (proposal 0003). Null until a fetch starts.
+	 * Compiled when writable or relation loads need schema-driven placement.
+	 * Null for plain reads that skip compile (proposal 0003 / lazy schema).
 	 */
 	public function getFetchSchema(): ?RepresentationSchema
 	{
 		return $this->fetchSchema;
+	}
+
+	/**
+	 * Query-owned flat place layout from the last fetch begin (null when unused).
+	 */
+	public function getFetchLayout(): ?ProjectionLayout
+	{
+		return $this->fetchLayout;
 	}
 
 	public function getSelections(): SelectionList
@@ -710,30 +730,58 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
-	 * Compile place schema before LoadRuntime (proposal 0003).
+	 * Resolve place schema / layout before LoadRuntime (proposal 0003).
 	 *
-	 * Writable prepares first (identity planning may mutate selections). When prepare
-	 * already supplies a schema, reuse it; otherwise compile once locally.
+	 * Writable prepares first (identity planning may mutate selections). Plain reads
+	 * without relation loads skip schema compile (no PK required). Relation loads
+	 * compile once for nested flat place keys.
 	 */
 	private function beginFetch(?WritableResultHandler $handler): ?WritablePreparation
 	{
+		$this->publicRowRelations = null;
+
 		if ($handler !== null) {
 			$preparation = $handler->prepare($this);
-			$this->fetchSchema = $preparation->getFetchSchema() ?? $this->compileFetchSchema();
+			$this->applyPreparationLayout($preparation);
 
 			return $preparation;
 		}
 
 		// Count wrappers and other derived sources have no collection place schema.
-		if ($this->isDerivedSource()) {
+		if ($this->isDerivedSource() || ! $this->needsFetchSchema()) {
 			$this->fetchSchema = null;
+			$this->fetchLayout = null;
 
 			return null;
 		}
 
 		$this->fetchSchema = $this->compileFetchSchema();
+		$this->fetchLayout = QueryRepresentationPlan::layoutFromSchema($this->fetchSchema);
 
 		return null;
+	}
+
+	private function applyPreparationLayout(WritablePreparation $preparation): void
+	{
+		if ($preparation instanceof QueryRepresentationPlan) {
+			$this->fetchSchema = $preparation->getSchema();
+			$this->fetchLayout = $preparation->getProjectionLayout();
+
+			return;
+		}
+
+		$this->fetchLayout = $preparation->getProjectionLayout();
+		$this->fetchSchema = $this->fetchLayout !== null
+			? $this->compileFetchSchema()
+			: null;
+	}
+
+	/**
+	 * Schema/layout needed for writable identity or relation-level flat place keys.
+	 */
+	private function needsFetchSchema(): bool
+	{
+		return ! $this->getRelationSelections()->isEmpty();
 	}
 
 	private function compileFetchSchema(): RepresentationSchema
@@ -821,7 +869,7 @@ final class SelectQuery implements QuerySourceInterface
 
 		$executor = $this->executor ?? throw QueryNotExecutableException::forQuery($this);
 
-		return $this->runtime = new Relation\LoadRuntime($this, $executor, $this->fetchSchema);
+		return $this->runtime = new Relation\LoadRuntime($this, $executor, $this->fetchLayout);
 	}
 
 	/**
@@ -922,7 +970,7 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	private function publicRow(array $row): array
 	{
-		$relations = $this->getRelationSelections();
+		$relations = $this->publicRowRelations ??= $this->getRelationSelections();
 
 		return $this->stripTaggedPrivateKeys(
 			$row,

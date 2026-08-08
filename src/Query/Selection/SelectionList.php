@@ -389,13 +389,18 @@ final class SelectionList implements IteratorAggregate, Countable
 
 	public function hasSelectionKey(string $name): bool
 	{
+		return $this->findBySelectionKey($name) !== null;
+	}
+
+	public function findBySelectionKey(string $name): ?SelectionItem
+	{
 		foreach ($this->entries as $entry) {
 			if ($entry->getSelectionKey() === $name) {
-				return true;
+				return $entry;
 			}
 		}
 
-		return false;
+		return null;
 	}
 
 	public function count(): int

@@ -269,6 +269,26 @@ final class RepresentationSchema
 		return array_values($this->relations);
 	}
 
+	/**
+	 * Walk nested related schemas by relation-name segments from this root.
+	 *
+	 * @param list<string> $path
+	 */
+	public function findRelatedSchemaAt(array $path): ?self
+	{
+		$current = $this;
+
+		foreach ($path as $segment) {
+			if (! $current->hasRelation($segment)) {
+				return null;
+			}
+
+			$current = $current->getRelation($segment)->getRelatedSchema();
+		}
+
+		return $current;
+	}
+
 	public function hasPath(string $path): bool
 	{
 		return $this->hasField($path) || $this->hasRelation($path);

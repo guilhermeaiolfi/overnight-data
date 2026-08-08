@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Exception\RelationSelectionException;
+use ON\Data\Query\Projection\ProjectionLayout;
 use ON\Data\Query\Selection\SelectionTag;
 
 /**
@@ -16,7 +16,7 @@ use ON\Data\Query\Selection\SelectionTag;
 final class RelationOutputProcessor
 {
 	public function __construct(
-		private readonly ?RepresentationSchema $schema = null,
+		private readonly ?ProjectionLayout $layout = null,
 	) {
 	}
 
@@ -249,7 +249,7 @@ final class RelationOutputProcessor
 
 	/**
 	 * Visible place keys: explicit own-level selections (unless INTERNAL/SQL_ONLY),
-	 * plus schema flats (non-empty sourcePath). Default visibility is public;
+	 * plus layout flats at this relation path. Default visibility is public;
 	 * INTERNAL opts out.
 	 *
 	 * @return list<string>
@@ -269,61 +269,27 @@ final class RelationOutputProcessor
 			$keys[] = $selection->getSelectionKey();
 		}
 
-		$levelSchema = $this->schemaForLevel($branch);
-
-		if ($levelSchema instanceof RepresentationSchema) {
-			$keys = $this->mergeFlatSchemaPaths($keys, $levelSchema);
+		if ($this->layout instanceof ProjectionLayout) {
+			foreach ($this->layout->flatPlaceKeysAt($this->relationPathFor($branch)) as $path) {
+				if (! in_array($path, $keys, true)) {
+					$keys[] = $path;
+				}
+			}
 		}
 
 		return $keys;
 	}
 
 	/**
-	 * @param list<string> $keys
 	 * @return list<string>
 	 */
-	private function mergeFlatSchemaPaths(array $keys, RepresentationSchema $schema): array
+	private function relationPathFor(LoadBranch $branch): array
 	{
-		foreach ($schema->getFields() as $field) {
-			if ($field->getSourcePath() === []) {
-				continue;
-			}
-
-			$path = $field->getPath();
-
-			if (! in_array($path, $keys, true)) {
-				$keys[] = $path;
-			}
+		if ($branch instanceof RelationLoadBranch) {
+			return $branch->getRelationRef()->getPath();
 		}
 
-		return $keys;
-	}
-
-	private function schemaForLevel(LoadBranch $branch): ?RepresentationSchema
-	{
-		if (! $this->schema instanceof RepresentationSchema) {
-			return null;
-		}
-
-		if ($branch instanceof RootLoadBranch) {
-			return $this->schema;
-		}
-
-		if (! $branch instanceof RelationLoadBranch) {
-			return null;
-		}
-
-		$current = $this->schema;
-
-		foreach ($branch->getRelationRef()->getPath() as $segment) {
-			if (! $current->hasRelation($segment)) {
-				return null;
-			}
-
-			$current = $current->getRelation($segment)->getRelatedSchema();
-		}
-
-		return $current;
+		return [];
 	}
 
 	/**

@@ -10,8 +10,9 @@ use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Without relation loads, LoadRuntime short-circuits to the executor. Cycle (and
- * this stub) emit place/selection keys directly — no load-local remapping.
+ * Without relation loads, LoadRuntime still assembles when place keys differ from
+ * load-local SQL keys (renames / flat related fields). Stub executors return
+ * load-local keys as Cycle would after SQL emission.
  */
 final class RootLoadLocalProjectionTest extends TestCase
 {
@@ -21,7 +22,7 @@ final class RootLoadLocalProjectionTest extends TestCase
 			$this->makeRegistry()->getCollection('users'),
 			new RootLoadLocalExecutor([
 				'id' => 1,
-				'displayName' => 'Ada',
+				'name' => 'Ada',
 			]),
 		);
 		$query->select($query->id, $query->name->as('displayName'));
@@ -38,7 +39,7 @@ final class RootLoadLocalProjectionTest extends TestCase
 			$this->makeRegistry()->getCollection('users'),
 			new RootLoadLocalExecutor([
 				'id' => 1,
-				'companyName' => 'Acme',
+				'company__name' => 'Acme',
 			]),
 		);
 		$query->select($query->id, $query->company->name->as('companyName'));

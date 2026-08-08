@@ -44,6 +44,7 @@ final class QueryArchitectureTest extends TestCase
 			'use ON\\Data\\ORM\\',
 		];
 		$selectQueryAllowOrm = [
+			'use ON\\Data\\ORM\\Representation\\Schema\\Query\\QueryRepresentationPlan;',
 			'use ON\\Data\\ORM\\Representation\\Schema\\Query\\QueryRepresentationSchemaCompiler;',
 			'use ON\\Data\\ORM\\Representation\\Schema\\RepresentationSchema;',
 		];

@@ -6,11 +6,13 @@ namespace ON\Data\Query\Relation;
 
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationSelectionException;
+use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Projection\ProjectionLayout;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use ReflectionMethod;
 
@@ -47,21 +49,21 @@ final class LoadRuntime
 	public function __construct(
 		private readonly SelectQuery $rootQuery,
 		private readonly QueryExecutorInterface $executor,
-		?RepresentationSchema $schema = null,
+		?ProjectionLayout $layout = null,
 	) {
 		$this->rootBranch = new RootLoadBranch(
 			$rootQuery,
 			fn (string $fieldName): string => $this->getJoinedAlias(['root', 'required'], $fieldName),
 		);
-		$this->outputProcessor = new RelationOutputProcessor($schema);
+		$this->outputProcessor = new RelationOutputProcessor($layout);
 		$this->fieldPlanner = new LoadFieldPlanner($this);
 	}
 
 	public function fetchAll(): array
 	{
-		// No relation loads: executor already returns place keys (including flat
-		// related columns). RootNode would collapse has-many flat joins by identity.
-		if ($this->rootQuery->getRelationSelections()->isEmpty()) {
+		// Plain own-field reads: executor already returns place keys.
+		// Renames, flats, and INTERNAL/SQL_ONLY remaps need assemble.
+		if (! $this->needsAssemble()) {
 			return $this->executor->fetchAll($this->rootQuery);
 		}
 
@@ -74,7 +76,7 @@ final class LoadRuntime
 
 	public function fetchOne(): ?array
 	{
-		if ($this->rootQuery->getRelationSelections()->isEmpty()) {
+		if (! $this->needsAssemble()) {
 			return $this->executor->fetchOne($this->rootQuery);
 		}
 
@@ -229,24 +231,60 @@ final class LoadRuntime
 		$this->rootBranch->registerPublicSelections();
 		$this->rootBranch->requirePrimaryKey();
 		// Own-level root columns before relation load (loaders may inspect the root query).
-		$this->fieldPlanner->bindBranch($this->rootBranch, includeCrossLevelFlats: false);
+		$this->bindAllDestinations(includeCrossLevelFlats: false);
 		$this->createBranches();
 		$this->configureBranches();
 
 		// Flats after destinations exist so loaded to-one children can be reused.
-		$this->fieldPlanner->bindBranch($this->rootBranch, includeCrossLevelFlats: true);
-
-		foreach ($this->relationBranchesByDepth() as $branch) {
-			$this->fieldPlanner->bindBranch($branch, includeCrossLevelFlats: true);
-		}
+		$this->bindAllDestinations(includeCrossLevelFlats: true);
 
 		$this->createParserTree();
 
-		$this->fieldPlanner->bindBranch($this->rootBranch, includeCrossLevelFlats: true);
+		$this->bindAllDestinations(includeCrossLevelFlats: true);
+	}
+
+	private function bindAllDestinations(bool $includeCrossLevelFlats): void
+	{
+		$this->fieldPlanner->bindBranch($this->rootBranch, $includeCrossLevelFlats);
 
 		foreach ($this->relationBranchesByDepth() as $branch) {
-			$this->fieldPlanner->bindBranch($branch, includeCrossLevelFlats: true);
+			$this->fieldPlanner->bindBranch($branch, $includeCrossLevelFlats);
 		}
+	}
+
+	/**
+	 * Assemble when relation loads remapping, place≠load keys, or flat FieldRefs.
+	 */
+	private function needsAssemble(): bool
+	{
+		if (! $this->rootQuery->getRelationSelections()->isEmpty()) {
+			return true;
+		}
+
+		foreach ($this->rootQuery->getSelections()->getAll() as $selection) {
+			if (
+				$selection->hasTag(SelectionTag::INTERNAL)
+				|| $selection->hasTag(SelectionTag::SQL_ONLY)
+			) {
+				continue;
+			}
+
+			$fieldRef = $selection->getFieldRef();
+
+			if (! $fieldRef instanceof FieldRef) {
+				continue;
+			}
+
+			if ($fieldRef->getSource() instanceof RelationRef) {
+				return true;
+			}
+
+			if ($selection->getSelectionKey() !== $fieldRef->getField()->getName()) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private function createBranches(): void
