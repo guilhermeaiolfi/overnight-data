@@ -26,15 +26,22 @@ final class LoadFieldPlanner
 	}
 
 	/**
-	 * Bind this branch's COLUMN fields: plan fetches, select SQL, set parser aliases.
+	 * Bind this branch's COLUMN fields: select SQL, set parser aliases, place→load binds.
 	 *
 	 * @param bool $includeCrossLevelFlats when false, omit FieldRefs whose source is under
 	 *        this level (early root pass before child destinations exist)
 	 */
 	public function bindBranch(LoadBranch $branch, bool $includeCrossLevelFlats = true): void
 	{
-		$fetches = $this->getFetches($branch, $includeCrossLevelFlats);
-		$aliases = $this->applyFetches($branch, $fetches);
+		$aliases = [];
+
+		foreach ($branch->getSelections()->getByTag(SelectionTag::COLUMN) as $selection) {
+			$alias = $this->bindColumn($branch, $selection, $includeCrossLevelFlats);
+
+			if ($alias !== null) {
+				$aliases[] = $alias;
+			}
+		}
 
 		if ($branch->hasNode()) {
 			$branch->getPublicNode()->setValueAliases($aliases);
@@ -42,143 +49,52 @@ final class LoadFieldPlanner
 	}
 
 	/**
-	 * @return list<array{
-	 *     placeKey: string,
-	 *     selection: SelectionItem,
-	 *     fieldRef: ?FieldRef,
-	 *     mode: 'local'|'child'|'skip',
-	 *     childPath?: list<string>,
-	 *     child?: RelationLoadBranch,
-	 *     fieldName?: string,
-	 * }>
+	 * Bind one COLUMN selection. Returns the load-local parser alias for local selects;
+	 * null when skipped or fetched from a child destination.
 	 */
-	private function getFetches(LoadBranch $branch, bool $includeCrossLevelFlats): array
-	{
+	private function bindColumn(
+		LoadBranch $branch,
+		SelectionItem $selection,
+		bool $includeCrossLevelFlats,
+	): ?string {
 		$level = $branch->getProjectionLevel();
-		$fetches = [];
+		$placeKey = $selection->getSelectionKey();
+		$fieldRef = $selection->getFieldRef();
 
-		foreach ($branch->getSelections()->getByTag(SelectionTag::COLUMN) as $selection) {
-			$placeKey = $selection->getSelectionKey();
-			$fieldRef = $selection->getFieldRef();
+		if (! $fieldRef instanceof FieldRef) {
+			$branch->bindPlaceToLoadKey($placeKey, $placeKey);
 
-			if (! $fieldRef instanceof FieldRef) {
-				$fetches[] = [
-					'placeKey' => $placeKey,
-					'selection' => $selection,
-					'fieldRef' => null,
-					'mode' => 'local',
-				];
-
-				continue;
-			}
-
-			$fieldName = $fieldRef->getField()->getName();
-			$source = $fieldRef->getSource();
-			$isCrossLevelFlat = $source instanceof RelationRef && $source->isUnder($level);
-
-			if ($isCrossLevelFlat && ! $includeCrossLevelFlats) {
-				$fetches[] = [
-					'placeKey' => $placeKey,
-					'selection' => $selection,
-					'fieldRef' => $fieldRef,
-					'mode' => 'skip',
-					'fieldName' => $fieldName,
-				];
-
-				continue;
-			}
-
-			if ($isCrossLevelFlat) {
-				$relative = $source->relativeTo($level);
-				$child = $this->getChildForFlat($branch, $relative);
-
-				if ($child instanceof RelationLoadBranch) {
-					$fetches[] = [
-						'placeKey' => $placeKey,
-						'selection' => $selection,
-						'fieldRef' => $fieldRef,
-						'mode' => 'child',
-						'childPath' => $relative,
-						'child' => $child,
-						'fieldName' => $fieldName,
-					];
-
-					continue;
-				}
-			}
-
-			$fetches[] = [
-				'placeKey' => $placeKey,
-				'selection' => $selection,
-				'fieldRef' => $fieldRef,
-				'mode' => 'local',
-				'fieldName' => $fieldName,
-			];
+			return $placeKey;
 		}
 
-		return $fetches;
-	}
+		$fieldName = $fieldRef->getField()->getName();
+		$source = $fieldRef->getSource();
+		$isCrossLevelFlat = $source instanceof RelationRef && $source->isUnder($level);
 
-	/**
-	 * @param list<array{
-	 *     placeKey: string,
-	 *     selection: SelectionItem,
-	 *     fieldRef: ?FieldRef,
-	 *     mode: 'local'|'child'|'skip',
-	 *     childPath?: list<string>,
-	 *     child?: RelationLoadBranch,
-	 *     fieldName?: string,
-	 * }> $fetches
-	 * @return list<string> load-local parser aliases for this place branch’s node
-	 */
-	private function applyFetches(LoadBranch $branch, array $fetches): array
-	{
-		$level = $branch->getProjectionLevel();
-		$aliases = [];
+		if ($isCrossLevelFlat && ! $includeCrossLevelFlats) {
+			return null;
+		}
 
-		foreach ($fetches as $fetch) {
-			$placeKey = $fetch['placeKey'];
+		if ($isCrossLevelFlat) {
+			$relative = $source->relativeTo($level);
+			$child = $this->getChildForFlat($branch, $relative);
 
-			if ($fetch['mode'] === 'skip') {
-				continue;
-			}
-
-			if ($fetch['mode'] === 'child') {
-				$child = $fetch['child'] ?? null;
-				$fieldName = $fetch['fieldName'] ?? '';
-				$childPath = $fetch['childPath'] ?? [];
-
-				if (! $child instanceof RelationLoadBranch || $fieldName === '' || $childPath === []) {
-					throw new LogicException('Child fetch is incomplete.');
-				}
-
+			if ($child instanceof RelationLoadBranch) {
 				$loadKeys = $this->runtime->requireFields($child, [$fieldName]);
-				$branch->bindPlaceToChildDestination($placeKey, $childPath, $loadKeys[0] ?? $fieldName);
+				$branch->bindPlaceToChildDestination($placeKey, $relative, $loadKeys[0] ?? $fieldName);
 
-				continue;
+				return null;
 			}
-
-			$fieldRef = $fetch['fieldRef'];
-
-			if (! $fieldRef instanceof FieldRef) {
-				$branch->bindPlaceToLoadKey($placeKey, $placeKey);
-				$aliases[] = $placeKey;
-
-				continue;
-			}
-
-			$fieldName = $fetch['fieldName'] ?? $fieldRef->getField()->getName();
-			$source = $fieldRef->getSource();
-			$path = $source instanceof RelationRef
-				? $source->getPath()
-				: ($level instanceof RelationRef ? $level->getPath() : []);
-			$loadKey = $this->getLoadKey($level, $fetch['selection'], $fieldRef, $fieldName);
-			$sqlKey = $this->selectField($branch, $fieldRef, $placeKey, $loadKey, $path);
-			$branch->bindPlaceToLoadKey($placeKey, $sqlKey);
-			$aliases[] = $sqlKey;
 		}
 
-		return $aliases;
+		$path = $source instanceof RelationRef
+			? $source->getPath()
+			: ($level instanceof RelationRef ? $level->getPath() : []);
+		$loadKey = $this->getLoadKey($level, $selection, $fieldRef, $fieldName);
+		$sqlKey = $this->selectField($branch, $fieldRef, $placeKey, $loadKey, $path);
+		$branch->bindPlaceToLoadKey($placeKey, $sqlKey);
+
+		return $sqlKey;
 	}
 
 	/**
@@ -197,7 +113,8 @@ final class LoadFieldPlanner
 		$source = $this->getSelectionSource($branch, $fieldRef);
 		$fieldName = $fieldRef->getField()->getName();
 		$ownsSelect = $branch->getSource() === $query;
-		$sqlKey = $this->getLoadAlias($loadKey, $fieldName, $path, $ownsSelect);
+		$preferred = $this->getLoadAlias($loadKey, $fieldName, $path, $ownsSelect);
+		$sqlKey = $this->resolveSqlKey($query, $source, $fieldName, $preferred);
 
 		// Authoring place alias already on this query (typical root): keep it and
 		// add a load-local SQL column for the parser.
@@ -205,19 +122,14 @@ final class LoadFieldPlanner
 			$placeKey !== $sqlKey
 			&& $query->getSelections()->hasSelectionKey($placeKey)
 		) {
-			$this->selectAs($query, $source, $fieldName, $sqlKey, sqlOnly: true);
+			if (! $this->aliasProvidesField($query, $sqlKey, $source, $fieldName)) {
+				$this->selectAs($query, $source, $fieldName, $sqlKey, sqlOnly: true);
+			}
 
 			return $sqlKey;
 		}
 
-		if (
-			$query->getSelections()->hasSelectionKey($sqlKey)
-			|| $query->getSelections()->hasNamedExpression($sqlKey)
-			|| (
-				$placeKey === $sqlKey
-				&& $query->getSelections()->hasSelectionKey($placeKey)
-			)
-		) {
+		if ($this->aliasProvidesField($query, $sqlKey, $source, $fieldName)) {
 			return $sqlKey;
 		}
 
@@ -256,6 +168,26 @@ final class LoadFieldPlanner
 		return $this->runtime->getJoinedAlias($path, $fieldName);
 	}
 
+	/**
+	 * Use $preferred when free or already the same source field; otherwise allocate
+	 * a collision-safe private alias (public l_* names must not steal unrelated columns).
+	 */
+	private function resolveSqlKey(
+		SelectQuery $query,
+		QuerySourceInterface $source,
+		string $fieldName,
+		string $preferred,
+	): string {
+		if (
+			! $this->aliasOccupied($query, $preferred)
+			|| $this->aliasProvidesField($query, $preferred, $source, $fieldName)
+		) {
+			return $preferred;
+		}
+
+		return $this->allocateUniqueAlias($query, $source, $fieldName, $preferred);
+	}
+
 	private function selectAs(
 		SelectQuery $query,
 		QuerySourceInterface $source,
@@ -263,11 +195,14 @@ final class LoadFieldPlanner
 		string $alias,
 		bool $sqlOnly,
 	): void {
-		if (
-			$query->getSelections()->hasSelectionKey($alias)
-			|| $query->getSelections()->hasNamedExpression($alias)
-		) {
+		if ($this->aliasProvidesField($query, $alias, $source, $fieldName)) {
 			return;
+		}
+
+		if ($this->aliasOccupied($query, $alias)) {
+			throw new LogicException(
+				'Load alias "' . $alias . '" is occupied by a different selection; resolveSqlKey should have allocated a free key.',
+			);
 		}
 
 		$expression = $source->field($fieldName)->as($alias);
@@ -282,6 +217,78 @@ final class LoadFieldPlanner
 		}
 
 		$query->select($expression);
+	}
+
+	private function aliasOccupied(SelectQuery $query, string $alias): bool
+	{
+		$selections = $query->getSelections();
+
+		return $selections->hasSelectionKey($alias) || $selections->hasNamedExpression($alias);
+	}
+
+	private function aliasProvidesField(
+		SelectQuery $query,
+		string $alias,
+		QuerySourceInterface $source,
+		string $fieldName,
+	): bool {
+		$existing = $query->getSelections()->findBySelectionKey($alias);
+
+		if ($existing === null) {
+			return false;
+		}
+
+		$fieldRef = $existing->getFieldRef();
+
+		if (! $fieldRef instanceof FieldRef || $fieldRef->getField()->getName() !== $fieldName) {
+			return false;
+		}
+
+		return $this->sourcesEquivalent($fieldRef->getSource(), $source);
+	}
+
+	private function sourcesEquivalent(QuerySourceInterface $left, QuerySourceInterface $right): bool
+	{
+		if ($left === $right) {
+			return true;
+		}
+
+		// FieldRefs authored on a RelationRef share the loader Join after attach.
+		if ($left instanceof RelationRef && $left->hasJoinedSource() && $left->getJoinedSource() === $right) {
+			return true;
+		}
+
+		if ($right instanceof RelationRef && $right->hasJoinedSource() && $right->getJoinedSource() === $left) {
+			return true;
+		}
+
+		if ($left instanceof RelationRef && $right instanceof RelationRef) {
+			return $left->getQuery() === $right->getQuery()
+				&& $left->getPath() === $right->getPath();
+		}
+
+		return false;
+	}
+
+	private function allocateUniqueAlias(
+		SelectQuery $query,
+		QuerySourceInterface $source,
+		string $fieldName,
+		string $preferred,
+	): string {
+		$candidate = $preferred;
+		$suffix = 2;
+
+		while ($this->aliasOccupied($query, $candidate)) {
+			if ($this->aliasProvidesField($query, $candidate, $source, $fieldName)) {
+				return $candidate;
+			}
+
+			$candidate = $preferred . '_' . $suffix;
+			++$suffix;
+		}
+
+		return $candidate;
 	}
 
 	/**

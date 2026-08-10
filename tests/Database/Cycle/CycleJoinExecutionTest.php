@@ -208,6 +208,36 @@ final class CycleJoinExecutionTest extends TestCase
 		self::assertArrayNotHasKey('author', $rows[0]['posts'][0]);
 	}
 
+	public function testJoinedLoadDoesNotReusePublicAliasThatCollidesWithGeneratedLoadKey(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts
+			->select($users->posts->id, $users->posts->title)
+			->join();
+
+		// Prefer the generated JOIN load alias as a public root column of a different field.
+		$rows = $users
+			->select($users->name->as('l_posts_id'))
+			->orderBy($users->id->asc(), $users->posts->title->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'l_posts_id' => 'Ada',
+				'posts' => [
+					['id' => 1, 'title' => 'Hello'],
+					['id' => 2, 'title' => 'World'],
+				],
+			],
+			[
+				'l_posts_id' => 'Grace',
+				'posts' => [
+					['id' => 3, 'title' => 'Graph'],
+				],
+			],
+		], $rows);
+	}
+
 	public function testManyToManyCreatesFlatMultipliedRows(): void
 	{
 		$articles = $this->database->query($this->registry->getCollection('articles'));

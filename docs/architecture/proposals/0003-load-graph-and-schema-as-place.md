@@ -1,8 +1,29 @@
 # Proposal 0003: LoadBranch destinations + RepresentationSchema as place
 
-Status: **Accepted direction** — incremental implementation on `feat/recursive-projection-levels`
+Status: **Accepted / closed (mostly done)** on `feat/recursive-projection-levels`
 
 Relates to: [`0002-recursive-projection-levels.md`](./0002-recursive-projection-levels.md), [`0001-representation-schema-as-reusable-model.md`](./0001-representation-schema-as-reusable-model.md).
+
+## Closing note (current)
+
+The fetch/place split is the lasting design. Remaining “purity” work is **intentionally deferred**, not unfinished MVP:
+
+| Done | Intentionally not doing now |
+|---|---|
+| `LoadBranch` = fetch destinations | Drive **all** own-level place keys from schema alone |
+| Schema (+ `ProjectionLayout` flats) = place provenance | Full root↔nested `requireFields` unify |
+| Load-local parser keys + place→load binds | Reintroduce LoadGraph / FetchPlan |
+| Lazy schema compile (only when writable or relations need place) | Treat hybrid assemble as a defect |
+| Flat reuse of loaded to-one child destinations | |
+
+**Hybrid assemble (intentional):** `RelationOutputProcessor::placeKeysFor()` builds public scalar keys from:
+
+1. **Own-level:** `EXPLICIT` selections that are not `INTERNAL` / `SQL_ONLY`
+2. **Flats:** `ProjectionLayout::flatPlaceKeysAt()` (schema fields with non-empty `sourcePath`)
+
+Schema PK backfill for adoption must **not** alone drive public place. Query stays ORM-light via `ProjectionLayout`; full `RepresentationSchema` stays on the SelectQuery / writable prepare boundary.
+
+Optional small cleanups (not place-model rewrites): collapse `LoadFieldPlanner` plan/apply into one bind pass; reuse JOIN/`l_*` aliases only when the existing selection is the same source field (else allocate a collision-safe alias).
 
 ## Problem
 
@@ -53,12 +74,12 @@ RelationSelectionTree     ← which attaches exist
 LoadBranch tree           ← runtime destination per attach (+ root)
         │
         ▼
-LoadFieldPlanner          ← bind place-level COLUMNs (getFetches → applyFetches)
+LoadFieldPlanner          ← bind place-level COLUMNs (per-selection bind)
   assign: local | child destination | skip
   emit:   SQL on that destination + place binds
         │
         ▼
-RelationOutputProcessor   ← place keys from schema; read via placeToLoadKeys / child paths
+RelationOutputProcessor   ← place keys: EXPLICIT ∪ layout flats; read via placeToLoadKeys / child paths
 ```
 
 **Invariant:** destination = RelationSelection attaches (+ root), **not** every schema `sourcePath`. Flat `$posts->author->name` does not create an author attach.
@@ -72,15 +93,15 @@ RelationOutputProcessor   ← place keys from schema; read via placeToLoadKeys /
 | No `author` destination (flat only) | **Parent** (posts) — JOIN/select onto posts query | from parent row |
 | `author` already a loaded destination | **Author** destination — select `name` there; skip redundant parent JOIN | from author bag → `authorName` on post |
 
-Never create an author destination **only** because of a flat. Prefer an existing author destination when present (follow-on if not yet implemented). Schema `sourcePath` remains provenance.
+Never create an author destination **only** because of a flat. Prefer an existing author destination when present. Schema `sourcePath` remains provenance.
 
-Today: flat-only registers as `COLUMN` on the parent `LoadBranch`; assemble places via schema path. When a loaded to-one child destination already covers `sourcePath`, fetch requires the field on that child and assemble reads the child bag (no redundant parent JOIN).
+Today: flat-only registers as `COLUMN` on the parent `LoadBranch`; assemble places via schema path (through `ProjectionLayout`). When a loaded to-one child destination already covers `sourcePath`, fetch requires the field on that child and assemble reads the child bag (no redundant parent JOIN).
 
 ### Invariants
 
 1. **One RelationSelection path ⇒ one LoadBranch** ⇒ one where/order/limit/strategy bag via existing selection/ref APIs. Do not duplicate inventories on the branch.  
 2. **Many place edges may read one load field** (flat + nested from the same author row — when author is a destination).  
-3. **Parser keys are load-local** (stable field / INTERNAL names). Public aliases live on the schema `path`.  
+3. **Parser keys are load-local** (stable field / INTERNAL names). Public aliases live on the schema `path` / place keys.  
 4. **JOIN vs SEPARATE is a LoadBranch attach mode** — place graph unchanged.  
 5. **`RepresentationSource`** remains the place-fields-grouped-by-source view (derived from schema) for writable.
 
@@ -102,19 +123,19 @@ Originally added a read-only `LoadGraph` keyed by source path, including unloade
 1. Ensure schema compile runs before fetch on paths that will assemble from schema (writable already `prepare()`s first; extend as needed).  
 2. Keep current output processor behavior.
 
-`SelectQuery::fetchAll()` / `fetchOne()` call `beginFetch()` first: compile `RepresentationSchema` before `LoadRuntime`. Writable `prepare()` exposes the same schema via `WritablePreparation::getFetchSchema()` (no second compile).
+`SelectQuery::beginFetch()` compiles place schema **lazily**: writable prepare first; relation loads that need place compile once; plain reads with no relations skip schema (no PK requirement on ordinary reads). Writable `prepare()` exposes the same schema via `WritablePreparation::getFetchSchema()` (no second compile). Query assemble sees flats through `ProjectionLayout` (`QueryRepresentationPlan::layoutFromSchema()`).
 
 ### Phase 2 — assemble flats from schema ✅
 
 1. Drive flat placement from schema `path`/`sourcePath` while parser remains mostly as today.  
 2. Shrink ad-hoc flat handling in output registration.
 
-`RelationOutputProcessor` places scalar keys from explicit own-level selections plus schema fields with non-empty `sourcePath` (flats). Nested flats register as fetch `COLUMN` only on the parent branch (not as own-level place from tags). Parser `valueAliases` still use the place alias as the load key for now (Phase 3 will go load-local).
+`RelationOutputProcessor` places scalar keys from explicit own-level selections plus layout flat keys (`sourcePath !== []`). Nested flats register as fetch `COLUMN` only on the parent branch (not as own-level place from tags).
 
 ### Phase 3 — parser ← load-local keys only ✅
 
 1. Parser `valueAliases` use load-local keys.  
-2. `assemble(schema, loadTree)` owns all public naming / visibility.  
+2. Assemble owns public naming / visibility (hybrid EXPLICIT ∪ flats).  
 3. JOIN attach is “same LoadBranch tree, different edge mode.”
 
 Relation branch columns bind `placeKey → loadKey` on the load branch. Own fields load as the field name; flats as a stable relative key (`author__name`); INTERNAL keys stay as planned. `RelationOutputProcessor` reads load keys and writes place paths. JOIN still allocates `__on_data_*` / `l_*` load keys and maps them the same way.
@@ -145,7 +166,7 @@ Same smell as the old root special-case: unfinished dual paths, not domain rules
 ### Cleanup — delete LoadGraph / FetchPlan ✅
 
 - [x] Remove `LoadGraph` / `LoadGraphNode` / `LoadGraphBuilder` (unused for fetch; invented unloaded flat nodes).  
-- [x] Remove `FetchPlan` wrapper; thread `RepresentationSchema` via `SelectQuery::getFetchSchema()` / `WritablePreparation::getFetchSchema()` / `LoadRuntime`.  
+- [x] Remove `FetchPlan` wrapper; thread place via `SelectQuery::getFetchSchema()` / `getFetchLayout()` / `WritablePreparation` / `LoadRuntime`.  
 - [x] Document destination pipeline + flat fetch-home rules (this proposal).  
 - [x] Flat reuse of an existing loaded to-one source destination (fetch home + assemble bag).
 
@@ -160,9 +181,9 @@ Same smell as the old root special-case: unfinished dual paths, not domain rules
 | `IDENTITY` / `REQUIRED` | Parser / loader bookkeeping. |
 | `DEFAULT` | Initial star selection before the first `select()`. |
 
-`PUBLIC` is retired. Assemble (`placeKeysFor`): explicit non-`INTERNAL`/`SQL_ONLY` selections, plus schema flats (`sourcePath !== []`). Schema still backfills PK fields for adoption — those must not alone drive public place.
+`PUBLIC` is retired. Assemble (`placeKeysFor`): explicit non-`INTERNAL`/`SQL_ONLY` selections, plus layout flats (`sourcePath !== []`). Schema still backfills PK fields for adoption — those must not alone drive public place.
 
-**Still deferred** (higher risk / separate pass): full root↔nested `requireFields` unify; driving all own-level place keys from schema (excluding identity backfill) instead of `EXPLICIT` tags.
+**Not planned as follow-on for this proposal** (higher risk / separate decision if ever revisited): full root↔nested `requireFields` unify; driving all own-level place keys from schema (excluding identity backfill) instead of `EXPLICIT` tags. The hybrid above is the accepted assemble contract.
 
 ## Acceptance (Phase 0) — superseded
 
@@ -172,13 +193,13 @@ Same smell as the old root special-case: unfinished dual paths, not domain rules
 
 ## Acceptance (Phase 1)
 
-- [x] Every `fetchAll` / `fetchOne` compiles place schema before LoadRuntime.  
+- [x] Fetch paths that need place compile schema before LoadRuntime (writable + relation loads); plain no-relation reads skip compile.  
 - [x] Writable prepare exposes place schema on `WritablePreparation` (post-identity).  
-- [x] `SelectQuery::getFetchSchema()` available after fetch begins; output shape unchanged.
+- [x] `SelectQuery::getFetchSchema()` / `getFetchLayout()` available after fetch begins when compiled; output shape unchanged.
 
 ## Acceptance (Phase 2)
 
-- [x] Nested/root visible scalars are placed from schema field paths when fetch schema is present.  
+- [x] Nested/root visible scalars are placed from hybrid EXPLICIT ∪ schema flats when layout/schema is present.  
 - [x] Nested flat related fields register as load-branch `COLUMN` (not own-level place from tags); output still exposes schema `path`.  
 - [x] Existing nested flat + writable flat tests keep passing.
 
@@ -205,6 +226,12 @@ Same smell as the old root special-case: unfinished dual paths, not domain rules
 - [x] Flat + loaded to-one child: field required on child destination; parent does not select `author__name`.  
 - [x] Assemble places `authorName` from the child bag; nested author container still from the attach.  
 - [x] Flat-only (no child destination) unchanged — JOIN under parent.
+
+## Acceptance (close)
+
+- [x] Hybrid assemble documented as intentional.  
+- [x] “Schema owns all own-level place keys” marked out of scope for this proposal.  
+- [x] Docs index reflects accepted / closed status.
 
 ## References
 

@@ -16,7 +16,7 @@ Proposed designs (not implemented until accepted and built):
 
 - [`architecture/proposals/0001-representation-schema-as-reusable-model.md`](./architecture/proposals/0001-representation-schema-as-reusable-model.md): Extend `RepresentationSchema` into a reusable select shape (`query($schema)`), including expression nodes.
 - [`architecture/proposals/0002-recursive-projection-levels.md`](./architecture/proposals/0002-recursive-projection-levels.md): Unify root and nested relation projections so every level shares one selection model (should inform / precede 0001).
-- [`architecture/proposals/0003-load-graph-and-schema-as-place.md`](./architecture/proposals/0003-load-graph-and-schema-as-place.md): Split fetch (`LoadBranch` destinations) from place (`RepresentationSchema`); flats do not invent attaches.
+- [`architecture/proposals/0003-load-graph-and-schema-as-place.md`](./architecture/proposals/0003-load-graph-and-schema-as-place.md): **Accepted / closed** — fetch (`LoadBranch`) vs place (`RepresentationSchema` + hybrid assemble); flats do not invent attaches.
 
 ## Definitions
 
