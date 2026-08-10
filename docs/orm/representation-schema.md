@@ -38,16 +38,32 @@ The mapper does not by itself know persistence provenance. It should not become 
 
 ### RepresentationSchema
 
-`RepresentationSchema` describes what a representation object shape means for ORM provenance.
+`RepresentationSchema` describes what a representation object shape means for place and ORM provenance.
 
-It is the structure-only persistence provenance graph for one representation shape. It can be used as a root schema or as a related schema branch. It stores collection, field, relation, path, source-path, writability, and related-branch metadata. It does not store `RecordState`, `RecordFieldRef`, or `RecordRelationRef`.
+It is the structure-only graph for one representation shape. It can be used as a root schema or as a related schema branch. It stores collection, field, relation, expression, path, source-path, writability, and related-branch metadata. It does not store `RecordState`, `RecordFieldRef`, or `RecordRelationRef`.
 
-It owns two path maps:
+It owns three path maps:
 
 - field schemas
 - relation schemas
+- expression schemas (computed / non-column scalars; always read-only for sync)
 
-A path can exist in only one of those maps. Scalar representation sync reads only field schemas. Relation representation sync reads only relation schemas.
+A path can exist in only one of those maps. Scalar representation sync reads only field schemas. Relation representation sync reads only relation schemas. Expression paths are ignored by sync/adoption.
+
+#### Attachment modes (one schema type)
+
+| Mode | When | How related data appears |
+|---|---|---|
+| **Graph** | Nested `relations` present (typical entity DTO) | Related objects under relation paths; each has a `relatedSchema` |
+| **Flat** | Fields with non-empty `sourcePath`, usually no relation containers | Multiple `RecordState`s via {@see RepresentationSchema::getSources()} |
+
+Adoption chooses flat vs graph from the schema (and intent); both modes share this type.
+
+#### Query assemble (hybrid today)
+
+For Query assemble, flat related fields are exposed via `getFlatFieldPaths()` / `flatPlaceKeysAt($relationPath)`. Own-level public keys still come from explicit query selections (hybrid place; see proposal 0003). Identity PK fields backfilled onto the schema for adoption must not alone drive public place.
+
+Once own-level field and expression paths are treated as the full public place list (with a clear rule for identity-only enrichment), assemble can stop using selection tags for visibility. That step is deferred; tags remain the assemble signal for own-level EXPLICIT / INTERNAL / SQL_ONLY for now.
 
 ### RepresentationState
 

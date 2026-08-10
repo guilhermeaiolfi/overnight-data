@@ -12,7 +12,6 @@ use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Key;
 use function ON\Data\Mapper\map;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Condition\ConditionInterface;
@@ -31,7 +30,6 @@ use ON\Data\Query\Expression\SourceFieldExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
-use ON\Data\Query\Projection\ProjectionLayout;
 use ON\Data\Query\Relation\RelationQueryPlanner;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelection;
@@ -100,8 +98,6 @@ final class SelectQuery implements QuerySourceInterface
 	private ?Relation\LoadRuntime $runtime = null;
 
 	private ?RepresentationSchema $fetchSchema = null;
-
-	private ?ProjectionLayout $fetchLayout = null;
 
 	/**
 	 * Cached once per fetch for {@see publicRow()} nested cleanup.
@@ -297,7 +293,6 @@ final class SelectQuery implements QuerySourceInterface
 		$copy->resultClass = $this->resultClass;
 		$copy->writableHandler = $this->writableHandler;
 		$copy->fetchSchema = null;
-		$copy->fetchLayout = null;
 		$copy->publicRowRelations = null;
 
 		return $copy;
@@ -472,14 +467,6 @@ final class SelectQuery implements QuerySourceInterface
 	public function getFetchSchema(): ?RepresentationSchema
 	{
 		return $this->fetchSchema;
-	}
-
-	/**
-	 * Query-owned flat place layout from the last fetch begin (null when unused).
-	 */
-	public function getFetchLayout(): ?ProjectionLayout
-	{
-		return $this->fetchLayout;
 	}
 
 	public function getSelections(): SelectionList
@@ -730,7 +717,7 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
-	 * Resolve place schema / layout before LoadRuntime (proposal 0003).
+	 * Resolve place schema before LoadRuntime (proposal 0003).
 	 *
 	 * Writable prepares first (identity planning may mutate selections). Plain reads
 	 * without relation loads skip schema compile (no PK required). Relation loads
@@ -742,7 +729,7 @@ final class SelectQuery implements QuerySourceInterface
 
 		if ($handler !== null) {
 			$preparation = $handler->prepare($this);
-			$this->applyPreparationLayout($preparation);
+			$this->applyPreparationSchema($preparation);
 
 			return $preparation;
 		}
@@ -750,34 +737,22 @@ final class SelectQuery implements QuerySourceInterface
 		// Count wrappers and other derived sources have no collection place schema.
 		if ($this->isDerivedSource() || ! $this->needsFetchSchema()) {
 			$this->fetchSchema = null;
-			$this->fetchLayout = null;
 
 			return null;
 		}
 
 		$this->fetchSchema = $this->compileFetchSchema();
-		$this->fetchLayout = QueryRepresentationPlan::layoutFromSchema($this->fetchSchema);
 
 		return null;
 	}
 
-	private function applyPreparationLayout(WritablePreparation $preparation): void
+	private function applyPreparationSchema(WritablePreparation $preparation): void
 	{
-		if ($preparation instanceof QueryRepresentationPlan) {
-			$this->fetchSchema = $preparation->getSchema();
-			$this->fetchLayout = $preparation->getProjectionLayout();
-
-			return;
-		}
-
-		$this->fetchLayout = $preparation->getProjectionLayout();
-		$this->fetchSchema = $this->fetchLayout !== null
-			? $this->compileFetchSchema()
-			: null;
+		$this->fetchSchema = $preparation->getFetchSchema();
 	}
 
 	/**
-	 * Schema/layout needed for writable identity or relation-level flat place keys.
+	 * Schema needed for writable identity or relation-level flat place keys.
 	 */
 	private function needsFetchSchema(): bool
 	{
@@ -869,7 +844,7 @@ final class SelectQuery implements QuerySourceInterface
 
 		$executor = $this->executor ?? throw QueryNotExecutableException::forQuery($this);
 
-		return $this->runtime = new Relation\LoadRuntime($this, $executor, $this->fetchLayout);
+		return $this->runtime = new Relation\LoadRuntime($this, $executor, $this->fetchSchema);
 	}
 
 	/**

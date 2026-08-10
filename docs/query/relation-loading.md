@@ -197,7 +197,7 @@ Practical guidance:
 
 Structured loads separate **fetch destinations** (`LoadBranch` tree — one per attached relation) from **place** (where values land on the result). Flat related fields (for example `authorName` from `posts.author`) place on the parent; they do not invent an `author` attach unless that relation is also loaded.
 
-Assemble builds public scalar keys as a **hybrid** (intentional): own-level `EXPLICIT` selections (excluding `INTERNAL` / `SQL_ONLY`), plus flat place keys from the fetch layout / schema `sourcePath`. Schema PK backfill for writable adoption does not alone drive public place. See proposal [`0003-load-graph-and-schema-as-place.md`](../architecture/proposals/0003-load-graph-and-schema-as-place.md).
+Assemble builds public scalar keys as a **hybrid** (intentional): own-level `EXPLICIT` selections (excluding `INTERNAL` / `SQL_ONLY`), plus flat place keys from `RepresentationSchema::flatPlaceKeysAt()` (`sourcePath`). Schema PK backfill for writable adoption does not alone drive public place. See proposal [`0003-load-graph-and-schema-as-place.md`](../architecture/proposals/0003-load-graph-and-schema-as-place.md).
 
 ## Architecture Guardrails
 

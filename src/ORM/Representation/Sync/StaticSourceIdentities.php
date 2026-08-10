@@ -39,7 +39,7 @@ final class StaticSourceIdentities implements RepresentationSourceIdentities
 		RepresentationIntent $intent,
 	): self {
 		$sourcesByPathKey = [];
-		foreach (RepresentationSource::fromRepresentationSchema($schema) as $source) {
+		foreach ($schema->getSources() as $source) {
 			$sourcesByPathKey[$source->getPathKey()] = $source;
 		}
 

@@ -39,6 +39,25 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertSame('name', $schema->getField('name')->getFieldName());
 	}
 
+	public function testCompilesAliasedRootExpressions(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = query($users, function (SelectQuery $query) {
+			$query->select(
+				$query->name,
+				x()->add($query->id, $query->id)->as('idSquared'),
+			);
+		});
+
+		$schema = $this->compiler->compile($query);
+
+		self::assertTrue($schema->hasField('name'));
+		self::assertTrue($schema->hasExpression('idSquared'));
+		self::assertFalse($schema->getExpression('idSquared')->isWritable());
+		self::assertContains('idSquared', $schema->getPaths());
+	}
+
 	public function testUsesAliasAsRepresentationPathWhenSelectedFieldIsAliased(): void
 	{
 		$registry = $this->makeRegistry();

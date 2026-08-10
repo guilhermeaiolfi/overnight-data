@@ -60,6 +60,6 @@ final class RepresentationAdoptionContext
 	 */
 	public function getSources(): array
 	{
-		return RepresentationSource::fromRepresentationSchema($this->schema);
+		return $this->schema->getSources();
 	}
 }

@@ -11,7 +11,7 @@ The fetch/place split is the lasting design. Remaining “purity” work is **in
 | Done | Intentionally not doing now |
 |---|---|
 | `LoadBranch` = fetch destinations | Drive **all** own-level place keys from schema alone |
-| Schema (+ `ProjectionLayout` flats) = place provenance | Full root↔nested `requireFields` unify |
+| Schema = place provenance (Query may use it directly) | Full root↔nested `requireFields` unify |
 | Load-local parser keys + place→load binds | Reintroduce LoadGraph / FetchPlan |
 | Lazy schema compile (only when writable or relations need place) | Treat hybrid assemble as a defect |
 | Flat reuse of loaded to-one child destinations | |
@@ -19,11 +19,11 @@ The fetch/place split is the lasting design. Remaining “purity” work is **in
 **Hybrid assemble (intentional):** `RelationOutputProcessor::placeKeysFor()` builds public scalar keys from:
 
 1. **Own-level:** `EXPLICIT` selections that are not `INTERNAL` / `SQL_ONLY`
-2. **Flats:** `ProjectionLayout::flatPlaceKeysAt()` (schema fields with non-empty `sourcePath`)
+2. **Flats:** `RepresentationSchema::flatPlaceKeysAt()` (fields with non-empty `sourcePath`)
 
-Schema PK backfill for adoption must **not** alone drive public place. Query stays ORM-light via `ProjectionLayout`; full `RepresentationSchema` stays on the SelectQuery / writable prepare boundary.
+Schema PK backfill for adoption must **not** alone drive public place. Query may import `RepresentationSchema` as the intentional place boundary (no separate `ProjectionLayout`).
 
-Optional small cleanups (not place-model rewrites): collapse `LoadFieldPlanner` plan/apply into one bind pass; reuse JOIN/`l_*` aliases only when the existing selection is the same source field (else allocate a collision-safe alias).
+Load-field planner bind/alias collision cleanups landed with the 0003 close.
 
 ## Problem
 
@@ -95,7 +95,7 @@ RelationOutputProcessor   ← place keys: EXPLICIT ∪ layout flats; read via pl
 
 Never create an author destination **only** because of a flat. Prefer an existing author destination when present. Schema `sourcePath` remains provenance.
 
-Today: flat-only registers as `COLUMN` on the parent `LoadBranch`; assemble places via schema path (through `ProjectionLayout`). When a loaded to-one child destination already covers `sourcePath`, fetch requires the field on that child and assemble reads the child bag (no redundant parent JOIN).
+Today: flat-only registers as `COLUMN` on the parent `LoadBranch`; assemble places via schema path (`RepresentationSchema::flatPlaceKeysAt`). When a loaded to-one child destination already covers `sourcePath`, fetch requires the field on that child and assemble reads the child bag (no redundant parent JOIN).
 
 ### Invariants
 
@@ -123,7 +123,7 @@ Originally added a read-only `LoadGraph` keyed by source path, including unloade
 1. Ensure schema compile runs before fetch on paths that will assemble from schema (writable already `prepare()`s first; extend as needed).  
 2. Keep current output processor behavior.
 
-`SelectQuery::beginFetch()` compiles place schema **lazily**: writable prepare first; relation loads that need place compile once; plain reads with no relations skip schema (no PK requirement on ordinary reads). Writable `prepare()` exposes the same schema via `WritablePreparation::getFetchSchema()` (no second compile). Query assemble sees flats through `ProjectionLayout` (`QueryRepresentationPlan::layoutFromSchema()`).
+`SelectQuery::beginFetch()` compiles place schema **lazily**: writable prepare first; relation loads that need place compile once; plain reads with no relations skip schema (no PK requirement on ordinary reads). Writable `prepare()` exposes the same schema via `WritablePreparation::getFetchSchema()` (no second compile). Query assemble reads flats from that `RepresentationSchema`.
 
 ### Phase 2 — assemble flats from schema ✅
 
@@ -166,7 +166,8 @@ Same smell as the old root special-case: unfinished dual paths, not domain rules
 ### Cleanup — delete LoadGraph / FetchPlan ✅
 
 - [x] Remove `LoadGraph` / `LoadGraphNode` / `LoadGraphBuilder` (unused for fetch; invented unloaded flat nodes).  
-- [x] Remove `FetchPlan` wrapper; thread place via `SelectQuery::getFetchSchema()` / `getFetchLayout()` / `WritablePreparation` / `LoadRuntime`.  
+- [x] Remove `FetchPlan` wrapper; thread place via `SelectQuery::getFetchSchema()` / `WritablePreparation` / `LoadRuntime`.  
+- [x] Remove `ProjectionLayout`; Query assemble uses `RepresentationSchema` directly as the place boundary.  
 - [x] Document destination pipeline + flat fetch-home rules (this proposal).  
 - [x] Flat reuse of an existing loaded to-one source destination (fetch home + assemble bag).
 
@@ -195,7 +196,7 @@ Same smell as the old root special-case: unfinished dual paths, not domain rules
 
 - [x] Fetch paths that need place compile schema before LoadRuntime (writable + relation loads); plain no-relation reads skip compile.  
 - [x] Writable prepare exposes place schema on `WritablePreparation` (post-identity).  
-- [x] `SelectQuery::getFetchSchema()` / `getFetchLayout()` available after fetch begins when compiled; output shape unchanged.
+- [x] `SelectQuery::getFetchSchema()` available after fetch begins when compiled; output shape unchanged.
 
 ## Acceptance (Phase 2)
 

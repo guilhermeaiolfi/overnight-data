@@ -10,18 +10,22 @@ use ON\Data\ORM\Exception\StateException;
 use stdClass;
 
 /**
- * Persistence provenance graph for one representation shape: a root collection
- * plus field and relation path maps that describe how object properties map to
- * records.
+ * Place + persistence provenance graph for one representation shape: a root
+ * collection plus field, relation, and expression path maps.
  *
- * The root collection means this representation branch is rooted at that
- * collection. Individual field properties may still target other collections in
- * flat heterogeneous projections, and nested relation schemas carry related
- * schemas rooted at the related collection.
+ * One schema serves two attachment modes:
+ * - **Graph** — nested `relations` with related schemas (entity-shaped objects).
+ * - **Flat** — fields with non-empty `sourcePath` spanning related collections
+ *   (no relation containers); see {@see getSources()}.
  *
- * Exists as the durable ORM model compiled from queries or manual representation declarations
- * and consumed by sync, adoption, and relation runtime state — separate from
- * query selections and mapper hydration.
+ * Query assemble still uses a hybrid for public keys (explicit selections ∪ flat
+ * field paths). Schema-owned full public place (including own-level scalars and
+ * expressions, excluding identity PK backfill) is a follow-on.
+ *
+ * Durable model compiled from queries or built manually; consumed by Session
+ * sync/adoption and by Query assemble for flat place keys. Query may import this
+ * type as the intentional ORM boundary exception (fetch still uses LoadBranch;
+ * selections stay on SelectionList).
  */
 final class RepresentationSchema
 {
@@ -29,8 +33,12 @@ final class RepresentationSchema
 	private array $fields = [];
 	/** @var array<string, RepresentationRelationSchema> */
 	private array $relations = [];
+	/** @var array<string, RepresentationExpressionSchema> */
+	private array $expressions = [];
 	/** @var list<string> */
 	private array $paths = [];
+	/** @var list<RepresentationSource>|null */
+	private ?array $sourcesCache = null;
 
 	public function __construct(
 		private CollectionInterface $collection,
@@ -168,6 +176,7 @@ final class RepresentationSchema
 
 		$this->fields[$path] = $fieldSchema;
 		$this->paths[] = $path;
+		$this->invalidateSources();
 	}
 
 	public function hasField(string $path): bool
@@ -190,6 +199,40 @@ final class RepresentationSchema
 	public function getFields(): array
 	{
 		return array_values($this->fields);
+	}
+
+	/**
+	 * Public place keys for flat related fields at this level (`sourcePath !== []`).
+	 * Own-level fields are omitted — assemble uses explicit selections for those.
+	 *
+	 * @return list<string>
+	 */
+	public function getFlatFieldPaths(): array
+	{
+		$keys = [];
+
+		foreach ($this->fields as $field) {
+			if ($field->getSourcePath() === []) {
+				continue;
+			}
+
+			$keys[] = $field->getPath();
+		}
+
+		return $keys;
+	}
+
+	/**
+	 * Flat place keys at a nested relation path from this root (empty = this level).
+	 *
+	 * @param list<string> $relationPath
+	 * @return list<string>
+	 */
+	public function flatPlaceKeysAt(array $relationPath): array
+	{
+		$node = $this->findRelatedSchemaAt($relationPath);
+
+		return $node === null ? [] : $node->getFlatFieldPaths();
 	}
 
 	/**
@@ -245,6 +288,7 @@ final class RepresentationSchema
 
 		$this->relations[$path] = $relationSchema;
 		$this->paths[] = $path;
+		$this->invalidateSources();
 	}
 
 	public function hasRelation(string $path): bool
@@ -269,6 +313,48 @@ final class RepresentationSchema
 		return array_values($this->relations);
 	}
 
+	public function addExpression(RepresentationExpressionSchema $expressionSchema): void
+	{
+		$path = $expressionSchema->getPath();
+		$this->assertPathIsAvailable($path);
+
+		$this->expressions[$path] = $expressionSchema;
+		$this->paths[] = $path;
+	}
+
+	public function hasExpression(string $path): bool
+	{
+		return array_key_exists($path, $this->expressions);
+	}
+
+	public function getExpression(string $path): RepresentationExpressionSchema
+	{
+		if (! array_key_exists($path, $this->expressions)) {
+			throw new StateException(sprintf("Representation schema does not contain expression path '%s'.", $path));
+		}
+
+		return $this->expressions[$path];
+	}
+
+	/**
+	 * @return list<RepresentationExpressionSchema>
+	 */
+	public function getExpressions(): array
+	{
+		return array_values($this->expressions);
+	}
+
+	/**
+	 * Field groupings by source path (flat / multi-record provenance).
+	 * Memoized until fields or relations change; expressions are not included.
+	 *
+	 * @return list<RepresentationSource>
+	 */
+	public function getSources(): array
+	{
+		return $this->sourcesCache ??= RepresentationSource::fromRepresentationSchema($this);
+	}
+
 	/**
 	 * Walk nested related schemas by relation-name segments from this root.
 	 *
@@ -291,7 +377,7 @@ final class RepresentationSchema
 
 	public function hasPath(string $path): bool
 	{
-		return $this->hasField($path) || $this->hasRelation($path);
+		return $this->hasField($path) || $this->hasRelation($path) || $this->hasExpression($path);
 	}
 
 	/**
@@ -307,5 +393,10 @@ final class RepresentationSchema
 		if ($this->hasPath($path)) {
 			throw new StateException(sprintf("Representation schema already contains path '%s'.", $path));
 		}
+	}
+
+	private function invalidateSources(): void
+	{
+		$this->sourcesCache = null;
 	}
 }

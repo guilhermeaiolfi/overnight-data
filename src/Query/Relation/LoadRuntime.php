@@ -6,10 +6,10 @@ namespace ON\Data\Query\Relation;
 
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Expression\FieldRef;
-use ON\Data\Query\Projection\ProjectionLayout;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Selection\SelectionTag;
@@ -49,13 +49,13 @@ final class LoadRuntime
 	public function __construct(
 		private readonly SelectQuery $rootQuery,
 		private readonly QueryExecutorInterface $executor,
-		?ProjectionLayout $layout = null,
+		?RepresentationSchema $schema = null,
 	) {
 		$this->rootBranch = new RootLoadBranch(
 			$rootQuery,
 			fn (string $fieldName): string => $this->getJoinedAlias(['root', 'required'], $fieldName),
 		);
-		$this->outputProcessor = new RelationOutputProcessor($layout);
+		$this->outputProcessor = new RelationOutputProcessor($schema);
 		$this->fieldPlanner = new LoadFieldPlanner($this);
 	}
 

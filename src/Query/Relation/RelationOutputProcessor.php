@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
+use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Exception\RelationSelectionException;
-use ON\Data\Query\Projection\ProjectionLayout;
 use ON\Data\Query\Selection\SelectionTag;
 
 /**
@@ -16,7 +16,7 @@ use ON\Data\Query\Selection\SelectionTag;
 final class RelationOutputProcessor
 {
 	public function __construct(
-		private readonly ?ProjectionLayout $layout = null,
+		private readonly ?RepresentationSchema $schema = null,
 	) {
 	}
 
@@ -249,7 +249,7 @@ final class RelationOutputProcessor
 
 	/**
 	 * Visible place keys: explicit own-level selections (unless INTERNAL/SQL_ONLY),
-	 * plus layout flats at this relation path. Default visibility is public;
+	 * plus schema flats at this relation path. Default visibility is public;
 	 * INTERNAL opts out.
 	 *
 	 * @return list<string>
@@ -269,8 +269,8 @@ final class RelationOutputProcessor
 			$keys[] = $selection->getSelectionKey();
 		}
 
-		if ($this->layout instanceof ProjectionLayout) {
-			foreach ($this->layout->flatPlaceKeysAt($this->relationPathFor($branch)) as $path) {
+		if ($this->schema instanceof RepresentationSchema) {
+			foreach ($this->schema->flatPlaceKeysAt($this->relationPathFor($branch)) as $path) {
 				if (! in_array($path, $keys, true)) {
 					$keys[] = $path;
 				}

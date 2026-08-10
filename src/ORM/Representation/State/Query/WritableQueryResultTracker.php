@@ -55,7 +55,7 @@ final class WritableQueryResultTracker implements WritableResultHandler
 	public function prepare(SelectQuery $query): WritablePreparation
 	{
 		$schema = $this->compiler->compile($query);
-		$sources = RepresentationSource::fromRepresentationSchema($schema);
+		$sources = $schema->getSources();
 		$identities = $this->identityPlanner->planIdentities($query, $sources, resetCounter: true);
 		$plan = new QueryRepresentationPlan($schema, $sources, $identities);
 
@@ -261,7 +261,7 @@ final class WritableQueryResultTracker implements WritableResultHandler
 			return;
 		}
 
-		$sources = RepresentationSource::fromRepresentationSchema($relatedSchema);
+		$sources = $relatedSchema->getSources();
 		if (! RepresentationSource::listHasNonRoot($sources)) {
 			return;
 		}

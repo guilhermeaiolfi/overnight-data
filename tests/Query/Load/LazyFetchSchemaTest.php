@@ -50,7 +50,6 @@ final class LazyFetchSchemaTest extends TestCase
 		self::assertSame([['message' => 'ok']], $query->fetchAll());
 		self::assertTrue($executor->called);
 		self::assertNull($query->getFetchSchema());
-		self::assertNull($query->getFetchLayout());
 	}
 
 	public function testRelationLoadStillCompilesFetchSchema(): void
@@ -93,6 +92,5 @@ final class LazyFetchSchemaTest extends TestCase
 		$query->fetchAll();
 
 		self::assertNotNull($query->getFetchSchema());
-		self::assertNotNull($query->getFetchLayout());
 	}
 }

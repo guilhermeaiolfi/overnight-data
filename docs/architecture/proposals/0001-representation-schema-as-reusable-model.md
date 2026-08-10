@@ -1,10 +1,12 @@
 # Proposal 0001: RepresentationSchema as reusable query model
 
-Status: **Proposed** (not implemented)
+Status: **Proposed** — expression map + compile retention partially landed on `feat/recursive-projection-levels`; `query($schema)` reopen and memoized `projection()` still open.
 
-Supersedes / relates to: current `SelectQuery::projection()` → `RepresentationSchema` (write provenance only).
+Supersedes / relates to: current `SelectQuery::projection()` → `RepresentationSchema` (place + write provenance; expressions retained when aliased).
 
-**Depends on direction in** [`0002-recursive-projection-levels.md`](./0002-recursive-projection-levels.md): nested levels should gain the same projection vocabulary as root before (or while) durable schema reopen is built — otherwise 0001 risks root-only expression/reopen work that must be redone.
+**Depends on direction in** [`0002-recursive-projection-levels.md`](./0002-recursive-projection-levels.md): nested levels should gain the same projection vocabulary as root before (or while) durable schema reopen is built — otherwise 0001 risks root-only expression/reopen work that must be redone. Field/alias/flat parity largely landed; nested expression *load* still limited (JOIN requires `separate()`).
+
+**Also relates to** [`0003-load-graph-and-schema-as-place.md`](./0003-load-graph-and-schema-as-place.md) (accepted/closed): schema is place; assemble still hybrid (EXPLICIT tags ∪ schema flats). Schema-owned full public place is a follow-on after expression/API enrich.
 
 This document freezes the design discussion so other work can land first and still influence the final shape.
 
@@ -37,7 +39,7 @@ Today:
 
 - `Collection` = table definition (not a select shape).
 - `SelectQuery` = full read intent including `where` / `order` / `limit` (ephemeral, not a shared model).
-- `RepresentationSchema` via `projection()` = persistence provenance compiled from **field** selections only; non-`FieldRef` expressions are dropped; there is no schema → query reopen; compilation is uncached across calls.
+- `RepresentationSchema` via `projection()` = place + write provenance; **aliased** non-`FieldRef` expressions compile to `RepresentationExpressionSchema`; there is no schema → query reopen; compilation is uncached across calls.
 
 There is no first-class “define this result structure once, vary only conditions” artifact.
 

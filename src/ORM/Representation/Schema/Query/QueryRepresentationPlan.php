@@ -6,8 +6,6 @@ namespace ON\Data\ORM\Representation\Schema\Query;
 
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSource;
-use ON\Data\Query\Projection\ArrayProjectionLayout;
-use ON\Data\Query\Projection\ProjectionLayout;
 use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Result\WritablePreparation;
 
@@ -15,11 +13,8 @@ use ON\Data\Query\Result\WritablePreparation;
  * Writable prepare() result: schema, sources, and the query-scoped
  * {@see QuerySourceIdentities} map (locators for the whole fetch).
  *
- * Also serves as the {@see WritablePreparation} token so SelectQuery can hold the
- * plan without importing ORM adoption types into the query layer.
- *
- * Query-owned {@see ProjectionLayout} is derived from the place schema so
- * LoadRuntime stays ORM-free (proposal 0003 / boundary fix).
+ * Also serves as the {@see WritablePreparation} token so SelectQuery can reuse the
+ * prepared place schema without a second compile.
  */
 final class QueryRepresentationPlan implements WritablePreparation
 {
@@ -28,8 +23,6 @@ final class QueryRepresentationPlan implements WritablePreparation
 
 	/** @var array<string, QuerySourceIdentities> */
 	private array $relationIdentities = [];
-
-	private ProjectionLayout $layout;
 
 	/**
 	 * @param list<RepresentationSource> $sources
@@ -40,7 +33,6 @@ final class QueryRepresentationPlan implements WritablePreparation
 		private QuerySourceIdentities $identities,
 	) {
 		$this->sources = array_values($sources);
-		$this->layout = self::layoutFromSchema($schema);
 	}
 
 	public function getSchema(): RepresentationSchema
@@ -48,43 +40,9 @@ final class QueryRepresentationPlan implements WritablePreparation
 		return $this->schema;
 	}
 
-	public function getProjectionLayout(): ?ProjectionLayout
+	public function getFetchSchema(): ?RepresentationSchema
 	{
-		return $this->layout;
-	}
-
-	/**
-	 * Flat place keys at each relation path, for Query assemble without ORM types.
-	 */
-	public static function layoutFromSchema(RepresentationSchema $schema): ProjectionLayout
-	{
-		/** @var array<string, list<string>> $flatPlaceKeysByPathKey */
-		$flatPlaceKeysByPathKey = [];
-
-		$walk = static function (RepresentationSchema $node, array $path) use (&$flatPlaceKeysByPathKey, &$walk): void {
-			$keys = [];
-
-			foreach ($node->getFields() as $field) {
-				if ($field->getSourcePath() === []) {
-					continue;
-				}
-
-				$keys[] = $field->getPath();
-			}
-
-			$flatPlaceKeysByPathKey[RelationSelection::pathKey($path)] = $keys;
-
-			foreach ($node->getRelations() as $relation) {
-				$walk(
-					$relation->getRelatedSchema(),
-					[...$path, $relation->getRelationName()],
-				);
-			}
-		};
-
-		$walk($schema, []);
-
-		return new ArrayProjectionLayout($flatPlaceKeysByPathKey);
+		return $this->schema;
 	}
 
 	/**

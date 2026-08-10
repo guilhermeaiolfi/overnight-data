@@ -128,7 +128,7 @@ final class RepresentationAdoptionEngine
 
 		// Without intent, only multi-source / non-root projections are flat.
 		// Homogeneous root schemas use graph adoption (untracked root sync).
-		$sources = RepresentationSource::fromRepresentationSchema($schema);
+		$sources = $schema->getSources();
 		foreach ($sources as $source) {
 			if (! $source->isRoot()) {
 				return true;

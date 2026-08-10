@@ -182,7 +182,7 @@ final class RelationLoadBranch extends LoadBranch
 			return;
 		}
 
-		// Fetch-only flats: place keys come from ProjectionLayout.
+		// Fetch-only flats: place keys come from RepresentationSchema.
 		// Keep EXPLICIT off flats so they are not treated as own-level place from tags.
 		$this->selections->add(
 			$fieldRef->as($alias),

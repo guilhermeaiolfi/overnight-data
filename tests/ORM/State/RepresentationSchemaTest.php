@@ -6,9 +6,11 @@ namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\Representation\Schema\RepresentationExpressionSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\ORM\Support\OrmFixture;
 
@@ -77,6 +79,66 @@ final class RepresentationSchemaTest extends TestCase
 		$schema->addField($this->fieldSchema('email'));
 
 		self::assertSame(['name', 'posts', 'email'], $schema->getPaths());
+	}
+
+	public function testFlatPlaceKeysAtReturnsNestedFlatFieldPaths(): void
+	{
+		$users = $this->users();
+		$posts = $this->posts();
+		$root = new RepresentationSchema($users);
+		$postsSchema = new RepresentationSchema($posts);
+		$postsSchema->addField(new RepresentationFieldSchema('id', $posts, 'id'));
+		$postsSchema->addField(new RepresentationFieldSchema(
+			'authorName',
+			$users,
+			'name',
+			true,
+			false,
+			['author'],
+		));
+		$root->addRelation(new RepresentationRelationSchema(
+			'posts',
+			$users,
+			'posts',
+			$postsSchema,
+		));
+
+		self::assertSame([], $root->getFlatFieldPaths());
+		self::assertSame(['authorName'], $root->flatPlaceKeysAt(['posts']));
+		self::assertSame([], $root->flatPlaceKeysAt(['missing']));
+	}
+
+	public function testAddExpressionAndPathCollisionAcrossKinds(): void
+	{
+		$schema = new RepresentationSchema($this->users());
+		$schema->addField($this->fieldSchema('name'));
+		$schema->addExpression(new RepresentationExpressionSchema(
+			'lineTotal',
+			x()->literal(1),
+		));
+
+		self::assertTrue($schema->hasExpression('lineTotal'));
+		self::assertTrue($schema->hasPath('lineTotal'));
+		self::assertSame(['name', 'lineTotal'], $schema->getPaths());
+		self::assertFalse($schema->getExpression('lineTotal')->isWritable());
+
+		$this->expectException(StateException::class);
+		$schema->addRelation($this->relationSchema('lineTotal'));
+	}
+
+	public function testSourcesAreMemoizedUntilFieldsChange(): void
+	{
+		$schema = new RepresentationSchema($this->users());
+		$schema->addField($this->fieldSchema('name'));
+		$first = $schema->getSources();
+		$second = $schema->getSources();
+		self::assertSame($first, $second);
+
+		$schema->addField($this->fieldSchema('email'));
+		$third = $schema->getSources();
+		self::assertNotSame($first, $third);
+		self::assertCount(1, $third);
+		self::assertTrue($third[0]->hasField('email'));
 	}
 
 	public function testDuplicateFieldPathThrows(): void

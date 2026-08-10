@@ -12,6 +12,9 @@ use ON\Data\ORM\Representation\Sync\RepresentationSourceIdentities;
  *
  * Carries only representation/source structure. External per-source identities
  * for adoption are supplied via {@see RepresentationSourceIdentities}.
+ *
+ * Prefer {@see RepresentationSchema::getSources()} for the memoized list; this factory
+ * remains for one-off derivation.
  */
 final class RepresentationSource
 {

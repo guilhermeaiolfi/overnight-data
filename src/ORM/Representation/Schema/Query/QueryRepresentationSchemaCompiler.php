@@ -9,12 +9,14 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Representation\Schema\RelationLoadKnowledge;
+use ON\Data\ORM\Representation\Schema\RepresentationExpressionSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
+use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelection;
@@ -52,6 +54,10 @@ final class QueryRepresentationSchemaCompiler
 			: $this->fieldsFromSelections($query, $this->getRootExplicitScalarSelections($query));
 
 		$this->addFields($schema, $fields);
+		$this->addExpressions(
+			$schema,
+			$this->expressionsFromSelections($query, $query->getSelections()->getExplicit()),
+		);
 		$this->assemblePrimaryKeyFields($schema, $collection);
 	}
 
@@ -250,10 +256,9 @@ final class QueryRepresentationSchemaCompiler
 		if ($selection->hasDefaultSelection()) {
 			$this->addFields($schema, $this->defaultFields($targetCollection));
 		} else {
-			$this->addFields(
-				$schema,
-				$this->fieldsFromSelections($relationRef, $selection->getSelections()->getExplicit()),
-			);
+			$explicit = $selection->getSelections()->getExplicit();
+			$this->addFields($schema, $this->fieldsFromSelections($relationRef, $explicit));
+			$this->addExpressions($schema, $this->expressionsFromSelections($relationRef, $explicit));
 		}
 
 		$this->assemblePrimaryKeyFields($schema, $targetCollection);
@@ -272,6 +277,20 @@ final class QueryRepresentationSchemaCompiler
 			}
 
 			$schema->addField($field);
+		}
+	}
+
+	/**
+	 * @param list<RepresentationExpressionSchema> $expressions
+	 */
+	private function addExpressions(RepresentationSchema $schema, array $expressions): void
+	{
+		foreach ($expressions as $expression) {
+			if ($schema->hasExpression($expression->getPath()) || $schema->hasPath($expression->getPath())) {
+				continue;
+			}
+
+			$schema->addExpression($expression);
 		}
 	}
 
@@ -344,6 +363,57 @@ final class QueryRepresentationSchemaCompiler
 		}
 
 		return $fields;
+	}
+
+	/**
+	 * @param list<SelectionItem> $selections
+	 *
+	 * @return list<RepresentationExpressionSchema>
+	 */
+	private function expressionsFromSelections(SelectQuery|RelationRef $level, array $selections): array
+	{
+		$expressions = [];
+
+		foreach ($selections as $selection) {
+			$expression = $this->expressionFromSelection($level, $selection);
+			if ($expression instanceof RepresentationExpressionSchema) {
+				$expressions[] = $expression;
+			}
+		}
+
+		return $expressions;
+	}
+
+	private function expressionFromSelection(
+		SelectQuery|RelationRef $level,
+		SelectionItem $selection,
+	): ?RepresentationExpressionSchema {
+		$expression = $selection->getExpression();
+
+		if ($expression instanceof StarExpression) {
+			return null;
+		}
+
+		$publicPath = $selection->getSelectionKey();
+
+		if ($expression instanceof AliasedExpression) {
+			$publicPath = $expression->getAlias();
+			$expression = $expression->getExpression();
+		}
+
+		if ($expression instanceof FieldRef) {
+			return null;
+		}
+
+		if (! $expression instanceof ValueExpressionInterface) {
+			return null;
+		}
+
+		if ($publicPath === '') {
+			return null;
+		}
+
+		return new RepresentationExpressionSchema($publicPath, $expression);
 	}
 
 	private function fieldFromSelection(SelectQuery|RelationRef $level, SelectionItem $selection): ?RepresentationFieldSchema
