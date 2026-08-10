@@ -18,14 +18,14 @@ use stdClass;
  * - **Flat** — fields with non-empty `sourcePath` spanning related collections
  *   (no relation containers); see {@see getSources()}.
  *
- * Query assemble still uses a hybrid for public keys (explicit selections ∪ flat
- * field paths). Schema-owned full public place (including own-level scalars and
- * expressions, excluding identity PK backfill) is a follow-on.
+ * Query assemble uses {@see getPublicScalarPaths()} when a fetch schema is
+ * present (Public fields + expressions; Identity enrichment excluded). Plain
+ * assemble without a compiled schema still falls back to explicit selections.
  *
  * Durable model compiled from queries or built manually; consumed by Session
- * sync/adoption and by Query assemble for flat place keys. Query may import this
- * type as the intentional ORM boundary exception (fetch still uses LoadBranch;
- * selections stay on SelectionList).
+ * sync/adoption and by Query assemble. Query may import this type as the
+ * intentional ORM boundary exception (fetch still uses LoadBranch; selections
+ * stay on SelectionList).
  */
 final class RepresentationSchema
 {
@@ -203,7 +203,7 @@ final class RepresentationSchema
 
 	/**
 	 * Public place keys for flat related fields at this level (`sourcePath !== []`).
-	 * Own-level fields are omitted — assemble uses explicit selections for those.
+	 * Identity enrichment and own-level fields are omitted.
 	 *
 	 * @return list<string>
 	 */
@@ -212,7 +212,7 @@ final class RepresentationSchema
 		$keys = [];
 
 		foreach ($this->fields as $field) {
-			if ($field->getSourcePath() === []) {
+			if ($field->getSourcePath() === [] || ! $field->isPublicPlace()) {
 				continue;
 			}
 
@@ -233,6 +233,31 @@ final class RepresentationSchema
 		$node = $this->findRelatedSchemaAt($relationPath);
 
 		return $node === null ? [] : $node->getFlatFieldPaths();
+	}
+
+	/**
+	 * Ordered public scalar place paths at this level (Public fields + expressions).
+	 * Excludes Identity enrichment and relation containers.
+	 *
+	 * @return list<string>
+	 */
+	public function getPublicScalarPaths(): array
+	{
+		$keys = [];
+
+		foreach ($this->paths as $path) {
+			if ($this->hasExpression($path)) {
+				$keys[] = $path;
+
+				continue;
+			}
+
+			if ($this->hasField($path) && $this->getField($path)->isPublicPlace()) {
+				$keys[] = $path;
+			}
+		}
+
+		return $keys;
 	}
 
 	/**

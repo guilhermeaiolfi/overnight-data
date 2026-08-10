@@ -10,6 +10,7 @@ use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Representation\Schema\RelationLoadKnowledge;
 use ON\Data\ORM\Representation\Schema\RepresentationExpressionSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationFieldRole;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
@@ -334,6 +335,7 @@ final class QueryRepresentationSchemaCompiler
 				writable: false,
 				skipWhenMissing: true,
 				sourcePath: $sourcePath,
+				role: RepresentationFieldRole::Identity,
 			);
 		}
 

@@ -56,6 +56,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertTrue($schema->hasExpression('idSquared'));
 		self::assertFalse($schema->getExpression('idSquared')->isWritable());
 		self::assertContains('idSquared', $schema->getPaths());
+		self::assertSame(['name', 'idSquared'], $schema->getPublicScalarPaths());
 	}
 
 	public function testUsesAliasAsRepresentationPathWhenSelectedFieldIsAliased(): void
@@ -81,7 +82,10 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 
 		self::assertTrue($schema->hasField('id'));
 		self::assertTrue($schema->getField('id')->isReadOnly());
+		self::assertTrue($schema->getField('id')->isIdentity());
 		self::assertTrue($schema->getField('name')->isWritable());
+		self::assertTrue($schema->getField('name')->isPublicPlace());
+		self::assertSame(['name'], $schema->getPublicScalarPaths());
 	}
 
 	public function testSupportsCompositePrimaryKeys(): void

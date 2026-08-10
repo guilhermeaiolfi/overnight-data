@@ -59,11 +59,11 @@ A path can exist in only one of those maps. Scalar representation sync reads onl
 
 Adoption chooses flat vs graph from the schema (and intent); both modes share this type.
 
-#### Query assemble (hybrid today)
+#### Query assemble (place-first when schema is present)
 
-For Query assemble, flat related fields are exposed via `getFlatFieldPaths()` / `flatPlaceKeysAt($relationPath)`. Own-level public keys still come from explicit query selections (hybrid place; see proposal 0003). Identity PK fields backfilled onto the schema for adoption must not alone drive public place.
+When a fetch schema exists, assemble uses {@see RepresentationSchema::getPublicScalarPaths()} — ordered **Public** field paths plus expression paths. **Identity** field enrichment (PK backfill) is on the schema for adoption but is not public place.
 
-Once own-level field and expression paths are treated as the full public place list (with a clear rule for identity-only enrichment), assemble can stop using selection tags for visibility. That step is deferred; tags remain the assemble signal for own-level EXPLICIT / INTERNAL / SQL_ONLY for now.
+Plain assemble without a compiled schema (e.g. alias-only reads with no relations) still falls back to explicit query selections. Fetch tags (`COLUMN`, `SQL_ONLY`, …) remain query/runtime only.
 
 ### RepresentationState
 

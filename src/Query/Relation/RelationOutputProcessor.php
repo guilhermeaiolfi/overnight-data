@@ -248,14 +248,23 @@ final class RelationOutputProcessor
 	}
 
 	/**
-	 * Visible place keys: explicit own-level selections (unless INTERNAL/SQL_ONLY),
-	 * plus schema flats at this relation path. Default visibility is public;
-	 * INTERNAL opts out.
+	 * Visible scalar place keys for this level.
+	 *
+	 * When a place schema is available, Public field + expression paths are
+	 * authoritative (Identity enrichment excluded). Otherwise fall back to
+	 * explicit selections (plain assemble without a compiled schema).
 	 *
 	 * @return list<string>
 	 */
 	private function placeKeysFor(LoadBranch $branch): array
 	{
+		if ($this->schema instanceof RepresentationSchema) {
+			$node = $this->schema->findRelatedSchemaAt($this->relationPathFor($branch));
+			if ($node instanceof RepresentationSchema) {
+				return $node->getPublicScalarPaths();
+			}
+		}
+
 		$keys = [];
 
 		foreach ($branch->getSelections()->getExplicit() as $selection) {
@@ -267,14 +276,6 @@ final class RelationOutputProcessor
 			}
 
 			$keys[] = $selection->getSelectionKey();
-		}
-
-		if ($this->schema instanceof RepresentationSchema) {
-			foreach ($this->schema->flatPlaceKeysAt($this->relationPathFor($branch)) as $path) {
-				if (! in_array($path, $keys, true)) {
-					$keys[] = $path;
-				}
-			}
 		}
 
 		return $keys;

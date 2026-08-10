@@ -8,11 +8,13 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
 
 /**
- * One structural scalar representation path with writability and optional
- * skip-when-missing adoption behavior.
+ * One structural scalar representation path with writability, place role, and
+ * optional skip-when-missing adoption behavior.
  *
  * Exists as the leaf node of RepresentationSchema used by scalar sync and flat
- * projection adoption.
+ * projection adoption. {@see RepresentationFieldRole::Public} paths form the
+ * representation place spine; {@see RepresentationFieldRole::Identity} is
+ * adoption enrichment only.
  */
 final class RepresentationFieldSchema
 {
@@ -30,6 +32,7 @@ final class RepresentationFieldSchema
 		private bool $writable = true,
 		private bool $skipWhenMissing = false,
 		array $sourcePath = [],
+		private RepresentationFieldRole $role = RepresentationFieldRole::Public,
 	) {
 		if ($path === '') {
 			throw new StateException('Representation schema path cannot be empty.');
@@ -88,9 +91,32 @@ final class RepresentationFieldSchema
 		return $this->sourcePath === [];
 	}
 
+	public function getRole(): RepresentationFieldRole
+	{
+		return $this->role;
+	}
+
+	public function isPublicPlace(): bool
+	{
+		return $this->role === RepresentationFieldRole::Public;
+	}
+
+	public function isIdentity(): bool
+	{
+		return $this->role === RepresentationFieldRole::Identity;
+	}
+
 	public function withSkipWhenMissing(bool $skipWhenMissing): self
 	{
-		return new self($this->path, $this->collection, $this->fieldName, $this->writable, $skipWhenMissing, $this->sourcePath);
+		return new self(
+			$this->path,
+			$this->collection,
+			$this->fieldName,
+			$this->writable,
+			$skipWhenMissing,
+			$this->sourcePath,
+			$this->role,
+		);
 	}
 
 	public function isWritable(): bool

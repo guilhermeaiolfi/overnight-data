@@ -16,14 +16,9 @@ The fetch/place split is the lasting design. Remaining “purity” work is **in
 | Lazy schema compile (only when writable or relations need place) | Treat hybrid assemble as a defect |
 | Flat reuse of loaded to-one child destinations | |
 
-**Hybrid assemble (intentional):** `RelationOutputProcessor::placeKeysFor()` builds public scalar keys from:
+**Place-first assemble (when schema is present):** `RelationOutputProcessor::placeKeysFor()` uses `RepresentationSchema::getPublicScalarPaths()` (Public fields + expressions). Identity PK enrichment stays on the schema for adoption but is not public place. Without a compiled schema, assemble still falls back to explicit selections.
 
-1. **Own-level:** `EXPLICIT` selections that are not `INTERNAL` / `SQL_ONLY`
-2. **Flats:** `RepresentationSchema::flatPlaceKeysAt()` (fields with non-empty `sourcePath`)
-
-Schema PK backfill for adoption must **not** alone drive public place. Query may import `RepresentationSchema` as the intentional place boundary (no separate `ProjectionLayout`).
-
-Load-field planner bind/alias collision cleanups landed with the 0003 close.
+Field place roles (`RepresentationFieldRole::Public` | `Identity`) are the durable half of selection meaning; fetch tags stay on Query.
 
 ## Problem
 
