@@ -176,8 +176,8 @@ abstract class AbstractNode
 	}
 
 	/**
-	 * Bind the SQL/result key order for this node. Columns are already load-local;
-	 * place aliases are applied later by RelationOutputProcessor via place→load binding.
+	 * Bind the SQL/result key order for reading a flat row into {@see $columns}.
+	 * Does not change bag keys (collection field names).
 	 *
 	 * @param list<string> $aliases
 	 */
@@ -197,8 +197,15 @@ abstract class AbstractNode
 			}
 		}
 
-		$this->columns = array_values($aliases);
 		$this->valueAliases = array_values($aliases);
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	public function getColumns(): array
+	{
+		return $this->columns;
 	}
 
 	/**

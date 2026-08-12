@@ -30,18 +30,13 @@ final class HasManyLoader extends AbstractLoader
 	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
 	{
 		$relationRef = $branch->getRelationRef();
-		$definition = $relationRef->getDefinition();
-		$parentToChild = $definition->getKeyPairing();
-		$parentBranch = $branch->getParent();
-		$identity = $runtime->requireFields($branch, $relationRef->getCollection()->getPrimaryKey());
-		$child = $runtime->requireFields($branch, $parentToChild->getRightFields());
-		$parent = $runtime->requireFields($parentBranch, $parentToChild->getLeftFields());
+		$pairing = $relationRef->getDefinition()->getKeyPairing();
 
 		return new CollectionNode(
-			$branch->localColumnLoadKeys(),
-			$identity,
-			$child,
-			$parent,
+			$branch->columns(),
+			$relationRef->getCollection()->getPrimaryKey(),
+			$pairing->getRightFields(),
+			$pairing->getLeftFields(),
 		);
 	}
 
@@ -68,9 +63,9 @@ final class HasManyLoader extends AbstractLoader
 			$runtime->setQueryContext($branch, $query, $query);
 		}
 
-		$runtime->requireFields($branch, $relationRef->getCollection()->getPrimaryKey());
-		$runtime->requireFields($branch, $parentToChild->getRightFields());
-		$runtime->requireFields($parentBranch, $parentToChild->getLeftFields());
+		$branch->requireFields($relationRef->getCollection()->getPrimaryKey());
+		$branch->requireFields($parentToChild->getRightFields());
+		$parentBranch->requireFields($parentToChild->getLeftFields());
 
 		if ($strategy !== LoadStrategy::JOIN) {
 			$runtime->continueWith($branch, 'loadData');

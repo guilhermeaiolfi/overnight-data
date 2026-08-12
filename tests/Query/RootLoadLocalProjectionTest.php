@@ -10,9 +10,9 @@ use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Without relation loads, LoadRuntime still assembles when place keys differ from
- * load-local SQL keys (renames / flat related fields). Stub executors return
- * load-local keys as Cycle would after SQL emission.
+ * Without relation loads, LoadRuntime still assembles when output names differ
+ * from field names (renames / flat related fields). Stub executors return SQL
+ * aliases as Cycle would after emission: root-owned columns use the output name.
  */
 final class RootLoadLocalProjectionTest extends TestCase
 {
@@ -22,7 +22,7 @@ final class RootLoadLocalProjectionTest extends TestCase
 			$this->makeRegistry()->getCollection('users'),
 			new RootLoadLocalExecutor([
 				'id' => 1,
-				'name' => 'Ada',
+				'displayName' => 'Ada',
 			]),
 		);
 		$query->select($query->id, $query->name->as('displayName'));
@@ -39,7 +39,7 @@ final class RootLoadLocalProjectionTest extends TestCase
 			$this->makeRegistry()->getCollection('users'),
 			new RootLoadLocalExecutor([
 				'id' => 1,
-				'company__name' => 'Acme',
+				'companyName' => 'Acme',
 			]),
 		);
 		$query->select($query->id, $query->company->name->as('companyName'));

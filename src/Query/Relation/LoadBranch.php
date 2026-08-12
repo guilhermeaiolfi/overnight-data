@@ -63,33 +63,65 @@ abstract class LoadBranch
 	}
 
 	/**
+	 * Local parser bag keys: own-level collection field names, plus output names
+	 * for local flats and non-field internals. Child-bag flats are omitted.
+	 *
+	 * @return list<string>
+	 */
+	public function columns(): array
+	{
+		$names = [];
+		$seen = [];
+
+		foreach ($this->getSelections()->getByTag(SelectionTag::COLUMN) as $selection) {
+			if ($this->childPathForPlace($selection->getSelectionKey()) !== null) {
+				continue;
+			}
+
+			$name = $this->parserColumnName($selection);
+
+			if (isset($seen[$name])) {
+				continue;
+			}
+
+			$seen[$name] = true;
+			$names[] = $name;
+		}
+
+		return $names;
+	}
+
+	/**
+	 * SQL aliases for {@see AbstractNode::setValueAliases()}, in node column order.
+	 */
+	public function applyRowAliases(AbstractNode $node): void
+	{
+		$aliases = [];
+
+		foreach ($node->getColumns() as $column) {
+			$aliases[] = $this->sqlAliasForColumn($column);
+		}
+
+		$node->setValueAliases($aliases);
+	}
+
+	public function sqlAliasForColumn(string $column): string
+	{
+		$own = $this->findOwnFieldSelection($column);
+
+		if ($own instanceof SelectionItem) {
+			return $this->loadKeyForPlace($own->getSelectionKey());
+		}
+
+		return $this->loadKeyForPlace($column);
+	}
+
+	/**
 	 * @return list<string>|null
 	 */
 	public function childPathForPlace(string $placeKey): ?array
 	{
 		return ($this->placeBindings[$placeKey] ?? null)?->getChildPath();
-	}
-
-	/**
-	 * Load-local parser keys for COLUMNs fetched on this destination (not child bags).
-	 *
-	 * @return list<string>
-	 */
-	public function localColumnLoadKeys(): array
-	{
-		$keys = [];
-
-		foreach ($this->getSelections()->getByTag(SelectionTag::COLUMN) as $selection) {
-			$placeKey = $selection->getSelectionKey();
-
-			if ($this->childPathForPlace($placeKey) !== null) {
-				continue;
-			}
-
-			$keys[] = $this->loadKeyForPlace($placeKey);
-		}
-
-		return $keys;
 	}
 
 	public function setNode(AbstractNode $node): void
@@ -263,6 +295,37 @@ abstract class LoadBranch
 		}
 
 		return null;
+	}
+
+	private function parserColumnName(SelectionItem $selection): string
+	{
+		$fieldRef = $selection->getFieldRef();
+		$level = $this->getProjectionLevel();
+
+		if ($fieldRef instanceof FieldRef && $fieldRef->getSource() === $level) {
+			return $fieldRef->getField()->getName();
+		}
+
+		return $selection->getSelectionKey();
+	}
+
+	/**
+	 * Parser-bag key for a place (output name): own collection field name, or
+	 * the output name for flats / internals.
+	 */
+	public function bagKeyForPlace(string $placeKey): string
+	{
+		if ($this->childPathForPlace($placeKey) !== null) {
+			return $this->loadKeyForPlace($placeKey);
+		}
+
+		$selection = $this->getSelections()->findBySelectionKey($placeKey);
+
+		if (! $selection instanceof SelectionItem) {
+			return $placeKey;
+		}
+
+		return $this->parserColumnName($selection);
 	}
 
 	private function ownFieldExpression(string $fieldName): AliasedExpression

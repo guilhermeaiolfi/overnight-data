@@ -41,6 +41,55 @@ final class RelationOutputProcessor
 		return $records;
 	}
 
+	/**
+	 * Remap SQL aliases to output names one row at a time (no identity fold).
+	 * Used when there are no relation attaches — including flat JOIN selects
+	 * that must keep multiplied rows.
+	 *
+	 * @param list<array<string, mixed>> $rows
+	 * @return list<array<string, mixed>>
+	 */
+	public function processRawRows(RootLoadBranch $root, array $rows): array
+	{
+		if (! $this->schema instanceof RepresentationSchema) {
+			throw LoadRuntimeException::placeSchemaMissing();
+		}
+
+		$placeKeys = $this->placeKeysFor($root);
+		$records = [];
+
+		foreach ($rows as $row) {
+			$records[] = $this->projectLevelRecord(
+				$root,
+				$this->sqlRowToBag($root, $row),
+				$placeKeys,
+				projectScalars: true,
+				promotionParent: 'root',
+			);
+		}
+
+		return $records;
+	}
+
+	/**
+	 * @param array<string, mixed> $row
+	 * @return array<string, mixed>
+	 */
+	private function sqlRowToBag(LoadBranch $branch, array $row): array
+	{
+		$bag = [];
+
+		foreach ($branch->columns() as $column) {
+			$sql = $branch->sqlAliasForColumn($column);
+
+			if (array_key_exists($sql, $row)) {
+				$bag[$column] = $row[$sql];
+			}
+		}
+
+		return $bag;
+	}
+
 	private function buildVisibleOutput(RelationLoadBranch $branch, mixed $value): mixed
 	{
 		if ($branch->returnsMany()) {
@@ -170,7 +219,9 @@ final class RelationOutputProcessor
 				continue;
 			}
 
-			$this->assignPlaceValue($item, $branch, $record, $placeKey);
+			if (! $this->assignPlaceValue($item, $branch, $record, $placeKey)) {
+				$item[$placeKey] = null;
+			}
 		}
 
 		return $item;
@@ -182,7 +233,7 @@ final class RelationOutputProcessor
 	 */
 	private function assignPlaceValue(array &$item, LoadBranch $branch, array $record, string $placeKey): bool
 	{
-		$loadKey = $branch->loadKeyForPlace($placeKey);
+		$loadKey = $branch->bagKeyForPlace($placeKey);
 		$childPath = $branch->childPathForPlace($placeKey);
 
 		if ($childPath !== null) {

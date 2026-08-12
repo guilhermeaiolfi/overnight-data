@@ -186,7 +186,7 @@ final class NestedFlatProjectionLoadTest extends TestCase
 			}
 
 			self::assertFalse(
-				$query->getSelections()->hasSelectionKey('author__name'),
+				$query->getSelections()->hasSelectionKey('authorName'),
 				'Flat must not JOIN author onto posts when an author destination exists',
 			);
 		}
@@ -259,8 +259,8 @@ final class NestedFlatProjectionExecutor implements QueryExecutorInterface
 				'id' => 10,
 				'userId' => 1,
 				'authorId' => 7,
-				'title' => 'Hello',
-				'author__name' => 'Ana',
+				'headline' => 'Hello',
+				'authorName' => 'Ana',
 			]],
 			'authors' => [[
 				'id' => 7,
@@ -297,10 +297,10 @@ final class NestedJoinedFlatProjectionExecutor implements QueryExecutorInterface
 		return [[
 			'id' => 1,
 			'name' => 'Ada',
-			'l_posts_id' => 10,
-			'l_posts_userid' => 1,
-			'l_posts_title' => 'Hello',
-			'author__name' => 'Ana',
+			'posts.id' => 10,
+			'posts.userId' => 1,
+			'posts.headline' => 'Hello',
+			'posts.authorName' => 'Ana',
 		]];
 	}
 
@@ -318,7 +318,7 @@ final class NestedJoinedFlatProjectionExecutor implements QueryExecutorInterface
 }
 
 /**
- * Posts rows intentionally omit author__name — reuse must read name from the author destination.
+ * Posts rows intentionally omit a flat authorName column — reuse must read name from the author destination.
  */
 final class NestedFlatReuseExecutor implements QueryExecutorInterface
 {

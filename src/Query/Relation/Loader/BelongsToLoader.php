@@ -20,18 +20,13 @@ final class BelongsToLoader extends AbstractLoader
 	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
 	{
 		$relationRef = $branch->getRelationRef();
-		$definition = $relationRef->getDefinition();
-		$ownerToTarget = $definition->getKeyPairing();
-		$parentBranch = $branch->getParent();
-		$identity = $runtime->requireFields($branch, $relationRef->getCollection()->getPrimaryKey());
-		$child = $runtime->requireFields($branch, $ownerToTarget->getRightFields());
-		$parent = $runtime->requireFields($parentBranch, $ownerToTarget->getLeftFields());
+		$pairing = $relationRef->getDefinition()->getKeyPairing();
 
 		return new SingularNode(
-			$branch->localColumnLoadKeys(),
-			$identity,
-			$child,
-			$parent,
+			$branch->columns(),
+			$relationRef->getCollection()->getPrimaryKey(),
+			$pairing->getRightFields(),
+			$pairing->getLeftFields(),
 		);
 	}
 
@@ -54,9 +49,9 @@ final class BelongsToLoader extends AbstractLoader
 			$runtime->setQueryContext($branch, $queryRelation->getQuery(), $source, $queryRelation);
 		}
 
-		$runtime->requireFields($branch, $relationRef->getCollection()->getPrimaryKey());
-		$runtime->requireFields($branch, $ownerToTarget->getRightFields());
-		$runtime->requireFields($parentBranch, $ownerToTarget->getLeftFields());
+		$branch->requireFields($relationRef->getCollection()->getPrimaryKey());
+		$branch->requireFields($ownerToTarget->getRightFields());
+		$parentBranch->requireFields($ownerToTarget->getLeftFields());
 
 		if ($strategy === LoadStrategy::SEPARATE_QUERY) {
 			$runtime->continueWith($branch, 'loadData');

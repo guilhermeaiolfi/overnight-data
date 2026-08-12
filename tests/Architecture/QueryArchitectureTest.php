@@ -431,7 +431,7 @@ final class QueryArchitectureTest extends TestCase
 
 		$loadRuntime = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/LoadRuntime.php');
 		self::assertStringContainsString('needsRowAssemble()', $loadRuntime);
-		self::assertStringContainsString('bindDestinations()', $loadRuntime);
+		self::assertStringContainsString('planScalars()', $loadRuntime);
 		self::assertStringNotContainsString('includeCrossLevelFlats', $loadRuntime);
 		self::assertStringNotContainsString('bindAllDestinations', $loadRuntime);
 		self::assertStringNotContainsString('getExpression()->getField()->getName()', $loadRuntime);
@@ -445,7 +445,8 @@ final class QueryArchitectureTest extends TestCase
 		] as $path) {
 			$contents = (string) file_get_contents($path);
 
-			self::assertStringContainsString('localColumnLoadKeys()', $contents, $path);
+			self::assertStringContainsString('columns()', $contents, $path);
+			self::assertStringNotContainsString('sqlAliases(', $contents, $path);
 			self::assertStringNotContainsString('getExpression()->getField()->getName()', $contents, $path);
 		}
 	}

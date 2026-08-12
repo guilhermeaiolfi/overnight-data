@@ -144,7 +144,7 @@ final class FetchSchemaPhase1Executor implements QueryExecutorInterface
 			'userId' => 1,
 			'authorId' => 7,
 			'title' => 'Hello',
-			'author__name' => 'Ana',
+			'authorName' => 'Ana',
 		];
 
 		foreach ($query->getSelections()->getAll() as $selection) {

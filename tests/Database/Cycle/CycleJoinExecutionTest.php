@@ -1367,8 +1367,8 @@ final class CycleJoinExecutionTest extends TestCase
 		self::assertStringContainsString('JOIN "users" AS', $sql);
 		self::assertStringContainsString('ROW_NUMBER() OVER', $sql);
 		self::assertStringContainsString('WHERE "__ondata_first_of_many"."__ondata_rank" = ?', $sql);
-		self::assertStringContainsString('"j0"."id" AS "l_latestpost_author_id"', $sql);
-		self::assertStringContainsString('"__ondata_first_of_many"."l_latestpost_author_id" AS "l_latestpost_author_id"', $sql);
+		self::assertStringContainsString('"j0"."id" AS "id_2"', $sql);
+		self::assertStringContainsString('"__ondata_first_of_many"."id_2" AS "id_2"', $sql);
 		self::assertStringNotContainsString('"__ondata_first_of_many"."author_id"', $sql);
 	}
 
@@ -2442,9 +2442,9 @@ final class FirstOfManyFallbackExecutor implements QueryExecutorInterface
 
 		return match ($query->getCollection()->getName()) {
 			'users' => [
-				['id' => 1, 'l_root_required_id' => 1, 'name' => 'Ada'],
-				['id' => 2, 'l_root_required_id' => 2, 'name' => 'Grace'],
-				['id' => 3, 'l_root_required_id' => 3, 'name' => 'Linus'],
+				['id' => 1, 'name' => 'Ada'],
+				['id' => 2, 'name' => 'Grace'],
+				['id' => 3, 'name' => 'Linus'],
 			],
 			'first_posts' => [
 				['id' => 11, 'userId' => 1, 'title' => 'Alpha'],

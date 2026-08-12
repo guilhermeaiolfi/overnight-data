@@ -11,52 +11,23 @@ use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 
 /**
- * Collision-safe SQL aliases for load-local columns (JOIN l_* vs owned field names).
+ * SQL aliases for load columns: {@see aliasForPath} (empty path → output name).
  */
 final class LoadAliasAllocator
 {
 	/**
-	 * SQL alias for a relation path + field. Callers choose the path segments;
-	 * this does not interpret them.
+	 * Column SQL alias: empty path uses the output name; otherwise path.name.
 	 *
 	 * @param list<string> $path
 	 */
-	public function aliasForPath(array $path, string $fieldName): string
+	public function aliasForPath(array $path, string $outputName): string
 	{
-		$slug = strtolower(
-			preg_replace('/[^a-z0-9_]+/i', '_', implode('_', [...$path, $fieldName])) ?? 'field',
-		);
-
-		return 'l_' . $slug;
-	}
-
-	/**
-	 * Choose the SQL alias to try: the planned load key when safe, otherwise a
-	 * path-based JOIN alias.
-	 *
-	 * Safe: branch owns the SELECT (SEPARATE / root), or the key is already
-	 * namespaced (flats like author__name, existing l_* aliases).
-	 *
-	 * @param list<string> $path
-	 */
-	public function chooseSqlAlias(
-		string $loadKey,
-		string $fieldName,
-		array $path,
-		bool $ownsSelect,
-	): string {
-		$preferred = $loadKey !== '' ? $loadKey : $this->aliasForPath($path, $fieldName);
-
-		if ($ownsSelect || $preferred !== $fieldName) {
-			return $preferred;
-		}
-
-		return $this->aliasForPath($path, $fieldName);
+		return $path === [] ? $outputName : implode('.', [...$path, $outputName]);
 	}
 
 	/**
 	 * Return $preferred when it is free or already this source field; otherwise
-	 * a collision-safe private alias (public l_* names must not steal unrelated columns).
+	 * a collision-safe suffix.
 	 */
 	public function ensureSqlAlias(
 		SelectQuery $query,

@@ -161,7 +161,7 @@ final class FlatCompanyUserQueryExecutor implements QueryExecutorInterface
 	{
 		return InternalSelectionRowFactory::withInternalCompanyId($query, [
 			'id' => 1,
-			'company__name' => 'Acme',
+			'name' => 'Acme',
 		]);
 	}
 
@@ -182,7 +182,7 @@ final class FlatCompanyUserQueryExecutorWithoutCompanyId implements QueryExecuto
 	{
 		return [
 			'id' => 1,
-			'company__name' => 'Acme',
+			'name' => 'Acme',
 		];
 	}
 
@@ -215,7 +215,7 @@ final class AssertingInternalCompanyIdSelectionExecutor implements QueryExecutor
 
 		return InternalSelectionRowFactory::withInternalCompanyId($query, [
 			'id' => 1,
-			'company__name' => 'Acme',
+			'name' => 'Acme',
 		]);
 	}
 

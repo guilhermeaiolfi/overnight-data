@@ -26,7 +26,7 @@ select()
            ▼
      LoadBranch tree          // fetch destinations
            ▼
-     load() → bindDestinations → parser
+     load() → planScalars → parser
            ▼
      assemble(schema, PlaceBinding)  // when needsRowAssemble()
 ```
@@ -49,7 +49,7 @@ select()
 
 - When `SelectQuery::needsRowAssemble()` is true, `beginFetch()` compiles (or reuses) a place schema; `RelationOutputProcessor` places only via `getPublicScalarPaths()`.
 - Plain own-field reads skip assemble and schema compile (executor keys already match place).
-- Fetch prepare is destinations + `load()`, then one `bindDestinations` (own-level and flats; flats reuse loaded to-one children), then parser. Nested parser nodes are still created children-first (`AbstractLoader::register`); the root node is created before top-level `initNode` so loaders can see the parent node. Do not add a third place/fetch plan type.
+- Fetch prepare is destinations + `load()` (JOIN/SEPARATE and mark required names), then one `planScalars` (emit SQL aliases; JOIN uses dotted `posts.title`), then parser. Nested parser nodes are still created children-first (`AbstractLoader::register`); the root node is created before top-level `initNode` so loaders can see the parent node. Do not add a third place/fetch plan type.
 - Deferred separately: `query($schema)` reopen (proposal 0001); richer path filters; soften `skipWhenMissing`.
 
 ## References

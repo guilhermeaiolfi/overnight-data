@@ -783,7 +783,10 @@ final class SelectQuery implements QuerySourceInterface
 				return true;
 			}
 
-			if ($selection->getSelectionKey() !== $fieldRef->getField()->getName()) {
+			if (
+				$fieldRef->getSource() === $this
+				&& $selection->getSelectionKey() !== $fieldRef->getField()->getName()
+			) {
 				return true;
 			}
 		}

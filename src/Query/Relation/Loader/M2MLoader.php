@@ -40,43 +40,38 @@ final class M2MLoader extends AbstractLoader
 		$throughToTarget = $through->getKeyPairing();
 		$throughInnerKeys = $through->getInnerKeys();
 		$throughOuterKeys = $through->getOuterKeys();
-		$parent = $branch->getParent();
-		$targetIdentity = $runtime->requireFields($branch, $relation->getCollection()->getPrimaryKey());
-		$runtime->requireFields($branch, $this->publicFieldNames($branch));
-		$targetOuterKeyColumns = $runtime->requireFields($branch, $throughToTarget->getRightFields());
-		$parentInnerKeyColumns = $runtime->requireFields($parent, $parentToThrough->getLeftFields());
 		$throughFieldNames = array_values(array_unique([
 			...$throughInnerKeys,
 			...$throughOuterKeys,
 		]));
 		$throughAliasesByField = $this->allocateThroughAliases($branch, $runtime, $throughFieldNames);
-		$throughColumns = array_values($throughAliasesByField);
-		$throughInnerLoadKeys = array_map(
-			static fn (string $field): string => $throughAliasesByField[$field],
-			$throughInnerKeys,
-		);
-		$throughOuterLoadKeys = array_map(
-			static fn (string $field): string => $throughAliasesByField[$field],
-			$throughOuterKeys,
-		);
 
 		$targetNode = new SingularNode(
-			$branch->localColumnLoadKeys(),
-			$targetIdentity,
-			$targetOuterKeyColumns,
-			$throughOuterLoadKeys,
+			$branch->columns(),
+			$relation->getCollection()->getPrimaryKey(),
+			$throughToTarget->getRightFields(),
+			$throughOuterKeys,
 		);
 		$branch->setPublicNode($targetNode);
 		$branch->setPublicPayloadChild(self::THROUGH_CONTAINER);
 
-		return new M2MThroughNode(
-			$throughColumns,
-			$throughColumns,
-			$throughInnerLoadKeys,
-			$parentInnerKeyColumns,
+		$throughNode = new M2MThroughNode(
+			$throughFieldNames,
+			$throughFieldNames,
+			$throughInnerKeys,
+			$parentToThrough->getLeftFields(),
 			self::THROUGH_CONTAINER,
 			$targetNode,
 		);
+		$throughAliases = [];
+
+		foreach ($throughFieldNames as $fieldName) {
+			$throughAliases[] = $throughAliasesByField[$fieldName];
+		}
+
+		$throughNode->setValueAliases($throughAliases);
+
+		return $throughNode;
 	}
 
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
@@ -115,10 +110,10 @@ final class M2MLoader extends AbstractLoader
 
 		$branch->setJoinedAttachment(false);
 		$runtime->setQueryContext($branch, $query, $query);
-		$runtime->requireFields($branch, $relation->getCollection()->getPrimaryKey());
-		$runtime->requireFields($branch, $this->publicFieldNames($branch));
-		$runtime->requireFields($branch, $throughToTarget->getRightFields());
-		$runtime->requireFields($parent, $parentToThrough->getLeftFields());
+		$branch->requireFields($relation->getCollection()->getPrimaryKey());
+		$branch->requireFields($this->publicFieldNames($branch));
+		$branch->requireFields($throughToTarget->getRightFields());
+		$parent->requireFields($parentToThrough->getLeftFields());
 		$runtime->continueWith($branch, 'loadData');
 	}
 
