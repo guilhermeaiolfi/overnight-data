@@ -61,6 +61,12 @@ final class LoadFieldPlanner
 		$placeKey = $selection->getSelectionKey();
 		$fieldRef = $selection->getFieldRef();
 
+		if ($branch->hasPlaceBinding($placeKey)) {
+			return $branch->childPathForPlace($placeKey) === null
+				? $branch->loadKeyForPlace($placeKey)
+				: null;
+		}
+
 		if (! $fieldRef instanceof FieldRef) {
 			$branch->bindPlaceToLoadKey($placeKey, $placeKey);
 
@@ -87,6 +93,12 @@ final class LoadFieldPlanner
 			}
 		}
 
+		if ($source === $level) {
+			$loadKeys = $this->runtime->requireFields($branch, [$fieldName]);
+
+			return $loadKeys[0] ?? $fieldName;
+		}
+
 		$path = $source instanceof RelationRef
 			? $source->getPath()
 			: ($level instanceof RelationRef ? $level->getPath() : []);
@@ -108,6 +120,7 @@ final class LoadFieldPlanner
 		string $placeKey,
 		string $loadKey,
 		array $path,
+		bool $sqlOnly = false,
 	): string {
 		$query = $branch->getQuery();
 		$source = $this->getSelectionSource($branch, $fieldRef);
@@ -115,6 +128,14 @@ final class LoadFieldPlanner
 		$ownsSelect = $branch->getSource() === $query;
 		$preferred = $this->getLoadAlias($loadKey, $fieldName, $path, $ownsSelect);
 		$sqlKey = $this->resolveSqlKey($query, $source, $fieldName, $preferred);
+
+		if ($sqlOnly) {
+			if (! $this->aliasProvidesField($query, $sqlKey, $source, $fieldName)) {
+				$this->selectAs($query, $source, $fieldName, $sqlKey, sqlOnly: true);
+			}
+
+			return $sqlKey;
+		}
 
 		// Authoring place alias already on this query (typical root): keep it and
 		// add a load-local SQL column for the parser.

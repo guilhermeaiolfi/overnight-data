@@ -410,7 +410,6 @@ final class QueryArchitectureTest extends TestCase
 	{
 		$selectionKeySources = [
 			dirname(__DIR__, 2) . '/src/Query/SelectQuery.php',
-			dirname(__DIR__, 2) . '/src/Query/Relation/RelationOutputProcessor.php',
 			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/AbstractLoader.php',
 		];
 
@@ -420,6 +419,11 @@ final class QueryArchitectureTest extends TestCase
 			self::assertStringContainsString('getSelectionKey()', $contents, $path);
 			self::assertStringNotContainsString('getExpression()->getField()->getName()', $contents, $path);
 		}
+
+		$outputProcessor = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/RelationOutputProcessor.php');
+		self::assertStringContainsString('getPublicScalarPaths()', $outputProcessor);
+		self::assertStringContainsString('getImplicitScalarPaths()', $outputProcessor);
+		self::assertStringNotContainsString('getExpression()->getField()->getName()', $outputProcessor);
 
 		$loadRuntime = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/LoadRuntime.php');
 		self::assertStringContainsString('needsRowAssemble()', $loadRuntime);

@@ -1590,7 +1590,7 @@ final class CycleJoinExecutionTest extends TestCase
 		$users = $this->database->query($this->registry->getCollection('users'));
 		$branch = new RelationLoadBranch(
 			new RelationSelection($users->posts, false, true, null),
-			new RootLoadBranch($users, static fn (string $fieldName): string => $fieldName),
+			new RootLoadBranch($users),
 			$users->posts->getLoader(),
 		);
 

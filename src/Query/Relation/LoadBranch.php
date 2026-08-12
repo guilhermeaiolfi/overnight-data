@@ -6,9 +6,13 @@ namespace ON\Data\Query\Relation;
 
 use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Query\Expression\AliasedExpression;
+use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
+use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionList;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 
 abstract class LoadBranch
@@ -59,6 +63,11 @@ abstract class LoadBranch
 		$this->placeChildPaths[$placeKey] = array_values($relativePath);
 	}
 
+	public function hasPlaceBinding(string $placeKey): bool
+	{
+		return isset($this->placeToLoadKeys[$placeKey]);
+	}
+
 	public function loadKeyForPlace(string $placeKey): string
 	{
 		return $this->placeToLoadKeys[$placeKey] ?? $placeKey;
@@ -97,10 +106,40 @@ abstract class LoadBranch
 	abstract public function getSelections(): SelectionList;
 
 	/**
+	 * Register own-level fields as REQUIRED. Returns place keys (not SQL aliases).
+	 * SQL emit and load-local keys belong on the runtime requireFields path.
+	 *
 	 * @param list<string> $fieldNames
 	 * @return list<string>
 	 */
-	abstract public function requireFields(array $fieldNames): array;
+	public function requireFields(array $fieldNames): array
+	{
+		if ($fieldNames === []) {
+			return [];
+		}
+
+		$added = [];
+
+		foreach ($fieldNames as $fieldName) {
+			$normalized = $this->getCollection()->getField($fieldName)->getName();
+			$existing = $this->findOwnFieldSelection($normalized);
+
+			if ($existing instanceof SelectionItem) {
+				$this->getSelections()->add($existing->getExpression(), SelectionTag::REQUIRED);
+				$added[] = $existing->getSelectionKey();
+
+				continue;
+			}
+
+			$this->getSelections()->add(
+				$this->ownFieldExpression($normalized),
+				[SelectionTag::REQUIRED, SelectionTag::INTERNAL],
+			);
+			$added[] = $normalized;
+		}
+
+		return $added;
+	}
 
 	/**
 	 * @return non-empty-list<string>
@@ -190,5 +229,35 @@ abstract class LoadBranch
 		}
 
 		return $ordered;
+	}
+
+	protected function findOwnFieldSelection(string $fieldName): ?SelectionItem
+	{
+		$level = $this->getProjectionLevel();
+
+		foreach ($this->getSelections()->getAll() as $selection) {
+			$expression = $selection->getExpression();
+
+			if ($expression instanceof AliasedExpression) {
+				$expression = $expression->getExpression();
+			}
+
+			if (
+				$expression instanceof FieldRef
+				&& $expression->getSource() === $level
+				&& $expression->getField()->getName() === $fieldName
+			) {
+				return $selection;
+			}
+		}
+
+		return null;
+	}
+
+	private function ownFieldExpression(string $fieldName): AliasedExpression
+	{
+		$level = $this->getProjectionLevel();
+
+		return $level->field($fieldName)->as($fieldName);
 	}
 }

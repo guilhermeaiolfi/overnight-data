@@ -86,6 +86,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertTrue($schema->getField('name')->isWritable());
 		self::assertTrue($schema->getField('name')->isPublicPlace());
 		self::assertSame(['name'], $schema->getPublicScalarPaths());
+		self::assertSame(['id'], $schema->getImplicitScalarPaths());
 	}
 
 	public function testSupportsCompositePrimaryKeys(): void

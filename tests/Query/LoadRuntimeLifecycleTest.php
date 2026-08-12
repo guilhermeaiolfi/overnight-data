@@ -1092,17 +1092,6 @@ abstract class LifecycleTestLoader extends AbstractLoader
 		LifecycleEvents::$attachmentModes[$relation->getName()] = false;
 		$runtime->setQueryContext($branch, $query, $query);
 	}
-
-	/**
-	 * @return list<string>
-	 */
-	private function parserFieldNames(RelationLoadBranch $branch): array
-	{
-		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
-		);
-	}
 }
 
 final class LifecycleRecordingLoader extends LifecycleTestLoader
@@ -1185,14 +1174,14 @@ class NestedPostsLoader extends AbstractLoader
 	{
 		$relation = $branch->getRelationRef();
 		$parentBranch = $branch->getParent();
-		$identity = $branch->requireFields(['id']);
-		$child = $branch->requireFields(['userId']);
-		$parent = $parentBranch->requireFields(['id']);
+		$identity = $runtime->requireFields($branch, ['id']);
+		$child = $runtime->requireFields($branch, ['userId']);
+		$parent = $runtime->requireFields($parentBranch, ['id']);
 		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
-		LifecycleEvents::$registerColumns['posts'] = $this->parserFieldNames($branch);
+		LifecycleEvents::$registerColumns['posts'] = $this->columnSelectionKeys($branch);
 
-		return new CollectionNode($this->parserFieldNames($branch), $identity, $child, $parent);
+		return new CollectionNode($this->columnSelectionKeys($branch), $identity, $child, $parent);
 	}
 
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
@@ -1208,17 +1197,6 @@ class NestedPostsLoader extends AbstractLoader
 	{
 		$runtime->execute($branch, $branch->getQuery());
 	}
-
-	/**
-	 * @return list<string>
-	 */
-	protected function parserFieldNames(RelationLoadBranch $branch): array
-	{
-		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
-		);
-	}
 }
 
 final class NestedAuthorLoader extends AbstractLoader
@@ -1232,14 +1210,14 @@ final class NestedAuthorLoader extends AbstractLoader
 	{
 		$relation = $branch->getRelationRef();
 		$parentBranch = $branch->getParent();
-		$identity = $branch->requireFields(['id']);
-		$child = $branch->requireFields(['id']);
-		$parent = $parentBranch->requireFields(['authorId']);
+		$identity = $runtime->requireFields($branch, ['id']);
+		$child = $runtime->requireFields($branch, ['id']);
+		$parent = $runtime->requireFields($parentBranch, ['authorId']);
 		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
-		LifecycleEvents::$registerColumns['author'] = $this->parserFieldNames($branch);
+		LifecycleEvents::$registerColumns['author'] = $this->columnSelectionKeys($branch);
 
-		return new SingularNode($this->parserFieldNames($branch), $identity, $child, $parent);
+		return new SingularNode($this->columnSelectionKeys($branch), $identity, $child, $parent);
 	}
 
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
@@ -1248,24 +1226,13 @@ final class NestedAuthorLoader extends AbstractLoader
 		$branch->setJoinedAttachment(true);
 		$runtime->setQueryContext($branch, $queryRelation->getQuery(), $this->join($queryRelation), $queryRelation);
 	}
-
-	/**
-	 * @return list<string>
-	 */
-	private function parserFieldNames(RelationLoadBranch $branch): array
-	{
-		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
-		);
-	}
 }
 
 final class RootFieldRequirementLoader extends LifecycleTestLoader
 {
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		LifecycleEvents::$plannedRootColumns = $branch->getParent()->requireFields(['name']);
+		LifecycleEvents::$plannedRootColumns = $runtime->requireFields($branch->getParent(), ['name']);
 		$this->prepareSeparateQuery($branch, $runtime);
 	}
 }
@@ -1274,7 +1241,7 @@ final class HiddenRootFieldRequirementLoader extends LifecycleTestLoader
 {
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		LifecycleEvents::$plannedRootColumns = $branch->getParent()->requireFields(['secret']);
+		LifecycleEvents::$plannedRootColumns = $runtime->requireFields($branch->getParent(), ['secret']);
 		$this->prepareSeparateQuery($branch, $runtime);
 	}
 }
@@ -1290,12 +1257,12 @@ final class JoinedProfileLoader extends AbstractLoader
 	{
 		$relation = $branch->getRelationRef();
 		$parentBranch = $branch->getParent();
-		$identity = $branch->requireFields(['id']);
-		$child = $branch->requireFields(['userId']);
-		$parent = $parentBranch->requireFields(['id']);
+		$identity = $runtime->requireFields($branch, ['id']);
+		$child = $runtime->requireFields($branch, ['userId']);
+		$parent = $runtime->requireFields($parentBranch, ['id']);
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
 
-		return new SingularNode($this->parserFieldNames($branch), $identity, $child, $parent);
+		return new SingularNode($this->columnSelectionKeys($branch), $identity, $child, $parent);
 	}
 
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
@@ -1305,17 +1272,6 @@ final class JoinedProfileLoader extends AbstractLoader
 		$branch->setJoinedAttachment(true);
 		LifecycleEvents::$attachmentModes[$relation->getName()] = true;
 		$runtime->setQueryContext($branch, $queryRelation->getQuery(), $this->join($queryRelation), $queryRelation);
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	private function parserFieldNames(RelationLoadBranch $branch): array
-	{
-		return array_map(
-			static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-			$branch->getSelections()->getByTag(SelectionTag::COLUMN),
-		);
 	}
 }
 

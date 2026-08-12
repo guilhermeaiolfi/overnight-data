@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
-use Closure;
 use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Query\Expression\AliasedExpression;
-use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Result\Parser\RootNode;
 use ON\Data\Query\Selection\SelectionItem;
@@ -22,7 +19,6 @@ final class RootLoadBranch extends LoadBranch
 
 	public function __construct(
 		private readonly SelectQuery $query,
-		private readonly Closure $allocateAlias,
 	) {
 		$this->selections = new SelectionList();
 		$this->setQueryContext($query, $query, null);
@@ -44,61 +40,14 @@ final class RootLoadBranch extends LoadBranch
 	}
 
 	/**
-	 * @param list<string> $fieldNames
-	 * @return list<string>
-	 */
-	public function requireFields(array $fieldNames): array
-	{
-		if ($fieldNames === []) {
-			return [];
-		}
-
-		$collection = $this->query->getCollection();
-		$aliases = [];
-
-		foreach ($fieldNames as $fieldName) {
-			$normalized = $collection->getField($fieldName)->getName();
-			$existing = $this->findRootFieldSelection($normalized);
-
-			if ($existing instanceof SelectionItem) {
-				$this->selections->add($existing->getExpression(), SelectionTag::REQUIRED);
-				$aliases[] = $this->loadKeyForPlace($existing->getSelectionKey());
-
-				continue;
-			}
-
-			$alias = ($this->allocateAlias)($normalized);
-
-			if (! is_string($alias) || $alias === '') {
-				throw new LogicException('Root field alias allocator must return a non-empty string.');
-			}
-
-			if (! $this->query->getSelections()->hasNamedExpression($alias)) {
-				$this->query->getSelections()->add(
-					$this->query->field($normalized)->as($alias),
-					[SelectionTag::INTERNAL, SelectionTag::COLUMN, SelectionTag::SQL_ONLY],
-				);
-			}
-
-			$this->selections->add(
-				$this->query->field($normalized)->as($alias),
-				[SelectionTag::REQUIRED, SelectionTag::INTERNAL],
-			);
-			$aliases[] = $alias;
-		}
-
-		return $aliases;
-	}
-
-	/**
 	 * @return non-empty-list<string>
 	 */
 	public function requirePrimaryKey(): array
 	{
-		$identityAliases = $this->requireFields($this->getCollection()->getPrimaryKey());
+		$placeKeys = $this->requireFields($this->getCollection()->getPrimaryKey());
 
 		foreach ($this->getCollection()->getPrimaryKey() as $fieldName) {
-			$selection = $this->findRootFieldSelection($this->getCollection()->getField($fieldName)->getName());
+			$selection = $this->findOwnFieldSelection($this->getCollection()->getField($fieldName)->getName());
 
 			if (! $selection instanceof SelectionItem) {
 				continue;
@@ -114,7 +63,7 @@ final class RootLoadBranch extends LoadBranch
 			$this->selections->add($selection->getExpression(), $tags);
 		}
 
-		return $identityAliases;
+		return $placeKeys;
 	}
 
 	public function createNode(): RootNode
@@ -223,26 +172,5 @@ final class RootLoadBranch extends LoadBranch
 			static fn (SelectionItem $selection): bool => ! $selection->hasTag(SelectionTag::INTERNAL)
 				&& ! $selection->hasTag(SelectionTag::SQL_ONLY),
 		));
-	}
-
-	private function findRootFieldSelection(string $fieldName): ?SelectionItem
-	{
-		foreach ($this->selections->getAll() as $selection) {
-			$fieldExpression = $selection->getExpression();
-
-			if ($fieldExpression instanceof AliasedExpression) {
-				$fieldExpression = $fieldExpression->getExpression();
-			}
-
-			if (
-				$fieldExpression instanceof FieldRef
-				&& $fieldExpression->getSource() === $this->query
-				&& $fieldExpression->getField()->getName() === $fieldName
-			) {
-				return $selection;
-			}
-		}
-
-		return null;
 	}
 }

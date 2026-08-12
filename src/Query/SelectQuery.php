@@ -984,6 +984,7 @@ final class SelectQuery implements QuerySourceInterface
 			$this->selections,
 			$relations->childrenOf(null),
 			$relations,
+			$this->fetchSchema,
 		);
 	}
 
@@ -998,12 +999,19 @@ final class SelectQuery implements QuerySourceInterface
 		SelectionList $selections,
 		array $childRelations,
 		RelationSelectionTree $relations,
+		?RepresentationSchema $schema = null,
 	): array {
 		$privateKeys = [];
 
 		foreach ([SelectionTag::INTERNAL, SelectionTag::SQL_ONLY] as $tag) {
 			foreach ($selections->getByTag($tag) as $selection) {
 				$privateKeys[$selection->getSelectionKey()] = true;
+			}
+		}
+
+		if ($schema instanceof RepresentationSchema) {
+			foreach ($schema->getImplicitScalarPaths() as $path) {
+				$privateKeys[$path] = true;
 			}
 		}
 
@@ -1022,16 +1030,20 @@ final class SelectQuery implements QuerySourceInterface
 
 			$child = $childRelations[$key];
 			$grandchildren = $relations->childrenOf($child);
+			$childSchema = $schema instanceof RepresentationSchema && $schema->hasRelation($key)
+				? $schema->getRelation($key)->getRelatedSchema()
+				: null;
 
 			if ($value !== [] && array_is_list($value)) {
 				$public[$key] = array_map(
-					function (mixed $item) use ($child, $grandchildren, $relations): mixed {
+					function (mixed $item) use ($child, $grandchildren, $relations, $childSchema): mixed {
 						return is_array($item)
 							? $this->stripTaggedPrivateKeys(
 								$item,
 								$child->getSelections(),
 								$grandchildren,
 								$relations,
+								$childSchema,
 							)
 							: $item;
 					},
@@ -1046,6 +1058,7 @@ final class SelectQuery implements QuerySourceInterface
 				$child->getSelections(),
 				$grandchildren,
 				$relations,
+				$childSchema,
 			);
 		}
 

@@ -74,32 +74,6 @@ final class RelationLoadBranch extends LoadBranch
 	 * @param list<string> $fieldNames
 	 * @return list<string>
 	 */
-	public function requireFields(array $fieldNames): array
-	{
-		$added = [];
-
-		foreach ($fieldNames as $fieldName) {
-			$canonical = $this->fieldSelectionName($fieldName);
-			$existing = $this->findOwnFieldSelection($canonical);
-
-			if ($existing instanceof SelectionItem) {
-				$this->selections->add($existing->getExpression(), SelectionTag::REQUIRED);
-				$added[] = $existing->getSelectionKey();
-
-				continue;
-			}
-
-			$this->selections->add($this->relationFieldSelection($canonical), SelectionTag::REQUIRED);
-			$added[] = $canonical;
-		}
-
-		return $added;
-	}
-
-	/**
-	 * @param list<string> $fieldNames
-	 * @return list<string>
-	 */
 	public function addPublicFields(array $fieldNames): array
 	{
 		$added = [];
@@ -238,23 +212,6 @@ final class RelationLoadBranch extends LoadBranch
 	private function fieldSelectionName(string $fieldName): string
 	{
 		return $this->getRelationRef()->field($fieldName)->getField()->getName();
-	}
-
-	private function findOwnFieldSelection(string $fieldName): ?SelectionItem
-	{
-		foreach ($this->selections->getAll() as $selection) {
-			[$fieldRef] = $this->unwrapFieldSelection($selection) ?? [null];
-
-			if (
-				$fieldRef instanceof FieldRef
-				&& $fieldRef->getSource() === $this->getRelationRef()
-				&& $fieldRef->getField()->getName() === $fieldName
-			) {
-				return $selection;
-			}
-		}
-
-		return null;
 	}
 
 	private function relationFieldSelection(string $fieldName): AliasedExpression

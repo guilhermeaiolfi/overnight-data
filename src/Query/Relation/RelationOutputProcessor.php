@@ -7,6 +7,7 @@ namespace ON\Data\Query\Relation;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationSelectionException;
+use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Selection\SelectionTag;
 
 /**
@@ -154,9 +155,21 @@ final class RelationOutputProcessor
 			$this->assignPlaceValue($item, $branch, $record, $placeKey);
 		}
 
-		// Keep INTERNAL identity keys for writable track(); SelectQuery::publicRow strips them.
+		// Implicit identity backfill for writable track(); SelectQuery::publicRow strips it.
+		foreach ($this->implicitPlaceKeysFor($branch) as $placeKey) {
+			$this->assignPlaceValue($item, $branch, $record, $placeKey);
+		}
+
+		// Identity-planner INTERNAL aliases (e.g. _od_internal_*) stay on the row for
+		// writable track. Required-only field names are not place — skip those.
 		foreach ($branch->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
 			$placeKey = $selection->getSelectionKey();
+			$fieldRef = $selection->getFieldRef();
+
+			if ($fieldRef instanceof FieldRef && $placeKey === $fieldRef->getField()->getName()) {
+				continue;
+			}
+
 			$this->assignPlaceValue($item, $branch, $record, $placeKey);
 		}
 
@@ -261,6 +274,19 @@ final class RelationOutputProcessor
 	 */
 	private function placeKeysFor(LoadBranch $branch): array
 	{
+		return $this->schemaNodeFor($branch)->getPublicScalarPaths();
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function implicitPlaceKeysFor(LoadBranch $branch): array
+	{
+		return $this->schemaNodeFor($branch)->getImplicitScalarPaths();
+	}
+
+	private function schemaNodeFor(LoadBranch $branch): RepresentationSchema
+	{
 		if (! $this->schema instanceof RepresentationSchema) {
 			throw LoadRuntimeException::placeSchemaMissing();
 		}
@@ -272,7 +298,7 @@ final class RelationOutputProcessor
 			throw LoadRuntimeException::placeSchemaNodeMissing($relationPath);
 		}
 
-		return $node->getPublicScalarPaths();
+		return $node;
 	}
 
 	/**

@@ -261,6 +261,24 @@ final class RepresentationSchema
 	}
 
 	/**
+	 * Ordered Implicit scalar paths at this level (identity backfill, not public place).
+	 *
+	 * @return list<string>
+	 */
+	public function getImplicitScalarPaths(): array
+	{
+		$keys = [];
+
+		foreach ($this->paths as $path) {
+			if ($this->hasField($path) && $this->getField($path)->isImplicit()) {
+				$keys[] = $path;
+			}
+		}
+
+		return $keys;
+	}
+
+	/**
 	 * @return list<RepresentationFieldSchema>
 	 */
 	public function getWritableFieldSchemas(): array

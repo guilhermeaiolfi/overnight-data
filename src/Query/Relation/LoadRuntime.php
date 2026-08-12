@@ -11,6 +11,8 @@ use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
+use ON\Data\Query\Selection\SelectionItem;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use ReflectionMethod;
 
@@ -49,10 +51,7 @@ final class LoadRuntime
 		private readonly QueryExecutorInterface $executor,
 		?RepresentationSchema $schema = null,
 	) {
-		$this->rootBranch = new RootLoadBranch(
-			$rootQuery,
-			fn (string $fieldName): string => $this->getJoinedAlias(['root', 'required'], $fieldName),
-		);
+		$this->rootBranch = new RootLoadBranch($rootQuery);
 		$this->outputProcessor = new RelationOutputProcessor($schema);
 		$this->fieldPlanner = new LoadFieldPlanner($this);
 	}
@@ -173,16 +172,14 @@ final class LoadRuntime
 	/**
 	 * Register required fields and, when query context exists, emit SQL columns now.
 	 *
+	 * Root and nested destinations share this path: the branch records place keys,
+	 * then the planner emits load-local SQL and binds place→load.
+	 *
 	 * @param list<string> $fieldNames
 	 * @return list<string> load-local parser keys
 	 */
 	public function requireFields(LoadBranch $branch, array $fieldNames): array
 	{
-		if ($branch instanceof RootLoadBranch) {
-			// Root already emits SQL and returns load-local keys.
-			return $branch->requireFields($fieldNames);
-		}
-
 		$placeKeys = $branch->requireFields($fieldNames);
 
 		if (! $branch->hasQueryContext() || $fieldNames === []) {
@@ -193,31 +190,65 @@ final class LoadRuntime
 		}
 
 		$level = $branch->getProjectionLevel();
-		$ownsQuery = $branch->getSource() === $branch->getQuery();
 		$loadKeys = [];
 
 		foreach ($placeKeys as $index => $placeKey) {
+			if ($branch->hasPlaceBinding($placeKey) && $branch->childPathForPlace($placeKey) === null) {
+				$loadKeys[] = $branch->loadKeyForPlace($placeKey);
+
+				continue;
+			}
+
 			$fieldName = $fieldNames[$index] ?? $placeKey;
 			$normalized = $branch->getCollection()->getField($fieldName)->getName();
 			$fieldRef = $level instanceof RelationRef
 				? $level->field($normalized)
 				: $branch->getQuery()->field($normalized);
 			$path = $level instanceof RelationRef ? $level->getPath() : [];
-			$preferred = $branch->loadKeyForPlace($placeKey);
-			if ($preferred === $placeKey) {
-				// SEPARATE/root-owned queries can use the field name; JOIN onto a
-				// shared parent query needs a path-stable alias (parent may already
-				// expose the same field name).
-				$preferred = $ownsQuery
-					? $normalized
-					: $this->getJoinedAlias($path, $normalized);
-			}
-			$sqlKey = $this->fieldPlanner->selectField($branch, $fieldRef, $placeKey, $preferred, $path);
+			$sqlOnly = $this->isRequiredOnly($branch, $placeKey);
+			$preferred = $this->preferredLoadKey($branch, $placeKey, $normalized, $path, $sqlOnly);
+			$sqlKey = $this->fieldPlanner->selectField($branch, $fieldRef, $placeKey, $preferred, $path, $sqlOnly);
 			$branch->bindPlaceToLoadKey($placeKey, $sqlKey);
 			$loadKeys[] = $sqlKey;
 		}
 
 		return $loadKeys;
+	}
+
+	private function isRequiredOnly(LoadBranch $branch, string $placeKey): bool
+	{
+		$selection = $branch->getSelections()->findBySelectionKey($placeKey);
+
+		return ! $selection instanceof SelectionItem
+			|| $selection->hasTag(SelectionTag::INTERNAL)
+			|| ! $selection->isExplicit();
+	}
+
+	/**
+	 * @param list<string> $path
+	 */
+	private function preferredLoadKey(
+		LoadBranch $branch,
+		string $placeKey,
+		string $normalized,
+		array $path,
+		bool $sqlOnly,
+	): string {
+		$preferred = $branch->loadKeyForPlace($placeKey);
+
+		if ($preferred !== $placeKey) {
+			return $preferred;
+		}
+
+		if ($sqlOnly && $branch instanceof RootLoadBranch) {
+			return $this->getJoinedAlias(['root', 'required'], $normalized);
+		}
+
+		$ownsQuery = $branch->getSource() === $branch->getQuery();
+
+		return $ownsQuery
+			? $normalized
+			: $this->getJoinedAlias($path, $normalized);
 	}
 
 	private function prepare(): void
@@ -228,6 +259,7 @@ final class LoadRuntime
 
 		$this->rootBranch->registerPublicSelections();
 		$this->rootBranch->requirePrimaryKey();
+		$this->requireFields($this->rootBranch, $this->rootBranch->getCollection()->getPrimaryKey());
 		// Own-level root columns before relation load (loaders may inspect the root query).
 		$this->bindAllDestinations(includeCrossLevelFlats: false);
 		$this->createBranches();
