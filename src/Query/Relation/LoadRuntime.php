@@ -44,6 +44,8 @@ final class LoadRuntime
 
 	private RelationOutputProcessor $outputProcessor;
 
+	private LoadAliasAllocator $aliases;
+
 	private LoadFieldPlanner $fieldPlanner;
 
 	public function __construct(
@@ -53,7 +55,8 @@ final class LoadRuntime
 	) {
 		$this->rootBranch = new RootLoadBranch($rootQuery);
 		$this->outputProcessor = new RelationOutputProcessor($schema);
-		$this->fieldPlanner = new LoadFieldPlanner($this);
+		$this->aliases = new LoadAliasAllocator();
+		$this->fieldPlanner = new LoadFieldPlanner($this, $this->aliases);
 	}
 
 	public function fetchAll(): array
@@ -241,14 +244,14 @@ final class LoadRuntime
 		}
 
 		if ($sqlOnly && $branch instanceof RootLoadBranch) {
-			return $this->getJoinedAlias(['root', 'required'], $normalized);
+			return $this->aliases->aliasForPath(['root', 'required'], $normalized);
 		}
 
 		$ownsQuery = $branch->getSource() === $branch->getQuery();
 
 		return $ownsQuery
 			? $normalized
-			: $this->getJoinedAlias($path, $normalized);
+			: $this->aliases->aliasForPath($path, $normalized);
 	}
 
 	private function prepare(): void
@@ -260,25 +263,18 @@ final class LoadRuntime
 		$this->rootBranch->registerPublicSelections();
 		$this->rootBranch->requirePrimaryKey();
 		$this->requireFields($this->rootBranch, $this->rootBranch->getCollection()->getPrimaryKey());
-		// Own-level root columns before relation load (loaders may inspect the root query).
-		$this->bindAllDestinations(includeCrossLevelFlats: false);
 		$this->createBranches();
 		$this->configureBranches();
-
-		// Flats after destinations exist so loaded to-one children can be reused.
-		$this->bindAllDestinations(includeCrossLevelFlats: true);
-
+		$this->bindDestinations();
 		$this->createParserTree();
-
-		$this->bindAllDestinations(includeCrossLevelFlats: true);
 	}
 
-	private function bindAllDestinations(bool $includeCrossLevelFlats): void
+	private function bindDestinations(): void
 	{
-		$this->fieldPlanner->bindBranch($this->rootBranch, $includeCrossLevelFlats);
+		$this->fieldPlanner->bindBranch($this->rootBranch);
 
 		foreach ($this->relationBranchesByDepth() as $branch) {
-			$this->fieldPlanner->bindBranch($branch, $includeCrossLevelFlats);
+			$this->fieldPlanner->bindBranch($branch);
 		}
 	}
 
@@ -446,11 +442,7 @@ final class LoadRuntime
 	 */
 	public function getJoinedAlias(array $path, string $fieldName): string
 	{
-		$slug = strtolower(
-			preg_replace('/[^a-z0-9_]+/i', '_', implode('_', [...$path, $fieldName])) ?? 'field',
-		);
-
-		return 'l_' . $slug;
+		return $this->aliases->aliasForPath($path, $fieldName);
 	}
 
 	private function assertContinuableMethod(RelationLoadBranch $branch, string $method): void

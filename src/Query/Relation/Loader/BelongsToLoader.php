@@ -28,7 +28,7 @@ final class BelongsToLoader extends AbstractLoader
 		$parent = $runtime->requireFields($parentBranch, $ownerToTarget->getLeftFields());
 
 		return new SingularNode(
-			$this->columnSelectionKeys($branch),
+			$branch->localColumnLoadKeys(),
 			$identity,
 			$child,
 			$parent,

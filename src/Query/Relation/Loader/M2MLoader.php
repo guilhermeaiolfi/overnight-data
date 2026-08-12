@@ -49,7 +49,7 @@ final class M2MLoader extends AbstractLoader
 			...$throughInnerKeys,
 			...$throughOuterKeys,
 		]));
-		$throughAliasesByField = $this->allocateThroughAliases($branch, $throughFieldNames);
+		$throughAliasesByField = $this->allocateThroughAliases($branch, $runtime, $throughFieldNames);
 		$throughColumns = array_values($throughAliasesByField);
 		$throughInnerLoadKeys = array_map(
 			static fn (string $field): string => $throughAliasesByField[$field],
@@ -61,7 +61,7 @@ final class M2MLoader extends AbstractLoader
 		);
 
 		$targetNode = new SingularNode(
-			$this->columnSelectionKeys($branch),
+			$branch->localColumnLoadKeys(),
 			$targetIdentity,
 			$targetOuterKeyColumns,
 			$throughOuterLoadKeys,
@@ -199,6 +199,7 @@ final class M2MLoader extends AbstractLoader
 	 */
 	private function allocateThroughAliases(
 		RelationLoadBranch $branch,
+		LoadRuntime $runtime,
 		array $fieldNames,
 	): array {
 		$relation = $branch->getRelationRef();
@@ -207,13 +208,7 @@ final class M2MLoader extends AbstractLoader
 		$aliasesByField = [];
 
 		foreach ($fieldNames as $fieldName) {
-			$alias = 'l_' . strtolower(
-				preg_replace(
-					'/[^a-z0-9_]+/i',
-					'_',
-					implode('_', [...$relation->getPath(), 'through', $fieldName]),
-				) ?? 'field',
-			);
+			$alias = $runtime->getJoinedAlias([...$relation->getPath(), 'through'], $fieldName);
 
 			if (! $query->getSelections()->hasNamedExpression($alias)) {
 				$query->select($source->field($fieldName)->as($alias));

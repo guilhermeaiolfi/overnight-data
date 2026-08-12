@@ -410,7 +410,7 @@ final class QueryArchitectureTest extends TestCase
 	{
 		$selectionKeySources = [
 			dirname(__DIR__, 2) . '/src/Query/SelectQuery.php',
-			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/AbstractLoader.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/LoadBranch.php',
 		];
 
 		foreach ($selectionKeySources as $path) {
@@ -420,6 +420,10 @@ final class QueryArchitectureTest extends TestCase
 			self::assertStringNotContainsString('getExpression()->getField()->getName()', $contents, $path);
 		}
 
+		$abstractLoader = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/Loader/AbstractLoader.php');
+		self::assertStringNotContainsString('columnSelectionKeys', $abstractLoader);
+		self::assertStringNotContainsString('getExpression()->getField()->getName()', $abstractLoader);
+
 		$outputProcessor = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/RelationOutputProcessor.php');
 		self::assertStringContainsString('getPublicScalarPaths()', $outputProcessor);
 		self::assertStringContainsString('getImplicitScalarPaths()', $outputProcessor);
@@ -427,16 +431,21 @@ final class QueryArchitectureTest extends TestCase
 
 		$loadRuntime = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/LoadRuntime.php');
 		self::assertStringContainsString('needsRowAssemble()', $loadRuntime);
+		self::assertStringContainsString('bindDestinations()', $loadRuntime);
+		self::assertStringNotContainsString('includeCrossLevelFlats', $loadRuntime);
+		self::assertStringNotContainsString('bindAllDestinations', $loadRuntime);
 		self::assertStringNotContainsString('getExpression()->getField()->getName()', $loadRuntime);
 
 		foreach ([
 			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/BelongsToLoader.php',
 			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasOneLoader.php',
 			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasManyLoader.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/FirstOfManyLoader.php',
 			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/M2MLoader.php',
 		] as $path) {
 			$contents = (string) file_get_contents($path);
 
+			self::assertStringContainsString('localColumnLoadKeys()', $contents, $path);
 			self::assertStringNotContainsString('getExpression()->getField()->getName()', $contents, $path);
 		}
 	}

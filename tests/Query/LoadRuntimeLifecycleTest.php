@@ -1070,7 +1070,7 @@ abstract class LifecycleTestLoader extends AbstractLoader
 		$parent = $runtime->requireFields($parentBranch, $definition->getInnerKeys());
 
 		$node = new CollectionNode(
-			$this->columnSelectionKeys($branch),
+			$branch->localColumnLoadKeys(),
 			$identity,
 			$child,
 			$parent,
@@ -1079,7 +1079,7 @@ abstract class LifecycleTestLoader extends AbstractLoader
 		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
 		LifecycleEvents::$returnedNodes[] = $node;
-		LifecycleEvents::$registerColumns[$relation->getName()] = $this->columnSelectionKeys($branch);
+		LifecycleEvents::$registerColumns[$relation->getName()] = $branch->localColumnLoadKeys();
 
 		return $node;
 	}
@@ -1179,9 +1179,9 @@ class NestedPostsLoader extends AbstractLoader
 		$parent = $runtime->requireFields($parentBranch, ['id']);
 		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
-		LifecycleEvents::$registerColumns['posts'] = $this->columnSelectionKeys($branch);
+		LifecycleEvents::$registerColumns['posts'] = $branch->localColumnLoadKeys();
 
-		return new CollectionNode($this->columnSelectionKeys($branch), $identity, $child, $parent);
+		return new CollectionNode($branch->localColumnLoadKeys(), $identity, $child, $parent);
 	}
 
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
@@ -1215,9 +1215,9 @@ final class NestedAuthorLoader extends AbstractLoader
 		$parent = $runtime->requireFields($parentBranch, ['authorId']);
 		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
-		LifecycleEvents::$registerColumns['author'] = $this->columnSelectionKeys($branch);
+		LifecycleEvents::$registerColumns['author'] = $branch->localColumnLoadKeys();
 
-		return new SingularNode($this->columnSelectionKeys($branch), $identity, $child, $parent);
+		return new SingularNode($branch->localColumnLoadKeys(), $identity, $child, $parent);
 	}
 
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
@@ -1262,7 +1262,7 @@ final class JoinedProfileLoader extends AbstractLoader
 		$parent = $runtime->requireFields($parentBranch, ['id']);
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
 
-		return new SingularNode($this->columnSelectionKeys($branch), $identity, $child, $parent);
+		return new SingularNode($branch->localColumnLoadKeys(), $identity, $child, $parent);
 	}
 
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void

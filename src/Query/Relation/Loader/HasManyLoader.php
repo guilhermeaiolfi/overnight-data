@@ -38,7 +38,7 @@ final class HasManyLoader extends AbstractLoader
 		$parent = $runtime->requireFields($parentBranch, $parentToChild->getLeftFields());
 
 		return new CollectionNode(
-			$this->columnSelectionKeys($branch),
+			$branch->localColumnLoadKeys(),
 			$identity,
 			$child,
 			$parent,

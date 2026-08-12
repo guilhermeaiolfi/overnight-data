@@ -258,25 +258,4 @@ abstract class AbstractLoader implements LoaderInterface
 	{
 		return self::SEPARATE_QUERY_BATCH_SIZE;
 	}
-
-	/**
-	 * @return list<string>
-	 */
-	protected function columnSelectionKeys(RelationLoadBranch $branch): array
-	{
-		$keys = [];
-
-		foreach ($branch->getSelections()->getByTag(SelectionTag::COLUMN) as $selection) {
-			$placeKey = $selection->getSelectionKey();
-
-			// Satisfied from a child destination — not a column on this parser node.
-			if ($branch->childPathForPlace($placeKey) !== null) {
-				continue;
-			}
-
-			$keys[] = $branch->loadKeyForPlace($placeKey);
-		}
-
-		return $keys;
-	}
 }

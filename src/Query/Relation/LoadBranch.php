@@ -35,23 +35,13 @@ abstract class LoadBranch
 	private array $children = [];
 
 	/**
-	 * Place path / selection key → parser/load record key (proposal 0003 Phase 3).
-	 *
-	 * @var array<string, string>
+	 * @var array<string, PlaceBinding>
 	 */
-	private array $placeToLoadKeys = [];
-
-	/**
-	 * Place keys satisfied from a loaded child destination (relative path under this branch).
-	 *
-	 * @var array<string, list<string>>
-	 */
-	private array $placeChildPaths = [];
+	private array $placeBindings = [];
 
 	public function bindPlaceToLoadKey(string $placeKey, string $loadKey): void
 	{
-		$this->placeToLoadKeys[$placeKey] = $loadKey;
-		unset($this->placeChildPaths[$placeKey]);
+		$this->placeBindings[$placeKey] = new PlaceBinding($loadKey);
 	}
 
 	/**
@@ -59,18 +49,17 @@ abstract class LoadBranch
 	 */
 	public function bindPlaceToChildDestination(string $placeKey, array $relativePath, string $loadKey): void
 	{
-		$this->placeToLoadKeys[$placeKey] = $loadKey;
-		$this->placeChildPaths[$placeKey] = array_values($relativePath);
+		$this->placeBindings[$placeKey] = new PlaceBinding($loadKey, array_values($relativePath));
 	}
 
 	public function hasPlaceBinding(string $placeKey): bool
 	{
-		return isset($this->placeToLoadKeys[$placeKey]);
+		return isset($this->placeBindings[$placeKey]);
 	}
 
 	public function loadKeyForPlace(string $placeKey): string
 	{
-		return $this->placeToLoadKeys[$placeKey] ?? $placeKey;
+		return ($this->placeBindings[$placeKey] ?? null)?->getLoadKey() ?? $placeKey;
 	}
 
 	/**
@@ -78,7 +67,29 @@ abstract class LoadBranch
 	 */
 	public function childPathForPlace(string $placeKey): ?array
 	{
-		return $this->placeChildPaths[$placeKey] ?? null;
+		return ($this->placeBindings[$placeKey] ?? null)?->getChildPath();
+	}
+
+	/**
+	 * Load-local parser keys for COLUMNs fetched on this destination (not child bags).
+	 *
+	 * @return list<string>
+	 */
+	public function localColumnLoadKeys(): array
+	{
+		$keys = [];
+
+		foreach ($this->getSelections()->getByTag(SelectionTag::COLUMN) as $selection) {
+			$placeKey = $selection->getSelectionKey();
+
+			if ($this->childPathForPlace($placeKey) !== null) {
+				continue;
+			}
+
+			$keys[] = $this->loadKeyForPlace($placeKey);
+		}
+
+		return $keys;
 	}
 
 	public function setNode(AbstractNode $node): void
