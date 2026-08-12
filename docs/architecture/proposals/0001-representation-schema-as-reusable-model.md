@@ -1,12 +1,10 @@
 # Proposal 0001: RepresentationSchema as reusable query model
 
-Status: **Proposed** — expression map + compile retention partially landed on `feat/recursive-projection-levels`; `query($schema)` reopen and memoized `projection()` still open.
+Status: **Proposed** — partially landed; **canonical living model is** [`docs/orm/representation-schema.md`](../../orm/representation-schema.md) (path-as-index, Public/Implicit, expressions, place-first assemble). This proposal keeps the reopen / reusable-model discussion.
 
-Supersedes / relates to: current `SelectQuery::projection()` → `RepresentationSchema` (place + write provenance; expressions retained when aliased).
+Supersedes / relates to: current `SelectQuery::projection()` → `RepresentationSchema`.
 
-**Depends on direction in** [`0002-recursive-projection-levels.md`](./0002-recursive-projection-levels.md): nested levels should gain the same projection vocabulary as root before (or while) durable schema reopen is built — otherwise 0001 risks root-only expression/reopen work that must be redone. Field/alias/flat parity largely landed; nested expression *load* still limited (JOIN requires `separate()`).
-
-**Also relates to** [`0003-load-graph-and-schema-as-place.md`](./0003-load-graph-and-schema-as-place.md) (accepted/closed): schema is place; assemble still hybrid (EXPLICIT tags ∪ schema flats). Schema-owned full public place is a follow-on after expression/API enrich.
+**Depends on** [`0002-recursive-projection-levels.md`](./0002-recursive-projection-levels.md). **Place/fetch:** [`../decisions/0002-fetch-loadbranch-vs-place-schema.md`](../decisions/0002-fetch-loadbranch-vs-place-schema.md) (accepted; archived proposal [`archive/0003-load-graph-and-schema-as-place.md`](./archive/0003-load-graph-and-schema-as-place.md)).
 
 This document freezes the design discussion so other work can land first and still influence the final shape.
 

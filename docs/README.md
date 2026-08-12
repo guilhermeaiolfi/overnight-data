@@ -10,13 +10,19 @@ The files linked below are the current reference material.
 - [`../CHANGELOG.md`](../CHANGELOG.md): Release history.
 - [`../UPGRADE.md`](../UPGRADE.md): What docs mean, upgrade expectations, no compatibility promise.
 
+## Architecture decisions
+
+Accepted lasting choices (rationale + consequences):
+
+- [`architecture/decisions/0001-database-adapter-boundary.md`](./architecture/decisions/0001-database-adapter-boundary.md): Database adapter boundary and compilation target.
+- [`architecture/decisions/0002-fetch-loadbranch-vs-place-schema.md`](./architecture/decisions/0002-fetch-loadbranch-vs-place-schema.md): Fetch (`LoadBranch`) vs place (`RepresentationSchema`); living detail in [`orm/representation-schema.md`](./orm/representation-schema.md).
+
 ## Architecture proposals
 
-Proposed designs (not implemented until accepted and built):
+Open designs (not done until accepted and built). Closed proposals live under [`architecture/proposals/archive/`](./architecture/proposals/archive/).
 
-- [`architecture/proposals/0001-representation-schema-as-reusable-model.md`](./architecture/proposals/0001-representation-schema-as-reusable-model.md): Extend `RepresentationSchema` into a reusable select shape (`query($schema)`), including expression nodes.
+- [`architecture/proposals/0001-representation-schema-as-reusable-model.md`](./architecture/proposals/0001-representation-schema-as-reusable-model.md): Reusable shape / `query($schema)` reopen — see also living [`orm/representation-schema.md`](./orm/representation-schema.md).
 - [`architecture/proposals/0002-recursive-projection-levels.md`](./architecture/proposals/0002-recursive-projection-levels.md): Unify root and nested relation projections so every level shares one selection model (should inform / precede 0001).
-- [`architecture/proposals/0003-load-graph-and-schema-as-place.md`](./architecture/proposals/0003-load-graph-and-schema-as-place.md): **Accepted / closed** — fetch (`LoadBranch`) vs place (`RepresentationSchema` + hybrid assemble); flats do not invent attaches.
 
 ## Definitions
 
@@ -40,6 +46,6 @@ Proposed designs (not implemented until accepted and built):
 
 - [`orm/foundation.md`](./orm/foundation.md): ORM foundation concepts, record-state persistence model, representation lineage, sync conflicts, and relation state.
 - [`orm/persistence.md`](./orm/persistence.md): Scalar ORM persistence pipeline, command planning, affected-row validation, Cycle command execution, generated primary-key merge, and write-side limits.
-- [`orm/representation-schema.md`](./orm/representation-schema.md): Recursive `RepresentationSchema` model, flat projection adoption, schema kinds, mapper/query/tracking boundaries, and scalar sync guardrails.
+- [`orm/representation-schema.md`](./orm/representation-schema.md): Canonical place + provenance spec (path-as-index, Public/Implicit, expressions, assemble); flat adoption and sync boundaries.
 - [`orm/writable-select-query-projections.md`](./orm/writable-select-query-projections.md): Writable `SelectQuery` projection provenance, flattened related-field updates, relation intent from queried objects, `identify()`, and current projection boundaries.
 - [`orm/session-save-api.md`](./orm/session-save-api.md): `update` / `create` / `detach` / `sync` / `flush`, `SelectQuery::projection()`, nested and flat intents, and `RepresentationIntentStore`.

@@ -248,6 +248,52 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		]], $users->fetchAll());
 	}
 
+	public function testAliasOnlyFetchCompilesPlaceSchemaAndAssemblesFromPublicPaths(): void
+	{
+		$users = new SelectQuery(
+			$this->makeBasicRegistry(ExecutingLifecycleLoader::class)->getCollection('users'),
+			new AliasOnlyRootExecutor(),
+		);
+		$users->select($users->name->as('displayName'));
+
+		self::assertTrue($users->needsRowAssemble());
+		self::assertSame([['displayName' => 'Ada']], $users->fetchAll());
+
+		$schema = $users->getFetchSchema();
+		self::assertNotNull($schema);
+		self::assertSame(['displayName'], $schema->getPublicScalarPaths());
+		self::assertTrue($schema->hasField('id'));
+		self::assertTrue($schema->getField('id')->isImplicit());
+	}
+
+	public function testPlainOwnFieldFetchSkipsPlaceSchemaCompile(): void
+	{
+		$users = new SelectQuery(
+			$this->makeBasicRegistry(ExecutingLifecycleLoader::class)->getCollection('users'),
+			new LifecycleExecutor(),
+		);
+		$users->select($users->name);
+
+		self::assertFalse($users->needsRowAssemble());
+		$users->fetchAll();
+		self::assertNull($users->getFetchSchema());
+	}
+
+	public function testAssembleWithoutPlaceSchemaFailsLoudly(): void
+	{
+		$users = new SelectQuery(
+			$this->makeBasicRegistry(ExecutingLifecycleLoader::class)->getCollection('users'),
+			new AliasOnlyRootExecutor(),
+		);
+		$users->select($users->name->as('displayName'));
+
+		$runtime = new LoadRuntime($users, new AliasOnlyRootExecutor(), null);
+
+		$this->expectException(LoadRuntimeException::class);
+		$this->expectExceptionMessage('compiled RepresentationSchema');
+		$runtime->fetchAll();
+	}
+
 	public function testDefaultVisibleRootFieldsRemainPublicWhenNoExplicitRootFieldsAreSelected(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(ExecutingLifecycleLoader::class)->getCollection('users'), new LifecycleExecutor());
@@ -769,6 +815,27 @@ final class AliasedRootSelectionExecutor implements QueryExecutorInterface
 			'posts' => [['id' => 10, 'userId' => 1, 'title' => 'Hello']],
 			default => [],
 		};
+	}
+
+	public function fetchOne(SelectQuery $query): ?array
+	{
+		return null;
+	}
+
+	public function iterate(SelectQuery $query): iterable
+	{
+		return [];
+	}
+}
+
+final class AliasOnlyRootExecutor implements QueryExecutorInterface
+{
+	public function fetchAll(SelectQuery $query): array
+	{
+		return [[
+			'name' => 'Ada',
+			'l_root_required_id' => 1,
+		]];
 	}
 
 	public function fetchOne(SelectQuery $query): ?array

@@ -1,8 +1,13 @@
 # Proposal 0003: LoadBranch destinations + RepresentationSchema as place
 
-Status: **Accepted / closed (mostly done)** on `feat/recursive-projection-levels`
+Status: **Accepted / closed** — archived.
 
-Relates to: [`0002-recursive-projection-levels.md`](./0002-recursive-projection-levels.md), [`0001-representation-schema-as-reusable-model.md`](./0001-representation-schema-as-reusable-model.md).
+**Decision record:** [`../../decisions/0002-fetch-loadbranch-vs-place-schema.md`](../../decisions/0002-fetch-loadbranch-vs-place-schema.md)  
+**Living place model:** [`../../../orm/representation-schema.md`](../../../orm/representation-schema.md)
+
+This file keeps implementation history and checklists. Do not treat it as the active contract.
+
+Relates to: [`../0002-recursive-projection-levels.md`](../0002-recursive-projection-levels.md), [`../0001-representation-schema-as-reusable-model.md`](../0001-representation-schema-as-reusable-model.md).
 
 ## Closing note (current)
 
@@ -10,13 +15,14 @@ The fetch/place split is the lasting design. Remaining “purity” work is **in
 
 | Done | Intentionally not doing now |
 |---|---|
-| `LoadBranch` = fetch destinations | Drive **all** own-level place keys from schema alone |
-| Schema = place provenance (Query may use it directly) | Full root↔nested `requireFields` unify |
-| Load-local parser keys + place→load binds | Reintroduce LoadGraph / FetchPlan |
-| Lazy schema compile (only when writable or relations need place) | Treat hybrid assemble as a defect |
+| `LoadBranch` = fetch destinations | Full root↔nested `requireFields` unify |
+| Schema = place provenance (Query may use it directly) | Reintroduce LoadGraph / FetchPlan |
+| Load-local parser keys + place→load binds | Soften `skipWhenMissing` / presence policy |
+| Assemble place from schema `getPublicScalarPaths()` when assemble runs | `query($schema)` reopen (0001) |
+| Compile schema whenever `needsRowAssemble()` (no EXPLICIT place fallback) | |
 | Flat reuse of loaded to-one child destinations | |
 
-**Place-first assemble (when schema is present):** `RelationOutputProcessor::placeKeysFor()` uses `RepresentationSchema::getPublicScalarPaths()` (Public fields + expressions). Implicit paths (e.g. PK backfill) stay on the schema for adoption but are not public place. Without a compiled schema, assemble still falls back to explicit selections.
+**Place-first assemble:** when `SelectQuery::needsRowAssemble()` is true, `beginFetch()` compiles a schema and `RelationOutputProcessor::placeKeysFor()` uses only `getPublicScalarPaths()`. Implicit paths stay on the schema for adoption but are not public place. Query `EXPLICIT` is not a place fallback. Living detail: [`../../../orm/representation-schema.md`](../../../orm/representation-schema.md).
 
 Field place roles (`RepresentationFieldRole::Public` | `Implicit`) are the durable half of selection meaning; fetch tags stay on Query.
 
@@ -74,7 +80,7 @@ LoadFieldPlanner          ← bind place-level COLUMNs (per-selection bind)
   emit:   SQL on that destination + place binds
         │
         ▼
-RelationOutputProcessor   ← place keys: EXPLICIT ∪ layout flats; read via placeToLoadKeys / child paths
+RelationOutputProcessor   ← place keys: schema getPublicScalarPaths(); read via placeToLoadKeys / child paths
 ```
 
 **Invariant:** destination = RelationSelection attaches (+ root), **not** every schema `sourcePath`. Flat `$posts->author->name` does not create an author attach.
@@ -118,7 +124,7 @@ Originally added a read-only `LoadGraph` keyed by source path, including unloade
 1. Ensure schema compile runs before fetch on paths that will assemble from schema (writable already `prepare()`s first; extend as needed).  
 2. Keep current output processor behavior.
 
-`SelectQuery::beginFetch()` compiles place schema **lazily**: writable prepare first; relation loads that need place compile once; plain reads with no relations skip schema (no PK requirement on ordinary reads). Writable `prepare()` exposes the same schema via `WritablePreparation::getFetchSchema()` (no second compile). Query assemble reads flats from that `RepresentationSchema`.
+`SelectQuery::beginFetch()` compiles place schema when `needsRowAssemble()` (aliases, flats, relation loads); writable prepare first and reuses `WritablePreparation::getFetchSchema()` when present. Plain own-field reads skip assemble and skip schema. Query assemble places only via that `RepresentationSchema`.
 
 ### Phase 2 — assemble flats from schema ✅
 
@@ -130,7 +136,7 @@ Originally added a read-only `LoadGraph` keyed by source path, including unloade
 ### Phase 3 — parser ← load-local keys only ✅
 
 1. Parser `valueAliases` use load-local keys.  
-2. Assemble owns public naming / visibility (hybrid EXPLICIT ∪ flats).  
+2. Assemble owns public naming / visibility from schema Public paths (not EXPLICIT tags).  
 3. JOIN attach is “same LoadBranch tree, different edge mode.”
 
 Relation branch columns bind `placeKey → loadKey` on the load branch. Own fields load as the field name; flats as a stable relative key (`author__name`); INTERNAL keys stay as planned. `RelationOutputProcessor` reads load keys and writes place paths. JOIN still allocates `__on_data_*` / `l_*` load keys and maps them the same way.
@@ -177,9 +183,9 @@ Same smell as the old root special-case: unfinished dual paths, not domain rules
 | `IDENTITY` / `REQUIRED` | Parser / loader bookkeeping. |
 | `DEFAULT` | Initial star selection before the first `select()`. |
 
-`PUBLIC` is retired. Assemble (`placeKeysFor`): explicit non-`INTERNAL`/`SQL_ONLY` selections, plus layout flats (`sourcePath !== []`). Schema still backfills PK fields for adoption — those must not alone drive public place.
+`PUBLIC` is retired. Assemble (`placeKeysFor`): schema `getPublicScalarPaths()` when assemble runs. Schema still backfills PK fields for adoption — those must not alone drive public place.
 
-**Not planned as follow-on for this proposal** (higher risk / separate decision if ever revisited): full root↔nested `requireFields` unify; driving all own-level place keys from schema (excluding identity backfill) instead of `EXPLICIT` tags. The hybrid above is the accepted assemble contract.
+**Historical note:** early drafts accepted hybrid EXPLICIT ∪ flats. That was superseded: assemble place is schema-only whenever row assemble runs (`needsRowAssemble()`). Still deferred separately: full root↔nested `requireFields` unify.
 
 ## Acceptance (Phase 0) — superseded
 
@@ -195,7 +201,7 @@ Same smell as the old root special-case: unfinished dual paths, not domain rules
 
 ## Acceptance (Phase 2)
 
-- [x] Nested/root visible scalars are placed from hybrid EXPLICIT ∪ schema flats when layout/schema is present.  
+- [x] Nested/root visible scalars are placed from schema `getPublicScalarPaths()` when assemble runs (no EXPLICIT place fallback).  
 - [x] Nested flat related fields register as load-branch `COLUMN` (not own-level place from tags); output still exposes schema `path`.  
 - [x] Existing nested flat + writable flat tests keep passing.
 
@@ -225,12 +231,12 @@ Same smell as the old root special-case: unfinished dual paths, not domain rules
 
 ## Acceptance (close)
 
-- [x] Hybrid assemble documented as intentional.  
+- [x] Hybrid assemble documented as intentional (later superseded by schema-only place).  
 - [x] “Schema owns all own-level place keys” marked out of scope for this proposal.  
-- [x] Docs index reflects accepted / closed status.
+- [x] Closed proposal archived; decision recorded as ADR 0002.
 
 ## References
 
-- [`docs/orm/representation-schema.md`](../../orm/representation-schema.md) — place graph today (`path` / `sourcePath`)  
-- [`docs/query/relation-loading.md`](../../query/relation-loading.md) — selection / JOIN limits today  
+- [`docs/orm/representation-schema.md`](../../../orm/representation-schema.md) — place graph today (`path` / `sourcePath`)  
+- [`docs/query/relation-loading.md`](../../../query/relation-loading.md) — selection / JOIN limits today  
 - Parser nodes under `src/Query/Result/Parser/` — current load hydration runtime  

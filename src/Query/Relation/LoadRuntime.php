@@ -9,10 +9,8 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationSelectionException;
-use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
-use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use ReflectionMethod;
 
@@ -63,7 +61,7 @@ final class LoadRuntime
 	{
 		// Plain own-field reads: executor already returns place keys.
 		// Renames, flats, and INTERNAL/SQL_ONLY remaps need assemble.
-		if (! $this->needsAssemble()) {
+		if (! $this->rootQuery->needsRowAssemble()) {
 			return $this->executor->fetchAll($this->rootQuery);
 		}
 
@@ -76,7 +74,7 @@ final class LoadRuntime
 
 	public function fetchOne(): ?array
 	{
-		if (! $this->needsAssemble()) {
+		if (! $this->rootQuery->needsRowAssemble()) {
 			return $this->executor->fetchOne($this->rootQuery);
 		}
 
@@ -250,41 +248,6 @@ final class LoadRuntime
 		foreach ($this->relationBranchesByDepth() as $branch) {
 			$this->fieldPlanner->bindBranch($branch, $includeCrossLevelFlats);
 		}
-	}
-
-	/**
-	 * Assemble when relation loads remapping, place≠load keys, or flat FieldRefs.
-	 */
-	private function needsAssemble(): bool
-	{
-		if (! $this->rootQuery->getRelationSelections()->isEmpty()) {
-			return true;
-		}
-
-		foreach ($this->rootQuery->getSelections()->getAll() as $selection) {
-			if (
-				$selection->hasTag(SelectionTag::INTERNAL)
-				|| $selection->hasTag(SelectionTag::SQL_ONLY)
-			) {
-				continue;
-			}
-
-			$fieldRef = $selection->getFieldRef();
-
-			if (! $fieldRef instanceof FieldRef) {
-				continue;
-			}
-
-			if ($fieldRef->getSource() instanceof RelationRef) {
-				return true;
-			}
-
-			if ($selection->getSelectionKey() !== $fieldRef->getField()->getName()) {
-				return true;
-			}
-		}
-
-		return false;
 	}
 
 	private function createBranches(): void

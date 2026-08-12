@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation;
 
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Selection\SelectionTag;
 
@@ -25,6 +26,10 @@ final class RelationOutputProcessor
 	 */
 	public function processRoot(RootLoadBranch $root): array
 	{
+		if (! $this->schema instanceof RepresentationSchema) {
+			throw LoadRuntimeException::placeSchemaMissing();
+		}
+
 		$placeKeys = $this->placeKeysFor($root);
 		$records = [];
 
@@ -248,37 +253,26 @@ final class RelationOutputProcessor
 	}
 
 	/**
-	 * Visible scalar place keys for this level.
-	 *
-	 * When a place schema is available, Public field + expression paths are
-	 * authoritative (Implicit paths excluded). Otherwise fall back to
-	 * explicit selections (plain assemble without a compiled schema).
+	 * Ordered public place keys for this branch level from the fetch schema
+	 * ({@see RepresentationSchema::getPublicScalarPaths()} — Public fields + expressions;
+	 * Implicit PK backfill omitted). Query EXPLICIT tags are not a place fallback.
 	 *
 	 * @return list<string>
 	 */
 	private function placeKeysFor(LoadBranch $branch): array
 	{
-		if ($this->schema instanceof RepresentationSchema) {
-			$node = $this->schema->findRelatedSchemaAt($this->relationPathFor($branch));
-			if ($node instanceof RepresentationSchema) {
-				return $node->getPublicScalarPaths();
-			}
+		if (! $this->schema instanceof RepresentationSchema) {
+			throw LoadRuntimeException::placeSchemaMissing();
 		}
 
-		$keys = [];
+		$relationPath = $this->relationPathFor($branch);
+		$node = $this->schema->findRelatedSchemaAt($relationPath);
 
-		foreach ($branch->getSelections()->getExplicit() as $selection) {
-			if (
-				$selection->hasTag(SelectionTag::INTERNAL)
-				|| $selection->hasTag(SelectionTag::SQL_ONLY)
-			) {
-				continue;
-			}
-
-			$keys[] = $selection->getSelectionKey();
+		if (! $node instanceof RepresentationSchema) {
+			throw LoadRuntimeException::placeSchemaNodeMissing($relationPath);
 		}
 
-		return $keys;
+		return $node->getPublicScalarPaths();
 	}
 
 	/**

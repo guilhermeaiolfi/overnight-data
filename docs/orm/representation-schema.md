@@ -1,216 +1,228 @@
 # ORM Representation Schema
 
-`RepresentationSchema` describes persistence provenance for a representation shape. It is separate from the definition tree, the query selection graph, mapper hydration, tracked object state, and runtime relation state.
+Canonical spec for `RepresentationSchema`: durable **place + provenance** for a representation shape.
 
-The current model is recursive: a schema can be the root representation shape, or it can be the related branch stored by a relation schema.
+Related history (do not treat as competing specs):
 
-## Model Boundaries
+- [`../architecture/decisions/0002-fetch-loadbranch-vs-place-schema.md`](../architecture/decisions/0002-fetch-loadbranch-vs-place-schema.md) — accepted: fetch (`LoadBranch`) vs place (this schema)
+- [`../architecture/proposals/0001-representation-schema-as-reusable-model.md`](../architecture/proposals/0001-representation-schema-as-reusable-model.md) — reusable shape / `query($schema)` reopen (partially landed; reopen still open)
+- [`../architecture/proposals/0002-recursive-projection-levels.md`](../architecture/proposals/0002-recursive-projection-levels.md) — root/nested selection parity
+- [`../architecture/proposals/archive/0003-load-graph-and-schema-as-place.md`](../architecture/proposals/archive/0003-load-graph-and-schema-as-place.md) — archived implementation history for the fetch/place split
 
-### Definition Tree
+This document is the living model. Decisions and open proposals above are background.
 
-The definition tree describes what can exist:
+---
 
-- collections
-- fields
-- relations
-- keys
-- table and column metadata
+## What it is
 
-Definitions are metadata. They do not say which fields were selected for one result, which representation paths were hydrated, or which PHP object instance is currently tracked.
+`RepresentationSchema` is the structure-only graph for one representation shape (root or nested related branch). It answers:
 
-### Query Graph / Selection Graph
+1. **Place** — which paths appear on the object/array, in order  
+2. **Provenance** — how those paths map to collections/fields (and nested related schemas) for Session sync/adoption  
 
-The query graph describes what was requested or read:
+It is separate from:
 
-- selected fields
-- aliases
-- expressions
-- relation selections
-- future load state and completeness facts
+| Concern | Owner |
+|---|---|
+| Table/column/relation metadata | Definition `Collection` |
+| Authoring + fetch (SQL, JOIN/SEPARATE, INTERNAL/SQL_ONLY) | `SelectQuery` / `SelectionList` / `LoadBranch` |
+| Instance tracking | `RepresentationState` |
+| Hydration naming only | Mapper |
 
-The query graph is read-side intent and result-shaping information. It may later compile into representation schemas, but it is not itself the ORM persistence provenance model.
+Query may import `RepresentationSchema` as the intentional place boundary (no separate `ProjectionLayout`). Fetch tags stay on Query.
 
-### `map($source)->to(...)`
+---
 
-`map($source)->to(...)` converts a data shape into an object shape. It hydrates arrays, `stdClass`, DTOs, and entity-like classes according to mapper rules.
+## Path as index (spine)
 
-The mapper does not by itself know persistence provenance. It should not become the schema declaration API. Mapper metadata such as source/target names can help shape values, but persistence also needs collection, field, identity, writability, relation provenance, and loaded relation state.
+Every entry is keyed by a **place path** local to this schema level (not a dotted root→leaf string). Nested levels use nested schemas.
 
-### RepresentationSchema
+```text
+RepresentationSchema
+  collection
+  fields[path]       → RepresentationFieldSchema
+  relations[path]    → RepresentationRelationSchema → nested RepresentationSchema
+  expressions[path]  → RepresentationExpressionSchema
+  paths[]            → ordered union of all paths (collision domain)
+```
 
-`RepresentationSchema` describes what a representation object shape means for place and ORM provenance.
+### Rules
 
-It is the structure-only graph for one representation shape. It can be used as a root schema or as a related schema branch. It stores collection, field, relation, expression, path, source-path, writability, and related-branch metadata. It does not store `RecordState`, `RecordFieldRef`, or `RecordRelationRef`.
+| Rule | Detail |
+|---|---|
+| Path = place name | e.g. `name`, `posts`, `lineTotal`, `authorName` — property/key on this level’s payload |
+| Uniqueness | A path exists in **at most one** of fields / relations / expressions |
+| Order | `paths[]` preserves insertion / compile order |
+| Flat related data | Place path is the alias (`authorName`); provenance uses `sourcePath` (e.g. `['author']`) — **path index ≠ source path** |
+| Nested data | Relation path `posts` → `getRelatedSchema()`; child fields are paths on that nested schema (`title`), not `posts.title` on the parent |
+| `star` / `all()` | **Expand** to concrete Public field paths at compile — never store `"*"` as a path |
+| Expressions | Path **requires** `->as('…')`. No library default alias for now; unaliased expressions are not schema paths |
+| Aggregates like `count(*)` | Same: public path is the alias we assign in the library API, not a DB-invented label |
 
-It owns three path maps:
+### Path filters (direction)
 
-- field schemas
-- relation schemas
-- expression schemas (computed / non-column scalars; always read-only for sync)
+Keep `getPaths()` as the **full ordered universe** (collision + inspection of everything on the schema, including Implicit).
 
-A path can exist in only one of those maps. Scalar representation sync reads only field schemas. Relation representation sync reads only relation schemas. Expression paths are ignored by sync/adoption.
+Prefer **filter helpers** (SelectionList-style), not overloading `getPaths()`:
 
-#### Attachment modes (one schema type)
+| Helper (today / next) | Meaning |
+|---|---|
+| `getPaths()` | All paths (fields + relations + expressions), ordered |
+| `getPublicScalarPaths()` | Public fields + expressions (assemble place) |
+| `getFields()` / `getRelations()` / `getExpressions()` | By kind |
+| Future | e.g. fields by `RepresentationFieldRole`, or a small filter API — same idea as `getByTag` |
 
-| Mode | When | How related data appears |
+Do **not** make `getPaths()` mean “public only”; that loses the Implicit/collision universe.
+
+---
+
+## Field roles (`RepresentationFieldRole`)
+
+Converges durable selection **meaning**, not Query fetch tags.
+
+| Role | Meaning | Public place? |
 |---|---|---|
-| **Graph** | Nested `relations` present (typical entity DTO) | Related objects under relation paths; each has a `relatedSchema` |
-| **Flat** | Fields with non-empty `sourcePath`, usually no relation containers | Multiple `RecordState`s via {@see RepresentationSchema::getSources()} |
+| **Public** | Authored / user-facing place path | Yes |
+| **Implicit** | Not authored place; on schema for adoption/tracking (e.g. PK backfill) | No |
 
-Adoption chooses flat vs graph from the schema (and intent); both modes share this type.
+- Selected `$q->id` → **Public** (even though it is a PK)  
+- Compiler PK backfill when `id` was not selected → **Implicit**  
+- Do **not** infer role from “is in collection primary key” alone  
 
-#### Query assemble (place-first when schema is present)
+Expressions have no role enum: they are always non-writable place (public scalars when present). Sync ignores expression paths.
 
-When a fetch schema exists, assemble uses {@see RepresentationSchema::getPublicScalarPaths()} — ordered **Public** field paths plus expression paths. **Implicit** field paths (e.g. PK backfill) stay on the schema for adoption but are not public place.
+`skipWhenMissing` remains a sync/adoption presence behavior; it is not a substitute for Public vs Implicit.
 
-Plain assemble without a compiled schema (e.g. alias-only reads with no relations) still falls back to explicit query selections. Fetch tags (`COLUMN`, `SQL_ONLY`, …) remain query/runtime only.
+---
+
+## Schema kinds
+
+### Field
+
+Maps a place path → collection field + `sourcePath` + writability + role.
+
+```text
+id          → users.id, sourcePath [], Public or Implicit
+companyName → companies.name, sourcePath [company], Public
+```
+
+### Relation
+
+Maps a place path → owner collection, relation name, nested `RepresentationSchema`, load knowledge.
+
+```text
+posts → users.posts MANY → related schema (post item shape)
+```
+
+### Expression
+
+Maps a place path → `ValueExpressionInterface` (aliased). Always read-only for Session.
+
+```text
+lineTotal → expression AST, path lineTotal
+```
+
+---
+
+## Attachment modes (one type)
+
+| Mode | When | How |
+|---|---|---|
+| **Graph** | Nested `relations` present | Related objects under relation paths |
+| **Flat** | Fields with non-empty `sourcePath` (often no relation containers) | Multiple `RecordState`s via `getSources()` |
+
+Adoption chooses flat vs graph from the schema (and intent).
+
+---
+
+## Query compile and assemble
+
+### Compile (`SelectQuery::projection()` / fetch schema)
+
+- FieldRefs → Public field schemas (aliases as paths; flats get `sourcePath`)  
+- Aliased non-field selections → expression schemas  
+- Relation selections → relation schemas (recursive)  
+- Missing PKs for each source → Implicit field schemas  
+- Star/default → expand to Public fields  
+
+### Assemble (place-first)
+
+**Schema is the place base.** When `SelectQuery::needsRowAssemble()` is true
+(aliases, flats, or relation loads), `beginFetch()` compiles a
+`RepresentationSchema` and `RelationOutputProcessor` places scalars only via
+`getPublicScalarPaths()`. Query `EXPLICIT` tags are fetch/authoring only — not a
+place fallback.
+
+Plain own-field reads skip assemble and skip schema compile (executor column
+names already match place).
+
+Fetch tags (`COLUMN`, `SQL_ONLY`, `INTERNAL`, `DEFAULT`, …) remain Query/runtime only.
+
+### `forPrimaryKey()`
+
+Builds a schema whose Public paths are the primary-key fields. That schema **is** the representation (key-only object). Those paths are Public place, not Implicit — Implicit is for backfill onto a larger shape.
+
+---
+
+## Model boundaries (unchanged intent)
+
+### Definition tree
+
+What can exist: collections, fields, relations, keys, storage names.
+
+### Query graph
+
+What was requested to read/fetch: selections, tags, load options, strategies. Compiles **into** representation schemas; is not itself the durable place model.
+
+### Mapper
+
+Shape conversion only; not persistence provenance.
+
+---
+
+## Runtime: state, sync, flat adoption
 
 ### RepresentationState
 
-`RepresentationState` describes concrete runtime attachment for one object instance. The object itself is held as the weak key in `RepresentationStateStore`, not inside `RepresentationState`.
+Attaches a schema to one object instance: field/relation state items + baselines. Multiple instances may share one schema.
 
-It stores:
+### Sync
 
-- the `RepresentationSchema`
-- `RepresentationFieldStateItem` entries that attach field schemas to concrete `RecordState` objects and baseline record revisions
-- `RepresentationRelationStateItem` entries that attach relation schemas to concrete owner `RecordState` objects
+- Scalar sync: writable **field** schemas (via state items)  
+- Relation sync: relation schemas only  
+- Expression paths: ignored  
 
-It is not a schema template. Multiple object instances may share the same reusable representation schema shape, while each representation state stores instance-specific runtime attachments and baseline revisions.
+`Session::sync($object, $schema)` walks explicit relation schemas; untracked roots need a homogeneous single-collection schema.
 
-### ToManyRelationState / ToOneRelationState
+### Flat projection adoption
 
-`ToManyRelationState` is runtime relation state for one owner object. It tracks known, added, and removed collection items plus the collection load state. `ToOneRelationState` is the singular-relation runtime state and tracks the current target plus local change intent.
+`RepresentationAdoptionEngine::attach()`:
 
-Runtime relation state is not representation shape. A `RepresentationRelationSchema` says that a representation path is a relation and stores the reusable related schema branch. A `ToManyRelationState` or `ToOneRelationState` says what one owner currently knows and intends to add, remove, or set at runtime.
+- Flat: `getSources()` (fields grouped by `sourcePath`)  
+- Graph: relation branches + `getRelatedSchema()`  
 
-Relation representation sync connects the two models:
+Writable prepare plans Query `INTERNAL` identity selections via `QueryRepresentationIdentityPlanner` (does not put SQL_ONLY aliases on the schema). Schema Implicit PK fields remain the durable identity provenance for adoption.
 
-- `MANY` relation schemas sync representation paths into `ToManyRelationState` instances.
-- `ONE` relation schemas sync representation paths into `ToOneRelationState` instances.
+See [`session-save-api.md`](./session-save-api.md) and [`writable-select-query-projections.md`](./writable-select-query-projections.md).
 
-In strict sync paths, related objects found at those representation paths must already be tracked/adopted. Relation representation sync validates that each `MANY` item and each non-null `ONE` target has a tracked representation, and throws `SyncException` with the relation path when it does not. It does not auto-adopt related objects by itself.
+---
 
-`Session::sync($representation, $schema)` is the explicit graph entry point for an untracked plain root object. The root schema is required for now; there is no class-to-schema inference. For an untracked root, the schema must be entity-shaped and target exactly one root collection through field schemas and/or relation owner schemas. Empty schemas and mixed/projection schemas spanning multiple root collections cannot create a new root `RecordState` and raise `StateException`. `Session::sync($representation)` can be used when the root object is already tracked. In both cases, the graph walk follows explicit `RepresentationRelationSchema` entries only. A `MANY` value may be `null` or an iterable of objects. A `ONE` value may be `null` or an object. Discovered untracked related objects are tracked with the relation schema's `getRelatedSchema()`, which is then applied to a new related `RecordState` using the existing representation adoption path. Primary-key presence is not lifecycle intent: newly discovered untracked objects (roots and related) default to `NEW`, even with a complete application-assigned primary key. Use `Session::update($object)` when a real object should be treated as an existing row during graph sync. Use `Session::identify($collection, $key)` for key-only existing references. Upsert is not implicit. Already-tracked objects are not duplicated and keep their current lifecycle. The walker guards object identity cycles and still walks an already-tracked object once if it has not been visited.
+## Open / next (not blocking this spec)
 
-Graph sync does not infer relations from collection definitions, object properties, mapper metadata, or query selections. It syncs scalar and relation runtime state, but does not plan relation persistence, flush records, execute commands, or clear relation changes. Calling `sync($object)` again refreshes state and can bring newly attached related plain objects into the session. Query/projection/mixed schemas remain valid provenance for already-tracked or query-created representations; they require existing tracked state rather than creating a new root record.
+- Richer path filters (by role / kind) if call sites need them  
+- `query($schema)` reopen (0001 remainder); nested expression load limits  
+- Soften or replace `skipWhenMissing` with clearer presence policy later  
 
-## Flat projection adoption
+---
 
-Object graphs and flat writable projections share `RepresentationAdoptionEngine::attach()`:
+## Non-goals
 
-- Flat: walks `RepresentationSource` entries (one object → multiple `RecordState`s).
-- Graph: walks `RepresentationRelationSchema` branches recursively (one object → one `RecordState` each), using `AdoptionRecordResolver` for identity.
+- Automatic relation inference from objects/mapper  
+- Array root sync  
+- Cascade / orphan policies in the schema type  
+- SQL generation or transactions on the schema  
+- A parallel `BindingTree` / `QueryPlan` place type beside `RepresentationSchema`  
+- Storing `"*"` or DB-default expression labels as paths  
+- Sharing `SelectionList` / fetch tags as the schema store  
 
-`Session::adopt()` remains the store-a-ready-`RepresentationState` API (session layer only — no `adoptRecord` / `adoptGraph`). Policy is explicit: `Hydrate` (writable query), `Patch` / `Create` (Session intents; graph resolve still honors update intent on the resolver).
-
-For flat projections, writable `prepare()` plans hidden identity selections tagged `SelectionTag::INTERNAL` via `QueryRepresentationIdentityPlanner` (schema compile itself does not mutate the query). `QuerySourceIdentities` owns the query-local locators (`add(sourcePath, fieldName, resultKey)` / `getResultKey(sourcePath, fieldName)`) and is the adoption identity map for that prepared query on `QueryRepresentationPlan`; `getIdentity(sourcePath, $rawRow)` uses the row only as a lookup bag. Session flat intents build one `StaticSourceIdentities` per adoption from `identity()` / flat keys. There is no identity map per row.
-
-Flat projection adoption is used by writable query export (`stdClass` or mutable DTO) and by `Session::update`/`create` with `SelectQuery::projection()`. See [`session-save-api.md`](./session-save-api.md).
-
-Inbound flat binds resolve `RecordState` per source via the same engine (keys from the DTO / flat ops, or `RecordState::new` for create). Relation add for flat `create('posts')` registers intent on `ToManyRelationState` / `ToOneRelationState`.
-
-Relation persistence planning then consumes changed `ToManyRelationState` and `ToOneRelationState` instances. Built-in planners cover many-to-many, has-many, belongs-to, and has-one relation definitions. `FirstOfMany` has no persistence planner by default — it is a read-only ordered view over has-many.
-
-## Schema Kinds
-
-### Field Schema
-
-A field schema maps a representation path to a collection field plus a `sourcePath`.
-
-```text
-object.id          -> RepresentationFieldSchema(path: id, collection: users, field: id, sourcePath: [])
-object.companyName -> RepresentationFieldSchema(path: companyName, collection: companies, field: name, sourcePath: [company])
-```
-
-`RepresentationFieldSchema` is structural only. Writable field schemas can be synchronized back into the concrete `RecordState` named by the corresponding `RepresentationFieldStateItem`. Read-only field schemas remain scalar field provenance, but scalar sync ignores them for updates.
-
-### Relation Schema
-
-A relation schema maps one representation path to an owner collection, relation name, and one reusable related schema.
-
-```text
-object.posts -> RepresentationRelationSchema(path: posts, owner: users, relation: posts) MANY
-    related schema:
-        object.posts[].id    -> posts.id
-        object.posts[].title -> posts.title
-```
-
-A relation path such as `posts` does not merely mean a relation named `posts`. It means the specific relation carried by `RepresentationRelationSchema`, including the owning collection. Concrete runtime ownership lives in `RepresentationRelationStateItem`. This keeps aliases and mixed representations safe:
-
-```text
-object.name  -> RepresentationFieldSchema(collection: companies, field: name, sourcePath: [company])
-object.posts -> RepresentationRelationSchema(owner: users, relation: posts)
-```
-
-For a `MANY` relation, `getRelatedSchema()` is the item shape. The same related schema is reused for every child object in that representation shape. Do not create one schema object per child instance.
-
-```text
-users representation schema
-    relation posts MANY
-        getRelatedSchema() -> post item schema
-
-post object A uses the same item schema shape as post object B
-```
-
-For a `ONE` relation, `getRelatedSchema()` is the target shape.
-
-```text
-object.author -> relation posts.author ONE
-    related schema:
-        object.author.id   -> users.id
-        object.author.name -> users.name
-```
-
-Use `getRelatedSchema()` for both cardinalities. Do not introduce separate `getItemBinding()` or `getTargetSchema()` names.
-
-## Attaching Schemas
-
-`RepresentationSchema` stays structure-only. It is attached to concrete runtime state by services that create `RepresentationState` items:
-
-- `RepresentationState::fromRecords()` builds field and relation state items from a schema and concrete `RecordState` instances keyed by source path.
-- `RepresentationAdoptionEngine::attach()` builds flat projections or walks nested graphs, then stores into session maps. Graph identity uses `AdoptionRecordResolver` inside the engine. `Session::identify()` routes through the same engine with `AdoptionPolicy::Identify` (key-only clean snapshot; no field patch).
-
-These attachment steps do not mutate the reusable schema shape. `Session::sync($object, $schema)` is the explicit API that chooses related objects from relation path values, then uses each relation schema's `getRelatedSchema()` with the existing adoption path. Schema attachment still does not infer relations from objects or plan relation persistence.
-
-## Current Sync Boundaries
-
-Scalar representation sync uses field schemas only:
-
-```text
-RepresentationSchema              -> getWritableFieldSchemas()
-RepresentationReader               -> readPath()
-SyncConflictDetector                 -> detect()
-ScalarRepresentationSynchronizer     -> buildPlan() / applyPlan()
-```
-
-Relation representation sync uses relation schemas only:
-
-```text
-RepresentationReader              -> readItems() / readTarget()
-RelationRepresentationSynchronizer -> ToManyRelationState / ToOneRelationState
-RepresentationStateResolver      -> already-tracked related objects only
-```
-
-`MANY` schemas become `ToManyRelationState` runtime state. `ONE` schemas become `ToOneRelationState` runtime state. `Session::sync($object, $schema)` exposes this graph-aware representation sync step directly for plain objects with a single-collection root schema, and `Session::sync($object)` refreshes an already-tracked object graph. `Session::flush()` still runs strict sync automatically before planning and flushing.
-
-Normal graph and query-created schemas remain strict: missing writable scalar paths or malformed relation values still raise through sync. Flat save-API overlays follow the same scalar sync rules after adoption.
-
-`Session::flush()` does not adopt newly attached untracked objects. If a new related plain object is attached after the last explicit `sync($object)`, `flush()` raises through the strict relation synchronization path. Call `sync($object)` again to refresh runtime state before flushing.
-
-## Non-Goals
-
-The recursive schema model does not implement:
-
-- automatic relation graph inference
-- automatic child adoption from flush
-- array root input for sync
-- cascade persistence policy
-- orphan removal
-- relation inference from developer objects
-- SQL generation
-- transactions
-- dependency ordering for generated ids
-- Registry awareness of ORM persistence
-- a separate `BindingGraph`, `BindingNode`, `PersistenceGraph`, `QueryGraph`, or `BindingTree`
-
-Keep `RepresentationSchema` as the graph/branch class.
+Keep `RepresentationSchema` as the graph/branch class; path is the index.

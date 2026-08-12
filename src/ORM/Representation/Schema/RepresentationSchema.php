@@ -18,9 +18,9 @@ use stdClass;
  * - **Flat** — fields with non-empty `sourcePath` spanning related collections
  *   (no relation containers); see {@see getSources()}.
  *
- * Query assemble uses {@see getPublicScalarPaths()} when a fetch schema is
- * present (Public fields + expressions; Implicit paths excluded). Plain
- * assemble without a compiled schema still falls back to explicit selections.
+ * Query assemble uses {@see getPublicScalarPaths()} as the place spine when a
+ * fetch schema is compiled for row assemble (Public fields + expressions;
+ * Implicit paths excluded).
  *
  * Durable model compiled from queries or built manually; consumed by Session
  * sync/adoption and by Query assemble. Query may import this type as the

@@ -717,11 +717,11 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
-	 * Resolve place schema before LoadRuntime (proposal 0003).
+	 * Resolve place schema before LoadRuntime when row assemble needs it.
 	 *
-	 * Writable prepares first (identity planning may mutate selections). Plain reads
-	 * without relation loads skip schema compile (no PK required). Relation loads
-	 * compile once for nested flat place keys.
+	 * Writable prepares first (identity planning may mutate selections) and
+	 * reuses that schema. Otherwise compile once for aliases, flats, and
+	 * relation loads. Plain own-field reads skip assemble and skip schema.
 	 */
 	private function beginFetch(?WritableResultHandler $handler): ?WritablePreparation
 	{
@@ -735,7 +735,7 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		// Count wrappers and other derived sources have no collection place schema.
-		if ($this->isDerivedSource() || ! $this->needsFetchSchema()) {
+		if ($this->isDerivedSource() || ! $this->needsRowAssemble()) {
 			$this->fetchSchema = null;
 
 			return null;
@@ -749,14 +749,46 @@ final class SelectQuery implements QuerySourceInterface
 	private function applyPreparationSchema(WritablePreparation $preparation): void
 	{
 		$this->fetchSchema = $preparation->getFetchSchema();
+
+		if ($this->fetchSchema === null && $this->needsRowAssemble() && ! $this->isDerivedSource()) {
+			$this->fetchSchema = $this->compileFetchSchema();
+		}
 	}
 
 	/**
-	 * Schema needed for writable identity or relation-level flat place keys.
+	 * Whether fetch rows need remapped assemble (aliases, flats, or relation loads).
+	 * When true, {@see beginFetch()} compiles a place {@see RepresentationSchema}.
 	 */
-	private function needsFetchSchema(): bool
+	public function needsRowAssemble(): bool
 	{
-		return ! $this->getRelationSelections()->isEmpty();
+		if (! $this->getRelationSelections()->isEmpty()) {
+			return true;
+		}
+
+		foreach ($this->selections->getAll() as $selection) {
+			if (
+				$selection->hasTag(SelectionTag::INTERNAL)
+				|| $selection->hasTag(SelectionTag::SQL_ONLY)
+			) {
+				continue;
+			}
+
+			$fieldRef = $selection->getFieldRef();
+
+			if (! $fieldRef instanceof FieldRef) {
+				continue;
+			}
+
+			if ($fieldRef->getSource() instanceof RelationRef) {
+				return true;
+			}
+
+			if ($selection->getSelectionKey() !== $fieldRef->getField()->getName()) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private function compileFetchSchema(): RepresentationSchema

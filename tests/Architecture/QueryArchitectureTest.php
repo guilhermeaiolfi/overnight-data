@@ -409,7 +409,7 @@ final class QueryArchitectureTest extends TestCase
 	public function testRelationLoadingUsesSelectionKeysInsteadOfInspectingFieldBackedExpressions(): void
 	{
 		$selectionKeySources = [
-			dirname(__DIR__, 2) . '/src/Query/Relation/LoadRuntime.php',
+			dirname(__DIR__, 2) . '/src/Query/SelectQuery.php',
 			dirname(__DIR__, 2) . '/src/Query/Relation/RelationOutputProcessor.php',
 			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/AbstractLoader.php',
 		];
@@ -420,6 +420,10 @@ final class QueryArchitectureTest extends TestCase
 			self::assertStringContainsString('getSelectionKey()', $contents, $path);
 			self::assertStringNotContainsString('getExpression()->getField()->getName()', $contents, $path);
 		}
+
+		$loadRuntime = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/LoadRuntime.php');
+		self::assertStringContainsString('needsRowAssemble()', $loadRuntime);
+		self::assertStringNotContainsString('getExpression()->getField()->getName()', $loadRuntime);
 
 		foreach ([
 			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/BelongsToLoader.php',
