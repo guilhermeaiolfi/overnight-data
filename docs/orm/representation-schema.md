@@ -61,7 +61,7 @@ Adoption chooses flat vs graph from the schema (and intent); both modes share th
 
 #### Query assemble (place-first when schema is present)
 
-When a fetch schema exists, assemble uses {@see RepresentationSchema::getPublicScalarPaths()} — ordered **Public** field paths plus expression paths. **Identity** field enrichment (PK backfill) is on the schema for adoption but is not public place.
+When a fetch schema exists, assemble uses {@see RepresentationSchema::getPublicScalarPaths()} — ordered **Public** field paths plus expression paths. **Implicit** field paths (e.g. PK backfill) stay on the schema for adoption but are not public place.
 
 Plain assemble without a compiled schema (e.g. alias-only reads with no relations) still falls back to explicit query selections. Fetch tags (`COLUMN`, `SQL_ONLY`, …) remain query/runtime only.
 

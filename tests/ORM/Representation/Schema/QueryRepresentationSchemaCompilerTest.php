@@ -82,7 +82,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 
 		self::assertTrue($schema->hasField('id'));
 		self::assertTrue($schema->getField('id')->isReadOnly());
-		self::assertTrue($schema->getField('id')->isIdentity());
+		self::assertTrue($schema->getField('id')->isImplicit());
 		self::assertTrue($schema->getField('name')->isWritable());
 		self::assertTrue($schema->getField('name')->isPublicPlace());
 		self::assertSame(['name'], $schema->getPublicScalarPaths());

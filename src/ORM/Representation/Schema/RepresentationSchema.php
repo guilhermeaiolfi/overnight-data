@@ -19,7 +19,7 @@ use stdClass;
  *   (no relation containers); see {@see getSources()}.
  *
  * Query assemble uses {@see getPublicScalarPaths()} when a fetch schema is
- * present (Public fields + expressions; Identity enrichment excluded). Plain
+ * present (Public fields + expressions; Implicit paths excluded). Plain
  * assemble without a compiled schema still falls back to explicit selections.
  *
  * Durable model compiled from queries or built manually; consumed by Session
@@ -203,7 +203,7 @@ final class RepresentationSchema
 
 	/**
 	 * Public place keys for flat related fields at this level (`sourcePath !== []`).
-	 * Identity enrichment and own-level fields are omitted.
+	 * Implicit paths and own-level fields are omitted.
 	 *
 	 * @return list<string>
 	 */
@@ -237,7 +237,7 @@ final class RepresentationSchema
 
 	/**
 	 * Ordered public scalar place paths at this level (Public fields + expressions).
-	 * Excludes Identity enrichment and relation containers.
+	 * Excludes Implicit paths and relation containers.
 	 *
 	 * @return list<string>
 	 */

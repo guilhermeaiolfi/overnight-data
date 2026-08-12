@@ -13,8 +13,8 @@ use ON\Data\ORM\Exception\StateException;
  *
  * Exists as the leaf node of RepresentationSchema used by scalar sync and flat
  * projection adoption. {@see RepresentationFieldRole::Public} paths form the
- * representation place spine; {@see RepresentationFieldRole::Identity} is
- * adoption enrichment only.
+ * representation place spine; {@see RepresentationFieldRole::Implicit} paths are
+ * not authored place (e.g. PK backfill for adoption).
  */
 final class RepresentationFieldSchema
 {
@@ -101,9 +101,9 @@ final class RepresentationFieldSchema
 		return $this->role === RepresentationFieldRole::Public;
 	}
 
-	public function isIdentity(): bool
+	public function isImplicit(): bool
 	{
-		return $this->role === RepresentationFieldRole::Identity;
+		return $this->role === RepresentationFieldRole::Implicit;
 	}
 
 	public function withSkipWhenMissing(bool $skipWhenMissing): self

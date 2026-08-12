@@ -251,7 +251,7 @@ final class RelationOutputProcessor
 	 * Visible scalar place keys for this level.
 	 *
 	 * When a place schema is available, Public field + expression paths are
-	 * authoritative (Identity enrichment excluded). Otherwise fall back to
+	 * authoritative (Implicit paths excluded). Otherwise fall back to
 	 * explicit selections (plain assemble without a compiled schema).
 	 *
 	 * @return list<string>

@@ -197,7 +197,7 @@ Practical guidance:
 
 Structured loads separate **fetch destinations** (`LoadBranch` tree — one per attached relation) from **place** (where values land on the result). Flat related fields (for example `authorName` from `posts.author`) place on the parent; they do not invent an `author` attach unless that relation is also loaded.
 
-Assemble builds public scalar keys from `RepresentationSchema::getPublicScalarPaths()` when a fetch schema is present (Public fields + expressions; Identity enrichment excluded). Without a compiled schema, assemble falls back to explicit selections. See proposal [`0003-load-graph-and-schema-as-place.md`](../architecture/proposals/0003-load-graph-and-schema-as-place.md).
+Assemble builds public scalar keys from `RepresentationSchema::getPublicScalarPaths()` when a fetch schema is present (Public fields + expressions; Implicit paths excluded). Without a compiled schema, assemble falls back to explicit selections. See proposal [`0003-load-graph-and-schema-as-place.md`](../architecture/proposals/0003-load-graph-and-schema-as-place.md).
 
 ## Architecture Guardrails
 

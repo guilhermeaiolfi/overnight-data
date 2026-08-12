@@ -335,7 +335,7 @@ final class QueryRepresentationSchemaCompiler
 				writable: false,
 				skipWhenMissing: true,
 				sourcePath: $sourcePath,
-				role: RepresentationFieldRole::Identity,
+				role: RepresentationFieldRole::Implicit,
 			);
 		}
 
