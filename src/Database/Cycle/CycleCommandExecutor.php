@@ -63,27 +63,27 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 			return $this->insertWithReturning($insert, $pending);
 		}
 
-		// InsertQuery::run() returns lastInsertID and discards rowCount. query()+close()
-		// finalizes the write before SQLite CHANGES() is read; PDO rowCount is not portable.
+		// InsertQuery::run() returns lastInsertID and discards rowCount; execute for the write.
 		$parameters = new QueryParameters();
-		$driver = $this->database->getDriver();
-		$statement = $driver->query(
-			$insert->sqlStatement($parameters),
-			$parameters->getParameters(),
+		$driver = $this->database->getDriver(DatabaseInterface::WRITE);
+		$affected = $this->affectedRows(
+			$driver->execute(
+				$insert->sqlStatement($parameters),
+				$parameters->getParameters(),
+			),
 		);
-
-		try {
-			$affected = $this->affectedRows($statement->rowCount());
-		} finally {
-			$statement->close();
-		}
 
 		$changes = $this->sqliteChangesAfterWrite($driver);
 		if ($changes > 0) {
 			$affected = $changes;
 		}
 
-		return new CommandResult($affected, $this->generatedValuesViaLastInsertId($command, $pending));
+		$generated = $this->generatedValuesViaLastInsertId($command, $pending);
+		if ($affected === 0 && $this->generatedKeyImpliesInsert($generated)) {
+			$affected = 1;
+		}
+
+		return new CommandResult($affected, $generated);
 	}
 
 	/**
@@ -309,20 +309,44 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 	/**
 	 * PDO SQLite often reports insert rowCount as 0 even when the row was written.
 	 * `CHANGES()` is the connection-local count of the last write.
+	 *
+	 * Cycle's statement wrapper forces FETCH_ASSOC; fetchColumn() is unreliable on
+	 * that mode, so read a numeric row instead.
 	 */
 	private function sqliteChangesAfterWrite(DriverInterface $driver): int
 	{
-		if (strcasecmp($driver->getType(), 'SQLite') !== 0) {
+		if (stripos($driver->getType(), 'sqlite') === false) {
 			return 0;
 		}
 
-		$statement = $driver->query('SELECT CHANGES()');
+		$statement = $driver->query('SELECT CHANGES() AS affected');
 
 		try {
-			return $this->parseNonNegativeCount($statement->fetchColumn());
+			$row = $statement->fetch(StatementInterface::FETCH_NUM);
+			$raw = is_array($row) && array_key_exists(0, $row) ? $row[0] : null;
+
+			return $this->parseNonNegativeCount($raw);
 		} finally {
 			$statement->close();
 		}
+	}
+
+	/**
+	 * @param array<string, mixed> $generated
+	 */
+	private function generatedKeyImpliesInsert(array $generated): bool
+	{
+		foreach ($generated as $value) {
+			if (is_int($value) && $value > 0) {
+				return true;
+			}
+
+			if (is_string($value) && $value !== '' && $value !== '0') {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private function parseNonNegativeCount(mixed $raw): int
