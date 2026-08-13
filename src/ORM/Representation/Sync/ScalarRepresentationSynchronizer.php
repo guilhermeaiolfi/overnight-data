@@ -70,15 +70,13 @@ final class ScalarRepresentationSynchronizer
 		$values = [];
 
 		foreach ($state->getWritableFieldItems() as $item) {
-			$fieldSchema = $item->getSchema();
-
 			try {
 				$values[$item->getPath()] = $this->reader->readPath(
 					$representation,
 					$item->getPath()
 				);
 			} catch (SyncException $exception) {
-				if ($fieldSchema->shouldSkipWhenMissing() && str_contains($exception->getMessage(), ' is missing.')) {
+				if (str_contains($exception->getMessage(), ' is missing.')) {
 					continue;
 				}
 
@@ -112,11 +110,7 @@ final class ScalarRepresentationSynchronizer
 			}
 
 			if (! array_key_exists($path, $currentValues)) {
-				if ($fieldSchema->shouldSkipWhenMissing()) {
-					continue;
-				}
-
-				throw new SyncException(sprintf("Current representation values do not contain path '%s'.", $path));
+				continue;
 			}
 
 			$record = $item->getRecord();

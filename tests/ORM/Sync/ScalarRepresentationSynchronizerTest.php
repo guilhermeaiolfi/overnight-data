@@ -18,7 +18,6 @@ use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\ORM\Representation\Sync\ScalarRepresentationSynchronizer;
 use PHPUnit\Framework\TestCase;
-use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
 use Tests\ON\Data\ORM\Support\RepresentationStateObjectRegistry;
 
@@ -265,16 +264,19 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 		self::assertStringNotContainsString('CommandInterface', $source);
 	}
 
-	public function testMissingCurrentPathThrowsSyncException(): void
+	public function testMissingCurrentPathIsOmittedFromThePlan(): void
 	{
-		$record = RecordState::new($this->users(), ['name' => 'A1']);
-		$tracked = $this->tracked(new stdClass(), $this->schema(
+		$record = RecordState::new($this->users(), ['name' => 'A1', 'email' => 'old@example.test']);
+		$tracked = $this->tracked($this->representation(['email' => 'new@example.test']), $this->schema(
 			$this->field('name', $record->getCollection(), 'name'),
+			$this->field('email', $record->getCollection(), 'email'),
 		), $record);
 
-		$this->expectException(SyncException::class);
+		$plans = $this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
 
-		$this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
+		self::assertCount(1, $plans[0]->getUpdates());
+		self::assertSame('A1', $record->getValue('name'));
+		self::assertSame('new@example.test', $record->getValue('email'));
 	}
 
 	public function testNullValueIsHandledAsNormalValue(): void

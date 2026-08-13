@@ -34,7 +34,7 @@ $session->flush();
 
 | Call | Meaning |
 |------|---------|
-| `update($obj, ?$schema)` | Existing row: adopt by key, then **PATCH** present DTO/map fields (dirty when non-key fields are present) |
+| `update($obj, ?$schema)` | Existing row: adopt by key, then **PATCH** present DTO/map fields (dirty when non-key fields are present). Omitted properties are not writes; explicit `null` is a write. Missing related source records follow `skipWhenMissing`, not this PATCH rule. |
 | `create($obj, ?$schema)` | New row |
 | `identify($collection, $key)` | Existing row by key only — **no** field writes |
 | Primary key on the projection / `->identity()` | Resolves **which** row for `update` — does not choose create vs update |

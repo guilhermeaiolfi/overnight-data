@@ -1,26 +1,26 @@
 # Proposal 0002: Recursive projection levels
 
-Status: **Proposed** — Phase A + Phase B + Phase C landed on `feat/recursive-projection-levels`
+Status: **Accepted** — Phases A–D landed on `feat/recursive-projection-levels`. Living contract: [`docs/query/relation-loading.md`](../../query/relation-loading.md) and [`docs/orm/representation-schema.md`](../../orm/representation-schema.md).
 
-Relates to: [`0001-representation-schema-as-reusable-model.md`](./0001-representation-schema-as-reusable-model.md) (should inform / precede 0001).
+Relates to: [`0001-representation-schema-as-reusable-model.md`](./0001-representation-schema-as-reusable-model.md) (`query($schema)` reopen remains open; this proposal does not implement it).
 
-This document captures the design for unifying root and nested relation projection so every level shares one selection model.
+This document is the design record for unifying root and nested relation projection so every level shares one selection model.
 
-**Landed so far:** `RelationRef::select()` (including string short form `select('id','title')`) over a per-level `SelectionList`, relation selection tree/load branch registration of own-level aliases, recursive schema compile for nested aliases + relative flat `sourcePath`, per-level alias/relation name collisions, nested flat field fetch onto the level payload (JOIN and SEPARATE), nested aliased non-field expressions (JOIN and SEPARATE, including windowed HasMany), and nested INTERNAL identity planning for writable flats (Phase C). JOIN allows same-level field selections (including aliases), nested flat FieldRefs, and aliased value expressions. `RelationRef::fields()` was removed.
+**Landed:** `RelationRef::select()` (including string short form `select('id','title')`) over a per-level `SelectionList`; relation selection tree / load branch registration of own-level aliases; recursive schema compile for nested aliases + relative flat `sourcePath`; per-level alias/relation name collisions; nested flat field fetch onto the level payload (JOIN and SEPARATE); nested aliased non-field expressions (JOIN and SEPARATE, including windowed HasMany); nested INTERNAL identity planning for writable flats (Phase C). JOIN allows same-level field selections (including aliases), nested flat FieldRefs, and aliased value expressions. `RelationRef::fields()` was removed. Unaliased nested expressions still require `->as('…')`. Dedicated subquery fixtures can follow.
 
-## Problem
+## Problem (historical)
 
-Root `SelectQuery` supports a rich projection language. Nested relation levels do not.
+Root `SelectQuery` already had a rich projection language. Nested relation levels did not:
 
 ```text
 Root:
   SelectionList → fields | aliases | expressions | subqueries | flat related fields | relation loads
 
-Nested relation (RelationSelection):
+Nested relation (before this work):
   ?list<string> field names only  (+ where / order / limit / strategy / visibility)
 ```
 
-Examples of the gap:
+Examples of the gap (all expressible now via nested `select()`):
 
 ```php
 // Works at root — flat related field + alias + expression
@@ -28,10 +28,10 @@ $u->select(
     $u->id,
     $u->profile->name->as('profileName'),
     x()->mul($u->qty, $u->price)->as('lineTotal'),
-    $u->posts->select('id', 'title'), // nested: names only
+    $u->posts->select('id', 'title'), // nested: names only — now the short form, not a separate API
 );
 
-// Not expressible today on the posts level:
+// Previously not expressible on the posts level:
 // - expression / aggregate on a post row
 // - alias different from field name on a nested payload
 // - flat grandchild field onto the post object
@@ -40,12 +40,12 @@ $u->select(
 
 `RepresentationSchema` is **already recursive** (`RepresentationRelationSchema` → nested schema). The asymmetry is in **query selection storage, load/output, and schema compilation inputs** — not in the schema tree shape.
 
-That dual model adds complexity:
+That dual model added complexity:
 
 - one authoring API (`select(...)`; former `fields()` sugar removed)
 - two stores (`SelectionList` vs `list<string>`)
 - three compiler passes at root vs a fields-only nested compile
-- docs that must explain two projection rules
+- docs that had to explain two projection rules
 
 ## Goals
 
@@ -53,7 +53,7 @@ That dual model adds complexity:
 2. **One recursive logic path** for compile, load public projection, and (later) schema reopen — root is not a special case except for being the query root (FROM / executor binding).
 3. Nested payloads can carry the same structural richness root results already can.
 4. Preserve existing relation **load options** (`where`, `orderBy`, `limit`, `offset`, `strategy`, visibility) as level-local query modifiers, not as substitutes for projection.
-5. Keep `RepresentationSchema` as the compiled shape target; fill nested schemas with the same node kinds root can produce (including future expression nodes from 0001).
+5. Keep `RepresentationSchema` as the compiled shape target; fill nested schemas with the same node kinds root can produce (fields, relations, expressions).
 6. Prefer **simplifying** dual paths over adding a third parallel API.
 
 ## Non-goals
@@ -80,17 +80,17 @@ Root `SelectQuery` is the top `ProjectionLevel` (plus root-only concerns: FROM s
 A nested relation is the same projection model scoped to the related collection, plus relation load options.
 
 ```text
-Today                          Target
-─────                          ──────
-Root: SelectionList            Level: SelectionList (or equivalent)
-Nested: list<field names>      Level: SelectionList (or equivalent)
+Before                         After (landed)
+──────                         ──────
+Root: SelectionList            Level: SelectionList
+Nested: list<field names>      Level: SelectionList
 Compiler: 3 root passes        Compiler: compileLevel(schema, level) recursive
          + fields-only nest
 ```
 
 ## Target authoring shape
 
-Illustrative API (exact method names TBD — see Open questions):
+Landed API:
 
 ```php
 $u->select(
@@ -119,21 +119,21 @@ Compatibility intent:
 
 ### Selection storage
 
-| Component | Today | Target |
+| Component | Before | After (landed) |
 |---|---|---|
 | `SelectQuery` | `SelectionList` | unchanged role (root level selections) |
-| `RelationSelection` | `?list<string> $fields` | selection list (expressions + aliases + stars + relation-sourced field refs), not only names |
+| `RelationSelection` | `?list<string> $fields` | selection list (expressions + aliases + stars + relation-sourced field refs) |
 
 Nested relation loads still register child `RelationRef` / selection-tree edges; scalar richness moves into per-level selections.
 
 ### Load / output
 
-| Component | Today | Target |
+| Component | Before | After (landed) |
 |---|---|---|
-| `RootLoadBranch::registerPublicSelections` | full public `SelectionList` | becomes the generic “register level selections” path |
+| `RootLoadBranch::registerPublicSelections` | full public `SelectionList` | generic “register level selections” path |
 | `RelationLoadBranch::addPublicFields` | `field->as(fieldName)` only | register full public selections for that level (aliases, expressions) |
-| `RelationOutputProcessor` | keys = field names | keys = selection public paths / aliases; nested containers unchanged in spirit |
-| Separate-query / JOIN loaders | project name allowlists | project level selections (JOIN may lag — see phasing) |
+| `RelationOutputProcessor` | keys = field names | keys = schema public scalar paths / aliases; nested containers unchanged in spirit |
+| Separate-query / JOIN loaders | project name allowlists | project level selections (`LoadFieldPlanner`; JOIN quotes dotted result aliases as one identifier) |
 
 ### Schema compilation
 
@@ -143,8 +143,7 @@ Replace root-specialized passes with one recursive compiler:
 compileLevel(RepresentationSchema $schema, ProjectionLevel $level):
   - field / star / aliased FieldRef → RepresentationFieldSchema
       (sourcePath relative to this level’s root collection)
-  - non-FieldRef expressions → RepresentationExpressionSchema (when 0001 lands;
-      until then: either keep in query-only path or park as expression nodes early)
+  - non-FieldRef expressions → RepresentationExpressionSchema (same `expressionsFromSelections()` path as root)
   - relation loads → RepresentationRelationSchema + compileLevel(relatedSchema, childLevel)
   - PK enrichment for this level’s collection / source paths (as today at root)
 ```
@@ -155,7 +154,7 @@ Identity planning for writable nested flat projections follows the same relative
 
 ### Collision rules
 
-Today: root alias vs top-level relation name (`assertNoRelationSelectionCollisions`).
+Before: root alias vs top-level relation name (`assertNoRelationSelectionCollisions`).
 
 Target: **per level** — a public selection path must not collide with a child relation container name at that same level.
 
@@ -196,14 +195,11 @@ Net: short-term implementation cost; long-term model cost should drop.
 Recommended sequencing:
 
 1. **0002** — recursive projection levels (query + load + compiler → schema).
-2. **0001** — expression nodes on schema (all levels), memoize `projection()`, `query($schema)` reopen that recursively applies level selections.
+2. **0001** — memoize `projection()`, `query($schema)` reopen that recursively applies level selections.
 
-If 0001 is implemented first without 0002, expect rework of reopen and expression attachment for nested schemas.
+Expression nodes on schema (all levels) landed with this proposal; 0001 still owns reopen and compile caching.
 
-Until 0001, 0002 may still compile nested field/flat-field schemas fully and either:
-
-- keep nested expressions query/load-only (not in schema), or
-- introduce `RepresentationExpressionSchema` early as part of 0002’s compiler output (overlap with 0001 — acceptable if coordinated).
+If 0001 had been implemented first without 0002, reopen and nested expression attachment would have needed rework.
 
 ## Phasing
 
@@ -240,7 +236,7 @@ Subquery-as-nested-selection is the same emit path as other value expressions; d
 - Root flat projections unchanged.
 - Nested result keys that were field names stay field names when using string-name `select('id', 'title')`.
 - New aliases at nested levels are opt-in via explicit `.as(...)` / nested select.
-- Schema consumers that assumed nested related schemas only contain same-name fields must tolerate aliases and (later) expression paths.
+- Schema consumers that assumed nested related schemas only contain same-name fields must tolerate aliases and expression paths.
 
 ## Resolved decisions
 
@@ -310,13 +306,11 @@ $u->posts->select(
 
 ### 4. JOIN vs SEPARATE — Phase A/B + D
 
-**Delivered:** nested field + alias + flat FieldRef projection on **JOIN** and **SEPARATE_QUERY**.
-
-Non-field expressions with JOIN still throw `RelationLoaderException::richNestedSelectionRequiresSeparate` — use `separate()` until expression Phase / 0001.
+**Delivered:** nested field + alias + flat FieldRef + aliased non-field expression projection on **JOIN** and **SEPARATE_QUERY** (including windowed HasMany). Unaliased expressions still require `->as('…')`.
 
 ### 5. Expression schema timing
 
-**Wait for 0001.** Phase A/B of 0002 may still *load/query* nested expressions eventually, but `RepresentationExpressionSchema` and schema retention of expressions stay with 0001. Phase A focuses on field + alias + flat related-field parity.
+**Landed in 0002.** Nested aliased expressions compile to `RepresentationExpressionSchema` on the related schema. `query($schema)` reopen remains 0001.
 
 ### 6. Hidden INTERNAL selections
 

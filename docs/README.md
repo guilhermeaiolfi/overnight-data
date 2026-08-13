@@ -22,7 +22,7 @@ Accepted lasting choices (rationale + consequences):
 Open designs (not done until accepted and built). Closed proposals live under [`architecture/proposals/archive/`](./architecture/proposals/archive/).
 
 - [`architecture/proposals/0001-representation-schema-as-reusable-model.md`](./architecture/proposals/0001-representation-schema-as-reusable-model.md): Reusable shape / `query($schema)` reopen — see also living [`orm/representation-schema.md`](./orm/representation-schema.md).
-- [`architecture/proposals/0002-recursive-projection-levels.md`](./architecture/proposals/0002-recursive-projection-levels.md): Unify root and nested relation projections so every level shares one selection model (should inform / precede 0001).
+- [`architecture/proposals/0002-recursive-projection-levels.md`](./architecture/proposals/0002-recursive-projection-levels.md): **Accepted** — nested `select()` parity with root (JOIN and SEPARATE). Remaining reopen work is 0001.
 
 ## Definitions
 

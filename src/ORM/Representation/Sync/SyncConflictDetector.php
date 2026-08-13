@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Sync;
 
-use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\State\RepresentationState;
 
 final class SyncConflictDetector
@@ -19,18 +18,12 @@ final class SyncConflictDetector
 	): array {
 		$conflicts = [];
 		foreach ($tracked->getWritableFieldItems() as $item) {
-			$fieldSchema = $item->getSchema();
 			$path = $item->getPath();
 			if (! array_key_exists($path, $currentValues)) {
-				if ($fieldSchema->shouldSkipWhenMissing()) {
-					continue;
-				}
-
-				throw new SyncException(sprintf("Current representation values do not contain path '%s'.", $path));
+				continue;
 			}
 
 			$recordState = $item->getRecord();
-			$fieldName = $item->getFieldName();
 			$baselineRevision = $item->getBaselineRevision();
 			if (! $item->hasBaselineValue()) {
 				continue;

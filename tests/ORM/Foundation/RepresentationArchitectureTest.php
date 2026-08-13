@@ -16,19 +16,18 @@ final class RepresentationArchitectureTest extends TestCase
 		$contents = file_get_contents(dirname(__DIR__, 3) . '/docs/orm/representation-schema.md');
 
 		self::assertIsString($contents);
-		self::assertStringContainsString('Definition Tree', $contents);
-		self::assertStringContainsString('Query Graph / Selection Graph', $contents);
-		self::assertStringContainsString('`map($source)->to(...)`', $contents);
-		self::assertStringContainsString('The mapper does not by itself know persistence provenance.', $contents);
+		self::assertStringContainsString('Definition tree', $contents);
+		self::assertStringContainsString('Query graph', $contents);
+		self::assertStringContainsString('Shape conversion only; not persistence provenance.', $contents);
 		self::assertStringContainsString('RepresentationSchema', $contents);
 		self::assertStringContainsString('RepresentationState', $contents);
-		self::assertStringContainsString('ToManyRelationState / ToOneRelationState', $contents);
 		self::assertStringContainsString('field schemas', $contents);
 		self::assertStringContainsString('relation schemas', $contents);
-		self::assertStringContainsString('It owns two path maps', $contents);
 		self::assertStringContainsString('getRelatedSchema()', $contents);
-		self::assertStringContainsString('Do not create one schema object per child instance.', $contents);
-		self::assertStringContainsString('Scalar representation sync uses field schemas only', $contents);
+		self::assertStringContainsString('Multiple instances may share one schema', $contents);
+		self::assertStringContainsString('Scalar sync: writable **field** schemas', $contents);
+		self::assertStringContainsString('getPublicScalarPaths()', $contents);
+		self::assertStringContainsString('RepresentationFieldRole', $contents);
 	}
 
 	public function testNoSeparateBindingOrPersistenceGraphClassesWereIntroduced(): void

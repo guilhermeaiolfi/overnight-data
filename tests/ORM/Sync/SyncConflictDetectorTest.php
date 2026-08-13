@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
@@ -77,12 +76,11 @@ final class SyncConflictDetectorTest extends TestCase
 		self::assertSame([], (new SyncConflictDetector())->detect($tracked, []));
 	}
 
-	public function testMissingCurrentValueThrows(): void
+	public function testMissingCurrentValueIsSkipped(): void
 	{
-		[$record, $tracked] = $this->changedRecordScenario('A2');
+		[, $tracked] = $this->changedRecordScenario('A2');
 
-		$this->expectException(SyncException::class);
-		(new SyncConflictDetector())->detect($tracked, []);
+		self::assertSame([], (new SyncConflictDetector())->detect($tracked, []));
 	}
 
 	public function testMissingHistoryRevisionThrowsClearException(): void
