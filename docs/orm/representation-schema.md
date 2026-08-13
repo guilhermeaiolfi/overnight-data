@@ -91,7 +91,7 @@ Converges durable selection **meaning**, not Query fetch tags.
 
 Expressions have no role enum: they are always non-writable place (public scalars when present). Sync ignores expression paths.
 
-`skipWhenMissing` remains a sync/adoption presence behavior; it is not a substitute for Public vs Implicit.
+`skipWhenMissing` is sync/adoption presence, not a substitute for Public vs Implicit. Own-level fields (`sourcePath []`) require the source record (and the object path on sync). Fields with a related `sourcePath` skip when that related record is absent (LEFT JOIN / null belongs-to). Override with `withSkipWhenMissing()`.
 
 ---
 
@@ -211,7 +211,6 @@ See [`session-save-api.md`](./session-save-api.md) and [`writable-select-query-p
 
 - Richer path filters (by role / kind) if call sites need them  
 - `query($schema)` reopen (0001 remainder); nested expression load limits  
-- Soften or replace `skipWhenMissing` with clearer presence policy later  
 
 ---
 

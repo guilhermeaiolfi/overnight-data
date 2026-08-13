@@ -17,10 +17,11 @@ The fetch/place split is the lasting design. Remaining “purity” work is **in
 |---|---|
 | `LoadBranch` = fetch destinations | Full root↔nested `requireFields` unify |
 | Schema = place provenance (Query may use it directly) | Reintroduce LoadGraph / FetchPlan |
-| Load-local parser keys + place→load binds | Soften `skipWhenMissing` / presence policy |
-| Assemble place from schema `getPublicScalarPaths()` when assemble runs | `query($schema)` reopen (0001) |
+| Load-local parser keys + place→load binds | `query($schema)` reopen (0001) |
+| Assemble place from schema `getPublicScalarPaths()` when assemble runs | |
 | Compile schema whenever `needsRowAssemble()` (no EXPLICIT place fallback) | |
 | Flat reuse of loaded to-one child destinations | |
+| `skipWhenMissing` from related `sourcePath` (own-level required) | |
 
 **Place-first assemble:** when `SelectQuery::needsRowAssemble()` is true, `beginFetch()` compiles a schema and `RelationOutputProcessor::placeKeysFor()` uses only `getPublicScalarPaths()`. Implicit paths stay on the schema for adoption but are not public place. Query `EXPLICIT` is not a place fallback. Living detail: [`../../../orm/representation-schema.md`](../../../orm/representation-schema.md).
 

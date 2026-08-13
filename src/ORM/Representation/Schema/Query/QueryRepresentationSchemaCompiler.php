@@ -310,7 +310,6 @@ final class QueryRepresentationSchemaCompiler
 				$collection,
 				$field->getName(),
 				writable: true,
-				skipWhenMissing: true,
 				sourcePath: $sourcePath,
 			);
 		}
@@ -333,7 +332,6 @@ final class QueryRepresentationSchemaCompiler
 				$collection,
 				$fieldName,
 				writable: false,
-				skipWhenMissing: true,
 				sourcePath: $sourcePath,
 				role: RepresentationFieldRole::Implicit,
 			);
@@ -439,7 +437,6 @@ final class QueryRepresentationSchemaCompiler
 			$collection,
 			$expression->getName(),
 			writable: true,
-			skipWhenMissing: true,
 			sourcePath: $sourcePath,
 		);
 	}

@@ -15,11 +15,17 @@ use ON\Data\ORM\Exception\StateException;
  * projection adoption. {@see RepresentationFieldRole::Public} paths form the
  * representation place spine; {@see RepresentationFieldRole::Implicit} paths are
  * not authored place (e.g. PK backfill for adoption).
+ *
+ * Presence: when skip-when-missing is omitted, related sources
+ * (non-empty sourcePath) skip adoption/sync if that record is absent;
+ * own-level fields require the source. Pass the flag to override.
  */
 final class RepresentationFieldSchema
 {
 	/** @var list<string> */
 	private array $sourcePath;
+
+	private bool $skipWhenMissing;
 
 	/**
 	 * @param list<string> $sourcePath relation path from the schema root to the
@@ -30,7 +36,7 @@ final class RepresentationFieldSchema
 		private CollectionInterface $collection,
 		private string $fieldName,
 		private bool $writable = true,
-		private bool $skipWhenMissing = false,
+		?bool $skipWhenMissing = null,
 		array $sourcePath = [],
 		private RepresentationFieldRole $role = RepresentationFieldRole::Public,
 	) {
@@ -43,6 +49,7 @@ final class RepresentationFieldSchema
 		}
 
 		$this->sourcePath = array_values($sourcePath);
+		$this->skipWhenMissing = $skipWhenMissing ?? $this->sourcePath !== [];
 	}
 
 	public function getPath(): string

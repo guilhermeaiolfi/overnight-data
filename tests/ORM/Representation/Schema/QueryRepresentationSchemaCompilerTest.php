@@ -36,6 +36,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 
 		self::assertTrue($schema->hasField('name'));
 		self::assertTrue($schema->getField('name')->isWritable());
+		self::assertFalse($schema->getField('name')->shouldSkipWhenMissing());
 		self::assertSame('name', $schema->getField('name')->getFieldName());
 	}
 
@@ -83,6 +84,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertTrue($schema->hasField('id'));
 		self::assertTrue($schema->getField('id')->isReadOnly());
 		self::assertTrue($schema->getField('id')->isImplicit());
+		self::assertFalse($schema->getField('id')->shouldSkipWhenMissing());
 		self::assertTrue($schema->getField('name')->isWritable());
 		self::assertTrue($schema->getField('name')->isPublicPlace());
 		self::assertSame(['name'], $schema->getPublicScalarPaths());
@@ -222,6 +224,8 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertFalse($sources[1]->hasField('companyName'));
 		self::assertSame('companyName', $sources[1]->getFieldPath('name'));
 		self::assertSame('companyId', $sources[1]->getFieldPath('id'));
+		self::assertFalse($compilation->getSchema()->getField('id')->shouldSkipWhenMissing());
+		self::assertTrue($compilation->getSchema()->getField('companyName')->shouldSkipWhenMissing());
 	}
 
 	public function testComputedExpressionsDoNotCreateRepresentationSourceFields(): void
@@ -320,11 +324,13 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertFalse($postsSchema->hasField('title'));
 		self::assertSame('title', $postsSchema->getField('headline')->getFieldName());
 		self::assertSame([], $postsSchema->getField('headline')->getSourcePath());
+		self::assertFalse($postsSchema->getField('headline')->shouldSkipWhenMissing());
 
 		self::assertTrue($postsSchema->hasField('authorName'));
 		self::assertSame('name', $postsSchema->getField('authorName')->getFieldName());
 		self::assertSame(['author'], $postsSchema->getField('authorName')->getSourcePath());
 		self::assertSame('users', $postsSchema->getField('authorName')->getCollectionName());
+		self::assertTrue($postsSchema->getField('authorName')->shouldSkipWhenMissing());
 	}
 
 	public function testCompilesNestedAliasedExpressionsOnRelationLevel(): void

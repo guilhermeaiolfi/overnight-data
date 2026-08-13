@@ -59,7 +59,12 @@ final class RepresentationStateFromRecordsTest extends TestCase
 		$registry = $this->registry();
 		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
-		$schema = $this->projectionSchema($users, $companies);
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('id', $users, 'id', writable: false));
+		$schema->addField(
+			(new RepresentationFieldSchema('companyName', $companies, 'name', sourcePath: ['company']))
+				->withSkipWhenMissing(false),
+		);
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage("source path 'company' is unresolved");
@@ -67,6 +72,23 @@ final class RepresentationStateFromRecordsTest extends TestCase
 		RepresentationState::fromRecords($schema, [
 			RepresentationFieldSchema::sourcePathKey([]) => RecordState::clean($users->getKey(1), ['id' => 1]),
 		]);
+	}
+
+	public function testRelatedSourceFieldsSkipWhenMissingByDefault(): void
+	{
+		$registry = $this->registry();
+		$users = $registry->getCollection('users');
+		$companies = $registry->getCollection('companies');
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('id', $users, 'id', writable: false));
+		$schema->addField(new RepresentationFieldSchema('companyName', $companies, 'name', sourcePath: ['company']));
+
+		$state = RepresentationState::fromRecords($schema, [
+			RepresentationFieldSchema::sourcePathKey([]) => RecordState::clean($users->getKey(1), ['id' => 1]),
+		]);
+
+		self::assertTrue($state->hasFieldItem('id'));
+		self::assertFalse($state->hasFieldItem('companyName'));
 	}
 
 	public function testRespectsSkipWhenMissingFromFieldSchema(): void
