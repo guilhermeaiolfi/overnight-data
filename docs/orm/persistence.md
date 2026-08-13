@@ -201,7 +201,7 @@ use ON\Data\Definition\Field\Generator\When;
 
 - one or more fields are `DatabaseGenerator` / `autoIncrement` for INSERT, and the insert command did not supply a non-null value for them;
 - **RETURNING path** (Postgres `InsertQuery`): pending fields are requested in one `RETURNING` clause, values are read from the result statement, and affected rows come from `rowCount()`;
-- **`lastInsertID` path** (SQLite / MySQL): only a single non-composite DB-generated primary key is recovered via `lastInsertID($sequence)` after `execute()`. PDO SQLite often reports generated-key insert `rowCount()` as 0; the Cycle adapter then reads `SELECT CHANGES() AS affected` as a numeric row on the write connection. If that is also 0 but a positive generated key was recovered, affected rows are treated as 1.
+- **`lastInsertID` path** (SQLite / MySQL): only a single non-composite DB-generated primary key is recovered via `lastInsertID($sequence)` immediately after `execute()`, before any follow-up query. PDO SQLite often reports generated-key insert `rowCount()` as 0 and can clear `lastInsertID` on the next statement (including `SELECT CHANGES()`). The Cycle adapter then reads `SELECT CHANGES() AS affected` as a numeric row. If that is also 0 but a positive generated key was recovered, affected rows are treated as 1.
 
 Numeric integer strings are normalized to `int`. Generated values remain keyed by field name even when the primary-key column name differs.
 

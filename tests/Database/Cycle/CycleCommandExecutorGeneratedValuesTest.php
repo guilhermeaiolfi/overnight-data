@@ -160,11 +160,21 @@ final class CycleCommandExecutorGeneratedValuesTest extends TestCase
 		$changesStatement->method('fetch')->willReturn(false);
 		$changesStatement->method('close');
 
+		$calls = [];
+
 		$driver = $this->createMock(DriverInterface::class);
 		$driver->method('getType')->willReturn('SQLite');
 		$driver->method('execute')->willReturn(0);
-		$driver->method('query')->willReturn($changesStatement);
-		$driver->method('lastInsertID')->willReturn('3');
+		$driver->method('lastInsertID')->willReturnCallback(static function () use (&$calls): string {
+			$calls[] = 'lastInsertID';
+
+			return '3';
+		});
+		$driver->method('query')->willReturnCallback(static function () use (&$calls, $changesStatement): StatementInterface {
+			$calls[] = 'query';
+
+			return $changesStatement;
+		});
 
 		$database = $this->createMock(DatabaseInterface::class);
 		$database->method('insert')->willReturn($insert);
@@ -174,6 +184,7 @@ final class CycleCommandExecutorGeneratedValuesTest extends TestCase
 			'name' => 'Ada',
 		]));
 
+		self::assertSame(['lastInsertID', 'query'], $calls);
 		self::assertSame(1, $result->getAffectedRows());
 		self::assertSame(['id' => 3], $result->getGeneratedValues());
 	}

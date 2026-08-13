@@ -73,12 +73,14 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 			),
 		);
 
+		// Read lastInsertID before any follow-up query. PDO SQLite clears it on the next statement.
+		$generated = $this->generatedValuesViaLastInsertId($command, $pending, $driver);
+
 		$changes = $this->sqliteChangesAfterWrite($driver);
 		if ($changes > 0) {
 			$affected = $changes;
 		}
 
-		$generated = $this->generatedValuesViaLastInsertId($command, $pending);
 		if ($affected === 0 && $this->generatedKeyImpliesInsert($generated)) {
 			$affected = 1;
 		}
@@ -253,8 +255,11 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 	 *
 	 * @return array<string, mixed>
 	 */
-	private function generatedValuesViaLastInsertId(InsertCommand $command, array $pending): array
-	{
+	private function generatedValuesViaLastInsertId(
+		InsertCommand $command,
+		array $pending,
+		DriverInterface $driver,
+	): array {
 		$field = $this->getGeneratedPrimaryKeyField($command->getCollection());
 		if ($field === null) {
 			return [];
@@ -270,7 +275,7 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 		}
 
 		$generatedId = $this->normalizeGeneratedId(
-			$this->database->getDriver()->lastInsertID($field->getGeneratorSequence()),
+			$driver->lastInsertID($field->getGeneratorSequence()),
 		);
 		if ($generatedId === null) {
 			return [];
