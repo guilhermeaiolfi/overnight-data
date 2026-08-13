@@ -137,6 +137,12 @@ final class RelationLoadBranch extends LoadBranch
 		[$fieldRef, $alias] = $this->unwrapFieldSelection($selection) ?? [null, null];
 
 		if (! $fieldRef instanceof FieldRef) {
+			if ($expression instanceof StarExpression) {
+				return;
+			}
+
+			$this->selections->add($expression, [...$tags, SelectionTag::COLUMN]);
+
 			return;
 		}
 

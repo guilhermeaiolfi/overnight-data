@@ -13,6 +13,7 @@ use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
+use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
@@ -139,8 +140,8 @@ abstract class AbstractLoader implements LoaderInterface
 	}
 
 	/**
-	 * JOIN allows same-level FieldRefs (any alias) and nested flat FieldRefs under
-	 * this level. Non-field expressions still require SEPARATE_QUERY.
+	 * JOIN allows same-level FieldRefs (any alias), nested flat FieldRefs under
+	 * this level, stars, and aliased non-field value expressions.
 	 */
 	protected function assertNoJoinedRichNestedSelection(RelationLoadBranch $branch): void
 	{
@@ -171,17 +172,17 @@ abstract class AbstractLoader implements LoaderInterface
 			return true;
 		}
 
-		if (! $expression instanceof FieldRef) {
-			return false;
+		if ($expression instanceof FieldRef) {
+			$source = $expression->getSource();
+
+			if ($source === $level) {
+				return true;
+			}
+
+			return $source instanceof RelationRef && $source->isUnder($level);
 		}
 
-		$source = $expression->getSource();
-
-		if ($source === $level) {
-			return true;
-		}
-
-		return $source instanceof RelationRef && $source->isUnder($level);
+		return $expression instanceof ValueExpressionInterface;
 	}
 
 	protected function applySeparateQueryConditions(RelationLoadBranch $branch): void

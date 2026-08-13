@@ -138,7 +138,7 @@ final class RelationLoaderException extends InvalidArgumentException
 	public static function richNestedSelectionRequiresSeparate(RelationRef $relation): self
 	{
 		return new self(sprintf(
-			'Relation "%s" cannot use JOIN loading with non-field expressions. Nested flat FieldRefs and same-level field selections (including aliases) are allowed; use separate() for expression projection.',
+			'Relation "%s" cannot use JOIN loading with nested selections that are not fields of this relation (or under it), stars, or value expressions.',
 			implode('.', $relation->getPath()),
 		));
 	}

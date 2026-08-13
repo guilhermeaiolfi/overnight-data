@@ -7,7 +7,6 @@ namespace Tests\ON\Data\Query;
 use LogicException;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Relation\Loader\BelongsToLoader;
 use ON\Data\Query\Relation\Loader\HasManyLoader;
 use ON\Data\Query\SelectQuery;
@@ -96,23 +95,58 @@ final class NestedFlatProjectionLoadTest extends TestCase
 		self::assertArrayNotHasKey('author', $rows[0]['posts'][0]);
 	}
 
-	public function testJoinedNonFieldExpressionNestedSelectionIsRejected(): void
+	public function testSeparatePostsSelectCanProjectNestedExpressionOntoPostRows(): void
 	{
 		$users = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
 			new NestedFlatProjectionExecutor(),
 		);
 
+		$users->select($users->id, $users->name);
 		$users->posts
 			->select(
 				$users->posts->id,
+				$users->posts->title->as('headline'),
+				x()->literal(1)->as('one'),
+			)
+			->separate();
+
+		self::assertSame([[
+			'id' => 1,
+			'name' => 'Ada',
+			'posts' => [[
+				'id' => 10,
+				'headline' => 'Hello',
+				'one' => 1,
+			]],
+		]], $users->fetchAll());
+	}
+
+	public function testJoinedPostsSelectCanProjectNestedExpressionOntoPostRows(): void
+	{
+		$users = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new NestedJoinedFlatProjectionExecutor(),
+		);
+
+		$users->select($users->id, $users->name);
+		$users->posts
+			->select(
+				$users->posts->id,
+				$users->posts->title->as('headline'),
 				x()->literal(1)->as('one'),
 			)
 			->join();
 
-		$this->expectException(RelationLoaderException::class);
-		$this->expectExceptionMessage('cannot use JOIN loading with non-field expressions');
-		$users->fetchAll();
+		self::assertSame([[
+			'id' => 1,
+			'name' => 'Ada',
+			'posts' => [[
+				'id' => 10,
+				'headline' => 'Hello',
+				'one' => 1,
+			]],
+		]], $users->fetchAll());
 	}
 
 	public function testBelongsToJoinAllowsSameLevelAliasSelect(): void
@@ -261,6 +295,7 @@ final class NestedFlatProjectionExecutor implements QueryExecutorInterface
 				'authorId' => 7,
 				'headline' => 'Hello',
 				'authorName' => 'Ana',
+				'one' => 1,
 			]],
 			'authors' => [[
 				'id' => 7,
@@ -301,6 +336,7 @@ final class NestedJoinedFlatProjectionExecutor implements QueryExecutorInterface
 			'posts.userId' => 1,
 			'posts.headline' => 'Hello',
 			'posts.authorName' => 'Ana',
+			'posts.one' => 1,
 		]];
 	}
 

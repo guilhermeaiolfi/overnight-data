@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation;
 
 use LogicException;
+use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
@@ -74,6 +76,52 @@ final class LoadAliasAllocator
 		}
 
 		$query->select($expression);
+	}
+
+	/**
+	 * Return $preferred when it is free; otherwise a collision-safe suffix.
+	 */
+	public function ensureFreeAlias(SelectQuery $query, string $preferred): string
+	{
+		if (! $this->isAliasTaken($query, $preferred)) {
+			return $preferred;
+		}
+
+		$suffix = 2;
+		$candidate = $preferred . '_' . $suffix;
+
+		while ($this->isAliasTaken($query, $candidate)) {
+			++$suffix;
+			$candidate = $preferred . '_' . $suffix;
+		}
+
+		return $candidate;
+	}
+
+	public function emitExpression(
+		SelectQuery $query,
+		ValueExpressionInterface $expression,
+		string $alias,
+		bool $sqlOnly,
+	): void {
+		if ($this->isAliasTaken($query, $alias)) {
+			throw new LogicException(
+				'Load alias "' . $alias . '" is taken by a different selection; ensureFreeAlias should have allocated a free key.',
+			);
+		}
+
+		$aliased = new AliasedExpression($expression, $alias);
+
+		if ($sqlOnly) {
+			$query->getSelections()->add(
+				$aliased,
+				[SelectionTag::SQL_ONLY, SelectionTag::COLUMN],
+			);
+
+			return;
+		}
+
+		$query->select($aliased);
 	}
 
 	/**

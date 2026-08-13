@@ -208,6 +208,99 @@ final class CycleJoinExecutionTest extends TestCase
 		self::assertArrayNotHasKey('author', $rows[0]['posts'][0]);
 	}
 
+	public function testHasManyJoinCanProjectNestedExpressionOntoPostRows(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts
+			->select(
+				$users->posts->id,
+				$users->posts->title,
+				x()->concat($users->posts->title, '!')->as('bang'),
+			)
+			->join();
+
+		$rows = $users
+			->select($users->name)
+			->orderBy($users->id->asc(), $users->posts->title->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'posts' => [
+					['id' => 1, 'title' => 'Hello', 'bang' => 'Hello!'],
+					['id' => 2, 'title' => 'World', 'bang' => 'World!'],
+				],
+			],
+			[
+				'name' => 'Grace',
+				'posts' => [
+					['id' => 3, 'title' => 'Graph', 'bang' => 'Graph!'],
+				],
+			],
+		], $rows);
+	}
+
+	public function testHasManySeparateCanProjectNestedExpressionOntoPostRows(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts
+			->select(
+				$users->posts->title,
+				x()->concat($users->posts->title, '!')->as('bang'),
+			)
+			->separate();
+
+		$rows = $users
+			->select($users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'posts' => [
+					['title' => 'Hello', 'bang' => 'Hello!'],
+					['title' => 'World', 'bang' => 'World!'],
+				],
+			],
+			[
+				'name' => 'Grace',
+				'posts' => [
+					['title' => 'Graph', 'bang' => 'Graph!'],
+				],
+			],
+			[
+				'name' => 'Linus',
+				'posts' => [],
+			],
+		], $rows);
+	}
+
+	public function testHasManySeparateLimitCanProjectNestedExpressionOntoPostRows(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts
+			->select(
+				$users->posts->title,
+				x()->concat($users->posts->title, '!')->as('bang'),
+			)
+			->orderBy($users->posts->title->desc())
+			->limit(1)
+			->separate();
+
+		$rows = $users
+			->select($users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'posts' => [['title' => 'World', 'bang' => 'World!']]],
+			['name' => 'Grace', 'posts' => [['title' => 'Graph', 'bang' => 'Graph!']]],
+			['name' => 'Linus', 'posts' => []],
+		], $rows);
+	}
+
 	public function testJoinedLoadDoesNotReusePublicAliasThatCollidesWithGeneratedLoadKey(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));

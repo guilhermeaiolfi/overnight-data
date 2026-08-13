@@ -1,12 +1,12 @@
 # Proposal 0002: Recursive projection levels
 
-Status: **Proposed** — Phase A + Phase C landed on `feat/recursive-projection-levels`
+Status: **Proposed** — Phase A + Phase B + Phase C landed on `feat/recursive-projection-levels`
 
 Relates to: [`0001-representation-schema-as-reusable-model.md`](./0001-representation-schema-as-reusable-model.md) (should inform / precede 0001).
 
 This document captures the design for unifying root and nested relation projection so every level shares one selection model.
 
-**Landed so far:** `RelationRef::select()` (including string short form `select('id','title')`) over a per-level `SelectionList`, relation selection tree/load branch registration of own-level aliases, recursive schema compile for nested aliases + relative flat `sourcePath`, per-level alias/relation name collisions, nested flat field fetch onto the level payload (JOIN and SEPARATE), and nested INTERNAL identity planning for writable flats (Phase C). JOIN allows same-level field selections (including aliases) and nested flat FieldRefs; non-field expressions still require `separate()`. `RelationRef::fields()` was removed. Deferred: nested expressions (0001).
+**Landed so far:** `RelationRef::select()` (including string short form `select('id','title')`) over a per-level `SelectionList`, relation selection tree/load branch registration of own-level aliases, recursive schema compile for nested aliases + relative flat `sourcePath`, per-level alias/relation name collisions, nested flat field fetch onto the level payload (JOIN and SEPARATE), nested aliased non-field expressions (JOIN and SEPARATE, including windowed HasMany), and nested INTERNAL identity planning for writable flats (Phase C). JOIN allows same-level field selections (including aliases), nested flat FieldRefs, and aliased value expressions. `RelationRef::fields()` was removed.
 
 ## Problem
 
@@ -216,11 +216,13 @@ Until 0001, 0002 may still compile nested field/flat-field schemas fully and eit
 5. Per-level collision checks.
 6. Tests: nested aliases; nested flat grandchild field; schema `sourcePath` relative to nested schema; string-name `select()` short form.
 
-### Phase B — expressions / subqueries at nested levels
+### Phase B — expressions / subqueries at nested levels ✅
 
-1. Allow expression selections in nested lists.
-2. Loader/translator support for nested computed columns.
-3. Align with 0001 expression schema nodes (or land them here).
+1. Allow aliased expression selections in nested lists (JOIN and SEPARATE).
+2. Loader/planner emit rebound computed columns onto the level query (`LoadFieldPlanner` + `LoadAliasAllocator::emitExpression`).
+3. Nested `RepresentationExpressionSchema` nodes compile from the same `expressionsFromSelections()` path as root (0001 expression schema).
+
+Subquery-as-nested-selection is the same emit path as other value expressions; dedicated subquery fixtures can follow.
 
 ### Phase C — writable nested flat projections ✅
 
@@ -230,7 +232,7 @@ Until 0001, 0002 may still compile nested field/flat-field schemas fully and eit
 ### Phase D — JOIN loader parity (nested flats) ✅
 
 1. Nested flat FieldRefs work under JOIN as well as SEPARATE (same `LoadFieldPlanner` path).  
-2. Non-field expressions in nested `select()` still require `separate()` (align with 0001 expression schema when landed).
+2. Nested aliased non-field expressions work under JOIN as well as SEPARATE (same `LoadFieldPlanner` emit path).
 
 ## Compatibility / migration
 

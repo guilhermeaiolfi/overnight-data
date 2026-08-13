@@ -327,6 +327,29 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertSame('users', $postsSchema->getField('authorName')->getCollectionName());
 	}
 
+	public function testCompilesNestedAliasedExpressionsOnRelationLevel(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+
+		$query = query($users, function (SelectQuery $query): void {
+			$query->select($query->id);
+			$query->posts->select(
+				$query->posts->title,
+				x()->concat($query->posts->title, '!')->as('headlineBang'),
+			);
+		});
+
+		$schema = $this->compiler->compile($query);
+		$postsSchema = $schema->getRelation('posts')->getRelatedSchema();
+
+		self::assertTrue($postsSchema->hasField('title'));
+		self::assertTrue($postsSchema->hasExpression('headlineBang'));
+		self::assertFalse($postsSchema->getExpression('headlineBang')->isWritable());
+		self::assertContains('headlineBang', $postsSchema->getPaths());
+		self::assertSame(['title', 'headlineBang'], $postsSchema->getPublicScalarPaths());
+	}
+
 	public function testUnqualifiedRelationLoadKnowledgeIsFull(): void
 	{
 		$registry = $this->makeRegistry();

@@ -6,10 +6,13 @@ namespace ON\Data\Query\Relation;
 
 use LogicException;
 use ON\Data\Query\Exception\LoadRuntimeException;
+use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionTag;
+use ON\Data\Query\SourceMap;
 
 /**
  * For each level COLUMN, choose where it is fetched, select SQL, and bind output name → SQL alias.
@@ -47,7 +50,7 @@ final class LoadFieldPlanner
 		}
 
 		if (! $fieldRef instanceof FieldRef) {
-			$branch->bindPlaceToLoadKey($outputName, $outputName);
+			$this->bindNonFieldColumn($branch, $selection);
 
 			return;
 		}
@@ -71,6 +74,42 @@ final class LoadFieldPlanner
 
 		$sqlOnly = $this->isRequiredOnly($branch, $outputName);
 		$sqlKey = $this->selectField($branch, $fieldRef, $outputName, $this->aliasPath($branch), $sqlOnly);
+		$branch->bindPlaceToLoadKey($outputName, $sqlKey);
+	}
+
+	private function bindNonFieldColumn(LoadBranch $branch, SelectionItem $selection): void
+	{
+		$outputName = $selection->getSelectionKey();
+		$query = $branch->getQuery();
+		$preferred = $this->aliases->aliasForPath($this->aliasPath($branch), $outputName);
+		$existing = $query->getSelections()->findBySelectionKey($preferred);
+
+		if ($existing instanceof SelectionItem && $existing->getFieldRef() === null) {
+			$branch->bindPlaceToLoadKey($outputName, $preferred);
+
+			return;
+		}
+
+		$sqlKey = $this->aliases->ensureFreeAlias($query, $preferred);
+		$expression = $selection->getExpression();
+
+		if ($expression instanceof AliasedExpression) {
+			$expression = $expression->getExpression();
+		}
+
+		if (! $expression instanceof ValueExpressionInterface) {
+			$branch->bindPlaceToLoadKey($outputName, $outputName);
+
+			return;
+		}
+
+		$rebound = $expression->rebind(SourceMap::of($branch->getProjectionLevel(), $branch->getSource()));
+		$this->aliases->emitExpression(
+			$query,
+			$rebound,
+			$sqlKey,
+			$this->isRequiredOnly($branch, $outputName),
+		);
 		$branch->bindPlaceToLoadKey($outputName, $sqlKey);
 	}
 

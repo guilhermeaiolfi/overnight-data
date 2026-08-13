@@ -488,24 +488,38 @@ final class SelectionList implements IteratorAggregate, Countable
 	): array {
 		$inferred = $callerTags;
 
-		// EXPLICIT means user-authored; field-like explicit selections are also COLUMNs.
-		// Visibility defaults to public — INTERNAL opts out (do not infer PUBLIC).
+		// EXPLICIT means user-authored; projected columns (fields and aliased
+		// expressions) are also COLUMNs. Visibility defaults to public —
+		// INTERNAL opts out (do not infer PUBLIC).
 		if (
 			in_array(SelectionTag::EXPLICIT, $inferred, true)
 			&& ! in_array(SelectionTag::SQL_ONLY, $inferred, true)
-			&& $this->isFieldLike($expression)
+			&& $this->isProjectedColumn($expression)
 		) {
 			$inferred[] = SelectionTag::COLUMN;
 		}
 
 		if (
-			$this->isFieldLike($expression)
+			$this->isProjectedColumn($expression)
 			&& ! in_array(SelectionTag::SQL_ONLY, $callerTags, true)
 		) {
 			$inferred[] = SelectionTag::COLUMN;
 		}
 
 		return array_values(array_unique(array_map('trim', $inferred)));
+	}
+
+	private function isProjectedColumn(ValueExpressionInterface|AliasedExpression|StarExpression $expression): bool
+	{
+		if ($expression instanceof StarExpression) {
+			return false;
+		}
+
+		if ($expression instanceof AliasedExpression) {
+			return ! $expression->getExpression() instanceof StarExpression;
+		}
+
+		return $this->isFieldLike($expression);
 	}
 
 	private function isFieldLike(ValueExpressionInterface|AliasedExpression|StarExpression $expression): bool

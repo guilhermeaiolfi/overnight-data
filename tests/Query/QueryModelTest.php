@@ -1352,6 +1352,20 @@ final class QueryModelTest extends TestCase
 		self::assertTrue($selection->hasTag(SelectionTag::EXPLICIT));
 	}
 
+	public function testSelectionListExplicitAliasedExpressionGetsColumnTag(): void
+	{
+		$list = new SelectionList();
+
+		$list->addExplicit([x()->literal(1)->as('one')]);
+
+		$selection = $list->getAll()[0];
+
+		self::assertTrue($selection->isExplicit());
+		self::assertTrue($selection->hasTag(SelectionTag::COLUMN));
+		self::assertTrue($selection->hasTag(SelectionTag::EXPLICIT));
+		self::assertSame('one', $selection->getSelectionKey());
+	}
+
 	public function testSelectionTagExposesExplicitConstant(): void
 	{
 		self::assertTrue(defined(SelectionTag::class . '::EXPLICIT'));
