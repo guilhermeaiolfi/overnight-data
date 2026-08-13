@@ -190,7 +190,7 @@ use ON\Data\Definition\Field\Generator\When;
 
 - `DatabaseGenerator` — database-owned (identity / sequence / DB default). Optional `$arg` is a sequence name (string) or `['sequence' => '...']` used as schema metadata for the column default (and passed through to `lastInsertID($sequence)` on the non-RETURNING path). Executors fill `CommandResult`:
   - drivers whose insert builder implements Cycle `ReturningInterface` (Postgres) recover pending DB-generated insert fields via `RETURNING` (sequence name is not required for that read — the database default / identity produces the value);
-  - otherwise the Cycle adapter recovers a single DB-generated primary key through `lastInsertID($sequence)`. Cycle’s stock `Driver::lastInsertID()` currently ignores the sequence argument and calls PDO without a name; passing the sequence is best-effort for custom/future drivers that honor it. MySQL/SQLite autoincrement typically does not need a sequence name.
+  - otherwise the Cycle adapter recovers a single DB-generated primary key through `lastInsertID($sequence)`. Cycle’s stock `Driver::lastInsertID()` currently ignores the sequence argument and calls PDO without a name; passing the sequence is best-effort for custom/future drivers that honor it. MySQL/SQLite autoincrement typically does not need a sequence name. The non-RETURNING insert runs through Cycle `query()` so the statement can be closed before affected rows are read; on SQLite, `SELECT CHANGES()` is preferred over PDO `rowCount()`, which is often 0 for generated-key inserts.
 - `UuidGenerator` — PHP-owned RFC 4122 UUID v4 string (`xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`). No constructor arg.
 - `NowGenerator` — PHP-owned `DateTimeImmutable('now')`. Optional `$arg` is a timezone name (e.g. `UTC`) or pass `new NowGenerator('UTC')` / `new NowGenerator(new DateTimeZone('UTC'))`.
 - `PhpFieldGeneratorInterface` — PHP-owned; `CommandPlanner` runs `generate()` above adapters before INSERT/UPDATE (`When` bitmask). `$arg` may be a scalar, a list of constructor args, or a single constructor value.
@@ -201,7 +201,7 @@ use ON\Data\Definition\Field\Generator\When;
 
 - one or more fields are `DatabaseGenerator` / `autoIncrement` for INSERT, and the insert command did not supply a non-null value for them;
 - **RETURNING path** (Postgres `InsertQuery`): pending fields are requested in one `RETURNING` clause, values are read from the result statement, and affected rows come from `rowCount()`;
-- **`lastInsertID` path** (SQLite / MySQL): only a single non-composite DB-generated primary key is recovered via `lastInsertID($sequence)` after `execute()`. PDO SQLite often reports INSERT `rowCount()` as 0; the Cycle adapter then reads `SELECT CHANGES()` on that connection.
+- **`lastInsertID` path** (SQLite / MySQL): only a single non-composite DB-generated primary key is recovered via `lastInsertID($sequence)` after the insert statement is closed. PDO SQLite often reports generated-key insert `rowCount()` as 0; the Cycle adapter prefers `SELECT CHANGES()` on that connection (numeric strings and whole floats are accepted).
 
 Numeric integer strings are normalized to `int`. Generated values remain keyed by field name even when the primary-key column name differs.
 

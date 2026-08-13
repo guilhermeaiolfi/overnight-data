@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Database\Cycle;
 
 use Cycle\Database\DatabaseInterface;
+use Cycle\Database\Driver\DriverInterface;
 use Cycle\Database\Query\InsertQuery;
 use Cycle\Database\Query\QueryParameters;
 use Cycle\Database\Query\ReturningInterface;
@@ -62,16 +63,24 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 			return $this->insertWithReturning($insert, $pending);
 		}
 
-		// InsertQuery::run() returns lastInsertID and discards rowCount; execute for affected rows.
+		// InsertQuery::run() returns lastInsertID and discards rowCount. query()+close()
+		// finalizes the write before SQLite CHANGES() is read; PDO rowCount is not portable.
 		$parameters = new QueryParameters();
-		$affected = $this->affectedRows(
-			$this->database->getDriver()->execute(
-				$insert->sqlStatement($parameters),
-				$parameters->getParameters(),
-			),
+		$driver = $this->database->getDriver();
+		$statement = $driver->query(
+			$insert->sqlStatement($parameters),
+			$parameters->getParameters(),
 		);
-		if ($affected === 0) {
-			$affected = $this->sqliteChangesAfterWrite();
+
+		try {
+			$affected = $this->affectedRows($statement->rowCount());
+		} finally {
+			$statement->close();
+		}
+
+		$changes = $this->sqliteChangesAfterWrite($driver);
+		if ($changes > 0) {
+			$affected = $changes;
 		}
 
 		return new CommandResult($affected, $this->generatedValuesViaLastInsertId($command, $pending));
@@ -301,9 +310,8 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 	 * PDO SQLite often reports insert rowCount as 0 even when the row was written.
 	 * `CHANGES()` is the connection-local count of the last write.
 	 */
-	private function sqliteChangesAfterWrite(): int
+	private function sqliteChangesAfterWrite(DriverInterface $driver): int
 	{
-		$driver = $this->database->getDriver();
 		if (strcasecmp($driver->getType(), 'SQLite') !== 0) {
 			return 0;
 		}
@@ -311,15 +319,27 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 		$statement = $driver->query('SELECT CHANGES()');
 
 		try {
-			$raw = $statement->fetchColumn();
-			if (is_string($raw) && preg_match('/^[0-9]+$/', $raw) === 1) {
-				$raw = (int) $raw;
-			}
-
-			return $this->affectedRows($raw);
+			return $this->parseNonNegativeCount($statement->fetchColumn());
 		} finally {
 			$statement->close();
 		}
+	}
+
+	private function parseNonNegativeCount(mixed $raw): int
+	{
+		if (is_int($raw) && $raw >= 0) {
+			return $raw;
+		}
+
+		if (is_float($raw) && $raw >= 0.0 && $raw === floor($raw)) {
+			return (int) $raw;
+		}
+
+		if (is_string($raw) && preg_match('/^[0-9]+(?:\.0+)?$/', $raw) === 1) {
+			return (int) $raw;
+		}
+
+		return 0;
 	}
 
 	private function affectedRows(mixed $result): int
