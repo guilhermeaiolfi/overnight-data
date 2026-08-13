@@ -70,6 +70,9 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 				$parameters->getParameters(),
 			),
 		);
+		if ($affected === 0) {
+			$affected = $this->sqliteChangesAfterWrite();
+		}
 
 		return new CommandResult($affected, $this->generatedValuesViaLastInsertId($command, $pending));
 	}
@@ -292,6 +295,31 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 		}
 
 		return $id;
+	}
+
+	/**
+	 * PDO SQLite often reports insert rowCount as 0 even when the row was written.
+	 * `CHANGES()` is the connection-local count of the last write.
+	 */
+	private function sqliteChangesAfterWrite(): int
+	{
+		$driver = $this->database->getDriver();
+		if (strcasecmp($driver->getType(), 'SQLite') !== 0) {
+			return 0;
+		}
+
+		$statement = $driver->query('SELECT CHANGES()');
+
+		try {
+			$raw = $statement->fetchColumn();
+			if (is_string($raw) && preg_match('/^[0-9]+$/', $raw) === 1) {
+				$raw = (int) $raw;
+			}
+
+			return $this->affectedRows($raw);
+		} finally {
+			$statement->close();
+		}
 	}
 
 	private function affectedRows(mixed $result): int

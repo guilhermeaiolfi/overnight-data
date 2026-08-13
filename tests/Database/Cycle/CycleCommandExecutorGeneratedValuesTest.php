@@ -54,6 +54,44 @@ final class CycleCommandExecutorGeneratedValuesTest extends TestCase
 		self::assertSame(['id' => 42], $result->getGeneratedValues());
 	}
 
+	public function testInsertUsesSqliteChangesWhenExecuteReportsZeroRows(): void
+	{
+		$users = (new Registry())
+			->collection('users')
+			->table('users')
+			->primaryKey('id')
+			->field('id', 'int')->generator(DatabaseGenerator::class)->end()
+			->field('name', 'string')->end();
+
+		$insert = new class ('users') extends InsertQuery {
+			public function sqlStatement(?QueryParameters $parameters = null): string
+			{
+				return 'INSERT INTO users (name) VALUES (?)';
+			}
+		};
+
+		$statement = $this->createMock(StatementInterface::class);
+		$statement->expects(self::once())->method('fetchColumn')->willReturn('1');
+		$statement->expects(self::once())->method('close');
+
+		$driver = $this->createMock(DriverInterface::class);
+		$driver->expects(self::once())->method('getType')->willReturn('SQLite');
+		$driver->expects(self::once())->method('execute')->willReturn(0);
+		$driver->expects(self::once())->method('query')->with('SELECT CHANGES()')->willReturn($statement);
+		$driver->expects(self::once())->method('lastInsertID')->willReturn('3');
+
+		$database = $this->createMock(DatabaseInterface::class);
+		$database->method('insert')->willReturn($insert);
+		$database->method('getDriver')->willReturn($driver);
+
+		$result = (new CycleCommandExecutor($database))->execute(new InsertCommand($users, [
+			'name' => 'Ada',
+		]));
+
+		self::assertSame(1, $result->getAffectedRows());
+		self::assertSame(['id' => 3], $result->getGeneratedValues());
+	}
+
 	public function testInsertUsesReturningForPendingDatabaseGeneratedFields(): void
 	{
 		$users = (new Registry())
