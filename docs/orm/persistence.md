@@ -189,8 +189,8 @@ use ON\Data\Definition\Field\Generator\When;
 ```
 
 - `DatabaseGenerator` — database-owned (identity / sequence / DB default). Optional `$arg` is a sequence name (string) or `['sequence' => '...']` used as schema metadata for the column default (and passed through to `lastInsertID($sequence)` on the non-RETURNING path). Executors fill `CommandResult`:
-  - drivers whose insert builder implements Cycle `ReturningInterface` (Postgres) recover pending DB-generated insert fields via `RETURNING` (sequence name is not required for that read — the database default / identity produces the value);
-  - otherwise the Cycle adapter recovers a single DB-generated primary key through `lastInsertID($sequence)`. Cycle’s stock `Driver::lastInsertID()` currently ignores the sequence argument and calls PDO without a name; passing the sequence is best-effort for custom/future drivers that honor it. MySQL/SQLite autoincrement typically does not need a sequence name. On SQLite, affected rows prefer a numeric `SELECT CHANGES()` row over PDO `rowCount()`; a recovered positive generated key still counts as one row when both report 0.
+  - drivers whose insert builder implements Cycle `ReturningInterface` (Postgres, and SQLite on Cycle Database 2.22+) recover pending DB-generated insert fields via `RETURNING`. Cycle’s statement wrapper forces `FETCH_ASSOC`, so values are read from an assoc row. If PDO reports `rowCount()` 0 but `RETURNING` produced a value, affected rows are treated as 1;
+  - otherwise the Cycle adapter recovers a single DB-generated primary key through `lastInsertID($sequence)`. Cycle’s stock `Driver::lastInsertID()` currently ignores the sequence argument and calls PDO without a name; passing the sequence is best-effort for custom/future drivers that honor it. MySQL autoincrement typically does not need a sequence name.
 - `UuidGenerator` — PHP-owned RFC 4122 UUID v4 string (`xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`). No constructor arg.
 - `NowGenerator` — PHP-owned `DateTimeImmutable('now')`. Optional `$arg` is a timezone name (e.g. `UTC`) or pass `new NowGenerator('UTC')` / `new NowGenerator(new DateTimeZone('UTC'))`.
 - `PhpFieldGeneratorInterface` — PHP-owned; `CommandPlanner` runs `generate()` above adapters before INSERT/UPDATE (`When` bitmask). `$arg` may be a scalar, a list of constructor args, or a single constructor value.
@@ -200,8 +200,8 @@ use ON\Data\Definition\Field\Generator\When;
 `CycleCommandExecutor` recovers generated values when:
 
 - one or more fields are `DatabaseGenerator` / `autoIncrement` for INSERT, and the insert command did not supply a non-null value for them;
-- **RETURNING path** (Postgres `InsertQuery`): pending fields are requested in one `RETURNING` clause, values are read from the result statement, and affected rows come from `rowCount()`;
-- **`lastInsertID` path** (SQLite / MySQL): only a single non-composite DB-generated primary key is recovered via `lastInsertID($sequence)` immediately after `execute()`, before any follow-up query. PDO SQLite often reports generated-key insert `rowCount()` as 0 and can clear `lastInsertID` on the next statement (including `SELECT CHANGES()`). The Cycle adapter then reads `SELECT CHANGES() AS affected` as a numeric row. If that is also 0 but a positive generated key was recovered, affected rows are treated as 1.
+- **RETURNING path** (Postgres, and SQLite on Cycle Database 2.22+): pending fields are requested in one `RETURNING` clause and read from an assoc result row. Affected rows come from `rowCount()` unless that is 0 and a generated value was recovered, in which case the insert counts as 1 row (PDO SQLite `INSERT … RETURNING` often reports `rowCount()` 0);
+- **`lastInsertID` path** (MySQL, and SQLite before Cycle 2.22): only a single non-composite DB-generated primary key is recovered via `lastInsertID($sequence)` after `execute()`.
 
 Numeric integer strings are normalized to `int`. Generated values remain keyed by field name even when the primary-key column name differs.
 
@@ -243,7 +243,7 @@ $generatedId = $record->getValue('id');
 
 `CycleRuntimeFactory` wires `ConvertingCommandExecutor` around `CycleCommandExecutor` automatically.
 
-Generated database values are recovered after insert via `RETURNING` (with real `rowCount()`) when the Cycle insert builder supports it, otherwise via `lastInsertID($sequence)` for a simple DB-generated primary key. PHP field generators are supported for any field through `->generator()`. Relation persistence planning is limited to configured planners that produce scalar mutations and/or commands. Physical table and column mapping happens in `CycleCommandExecutor` using collection and field metadata.
+Generated database values are recovered after insert via `RETURNING` when the Cycle insert builder supports it (including SQLite on Cycle Database 2.22+), otherwise via `lastInsertID($sequence)` for a simple DB-generated primary key. PHP field generators are supported for any field through `->generator()`. Relation persistence planning is limited to configured planners that produce scalar mutations and/or commands. Physical table and column mapping happens in `CycleCommandExecutor` using collection and field metadata.
 
 ## Public Runtime
 

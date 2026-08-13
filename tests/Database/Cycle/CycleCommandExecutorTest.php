@@ -491,8 +491,7 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertStringContainsString('sqlStatement', $source);
 		self::assertStringContainsString('DatabaseInterface::WRITE', $source);
 		self::assertStringContainsString('->execute(', $source);
-		self::assertStringContainsString('SELECT CHANGES()', $source);
-		self::assertStringContainsString('FETCH_NUM', $source);
+		self::assertStringContainsString('FETCH_ASSOC', $source);
 		self::assertStringNotContainsString('SELECT *', $source);
 		self::assertStringNotContainsString('INSERT ', $source);
 		self::assertStringNotContainsString('UPDATE ', $source);

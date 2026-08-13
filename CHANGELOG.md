@@ -7,6 +7,10 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 ## [Unreleased]
 
+### Fixed
+
+- **SQLite generated-key inserts on Cycle Database 2.22+** — Cycle 2.22’s SQLite `InsertQuery` implements `ReturningInterface`, so pending autoincrement inserts use `RETURNING`. PDO SQLite often reports `rowCount()` 0 for that statement. `CycleCommandExecutor` reads `RETURNING` as an assoc row and treats a recovered generated value as one affected row.
+
 ### Changed
 
 - **Adoption entry unification** — `RepresentationAdoptionEngine::isFlatAttachment()` is the single flat-vs-graph rule (`RepresentationIntent::isFlatProjection()` delegates). `Session::identify()` routes through the engine with `AdoptionPolicy::Identify` instead of a hand-rolled `adopt()` path. Writable mutable DTO docs aligned in README.

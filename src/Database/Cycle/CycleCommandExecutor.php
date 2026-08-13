@@ -66,26 +66,16 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 		// InsertQuery::run() returns lastInsertID and discards rowCount; execute for the write.
 		$parameters = new QueryParameters();
 		$driver = $this->database->getDriver(DatabaseInterface::WRITE);
-		$affected = $this->affectedRows(
-			$driver->execute(
-				$insert->sqlStatement($parameters),
-				$parameters->getParameters(),
+
+		return new CommandResult(
+			$this->affectedRows(
+				$driver->execute(
+					$insert->sqlStatement($parameters),
+					$parameters->getParameters(),
+				),
 			),
+			$this->generatedValuesViaLastInsertId($command, $pending, $driver),
 		);
-
-		// Read lastInsertID before any follow-up query. PDO SQLite clears it on the next statement.
-		$generated = $this->generatedValuesViaLastInsertId($command, $pending, $driver);
-
-		$changes = $this->sqliteChangesAfterWrite($driver);
-		if ($changes > 0) {
-			$affected = $changes;
-		}
-
-		if ($affected === 0 && $this->generatedKeyImpliesInsert($generated)) {
-			$affected = 1;
-		}
-
-		return new CommandResult($affected, $generated);
 	}
 
 	/**
@@ -115,16 +105,23 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 			$parameters->getParameters(),
 		);
 
+		$raw = null;
+		$affected = 0;
+
 		try {
-			$raw = count($columns) === 1
-				? $statement->fetchColumn()
-				: $statement->fetch(StatementInterface::FETCH_ASSOC);
+			// Cycle's statement wrapper forces FETCH_ASSOC; fetchColumn() is unreliable.
+			$raw = $statement->fetch(StatementInterface::FETCH_ASSOC);
 			$affected = $this->affectedRows($statement->rowCount());
 		} finally {
 			$statement->close();
 		}
 
-		return new CommandResult($affected, $this->mapReturningResult($raw, $fields, $columnToField));
+		$generated = $this->mapReturningResult($raw, $fields, $columnToField);
+		if ($affected === 0 && $generated !== []) {
+			$affected = 1;
+		}
+
+		return new CommandResult($affected, $generated);
 	}
 
 	/**
@@ -309,66 +306,6 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 		}
 
 		return $id;
-	}
-
-	/**
-	 * PDO SQLite often reports insert rowCount as 0 even when the row was written.
-	 * `CHANGES()` is the connection-local count of the last write.
-	 *
-	 * Cycle's statement wrapper forces FETCH_ASSOC; fetchColumn() is unreliable on
-	 * that mode, so read a numeric row instead.
-	 */
-	private function sqliteChangesAfterWrite(DriverInterface $driver): int
-	{
-		if (stripos($driver->getType(), 'sqlite') === false) {
-			return 0;
-		}
-
-		$statement = $driver->query('SELECT CHANGES() AS affected');
-
-		try {
-			$row = $statement->fetch(StatementInterface::FETCH_NUM);
-			$raw = is_array($row) && array_key_exists(0, $row) ? $row[0] : null;
-
-			return $this->parseNonNegativeCount($raw);
-		} finally {
-			$statement->close();
-		}
-	}
-
-	/**
-	 * @param array<string, mixed> $generated
-	 */
-	private function generatedKeyImpliesInsert(array $generated): bool
-	{
-		foreach ($generated as $value) {
-			if (is_int($value) && $value > 0) {
-				return true;
-			}
-
-			if (is_string($value) && $value !== '' && $value !== '0') {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	private function parseNonNegativeCount(mixed $raw): int
-	{
-		if (is_int($raw) && $raw >= 0) {
-			return $raw;
-		}
-
-		if (is_float($raw) && $raw >= 0.0 && $raw === floor($raw)) {
-			return (int) $raw;
-		}
-
-		if (is_string($raw) && preg_match('/^[0-9]+(?:\.0+)?$/', $raw) === 1) {
-			return (int) $raw;
-		}
-
-		return 0;
 	}
 
 	private function affectedRows(mixed $result): int

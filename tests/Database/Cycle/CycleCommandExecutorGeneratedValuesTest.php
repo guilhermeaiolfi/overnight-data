@@ -36,7 +36,6 @@ final class CycleCommandExecutorGeneratedValuesTest extends TestCase
 		};
 
 		$driver = $this->createMock(DriverInterface::class);
-		$driver->method('getType')->willReturn('Postgres');
 		$driver->expects(self::once())->method('execute')->willReturn(1);
 		$driver->expects(self::never())->method('query');
 		$driver->expects(self::once())
@@ -54,139 +53,6 @@ final class CycleCommandExecutorGeneratedValuesTest extends TestCase
 
 		self::assertSame(1, $result->getAffectedRows());
 		self::assertSame(['id' => 42], $result->getGeneratedValues());
-	}
-
-	public function testInsertPrefersSqliteChangesNumericRowOverZeroRowCount(): void
-	{
-		$users = (new Registry())
-			->collection('users')
-			->table('users')
-			->primaryKey('id')
-			->field('id', 'int')->generator(DatabaseGenerator::class)->end()
-			->field('name', 'string')->end();
-
-		$insert = new class ('users') extends InsertQuery {
-			public function sqlStatement(?QueryParameters $parameters = null): string
-			{
-				return 'INSERT INTO users (name) VALUES (?)';
-			}
-		};
-
-		$changesStatement = $this->createMock(StatementInterface::class);
-		$changesStatement->expects(self::once())
-			->method('fetch')
-			->with(StatementInterface::FETCH_NUM)
-			->willReturn([1.0]);
-		$changesStatement->expects(self::once())->method('close');
-
-		$driver = $this->createMock(DriverInterface::class);
-		$driver->expects(self::once())->method('getType')->willReturn('SQLite');
-		$driver->expects(self::once())->method('execute')->willReturn(0);
-		$driver->expects(self::once())
-			->method('query')
-			->with('SELECT CHANGES() AS affected')
-			->willReturn($changesStatement);
-		$driver->expects(self::once())->method('lastInsertID')->willReturn('3');
-
-		$database = $this->createMock(DatabaseInterface::class);
-		$database->method('insert')->willReturn($insert);
-		$database->method('getDriver')->willReturn($driver);
-
-		$result = (new CycleCommandExecutor($database))->execute(new InsertCommand($users, [
-			'name' => 'Ada',
-		]));
-
-		self::assertSame(1, $result->getAffectedRows());
-		self::assertSame(['id' => 3], $result->getGeneratedValues());
-	}
-
-	public function testInsertAcceptsNumericStringSqliteChanges(): void
-	{
-		$users = (new Registry())
-			->collection('users')
-			->table('users')
-			->primaryKey('id')
-			->field('id', 'int')->generator(DatabaseGenerator::class)->end()
-			->field('name', 'string')->end();
-
-		$insert = new class ('users') extends InsertQuery {
-			public function sqlStatement(?QueryParameters $parameters = null): string
-			{
-				return 'INSERT INTO users (name) VALUES (?)';
-			}
-		};
-
-		$changesStatement = $this->createMock(StatementInterface::class);
-		$changesStatement->expects(self::once())
-			->method('fetch')
-			->with(StatementInterface::FETCH_NUM)
-			->willReturn(['1.0']);
-		$changesStatement->method('close');
-
-		$driver = $this->createMock(DriverInterface::class);
-		$driver->method('getType')->willReturn('SQLite');
-		$driver->method('execute')->willReturn(0);
-		$driver->method('query')->willReturn($changesStatement);
-		$driver->method('lastInsertID')->willReturn('3');
-
-		$database = $this->createMock(DatabaseInterface::class);
-		$database->method('insert')->willReturn($insert);
-		$database->method('getDriver')->willReturn($driver);
-
-		$result = (new CycleCommandExecutor($database))->execute(new InsertCommand($users, [
-			'name' => 'Ada',
-		]));
-
-		self::assertSame(1, $result->getAffectedRows());
-	}
-
-	public function testInsertTreatsRecoveredSqliteAutoIncrementKeyAsOneAffectedRow(): void
-	{
-		$users = (new Registry())
-			->collection('users')
-			->table('users')
-			->primaryKey('id')
-			->field('id', 'int')->generator(DatabaseGenerator::class)->end()
-			->field('name', 'string')->end();
-
-		$insert = new class ('users') extends InsertQuery {
-			public function sqlStatement(?QueryParameters $parameters = null): string
-			{
-				return 'INSERT INTO users (name) VALUES (?)';
-			}
-		};
-
-		$changesStatement = $this->createMock(StatementInterface::class);
-		$changesStatement->method('fetch')->willReturn(false);
-		$changesStatement->method('close');
-
-		$calls = [];
-
-		$driver = $this->createMock(DriverInterface::class);
-		$driver->method('getType')->willReturn('SQLite');
-		$driver->method('execute')->willReturn(0);
-		$driver->method('lastInsertID')->willReturnCallback(static function () use (&$calls): string {
-			$calls[] = 'lastInsertID';
-
-			return '3';
-		});
-		$driver->method('query')->willReturnCallback(static function () use (&$calls, $changesStatement): StatementInterface {
-			$calls[] = 'query';
-
-			return $changesStatement;
-		});
-
-		$database = $this->createMock(DatabaseInterface::class);
-		$database->method('insert')->willReturn($insert);
-		$database->method('getDriver')->willReturn($driver);
-
-		$result = (new CycleCommandExecutor($database))->execute(new InsertCommand($users, [
-			'name' => 'Ada',
-		]));
-
-		self::assertSame(['lastInsertID', 'query'], $calls);
-		self::assertSame(1, $result->getAffectedRows());
-		self::assertSame(['id' => 3], $result->getGeneratedValues());
 	}
 
 	public function testInsertUsesReturningForPendingDatabaseGeneratedFields(): void
@@ -251,7 +117,7 @@ final class CycleCommandExecutorGeneratedValuesTest extends TestCase
 		], $result->getGeneratedValues());
 	}
 
-	public function testInsertReturningSingleColumnUsesFetchColumnAndRowCount(): void
+	public function testInsertReturningSingleColumnUsesAssocRowAndRowCount(): void
 	{
 		$users = (new Registry())
 			->collection('users')
@@ -273,7 +139,11 @@ final class CycleCommandExecutorGeneratedValuesTest extends TestCase
 		};
 
 		$statement = $this->createMock(StatementInterface::class);
-		$statement->expects(self::once())->method('fetchColumn')->willReturn('15');
+		$statement->expects(self::once())
+			->method('fetch')
+			->with(StatementInterface::FETCH_ASSOC)
+			->willReturn(['user_id' => '15']);
+		$statement->expects(self::never())->method('fetchColumn');
 		$statement->expects(self::once())->method('rowCount')->willReturn(1);
 		$statement->expects(self::once())->method('close');
 
@@ -292,7 +162,7 @@ final class CycleCommandExecutorGeneratedValuesTest extends TestCase
 		self::assertSame(['id' => 15], $result->getGeneratedValues());
 	}
 
-	public function testInsertReturningReportsDriverRowCount(): void
+	public function testInsertReturningTreatsRecoveredRowAsOneAffectedWhenDriverReportsZero(): void
 	{
 		$users = (new Registry())
 			->collection('users')
@@ -314,7 +184,7 @@ final class CycleCommandExecutorGeneratedValuesTest extends TestCase
 		};
 
 		$statement = $this->createMock(StatementInterface::class);
-		$statement->method('fetchColumn')->willReturn('1');
+		$statement->method('fetch')->willReturn(['id' => '1']);
 		$statement->method('rowCount')->willReturn(0);
 		$statement->method('close');
 
@@ -329,7 +199,7 @@ final class CycleCommandExecutorGeneratedValuesTest extends TestCase
 			'name' => 'Ada',
 		]));
 
-		self::assertSame(0, $result->getAffectedRows());
+		self::assertSame(1, $result->getAffectedRows());
 		self::assertSame(['id' => 1], $result->getGeneratedValues());
 	}
 }
