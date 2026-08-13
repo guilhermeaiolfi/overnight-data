@@ -660,7 +660,7 @@ final class CycleQueryTranslator
 			));
 		}
 
-		return SqlFragment::raw($this->quoteQualified(
+		return SqlFragment::raw($this->quoteColumnReference(
 			$context->aliasFor($source),
 			$field->getName(),
 		));
@@ -990,6 +990,21 @@ final class CycleQueryTranslator
 	private function quoteQualified(string ...$identifiers): string
 	{
 		return implode('.', array_map($this->quote(...), $identifiers));
+	}
+
+	/**
+	 * Table + column, keeping dotted result aliases as one identifier.
+	 *
+	 * Cycle's quoteIdentifier splits on `.` (`"author.name"` → `"author"."name"`),
+	 * which breaks derived-table references to JOIN aliases such as `author.name`.
+	 */
+	private function quoteColumnReference(string $table, string $column): string
+	{
+		$quotedColumn = str_contains($column, '.')
+			? $this->quoteResultAlias($column)
+			: $this->quote($column);
+
+		return $this->quote($table) . '.' . $quotedColumn;
 	}
 
 	private function quoteResultAlias(string $alias): string

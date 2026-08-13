@@ -418,6 +418,30 @@ final class CycleQueryExecutionTest extends TestCase
 		self::assertStringNotContainsString('"ranked_posts.__rank"', $sql);
 	}
 
+	public function testDerivedQueryQuotesDottedResultAliasesAsOneIdentifier(): void
+	{
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+		$inner = $posts->select($posts->title->as('author.name'));
+		$wrapped = $inner->as('wrapped');
+		$query = $this->database->query($wrapped)
+			->select($wrapped->field('author.name'))
+			->orderBy($wrapped->field('author.name')->asc());
+
+		$sql = $this->compileSql($query);
+
+		self::assertStringContainsString('AS "author.name"', $sql);
+		self::assertStringContainsString('"wrapped"."author.name"', $sql);
+		self::assertStringNotContainsString('"wrapped"."author"."name"', $sql);
+
+		$rows = $query->fetchAll();
+
+		self::assertSame([
+			['author.name' => 'Graph'],
+			['author.name' => 'Hello'],
+			['author.name' => 'World'],
+		], $rows);
+	}
+
 	public function testNestedDerivedUsesCanonicalOutputColumnNames(): void
 	{
 		$posts = $this->database->query($this->registry->getCollection('posts'));

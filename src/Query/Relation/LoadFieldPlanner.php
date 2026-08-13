@@ -164,15 +164,16 @@ final class LoadFieldPlanner
 	}
 
 	/**
-	 * Path fed to {@see LoadAliasAllocator::aliasForPath()}. Empty on owned
-	 * SELECT and on SEPARATE queries (output name; collisions get a suffix).
-	 * JOIN on the original root uses the destination path (`posts.title`).
+	 * Path fed to {@see LoadAliasAllocator::aliasForPath()}. Empty on the
+	 * query that owns the SELECT (output name). JOIN children on that query
+	 * use the destination path (`posts.title` on root, `author.name` on a
+	 * SEPARATE posts query).
 	 *
 	 * @return list<string>
 	 */
 	private function aliasPath(LoadBranch $branch): array
 	{
-		return $this->usesDottedAliases($branch) ? $this->destinationPath($branch) : [];
+		return $this->destinationPath($branch);
 	}
 
 	/**
@@ -203,22 +204,6 @@ final class LoadFieldPlanner
 		}
 
 		return $segments;
-	}
-
-	/**
-	 * Dotted column aliases belong on the original root query, where JOIN
-	 * columns share a row with parent fields. SEPARATE queries (and their
-	 * windowed derived wrappers) use output names; collisions get a suffix.
-	 */
-	private function usesDottedAliases(LoadBranch $branch): bool
-	{
-		$owner = $branch;
-
-		while ($owner instanceof RelationLoadBranch && $owner->getSource() !== $owner->getQuery()) {
-			$owner = $owner->getParent();
-		}
-
-		return ! $owner instanceof RelationLoadBranch;
 	}
 
 	private function isRequiredOnly(LoadBranch $branch, string $outputName): bool

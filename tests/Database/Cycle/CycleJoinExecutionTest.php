@@ -799,6 +799,39 @@ final class CycleJoinExecutionTest extends TestCase
 		self::assertStringNotContainsString('"__ondata_limited_has_many"."user_id"', $sql);
 	}
 
+	public function testHasManySeparateLimitJoinsNestedAuthorWithQuotedDottedAliases(): void
+	{
+		$executor = $this->executorFromDatabase($this->database);
+		$recording = new RecordingQueryExecutor(
+			$executor,
+			fn (SelectQuery $query): string => $this->compileSqlWithExecutor($executor, $query),
+		);
+		$database = $this->runtimeForExecutor($recording);
+		$users = $database->query($this->registry->getCollection('users'));
+		$users->posts
+			->select('title')
+			->orderBy($users->posts->title->desc())
+			->limit(1)
+			->separate();
+		$users->posts->author->select('name');
+
+		$rows = $users
+			->select($users->name)
+			->orderBy($users->id->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'posts' => [['title' => 'World', 'author' => ['name' => 'Ada']]]],
+			['name' => 'Grace', 'posts' => [['title' => 'Graph', 'author' => ['name' => 'Grace']]]],
+			['name' => 'Linus', 'posts' => []],
+		], $rows);
+
+		$sql = $recording->derivedSql()[0] ?? '';
+
+		self::assertStringContainsString('"__ondata_limited_has_many"."author.name" AS "author.name"', $sql);
+		self::assertStringNotContainsString('"__ondata_limited_has_many"."author"."name"', $sql);
+	}
+
 	public function testHasManyLimitSupportsCompositeRelationKeysAndCompositeTargetPrimaryKeyTieBreakers(): void
 	{
 		$employees = $this->database->query($this->registry->getCollection('employees'));
@@ -1460,8 +1493,8 @@ final class CycleJoinExecutionTest extends TestCase
 		self::assertStringContainsString('JOIN "users" AS', $sql);
 		self::assertStringContainsString('ROW_NUMBER() OVER', $sql);
 		self::assertStringContainsString('WHERE "__ondata_first_of_many"."__ondata_rank" = ?', $sql);
-		self::assertStringContainsString('"j0"."id" AS "id_2"', $sql);
-		self::assertStringContainsString('"__ondata_first_of_many"."id_2" AS "id_2"', $sql);
+		self::assertStringContainsString('"j0"."id" AS "author.id"', $sql);
+		self::assertStringContainsString('"__ondata_first_of_many"."author.id" AS "author.id"', $sql);
 		self::assertStringNotContainsString('"__ondata_first_of_many"."author_id"', $sql);
 	}
 
