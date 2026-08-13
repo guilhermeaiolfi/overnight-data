@@ -202,6 +202,63 @@ final class RepresentationSchema
 	}
 
 	/**
+	 * Fields matching a predicate, in insertion order.
+	 *
+	 * @param callable(RepresentationFieldSchema): bool $predicate
+	 * @return list<RepresentationFieldSchema>
+	 */
+	public function filterFields(callable $predicate): array
+	{
+		$fields = [];
+
+		foreach ($this->fields as $field) {
+			if (! $predicate($field)) {
+				continue;
+			}
+
+			$fields[] = $field;
+		}
+
+		return $fields;
+	}
+
+	/**
+	 * @return list<RepresentationFieldSchema>
+	 */
+	public function getFieldsByRole(RepresentationFieldRole $role): array
+	{
+		return $this->filterFields(
+			static fn (RepresentationFieldSchema $field): bool => $field->getRole() === $role,
+		);
+	}
+
+	/**
+	 * @return list<RepresentationFieldSchema>
+	 */
+	public function getPublicFields(): array
+	{
+		return $this->getFieldsByRole(RepresentationFieldRole::Public);
+	}
+
+	/**
+	 * @return list<RepresentationFieldSchema>
+	 */
+	public function getImplicitFields(): array
+	{
+		return $this->getFieldsByRole(RepresentationFieldRole::Implicit);
+	}
+
+	/**
+	 * Ordered field paths with this role (expressions and relations omitted).
+	 *
+	 * @return list<string>
+	 */
+	public function getFieldPathsByRole(RepresentationFieldRole $role): array
+	{
+		return $this->fieldPaths($this->getFieldsByRole($role));
+	}
+
+	/**
 	 * Public place keys for flat related fields at this level (`sourcePath !== []`).
 	 * Implicit paths and own-level fields are omitted.
 	 *
@@ -209,17 +266,9 @@ final class RepresentationSchema
 	 */
 	public function getFlatFieldPaths(): array
 	{
-		$keys = [];
-
-		foreach ($this->fields as $field) {
-			if ($field->getSourcePath() === [] || ! $field->isPublicPlace()) {
-				continue;
-			}
-
-			$keys[] = $field->getPath();
-		}
-
-		return $keys;
+		return $this->fieldPaths($this->filterFields(
+			static fn (RepresentationFieldSchema $field): bool => $field->isPublicPlace() && $field->getSourcePath() !== [],
+		));
 	}
 
 	/**
@@ -243,16 +292,14 @@ final class RepresentationSchema
 	 */
 	public function getPublicScalarPaths(): array
 	{
+		$publicFieldPaths = [];
+		foreach ($this->getPublicFields() as $field) {
+			$publicFieldPaths[$field->getPath()] = true;
+		}
+
 		$keys = [];
-
 		foreach ($this->paths as $path) {
-			if ($this->hasExpression($path)) {
-				$keys[] = $path;
-
-				continue;
-			}
-
-			if ($this->hasField($path) && $this->getField($path)->isPublicPlace()) {
+			if ($this->hasExpression($path) || isset($publicFieldPaths[$path])) {
 				$keys[] = $path;
 			}
 		}
@@ -267,15 +314,7 @@ final class RepresentationSchema
 	 */
 	public function getImplicitScalarPaths(): array
 	{
-		$keys = [];
-
-		foreach ($this->paths as $path) {
-			if ($this->hasField($path) && $this->getField($path)->isImplicit()) {
-				$keys[] = $path;
-			}
-		}
-
-		return $keys;
+		return $this->getFieldPathsByRole(RepresentationFieldRole::Implicit);
 	}
 
 	/**
@@ -283,10 +322,9 @@ final class RepresentationSchema
 	 */
 	public function getWritableFieldSchemas(): array
 	{
-		return array_values(array_filter(
-			$this->fields,
-			static fn (RepresentationFieldSchema $fieldSchema): bool => $fieldSchema->isWritable()
-		));
+		return $this->filterFields(
+			static fn (RepresentationFieldSchema $fieldSchema): bool => $fieldSchema->isWritable(),
+		);
 	}
 
 	/**
@@ -294,10 +332,9 @@ final class RepresentationSchema
 	 */
 	public function getReadOnlyFieldSchemas(): array
 	{
-		return array_values(array_filter(
-			$this->fields,
-			static fn (RepresentationFieldSchema $fieldSchema): bool => $fieldSchema->isReadOnly()
-		));
+		return $this->filterFields(
+			static fn (RepresentationFieldSchema $fieldSchema): bool => $fieldSchema->isReadOnly(),
+		);
 	}
 
 	/**
@@ -441,5 +478,19 @@ final class RepresentationSchema
 	private function invalidateSources(): void
 	{
 		$this->sourcesCache = null;
+	}
+
+	/**
+	 * @param list<RepresentationFieldSchema> $fields
+	 * @return list<string>
+	 */
+	private function fieldPaths(array $fields): array
+	{
+		$paths = [];
+		foreach ($fields as $field) {
+			$paths[] = $field->getPath();
+		}
+
+		return $paths;
 	}
 }

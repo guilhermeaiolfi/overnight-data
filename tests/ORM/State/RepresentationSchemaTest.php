@@ -7,6 +7,7 @@ namespace Tests\ON\Data\ORM\State;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Representation\Schema\RepresentationExpressionSchema;
+use ON\Data\ORM\Representation\Schema\RepresentationFieldRole;
 use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\Schema\RepresentationSchema;
@@ -95,6 +96,15 @@ final class RepresentationSchemaTest extends TestCase
 			true,
 			false,
 			['author'],
+		));
+		$postsSchema->addField(new RepresentationFieldSchema(
+			'authorId',
+			$users,
+			'id',
+			true,
+			false,
+			['author'],
+			RepresentationFieldRole::Implicit,
 		));
 		$root->addRelation(new RepresentationRelationSchema(
 			'posts',
@@ -216,6 +226,36 @@ final class RepresentationSchemaTest extends TestCase
 		self::assertSame([$name, $email], $schema->getFields());
 	}
 
+	public function testFieldRoleFiltersSplitPublicAndImplicitWithoutHandFiltering(): void
+	{
+		$schema = new RepresentationSchema($this->users());
+		$name = $this->fieldSchema('name');
+		$id = $this->fieldSchema('id', role: RepresentationFieldRole::Implicit);
+		$email = $this->fieldSchema('email');
+		$schema->addField($name);
+		$schema->addField($id);
+		$schema->addField($email);
+		$schema->addRelation($this->relationSchema('posts'));
+		$schema->addExpression(new RepresentationExpressionSchema(
+			'lineTotal',
+			x()->literal(1),
+		));
+
+		self::assertSame([$name, $id, $email], $schema->getFields());
+		self::assertSame([$name, $email], $schema->getPublicFields());
+		self::assertSame([$id], $schema->getImplicitFields());
+		self::assertSame([$name, $email], $schema->getFieldsByRole(RepresentationFieldRole::Public));
+		self::assertSame(['name', 'email'], $schema->getFieldPathsByRole(RepresentationFieldRole::Public));
+		self::assertSame(['id'], $schema->getFieldPathsByRole(RepresentationFieldRole::Implicit));
+		self::assertSame(['name', 'email', 'lineTotal'], $schema->getPublicScalarPaths());
+		self::assertSame(['id'], $schema->getImplicitScalarPaths());
+		self::assertSame(
+			[$email],
+			$schema->filterFields(static fn (RepresentationFieldSchema $field): bool => $field->getPath() === 'email'),
+		);
+		self::assertSame(['name', 'id', 'email', 'posts', 'lineTotal'], $schema->getPaths());
+	}
+
 	public function testFlatHeterogeneousFieldsCanTargetCollectionsOtherThanRoot(): void
 	{
 		$users = $this->users();
@@ -266,9 +306,12 @@ final class RepresentationSchemaTest extends TestCase
 		self::assertSame('manager.profile', RepresentationFieldSchema::sourcePathKey(['manager', 'profile']));
 	}
 
-	private function fieldSchema(string $path, bool $writable = true): RepresentationFieldSchema
-	{
-		return new RepresentationFieldSchema($path, $this->users(), $path, $writable);
+	private function fieldSchema(
+		string $path,
+		bool $writable = true,
+		RepresentationFieldRole $role = RepresentationFieldRole::Public,
+	): RepresentationFieldSchema {
+		return new RepresentationFieldSchema($path, $this->users(), $path, $writable, role: $role);
 	}
 
 	private function relationSchema(string $path): RepresentationRelationSchema

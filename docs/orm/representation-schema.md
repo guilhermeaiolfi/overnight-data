@@ -65,14 +65,19 @@ Keep `getPaths()` as the **full ordered universe** (collision + inspection of ev
 
 Prefer **filter helpers** (SelectionList-style), not overloading `getPaths()`:
 
-| Helper (today / next) | Meaning |
+| Helper | Meaning |
 |---|---|
 | `getPaths()` | All paths (fields + relations + expressions), ordered |
-| `getPublicScalarPaths()` | Public fields + expressions (assemble place) |
+| `getPublicScalarPaths()` | Public fields + expressions (assemble place), path order |
+| `getImplicitScalarPaths()` | Implicit field paths (PK backfill), field order |
 | `getFields()` / `getRelations()` / `getExpressions()` | By kind |
-| Future | e.g. fields by `RepresentationFieldRole`, or a small filter API — same idea as `getByTag` |
+| `getPublicFields()` / `getImplicitFields()` / `getFieldsByRole()` | Fields by `RepresentationFieldRole` |
+| `getFieldPathsByRole()` | Field paths by role (no expressions / relations) |
+| `filterFields($predicate)` | Custom field subset (`getByTag`-style) |
+| `getWritableFieldSchemas()` / `getReadOnlyFieldSchemas()` | By writability |
+| `getFlatFieldPaths()` | Public fields with non-empty `sourcePath` |
 
-Do **not** make `getPaths()` mean “public only”; that loses the Implicit/collision universe.
+Do **not** make `getPaths()` mean “public only”; that loses the Implicit/collision universe. Call sites should use the helpers above instead of looping `getFields()` / `getPaths()` and checking `isPublicPlace()` / `isImplicit()`.
 
 ---
 
@@ -209,7 +214,6 @@ See [`session-save-api.md`](./session-save-api.md) and [`writable-select-query-p
 
 ## Open / next (not blocking this spec)
 
-- Richer path filters (by role / kind) if call sites need them  
 - `query($schema)` reopen (0001 remainder); nested expression load limits  
 
 ---
