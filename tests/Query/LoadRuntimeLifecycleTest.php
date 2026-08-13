@@ -112,7 +112,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$users->posts->author->separate();
 		$this->prepareRuntime($users);
 
-		$columns = LifecycleEvents::$registerColumns['posts'];
+		$columns = array_keys(LifecycleEvents::$registerColumns['posts']);
 		sort($columns);
 
 		self::assertSame(['authorId', 'id', 'userId'], $columns);
@@ -216,7 +216,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$rootNode = $rootBranch->getNode();
 		$columns = $this->readProperty($rootNode, 'columns');
 
-		self::assertContains('name', $columns);
+		self::assertArrayHasKey('name', $columns);
 		self::assertContains('name', LifecycleEvents::$plannedRootColumns);
 	}
 
@@ -316,7 +316,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$rootBranch = $this->readProperty($runtime, 'rootBranch');
 		$columns = $this->readProperty($rootBranch->getNode(), 'columns');
 
-		self::assertContains('secret', $columns);
+		self::assertArrayHasKey('secret', $columns);
 		self::assertSame([[
 			'id' => 1,
 			'name' => 'Ada',
@@ -335,7 +335,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$selections = $this->readProperty($rootBranch, 'selections');
 		$titleSelection = $selections->getByTag(SelectionTag::EXPLICIT)[0];
 
-		self::assertSame(['name', 'id'], $columns);
+		self::assertSame(['name' => 'title', 'id' => 'id'], $columns);
 		self::assertSame(['title'], LifecycleEvents::$plannedRootColumns);
 		self::assertTrue($titleSelection->hasTag(SelectionTag::EXPLICIT));
 		self::assertTrue($titleSelection->hasTag(SelectionTag::REQUIRED));
@@ -1065,7 +1065,7 @@ abstract class LifecycleTestLoader extends AbstractLoader
 		$relation = $branch->getRelationRef();
 		$definition = $relation->getDefinition();
 		$node = new CollectionNode(
-			$branch->columns(),
+			$branch->getRemapColumns(),
 			$relation->getCollection()->getPrimaryKey(),
 			$definition->getOuterKeys(),
 			$definition->getInnerKeys(),
@@ -1074,7 +1074,7 @@ abstract class LifecycleTestLoader extends AbstractLoader
 		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
 		LifecycleEvents::$returnedNodes[] = $node;
-		LifecycleEvents::$registerColumns[$relation->getName()] = $branch->columns();
+		LifecycleEvents::$registerColumns[$relation->getName()] = $branch->getRemapColumns();
 
 		return $node;
 	}
@@ -1174,9 +1174,9 @@ class NestedPostsLoader extends AbstractLoader
 		$relation = $branch->getRelationRef();
 		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
-		LifecycleEvents::$registerColumns['posts'] = $branch->columns();
+		LifecycleEvents::$registerColumns['posts'] = $branch->getRemapColumns();
 
-		return new CollectionNode($branch->columns(), ['id'], ['userId'], ['id']);
+		return new CollectionNode($branch->getRemapColumns(), ['id'], ['userId'], ['id']);
 	}
 
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
@@ -1208,9 +1208,9 @@ final class NestedAuthorLoader extends AbstractLoader
 		$relation = $branch->getRelationRef();
 		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
-		LifecycleEvents::$registerColumns['author'] = $branch->columns();
+		LifecycleEvents::$registerColumns['author'] = $branch->getRemapColumns();
 
-		return new SingularNode($branch->columns(), ['id'], ['id'], ['authorId']);
+		return new SingularNode($branch->getRemapColumns(), ['id'], ['id'], ['authorId']);
 	}
 
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
@@ -1227,7 +1227,7 @@ final class RootFieldRequirementLoader extends LifecycleTestLoader
 {
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		LifecycleEvents::$plannedRootColumns = $runtime->requireFields($branch->getParent(), ['name']);
+		LifecycleEvents::$plannedRootColumns = $branch->getParent()->requireFields(['name']);
 		$this->prepareSeparateQuery($branch, $runtime);
 	}
 }
@@ -1236,7 +1236,7 @@ final class HiddenRootFieldRequirementLoader extends LifecycleTestLoader
 {
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		LifecycleEvents::$plannedRootColumns = $runtime->requireFields($branch->getParent(), ['secret']);
+		LifecycleEvents::$plannedRootColumns = $branch->getParent()->requireFields(['secret']);
 		$this->prepareSeparateQuery($branch, $runtime);
 	}
 }
@@ -1253,7 +1253,7 @@ final class JoinedProfileLoader extends AbstractLoader
 		$relation = $branch->getRelationRef();
 		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
 
-		return new SingularNode($branch->columns(), ['id'], ['userId'], ['id']);
+		return new SingularNode($branch->getRemapColumns(), ['id'], ['userId'], ['id']);
 	}
 
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void

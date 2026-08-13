@@ -15,7 +15,7 @@ namespace ON\Data\Query\Result\Parser;
 final class RootNode extends OutputNode
 {
 	/**
-	 * @param list<string> $columns
+	 * @param array<string, string>|list<string> $columns
 	 * @param list<string> $identityFields
 	 */
 	public function __construct(array $columns, array $identityFields)

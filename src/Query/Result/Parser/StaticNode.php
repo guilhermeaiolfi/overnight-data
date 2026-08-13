@@ -15,7 +15,7 @@ namespace ON\Data\Query\Result\Parser;
 final class StaticNode extends OutputNode
 {
 	/**
-	 * @param list<string> $columns
+	 * @param array<string, string>|list<string> $columns
 	 * @param list<string> $identityFields
 	 */
 	public function __construct(array $columns, array $identityFields)
@@ -25,7 +25,7 @@ final class StaticNode extends OutputNode
 		$this->setIdentityFields($this->validateFieldList($identityFields, 'Identity fields'));
 	}
 
-	public function parseRow(int $offset, array $row): int
+	public function parseRow(array $row): void
 	{
 		throw new ParserException('StaticNode does not support parseRow(); provide already loaded records through push().');
 	}

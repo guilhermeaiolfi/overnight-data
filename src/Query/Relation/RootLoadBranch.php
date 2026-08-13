@@ -69,8 +69,7 @@ final class RootLoadBranch extends LoadBranch
 	public function createNode(): RootNode
 	{
 		$identities = $this->getCollection()->getPrimaryKey();
-		$node = new RootNode($this->columns(), $identities);
-		$this->applyRowAliases($node);
+		$node = new RootNode($this->getRemapColumns(), $identities);
 		$this->setNode($node);
 
 		return $node;
@@ -93,10 +92,9 @@ final class RootLoadBranch extends LoadBranch
 	public function parseRows(array $rows): void
 	{
 		$node = $this->getRootNode();
-		$aliases = $node->getValueAliasTraversal();
 
 		foreach ($rows as $row) {
-			$node->parseRow(0, $this->orderedValues($row, $aliases));
+			$node->parseRow($row);
 		}
 	}
 

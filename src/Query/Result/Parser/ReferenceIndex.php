@@ -49,14 +49,6 @@ final class ReferenceIndex
 	}
 
 	/**
-	 * @return non-empty-list<string>
-	 */
-	public function getFields(): array
-	{
-		return $this->fields;
-	}
-
-	/**
 	 * @param array<string, mixed> $record
 	 */
 	public function add(array &$record): void

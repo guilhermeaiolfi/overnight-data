@@ -25,8 +25,6 @@ abstract class LoadBranch
 
 	private ?RelationRef $queryLocalRelation = null;
 
-	private ?AbstractNode $publicNode = null;
-
 	private ?string $publicPayloadChild = null;
 
 	/**
@@ -63,15 +61,15 @@ abstract class LoadBranch
 	}
 
 	/**
-	 * Local parser bag keys: own-level collection field names, plus output names
-	 * for local flats and non-field internals. Child-bag flats are omitted.
+	 * Local parser remap: bag name => SQL/result key. Own-level collection
+	 * fields use the field name as the bag key; local flats and non-field
+	 * internals use the output name. Child-bag flats are omitted.
 	 *
-	 * @return list<string>
+	 * @return array<string, string>
 	 */
-	public function columns(): array
+	public function getRemapColumns(): array
 	{
-		$names = [];
-		$seen = [];
+		$map = [];
 
 		foreach ($this->getSelections()->getByTag(SelectionTag::COLUMN) as $selection) {
 			if ($this->childPathForPlace($selection->getSelectionKey()) !== null) {
@@ -80,32 +78,17 @@ abstract class LoadBranch
 
 			$name = $this->parserColumnName($selection);
 
-			if (isset($seen[$name])) {
+			if (isset($map[$name])) {
 				continue;
 			}
 
-			$seen[$name] = true;
-			$names[] = $name;
+			$map[$name] = $this->sqlAliasForColumn($name);
 		}
 
-		return $names;
+		return $map;
 	}
 
-	/**
-	 * SQL aliases for {@see AbstractNode::setValueAliases()}, in node column order.
-	 */
-	public function applyRowAliases(AbstractNode $node): void
-	{
-		$aliases = [];
-
-		foreach ($node->getColumns() as $column) {
-			$aliases[] = $this->sqlAliasForColumn($column);
-		}
-
-		$node->setValueAliases($aliases);
-	}
-
-	public function sqlAliasForColumn(string $column): string
+	private function sqlAliasForColumn(string $column): string
 	{
 		$own = $this->findOwnFieldSelection($column);
 
@@ -192,16 +175,6 @@ abstract class LoadBranch
 		return $this->requireFields($this->getCollection()->getPrimaryKey());
 	}
 
-	public function setPublicNode(AbstractNode $node): void
-	{
-		$this->publicNode = $node;
-	}
-
-	public function getPublicNode(): AbstractNode
-	{
-		return $this->publicNode ?? $this->getNode();
-	}
-
 	public function setPublicPayloadChild(?string $container): void
 	{
 		$this->publicPayloadChild = $container;
@@ -223,11 +196,6 @@ abstract class LoadBranch
 		$this->query = $query;
 		$this->source = $source;
 		$this->queryLocalRelation = $queryLocalRelation;
-	}
-
-	public function hasQueryContext(): bool
-	{
-		return $this->query !== null;
 	}
 
 	public function getQuery(): SelectQuery
@@ -256,22 +224,6 @@ abstract class LoadBranch
 	protected function addChild(RelationLoadBranch $child): void
 	{
 		$this->children[] = $child;
-	}
-
-	/**
-	 * @param array<string, mixed> $row
-	 * @param list<string> $aliases
-	 * @return list<mixed>
-	 */
-	final public static function orderedValues(array $row, array $aliases): array
-	{
-		$ordered = [];
-
-		foreach ($aliases as $alias) {
-			$ordered[] = $row[$alias] ?? null;
-		}
-
-		return $ordered;
 	}
 
 	protected function findOwnFieldSelection(string $fieldName): ?SelectionItem

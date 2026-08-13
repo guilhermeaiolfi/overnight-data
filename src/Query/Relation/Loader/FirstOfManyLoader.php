@@ -38,7 +38,7 @@ final class FirstOfManyLoader extends AbstractLoader
 		$pairing = $relationRef->getDefinition()->getKeyPairing();
 
 		return new SingularNode(
-			$branch->columns(),
+			$branch->getRemapColumns(),
 			$relationRef->getCollection()->getPrimaryKey(),
 			$pairing->getRightFields(),
 			$pairing->getLeftFields(),

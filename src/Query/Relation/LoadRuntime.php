@@ -163,10 +163,7 @@ final class LoadRuntime
 		$rows = $this->executor->fetchAll($query);
 
 		foreach ($rows as $row) {
-			$branch->getNode()->parseRow(
-				0,
-				LoadBranch::orderedValues($row, $branch->getNode()->getValueAliasTraversal()),
-			);
+			$branch->getNode()->parseRow($row);
 		}
 
 		$continuationQuery = $branch->getQuery();
@@ -178,17 +175,6 @@ final class LoadRuntime
 	{
 		return $branch->getSelection()->getStrategy()
 			?? $branch->getLoader()->getDefaultLoadStrategy();
-	}
-
-	/**
-	 * Mark required field names on the branch. SQL is emitted later by {@see planScalars()}.
-	 *
-	 * @param list<string> $fieldNames
-	 * @return list<string> output names
-	 */
-	public function requireFields(LoadBranch $branch, array $fieldNames): array
-	{
-		return $branch->requireFields($fieldNames);
 	}
 
 	private function prepare(): void

@@ -22,7 +22,7 @@ abstract class AbstractMergeNode extends AbstractNode
 	protected array $results = [];
 
 	/**
-	 * @param list<string> $columns
+	 * @param array<string, string>|list<string> $columns
 	 * @param list<string> $identityFields
 	 * @param non-empty-list<string> $childFields
 	 * @param non-empty-list<string> $parentFields

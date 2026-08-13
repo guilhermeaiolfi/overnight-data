@@ -14,16 +14,16 @@ final class IdentityEncodingTest extends TestCase
 		$node = new RootNode(['id', 'label'], ['id']);
 
 		foreach ([
-			[1, 'int'],
-			['1', 'canonical-integer-string'], // same key as int 1
-			[1.0, 'float'],
-			[true, 'bool-true'],
-			[false, 'bool-false'],
-			[0, 'int-zero'],
-			['', 'empty-string'],
-			['01', 'leading-zero-string'],
+			['id' => 1, 'label' => 'int'],
+			['id' => '1', 'label' => 'canonical-integer-string'], // same key as int 1
+			['id' => 1.0, 'label' => 'float'],
+			['id' => true, 'label' => 'bool-true'],
+			['id' => false, 'label' => 'bool-false'],
+			['id' => 0, 'label' => 'int-zero'],
+			['id' => '', 'label' => 'empty-string'],
+			['id' => '01', 'label' => 'leading-zero-string'],
 		] as $row) {
-			$node->parseRow(0, $row);
+			$node->parseRow($row);
 		}
 
 		$result = $node->getResult();
@@ -36,8 +36,8 @@ final class IdentityEncodingTest extends TestCase
 	{
 		$node = new RootNode(['id', 'label'], ['id']);
 
-		$node->parseRow(0, [5, 'from-int']);
-		$node->parseRow(0, ['5', 'from-string']);
+		$node->parseRow(['id' => 5, 'label' => 'from-int']);
+		$node->parseRow(['id' => '5', 'label' => 'from-string']);
 
 		self::assertSame([['id' => 5, 'label' => 'from-int']], $node->getResult());
 	}
@@ -46,8 +46,12 @@ final class IdentityEncodingTest extends TestCase
 	{
 		$node = new RootNode(['id', 'label'], ['id']);
 
-		foreach ([["a\0b", 'binary'], ['1:2|3', 'separator'], ['1:2', 'plain']] as $row) {
-			$node->parseRow(0, $row);
+		foreach ([
+			['id' => "a\0b", 'label' => 'binary'],
+			['id' => '1:2|3', 'label' => 'separator'],
+			['id' => '1:2', 'label' => 'plain'],
+		] as $row) {
+			$node->parseRow($row);
 		}
 
 		self::assertCount(3, $node->getResult());
@@ -57,8 +61,11 @@ final class IdentityEncodingTest extends TestCase
 	{
 		$node = new RootNode(['tenant_id', 'id', 'label'], ['tenant_id', 'id']);
 
-		foreach ([[1, 23, 'first'], [12, 3, 'second']] as $row) {
-			$node->parseRow(0, $row);
+		foreach ([
+			['tenant_id' => 1, 'id' => 23, 'label' => 'first'],
+			['tenant_id' => 12, 'id' => 3, 'label' => 'second'],
+		] as $row) {
+			$node->parseRow($row);
 		}
 
 		self::assertCount(2, $node->getResult());
@@ -68,8 +75,8 @@ final class IdentityEncodingTest extends TestCase
 	{
 		$node = new RootNode(['id', 'label'], ['id']);
 
-		$node->parseRow(0, [null, 'missing']);
-		$node->parseRow(0, [1, 'present']);
+		$node->parseRow(['id' => null, 'label' => 'missing']);
+		$node->parseRow(['id' => 1, 'label' => 'present']);
 
 		self::assertSame([['id' => 1, 'label' => 'present']], $node->getResult());
 	}

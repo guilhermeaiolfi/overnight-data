@@ -79,9 +79,7 @@ final class RelationOutputProcessor
 	{
 		$bag = [];
 
-		foreach ($branch->columns() as $column) {
-			$sql = $branch->sqlAliasForColumn($column);
-
+		foreach ($branch->getRemapColumns() as $column => $sql) {
 			if (array_key_exists($sql, $row)) {
 				$bag[$column] = $row[$sql];
 			}

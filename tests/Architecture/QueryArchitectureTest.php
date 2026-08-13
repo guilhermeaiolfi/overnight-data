@@ -445,7 +445,7 @@ final class QueryArchitectureTest extends TestCase
 		] as $path) {
 			$contents = (string) file_get_contents($path);
 
-			self::assertStringContainsString('columns()', $contents, $path);
+			self::assertStringContainsString('getRemapColumns()', $contents, $path);
 			self::assertStringNotContainsString('sqlAliases(', $contents, $path);
 			self::assertStringNotContainsString('getExpression()->getField()->getName()', $contents, $path);
 		}

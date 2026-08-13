@@ -33,7 +33,7 @@ final class HasManyLoader extends AbstractLoader
 		$pairing = $relationRef->getDefinition()->getKeyPairing();
 
 		return new CollectionNode(
-			$branch->columns(),
+			$branch->getRemapColumns(),
 			$relationRef->getCollection()->getPrimaryKey(),
 			$pairing->getRightFields(),
 			$pairing->getLeftFields(),

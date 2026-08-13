@@ -16,8 +16,11 @@ final class NodeTest extends TestCase
 	{
 		$node = new RootNode(['id', 'email'], ['id']);
 
-		foreach ([[1, 'email@gmail.com'], [2, 'other@gmail.com']] as $row) {
-			$node->parseRow(0, $row);
+		foreach ([
+			['id' => 1, 'email' => 'email@gmail.com'],
+			['id' => 2, 'email' => 'other@gmail.com'],
+		] as $row) {
+			$node->parseRow($row);
 		}
 
 		self::assertSame([
@@ -30,8 +33,13 @@ final class NodeTest extends TestCase
 	{
 		$node = new RootNode(['id', 'email'], ['id']);
 
-		foreach ([[1, 'email@gmail.com'], [2, 'other@gmail.com'], [1, 'other@gmail.com'], [2, 'other@gmail.com']] as $row) {
-			$node->parseRow(0, $row);
+		foreach ([
+			['id' => 1, 'email' => 'email@gmail.com'],
+			['id' => 2, 'email' => 'other@gmail.com'],
+			['id' => 1, 'email' => 'other@gmail.com'],
+			['id' => 2, 'email' => 'other@gmail.com'],
+		] as $row) {
+			$node->parseRow($row);
 		}
 
 		self::assertSame([
@@ -43,10 +51,14 @@ final class NodeTest extends TestCase
 	public function testJoinedSingular(): void
 	{
 		$node = new RootNode(['id', 'email'], ['id']);
-		$node->joinNode('balance', $this->createSingularNode());
+		$node->joinNode('balance', $this->createJoinedBalanceNode());
 
-		foreach ([[1, 'email@gmail.com', 1, 1, 100], [2, 'other@gmail.com', 2, 2, 200], [3, 'third@gmail.com', null, null, null]] as $row) {
-			$node->parseRow(0, $row);
+		foreach ([
+			['id' => 1, 'email' => 'email@gmail.com', 'balance.id' => 1, 'balance.user_id' => 1, 'balance.balance' => 100],
+			['id' => 2, 'email' => 'other@gmail.com', 'balance.id' => 2, 'balance.user_id' => 2, 'balance.balance' => 200],
+			['id' => 3, 'email' => 'third@gmail.com', 'balance.id' => null, 'balance.user_id' => null, 'balance.balance' => null],
+		] as $row) {
+			$node->parseRow($row);
 		}
 
 		self::assertSame([
@@ -61,8 +73,12 @@ final class NodeTest extends TestCase
 		$node = new RootNode(['id', 'email'], ['id']);
 		$node->linkNode('balance', $child = $this->createSingularNode());
 
-		foreach ([[1, 'email@gmail.com'], [2, 'other@gmail.com'], [3, 'third@gmail.com']] as $row) {
-			$node->parseRow(0, $row);
+		foreach ([
+			['id' => 1, 'email' => 'email@gmail.com'],
+			['id' => 2, 'email' => 'other@gmail.com'],
+			['id' => 3, 'email' => 'third@gmail.com'],
+		] as $row) {
+			$node->parseRow($row);
 		}
 
 		self::assertSame([['id' => 1], ['id' => 2], ['id' => 3]], $child->getReferenceValues());
@@ -80,12 +96,19 @@ final class NodeTest extends TestCase
 		$node = new RootNode(['id', 'email'], ['id']);
 		$node->linkNode('balance', $child = $this->createSingularNode());
 
-		foreach ([[1, 'email@gmail.com'], [2, 'other@gmail.com'], [3, 'third@gmail.com']] as $row) {
-			$node->parseRow(0, $row);
+		foreach ([
+			['id' => 1, 'email' => 'email@gmail.com'],
+			['id' => 2, 'email' => 'other@gmail.com'],
+			['id' => 3, 'email' => 'third@gmail.com'],
+		] as $row) {
+			$node->parseRow($row);
 		}
 
-		foreach ([[1, 1, 100], [2, 2, 200]] as $row) {
-			$child->parseRow(0, $row);
+		foreach ([
+			['id' => 1, 'user_id' => 1, 'balance' => 100],
+			['id' => 2, 'user_id' => 2, 'balance' => 200],
+		] as $row) {
+			$child->parseRow($row);
 		}
 
 		self::assertSame([
@@ -100,12 +123,19 @@ final class NodeTest extends TestCase
 		$node = new RootNode(['id', 'email'], ['id']);
 		$node->linkNode('balance', $child = $this->createSingularNode());
 
-		foreach ([[1, 'email@gmail.com'], [2, 'other@gmail.com'], [3, 'third@gmail.com']] as $row) {
-			$node->parseRow(0, $row);
+		foreach ([
+			['id' => 1, 'email' => 'email@gmail.com'],
+			['id' => 2, 'email' => 'other@gmail.com'],
+			['id' => 3, 'email' => 'third@gmail.com'],
+		] as $row) {
+			$node->parseRow($row);
 		}
 
-		foreach ([[1, 1, 100], [2, -1, 200]] as $row) {
-			$child->parseRow(0, $row);
+		foreach ([
+			['id' => 1, 'user_id' => 1, 'balance' => 100],
+			['id' => 2, 'user_id' => -1, 'balance' => 200],
+		] as $row) {
+			$child->parseRow($row);
 		}
 
 		self::assertSame([
@@ -115,22 +145,22 @@ final class NodeTest extends TestCase
 		], $node->getResult());
 	}
 
-	public function testInvalidColumnCount(): void
+	public function testMissingJoinedChildKeysAreTreatedAsNull(): void
 	{
-		$this->expectException(ParserException::class);
-
 		$node = new RootNode(['id', 'email'], ['id']);
-		$node->joinNode('balance', $this->createSingularNode());
+		$node->joinNode('balance', $this->createJoinedBalanceNode());
 
-		foreach ([[1, 'email@gmail.com', 1, 1, 100], [2, 'other@gmail.com', 2, 2], [3, 'third@gmail.com', null, null, null]] as $row) {
-			$node->parseRow(0, $row);
-		}
+		$node->parseRow(['id' => 1, 'email' => 'email@gmail.com']);
+
+		self::assertSame([
+			['id' => 1, 'email' => 'email@gmail.com', 'balance' => null],
+		], $node->getResult());
 	}
 
 	public function testGetNode(): void
 	{
 		$node = new RootNode(['id', 'email'], ['id']);
-		$node->joinNode('balance', $this->createSingularNode());
+		$node->joinNode('balance', $this->createJoinedBalanceNode());
 
 		self::assertInstanceOf(SingularNode::class, $node->getNode('balance'));
 	}
@@ -146,16 +176,27 @@ final class NodeTest extends TestCase
 	{
 		$this->expectException(ParserException::class);
 
-		$this->createSingularNode()->parseRow(0, [1, 10, 10]);
+		$this->createSingularNode()->parseRow(['id' => 1, 'user_id' => 10, 'balance' => 10]);
 	}
 
 	public function testJoinedCollection(): void
 	{
 		$node = new RootNode(['id', 'email'], ['id']);
-		$node->joinNode('lines', new CollectionNode(['id', 'user_id', 'value'], ['id'], ['user_id'], ['id']));
+		$node->joinNode('lines', new CollectionNode(
+			['id' => 'lines.id', 'user_id' => 'lines.user_id', 'value' => 'lines.value'],
+			['id'],
+			['user_id'],
+			['id'],
+		));
 
-		foreach ([[1, 'email@gmail.com', 1, 1, 100], [2, 'other@gmail.com', 2, 2, 200], [2, 'other@gmail.com', 3, 2, 300], [3, 'third@gmail.com', null, null, null], [3, 'third@gmail.com', null, null, null]] as $row) {
-			$node->parseRow(0, $row);
+		foreach ([
+			['id' => 1, 'email' => 'email@gmail.com', 'lines.id' => 1, 'lines.user_id' => 1, 'lines.value' => 100],
+			['id' => 2, 'email' => 'other@gmail.com', 'lines.id' => 2, 'lines.user_id' => 2, 'lines.value' => 200],
+			['id' => 2, 'email' => 'other@gmail.com', 'lines.id' => 3, 'lines.user_id' => 2, 'lines.value' => 300],
+			['id' => 3, 'email' => 'third@gmail.com', 'lines.id' => null, 'lines.user_id' => null, 'lines.value' => null],
+			['id' => 3, 'email' => 'third@gmail.com', 'lines.id' => null, 'lines.user_id' => null, 'lines.value' => null],
+		] as $row) {
+			$node->parseRow($row);
 		}
 
 		self::assertSame([
@@ -170,12 +211,19 @@ final class NodeTest extends TestCase
 		$node = new RootNode(['id', 'email'], ['id']);
 		$node->linkNode('balance', $child = new CollectionNode(['id', 'user_id', 'balance'], ['id'], ['user_id'], ['id']));
 
-		foreach ([[1, 'email@gmail.com'], [2, 'other@gmail.com'], [3, 'third@gmail.com']] as $row) {
-			$node->parseRow(0, $row);
+		foreach ([
+			['id' => 1, 'email' => 'email@gmail.com'],
+			['id' => 2, 'email' => 'other@gmail.com'],
+			['id' => 3, 'email' => 'third@gmail.com'],
+		] as $row) {
+			$node->parseRow($row);
 		}
 
-		foreach ([[1, 1, 100], [2, -1, 200]] as $row) {
-			$child->parseRow(0, $row);
+		foreach ([
+			['id' => 1, 'user_id' => 1, 'balance' => 100],
+			['id' => 2, 'user_id' => -1, 'balance' => 200],
+		] as $row) {
+			$child->parseRow($row);
 		}
 
 		self::assertSame([
@@ -189,11 +237,25 @@ final class NodeTest extends TestCase
 	{
 		$this->expectException(ParserException::class);
 
-		(new CollectionNode(['id', 'user_id', 'balance'], ['id'], ['user_id'], ['id']))->parseRow(0, [1, 10, 10]);
+		(new CollectionNode(['id', 'user_id', 'balance'], ['id'], ['user_id'], ['id']))->parseRow([
+			'id' => 1,
+			'user_id' => 10,
+			'balance' => 10,
+		]);
 	}
 
 	private function createSingularNode(): SingularNode
 	{
 		return new SingularNode(['id', 'user_id', 'balance'], ['id'], ['user_id'], ['id']);
+	}
+
+	private function createJoinedBalanceNode(): SingularNode
+	{
+		return new SingularNode(
+			['id' => 'balance.id', 'user_id' => 'balance.user_id', 'balance' => 'balance.balance'],
+			['id'],
+			['user_id'],
+			['id'],
+		);
 	}
 }

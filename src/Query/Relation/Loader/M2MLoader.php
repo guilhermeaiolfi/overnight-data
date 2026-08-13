@@ -47,29 +47,27 @@ final class M2MLoader extends AbstractLoader
 		$throughAliasesByField = $this->allocateThroughAliases($branch, $runtime, $throughFieldNames);
 
 		$targetNode = new SingularNode(
-			$branch->columns(),
+			$branch->getRemapColumns(),
 			$relation->getCollection()->getPrimaryKey(),
 			$throughToTarget->getRightFields(),
 			$throughOuterKeys,
 		);
-		$branch->setPublicNode($targetNode);
 		$branch->setPublicPayloadChild(self::THROUGH_CONTAINER);
 
+		$throughRemap = [];
+
+		foreach ($throughFieldNames as $fieldName) {
+			$throughRemap[$fieldName] = $throughAliasesByField[$fieldName];
+		}
+
 		$throughNode = new M2MThroughNode(
-			$throughFieldNames,
+			$throughRemap,
 			$throughFieldNames,
 			$throughInnerKeys,
 			$parentToThrough->getLeftFields(),
 			self::THROUGH_CONTAINER,
 			$targetNode,
 		);
-		$throughAliases = [];
-
-		foreach ($throughFieldNames as $fieldName) {
-			$throughAliases[] = $throughAliasesByField[$fieldName];
-		}
-
-		$throughNode->setValueAliases($throughAliases);
 
 		return $throughNode;
 	}

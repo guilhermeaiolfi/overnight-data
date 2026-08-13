@@ -58,8 +58,8 @@ final class IndexValueEncoderTest extends TestCase
 		);
 		$root->linkNode('cover', $cover);
 
-		$root->parseRow(0, [7, 'Hello']);
-		$cover->parseRow(0, [100, '7', 0]);
+		$root->parseRow(['id' => 7, 'title' => 'Hello']);
+		$cover->parseRow(['id' => 100, 'news_id' => '7', 'sequence' => 0]);
 
 		$result = $root->getResult();
 

@@ -14,17 +14,54 @@ final class NestedNodeTest extends TestCase
 	public function testJoinedCollectionUnderJoinedCollectionFoldsCartesianRows(): void
 	{
 		$root = new RootNode(['id', 'name'], ['id']);
-		$posts = new CollectionNode(['id', 'user_id', 'title'], ['id'], ['user_id'], ['id']);
-		$tags = new CollectionNode(['id', 'post_id', 'label'], ['id'], ['post_id'], ['id']);
+		$posts = new CollectionNode(
+			['id' => 'posts.id', 'user_id' => 'posts.user_id', 'title' => 'posts.title'],
+			['id'],
+			['user_id'],
+			['id'],
+		);
+		$tags = new CollectionNode(
+			['id' => 'tags.id', 'post_id' => 'tags.post_id', 'label' => 'tags.label'],
+			['id'],
+			['post_id'],
+			['id'],
+		);
 		$posts->joinNode('tags', $tags);
 		$root->joinNode('posts', $posts);
 
 		foreach ([
-			[1, 'Ada', 10, 1, 'First post', 100, 10, 'php'],
-			[1, 'Ada', 10, 1, 'First post', 101, 10, 'orm'],
-			[1, 'Ada', 11, 1, 'Second post', 102, 11, 'parser'],
+			[
+				'id' => 1,
+				'name' => 'Ada',
+				'posts.id' => 10,
+				'posts.user_id' => 1,
+				'posts.title' => 'First post',
+				'tags.id' => 100,
+				'tags.post_id' => 10,
+				'tags.label' => 'php',
+			],
+			[
+				'id' => 1,
+				'name' => 'Ada',
+				'posts.id' => 10,
+				'posts.user_id' => 1,
+				'posts.title' => 'First post',
+				'tags.id' => 101,
+				'tags.post_id' => 10,
+				'tags.label' => 'orm',
+			],
+			[
+				'id' => 1,
+				'name' => 'Ada',
+				'posts.id' => 11,
+				'posts.user_id' => 1,
+				'posts.title' => 'Second post',
+				'tags.id' => 102,
+				'tags.post_id' => 11,
+				'tags.label' => 'parser',
+			],
 		] as $row) {
-			$root->parseRow(0, $row);
+			$root->parseRow($row);
 		}
 
 		self::assertSame([
@@ -64,12 +101,18 @@ final class NestedNodeTest extends TestCase
 			['tenant_id', 'id'],
 		));
 
-		foreach ([[10, 1, 'Ada'], [10, 2, 'Linus']] as $row) {
-			$root->parseRow(0, $row);
+		foreach ([
+			['tenant_id' => 10, 'id' => 1, 'name' => 'Ada'],
+			['tenant_id' => 10, 'id' => 2, 'name' => 'Linus'],
+		] as $row) {
+			$root->parseRow($row);
 		}
 
-		foreach ([[100, 10, 1, 'First'], [101, 10, 2, 'Second']] as $row) {
-			$posts->parseRow(0, $row);
+		foreach ([
+			['id' => 100, 'tenant_id' => 10, 'user_id' => 1, 'title' => 'First'],
+			['id' => 101, 'tenant_id' => 10, 'user_id' => 2, 'title' => 'Second'],
+		] as $row) {
+			$posts->parseRow($row);
 		}
 
 		self::assertSame([
@@ -81,18 +124,34 @@ final class NestedNodeTest extends TestCase
 	public function testLinkedChildUnderJoinedCollectionSupportsJoinedGrandchildren(): void
 	{
 		$root = new RootNode(['id', 'name'], ['id']);
-		$posts = new CollectionNode(['id', 'user_id', 'title'], ['id'], ['user_id'], ['id']);
+		$posts = new CollectionNode(
+			['id' => 'posts.id', 'user_id' => 'posts.user_id', 'title' => 'posts.title'],
+			['id'],
+			['user_id'],
+			['id'],
+		);
 		$comments = new CollectionNode(['id', 'post_id', 'body'], ['id'], ['post_id'], ['id']);
-		$comments->joinNode('author', new SingularNode(['id', 'comment_id', 'name'], ['id'], ['comment_id'], ['id']));
+		$comments->joinNode('author', new SingularNode(
+			['id' => 'author.id', 'comment_id' => 'author.comment_id', 'name' => 'author.name'],
+			['id'],
+			['comment_id'],
+			['id'],
+		));
 		$posts->linkNode('comments', $comments);
 		$root->joinNode('posts', $posts);
 
-		foreach ([[1, 'Ada', 10, 1, 'First'], [1, 'Ada', 11, 1, 'Second']] as $row) {
-			$root->parseRow(0, $row);
+		foreach ([
+			['id' => 1, 'name' => 'Ada', 'posts.id' => 10, 'posts.user_id' => 1, 'posts.title' => 'First'],
+			['id' => 1, 'name' => 'Ada', 'posts.id' => 11, 'posts.user_id' => 1, 'posts.title' => 'Second'],
+		] as $row) {
+			$root->parseRow($row);
 		}
 
-		foreach ([[100, 10, 'Great', 1, 100, 'Grace'], [101, 10, 'Nice', 2, 101, 'Linus']] as $row) {
-			$comments->parseRow(0, $row);
+		foreach ([
+			['id' => 100, 'post_id' => 10, 'body' => 'Great', 'author.id' => 1, 'author.comment_id' => 100, 'author.name' => 'Grace'],
+			['id' => 101, 'post_id' => 10, 'body' => 'Nice', 'author.id' => 2, 'author.comment_id' => 101, 'author.name' => 'Linus'],
+		] as $row) {
+			$comments->parseRow($row);
 		}
 
 		self::assertSame('Grace', $root->getResult()[0]['posts'][0]['comments'][0]['author']['name']);

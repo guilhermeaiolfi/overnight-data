@@ -78,7 +78,6 @@ abstract class AbstractLoader implements LoaderInterface
 
 		$node = $this->initNode($branch, $runtime);
 		$attachmentNode = $node->getRelationAttachmentNode();
-		$branch->applyRowAliases($attachmentNode);
 
 		foreach ($branch->getChildren() as $child) {
 			if (! $child->hasNode()) {

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\Query\Result\Parser;
 
 use ON\Data\Query\Result\Parser\Traits\DuplicateTrait;
-use Throwable;
 
 /**
  * Adapted from Cycle ORM parser code.
@@ -52,27 +51,30 @@ abstract class AbstractNode
 	protected array $referenceIndexes = [];
 
 	/**
-	 * @var list<string>
+	 * Bag name => SQL/result key. A list constructor argument is stored as an identity map.
+	 *
+	 * @var array<string, string>
 	 */
-	private array $valueAliases = [];
+	protected array $columns;
 
 	/**
-	 * @param list<string> $columns
+	 * @param array<string, string>|list<string> $columns bag name => SQL key; a list is an identity map
 	 * @param list<string>|null $parentFields
 	 */
 	public function __construct(
-		protected array $columns,
+		array $columns,
 		?array $parentFields = null,
 	) {
 		$this->columns = $this->validateColumns($columns);
 		$this->parentFields = $this->validateFieldList($parentFields ?? [], 'Parent reference fields');
-		$this->valueAliases = $this->columns;
 	}
 
-	public function parseRow(int $offset, array $row): int
+	/**
+	 * @param array<string, mixed> $row
+	 */
+	public function parseRow(array $row): void
 	{
-		$data = $this->fetchData($offset, $row);
-		$innerOffset = 0;
+		$data = $this->fetchData($row);
 		$relatedNodes = array_merge(
 			$this->mergeParent === null ? [] : [$this->mergeParent],
 			$this->nodes,
@@ -80,14 +82,7 @@ abstract class AbstractNode
 		);
 
 		if ($this->hasNullIdentityValue($data)) {
-			return count($this->columns)
-				+ array_reduce(
-					$relatedNodes,
-					static fn (int $count, AbstractNode $node): int => $node->isCollectionLike()
-						? 0
-						: $count + count($node->columns),
-					0,
-				);
+			return;
 		}
 
 		if ($this->deduplicate($data)) {
@@ -109,12 +104,8 @@ abstract class AbstractNode
 				continue;
 			}
 
-			$innerColumns = $node->parseRow(count($this->columns) + $offset, $row);
-			$offset += $innerColumns;
-			$innerOffset += $innerColumns;
+			$node->parseRow($row);
 		}
-
-		return count($this->columns) + $innerOffset;
 	}
 
 	/**
@@ -175,61 +166,6 @@ abstract class AbstractNode
 		return false;
 	}
 
-	/**
-	 * Bind the SQL/result key order for reading a flat row into {@see $columns}.
-	 * Does not change bag keys (collection field names).
-	 *
-	 * @param list<string> $aliases
-	 */
-	public function setValueAliases(array $aliases): void
-	{
-		if (count($aliases) !== count($this->columns)) {
-			throw new ParserException(sprintf(
-				'Value alias count (%d) must match configured column count (%d).',
-				count($aliases),
-				count($this->columns),
-			));
-		}
-
-		foreach ($aliases as $alias) {
-			if (! is_string($alias) || $alias === '') {
-				throw new ParserException('Value aliases must be non-empty strings.');
-			}
-		}
-
-		$this->valueAliases = array_values($aliases);
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	public function getColumns(): array
-	{
-		return $this->columns;
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	public function getValueAliasTraversal(): array
-	{
-		$aliases = $this->valueAliases;
-
-		foreach (array_merge(
-			$this->mergeParent === null ? [] : [$this->mergeParent],
-			$this->nodes,
-			$this->mergeSubclass,
-		) as $node) {
-			if (! $node->joined) {
-				continue;
-			}
-
-			array_push($aliases, ...$node->getValueAliasTraversal());
-		}
-
-		return $aliases;
-	}
-
 	public function mergeInheritanceNodes(bool $includeDiscriminator = false): void
 	{
 		$this->mergeParent?->mergeInheritanceNodes();
@@ -247,7 +183,6 @@ abstract class AbstractNode
 		$this->mergeSubclass = [];
 		$this->referenceIndexes = [];
 		$this->duplicates = [];
-		$this->valueAliases = [];
 	}
 
 	/**
@@ -329,64 +264,52 @@ abstract class AbstractNode
 	abstract protected function push(array &$data): void;
 
 	/**
+	 * @param array<string, mixed> $row
 	 * @return array<string, mixed>
 	 */
-	protected function fetchData(int $dataOffset, array $row): array
+	protected function fetchData(array $row): array
 	{
-		try {
-			$data = array_combine(
-				$this->columns,
-				array_slice($row, $dataOffset, count($this->columns)),
-			);
-		} catch (Throwable $exception) {
-			throw new ParserException('Unable to parse the incoming row: ' . $exception->getMessage(), (int) $exception->getCode(), $exception);
-		}
+		$data = [];
 
-		if ($data === false) {
-			throw new ParserException('Unable to parse the incoming row because the configured column count does not match the incoming values.');
+		foreach ($this->columns as $bagName => $sqlKey) {
+			$data[$bagName] = $row[$sqlKey] ?? null;
 		}
 
 		return $data;
 	}
 
 	/**
-	 * @param list<string> $keys
-	 * @param array<string, mixed> $data
-	 * @return array<string, mixed>
-	 */
-	protected function intersectData(array $keys, array $data): array
-	{
-		$result = [];
-
-		foreach ($keys as $key) {
-			if (! array_key_exists($key, $data)) {
-				throw new ParserException(sprintf('Configured field `%s` is missing from the parsed record.', $key));
-			}
-
-			$result[$key] = $data[$key];
-		}
-
-		return $result;
-	}
-
-	/**
-	 * @param list<string> $columns
-	 * @return list<string>
+	 * @param array<string, string>|list<string> $columns
+	 * @return array<string, string>
 	 */
 	protected function validateColumns(array $columns): array
 	{
-		$validated = [];
+		if ($columns !== [] && array_is_list($columns)) {
+			$identity = [];
 
-		foreach ($columns as $column) {
-			if (! is_string($column) || $column === '') {
-				throw new ParserException('Configured columns must be non-empty strings.');
+			foreach ($columns as $column) {
+				if (! is_string($column) || $column === '') {
+					throw new ParserException('Configured columns must be non-empty strings.');
+				}
+
+				if (isset($identity[$column])) {
+					throw new ParserException('Duplicate column names are not allowed within one parser node.');
+				}
+
+				$identity[$column] = $column;
 			}
 
-			$validated[] = $column;
+			return $identity;
 		}
 
-		if (count(array_unique($validated)) !== count($validated)) {
-			throw new ParserException('Duplicate column names are not allowed within one parser node.');
+		$validated = [];
+
+		foreach ($columns as $bagName => $sqlKey) {
+			if (! is_string($bagName) || $bagName === '' || ! is_string($sqlKey) || $sqlKey === '') {
+				throw new ParserException('Column remap keys and values must be non-empty strings.');
+			}
+
+			$validated[$bagName] = $sqlKey;
 		}
 
 		return $validated;
@@ -417,11 +340,12 @@ abstract class AbstractNode
 
 	/**
 	 * @param list<string> $fields
+	 * @param array<string, string> $columns
 	 */
 	protected function assertFieldsExist(array $fields, array $columns, string $label): void
 	{
 		foreach ($fields as $field) {
-			if (! in_array($field, $columns, true)) {
+			if (! array_key_exists($field, $columns)) {
 				throw new ParserException(sprintf('%s `%s` does not exist in the configured columns.', $label, $field));
 			}
 		}

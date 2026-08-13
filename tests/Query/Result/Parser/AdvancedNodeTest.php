@@ -22,7 +22,7 @@ final class AdvancedNodeTest extends TestCase
 		$root = new RootNode(['id', 'name'], ['id']);
 		$root->joinNode('profile', new EmbeddedNode(['bio'], ['id']));
 
-		$root->parseRow(0, [1, 'Ada', 'Writes parsers']);
+		$root->parseRow(['id' => 1, 'name' => 'Ada', 'bio' => 'Writes parsers']);
 
 		self::assertSame('Writes parsers', $root->getResult()[0]['profile']['bio']);
 	}
@@ -37,7 +37,7 @@ final class AdvancedNodeTest extends TestCase
 		$root->push($first);
 		$root->push($second);
 
-		$posts->parseRow(0, [10, 1, 'First']);
+		$posts->parseRow(['id' => 10, 'user_id' => 1, 'title' => 'First']);
 
 		self::assertSame('First', $root->getResult()[0]['posts'][0]['title']);
 		self::assertSame([], $root->getResult()[1]['posts']);
@@ -48,7 +48,7 @@ final class AdvancedNodeTest extends TestCase
 		$this->expectException(ParserException::class);
 
 		$root = new StaticNode(['id', 'name'], ['id']);
-		$root->parseRow(0, [1, 'Ada']);
+		$root->parseRow(['id' => 1, 'name' => 'Ada']);
 	}
 
 	public function testStaticNodeIndexesExistingDataExactlyOnce(): void
@@ -59,8 +59,8 @@ final class AdvancedNodeTest extends TestCase
 		$user = ['id' => 1, 'name' => 'Ada'];
 		$root->push($user);
 
-		$posts->parseRow(0, [10, 1, 'First']);
-		$posts->parseRow(0, [11, 1, 'Second']);
+		$posts->parseRow(['id' => 10, 'user_id' => 1, 'title' => 'First']);
+		$posts->parseRow(['id' => 11, 'user_id' => 1, 'title' => 'Second']);
 
 		self::assertCount(2, $root->getResult()[0]['posts']);
 		self::assertSame(['First', 'Second'], array_column($root->getResult()[0]['posts'], 'title'));
@@ -71,8 +71,11 @@ final class AdvancedNodeTest extends TestCase
 		$root = new RootNode(['type', 'owner_id', 'name'], ['type', 'owner_id']);
 		$root->linkNode('owner', $proxy = new ProxyNode(['type', 'owner_id']));
 
-		foreach ([['user', 1, 'Comment'], ['team', 5, 'Repo']] as $row) {
-			$root->parseRow(0, $row);
+		foreach ([
+			['type' => 'user', 'owner_id' => 1, 'name' => 'Comment'],
+			['type' => 'team', 'owner_id' => 5, 'name' => 'Repo'],
+		] as $row) {
+			$root->parseRow($row);
 		}
 
 		/** @var SingularNode $userNode */
@@ -80,8 +83,8 @@ final class AdvancedNodeTest extends TestCase
 		/** @var SingularNode $teamNode */
 		$teamNode = $proxy->addNode('team', new SingularNode(['id', 'name'], ['id'], ['id'], ['type', 'owner_id'], 'team'));
 
-		$userNode->parseRow(0, [1, 'Ada']);
-		$teamNode->parseRow(0, [5, 'Core']);
+		$userNode->parseRow(['id' => 1, 'name' => 'Ada']);
+		$teamNode->parseRow(['id' => 5, 'name' => 'Core']);
 
 		self::assertSame('Ada', $root->getResult()[0]['owner']['name']);
 		self::assertSame('Core', $root->getResult()[1]['owner']['name']);
@@ -92,8 +95,8 @@ final class AdvancedNodeTest extends TestCase
 		$root = new RootNode(['id', 'name'], ['id']);
 		$root->linkNode(null, $merge = new ParentMergeNode('employee', ['id', 'title'], ['id'], ['id'], ['id']));
 
-		$root->parseRow(0, [1, 'Ada']);
-		$merge->parseRow(0, [1, 'Lead']);
+		$root->parseRow(['id' => 1, 'name' => 'Ada']);
+		$merge->parseRow(['id' => 1, 'title' => 'Lead']);
 		$root->mergeInheritanceNodes();
 
 		self::assertSame('Lead', $root->getResult()[0]['title']);
@@ -104,8 +107,8 @@ final class AdvancedNodeTest extends TestCase
 		$root = new RootNode(['id', 'name'], ['id']);
 		$root->linkNode(null, $merge = new SubclassMergeNode('manager', ['id', 'department'], ['id'], ['id'], ['id']));
 
-		$root->parseRow(0, [1, 'Ada']);
-		$merge->parseRow(0, [1, 'Platform']);
+		$root->parseRow(['id' => 1, 'name' => 'Ada']);
+		$merge->parseRow(['id' => 1, 'department' => 'Platform']);
 		$root->mergeInheritanceNodes(true);
 
 		self::assertSame('Platform', $root->getResult()[0]['department']);
