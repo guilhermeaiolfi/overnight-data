@@ -5,42 +5,34 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\State\Query;
 
 use InvalidArgumentException;
-use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Exception\SyncException;
+use ON\Data\Key;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\Query\QuerySourceIdentities;
 use ON\Data\ORM\Representation\Sync\AdoptionPolicy;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionContext;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionEngine;
-use ON\Data\ORM\Representation\Sync\RepresentationReader;
 use ON\Data\ORM\Session;
-use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Result\WritablePreparation;
 use ON\Data\Query\Result\WritableResultHandler;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Schema\RepresentationSchema;
-use ON\Data\Schema\RepresentationSource;
 
 /**
  * Writable query export bridge: compiles projections ({@see prepare()}) and routes
- * results into Session tracking via {@see RepresentationAdoptionEngine}.
+ * assembled rows into Session tracking via {@see RepresentationAdoptionEngine}.
  *
  * Stateless for preparations — the plan token is owned by the caller (SelectQuery
  * holds it for the duration of one fetch).
  */
 final class WritableQueryResultTracker implements WritableResultHandler
 {
-	private RepresentationReader $reader;
-
 	private RepresentationAdoptionEngine $adoptionEngine;
 
 	public function __construct(
 		private readonly Session $session,
-		?RepresentationReader $reader = null,
 		?RepresentationAdoptionEngine $adoptionEngine = null,
 	) {
-		$this->reader = $reader ?? new RepresentationReader();
-		$this->adoptionEngine = $adoptionEngine ?? new RepresentationAdoptionEngine($this->reader);
+		$this->adoptionEngine = $adoptionEngine ?? new RepresentationAdoptionEngine();
 	}
 
 	public function prepare(SelectQuery $query): WritablePreparation
@@ -48,13 +40,8 @@ final class WritableQueryResultTracker implements WritableResultHandler
 		$schema = $query->projection();
 		$sources = $schema->getSources();
 		$identities = new QuerySourceIdentities($sources);
-		$plan = new QueryRepresentationPlan($schema, $sources, $identities);
 
-		foreach ($query->getRelationSelections()->getAll() as $selection) {
-			$this->planRelationLevel($plan, $schema, $selection);
-		}
-
-		return $plan;
+		return new QueryRepresentationPlan($schema, $sources, $identities);
 	}
 
 	public function track(
@@ -107,9 +94,7 @@ final class WritableQueryResultTracker implements WritableResultHandler
 		QueryRepresentationPlan $compilation,
 		array $sourceRow,
 	): void {
-		$this->preAttachNestedFlatRelations($object, $compilation, $sourceRow);
-
-		if (RepresentationSource::listHasNonRoot($compilation->getSources())) {
+		if ($this->canHydrateRoot($compilation, $object, $sourceRow)) {
 			$this->adoptionEngine->attach(
 				$object,
 				new RepresentationAdoptionContext(
@@ -126,172 +111,53 @@ final class WritableQueryResultTracker implements WritableResultHandler
 			return;
 		}
 
-		$schema = $compilation->getSchema();
+		$this->session->sync($object, $compilation->getSchema());
+	}
 
-		if ($this->hasReadableRootPrimaryKey($object, $schema)) {
-			$this->adoptionEngine->attach(
-				$object,
-				new RepresentationAdoptionContext(
-					schema: $schema,
-					policy: AdoptionPolicy::Hydrate,
-				),
-				$this->session->getRecords(),
-				$this->session->getRepresentations(),
-			);
-			$this->session->sync($object);
-
-			return;
+	/**
+	 * @param array<string, mixed> $sourceRow
+	 */
+	private function canHydrateRoot(
+		QueryRepresentationPlan $compilation,
+		object $object,
+		array $sourceRow,
+	): bool {
+		if ($compilation->getIdentities()->getIdentity([], $sourceRow) instanceof Key) {
+			return true;
 		}
 
-		$this->session->sync($object, $schema);
+		return $this->hasReadableRootPrimaryKey($object, $compilation->getSchema(), $sourceRow);
 	}
 
 	/**
-	 * Flat-attach nested relation items whose related schema has non-root sources
-	 * (e.g. posts.authorName → authors) before graph attachment walks the root.
-	 *
 	 * @param array<string, mixed> $sourceRow
 	 */
-	private function preAttachNestedFlatRelations(
-		object $object,
-		QueryRepresentationPlan $compilation,
-		array $sourceRow,
-	): void {
-		$this->preAttachNestedFlatRelationsAt(
-			$object,
-			$compilation->getSchema(),
-			$compilation,
-			$sourceRow,
-			[],
-		);
-	}
-
-	/**
-	 * @param list<string> $relationPathPrefix
-	 * @param array<string, mixed> $sourceRow
-	 */
-	private function preAttachNestedFlatRelationsAt(
+	private function hasReadableRootPrimaryKey(
 		object $object,
 		RepresentationSchema $schema,
-		QueryRepresentationPlan $compilation,
 		array $sourceRow,
-		array $relationPathPrefix,
-	): void {
-		foreach ($schema->getRelations() as $relationSchema) {
-			$path = [...$relationPathPrefix, $relationSchema->getPath()];
-			$relatedSchema = $relationSchema->getRelatedSchema();
-			$rawChildren = $sourceRow[$relationSchema->getPath()] ?? null;
-			$needsFlatAttach = RepresentationAdoptionEngine::isFlatAttachment($relatedSchema);
-			$needsRecurse = $relatedSchema->getRelations() !== [];
+	): bool {
+		$vars = get_object_vars($object);
 
-			if (! $needsFlatAttach && ! $needsRecurse) {
-				continue;
-			}
+		foreach ($schema->getCollection()->getPrimaryKey() as $fieldName) {
+			$path = null;
+			foreach ($schema->getFields() as $fieldSchema) {
+				if ($fieldSchema->getFieldName() === $fieldName && $fieldSchema->isRootSource()) {
+					$path = $fieldSchema->getPath();
 
-			$identities = $needsFlatAttach
-				? $compilation->getRelationIdentities($path)
-				: null;
-
-			if ($needsFlatAttach && $identities === null) {
-				continue;
-			}
-
-			$items = $relationSchema->isMany()
-				? $this->reader->readItems($object, $relationSchema, static fn (string $message): StateException => new StateException($message))
-				: array_values(array_filter([
-					$this->reader->readTarget($object, $relationSchema, static fn (string $message): StateException => new StateException($message)),
-				]));
-
-			foreach ($items as $index => $item) {
-				$childRow = is_array($rawChildren)
-					? ($relationSchema->isMany() ? ($rawChildren[$index] ?? []) : $rawChildren)
-					: [];
-
-				if (! is_array($childRow)) {
-					$childRow = [];
-				}
-
-				if ($needsFlatAttach && $identities !== null && ! $this->session->getRepresentations()->has($item)) {
-					$this->adoptionEngine->attach(
-						$item,
-						new RepresentationAdoptionContext(
-							schema: $relatedSchema,
-							policy: AdoptionPolicy::Hydrate,
-							identities: $identities,
-							sourceRow: $childRow,
-						),
-						$this->session->getRecords(),
-						$this->session->getRepresentations(),
-					);
-				}
-
-				if ($needsRecurse) {
-					$this->preAttachNestedFlatRelationsAt(
-						$item,
-						$relatedSchema,
-						$compilation,
-						$childRow,
-						$path,
-					);
+					break;
 				}
 			}
-		}
-	}
 
-	private function planRelationLevel(
-		QueryRepresentationPlan $plan,
-		RepresentationSchema $rootSchema,
-		RelationSelection $selection,
-	): void {
-		if (! $selection->isLoaded()) {
-			return;
-		}
-
-		$relatedSchema = $this->relatedSchemaAtPath($rootSchema, $selection->getPath());
-		if (! $relatedSchema instanceof RepresentationSchema) {
-			return;
-		}
-
-		$sources = $relatedSchema->getSources();
-		if (! RepresentationSource::listHasNonRoot($sources)) {
-			return;
-		}
-
-		$identities = new QuerySourceIdentities($sources);
-		$plan->setRelationIdentities($selection->getPath(), $identities);
-	}
-
-	/**
-	 * @param list<string> $path
-	 */
-	private function relatedSchemaAtPath(RepresentationSchema $schema, array $path): ?RepresentationSchema
-	{
-		return $schema->findRelatedSchemaAt($path);
-	}
-
-	private function hasReadableRootPrimaryKey(object $representation, RepresentationSchema $schema): bool
-	{
-		$collection = $schema->getCollection();
-		$pathsByField = [];
-
-		foreach ($schema->getFields() as $fieldSchema) {
-			if ($fieldSchema->getCollectionName() === $collection->getName()) {
-				$pathsByField[$fieldSchema->getFieldName()] = $fieldSchema->getPath();
-			}
-		}
-
-		foreach ($collection->getPrimaryKey() as $fieldName) {
-			if (! array_key_exists($fieldName, $pathsByField)) {
+			if ($path === null) {
 				return false;
 			}
 
-			try {
-				$value = $this->reader->readPath($representation, $pathsByField[$fieldName]);
-			} catch (SyncException) {
-				return false;
+			if (array_key_exists($path, $sourceRow) && $sourceRow[$path] !== null) {
+				continue;
 			}
 
-			if ($value === null) {
+			if (! array_key_exists($path, $vars) || $vars[$path] === null) {
 				return false;
 			}
 		}

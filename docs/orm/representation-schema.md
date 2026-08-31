@@ -129,14 +129,13 @@ lineTotal → expression AST, path lineTotal
 
 ---
 
-## Attachment modes (one type)
+## Attachment (one walk)
 
-| Mode | When | How |
-|---|---|---|
-| **Graph** | Nested `relations` present | Related objects under relation paths |
-| **Flat** | Fields with non-empty `sourcePath` (often no relation containers) | Multiple `RecordState`s via `getSources()` |
+`RepresentationAdoptionEngine::attach()` binds **every source** on this schema (`getSources()`), then walks **relation children** (`getRelatedSchema()`). Root-only, loaded `posts`, and flat `authorName` are the same walk. Nested objects are separate representations; flat related fields are extra records on this representation.
 
-Adoption chooses flat vs graph from the schema (and intent).
+Policy (`Hydrate` / `Identify` / `Patch` / `Create`) is the operation, not a layout choice. Writable query hydrate reads the assembled row (`sourceRow`) for hidden source ids (`company.id`); `Session::sync()` still reads the live object.
+
+Writable prepare builds `QuerySourceIdentities` from schema sources (Implicit PK paths such as `company.id`). It does not add Query `INTERNAL` selections.
 
 ---
 
@@ -189,7 +188,7 @@ Shape conversion only; not persistence provenance.
 
 ---
 
-## Runtime: state, sync, flat adoption
+## Runtime: state, sync, adoption
 
 ### RepresentationState
 
@@ -201,16 +200,14 @@ Attaches a schema to one object instance: field/relation state items + baselines
 - Relation sync: relation schemas only  
 - Expression paths: ignored  
 
-`Session::sync($object, $schema)` walks explicit relation schemas; untracked roots need a homogeneous single-collection schema.
+`Session::sync($object, $schema)` walks the schema once (sources, then relations). Untracked roots still need a schema.
 
-### Flat projection adoption
+### Query hydrate
 
-`RepresentationAdoptionEngine::attach()`:
+`RepresentationAdoptionEngine::attach()` with `AdoptionPolicy::Hydrate` and the assembled row:
 
-- Flat: `getSources()` (fields grouped by `sourcePath`)  
-- Graph: relation branches + `getRelatedSchema()`  
-
-Writable prepare builds `QuerySourceIdentities` from schema sources (Implicit PK paths such as `company.id`). It does not add Query `INTERNAL` selections.
+- Bind `getSources()` (including flat related records) from `sourceRow` + the object  
+- Walk relation branches via `getRelatedSchema()`  
 
 See [`session-save-api.md`](./session-save-api.md) and [`writable-select-query-projections.md`](./writable-select-query-projections.md).
 

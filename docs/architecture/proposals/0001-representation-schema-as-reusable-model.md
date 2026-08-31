@@ -223,7 +223,7 @@ Approx. effort (rough): **~300–450 production LOC**, **~550–850 with tests**
 3. **Expression storage form** — live `ValueExpressionInterface` only in v1, or an intermediate serializable IR early?
 4. **`toQuery()` vs only `query($schema)`** — one or both in public API?
 5. **Flat join-sourced fields** — already partially modeled via `sourcePath`; any reopen gaps vs compiler?
-6. **Identity / INTERNAL selections** — remain prepare-time only (`QueryRepresentationIdentityPlanner`), not stored on durable schema?
+6. **Identity / INTERNAL selections** — implicit source PKs live on the durable schema (`company.id`); fetch plumbing stays off-schema. Reopen must re-emit that SQL, not a second identity planner.
 7. **Naming** — keep `RepresentationSchema` vs later rename to `Projection` (type rename is not required for MVP)?
 8. **Interaction with upcoming ideas** — leave room for alternate authoring or storage of shapes without forking a second public tree.
 

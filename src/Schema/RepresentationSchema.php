@@ -13,10 +13,8 @@ use stdClass;
  * Place + persistence provenance graph for one representation shape: a root
  * collection plus field, relation, and expression path maps.
  *
- * One schema serves two attachment modes:
- * - **Graph** — nested `relations` with related schemas (entity-shaped objects).
- * - **Flat** — fields with non-empty `sourcePath` spanning related collections
- *   (no relation containers); see {@see getSources()}.
+ * Nested relations and flat `sourcePath` fields live on the same graph.
+ * Attach binds {@see getSources()} then walks {@see getRelations()}.
  *
  * Query assemble uses {@see getPublicScalarPaths()} as the place spine when a
  * fetch schema is compiled for row assemble (Public fields + expressions;
@@ -73,100 +71,6 @@ final class RepresentationSchema
 	public function getCollectionName(): string
 	{
 		return $this->collection->getName();
-	}
-
-	/**
-	 * True when the schema has at least one field or relation, and every field
-	 * collection and relation owner collection agrees with the root collection.
-	 *
-	 * Flat mixed projections (multiple collections) and empty schemas are not homogeneous.
-	 */
-	public function isHomogeneous(): bool
-	{
-		if ($this->fields === [] && $this->relations === []) {
-			return false;
-		}
-
-		$rootName = $this->collection->getName();
-		foreach ($this->fields as $fieldSchema) {
-			if ($fieldSchema->getCollectionName() !== $rootName) {
-				return false;
-			}
-		}
-
-		foreach ($this->relations as $relationSchema) {
-			if ($relationSchema->getOwnerCollectionName() !== $rootName) {
-				return false;
-			}
-		}
-
-		return true;
-	}
-
-	/**
-	 * Root collection when {@see isHomogeneous()}; otherwise throws with adoption/sync context.
-	 */
-	public function requireHomogeneousCollection(bool $isRoot = true): CollectionInterface
-	{
-		if ($this->isHomogeneous()) {
-			return $this->collection;
-		}
-
-		if ($this->fields === [] && $this->relations === []) {
-			if ($isRoot) {
-				throw new InvalidSchemaException('Cannot synchronize untracked root representation because untracked root sync needs a schema targeting one collection.');
-			}
-
-			throw new InvalidSchemaException('Cannot adopt representation graph because a related schema does not target a collection.');
-		}
-
-		$rootName = $this->collection->getName();
-		foreach ($this->fields as $fieldSchema) {
-			if ($fieldSchema->getCollectionName() !== $rootName) {
-				throw $this->heterogeneousCollectionException(
-					$fieldSchema->getPath(),
-					$fieldSchema->getCollectionName(),
-					$rootName,
-					$isRoot,
-				);
-			}
-		}
-
-		foreach ($this->relations as $relationSchema) {
-			if ($relationSchema->getOwnerCollectionName() !== $rootName) {
-				throw $this->heterogeneousCollectionException(
-					$relationSchema->getPath(),
-					$relationSchema->getOwnerCollectionName(),
-					$rootName,
-					$isRoot,
-				);
-			}
-		}
-
-		throw new InvalidSchemaException('Cannot adopt representation because the schema is not homogeneous.');
-	}
-
-	private function heterogeneousCollectionException(
-		string $path,
-		string $nextName,
-		string $currentName,
-		bool $isRoot,
-	): InvalidSchemaException {
-		if ($isRoot) {
-			return new InvalidSchemaException(sprintf(
-				"Cannot synchronize untracked root representation because untracked root sync needs a schema targeting one collection; path '%s' targets collection '%s' after '%s'.",
-				$path,
-				$nextName,
-				$currentName,
-			));
-		}
-
-		return new InvalidSchemaException(sprintf(
-			"Cannot adopt representation graph because related schema path '%s' targets collection '%s' after '%s'.",
-			$path,
-			$nextName,
-			$currentName,
-		));
 	}
 
 	public function addField(RepresentationFieldSchema $fieldSchema): void

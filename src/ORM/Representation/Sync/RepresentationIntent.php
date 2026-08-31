@@ -82,14 +82,4 @@ final class RepresentationIntent
 	{
 		$this->flatOps[] = $op;
 	}
-
-	/**
-	 * Whether sync should use the flat projection binder instead of graph adoption.
-	 *
-	 * @param RepresentationSchema|null $schema resolved schema for this sync (may differ from intent schema)
-	 */
-	public function isFlatProjection(?RepresentationSchema $schema = null): bool
-	{
-		return RepresentationAdoptionEngine::isFlatAttachment($schema ?? $this->schema, $this);
-	}
 }

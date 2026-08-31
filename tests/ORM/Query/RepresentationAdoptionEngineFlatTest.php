@@ -17,6 +17,7 @@ use ON\Data\ORM\Representation\Sync\RepresentationAdoptionContext;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionEngine;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\SessionContext;
+use ON\Data\Schema\RepresentationFieldRole;
 use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationRelationSchema;
 use ON\Data\Schema\RepresentationSchema;
@@ -35,12 +36,12 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		$schema = $this->projectionSchema($users, $companies);
 		$object = $this->flatUser(1, 'Acme');
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = $this->companyIdProjectionIdentities($schema, 'company_id');
+		$identities = $this->identitiesFor($schema);
 
 		$state = $this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
 			'id' => 1,
 			'name' => 'Acme',
-			'company_id' => 5,
+			'company.id' => 5,
 		], $session);
 
 		self::assertTrue($session->getRepresentations()->has($object));
@@ -56,12 +57,12 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		$companies = $registry->getCollection('companies');
 		$schema = $this->projectionSchema($users, $companies);
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = $this->companyIdProjectionIdentities($schema, 'company_id');
+		$identities = $this->identitiesFor($schema);
 
 		$this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, $identities), [
 			'id' => 1,
 			'name' => 'Acme',
-			'company_id' => 5,
+			'company.id' => 5,
 		], $session);
 
 		$userRecord = $session->getRecords()->getByKey($users->getKey(1));
@@ -79,12 +80,12 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		$companies = $registry->getCollection('companies');
 		$schema = $this->projectionSchema($users, $companies);
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = $this->companyIdProjectionIdentities($schema, 'company_id');
+		$identities = $this->identitiesFor($schema);
 
 		$state = $this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, $identities), [
 			'id' => 1,
 			'name' => 'Acme',
-			'company_id' => 5,
+			'company.id' => 5,
 		], $session);
 
 		$idItem = $state->getFieldItem('id');
@@ -102,12 +103,12 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		$companies = $registry->getCollection('companies');
 		$schema = $this->projectionSchema($users, $companies);
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = $this->companyIdProjectionIdentities($schema, 'company_id');
+		$identities = $this->identitiesFor($schema);
 
 		$state = $this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, $identities), [
 			'id' => 1,
 			'name' => 'Acme',
-			'company_id' => 5,
+			'company.id' => 5,
 		], $session);
 
 		$userRecord = $session->getRecords()->getByKey($users->getKey(1));
@@ -123,7 +124,7 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		self::assertSame($companyRecord->getRevision(), $nameItem->getBaselineRevision());
 	}
 
-	public function testHiddenIdentityValuesAreReadThroughProjectionIdentityColumns(): void
+	public function testHiddenIdentityValuesAreReadFromAssembledRow(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
@@ -133,10 +134,10 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		$object->id = 1;
 		$object->name = 'Acme';
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = $this->companyIdProjectionIdentities($schema, 'company_id');
+		$identities = $this->identitiesFor($schema);
 
 		$this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
-			'company_id' => 5,
+			'company.id' => 5,
 		], $session);
 
 		$companyRecord = $session->getRecords()->getByKey($companies->getKey(5));
@@ -153,11 +154,11 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		$object->id = 1;
 		$object->name = 'Acme';
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = $this->companyIdProjectionIdentities($schema, 'company_id');
+		$identities = $this->identitiesFor($schema);
 
 		$this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
 			'name' => 'Acme',
-			'company_id' => 5,
+			'company.id' => 5,
 		], $session);
 
 		$userRecord = $session->getRecords()->getByKey($users->getKey(1));
@@ -181,25 +182,7 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		], $session);
 	}
 
-	public function testThrowsWhenMapPointsToMissingSourceRowKey(): void
-	{
-		$registry = $this->makeRegistry();
-		$users = $registry->getCollection('users');
-		$companies = $registry->getCollection('companies');
-		$schema = $this->projectionSchema($users, $companies);
-		$session = new Session(new RecordingCommandExecutor());
-		$identities = $this->companyIdProjectionIdentities($schema, 'missing_key');
-
-		$this->expectException(StateException::class);
-		$this->expectExceptionMessage("internal result key 'missing_key' for primary key field 'id' is missing from the source row");
-
-		$this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, $identities), [
-			'id' => 1,
-			'name' => 'Acme',
-		], $session);
-	}
-
-	public function testThrowsWhenSchemaContainsRelationSchemasUsesGraphAttach(): void
+	public function testAttachBindsFlatSourcesAndWalksRelations(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
@@ -212,15 +195,18 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		));
 		$session = new Session(new RecordingCommandExecutor());
 		$object = $this->flatUser(1, 'Acme');
+		$object->company = null;
+		$identities = $this->identitiesFor($schema);
 
-		$this->expectException(StateException::class);
-		$this->expectExceptionMessage('untracked root sync needs a schema targeting one collection');
-
-		$this->attachFlat($object, $this->compilation($schema, new QuerySourceIdentities(RepresentationSource::fromRepresentationSchema($schema))), [
+		$state = $this->attachFlat($object, $this->compilation($schema, $identities), [
 			'id' => 1,
 			'name' => 'Acme',
-			'company_id' => 5,
+			'company.id' => 5,
 		], $session);
+
+		self::assertTrue($session->getRepresentations()->has($object));
+		self::assertSame('users', $state->getFieldItem('id')->getRecord()->getCollection()->getName());
+		self::assertSame('companies', $state->getFieldItem('name')->getRecord()->getCollection()->getName());
 	}
 
 	public function testAttachStoresFlatProjectionRecords(): void
@@ -231,12 +217,12 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		$schema = $this->projectionSchema($users, $companies);
 		$object = $this->flatUser(1, 'Acme');
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = $this->companyIdProjectionIdentities($schema, 'company_id');
+		$identities = $this->identitiesFor($schema);
 
 		$state = $this->attachFlat($object, $this->compilation($schema, $identities), [
 			'id' => 1,
 			'name' => 'Acme',
-			'company_id' => 5,
+			'company.id' => 5,
 		], $session);
 
 		self::assertInstanceOf(RepresentationState::class, $state);
@@ -252,6 +238,14 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		$schema->addField(new RepresentationFieldSchema('id', $users, 'id', writable: false));
 		$schema->addField(new RepresentationFieldSchema('name', $users, 'name', writable: true));
 		$schema->addField(new RepresentationFieldSchema('managerName', $users, 'name', writable: true, sourcePath: ['manager']));
+		$schema->addField(new RepresentationFieldSchema(
+			'manager.id',
+			$users,
+			'id',
+			writable: false,
+			sourcePath: ['manager'],
+			role: RepresentationFieldRole::Implicit,
+		));
 
 		$object = new stdClass();
 		$object->id = 1;
@@ -259,14 +253,13 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		$object->managerName = 'Boss';
 
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = new QuerySourceIdentities(RepresentationSource::fromRepresentationSchema($schema));
-		$identities->add(['manager'], 'id', 'manager_id');
+		$identities = $this->identitiesFor($schema);
 
 		$state = $this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
 			'id' => 1,
 			'name' => 'Root',
 			'managerName' => 'Boss',
-			'manager_id' => 9,
+			'manager.id' => 9,
 		], $session);
 
 		$rootRecord = $session->getRecords()->getByKey($users->getKey(1));
@@ -292,19 +285,26 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		$schema = new RepresentationSchema($users);
 		$schema->addField(new RepresentationFieldSchema('id', $users, 'id', writable: false));
 		$schema->addField(new RepresentationFieldSchema('managerName', $users, 'name', writable: true, sourcePath: ['manager']));
+		$schema->addField(new RepresentationFieldSchema(
+			'manager.id',
+			$users,
+			'id',
+			writable: false,
+			sourcePath: ['manager'],
+			role: RepresentationFieldRole::Implicit,
+		));
 
 		$object = new stdClass();
 		$object->id = 1;
 		$object->managerName = 'Boss';
 
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = new QuerySourceIdentities(RepresentationSource::fromRepresentationSchema($schema));
-		$identities->add(['manager'], 'id', 'manager_id');
+		$identities = $this->identitiesFor($schema);
 
 		$state = $this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
 			'id' => 1,
 			'managerName' => 'Boss',
-			'manager_id' => 9,
+			'manager.id' => 9,
 		], $session);
 
 		$idItem = $state->getFieldItem('id');
@@ -325,12 +325,12 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		$records = new RecordStateStore();
 		$records->add($existing);
 		$session = new Session(new RecordingCommandExecutor(), context: new SessionContext($records));
-		$identities = $this->companyIdProjectionIdentities($schema, 'company_id');
+		$identities = $this->identitiesFor($schema);
 
 		$this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, $identities), [
 			'id' => 1,
 			'name' => 'Acme',
-			'company_id' => 5,
+			'company.id' => 5,
 		], $session);
 
 		self::assertSame($existing, $session->getRecords()->getByKey($companies->getKey(5)));
@@ -395,12 +395,9 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		return $user;
 	}
 
-	private function companyIdProjectionIdentities(RepresentationSchema $schema, string $resultKey): QuerySourceIdentities
+	private function identitiesFor(RepresentationSchema $schema): QuerySourceIdentities
 	{
-		$identities = new QuerySourceIdentities(RepresentationSource::fromRepresentationSchema($schema));
-		$identities->add(['company'], 'id', $resultKey);
-
-		return $identities;
+		return new QuerySourceIdentities(RepresentationSource::fromRepresentationSchema($schema));
 	}
 
 	private function projectionSchema(
@@ -410,6 +407,14 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		$schema = new RepresentationSchema($users);
 		$schema->addField(new RepresentationFieldSchema('id', $users, 'id', writable: false));
 		$schema->addField(new RepresentationFieldSchema('name', $companies, 'name', writable: true, sourcePath: ['company']));
+		$schema->addField(new RepresentationFieldSchema(
+			'company.id',
+			$companies,
+			'id',
+			writable: false,
+			sourcePath: ['company'],
+			role: RepresentationFieldRole::Implicit,
+		));
 
 		return $schema;
 	}

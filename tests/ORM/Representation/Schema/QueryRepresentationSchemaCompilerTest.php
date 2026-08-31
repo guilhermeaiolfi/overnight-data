@@ -145,7 +145,6 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertSame('company.id', $companyIdPath);
 		self::assertTrue($schema->getField($companyIdPath)->isImplicit());
 		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
-		self::assertNull($compilation->getIdentities()->getResultKey(['company'], 'id'));
 		$companySource = $this->sourceAt($compilation->getSources(), ['company']);
 		self::assertSame($companyIdPath, $companySource->getFieldPath('id'));
 	}
@@ -182,7 +181,6 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$compilation = $this->preparePlan($resultQuery);
 
 		self::assertCount(0, $resultQuery->getSelections()->getByTag(SelectionTag::INTERNAL));
-		self::assertNull($compilation->getIdentities()->getResultKey(['company'], 'id'));
 		self::assertSame(
 			$this->implicitSourceFieldPath($compilation->getSchema(), ['company'], 'id'),
 			$this->sourceAt($compilation->getSources(), ['company'])->getFieldPath('id'),
@@ -200,8 +198,6 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 
 		self::assertInstanceOf(QueryRepresentationPlan::class, $compilation);
 		self::assertTrue($compilation->getSchema()->getField('name')->getSourcePath() === ['company']);
-		self::assertNull($compilation->getIdentities()->getResultKey(['company'], 'id'));
-		self::assertNull($compilation->getIdentities()->getResultKey([], 'id'));
 		self::assertSame(
 			$this->implicitSourceFieldPath($compilation->getSchema(), ['company'], 'id'),
 			$this->sourceAt($compilation->getSources(), ['company'])->getFieldPath('id'),
@@ -264,9 +260,6 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertSame([], $schema->getField('name')->getSourcePath());
 		self::assertSame(['manager'], $schema->getField('managerName')->getSourcePath());
 
-		$identities = $compilation->getIdentities();
-		self::assertNull($identities->getResultKey([], 'id'));
-		self::assertNull($identities->getResultKey(['manager'], 'id'));
 		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
 		self::assertSame('manager.id', $this->implicitSourceFieldPath($schema, ['manager'], 'id'));
 	}
@@ -286,7 +279,6 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertTrue($schema->getField('company.id')->isImplicit());
 		self::assertSame('id', $schema->getField('company.id')->getFieldName());
 		self::assertSame(['company'], $schema->getField('company.id')->getSourcePath());
-		self::assertNull($compilation->getIdentities()->getResultKey(['company'], 'id'));
 		self::assertSame('company.id', $this->implicitSourceFieldPath($schema, ['company'], 'id'));
 		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
 	}

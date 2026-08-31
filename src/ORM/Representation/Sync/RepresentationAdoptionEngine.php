@@ -12,6 +12,7 @@ use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\RelationTarget;
 use ON\Data\ORM\Relation\ToManyRelationState;
+use ON\Data\ORM\Representation\Schema\Query\QuerySourceIdentities;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\ORM\Session;
@@ -23,29 +24,22 @@ use ON\Data\Schema\RepresentationSource;
  * Schema-driven attachment of representations into session stores.
  *
  * Distinct from {@see Session::adopt()}, which stores an already-built
- * {@see RepresentationState}. This entry builds flat state or walks a graph,
- * then stores the result.
+ * {@see RepresentationState}. This entry binds every source on the schema,
+ * then walks relation children — one pass, not a flat/graph fork.
  *
  * Policy ({@see AdoptionPolicy}): Hydrate | Identify | Patch | Create.
- * Flat external PKs come from {@see RepresentationSourceIdentities}.
+ * Query hydrate prefers values on {@see RepresentationAdoptionContext::getSourceRow()}.
  */
 final class RepresentationAdoptionEngine
 {
-	private AdoptionRecordResolver $recordResolver;
-
 	public function __construct(
 		private RepresentationReader $reader = new RepresentationReader(),
-		?AdoptionRecordResolver $recordResolver = null,
-		?RepresentationIntentStore $intents = null,
+		private ?RepresentationIntentStore $intents = null,
 	) {
-		$this->recordResolver = $recordResolver ?? new AdoptionRecordResolver(
-			reader: $this->reader,
-			intents: $intents,
-		);
 	}
 
 	/**
-	 * Build (flat) or walk (graph) and store into $reps / $records.
+	 * Bind this schema's sources, store the representation, then walk nested relations.
 	 */
 	public function attach(
 		object $representation,
@@ -55,95 +49,187 @@ final class RepresentationAdoptionEngine
 		?RelationStateStore $relations = null,
 		RepresentationAttachmentMode $mode = RepresentationAttachmentMode::Add,
 	): RepresentationState {
+		$visited = [];
+
+		return $this->attachRecursive(
+			$representation,
+			$context,
+			$records,
+			$reps,
+			$relations,
+			$mode,
+			$visited,
+		);
+	}
+
+	/**
+	 * @param array<int, true> $visited
+	 */
+	private function attachRecursive(
+		object $representation,
+		RepresentationAdoptionContext $context,
+		RecordStateStore $records,
+		RepresentationStateStore $reps,
+		?RelationStateStore $relations,
+		RepresentationAttachmentMode $mode,
+		array &$visited,
+	): RepresentationState {
 		if ($mode === RepresentationAttachmentMode::Add && $reps->has($representation)) {
-			if (self::isFlatAttachment($context->getSchema(), $context->getIntent())) {
-				$tracked = $reps->get($representation);
-				if (! $tracked instanceof RepresentationState) {
-					throw new StateException('Tracked representation is missing state.');
-				}
-
-				return $tracked;
-			}
-
-			$this->attachGraph($representation, $context, $records, $reps);
 			$tracked = $reps->get($representation);
 			if (! $tracked instanceof RepresentationState) {
-				throw new StateException('Graph attachment failed to track the root representation.');
+				throw new StateException('Tracked representation is missing state.');
 			}
+
+			$this->walkRelations(
+				$representation,
+				$context,
+				$records,
+				$reps,
+				$relations,
+				$visited,
+			);
 
 			return $tracked;
 		}
 
-		if (self::isFlatAttachment($context->getSchema(), $context->getIntent())) {
-			$state = $this->buildFlat($representation, $context, $records, $relations);
+		$state = $this->bindSources($representation, $context, $records, $relations);
 
-			foreach ($state->getUniqueRecords() as $record) {
-				$records->add($record);
-			}
-
-			if ($mode === RepresentationAttachmentMode::Replace && $reps->has($representation)) {
-				$reps->remove($representation);
-			}
-
-			$reps->add($representation, $state);
-
-			return $state;
+		foreach ($state->getUniqueRecords() as $record) {
+			$records->add($record);
 		}
 
-		$this->attachGraph($representation, $context, $records, $reps);
+		if ($mode === RepresentationAttachmentMode::Replace && $reps->has($representation)) {
+			$reps->remove($representation);
+		}
+
+		$reps->add($representation, $state);
+
+		$this->walkRelations(
+			$representation,
+			$context,
+			$records,
+			$reps,
+			$relations,
+			$visited,
+		);
+
+		return $state;
+	}
+
+	/**
+	 * @param array<int, true> $visited
+	 */
+	private function walkRelations(
+		object $representation,
+		RepresentationAdoptionContext $context,
+		RecordStateStore $records,
+		RepresentationStateStore $reps,
+		?RelationStateStore $relations,
+		array &$visited,
+	): void {
+		$id = spl_object_id($representation);
+		if (array_key_exists($id, $visited)) {
+			return;
+		}
+
+		$visited[$id] = true;
 		$tracked = $reps->get($representation);
-		if (! $tracked instanceof RepresentationState) {
-			throw new StateException('Graph attachment failed to track the root representation.');
-		}
+		$schema = $tracked instanceof RepresentationState
+			? $tracked->getSchema()
+			: $context->getSchema();
+		$sourceRow = $context->getSourceRow();
 
-		return $tracked;
-	}
+		foreach ($schema->getRelations() as $relationSchema) {
+			if ($relationSchema->getOwnerCollectionName() !== $schema->getCollection()->getName()) {
+				throw new StateException(sprintf(
+					"Cannot synchronize untracked root representation because untracked root sync needs a schema targeting one collection; path '%s' targets collection '%s' after '%s'.",
+					$relationSchema->getPath(),
+					$relationSchema->getOwnerCollectionName(),
+					$schema->getCollection()->getName(),
+				));
+			}
 
-	/**
-	 * Whether attach should use the flat projection binder instead of graph adoption.
-	 *
-	 * Single owner for flat-vs-graph rules (Session and intent helpers must not diverge).
-	 */
-	public static function isFlatAttachment(
-		?RepresentationSchema $schema,
-		?RepresentationIntent $intent = null,
-	): bool {
-		if ($intent instanceof RepresentationIntent && $intent->getFlatOps() !== []) {
-			return true;
-		}
+			$rawChildren = is_array($sourceRow)
+				? ($sourceRow[$relationSchema->getPath()] ?? null)
+				: null;
 
-		if (! $schema instanceof RepresentationSchema) {
-			return false;
-		}
+			if ($relationSchema->isMany()) {
+				foreach ($this->reader->readItems($representation, $relationSchema, $this->relationError(...)) as $index => $item) {
+					$childRow = $this->childSourceRow($rawChildren, $index, many: true);
+					$this->attachRecursive(
+						$item,
+						$this->childContext($context, $relationSchema->getRelatedSchema(), $childRow),
+						$records,
+						$reps,
+						$relations,
+						RepresentationAttachmentMode::Add,
+						$visited,
+					);
+				}
 
-		if ($schema->getRelations() !== []) {
-			return false;
-		}
+				continue;
+			}
 
-		// Inbound save maps (SelectQuery::projection / schema overlay) without relation
-		// branches use the flat projection binder — including single-collection roots.
-		if ($intent instanceof RepresentationIntent && $intent->getSchema() instanceof RepresentationSchema) {
-			return true;
-		}
-
-		// Without intent, only multi-source / non-root projections are flat.
-		// Homogeneous root schemas use graph adoption (untracked root sync).
-		$sources = $schema->getSources();
-		foreach ($sources as $source) {
-			if (! $source->isRoot()) {
-				return true;
+			if ($relationSchema->isSingle()) {
+				$target = $this->reader->readTarget($representation, $relationSchema, $this->relationError(...));
+				if ($target !== null) {
+					$childRow = $this->childSourceRow($rawChildren, 0, many: false);
+					$this->attachRecursive(
+						$target,
+						$this->childContext($context, $relationSchema->getRelatedSchema(), $childRow),
+						$records,
+						$reps,
+						$relations,
+						RepresentationAttachmentMode::Add,
+						$visited,
+					);
+				}
 			}
 		}
+	}
 
-		return count($sources) > 1;
+	private function childContext(
+		RepresentationAdoptionContext $parent,
+		RepresentationSchema $relatedSchema,
+		?array $childRow,
+	): RepresentationAdoptionContext {
+		$policy = $parent->getPolicy();
+		if ($policy !== AdoptionPolicy::Hydrate && $policy !== AdoptionPolicy::Identify) {
+			$policy = AdoptionPolicy::Create;
+		}
+
+		return new RepresentationAdoptionContext(
+			schema: $relatedSchema,
+			policy: $policy,
+			identities: new QuerySourceIdentities($relatedSchema->getSources()),
+			sourceRow: $childRow,
+		);
 	}
 
 	/**
-	 * Build flat RepresentationState without storing on RepresentationStateStore.
-	 * Hydrate clean records are not added to $records until attached.
-	 * Create records are added immediately (matches prior projection builder).
+	 * @param mixed $rawChildren
+	 *
+	 * @return array<string, mixed>|null
 	 */
-	private function buildFlat(
+	private function childSourceRow(mixed $rawChildren, int $index, bool $many): ?array
+	{
+		if (! is_array($rawChildren)) {
+			return null;
+		}
+
+		$child = $many ? ($rawChildren[$index] ?? null) : $rawChildren;
+		if (! is_array($child)) {
+			return null;
+		}
+
+		/** @var array<string, mixed> $child */
+		return $child;
+	}
+
+	/**
+	 * Bind every source on this schema into one {@see RepresentationState}.
+	 */
+	private function bindSources(
 		object $representation,
 		RepresentationAdoptionContext $context,
 		RecordStateStore $records,
@@ -151,8 +237,11 @@ final class RepresentationAdoptionEngine
 	): RepresentationState {
 		$schema = $context->getSchema();
 		$sources = $context->getSources();
-		if ($sources === []) {
-			throw new StateException('Cannot build flat projection representation because the schema has no field sources.');
+
+		if ($sources === [] && $schema->getRelations() === []) {
+			throw new StateException(
+				'Cannot synchronize untracked root representation because untracked root sync needs a schema targeting one collection.',
+			);
 		}
 
 		$intent = $context->getIntent();
@@ -160,10 +249,29 @@ final class RepresentationAdoptionEngine
 		$recordsBySourceKey = [];
 		$rootRecord = null;
 
+		foreach ($schema->getRelations() as $relationSchema) {
+			if ($relationSchema->getOwnerCollectionName() !== $schema->getCollection()->getName()) {
+				throw new StateException(sprintf(
+					"Cannot synchronize untracked root representation because untracked root sync needs a schema targeting one collection; path '%s' targets collection '%s' after '%s'.",
+					$relationSchema->getPath(),
+					$relationSchema->getOwnerCollectionName(),
+					$schema->getCollection()->getName(),
+				));
+			}
+		}
+
+		if ($sources === []) {
+			$rootRecord = $this->resolveEmptyRoot($context, $records);
+			$recordsBySourceKey[RepresentationFieldSchema::sourcePathKey([])] = $rootRecord;
+		}
+
 		foreach ($sources as $source) {
+			$this->assertSourceFieldCollections($source);
+
 			$pathKey = $source->getPathKey();
 			$op = $opsByPath[$pathKey] ?? null;
-			$policy = $this->policyForSource($context, $source, $op);
+			$policy = $this->policyForSource($representation, $context, $source, $op);
+
 			$record = $this->resolveSourceRecord(
 				$representation,
 				$source,
@@ -193,12 +301,15 @@ final class RepresentationAdoptionEngine
 						);
 					}
 
-					$this->registerRelationAdd(
-						$rootRecord,
-						$source,
-						$recordsBySourceKey[$pathKey],
-						$relations,
-					);
+					$related = $recordsBySourceKey[$pathKey] ?? null;
+					if ($related instanceof RecordState) {
+						$this->registerRelationAdd(
+							$rootRecord,
+							$source,
+							$related,
+							$relations,
+						);
+					}
 				}
 			}
 		}
@@ -206,179 +317,71 @@ final class RepresentationAdoptionEngine
 		return RepresentationState::fromRecords($schema, $recordsBySourceKey);
 	}
 
-	/**
-	 * @return list<RepresentationState>
-	 */
-	private function attachGraph(
-		object $root,
+	private function resolveEmptyRoot(
 		RepresentationAdoptionContext $context,
 		RecordStateStore $records,
-		RepresentationStateStore $reps,
-	): array {
-		if ($reps->get($root) === null) {
-			$schema = $context->getSchema();
-			$state = $this->attachGraphNode(
-				$root,
-				$schema,
-				$records,
-				$reps,
-				isRoot: true,
-				policy: $context->getPolicy(),
-				identity: $this->rootIdentity($context),
-			);
-			$adopted = [$state];
-		} else {
-			$adopted = [];
-		}
+	): RecordState {
+		$collection = $context->getSchema()->getCollection();
+		$policy = $context->getPolicy();
+		$identity = $context->getIdentities()?->getIdentity([], $context->getSourceRow());
 
-		$visited = [];
-		$this->walkGraph($root, $context->getPolicy(), $records, $reps, $visited, $adopted);
-
-		return $adopted;
-	}
-
-	/**
-	 * @param array<int, true> $visited
-	 * @param list<RepresentationState> $adopted
-	 */
-	private function walkGraph(
-		object $representation,
-		AdoptionPolicy $policy,
-		RecordStateStore $records,
-		RepresentationStateStore $reps,
-		array &$visited,
-		array &$adopted,
-	): void {
-		$id = spl_object_id($representation);
-		if (array_key_exists($id, $visited)) {
-			return;
-		}
-
-		$tracked = $reps->get($representation);
-		if ($tracked === null) {
-			throw new StateException('Cannot walk representation graph because a representation is not tracked.');
-		}
-
-		$visited[$id] = true;
-		foreach ($tracked->getSchema()->getRelations() as $relationSchema) {
-			if ($relationSchema->isMany()) {
-				foreach ($this->reader->readItems($representation, $relationSchema, $this->graphAdoptionError(...)) as $item) {
-					$this->adoptRelatedAndWalk(
-						$item,
-						$relationSchema->getRelatedSchema(),
-						$policy,
-						$records,
-						$reps,
-						$visited,
-						$adopted,
-					);
-				}
-
-				continue;
+		if ($policy === AdoptionPolicy::Hydrate || $policy === AdoptionPolicy::Identify) {
+			if (! $identity instanceof Key) {
+				throw new StateException(sprintf(
+					"Cannot build projection representation for collection '%s' because primary key field '%s' is missing or incomplete.",
+					$collection->getName(),
+					$collection->getPrimaryKey()[0] ?? 'id',
+				));
 			}
 
-			if ($relationSchema->isSingle()) {
-				$target = $this->reader->readTarget($representation, $relationSchema, $this->graphAdoptionError(...));
-				if ($target !== null) {
-					$this->adoptRelatedAndWalk(
-						$target,
-						$relationSchema->getRelatedSchema(),
-						$policy,
-						$records,
-						$reps,
-						$visited,
-						$adopted,
-					);
+			$existing = $records->getByKey($identity);
+			if ($existing instanceof RecordState) {
+				if ($existing->isRemoved()) {
+					throw new StateException(sprintf(
+						"Cannot build projection representation for collection '%s' because key '%s' is already tracked as removed.",
+						$collection->getName(),
+						$identity->getDebugString(),
+					));
 				}
-			}
-		}
-	}
 
-	/**
-	 * @param array<int, true> $visited
-	 * @param list<RepresentationState> $adopted
-	 */
-	private function adoptRelatedAndWalk(
-		object $representation,
-		RepresentationSchema $schema,
-		AdoptionPolicy $policy,
-		RecordStateStore $records,
-		RepresentationStateStore $reps,
-		array &$visited,
-		array &$adopted,
-	): void {
-		if (! $reps->has($representation)) {
-			$adopted[] = $this->attachGraphNode(
-				$representation,
-				$schema,
-				$records,
-				$reps,
-				isRoot: false,
-				policy: $policy,
+				return $existing;
+			}
+
+			return RecordState::clean($identity, $identity->getValues());
+		}
+
+		if ($policy === AdoptionPolicy::Patch && $identity instanceof Key) {
+			return $records->bindExisting(
+				$identity,
+				[],
+				sprintf(
+					"Cannot bind projection source '%s' because key '%s' is already tracked as removed.",
+					'[root]',
+					$identity->getDebugString(),
+				),
 			);
 		}
 
-		$this->walkGraph($representation, $policy, $records, $reps, $visited, $adopted);
+		return RecordState::new($collection, []);
 	}
 
-	private function attachGraphNode(
-		object $representation,
-		RepresentationSchema $schema,
-		RecordStateStore $records,
-		RepresentationStateStore $reps,
-		bool $isRoot,
-		AdoptionPolicy $policy,
-		?Key $identity = null,
-	): RepresentationState {
-		$record = match ($policy) {
-			AdoptionPolicy::Hydrate,
-			AdoptionPolicy::Identify => $this->recordResolver->resolveClean(
-				$representation,
-				$schema,
-				$records,
-				$isRoot,
-				$policy === AdoptionPolicy::Identify ? $identity : null,
-			),
-			AdoptionPolicy::Patch,
-			AdoptionPolicy::Create => $this->recordResolver->resolve(
-				$representation,
-				$schema,
-				$records,
-				$isRoot,
-			),
-		};
-
-		$state = RepresentationState::fromRecords($schema, [
-			RepresentationFieldSchema::sourcePathKey([]) => $record,
-		]);
-
-		foreach ($state->getUniqueRecords() as $unique) {
-			$records->add($unique);
-		}
-
-		$reps->add($representation, $state);
-
-		return $state;
-	}
-
-	private function rootIdentity(RepresentationAdoptionContext $context): ?Key
+	private function assertSourceFieldCollections(RepresentationSource $source): void
 	{
-		if ($context->getPolicy() !== AdoptionPolicy::Identify) {
-			return null;
+		$expected = $source->getCollection()->getName();
+		foreach ($source->getFields() as $field) {
+			if ($field->getCollectionName() !== $expected) {
+				throw new StateException(sprintf(
+					"Cannot synchronize untracked root representation because untracked root sync needs a schema targeting one collection; path '%s' targets collection '%s' after '%s'.",
+					$field->getPath(),
+					$field->getCollectionName(),
+					$expected,
+				));
+			}
 		}
-
-		return $context->getIdentities()?->getIdentity([]);
-	}
-
-	/**
-	 * @param non-empty-string $message
-	 */
-	private function graphAdoptionError(string $message): StateException
-	{
-		return new StateException(rtrim($message, '.') . ' during graph adoption.');
 	}
 
 	private function policyForSource(
+		object $representation,
 		RepresentationAdoptionContext $context,
 		RepresentationSource $source,
 		?FlatIntentOp $op,
@@ -387,12 +390,24 @@ final class RepresentationAdoptionEngine
 			return $op->isCreate() ? AdoptionPolicy::Create : AdoptionPolicy::Patch;
 		}
 
+		$policy = $context->getPolicy();
+		if ($policy === AdoptionPolicy::Hydrate || $policy === AdoptionPolicy::Identify) {
+			return $policy;
+		}
+
+		if ($source->isRoot() && $this->intents instanceof RepresentationIntentStore) {
+			$stored = $this->intents->get($representation);
+			if ($stored instanceof RepresentationIntent) {
+				return $stored->isCreate() ? AdoptionPolicy::Create : AdoptionPolicy::Patch;
+			}
+		}
+
 		$intent = $context->getIntent();
 		if ($source->isRoot() && $intent instanceof RepresentationIntent && $intent->isCreate()) {
 			return AdoptionPolicy::Create;
 		}
 
-		return $context->getPolicy();
+		return $policy;
 	}
 
 	private function resolveSourceRecord(
@@ -405,7 +420,22 @@ final class RepresentationAdoptionEngine
 		$collection = $source->getCollection();
 
 		if ($policy === AdoptionPolicy::Create) {
-			$values = $this->patchInitialValues($representation, $source);
+			$values = $this->patchInitialValues($representation, $source, $context);
+			$key = $this->tryCompleteKey($representation, $source, $context);
+			if ($key instanceof Key) {
+				$existing = $records->getActive(
+					$key,
+					sprintf(
+						"Cannot adopt representation for collection '%s' because key '%s' is already tracked as removed.",
+						$collection->getName(),
+						$key->getDebugString(),
+					),
+				);
+				if ($existing instanceof RecordState) {
+					return $existing;
+				}
+			}
+
 			$record = RecordState::new($collection, $values);
 			$records->add($record);
 
@@ -417,7 +447,7 @@ final class RepresentationAdoptionEngine
 		}
 
 		$key = $this->resolveExistingKey($representation, $source, $context);
-		$values = $this->patchInitialValues($representation, $source);
+		$values = $this->patchInitialValues($representation, $source, $context);
 
 		return $records->bindExisting(
 			$key,
@@ -437,7 +467,7 @@ final class RepresentationAdoptionEngine
 		RecordStateStore $records,
 	): RecordState {
 		$key = $this->resolveExistingKey($representation, $source, $context, hydrate: true);
-		$values = $this->hydrateInitialValues($representation, $source);
+		$values = $this->hydrateInitialValues($representation, $source, $context);
 		$record = $records->getByKey($key);
 
 		if ($record instanceof RecordState) {
@@ -455,13 +485,25 @@ final class RepresentationAdoptionEngine
 		return RecordState::clean($key, $values);
 	}
 
+	private function tryCompleteKey(
+		object $representation,
+		RepresentationSource $source,
+		RepresentationAdoptionContext $context,
+	): ?Key {
+		try {
+			return $this->resolveExistingKey($representation, $source, $context, hydrate: true);
+		} catch (StateException) {
+			return null;
+		}
+	}
+
 	private function resolveExistingKey(
 		object $representation,
 		RepresentationSource $source,
 		RepresentationAdoptionContext $context,
 		bool $hydrate = false,
 	): Key {
-		$fromObject = $this->completeKeyFromObject($representation, $source);
+		$fromObject = $this->completeKeyFromPlace($representation, $source, $context);
 		if ($fromObject instanceof Key) {
 			$external = $context->getIdentities()?->getIdentity(
 				$source->getPath(),
@@ -487,7 +529,7 @@ final class RepresentationAdoptionEngine
 		);
 		if ($external instanceof Key) {
 			$conflict = $external->conflictingIdentityField(
-				$this->readablePrimaryKeyValues($representation, $source),
+				$this->readablePrimaryKeyValues($representation, $source, $context),
 			);
 			if ($conflict !== null) {
 				throw new StateException(sprintf(
@@ -509,31 +551,16 @@ final class RepresentationAdoptionEngine
 			));
 		}
 
-		foreach ($collection->getPrimaryKey() as $fieldName) {
-			if ($source->getFieldPath($fieldName) === null) {
-				throw new StateException(sprintf(
-					"Cannot bind projection source for collection '%s' because primary key field '%s' is not in the schema and no explicit key was provided.",
-					$collection->getName(),
-					$fieldName,
-				));
-			}
-
-			throw new StateException(sprintf(
-				"Cannot bind projection source for collection '%s' because primary key field '%s' is missing on the representation.",
-				$collection->getName(),
-				$fieldName,
-			));
-		}
-
 		throw new StateException(sprintf(
-			"Cannot bind projection source for collection '%s' because the primary key is missing or incomplete.",
+			"Cannot adopt update representation for collection '%s' because its primary key cannot be read through the schema or intent identity.",
 			$collection->getName(),
 		));
 	}
 
-	private function completeKeyFromObject(
+	private function completeKeyFromPlace(
 		object $representation,
 		RepresentationSource $source,
+		RepresentationAdoptionContext $context,
 	): ?Key {
 		$collection = $source->getCollection();
 		$values = [];
@@ -545,7 +572,7 @@ final class RepresentationAdoptionEngine
 			}
 
 			try {
-				$value = $this->reader->readPath($representation, $path);
+				$value = $this->readPlaceValue($representation, $path, $context->getSourceRow());
 			} catch (SyncException) {
 				return null;
 			}
@@ -566,6 +593,7 @@ final class RepresentationAdoptionEngine
 	private function hydrateInitialValues(
 		object $representation,
 		RepresentationSource $source,
+		RepresentationAdoptionContext $context,
 	): array {
 		$collection = $source->getCollection();
 		$values = [];
@@ -575,7 +603,11 @@ final class RepresentationAdoptionEngine
 			$fieldName = $fieldSchema->getFieldName();
 
 			try {
-				$value = $this->reader->readPath($representation, $fieldSchema->getPath());
+				$value = $this->readPlaceValue(
+					$representation,
+					$fieldSchema->getPath(),
+					$context->getSourceRow(),
+				);
 			} catch (SyncException) {
 				continue;
 			}
@@ -597,14 +629,54 @@ final class RepresentationAdoptionEngine
 	/**
 	 * @return array<string, mixed>
 	 */
-	private function patchInitialValues(object $representation, RepresentationSource $source): array
-	{
+	private function patchInitialValues(
+		object $representation,
+		RepresentationSource $source,
+		RepresentationAdoptionContext $context,
+	): array {
 		$values = [];
 		foreach ($source->getFields() as $fieldSchema) {
 			try {
-				$values[$fieldSchema->getFieldName()] = $this->reader->readPath(
+				$value = $this->readPlaceValue(
 					$representation,
 					$fieldSchema->getPath(),
+					$context->getSourceRow(),
+				);
+			} catch (SyncException) {
+				continue;
+			}
+
+			$fieldName = $fieldSchema->getFieldName();
+			if ($value === null && in_array($fieldName, $source->getCollection()->getPrimaryKey(), true)) {
+				continue;
+			}
+
+			$values[$fieldName] = $value;
+		}
+
+		return $values;
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function readablePrimaryKeyValues(
+		object $representation,
+		RepresentationSource $source,
+		RepresentationAdoptionContext $context,
+	): array {
+		$values = [];
+		foreach ($source->getCollection()->getPrimaryKey() as $fieldName) {
+			$path = $source->getFieldPath($fieldName);
+			if ($path === null) {
+				continue;
+			}
+
+			try {
+				$values[$fieldName] = $this->readPlaceValue(
+					$representation,
+					$path,
+					$context->getSourceRow(),
 				);
 			} catch (SyncException) {
 			}
@@ -614,24 +686,15 @@ final class RepresentationAdoptionEngine
 	}
 
 	/**
-	 * @return array<string, mixed>
+	 * @param array<string, mixed>|null $sourceRow
 	 */
-	private function readablePrimaryKeyValues(object $representation, RepresentationSource $source): array
+	private function readPlaceValue(object $representation, string $path, ?array $sourceRow): mixed
 	{
-		$values = [];
-		foreach ($source->getCollection()->getPrimaryKey() as $fieldName) {
-			$path = $source->getFieldPath($fieldName);
-			if ($path === null) {
-				continue;
-			}
-
-			try {
-				$values[$fieldName] = $this->reader->readPath($representation, $path);
-			} catch (SyncException) {
-			}
+		if ($sourceRow !== null && array_key_exists($path, $sourceRow)) {
+			return $sourceRow[$path];
 		}
 
-		return $values;
+		return $this->reader->readPath($representation, $path);
 	}
 
 	/**
@@ -691,5 +754,13 @@ final class RepresentationAdoptionEngine
 		}
 
 		$state->setTarget($target);
+	}
+
+	/**
+	 * @param non-empty-string $message
+	 */
+	private function relationError(string $message): StateException
+	{
+		return new StateException(rtrim($message, '.') . ' during graph adoption.');
 	}
 }

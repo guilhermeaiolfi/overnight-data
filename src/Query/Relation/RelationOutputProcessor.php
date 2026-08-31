@@ -207,8 +207,8 @@ final class RelationOutputProcessor
 			$this->assignPlaceValue($item, $branch, $record, $placeKey);
 		}
 
-		// Identity-planner INTERNAL aliases (e.g. _od_internal_*) stay on the row for
-		// writable track. Required-only field names are not place — skip those.
+		// INTERNAL-tagged aliases stay on the row for callers that selected them.
+		// Required-only field names are not place — skip those.
 		foreach ($branch->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
 			$placeKey = $selection->getSelectionKey();
 			$fieldRef = $selection->getFieldRef();

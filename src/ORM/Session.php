@@ -309,46 +309,37 @@ final class Session implements WritableResultHandler
 				? $this->getRepresentations()->get($representation)?->getSchema()
 				: null);
 
-		if ($intent !== null && RepresentationAdoptionEngine::isFlatAttachment($resolvedSchema, $intent)) {
-			if (! $resolvedSchema instanceof RepresentationSchema) {
-				throw new SyncException('Cannot synchronize a flat projection intent without a RepresentationSchema.');
-			}
-
-			$this->adoptionEngine->attach(
-				$representation,
-				new RepresentationAdoptionContext(
-					schema: $resolvedSchema,
-					policy: $intent->isCreate() ? AdoptionPolicy::Create : AdoptionPolicy::Patch,
-					identities: StaticSourceIdentities::fromIntent($resolvedSchema, $intent),
-					intent: $intent,
-				),
-				$this->getRecords(),
-				$this->getRepresentations(),
-				$this->getRelations(),
-				RepresentationAttachmentMode::Replace,
-			);
-			$this->context->getIntents()->remove($representation);
-
-			return;
-		}
-
 		if (! $resolvedSchema instanceof RepresentationSchema) {
 			throw new SyncException('Cannot synchronize an untracked representation object without a root RepresentationSchema.');
 		}
 
-		$policy = $intent?->isUpdate() === true
-			? AdoptionPolicy::Patch
-			: AdoptionPolicy::Create;
+		$policy = $intent?->isCreate() === true
+			? AdoptionPolicy::Create
+			: ($intent?->isUpdate() === true ? AdoptionPolicy::Patch : AdoptionPolicy::Create);
+		$mode = $intent !== null && ($intent->getFlatOps() !== [] || $intent->getSchema() instanceof RepresentationSchema)
+			? RepresentationAttachmentMode::Replace
+			: RepresentationAttachmentMode::Add;
+		$identities = $intent !== null
+			? StaticSourceIdentities::fromIntent($resolvedSchema, $intent)
+			: null;
+
 		$this->adoptionEngine->attach(
 			$representation,
 			new RepresentationAdoptionContext(
 				schema: $resolvedSchema,
 				policy: $policy,
+				identities: $identities,
+				intent: $intent,
 			),
 			$this->getRecords(),
 			$this->getRepresentations(),
+			$this->getRelations(),
+			$mode,
 		);
-		$this->context->getIntents()->remove($representation);
+
+		if ($intent !== null) {
+			$this->context->getIntents()->remove($representation);
+		}
 	}
 
 	/**

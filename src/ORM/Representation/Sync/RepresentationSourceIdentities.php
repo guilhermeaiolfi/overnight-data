@@ -7,11 +7,10 @@ namespace ON\Data\ORM\Representation\Sync;
 use ON\Data\Key;
 
 /**
- * Per-source identity map for flat adoption.
+ * Per-source identity map for adoption.
  *
- * Supports both modes:
- * - Static: {@see getIdentity()} with precomputed keys (projection / eager query).
- * - Dynamic: {@see getIdentity()} with a source row (query locators + raw row).
+ * Static: {@see getIdentity()} with precomputed keys (Session intent).
+ * Dynamic: {@see getIdentity()} with an assembled source row (schema field paths).
  */
 interface RepresentationSourceIdentities
 {

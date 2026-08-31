@@ -38,6 +38,12 @@ final class RepresentationArchitectureTest extends TestCase
 			'PersistenceGraph',
 			'QueryGraph',
 			'BindingTree',
+			'LoadGraph',
+			'LoadGraphNode',
+			'LoadGraphBuilder',
+			'FetchPlan',
+			'ProjectionLayout',
+			'SpreadPlan',
 			'RepresentationBinding',
 			'RepresentationFieldBinding',
 			'RepresentationRelationBinding',
@@ -48,6 +54,8 @@ final class RepresentationArchitectureTest extends TestCase
 			'ProjectionRepresentationAdopter',
 			'GraphAdopter',
 			'RepresentationAdopter',
+			'AdoptionRecordResolver',
+			'QueryRepresentationIdentityPlanner',
 		];
 
 		foreach ($this->phpFiles(dirname(__DIR__, 3) . '/src') as $path) {

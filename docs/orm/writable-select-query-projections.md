@@ -117,7 +117,7 @@ $session->sync($user);
 $session->flush();
 ```
 
-Intended meaning: `authorName` writes to `authors.name` for the author row identified by the hidden schema path (`author.id`) on the assembled posts-level payload. Those keys stay off the public nested objects. Graph attach alone cannot adopt multi-source nested flats; the writable tracker flat-hydrates those nested items first using per-relation `QuerySourceIdentities`.
+Intended meaning: `authorName` writes to `authors.name` for the author row identified by the hidden schema path (`author.id`) on the assembled posts-level payload. Those keys stay off the public nested objects. Attach walks the posts-level schema once: bind posts + author sources from the nested assembled row, then continue into any loaded relation children.
 
 ## Existing relation item from query
 
