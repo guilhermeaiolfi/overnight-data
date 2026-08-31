@@ -6,7 +6,6 @@ namespace Tests\ON\Data\Query;
 
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Exception\CountRequiresRootIdentityException;
 use ON\Data\Query\Expression\AggregateExpression;
 use ON\Data\Query\Expression\AggregateFunction;
@@ -16,6 +15,7 @@ use ON\Data\Query\Result\WritablePreparation;
 use ON\Data\Query\Result\WritableResultHandler;
 use ON\Data\Query\SelectQuery;
 use function ON\Data\Query\x;
+use ON\Data\Schema\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 

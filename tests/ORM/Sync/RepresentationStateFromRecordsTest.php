@@ -8,10 +8,10 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
-use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\State\RepresentationState;
+use ON\Data\Schema\RepresentationFieldSchema;
+use ON\Data\Schema\RepresentationRelationSchema;
+use ON\Data\Schema\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 
 final class RepresentationStateFromRecordsTest extends TestCase

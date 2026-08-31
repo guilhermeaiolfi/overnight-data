@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Result;
 
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\Schema\RepresentationSchema;
 
 /**
  * Opaque token from {@see WritableResultHandler::prepare()} for one mutable fetch.

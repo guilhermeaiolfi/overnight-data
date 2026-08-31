@@ -10,7 +10,8 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\Schema\Exception\InvalidSchemaException;
+use ON\Data\Schema\RepresentationSchema;
 
 /**
  * Resolves RecordState for graph adoption.
@@ -38,7 +39,7 @@ final class AdoptionRecordResolver
 		RecordStateStore $records,
 		bool $isRoot,
 	): RecordState {
-		$collection = $schema->requireHomogeneousCollection($isRoot);
+		$collection = $this->requireCollection($schema, $isRoot);
 		$values = $this->initialValues($representation, $schema, $collection);
 		$keyValues = $this->completeKeyValues($representation, $schema, $collection, $isRoot);
 
@@ -87,7 +88,7 @@ final class AdoptionRecordResolver
 		bool $isRoot = true,
 		?Key $identity = null,
 	): RecordState {
-		$collection = $schema->requireHomogeneousCollection($isRoot);
+		$collection = $this->requireCollection($schema, $isRoot);
 		$key = $this->resolveCleanKey($representation, $schema, $collection, $isRoot, $identity);
 		$existing = $records->getActive(
 			$key,
@@ -284,5 +285,14 @@ final class AdoptionRecordResolver
 	{
 		return $this->intents instanceof RepresentationIntentStore
 			&& $this->intents->isUpdate($representation);
+	}
+
+	private function requireCollection(RepresentationSchema $schema, bool $isRoot): CollectionInterface
+	{
+		try {
+			return $schema->requireHomogeneousCollection($isRoot);
+		} catch (InvalidSchemaException $e) {
+			throw new StateException($e->getMessage(), 0, $e);
+		}
 	}
 }

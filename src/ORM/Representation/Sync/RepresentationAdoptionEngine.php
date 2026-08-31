@@ -12,12 +12,12 @@ use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\RelationTarget;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSource;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\ORM\Session;
+use ON\Data\Schema\RepresentationFieldSchema;
+use ON\Data\Schema\RepresentationSchema;
+use ON\Data\Schema\RepresentationSource;
 
 /**
  * Schema-driven attachment of representations into session stores.

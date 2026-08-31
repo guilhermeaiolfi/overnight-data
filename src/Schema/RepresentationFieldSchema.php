@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\Representation\Schema;
+namespace ON\Data\Schema;
 
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\ORM\Exception\StateException;
+use ON\Data\Schema\Exception\InvalidSchemaException;
 
 /**
  * One structural scalar representation path with writability, place role, and
@@ -41,11 +41,11 @@ final class RepresentationFieldSchema
 		private RepresentationFieldRole $role = RepresentationFieldRole::Public,
 	) {
 		if ($path === '') {
-			throw new StateException('Representation schema path cannot be empty.');
+			throw new InvalidSchemaException('Representation schema path cannot be empty.');
 		}
 
 		if ($fieldName === '') {
-			throw new StateException('Representation schema field name cannot be empty.');
+			throw new InvalidSchemaException('Representation schema field name cannot be empty.');
 		}
 
 		$this->sourcePath = array_values($sourcePath);

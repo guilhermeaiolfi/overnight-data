@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Sync;
 
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSource;
+use ON\Data\Schema\RepresentationSchema;
+use ON\Data\Schema\RepresentationSource;
 
 /**
  * Input for {@see RepresentationAdoptionEngine::attach()}.

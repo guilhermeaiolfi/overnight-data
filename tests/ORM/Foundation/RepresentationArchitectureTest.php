@@ -70,6 +70,7 @@ final class RepresentationArchitectureTest extends TestCase
 	public function testRepresentationSchemaIsNotCoupledToMapperHydrationApi(): void
 	{
 		foreach ([
+			dirname(__DIR__, 3) . '/src/Schema',
 			dirname(__DIR__, 3) . '/src/ORM/Representation/Schema',
 			dirname(__DIR__, 3) . '/src/ORM/Representation/State',
 		] as $root) {

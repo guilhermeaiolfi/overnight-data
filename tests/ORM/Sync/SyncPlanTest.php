@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Record\RecordState;
-use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Sync\SyncConflict;
 use ON\Data\ORM\Representation\Sync\SyncFieldUpdate;
 use ON\Data\ORM\Representation\Sync\SyncPlan;
+use ON\Data\Schema\RepresentationFieldSchema;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\ORM\Support\OrmFixture;
 

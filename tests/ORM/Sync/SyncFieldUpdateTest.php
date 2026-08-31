@@ -6,8 +6,8 @@ namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Record\RecordState;
-use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
 use ON\Data\ORM\Representation\Sync\SyncFieldUpdate;
+use ON\Data\Schema\RepresentationFieldSchema;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\ORM\Support\OrmFixture;
 

@@ -6,9 +6,9 @@ namespace ON\Data\ORM\Representation\Schema\Query;
 
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSource;
 use ON\Data\ORM\Representation\Sync\RepresentationSourceIdentities;
+use ON\Data\Schema\RepresentationFieldSchema;
+use ON\Data\Schema\RepresentationSource;
 
 /**
  * Adoption identity map for a prepared writable query (one per {@see QueryRepresentationPlan}).

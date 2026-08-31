@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Schema\Query;
 
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSource;
 use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Result\WritablePreparation;
+use ON\Data\Schema\RepresentationSchema;
+use ON\Data\Schema\RepresentationSource;
 
 /**
  * Writable prepare() result: schema, sources, and the query-scoped

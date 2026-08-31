@@ -7,8 +7,8 @@ namespace ON\Data\ORM\Representation\State;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
-use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\Schema\RepresentationFieldSchema;
+use ON\Data\Schema\RepresentationSchema;
 
 final class RepresentationState
 {

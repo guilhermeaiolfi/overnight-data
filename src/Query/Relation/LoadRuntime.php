@@ -6,12 +6,12 @@ namespace ON\Data\Query\Relation;
 
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Schema\RepresentationSchema;
 use ReflectionMethod;
 
 final class LoadRuntime

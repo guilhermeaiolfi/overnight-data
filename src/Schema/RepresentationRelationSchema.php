@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\Representation\Schema;
+namespace ON\Data\Schema;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\Definition\Relation\RelationInterface;
-use ON\Data\ORM\Exception\StateException;
+use ON\Data\Schema\Exception\InvalidSchemaException;
 
 final class RepresentationRelationSchema
 {
@@ -20,11 +20,11 @@ final class RepresentationRelationSchema
 		private RelationLoadKnowledge $loadKnowledge = RelationLoadKnowledge::Unknown,
 	) {
 		if ($path === '') {
-			throw new StateException('Representation relation schema path cannot be empty.');
+			throw new InvalidSchemaException('Representation relation schema path cannot be empty.');
 		}
 
 		if ($relationName === '') {
-			throw new StateException('Representation relation schema relation name cannot be empty.');
+			throw new InvalidSchemaException('Representation relation schema relation name cannot be empty.');
 		}
 	}
 

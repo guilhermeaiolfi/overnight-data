@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\Representation\Schema;
+namespace ON\Data\Schema;
 
 /**
  * Place role for a field path on {@see RepresentationSchema}.

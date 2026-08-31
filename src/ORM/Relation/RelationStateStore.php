@@ -7,7 +7,7 @@ namespace ON\Data\ORM\Relation;
 use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\Schema\RepresentationSchema;
 
 final class RelationStateStore
 {

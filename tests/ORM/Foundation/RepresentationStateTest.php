@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Foundation;
 
 use ON\Data\ORM\Record\RecordState;
-use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\State\RepresentationState;
+use ON\Data\Schema\RepresentationFieldSchema;
+use ON\Data\Schema\RepresentationRelationSchema;
+use ON\Data\Schema\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;

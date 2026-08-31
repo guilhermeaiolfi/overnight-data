@@ -2,16 +2,15 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\Representation\Schema;
+namespace ON\Data\Schema;
 
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\ORM\Representation\Sync\RepresentationSourceIdentities;
 
 /**
  * Structural grouping of representation fields that originate from one source path.
  *
  * Carries only representation/source structure. External per-source identities
- * for adoption are supplied via {@see RepresentationSourceIdentities}.
+ * for adoption are supplied by the ORM identity maps.
  *
  * Prefer {@see RepresentationSchema::getSources()} for the memoized list; this factory
  * remains for one-off derivation.

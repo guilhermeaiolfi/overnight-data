@@ -16,8 +16,6 @@ use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\RelationTarget;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\State\Query\WritableQueryResultTracker;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
@@ -33,6 +31,8 @@ use ON\Data\ORM\Representation\Sync\SyncResult;
 use ON\Data\Query\Result\WritablePreparation;
 use ON\Data\Query\Result\WritableResultHandler;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Schema\RepresentationRelationSchema;
+use ON\Data\Schema\RepresentationSchema;
 
 final class Session implements WritableResultHandler
 {

@@ -7,14 +7,14 @@ namespace Tests\ON\Data\ORM\Representation\Schema;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityPlanner;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
-use ON\Data\ORM\Representation\Schema\RelationLoadKnowledge;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSource;
 use function ON\Data\Query\query;
+use ON\Data\Query\Schema\QueryRepresentationSchemaCompiler;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use function ON\Data\Query\x;
+use ON\Data\Schema\RelationLoadKnowledge;
+use ON\Data\Schema\RepresentationSchema;
+use ON\Data\Schema\RepresentationSource;
 use PHPUnit\Framework\TestCase;
 
 final class QueryRepresentationSchemaCompilerTest extends TestCase

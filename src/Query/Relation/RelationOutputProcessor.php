@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Selection\SelectionTag;
+use ON\Data\Schema\RepresentationSchema;
 
 /**
  * @phpstan-type HiddenPromotionItem array{identity: string, value: mixed}

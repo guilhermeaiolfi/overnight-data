@@ -43,16 +43,6 @@ final class QueryArchitectureTest extends TestCase
 			'PDO',
 			'use ON\\Data\\ORM\\',
 		];
-		$selectQueryAllowOrm = [
-			'use ON\\Data\\ORM\\Representation\\Schema\\Query\\QueryRepresentationPlan;',
-			'use ON\\Data\\ORM\\Representation\\Schema\\Query\\QueryRepresentationSchemaCompiler;',
-			'use ON\\Data\\ORM\\Representation\\Schema\\RepresentationSchema;',
-		];
-		// RepresentationSchema is the intentional Query↔ORM place boundary (assemble,
-		// WritablePreparation); allowed anywhere under src/Query.
-		$queryWideAllowOrm = [
-			'use ON\\Data\\ORM\\Representation\\Schema\\RepresentationSchema;',
-		];
 
 		$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root));
 
@@ -63,12 +53,6 @@ final class QueryArchitectureTest extends TestCase
 			}
 
 			$raw = (string) file_get_contents($file->getPathname());
-			$isSelectQuery = str_ends_with(str_replace('\\', '/', $file->getPathname()), '/SelectQuery.php');
-			$raw = str_replace($queryWideAllowOrm, '', $raw);
-			if ($isSelectQuery) {
-				$raw = str_replace($selectQueryAllowOrm, '', $raw);
-			}
-
 			$contents = strtolower($raw);
 
 			foreach ($forbiddenPatterns as $pattern) {

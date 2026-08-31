@@ -12,8 +12,6 @@ use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Key;
 use function ON\Data\Mapper\map;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationSchemaCompiler;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Condition\ConditionList;
 use ON\Data\Query\Condition\ConditionTag;
@@ -37,9 +35,11 @@ use ON\Data\Query\Relation\RelationSelectionTree;
 use ON\Data\Query\Result\ObjectExportClassValidator;
 use ON\Data\Query\Result\WritablePreparation;
 use ON\Data\Query\Result\WritableResultHandler;
+use ON\Data\Query\Schema\QueryRepresentationSchemaCompiler;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\Sort\Sort;
+use ON\Data\Schema\RepresentationSchema;
 
 final class SelectQuery implements QuerySourceInterface
 {

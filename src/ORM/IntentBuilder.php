@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace ON\Data\ORM;
 
 use ON\Data\Key;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Sync\FlatIntentOp;
 use ON\Data\ORM\Representation\Sync\RepresentationIntent;
 use ON\Data\ORM\Representation\Sync\RepresentationIntentLifecycle;
+use ON\Data\Schema\RepresentationSchema;
 
 /**
  * Fluent writer into RepresentationIntentStore for one representation.

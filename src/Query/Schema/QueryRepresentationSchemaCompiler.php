@@ -2,18 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\Representation\Schema\Query;
+namespace ON\Data\Query\Schema;
 
 use InvalidArgumentException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
-use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Representation\Schema\RelationLoadKnowledge;
-use ON\Data\ORM\Representation\Schema\RepresentationExpressionSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationFieldRole;
-use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
@@ -23,13 +16,20 @@ use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Schema\Exception\InvalidSchemaException;
+use ON\Data\Schema\RelationLoadKnowledge;
+use ON\Data\Schema\RepresentationExpressionSchema;
+use ON\Data\Schema\RepresentationFieldRole;
+use ON\Data\Schema\RepresentationFieldSchema;
+use ON\Data\Schema\RepresentationRelationSchema;
+use ON\Data\Schema\RepresentationSchema;
 
 /**
  * Compiles a SelectQuery selection graph into a structural RepresentationSchema
  * for flat mutable projection adoption.
  *
- * Does not plan identities or mutate the query — that belongs to
- * {@see QueryRepresentationIdentityPlanner} at writable prepare time.
+ * Does not plan identities or mutate the query — identity planning runs at
+ * writable prepare time in the ORM tracker.
  */
 final class QueryRepresentationSchemaCompiler
 {
@@ -458,6 +458,6 @@ final class QueryRepresentationSchemaCompiler
 			return [$source->getCollection(), $source->relativeTo($level)];
 		}
 
-		throw new StateException('Cannot resolve projection source because it does not belong to this query level.');
+		throw new InvalidSchemaException('Cannot resolve projection source because it does not belong to this query level.');
 	}
 }

@@ -7,11 +7,11 @@ namespace Tests\ON\Data\ORM\Sync;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Representation\Sync\SyncFieldUpdate;
 use ON\Data\ORM\Representation\Sync\SyncPlan;
 use ON\Data\ORM\Representation\Sync\SyncResult;
+use ON\Data\Schema\RepresentationFieldSchema;
+use ON\Data\Schema\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 

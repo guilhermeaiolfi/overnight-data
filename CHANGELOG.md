@@ -17,6 +17,7 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 ### Changed
 
+- **Representation schema kernel** — place types (`RepresentationSchema` and field/relation/expression/source nodes) live in `ON\Data\Schema`. `QueryRepresentationSchemaCompiler` lives in `ON\Data\Query\Schema`. Query assemble no longer imports ORM. Identity planning (`QueryRepresentationPlan`, `QueryRepresentationIdentityPlanner`, `QuerySourceIdentities`) stays in ORM.
 - **Adoption entry unification** — `RepresentationAdoptionEngine::isFlatAttachment()` is the single flat-vs-graph rule (`RepresentationIntent::isFlatProjection()` delegates). `Session::identify()` routes through the engine with `AdoptionPolicy::Identify` instead of a hand-rolled `adopt()` path. Writable mutable DTO docs aligned in README.
 - **Relation load completeness** — query-compiled `RepresentationRelationSchema` carries `RelationLoadKnowledge` (`Full` without relation where/limit/offset, otherwise `Partial`). `RelationRepresentationSynchronizer` marks `ToManyRelationState` accordingly and treats the first Full/Partial query projection as a loaded snapshot (`clearChanges()`), so full loads can remove absent members on later sync while filtered/sliced loads stay add-only.
 

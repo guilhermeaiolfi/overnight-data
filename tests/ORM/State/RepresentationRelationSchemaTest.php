@@ -6,10 +6,10 @@ namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Representation\Schema\RelationLoadKnowledge;
-use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\Schema\Exception\InvalidSchemaException;
+use ON\Data\Schema\RelationLoadKnowledge;
+use ON\Data\Schema\RepresentationRelationSchema;
+use ON\Data\Schema\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 
 final class RepresentationRelationSchemaTest extends TestCase
@@ -31,14 +31,14 @@ final class RepresentationRelationSchemaTest extends TestCase
 
 	public function testRejectsEmptyPath(): void
 	{
-		$this->expectException(StateException::class);
+		$this->expectException(InvalidSchemaException::class);
 
 		new RepresentationRelationSchema('', $this->users(), 'posts', $this->related());
 	}
 
 	public function testRejectsEmptyRelationName(): void
 	{
-		$this->expectException(StateException::class);
+		$this->expectException(InvalidSchemaException::class);
 
 		new RepresentationRelationSchema('posts', $this->users(), '', $this->related());
 	}

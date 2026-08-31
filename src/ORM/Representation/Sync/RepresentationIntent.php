@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\Key;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
+use ON\Data\Schema\RepresentationSchema;
 
 /**
  * Pending update/create intent for one representation until sync().

@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Representation\Schema\RepresentationExpressionSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationFieldRole;
-use ON\Data\ORM\Representation\Schema\RepresentationFieldSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use function ON\Data\Query\x;
+use ON\Data\Schema\Exception\InvalidSchemaException;
+use ON\Data\Schema\RepresentationExpressionSchema;
+use ON\Data\Schema\RepresentationFieldRole;
+use ON\Data\Schema\RepresentationFieldSchema;
+use ON\Data\Schema\RepresentationRelationSchema;
+use ON\Data\Schema\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\ORM\Support\OrmFixture;
 
@@ -132,7 +132,7 @@ final class RepresentationSchemaTest extends TestCase
 		self::assertSame(['name', 'lineTotal'], $schema->getPaths());
 		self::assertFalse($schema->getExpression('lineTotal')->isWritable());
 
-		$this->expectException(StateException::class);
+		$this->expectException(InvalidSchemaException::class);
 		$schema->addRelation($this->relationSchema('lineTotal'));
 	}
 
@@ -156,7 +156,7 @@ final class RepresentationSchemaTest extends TestCase
 		$schema = new RepresentationSchema($this->users());
 		$schema->addField($this->fieldSchema('name'));
 
-		$this->expectException(StateException::class);
+		$this->expectException(InvalidSchemaException::class);
 		$this->expectExceptionMessage('name');
 		$schema->addField($this->fieldSchema('name'));
 	}
@@ -166,7 +166,7 @@ final class RepresentationSchemaTest extends TestCase
 		$schema = new RepresentationSchema($this->users());
 		$schema->addRelation($this->relationSchema('posts'));
 
-		$this->expectException(StateException::class);
+		$this->expectException(InvalidSchemaException::class);
 		$this->expectExceptionMessage('posts');
 		$schema->addRelation($this->relationSchema('posts'));
 	}
@@ -176,7 +176,7 @@ final class RepresentationSchemaTest extends TestCase
 		$schema = new RepresentationSchema($this->users());
 		$schema->addField($this->fieldSchema('posts'));
 
-		$this->expectException(StateException::class);
+		$this->expectException(InvalidSchemaException::class);
 		$this->expectExceptionMessage('posts');
 		$schema->addRelation($this->relationSchema('posts'));
 	}

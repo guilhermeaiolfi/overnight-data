@@ -6,7 +6,7 @@ namespace ON\Data\ORM\Representation\State;
 
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
-use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
+use ON\Data\Schema\RepresentationRelationSchema;
 
 /**
  * Concrete runtime attachment for one relation representation path: the

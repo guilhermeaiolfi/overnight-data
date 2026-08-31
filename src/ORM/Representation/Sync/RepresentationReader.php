@@ -6,9 +6,9 @@ namespace ON\Data\ORM\Representation\Sync;
 
 use function ON\Data\Mapper\map;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
-use ON\Data\ORM\Representation\Schema\RepresentationSchema;
 use ON\Data\ORM\Session;
+use ON\Data\Schema\RepresentationRelationSchema;
+use ON\Data\Schema\RepresentationSchema;
 use stdClass;
 use Throwable;
 

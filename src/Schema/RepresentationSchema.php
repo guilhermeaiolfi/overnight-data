@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\ORM\Representation\Schema;
+namespace ON\Data\Schema;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
-use ON\Data\ORM\Exception\StateException;
+use ON\Data\Schema\Exception\InvalidSchemaException;
 use stdClass;
 
 /**
@@ -23,8 +23,8 @@ use stdClass;
  * Implicit paths excluded).
  *
  * Durable model compiled from queries or built manually; consumed by Session
- * sync/adoption and by Query assemble. Query may import this type as the
- * intentional ORM boundary exception (fetch still uses LoadBranch; selections
+ * sync/adoption and by Query assemble. Lives outside ORM so Query assemble can
+ * depend on it without importing ORM (fetch still uses LoadBranch; selections
  * stay on SelectionList).
  */
 final class RepresentationSchema
@@ -114,10 +114,10 @@ final class RepresentationSchema
 
 		if ($this->fields === [] && $this->relations === []) {
 			if ($isRoot) {
-				throw new StateException('Cannot synchronize untracked root representation because untracked root sync needs a schema targeting one collection.');
+				throw new InvalidSchemaException('Cannot synchronize untracked root representation because untracked root sync needs a schema targeting one collection.');
 			}
 
-			throw new StateException('Cannot adopt representation graph because a related schema does not target a collection.');
+			throw new InvalidSchemaException('Cannot adopt representation graph because a related schema does not target a collection.');
 		}
 
 		$rootName = $this->collection->getName();
@@ -143,7 +143,7 @@ final class RepresentationSchema
 			}
 		}
 
-		throw new StateException('Cannot adopt representation because the schema is not homogeneous.');
+		throw new InvalidSchemaException('Cannot adopt representation because the schema is not homogeneous.');
 	}
 
 	private function heterogeneousCollectionException(
@@ -151,9 +151,9 @@ final class RepresentationSchema
 		string $nextName,
 		string $currentName,
 		bool $isRoot,
-	): StateException {
+	): InvalidSchemaException {
 		if ($isRoot) {
-			return new StateException(sprintf(
+			return new InvalidSchemaException(sprintf(
 				"Cannot synchronize untracked root representation because untracked root sync needs a schema targeting one collection; path '%s' targets collection '%s' after '%s'.",
 				$path,
 				$nextName,
@@ -161,7 +161,7 @@ final class RepresentationSchema
 			));
 		}
 
-		return new StateException(sprintf(
+		return new InvalidSchemaException(sprintf(
 			"Cannot adopt representation graph because related schema path '%s' targets collection '%s' after '%s'.",
 			$path,
 			$nextName,
@@ -187,7 +187,7 @@ final class RepresentationSchema
 	public function getField(string $path): RepresentationFieldSchema
 	{
 		if (! array_key_exists($path, $this->fields)) {
-			throw new StateException(sprintf("Representation schema does not contain field path '%s'.", $path));
+			throw new InvalidSchemaException(sprintf("Representation schema does not contain field path '%s'.", $path));
 		}
 
 		return $this->fields[$path];
@@ -379,7 +379,7 @@ final class RepresentationSchema
 	public function getRelation(string $path): RepresentationRelationSchema
 	{
 		if (! array_key_exists($path, $this->relations)) {
-			throw new StateException(sprintf("Representation schema does not contain relation path '%s'.", $path));
+			throw new InvalidSchemaException(sprintf("Representation schema does not contain relation path '%s'.", $path));
 		}
 
 		return $this->relations[$path];
@@ -410,7 +410,7 @@ final class RepresentationSchema
 	public function getExpression(string $path): RepresentationExpressionSchema
 	{
 		if (! array_key_exists($path, $this->expressions)) {
-			throw new StateException(sprintf("Representation schema does not contain expression path '%s'.", $path));
+			throw new InvalidSchemaException(sprintf("Representation schema does not contain expression path '%s'.", $path));
 		}
 
 		return $this->expressions[$path];
@@ -471,7 +471,7 @@ final class RepresentationSchema
 	private function assertPathIsAvailable(string $path): void
 	{
 		if ($this->hasPath($path)) {
-			throw new StateException(sprintf("Representation schema already contains path '%s'.", $path));
+			throw new InvalidSchemaException(sprintf("Representation schema already contains path '%s'.", $path));
 		}
 	}
 

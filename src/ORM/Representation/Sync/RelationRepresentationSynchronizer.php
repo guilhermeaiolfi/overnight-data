@@ -9,11 +9,11 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Relation\RelationStateInterface;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Representation\Schema\RelationLoadKnowledge;
-use ON\Data\ORM\Representation\Schema\RepresentationRelationSchema;
 use ON\Data\ORM\Representation\State\RepresentationRelationStateItem;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
+use ON\Data\Schema\RelationLoadKnowledge;
+use ON\Data\Schema\RepresentationRelationSchema;
 
 final class RelationRepresentationSynchronizer
 {
