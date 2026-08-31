@@ -92,7 +92,7 @@ final class FlushScheduler
 				$results[] = $result;
 
 				if ($command instanceof InsertCommand) {
-					$this->syncInsertedRecord($record, $result);
+					$this->applyRecoveredValues($record, $result);
 					if ($deferFinalizers) {
 						$finalizers[] = function () use ($states, $record): void {
 							$this->markCleanAndIndex($states, $record);
@@ -107,6 +107,7 @@ final class FlushScheduler
 				}
 
 				if ($command instanceof UpdateCommand) {
+					$this->applyRecoveredValues($record, $result);
 					$this->finalize($finalizers, function () use ($states, $record): void {
 						$this->markCleanAndIndex($states, $record);
 					}, $deferFinalizers);
@@ -247,7 +248,7 @@ final class FlushScheduler
 		return [];
 	}
 
-	private function syncInsertedRecord(RecordState $record, CommandResult $result): void
+	private function applyRecoveredValues(RecordState $record, CommandResult $result): void
 	{
 		$generatedValues = $result->getGeneratedValues();
 		if ($generatedValues !== []) {

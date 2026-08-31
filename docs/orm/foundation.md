@@ -542,4 +542,4 @@ Do not introduce as part of the current ORM persistence layer:
 - proxy objects;
 - a separate transaction API on `Session`;
 - stale-row detection;
-- full database-default refresh.
+- `Session::refresh()` of an existing row (write-path recovery of omitted insert columns and `DatabaseGenerator` update columns is implemented).

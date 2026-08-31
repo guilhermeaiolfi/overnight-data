@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Persistence;
 
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\Field\Generator\DatabaseGenerator;
+use ON\Data\Definition\Field\Generator\When;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Persistence\CommandPlanner;
@@ -189,6 +191,29 @@ final class CommandPlannerTest extends TestCase
 
 		self::assertInstanceOf(UpdateCommand::class, $command);
 		self::assertSame(['manager_id' => 20], $command->getChanges());
+	}
+
+	public function testUpdatePlanningOmitsDatabaseGeneratedUpdateFields(): void
+	{
+		$notes = (new Registry())
+			->collection('notes')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('title', 'string')->end()
+			->field('stamp', 'string')->generator(DatabaseGenerator::class, null, When::UPDATE)->end();
+
+		$record = RecordState::clean($notes->getKey(3), [
+			'id' => 3,
+			'title' => 'Hello',
+			'stamp' => 'init',
+		]);
+		$record->setValue('title', 'Updated');
+		$record->setValue('stamp', 'php');
+
+		$command = (new CommandPlanner())->plan($record);
+
+		self::assertInstanceOf(UpdateCommand::class, $command);
+		self::assertSame(['title' => 'Updated'], $command->getChanges());
 	}
 
 	private function memberships(): CollectionInterface

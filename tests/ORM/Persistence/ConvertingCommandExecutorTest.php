@@ -117,4 +117,34 @@ final class ConvertingCommandExecutorTest extends TestCase
 			$inner->lastCommand->getChanges(),
 		);
 	}
+
+	public function testExecuteConvertsGeneratedStorageValuesBackToPhp(): void
+	{
+		$articles = (new Registry())
+			->collection('articles')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('createdAt', 'datetime')->end();
+
+		$command = new InsertCommand($articles, [
+			'id' => 1,
+		]);
+
+		$inner = new class () implements CommandExecutorInterface {
+			public function execute(CommandInterface $command): CommandResult
+			{
+				return new CommandResult(1, [
+					'createdAt' => '2026-08-17 12:30:00',
+				]);
+			}
+		};
+
+		$result = (new ConvertingCommandExecutor($inner))->execute($command);
+
+		self::assertInstanceOf(DateTimeImmutable::class, $result->getGeneratedValues()['createdAt']);
+		self::assertSame(
+			'2026-08-17 12:30:00',
+			$result->getGeneratedValues()['createdAt']->format('Y-m-d H:i:s'),
+		);
+	}
 }

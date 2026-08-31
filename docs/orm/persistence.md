@@ -189,23 +189,27 @@ use ON\Data\Definition\Field\Generator\When;
 ```
 
 - `DatabaseGenerator` — database-owned (identity / sequence / DB default). Optional `$arg` is a sequence name (string) or `['sequence' => '...']` used as schema metadata for the column default (and passed through to `lastInsertID($sequence)` on the non-RETURNING path). Executors fill `CommandResult`:
-  - drivers whose insert builder implements Cycle `ReturningInterface` (Postgres, and SQLite on Cycle Database 2.22+) recover pending DB-generated insert fields via `RETURNING`. Cycle’s statement wrapper forces `FETCH_ASSOC`, so values are read from an assoc row. If PDO reports `rowCount()` 0 but `RETURNING` produced a value, affected rows are treated as 1;
-  - otherwise the Cycle adapter recovers a single DB-generated primary key through `lastInsertID($sequence)`. Cycle’s stock `Driver::lastInsertID()` currently ignores the sequence argument and calls PDO without a name; passing the sequence is best-effort for custom/future drivers that honor it. MySQL autoincrement typically does not need a sequence name.
+  - **Insert readback**: any collection field omitted from the insert payload (SQL `DEFAULT`, identity, triggers), not only fields tagged `DatabaseGenerator`.
+  - **Update readback**: fields tagged `DatabaseGenerator` for `When::UPDATE` (and omitted from the UPDATE SET by `CommandPlanner`).
+  - drivers whose insert builder implements Cycle `ReturningInterface` (Postgres, and SQLite on Cycle Database 2.22+) recover those insert columns via `RETURNING`. Cycle’s statement wrapper forces `FETCH_ASSOC`, so values are read from an assoc row. If PDO reports `rowCount()` 0 but a value was recovered, affected rows are treated as 1;
+  - otherwise the Cycle adapter recovers a single DB-generated primary key through `lastInsertID($sequence)`, then reads any remaining omitted insert columns (or `When::UPDATE` columns after update) with a Cycle `select()` keyed by identity. Cycle’s stock `Driver::lastInsertID()` currently ignores the sequence argument and calls PDO without a name; passing the sequence is best-effort for custom/future drivers that honor it. MySQL autoincrement typically does not need a sequence name.
+  - recovered storage values are converted back to canonical PHP by `ConvertingCommandExecutor`. There is no `Session::refresh()` API; this is write-path completion of `CommandResult` only.
 - `UuidGenerator` — PHP-owned RFC 4122 UUID v4 string (`xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`). No constructor arg.
 - `NowGenerator` — PHP-owned `DateTimeImmutable('now')`. Optional `$arg` is a timezone name (e.g. `UTC`) or pass `new NowGenerator('UTC')` / `new NowGenerator(new DateTimeZone('UTC'))`.
 - `PhpFieldGeneratorInterface` — PHP-owned; `CommandPlanner` runs `generate()` above adapters before INSERT/UPDATE (`When` bitmask). `$arg` may be a scalar, a list of constructor args, or a single constructor value.
 - Instances are allowed when they implement `GeneratorDefinitionArgInterface` (or you pass an explicit `$arg`); they flatten into the array definition as `class` + `arg`.
 - `autoIncrement(true)` is sugar for `generator(DatabaseGenerator::class, null, When::INSERT)`.
 
-`CycleCommandExecutor` recovers generated values when:
+`CycleCommandExecutor` recovers database-assigned values when:
 
-- one or more fields are `DatabaseGenerator` / `autoIncrement` for INSERT, and the insert command did not supply a non-null value for them;
-- **RETURNING path** (Postgres, and SQLite on Cycle Database 2.22+): pending fields are requested in one `RETURNING` clause and read from an assoc result row. Affected rows come from `rowCount()` unless that is 0 and a generated value was recovered, in which case the insert counts as 1 row (PDO SQLite `INSERT … RETURNING` often reports `rowCount()` 0);
-- **`lastInsertID` path** (MySQL, and SQLite before Cycle 2.22): only a single non-composite DB-generated primary key is recovered via `lastInsertID($sequence)` after `execute()`.
+- **Insert**: collection fields omitted from the insert payload (SQL defaults, identity, triggers). Fields present on the command, including explicit `null`, are not reread.
+- **Update**: fields tagged `DatabaseGenerator` for `When::UPDATE`.
+- **RETURNING path** (Postgres, and SQLite on Cycle Database 2.22+): omitted insert columns are requested in one `RETURNING` clause and read from an assoc result row. Affected rows come from `rowCount()` unless that is 0 and a generated value was recovered, in which case the insert counts as 1 row (PDO SQLite `INSERT … RETURNING` often reports `rowCount()` 0);
+- **`lastInsertID` + select path** (MySQL, and SQLite before Cycle 2.22): a single non-composite DB-generated primary key is recovered via `lastInsertID($sequence)` after `execute()`. Remaining omitted insert columns, and `When::UPDATE` columns after update, are read with a Cycle `select()` when identity is complete.
 
-Numeric integer strings are normalized to `int`. Generated values remain keyed by field name even when the primary-key column name differs.
+Numeric integer strings are normalized to `int`. Recovered values remain keyed by field name even when the physical column name differs. `ConvertingCommandExecutor` converts those storage values to canonical PHP before `FlushScheduler` merges them into `RecordState` (insert and update).
 
-Multi-field database-generated insert recovery is a RETURNING-capable adapter feature. The executor does not yet support generated-value recovery for composite keys on the `lastInsertID` path, explicit sequence `NEXTVAL` pre-allocation (client-side id before insert), or full row refresh of non-generated columns. PHP generators for non-PK fields are supported through definition + `CommandPlanner`.
+Multi-field insert recovery on the `lastInsertID` path still requires a complete identity (recovered PK or application-assigned key). Composite keys are recovered through `RETURNING` when the insert builder supports it; they are not recovered via `lastInsertID`. Explicit sequence `NEXTVAL` pre-allocation (client-side id before insert) is not implemented. There is no `Session::refresh()` of an unchanged row. PHP generators for non-PK fields are supported through definition + `CommandPlanner`.
 
 Generated values are merged into in-memory record state as soon as the insert command succeeds so later dependent commands in the same flush can resolve concrete foreign-key values. When the flush transaction fails, `FlushExecutor` restores in-memory record snapshots so rolled-back generated values are not left exposed after failure. Relation change markers remain pending so a full retry can plan again.
 
@@ -243,7 +247,7 @@ $generatedId = $record->getValue('id');
 
 `CycleRuntimeFactory` wires `ConvertingCommandExecutor` around `CycleCommandExecutor` automatically.
 
-Generated database values are recovered after insert via `RETURNING` when the Cycle insert builder supports it (including SQLite on Cycle Database 2.22+), otherwise via `lastInsertID($sequence)` for a simple DB-generated primary key. PHP field generators are supported for any field through `->generator()`. Relation persistence planning is limited to configured planners that produce scalar mutations and/or commands. Physical table and column mapping happens in `CycleCommandExecutor` using collection and field metadata.
+Generated database values and omitted insert columns are recovered after insert via `RETURNING` when the Cycle insert builder supports it (including SQLite on Cycle Database 2.22+), otherwise via `lastInsertID($sequence)` plus a Cycle `select()` for remaining columns. After update, `DatabaseGenerator` `When::UPDATE` columns are reread the same way. PHP field generators are supported for any field through `->generator()`. Relation persistence planning is limited to configured planners that produce scalar mutations and/or commands. Physical table and column mapping happens in `CycleCommandExecutor` using collection and field metadata.
 
 ## Public Runtime
 
@@ -274,7 +278,7 @@ This is deliberately not an `EntityManager`. There is no repository API, object 
 - No optimistic locking or stale-row revision conflict handling beyond representation sync baseline checks.
 - No lazy loading.
 - No repositories, `EntityManager`, `UnitOfWork`, lifecycle events, proxies, or generated model layer.
-- No full database-default refresh of non-generated columns; pending `DatabaseGenerator` insert fields are recovered via `RETURNING` or `lastInsertID($sequence)` as documented above.
+- No `Session::refresh()` of an existing row; omitted insert columns and `DatabaseGenerator` update columns are recovered on the write path via `RETURNING` or a follow-up select as documented above.
 - No batch command execution.
 - No public SQL command API.
 - Writable export supports `stdClass` and mutable public-property classes; readonly classes/properties are rejected. Sync reads scalars via the mapper (`map($dto)->to(stdClass::class)`); relation identity uses live object paths.

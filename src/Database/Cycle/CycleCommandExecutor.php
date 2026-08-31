@@ -58,7 +58,7 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 			->insert($this->getTable($command))
 			->values($this->mapFieldValuesToColumns($command->getCollection(), $command->getValues()));
 
-		$pending = $this->pendingDatabaseGeneratedFields($command);
+		$pending = $this->insertReadbackFields($command);
 		if ($pending !== [] && $insert instanceof ReturningInterface) {
 			return $this->insertWithReturning($insert, $pending);
 		}
@@ -66,16 +66,22 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 		// InsertQuery::run() returns lastInsertID and discards rowCount; execute for the write.
 		$parameters = new QueryParameters();
 		$driver = $this->database->getDriver(DatabaseInterface::WRITE);
-
-		return new CommandResult(
-			$this->affectedRows(
-				$driver->execute(
-					$insert->sqlStatement($parameters),
-					$parameters->getParameters(),
-				),
+		$affected = $this->affectedRows(
+			$driver->execute(
+				$insert->sqlStatement($parameters),
+				$parameters->getParameters(),
 			),
-			$this->generatedValuesViaLastInsertId($command, $pending, $driver),
 		);
+		$generated = $this->generatedValuesViaLastInsertId($command, $pending, $driver);
+		$remaining = $this->fieldsNotRecovered($pending, $generated);
+		if ($remaining !== []) {
+			$identity = $this->insertIdentityForReadback($command, $generated);
+			if ($identity !== []) {
+				$generated += $this->fetchFieldValues($command->getCollection(), $remaining, $identity);
+			}
+		}
+
+		return new CommandResult($affected, $generated);
 	}
 
 	/**
@@ -137,7 +143,7 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 		}
 
 		if (count($fields) === 1 && ! is_array($raw)) {
-			$value = $this->normalizeGeneratedId($raw);
+			$value = $this->normalizeRecoveredValue($raw);
 
 			return $value === null ? [] : [$fields[0]->getName() => $value];
 		}
@@ -153,7 +159,7 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 				continue;
 			}
 
-			$normalized = $this->normalizeGeneratedId($value);
+			$normalized = $this->normalizeRecoveredValue($value);
 			if ($normalized !== null) {
 				$generated[$fieldName] = $normalized;
 			}
@@ -173,7 +179,14 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 			$query->where($column, $value);
 		}
 
-		return new CommandResult($this->affectedRows($query->run()));
+		$affected = $this->affectedRows($query->run());
+		$generated = [];
+		$pending = $this->updateReadbackFields($command);
+		if ($affected > 0 && $pending !== []) {
+			$generated = $this->fetchFieldValues($collection, $pending, $command->getIdentity());
+		}
+
+		return new CommandResult($affected, $generated);
 	}
 
 	private function delete(DeleteCommand $command): CommandResult
@@ -222,22 +235,17 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 	}
 
 	/**
-	 * DB-generated insert fields the command did not supply (database must fill them).
+	 * Collection fields omitted from the insert payload (DB default / identity / trigger).
 	 *
 	 * @return list<FieldInterface>
 	 */
-	private function pendingDatabaseGeneratedFields(InsertCommand $command): array
+	private function insertReadbackFields(InsertCommand $command): array
 	{
 		$values = $command->getValues();
 		$pending = [];
 
 		foreach ($command->getCollection()->getFields() as $field) {
-			if (! $field->isDatabaseGenerated() || ! $field->isGeneratedWhen(When::INSERT)) {
-				continue;
-			}
-
-			$fieldName = $field->getName();
-			if (array_key_exists($fieldName, $values) && $values[$fieldName] !== null) {
+			if (array_key_exists($field->getName(), $values)) {
 				continue;
 			}
 
@@ -245,6 +253,99 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 		}
 
 		return $pending;
+	}
+
+	/**
+	 * Database-owned fields the adapter should reread after update.
+	 *
+	 * @return list<FieldInterface>
+	 */
+	private function updateReadbackFields(UpdateCommand $command): array
+	{
+		$pending = [];
+
+		foreach ($command->getCollection()->getFields() as $field) {
+			if (! $field->isDatabaseGenerated() || ! $field->isGeneratedWhen(When::UPDATE)) {
+				continue;
+			}
+
+			$pending[] = $field;
+		}
+
+		return $pending;
+	}
+
+	/**
+	 * @param list<FieldInterface> $pending
+	 * @param array<string, mixed> $generated
+	 *
+	 * @return list<FieldInterface>
+	 */
+	private function fieldsNotRecovered(array $pending, array $generated): array
+	{
+		$remaining = [];
+		foreach ($pending as $field) {
+			if (! array_key_exists($field->getName(), $generated)) {
+				$remaining[] = $field;
+			}
+		}
+
+		return $remaining;
+	}
+
+	/**
+	 * @param array<string, mixed> $generated
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function insertIdentityForReadback(InsertCommand $command, array $generated): array
+	{
+		$collection = $command->getCollection();
+		if (! $collection->hasPrimaryKey()) {
+			return [];
+		}
+
+		$values = $command->getValues() + $generated;
+		$identity = [];
+		foreach ($collection->getPrimaryKey() as $fieldName) {
+			if (! array_key_exists($fieldName, $values) || $values[$fieldName] === null) {
+				return [];
+			}
+
+			$identity[$fieldName] = $values[$fieldName];
+		}
+
+		return $identity;
+	}
+
+	/**
+	 * @param list<FieldInterface> $fields
+	 * @param array<string, mixed> $identity
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function fetchFieldValues(CollectionInterface $collection, array $fields, array $identity): array
+	{
+		if ($fields === [] || $identity === []) {
+			return [];
+		}
+
+		$columns = [];
+		$columnToField = [];
+		foreach ($fields as $field) {
+			$column = $field->getColumn();
+			$columns[] = $column;
+			$columnToField[strtolower($column)] = $field->getName();
+		}
+
+		$select = $this->database->select($columns)->from($collection->getTable());
+		foreach ($this->mapFieldValuesToColumns($collection, $identity) as $column => $value) {
+			$select->where($column, $value);
+		}
+
+		$row = $select->limit(1)->fetchAll(StatementInterface::FETCH_ASSOC)[0] ?? null;
+
+		return $this->mapReturningResult($row, $fields, $columnToField);
 	}
 
 	/**
@@ -301,11 +402,20 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 			return null;
 		}
 
-		if (is_string($id) && preg_match('/^[0-9]+$/', $id) === 1) {
-			return (int) $id;
+		return $this->normalizeRecoveredValue($id);
+	}
+
+	private function normalizeRecoveredValue(mixed $value): mixed
+	{
+		if ($value === false) {
+			return null;
 		}
 
-		return $id;
+		if (is_string($value) && preg_match('/^[0-9]+$/', $value) === 1) {
+			return (int) $value;
+		}
+
+		return $value;
 	}
 
 	private function affectedRows(mixed $result): int

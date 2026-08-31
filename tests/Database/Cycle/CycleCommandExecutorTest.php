@@ -13,6 +13,7 @@ use DateTimeImmutable;
 use ON\Data\Database\Cycle\CycleCommandExecutor;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\Generator\DatabaseGenerator;
+use ON\Data\Definition\Field\Generator\When;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Persistence\CommandInterface;
@@ -285,6 +286,46 @@ final class CycleCommandExecutorTest extends TestCase
 		);
 	}
 
+	public function testInsertRecoversOmittedSqlDefaultColumns(): void
+	{
+		$result = $this->executor->execute(new InsertCommand($this->notes(), [
+			'title' => 'Hello',
+		]));
+
+		self::assertSame(1, $result->getAffectedRows());
+		self::assertSame('draft', $result->getGeneratedValues()['status']);
+		self::assertSame('init', $result->getGeneratedValues()['stamp']);
+		self::assertArrayHasKey('id', $result->getGeneratedValues());
+		self::assertSame('draft', $this->fetchNote($result->getGeneratedValues()['id'])['status']);
+	}
+
+	public function testInsertRecoversDatetimeSqlDefaultAsPhpValue(): void
+	{
+		$result = $this->executor->execute(new InsertCommand($this->notes(), [
+			'title' => 'Timed',
+		]));
+
+		$createdAt = $result->getGeneratedValues()['createdAt'];
+		self::assertInstanceOf(DateTimeImmutable::class, $createdAt);
+		self::assertNotSame('', $createdAt->format('Y-m-d H:i:s'));
+	}
+
+	public function testUpdateReadsDatabaseGeneratedColumnsAfterWrite(): void
+	{
+		$insert = $this->executor->execute(new InsertCommand($this->notes(), [
+			'title' => 'Hello',
+		]));
+		$id = $insert->getGeneratedValues()['id'];
+
+		$result = $this->executor->execute(new UpdateCommand($this->notes(), ['id' => $id], [
+			'title' => 'Updated',
+		]));
+
+		self::assertSame(1, $result->getAffectedRows());
+		self::assertSame('touched', $result->getGeneratedValues()['stamp']);
+		self::assertSame('touched', $this->fetchNote($id)['stamp']);
+	}
+
 	public function testUpdateCommandMapsSingleIdentityFieldToPrimaryKeyColumn(): void
 	{
 		$result = $this->executor->execute(new UpdateCommand($this->users(), ['id' => 2], [
@@ -488,6 +529,7 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertStringContainsString('->insert(', $source);
 		self::assertStringContainsString('->update(', $source);
 		self::assertStringContainsString('->delete(', $source);
+		self::assertStringContainsString('->select(', $source);
 		self::assertStringContainsString('sqlStatement', $source);
 		self::assertStringContainsString('DatabaseInterface::WRITE', $source);
 		self::assertStringContainsString('->execute(', $source);
@@ -581,6 +623,20 @@ final class CycleCommandExecutorTest extends TestCase
 	}
 
 	/**
+	 * @return array{title: string, status: string, stamp: string}|null
+	 */
+	private function fetchNote(int $id): ?array
+	{
+		$statement = $this->pdo->prepare(
+			'SELECT title, status, stamp FROM app_notes WHERE note_id = ?',
+		);
+		$statement->execute([$id]);
+		$row = $statement->fetch(PDO::FETCH_ASSOC);
+
+		return is_array($row) ? $row : null;
+	}
+
+	/**
 	 * @return array{title: string, published_at: string, meta_json: string}|null
 	 */
 	private function fetchArticle(int $id): ?array
@@ -646,6 +702,19 @@ final class CycleCommandExecutorTest extends TestCase
 		return $this->memberships;
 	}
 
+	private function notes(): CollectionInterface
+	{
+		return (new Registry())
+			->collection('notes')
+			->table('app_notes')
+			->primaryKey('id')
+			->field('id', 'int')->column('note_id')->autoIncrement(true)->end()
+			->field('title', 'string')->column('title')->end()
+			->field('status', 'string')->column('status')->end()
+			->field('stamp', 'string')->column('stamp')->generator(DatabaseGenerator::class, null, When::UPDATE)->end()
+			->field('createdAt', 'datetime')->column('created_at')->end();
+	}
+
 	private function makeArticles(): CollectionInterface
 	{
 		return (new Registry())
@@ -696,6 +765,17 @@ final class CycleCommandExecutorTest extends TestCase
 		$pdo->exec('CREATE TABLE app_external_users (external_id TEXT PRIMARY KEY, full_name TEXT)');
 		$pdo->exec('CREATE TABLE app_memberships (tenant_key INTEGER, member_key INTEGER, role_name TEXT, PRIMARY KEY (tenant_key, member_key))');
 		$pdo->exec('CREATE TABLE app_articles (article_id INTEGER PRIMARY KEY, title TEXT, published_at TEXT, meta_json TEXT)');
+		$pdo->exec('CREATE TABLE app_notes (
+			note_id INTEGER PRIMARY KEY,
+			title TEXT,
+			status TEXT DEFAULT \'draft\',
+			stamp TEXT DEFAULT \'init\',
+			created_at TEXT DEFAULT CURRENT_TIMESTAMP
+		)');
+		$pdo->exec('CREATE TRIGGER app_notes_stamp AFTER UPDATE ON app_notes
+			BEGIN
+				UPDATE app_notes SET stamp = \'touched\' WHERE note_id = NEW.note_id;
+			END');
 
 		$users = $pdo->prepare('INSERT INTO app_users (user_id, full_name, email_address) VALUES (?, ?, ?)');
 		$users->execute([1, 'Ada', 'ada@example.test']);

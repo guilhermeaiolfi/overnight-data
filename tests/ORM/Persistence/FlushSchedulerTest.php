@@ -85,6 +85,25 @@ final class FlushSchedulerTest extends TestCase
 		self::assertSame($record, $states->getByKey($key));
 	}
 
+	public function testDirtyRecordMergesGeneratedValuesBeforeMarkingClean(): void
+	{
+		$users = $this->users();
+		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Ada']);
+		$record->setValue('name', 'Grace');
+		$states = $this->states($record);
+		$executor = new RecordingCommandExecutor(new CommandResult(1, ['email' => 'db@example.test']));
+
+		(new FlushScheduler($executor))->run($states);
+
+		self::assertTrue($record->isClean());
+		self::assertSame([
+			'id' => 10,
+			'name' => 'Grace',
+			'email' => 'db@example.test',
+		], $record->getValues());
+		self::assertSame($record->getValues(), $record->getOriginalValues());
+	}
+
 	public function testDirtyRecordExecutesUpdateCommandAndBecomesClean(): void
 	{
 		$users = $this->users();

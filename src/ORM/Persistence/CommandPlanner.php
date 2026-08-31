@@ -71,10 +71,29 @@ final class CommandPlanner
 		return $values;
 	}
 
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function valuesForUpdate(RecordState $record): array
+	{
+		$changes = $record->getDirtyValues();
+		$collection = $record->getCollection();
+
+		foreach ($collection->getFields() as $field) {
+			if (! $field->isDatabaseGenerated() || ! $field->isGeneratedWhen(When::UPDATE)) {
+				continue;
+			}
+
+			unset($changes[$field->getName()]);
+		}
+
+		return $changes;
+	}
+
 	private function planDirty(RecordState $record): ?UpdateCommand
 	{
 		$this->fieldGenerators->apply($record, When::UPDATE);
-		$changes = $record->getDirtyValues();
+		$changes = $this->valuesForUpdate($record);
 
 		if ($changes === []) {
 			return null;

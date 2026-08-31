@@ -7,6 +7,10 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 ## [Unreleased]
 
+### Added
+
+- **Write-path database value recovery** — after insert, `CycleCommandExecutor` recovers omitted columns (SQL defaults, identity, triggers), not only `DatabaseGenerator` fields. After update, it rereads `DatabaseGenerator` `When::UPDATE` columns. Cycle `RETURNING` is used when the insert builder supports it; otherwise the adapter uses `lastInsertID` for a simple PK plus a Cycle `select()` for remaining columns. `ConvertingCommandExecutor` converts recovered storage values back to PHP. `FlushScheduler` merges recovered values into `RecordState` on insert and update. There is still no `Session::refresh()`.
+
 ### Fixed
 
 - **SQLite generated-key inserts on Cycle Database 2.22+** — Cycle 2.22’s SQLite `InsertQuery` implements `ReturningInterface`, so pending autoincrement inserts use `RETURNING`. PDO SQLite often reports `rowCount()` 0 for that statement. `CycleCommandExecutor` reads `RETURNING` as an assoc row and treats a recovered generated value as one affected row.

@@ -128,7 +128,7 @@ Public-property class export requirements:
 - No optimistic locking or stale-row revision conflict handling beyond representation sync baseline checks.
 - No lazy loading.
 - No repositories, `EntityManager`, `UnitOfWork`, events, proxies, or generated model layer.
-- No full database-default refresh beyond simple auto-increment primary keys.
+- No `Session::refresh()` of an existing row. Insert and update recover omitted insert columns and `DatabaseGenerator` update columns through `RETURNING` or a follow-up select when the adapter can.
 - Writable iteration is not supported yet.
 - Flat projection provenance is available for writable `stdClass` and mutable public-property DTO query export.
 
