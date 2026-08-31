@@ -207,6 +207,111 @@ final class CycleCommandExecutorGeneratedValuesTest extends TestCase
 		self::assertSame(['id' => 1], $result->getGeneratedValues());
 	}
 
+	public function testInsertUsesSqliteChangesWhenExecuteReportsZeroAffectedRows(): void
+	{
+		$users = (new Registry())
+			->collection('users')
+			->table('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+
+		$insert = new class ('users') extends InsertQuery {
+			public function sqlStatement(?QueryParameters $parameters = null): string
+			{
+				return 'INSERT INTO users (id, name) VALUES (?, ?)';
+			}
+		};
+
+		$statement = $this->createMock(StatementInterface::class);
+		$statement->expects(self::once())
+			->method('fetch')
+			->with(StatementInterface::FETCH_ASSOC)
+			->willReturn(['affected' => 1]);
+		$statement->method('close');
+
+		$driver = $this->createMock(DriverInterface::class);
+		$driver->method('getType')->willReturn('SQLite');
+		$driver->expects(self::once())->method('execute')->willReturn(0);
+		$driver->expects(self::once())->method('query')->with('SELECT CHANGES() AS affected')->willReturn($statement);
+		$driver->expects(self::never())->method('lastInsertID');
+
+		$database = $this->createMock(DatabaseInterface::class);
+		$database->method('insert')->willReturn($insert);
+		$database->method('getDriver')->willReturn($driver);
+
+		$result = (new CycleCommandExecutor($database))->execute(new InsertCommand($users, [
+			'id' => 10,
+			'name' => 'Assigned',
+		]));
+
+		self::assertSame(1, $result->getAffectedRows());
+		self::assertSame([], $result->getGeneratedValues());
+	}
+
+	public function testInsertReturningFallsBackToSqliteChangesWhenRecoveredRowDoesNotMap(): void
+	{
+		$users = (new Registry())
+			->collection('users')
+			->table('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end()
+			->field('email', 'string')->end();
+
+		$insert = new class ('users') extends InsertQuery implements ReturningInterface {
+			/** @var list<string> */
+			public array $returningColumns = [];
+
+			public function returning(string|FragmentInterface ...$columns): self
+			{
+				$this->returningColumns = array_values(array_map(
+					static fn (string|FragmentInterface $column): string => (string) $column,
+					$columns,
+				));
+
+				return $this;
+			}
+
+			public function sqlStatement(?QueryParameters $parameters = null): string
+			{
+				return 'INSERT INTO users (id, name) VALUES (?, ?) RETURNING email';
+			}
+		};
+
+		$returningStatement = $this->createMock(StatementInterface::class);
+		$returningStatement->method('fetch')->willReturn(['"email"' => 'email']);
+		$returningStatement->method('rowCount')->willReturn(0);
+		$returningStatement->method('close');
+
+		$changesStatement = $this->createMock(StatementInterface::class);
+		$changesStatement->expects(self::once())
+			->method('fetch')
+			->with(StatementInterface::FETCH_ASSOC)
+			->willReturn(['affected' => 1]);
+		$changesStatement->method('close');
+
+		$driver = $this->createMock(DriverInterface::class);
+		$driver->method('getType')->willReturn('SQLite');
+		$driver->expects(self::never())->method('execute');
+		$driver->expects(self::exactly(2))
+			->method('query')
+			->willReturnOnConsecutiveCalls($returningStatement, $changesStatement);
+
+		$database = $this->createMock(DatabaseInterface::class);
+		$database->method('insert')->willReturn($insert);
+		$database->method('getDriver')->willReturn($driver);
+
+		$result = (new CycleCommandExecutor($database))->execute(new InsertCommand($users, [
+			'id' => 10,
+			'name' => 'Assigned',
+		]));
+
+		self::assertSame(['email'], $insert->returningColumns);
+		self::assertSame(1, $result->getAffectedRows());
+		self::assertSame([], $result->getGeneratedValues());
+	}
+
 	public function testInsertUsesReturningForOmittedSqlDefaultColumns(): void
 	{
 		$notes = (new Registry())

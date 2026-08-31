@@ -72,7 +72,18 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 				$parameters->getParameters(),
 			),
 		);
+		// Read lastInsertID before any follow-up query. PDO SQLite clears it on the next statement.
 		$generated = $this->generatedValuesViaLastInsertId($command, $pending, $driver);
+
+		if ($affected === 0) {
+			$changes = $this->sqliteChangesAfterWrite($driver);
+			if ($changes > 0) {
+				$affected = $changes;
+			} elseif ($this->generatedKeyImpliesInsert($generated)) {
+				$affected = 1;
+			}
+		}
+
 		$remaining = $this->fieldsNotRecovered($pending, $generated);
 		if ($remaining !== []) {
 			$identity = $this->insertIdentityForReadback($command, $generated);
@@ -106,7 +117,8 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 		$insert->returning(...$columns);
 
 		$parameters = new QueryParameters();
-		$statement = $this->database->getDriver()->query(
+		$driver = $this->database->getDriver(DatabaseInterface::WRITE);
+		$statement = $driver->query(
 			$insert->sqlStatement($parameters),
 			$parameters->getParameters(),
 		);
@@ -125,6 +137,16 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 		$generated = $this->mapReturningResult($raw, $fields, $columnToField);
 		if ($affected === 0 && $generated !== []) {
 			$affected = 1;
+		}
+
+		// PDO SQLite write+readback often reports rowCount 0. A recovered
+		// value already counts as one row. If nothing mapped (omitted unused
+		// columns can come back as DQS string literals), CHANGES() still sees the write.
+		if ($affected === 0) {
+			$changes = $this->sqliteChangesAfterWrite($driver);
+			if ($changes > 0) {
+				$affected = $changes;
+			}
 		}
 
 		return new CommandResult($affected, $generated);
@@ -416,6 +438,70 @@ final class CycleCommandExecutor implements CommandExecutorInterface, Transactio
 		}
 
 		return $value;
+	}
+
+	/**
+	 * PDO SQLite often reports insert rowCount as 0 even when the row was written.
+	 * `CHANGES()` is the connection-local count of the last write.
+	 *
+	 * Cycle's statement wrapper forces FETCH_ASSOC; fetchColumn() is unreliable on
+	 * that mode, so read a numeric row instead.
+	 */
+	private function sqliteChangesAfterWrite(DriverInterface $driver): int
+	{
+		if (stripos($driver->getType(), 'sqlite') === false) {
+			return 0;
+		}
+
+		$statement = $driver->query('SELECT CHANGES() AS affected');
+
+		try {
+			$row = $statement->fetch(StatementInterface::FETCH_ASSOC);
+			if (! is_array($row) || $row === []) {
+				return 0;
+			}
+
+			$raw = $row['affected'] ?? $row['CHANGES()'] ?? reset($row);
+
+			return $this->parseNonNegativeCount($raw);
+		} finally {
+			$statement->close();
+		}
+	}
+
+	/**
+	 * @param array<string, mixed> $generated
+	 */
+	private function generatedKeyImpliesInsert(array $generated): bool
+	{
+		foreach ($generated as $value) {
+			if (is_int($value) && $value > 0) {
+				return true;
+			}
+
+			if (is_string($value) && $value !== '' && $value !== '0') {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function parseNonNegativeCount(mixed $raw): int
+	{
+		if (is_int($raw) && $raw >= 0) {
+			return $raw;
+		}
+
+		if (is_float($raw) && $raw >= 0.0 && $raw === floor($raw)) {
+			return (int) $raw;
+		}
+
+		if (is_string($raw) && preg_match('/^[0-9]+(?:\.0+)?$/', $raw) === 1) {
+			return (int) $raw;
+		}
+
+		return 0;
 	}
 
 	private function affectedRows(mixed $result): int

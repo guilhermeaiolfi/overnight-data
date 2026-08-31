@@ -175,6 +175,7 @@ final class CycleCommandExecutorTest extends TestCase
 			'email' => 'margaret@example.test',
 		]));
 
+		self::assertSame(1, $result->getAffectedRows());
 		self::assertSame([], $result->getGeneratedValues());
 		self::assertSame(
 			['name' => 'Margaret', 'email' => 'margaret@example.test'],
@@ -534,6 +535,7 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertStringContainsString('DatabaseInterface::WRITE', $source);
 		self::assertStringContainsString('->execute(', $source);
 		self::assertStringContainsString('FETCH_ASSOC', $source);
+		self::assertStringContainsString('SELECT CHANGES()', $source);
 		self::assertStringNotContainsString('SELECT *', $source);
 		self::assertStringNotContainsString('INSERT ', $source);
 		self::assertStringNotContainsString('UPDATE ', $source);
