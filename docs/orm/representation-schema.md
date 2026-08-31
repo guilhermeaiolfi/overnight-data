@@ -133,7 +133,7 @@ lineTotal → expression AST, path lineTotal
 
 `RepresentationAdoptionEngine::attach()` binds **every source** on this schema (`getSources()`), then walks **relation children** (`getRelatedSchema()`). Root-only, loaded `posts`, and flat `authorName` are the same walk. Nested objects are separate representations; flat related fields are extra records on this representation.
 
-Policy (`Hydrate` / `Identify` / `Patch` / `Create`) is the operation, not a layout choice. Writable query hydrate reads the assembled row (`sourceRow`) for hidden source ids (`company.id`); `Session::sync()` still reads the live object.
+Policy (`Hydrate` / `Identify` / `Patch` / `Create`) is the operation, not a layout choice. Writable query hydrate reads the assembled row (`sourceRow`) for hidden source ids (`company.id`); `Session::sync()` still reads the live object. Hydrate constructs loaded relation state from the walked children (`ToManyRelationState::full` / `::partial`, `ToOneRelationState`), the same way it constructs `RecordState::clean` for rows. Writable `track()` does not call `sync()` afterward. If the fetched row has no identity, tracking throws (`writable()` does not invent primary-key columns, and results without identity are never tracked).
 
 Writable prepare builds `QuerySourceIdentities` from schema sources (Implicit PK paths such as `company.id`). It does not add Query `INTERNAL` selections.
 

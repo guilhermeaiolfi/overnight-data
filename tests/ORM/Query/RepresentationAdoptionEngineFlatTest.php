@@ -174,7 +174,7 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 
 		$this->expectException(StateException::class);
-		$this->expectExceptionMessage("primary key field 'id' is missing or incomplete");
+		$this->expectExceptionMessage('results without identity are never tracked');
 
 		$this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, new QuerySourceIdentities(RepresentationSource::fromRepresentationSchema($schema))), [
 			'id' => 1,

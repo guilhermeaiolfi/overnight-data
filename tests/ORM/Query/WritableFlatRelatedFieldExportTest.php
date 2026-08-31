@@ -91,7 +91,7 @@ final class WritableFlatRelatedFieldExportTest extends TestCase
 		$query->select($query->id, $query->company->name->as('name'));
 
 		$this->expectException(StateException::class);
-		$this->expectExceptionMessage("primary key field 'id' is missing or incomplete");
+		$this->expectExceptionMessage('results without identity are never tracked');
 
 		$query->to(stdClass::class)->writable($session)->fetchOne();
 	}

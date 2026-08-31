@@ -81,7 +81,7 @@ For `MANY` relation schemas, the representation path must contain an iterable of
 - `Partial` — mark partially loaded (filtered or sliced query relation load)
 - `Unknown` — leave load state unchanged (inbound graph / identify / hand-built schemas)
 
-When Full or Partial knowledge is applied to a previously unloaded collection, the synchronizer treats the projected membership as a loaded snapshot (`clearChanges()`), not as pending add intent. If the collection is not fully loaded, later syncs only add newly present items without implying that absent database rows were removed. If the collection is fully loaded, later syncs can also remove known items that are absent from the current representation value.
+When Full or Partial knowledge is applied to a previously unloaded collection, the synchronizer treats the projected membership as a loaded baseline (`clearChanges()`), not as pending add intent. Query hydrate does not go through that path: it constructs `ToManyRelationState::full()` or `::partial()` (or `ToOneRelationState`) with the walked children already as baseline. If the collection is not fully loaded, later syncs only add newly present items without implying that absent database rows were removed. If the collection is fully loaded, later syncs can also remove known items that are absent from the current representation value.
 
 For `ONE` relation schemas, the representation path must contain an object or `null`. The synchronizer creates or reuses a `ToOneRelationState` for the concrete owner record and relation name, then sets the current target. `ToOneRelationState` keeps both baseline and current target object identity so the planner can distinguish unchanged, replaced, and cleared references.
 

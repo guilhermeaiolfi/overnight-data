@@ -6,6 +6,7 @@ namespace Tests\ON\Data\ORM\Query;
 
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Representation\State\Query\WritableQueryResultTracker;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Session;
@@ -346,6 +347,23 @@ final class WritableQueryResultTrackerTest extends TestCase
 
 		self::assertTrue($session->getRepresentations()->has($user));
 		self::assertTrue($session->getRepresentations()->get($user)?->getSchema()->hasField('name'));
+	}
+
+	public function testTrackWithoutFetchedIdentityThrows(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = new SelectQuery($users);
+		$query->select($query->name);
+
+		$session = new Session(new RecordingCommandExecutor());
+		$tracker = new WritableQueryResultTracker($session);
+		$compilation = $tracker->prepare($query);
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage("writable() does not add them, and results without identity are never tracked");
+
+		$tracker->trackOne($compilation, $this->userObject(1, 'Ada'), ['name' => 'Ada']);
 	}
 
 	private function makeRegistry(): Registry

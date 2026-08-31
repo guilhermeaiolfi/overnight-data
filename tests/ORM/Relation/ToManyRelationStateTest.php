@@ -41,6 +41,20 @@ final class ToManyRelationStateTest extends TestCase
 		self::assertTrue($collection->isFullyLoaded());
 	}
 
+	public function testPartialFactoryMarksEmptyCollectionPartiallyLoadedWithoutPendingAdds(): void
+	{
+		$owner = RecordState::new($this->users());
+		$schema = $this->postSchema();
+
+		$collection = ToManyRelationState::partial($owner, 'posts', $schema);
+
+		self::assertTrue($collection->isPartiallyLoaded());
+		self::assertFalse($collection->isFullyLoaded());
+		self::assertSame([], $collection->getItems());
+		self::assertSame([], $collection->getAdded());
+		self::assertFalse($collection->hasChanges());
+	}
+
 	public function testRejectsEmptyRelationName(): void
 	{
 		$this->expectException(StateException::class);

@@ -6,6 +6,7 @@ namespace ON\Data\ORM\Representation\State\Query;
 
 use InvalidArgumentException;
 use ON\Data\Key;
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\Query\QuerySourceIdentities;
 use ON\Data\ORM\Representation\Sync\AdoptionPolicy;
@@ -15,7 +16,6 @@ use ON\Data\ORM\Session;
 use ON\Data\Query\Result\WritablePreparation;
 use ON\Data\Query\Result\WritableResultHandler;
 use ON\Data\Query\SelectQuery;
-use ON\Data\Schema\RepresentationSchema;
 
 /**
  * Writable query export bridge: compiles projections ({@see prepare()}) and routes
@@ -94,74 +94,25 @@ final class WritableQueryResultTracker implements WritableResultHandler
 		QueryRepresentationPlan $compilation,
 		array $sourceRow,
 	): void {
-		if ($this->canHydrateRoot($compilation, $object, $sourceRow)) {
-			$this->adoptionEngine->attach(
-				$object,
-				new RepresentationAdoptionContext(
-					schema: $compilation->getSchema(),
-					policy: AdoptionPolicy::Hydrate,
-					identities: $compilation->getIdentities(),
-					sourceRow: $sourceRow,
-				),
-				$this->session->getRecords(),
-				$this->session->getRepresentations(),
+		$schema = $compilation->getSchema();
+		if (! $compilation->getIdentities()->getIdentity([], $sourceRow) instanceof Key) {
+			throw StateException::writableResultMissingIdentity(
+				$schema->getCollection()->getName(),
+				$schema->getCollection()->getPrimaryKey(),
 			);
-			$this->session->sync($object);
-
-			return;
 		}
 
-		$this->session->sync($object, $compilation->getSchema());
-	}
-
-	/**
-	 * @param array<string, mixed> $sourceRow
-	 */
-	private function canHydrateRoot(
-		QueryRepresentationPlan $compilation,
-		object $object,
-		array $sourceRow,
-	): bool {
-		if ($compilation->getIdentities()->getIdentity([], $sourceRow) instanceof Key) {
-			return true;
-		}
-
-		return $this->hasReadableRootPrimaryKey($object, $compilation->getSchema(), $sourceRow);
-	}
-
-	/**
-	 * @param array<string, mixed> $sourceRow
-	 */
-	private function hasReadableRootPrimaryKey(
-		object $object,
-		RepresentationSchema $schema,
-		array $sourceRow,
-	): bool {
-		$vars = get_object_vars($object);
-
-		foreach ($schema->getCollection()->getPrimaryKey() as $fieldName) {
-			$path = null;
-			foreach ($schema->getFields() as $fieldSchema) {
-				if ($fieldSchema->getFieldName() === $fieldName && $fieldSchema->isRootSource()) {
-					$path = $fieldSchema->getPath();
-
-					break;
-				}
-			}
-
-			if ($path === null) {
-				return false;
-			}
-
-			if (array_key_exists($path, $sourceRow) && $sourceRow[$path] !== null) {
-				continue;
-			}
-
-			if (! array_key_exists($path, $vars) || $vars[$path] === null) {
-				return false;
-			}
-		}
-
-		return true;
+		$this->adoptionEngine->attach(
+			$object,
+			new RepresentationAdoptionContext(
+				schema: $schema,
+				policy: AdoptionPolicy::Hydrate,
+				identities: $compilation->getIdentities(),
+				sourceRow: $sourceRow,
+			),
+			$this->session->getRecords(),
+			$this->session->getRepresentations(),
+			$this->session->getRelations(),
+		);
 	}
 }

@@ -75,6 +75,21 @@ final class ToManyRelationState implements RelationStateInterface
 		return $state;
 	}
 
+	/**
+	 * @param list<object> $items
+	 */
+	public static function partial(
+		RecordState $owner,
+		string $relationName,
+		RepresentationSchema $childSchema,
+		array $items = [],
+	): self {
+		$state = new self($owner, $relationName, $childSchema, $items);
+		$state->markPartiallyLoaded();
+
+		return $state;
+	}
+
 	public function getOwner(): RecordState
 	{
 		return $this->owner;

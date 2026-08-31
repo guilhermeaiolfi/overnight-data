@@ -76,13 +76,14 @@ $row = $runtime->query($postUser)->fetchOne(['post_id' => 1, 'user_id' => 2]);
 $row = $runtime->query($users)->fetchOne($users->getKey(2));
 ```
 
-Selections tagged `SelectionTag::INTERNAL` are compiled into the query when writable flat projections need hidden identity values. They are stripped from public array and object results.
+When assemble runs (aliases, flats, or relation loads), implicit source primary keys are placed on the assembled row and stripped from public array and object results. `writable()` does not add identity columns. A writable fetch whose row lacks the root primary key is not tracked.
 
 Writable export requirements:
 
 - requires `to(stdClass::class)` or `to(MutableDto::class)` where the class is concrete and not readonly (mutable public properties);
 - requires an explicit `Session`;
 - tracks the same object instance returned to the caller (no shadow copy);
+- requires the root primary key to be present on the fetched row (`writable()` does not add it; results without identity are never tracked);
 - sync reads scalar field paths through `map($representation)->to(stdClass::class)`; relation targets stay live object paths so identity is preserved;
 - DTO property names (or `MapFrom`) must match selection aliases / schema paths; avoid `MapTo` that renames those keys on the way back to a bag;
 - compiles binding/provenance only for writable export, not for normal array queries or read-only object export;

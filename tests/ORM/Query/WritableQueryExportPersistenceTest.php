@@ -89,6 +89,12 @@ final class WritableQueryExportPersistenceTest extends TestCase
 		self::assertInstanceOf(stdClass::class, $user);
 		self::assertSame([], $user->posts);
 
+		$owner = $session->getRepresentations()->get($user)?->requireRootRecord();
+		$relation = $session->getRelations()->get($owner, 'posts');
+		self::assertInstanceOf(ToManyRelationState::class, $relation);
+		self::assertTrue($relation->isFullyLoaded());
+		self::assertFalse($relation->hasChanges());
+
 		$newPost = new stdClass();
 		$newPost->id = null;
 		$newPost->title = 'New post';
@@ -125,6 +131,7 @@ final class WritableQueryExportPersistenceTest extends TestCase
 		$relation = $session->getRelations()->get($owner, 'posts');
 		self::assertInstanceOf(ToManyRelationState::class, $relation);
 		self::assertTrue($relation->isFullyLoaded());
+		self::assertFalse($relation->hasChanges());
 
 		$kept = $user->posts[0];
 		$user->posts = [$kept];
@@ -152,6 +159,7 @@ final class WritableQueryExportPersistenceTest extends TestCase
 		$relation = $session->getRelations()->get($owner, 'posts');
 		self::assertInstanceOf(ToManyRelationState::class, $relation);
 		self::assertTrue($relation->isPartiallyLoaded());
+		self::assertFalse($relation->hasChanges());
 
 		$before = $relation->countKnown();
 		$kept = $user->posts[0];

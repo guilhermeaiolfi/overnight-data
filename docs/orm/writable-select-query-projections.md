@@ -39,6 +39,7 @@ Writable export requirements:
 - `to(stdClass::class)` or `to(MutableDto::class)` (concrete, non-readonly, mutable public properties)
 - an explicit `Session` is required (`Session` implements `WritableResultHandler`; that is the Query↔ORM bridge)
 - the returned object is what Session tracks (same identity)
+- **identity must be in the fetched row** — select the collection primary key, or use a shape that already loads it (for example a flattened related field whose assemble backfills a hidden source id). `writable()` does not add identity columns. Results without identity are never tracked
 - scalar sync reads go through `map($representation)->to(stdClass::class)`; relation `ONE`/`MANY` targets are read from the live object so related instances stay tracked
 - selection aliases / schema paths are the contract: DTO properties (or `MapFrom`) must match them; avoid `MapTo` that renames those keys when mapping back to a bag
 - `prepare()` returns a `WritablePreparation` token (concretely `QueryRepresentationPlan`); the query holds it for that fetch and passes it to `track()`
@@ -88,7 +89,7 @@ $user->profileName
 
 `flush()` updates `profiles.name`, not `users.name`.
 
-The query/projection adopter must have enough hidden identity information to resolve `profiles#5`. For a flattened related field, the compiler adds internal identity selections for the related record. If that identity is missing from the executed query result, projection adoption fails rather than guessing the target row.
+The query/projection adopter must have enough identity in the assembled row to resolve `profiles#5`. Flattened related fields get Implicit source primary-key paths (such as `profile.id`) on the schema; assemble fetches those when the shape needs them, with or without `writable()`. If that identity is missing from the executed result, tracking throws rather than guessing the target row or treating the object as new. `writable()` does not add those columns.
 
 ## Nested flattened related field
 

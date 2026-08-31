@@ -12,11 +12,14 @@ use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\RelationTarget;
 use ON\Data\ORM\Relation\ToManyRelationState;
+use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Representation\Schema\Query\QuerySourceIdentities;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\ORM\Session;
+use ON\Data\Schema\RelationLoadKnowledge;
 use ON\Data\Schema\RepresentationFieldSchema;
+use ON\Data\Schema\RepresentationRelationSchema;
 use ON\Data\Schema\RepresentationSchema;
 use ON\Data\Schema\RepresentationSource;
 
@@ -29,6 +32,9 @@ use ON\Data\Schema\RepresentationSource;
  *
  * Policy ({@see AdoptionPolicy}): Hydrate | Identify | Patch | Create.
  * Query hydrate prefers values on {@see RepresentationAdoptionContext::getSourceRow()}.
+ * Hydrate also constructs loaded relation state from walked children
+ * ({@see ToManyRelationState::full()}, {@see ToManyRelationState::partial()},
+ * {@see ToOneRelationState}), matching {@see RecordState::clean()} for rows.
  */
 final class RepresentationAdoptionEngine
 {
@@ -154,6 +160,7 @@ final class RepresentationAdoptionEngine
 				: null;
 
 			if ($relationSchema->isMany()) {
+				$items = [];
 				foreach ($this->reader->readItems($representation, $relationSchema, $this->relationError(...)) as $index => $item) {
 					$childRow = $this->childSourceRow($rawChildren, $index, many: true);
 					$this->attachRecursive(
@@ -165,7 +172,16 @@ final class RepresentationAdoptionEngine
 						RepresentationAttachmentMode::Add,
 						$visited,
 					);
+					$items[] = $item;
 				}
+
+				$this->hydrateLoadedMany(
+					$context,
+					$tracked,
+					$relationSchema,
+					$relations,
+					$items,
+				);
 
 				continue;
 			}
@@ -184,6 +200,14 @@ final class RepresentationAdoptionEngine
 						$visited,
 					);
 				}
+
+				$this->hydrateLoadedOne(
+					$context,
+					$tracked,
+					$relationSchema,
+					$relations,
+					$target,
+				);
 			}
 		}
 	}
@@ -224,6 +248,73 @@ final class RepresentationAdoptionEngine
 
 		/** @var array<string, mixed> $child */
 		return $child;
+	}
+
+	/**
+	 * @param list<object> $items
+	 */
+	private function hydrateLoadedMany(
+		RepresentationAdoptionContext $context,
+		?RepresentationState $ownerState,
+		RepresentationRelationSchema $relationSchema,
+		?RelationStateStore $relations,
+		array $items,
+	): void {
+		$owner = $this->hydrateOwnerRecord($context, $ownerState, $relationSchema, $relations);
+		if (! $owner instanceof RecordState || ! $relations instanceof RelationStateStore) {
+			return;
+		}
+
+		$relationName = $relationSchema->getRelationName();
+		$relatedSchema = $relationSchema->getRelatedSchema();
+		$state = match ($relationSchema->getLoadKnowledge()) {
+			RelationLoadKnowledge::Full => ToManyRelationState::full($owner, $relationName, $relatedSchema, $items),
+			RelationLoadKnowledge::Partial => ToManyRelationState::partial($owner, $relationName, $relatedSchema, $items),
+			RelationLoadKnowledge::Unknown => new ToManyRelationState($owner, $relationName, $relatedSchema, $items),
+		};
+		$relations->add($state);
+	}
+
+	private function hydrateLoadedOne(
+		RepresentationAdoptionContext $context,
+		?RepresentationState $ownerState,
+		RepresentationRelationSchema $relationSchema,
+		?RelationStateStore $relations,
+		?object $target,
+	): void {
+		$owner = $this->hydrateOwnerRecord($context, $ownerState, $relationSchema, $relations);
+		if (! $owner instanceof RecordState || ! $relations instanceof RelationStateStore) {
+			return;
+		}
+
+		$relations->add(new ToOneRelationState(
+			$owner,
+			$relationSchema->getRelationName(),
+			$relationSchema->getRelatedSchema(),
+			$target,
+		));
+	}
+
+	private function hydrateOwnerRecord(
+		RepresentationAdoptionContext $context,
+		?RepresentationState $ownerState,
+		RepresentationRelationSchema $relationSchema,
+		?RelationStateStore $relations,
+	): ?RecordState {
+		if ($context->getPolicy() !== AdoptionPolicy::Hydrate) {
+			return null;
+		}
+
+		if (! $relations instanceof RelationStateStore || ! $ownerState instanceof RepresentationState) {
+			return null;
+		}
+
+		$owner = $ownerState->getOwnerRecord($relationSchema->getRelationName());
+		if ($relations->has($owner, $relationSchema->getRelationName())) {
+			return null;
+		}
+
+		return $owner;
 	}
 
 	/**
@@ -327,6 +418,13 @@ final class RepresentationAdoptionEngine
 
 		if ($policy === AdoptionPolicy::Hydrate || $policy === AdoptionPolicy::Identify) {
 			if (! $identity instanceof Key) {
+				if ($policy === AdoptionPolicy::Hydrate) {
+					throw StateException::writableResultMissingIdentity(
+						$collection->getName(),
+						$collection->getPrimaryKey(),
+					);
+				}
+
 				throw new StateException(sprintf(
 					"Cannot build projection representation for collection '%s' because primary key field '%s' is missing or incomplete.",
 					$collection->getName(),
@@ -544,11 +642,10 @@ final class RepresentationAdoptionEngine
 
 		$collection = $source->getCollection();
 		if ($hydrate) {
-			throw new StateException(sprintf(
-				"Cannot build projection representation for collection '%s' because primary key field '%s' is missing or incomplete.",
+			throw StateException::writableResultMissingIdentity(
 				$collection->getName(),
-				$collection->getPrimaryKey()[0] ?? 'id',
-			));
+				$collection->getPrimaryKey(),
+			);
 		}
 
 		throw new StateException(sprintf(

@@ -6,6 +6,7 @@ namespace Tests\ON\Data\ORM\Foundation;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
+use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Session;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Selection\SelectionTag;
@@ -104,11 +105,10 @@ final class SelectQueryOrmTargetTest extends TestCase
 	public function testHiddenIdentityFieldsDoNotLeakIntoMappedRepresentation(): void
 	{
 		[$harness, $users] = $this->usersHarness();
-		$session = new Session($harness->commandExecutor);
 		$query = $harness->database->query($users);
 		$query->select($query->name);
 
-		$user = $query->to(stdClass::class)->writable($session)->fetchOne();
+		$user = $query->to(stdClass::class)->fetchOne();
 
 		self::assertInstanceOf(stdClass::class, $user);
 		self::assertSame('Ada', $user->name);
@@ -117,6 +117,19 @@ final class SelectQueryOrmTargetTest extends TestCase
 		foreach ($query->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
 			self::assertFalse(property_exists($user, $selection->getSelectionKey()));
 		}
+	}
+
+	public function testWritableFetchWithoutSelectedIdentityThrows(): void
+	{
+		[$harness, $users] = $this->usersHarness();
+		$session = new Session($harness->commandExecutor);
+		$query = $harness->database->query($users);
+		$query->select($query->name);
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage('results without identity are never tracked');
+
+		$query->to(stdClass::class)->writable($session)->fetchOne();
 	}
 
 	public function testDirectSelectedFieldsCanHaveWritableLineage(): void
