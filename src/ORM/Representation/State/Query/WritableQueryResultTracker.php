@@ -7,8 +7,8 @@ namespace ON\Data\ORM\Representation\State\Query;
 use InvalidArgumentException;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityPlanner;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
+use ON\Data\ORM\Representation\Schema\Query\QuerySourceIdentities;
 use ON\Data\ORM\Representation\Sync\AdoptionPolicy;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionContext;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionEngine;
@@ -17,7 +17,6 @@ use ON\Data\ORM\Session;
 use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Result\WritablePreparation;
 use ON\Data\Query\Result\WritableResultHandler;
-use ON\Data\Query\Schema\QueryRepresentationSchemaCompiler;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Schema\RepresentationSchema;
 use ON\Data\Schema\RepresentationSource;
@@ -33,30 +32,22 @@ final class WritableQueryResultTracker implements WritableResultHandler
 {
 	private RepresentationReader $reader;
 
-	private QueryRepresentationSchemaCompiler $compiler;
-
-	private QueryRepresentationIdentityPlanner $identityPlanner;
-
 	private RepresentationAdoptionEngine $adoptionEngine;
 
 	public function __construct(
 		private readonly Session $session,
 		?RepresentationReader $reader = null,
-		?QueryRepresentationSchemaCompiler $compiler = null,
-		?QueryRepresentationIdentityPlanner $identityPlanner = null,
 		?RepresentationAdoptionEngine $adoptionEngine = null,
 	) {
 		$this->reader = $reader ?? new RepresentationReader();
-		$this->compiler = $compiler ?? new QueryRepresentationSchemaCompiler();
-		$this->identityPlanner = $identityPlanner ?? new QueryRepresentationIdentityPlanner();
 		$this->adoptionEngine = $adoptionEngine ?? new RepresentationAdoptionEngine($this->reader);
 	}
 
 	public function prepare(SelectQuery $query): WritablePreparation
 	{
-		$schema = $this->compiler->compile($query);
+		$schema = $query->projection();
 		$sources = $schema->getSources();
-		$identities = $this->identityPlanner->planIdentities($query, $sources, resetCounter: true);
+		$identities = new QuerySourceIdentities($sources);
 		$plan = new QueryRepresentationPlan($schema, $sources, $identities);
 
 		foreach ($query->getRelationSelections()->getAll() as $selection) {
@@ -266,7 +257,7 @@ final class WritableQueryResultTracker implements WritableResultHandler
 			return;
 		}
 
-		$identities = $this->identityPlanner->planIdentities($selection->getRelationRef(), $sources);
+		$identities = new QuerySourceIdentities($sources);
 		$plan->setRelationIdentities($selection->getPath(), $identities);
 	}
 

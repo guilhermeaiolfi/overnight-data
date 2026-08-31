@@ -145,7 +145,7 @@ final class NestedFlatWritableExecutor implements QueryExecutorInterface
 		foreach ($query->getSelections()->getAll() as $selection) {
 			$key = $selection->getSelectionKey();
 
-			if (str_starts_with($key, '_od_internal_')) {
+			if (str_contains($key, '.') || str_starts_with($key, '_od_internal_')) {
 				$row[$key] = 7;
 			}
 		}

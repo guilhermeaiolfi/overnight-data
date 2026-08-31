@@ -420,6 +420,18 @@ final class QueryArchitectureTest extends TestCase
 		self::assertStringNotContainsString('bindAllDestinations', $loadRuntime);
 		self::assertStringNotContainsString('getExpression()->getField()->getName()', $loadRuntime);
 
+		$loadFieldPlanner = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/LoadFieldPlanner.php');
+		self::assertStringContainsString('getPaths()', $loadFieldPlanner);
+		self::assertStringContainsString('bindPlacePath', $loadFieldPlanner);
+		self::assertStringContainsString('schemaFor', $loadFieldPlanner);
+		self::assertStringContainsString('private readonly RepresentationSchema $schema', $loadFieldPlanner);
+		self::assertStringNotContainsString('getByTag', $loadFieldPlanner);
+		self::assertStringNotContainsString('SelectionTag::COLUMN', $loadFieldPlanner);
+
+		$selectQuery = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/SelectQuery.php');
+		self::assertStringContainsString('$this->projection()', $selectQuery);
+		self::assertStringNotContainsString('compileFetchSchema', $selectQuery);
+
 		foreach ([
 			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/BelongsToLoader.php',
 			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasOneLoader.php',

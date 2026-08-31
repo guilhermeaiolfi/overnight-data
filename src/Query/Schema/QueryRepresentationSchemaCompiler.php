@@ -12,6 +12,7 @@ use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\Relation\LoadBranch;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\RelationSelection;
 use ON\Data\Query\Selection\SelectionItem;
@@ -26,10 +27,11 @@ use ON\Data\Schema\RepresentationSchema;
 
 /**
  * Compiles a SelectQuery selection graph into a structural RepresentationSchema
- * for flat mutable projection adoption.
+ * (result shape: public paths plus implicit source identities).
  *
- * Does not plan identities or mutate the query — identity planning runs at
- * writable prepare time in the ORM tracker.
+ * Does not mutate the query. Join/correlation keys stay on loaders
+ * ({@see LoadBranch::requireFields()}). Hidden source primary keys are Implicit
+ * fields; non-root identities use a source-qualified path (`company.id`).
  */
 final class QueryRepresentationSchemaCompiler
 {
@@ -72,17 +74,20 @@ final class QueryRepresentationSchemaCompiler
 		CollectionInterface $collection,
 		array $sourcePath = [],
 	): void {
-		$fields = [];
-
-		foreach ($this->primaryKeyFields($collection, $sourcePath) as $field) {
-			if ($schema->hasFieldForSource($sourcePath, $field->getFieldName())) {
+		foreach ($collection->getPrimaryKey() as $fieldName) {
+			if ($schema->hasFieldForSource($sourcePath, $fieldName)) {
 				continue;
 			}
 
-			$fields[] = $field;
+			$schema->addField(new RepresentationFieldSchema(
+				$this->identityPath($schema, $sourcePath, $fieldName),
+				$collection,
+				$fieldName,
+				writable: false,
+				sourcePath: $sourcePath,
+				role: RepresentationFieldRole::Implicit,
+			));
 		}
-
-		$this->addFields($schema, $fields);
 	}
 
 	/**
@@ -150,8 +155,11 @@ final class QueryRepresentationSchemaCompiler
 				continue;
 			}
 
-			$this->addFields($schema, $this->fieldsFromSelections($query, [$selection]));
+			$fields = $this->fieldsFromSelections($query, [$selection]);
+			$this->addFields($schema, $fields);
 		}
+
+		$this->assembleFlatSourcePrimaryKeys($schema);
 	}
 
 	private function isRelationSourcedFieldSelection(SelectQuery $query, SelectionItem $selection): bool
@@ -260,11 +268,56 @@ final class QueryRepresentationSchemaCompiler
 			$explicit = $selection->getSelections()->getExplicit();
 			$this->addFields($schema, $this->fieldsFromSelections($relationRef, $explicit));
 			$this->addExpressions($schema, $this->expressionsFromSelections($relationRef, $explicit));
+			$this->assembleFlatSourcePrimaryKeys($schema);
 		}
 
 		$this->assemblePrimaryKeyFields($schema, $targetCollection);
 
 		return $schema;
+	}
+
+	private function assembleFlatSourcePrimaryKeys(RepresentationSchema $schema): void
+	{
+		$seen = [];
+
+		foreach ($schema->getFields() as $field) {
+			if ($field->getSourcePath() === []) {
+				continue;
+			}
+
+			$key = $field->getSourcePathKey();
+			if (isset($seen[$key])) {
+				continue;
+			}
+
+			$seen[$key] = true;
+			$this->assemblePrimaryKeyFields($schema, $field->getCollection(), $field->getSourcePath());
+		}
+	}
+
+	/**
+	 * Row key for an implicit source primary key. Root uses the field name;
+	 * related sources qualify with source path (`company.id`) so they do not
+	 * collide with the root `id`. If that path is already taken, suffix `_2`.
+	 *
+	 * @param list<string> $sourcePath
+	 */
+	private function identityPath(RepresentationSchema $schema, array $sourcePath, string $fieldName): string
+	{
+		$path = $sourcePath === []
+			? $fieldName
+			: implode('.', [...$sourcePath, $fieldName]);
+
+		if (! $schema->hasPath($path)) {
+			return $path;
+		}
+
+		$n = 2;
+		do {
+			$fallback = $path . '_' . $n++;
+		} while ($schema->hasPath($fallback));
+
+		return $fallback;
 	}
 
 	/**
@@ -305,35 +358,16 @@ final class QueryRepresentationSchemaCompiler
 		$fields = [];
 
 		foreach ($collection->getFields() as $field) {
+			if ($field->isHidden()) {
+				continue;
+			}
+
 			$fields[] = new RepresentationFieldSchema(
 				$field->getName(),
 				$collection,
 				$field->getName(),
 				writable: true,
 				sourcePath: $sourcePath,
-			);
-		}
-
-		return $fields;
-	}
-
-	/**
-	 * @param list<string> $sourcePath
-	 *
-	 * @return list<RepresentationFieldSchema>
-	 */
-	private function primaryKeyFields(CollectionInterface $collection, array $sourcePath = []): array
-	{
-		$fields = [];
-
-		foreach ($collection->getPrimaryKey() as $fieldName) {
-			$fields[] = new RepresentationFieldSchema(
-				$fieldName,
-				$collection,
-				$fieldName,
-				writable: false,
-				sourcePath: $sourcePath,
-				role: RepresentationFieldRole::Implicit,
 			);
 		}
 

@@ -154,9 +154,13 @@ Adoption chooses flat vs graph from the schema (and intent).
 
 **Schema is the place base.** When `SelectQuery::needsRowAssemble()` is true
 (aliases, flats, or relation loads), `beginFetch()` compiles a
-`RepresentationSchema` and `RelationOutputProcessor` places scalars only via
-`getPublicScalarPaths()`. Query `EXPLICIT` tags are fetch/authoring only — not a
-place fallback.
+`RepresentationSchema` via `projection()` and `RelationOutputProcessor` places
+scalars only via `getPublicScalarPaths()`. Writable `prepare()` uses the same
+`projection()` and reuses that schema. `LoadFieldPlanner` requires the compiled
+schema and binds SQL from schema scalar paths at each load level. Query
+`EXPLICIT` tags are fetch/authoring only — not a place fallback. Join keys stay
+on loaders (`requireFields()`). Hidden source primary keys are Implicit fields
+with source-qualified paths (`company.id`) when they would collide with root `id`.
 
 Plain own-field reads skip assemble and skip schema compile (executor column
 names already match place).
@@ -206,7 +210,7 @@ Attaches a schema to one object instance: field/relation state items + baselines
 - Flat: `getSources()` (fields grouped by `sourcePath`)  
 - Graph: relation branches + `getRelatedSchema()`  
 
-Writable prepare plans Query `INTERNAL` identity selections via `QueryRepresentationIdentityPlanner` (does not put SQL_ONLY aliases on the schema). Schema Implicit PK fields remain the durable identity provenance for adoption.
+Writable prepare builds `QuerySourceIdentities` from schema sources (Implicit PK paths such as `company.id`). It does not add Query `INTERNAL` selections.
 
 See [`session-save-api.md`](./session-save-api.md) and [`writable-select-query-projections.md`](./writable-select-query-projections.md).
 

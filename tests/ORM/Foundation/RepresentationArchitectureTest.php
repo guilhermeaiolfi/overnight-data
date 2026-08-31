@@ -112,6 +112,15 @@ final class RepresentationArchitectureTest extends TestCase
 		self::assertStringContainsString('WritableResultHandler', $contents);
 	}
 
+	public function testWritablePrepareCompilesViaSelectQueryProjection(): void
+	{
+		$contents = file_get_contents(dirname(__DIR__, 3) . '/src/ORM/Representation/State/Query/WritableQueryResultTracker.php');
+
+		self::assertIsString($contents);
+		self::assertStringContainsString('$query->projection()', $contents);
+		self::assertStringNotContainsString('QueryRepresentationSchemaCompiler', $contents);
+	}
+
 	/**
 	 * @return list<string>
 	 */

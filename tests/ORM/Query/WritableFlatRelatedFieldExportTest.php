@@ -115,6 +115,13 @@ final class WritableFlatRelatedFieldExportTest extends TestCase
 
 	private function assertInternalSelectionsAreNotExported(SelectQuery $query, stdClass $user): void
 	{
+		foreach (get_object_vars($user) as $name => $_) {
+			self::assertFalse(
+				str_starts_with((string) $name, '_od_internal_'),
+				sprintf('Internal path "%s" must not be exported on the result.', $name),
+			);
+		}
+
 		foreach ($query->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
 			self::assertFalse(
 				property_exists($user, $selection->getSelectionKey()),
@@ -201,16 +208,17 @@ final class AssertingInternalCompanyIdSelectionExecutor implements QueryExecutor
 
 	public function fetchOne(SelectQuery $query): ?array
 	{
-		$internalSelections = $query->getSelections()->getByTag(SelectionTag::INTERNAL);
+		$identitySelections = [];
 
-		if ($internalSelections === []) {
-			throw new AssertionFailedError('Expected internal selection before query execution.');
+		foreach ($query->getSelections()->getAll() as $selection) {
+			$key = $selection->getSelectionKey();
+			if (str_contains($key, '.') || str_starts_with($key, '_od_internal_') || $selection->hasTag(SelectionTag::INTERNAL)) {
+				$identitySelections[] = $selection;
+			}
 		}
 
-		foreach ($internalSelections as $selection) {
-			if (! $selection->hasTag(SelectionTag::INTERNAL)) {
-				throw new AssertionFailedError('Expected INTERNAL tag on internal selection.');
-			}
+		if ($identitySelections === []) {
+			throw new AssertionFailedError('Expected related-source identity selection before query execution.');
 		}
 
 		return InternalSelectionRowFactory::withInternalCompanyId($query, [
@@ -234,8 +242,11 @@ final class InternalSelectionRowFactory
 	 */
 	public static function withInternalCompanyId(SelectQuery $query, array $row): array
 	{
-		foreach ($query->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
-			$row[$selection->getSelectionKey()] = 5;
+		foreach ($query->getSelections()->getAll() as $selection) {
+			$key = $selection->getSelectionKey();
+			if (str_contains($key, '.') || str_starts_with($key, '_od_internal_') || $selection->hasTag(SelectionTag::INTERNAL)) {
+				$row[$key] = 5;
+			}
 		}
 
 		return $row;

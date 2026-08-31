@@ -44,17 +44,16 @@ final class LoadRuntime
 
 	private LoadAliasAllocator $aliases;
 
-	private LoadFieldPlanner $fieldPlanner;
+	private ?LoadFieldPlanner $fieldPlanner = null;
 
 	public function __construct(
 		private readonly SelectQuery $rootQuery,
 		private readonly QueryExecutorInterface $executor,
-		?RepresentationSchema $schema = null,
+		private readonly ?RepresentationSchema $schema = null,
 	) {
 		$this->rootBranch = new RootLoadBranch($rootQuery);
 		$this->outputProcessor = new RelationOutputProcessor($schema);
 		$this->aliases = new LoadAliasAllocator();
-		$this->fieldPlanner = new LoadFieldPlanner($this->aliases);
 	}
 
 	public function fetchAll(): array
@@ -193,11 +192,20 @@ final class LoadRuntime
 
 	private function planScalars(): void
 	{
-		$this->fieldPlanner->bindBranch($this->rootBranch);
+		$planner = $this->fieldPlanner();
+		$planner->bindBranch($this->rootBranch);
 
 		foreach ($this->relationBranchesByDepth() as $branch) {
-			$this->fieldPlanner->bindBranch($branch);
+			$planner->bindBranch($branch);
 		}
+	}
+
+	private function fieldPlanner(): LoadFieldPlanner
+	{
+		return $this->fieldPlanner ??= new LoadFieldPlanner(
+			$this->aliases,
+			$this->schema ?? throw LoadRuntimeException::placeSchemaMissing(),
+		);
 	}
 
 	private function createBranches(): void

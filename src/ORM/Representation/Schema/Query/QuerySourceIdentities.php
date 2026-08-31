@@ -15,16 +15,13 @@ use ON\Data\Schema\RepresentationSource;
  *
  * Owns the locator map (source path + primary-key field -> result row key) used
  * to read hidden or public identity values from the source row before resolving
- * records through RecordStateStore. Locators are fixed for the fetch and start
- * empty; callers fill them via {@see add()} while planning. Call {@see getIdentity()}
- * with a raw row when resolving Keys during adopt — the map itself is not per row.
+ * records through RecordStateStore. Locators start empty; {@see getIdentity()}
+ * prefers the source's schema field path (including source-qualified Implicit
+ * paths such as `company.id`). Call it with a raw assembled row when resolving
+ * Keys during adopt — the map itself is not per row.
  *
  * This is NOT the session RecordState identity map: it does not hold RecordState
- * objects. It is compiled query/result-row metadata describing where identity
- * columns can be found, keyed by source path + primary-key field. SelectQuery may
- * inject INTERNAL-tagged identity selections that must not appear in public
- * results but are required to resolve RecordState keys during flat hydrate
- * adoption. Keying by source path (rather than collection name) lets root and
+ * objects. Keying by source path (rather than collection name) lets root and
  * related sources share a terminal collection while remaining distinct records.
  */
 final class QuerySourceIdentities implements RepresentationSourceIdentities

@@ -741,7 +741,7 @@ final class SelectQuery implements QuerySourceInterface
 			return null;
 		}
 
-		$this->fetchSchema = $this->compileFetchSchema();
+		$this->fetchSchema = $this->projection();
 
 		return null;
 	}
@@ -751,7 +751,7 @@ final class SelectQuery implements QuerySourceInterface
 		$this->fetchSchema = $preparation->getFetchSchema();
 
 		if ($this->fetchSchema === null && $this->needsRowAssemble() && ! $this->isDerivedSource()) {
-			$this->fetchSchema = $this->compileFetchSchema();
+			$this->fetchSchema = $this->projection();
 		}
 	}
 
@@ -792,11 +792,6 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		return false;
-	}
-
-	private function compileFetchSchema(): RepresentationSchema
-	{
-		return (new QueryRepresentationSchemaCompiler())->compile($this);
 	}
 
 	/**

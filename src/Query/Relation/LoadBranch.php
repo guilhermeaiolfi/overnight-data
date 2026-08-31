@@ -37,6 +37,11 @@ abstract class LoadBranch
 	 */
 	private array $placeBindings = [];
 
+	/**
+	 * @var list<string>
+	 */
+	private array $requiredFieldNames = [];
+
 	public function bindPlaceToLoadKey(string $placeKey, string $loadKey): void
 	{
 		$this->placeBindings[$placeKey] = new PlaceBinding($loadKey);
@@ -65,38 +70,30 @@ abstract class LoadBranch
 	 * fields use the field name as the bag key; local flats and non-field
 	 * internals use the output name. Child-bag flats are omitted.
 	 *
+	 * Built from {@see PlaceBinding} after the schema-path planner runs; not a
+	 * second walk of {@see SelectionList} COLUMN tags as place.
+	 *
 	 * @return array<string, string>
 	 */
 	public function getRemapColumns(): array
 	{
 		$map = [];
 
-		foreach ($this->getSelections()->getByTag(SelectionTag::COLUMN) as $selection) {
-			if ($this->childPathForPlace($selection->getSelectionKey()) !== null) {
+		foreach ($this->placeBindings as $placeKey => $binding) {
+			if ($binding->isChildDestination()) {
 				continue;
 			}
 
-			$name = $this->parserColumnName($selection);
+			$name = $this->bagKeyForPlace($placeKey);
 
 			if (isset($map[$name])) {
 				continue;
 			}
 
-			$map[$name] = $this->sqlAliasForColumn($name);
+			$map[$name] = $binding->getLoadKey();
 		}
 
 		return $map;
-	}
-
-	private function sqlAliasForColumn(string $column): string
-	{
-		$own = $this->findOwnFieldSelection($column);
-
-		if ($own instanceof SelectionItem) {
-			return $this->loadKeyForPlace($own->getSelectionKey());
-		}
-
-		return $this->loadKeyForPlace($column);
 	}
 
 	/**
@@ -133,7 +130,7 @@ abstract class LoadBranch
 
 	/**
 	 * Register own-level fields as REQUIRED. Returns place keys (not SQL aliases).
-	 * SQL emit and load-local keys belong on the runtime requireFields path.
+	 * {@see LoadFieldPlanner::emitRequiredFields()} emits SQL after schema bind.
 	 *
 	 * @param list<string> $fieldNames
 	 * @return list<string>
@@ -148,6 +145,7 @@ abstract class LoadBranch
 
 		foreach ($fieldNames as $fieldName) {
 			$normalized = $this->getCollection()->getField($fieldName)->getName();
+			$this->requiredFieldNames[] = $normalized;
 			$existing = $this->findOwnFieldSelection($normalized);
 
 			if ($existing instanceof SelectionItem) {
@@ -165,6 +163,14 @@ abstract class LoadBranch
 		}
 
 		return $added;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	public function getRequiredFieldNames(): array
+	{
+		return array_values(array_unique($this->requiredFieldNames));
 	}
 
 	/**

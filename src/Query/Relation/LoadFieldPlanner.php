@@ -11,75 +11,126 @@ use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Selection\SelectionItem;
-use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SourceMap;
+use ON\Data\Schema\RepresentationExpressionSchema;
+use ON\Data\Schema\RepresentationFieldSchema;
+use ON\Data\Schema\RepresentationSchema;
 
 /**
- * For each level COLUMN, choose where it is fetched, select SQL, and bind output name → SQL alias.
+ * For each schema scalar path at this level, choose where it is fetched, select
+ * SQL, and bind place path → SQL alias.
  *
  * Destinations are existing {@see LoadBranch} nodes (this level, or a loaded to-one child).
- * Does not invent attaches for flats.
+ * Does not invent attaches for flats. Place comes only from {@see RepresentationSchema}.
  */
 final class LoadFieldPlanner
 {
 	public function __construct(
 		private readonly LoadAliasAllocator $aliases,
+		private readonly RepresentationSchema $schema,
 	) {
 	}
 
 	/**
-	 * Emit SQL and bind output name → SQL alias for this branch's COLUMN fields.
+	 * Emit SQL and bind place path → SQL alias for this branch.
 	 */
 	public function bindBranch(LoadBranch $branch): void
 	{
-		foreach ($branch->getSelections()->getByTag(SelectionTag::COLUMN) as $selection) {
-			$this->bindColumn($branch, $selection);
+		$schema = $this->schemaFor($branch);
+		foreach ($schema->getPaths() as $path) {
+			if ($schema->hasRelation($path)) {
+				continue;
+			}
+
+			$this->bindPlacePath($branch, $schema, $path);
+		}
+
+		$this->emitRequiredFields($branch);
+	}
+
+	/**
+	 * Emit SQL for loader-required join/correlation keys that are not schema place.
+	 */
+	public function emitRequiredFields(LoadBranch $branch): void
+	{
+		foreach ($branch->getRequiredFieldNames() as $fieldName) {
+			$this->emitOwnField($branch, $fieldName);
 		}
 	}
 
-	private function bindColumn(
+	private function schemaFor(LoadBranch $branch): RepresentationSchema
+	{
+		if ($branch instanceof RootLoadBranch) {
+			return $this->schema;
+		}
+
+		if (! $branch instanceof RelationLoadBranch) {
+			throw LoadRuntimeException::placeSchemaMissing();
+		}
+
+		$path = $branch->getRelationRef()->getPath();
+		$node = $this->schema->findRelatedSchemaAt($path);
+		if (! $node instanceof RepresentationSchema) {
+			throw LoadRuntimeException::placeSchemaNodeMissing($path);
+		}
+
+		return $node;
+	}
+
+	private function bindPlacePath(
 		LoadBranch $branch,
-		SelectionItem $selection,
+		RepresentationSchema $schema,
+		string $path,
 	): void {
-		$level = $branch->getProjectionLevel();
-		$outputName = $selection->getSelectionKey();
-		$fieldRef = $selection->getFieldRef();
-
-		if ($branch->hasPlaceBinding($outputName)) {
+		if ($branch->hasPlaceBinding($path)) {
 			return;
 		}
 
-		if (! $fieldRef instanceof FieldRef) {
-			$this->bindNonFieldColumn($branch, $selection);
+		if ($schema->hasField($path)) {
+			$this->bindFieldSchema($branch, $schema->getField($path));
 
 			return;
 		}
 
-		$fieldName = $fieldRef->getField()->getName();
-		$source = $fieldRef->getSource();
-		$isCrossLevelFlat = $source instanceof RelationRef && $source->isUnder($level);
+		if ($schema->hasExpression($path)) {
+			$this->bindExpressionSchema($branch, $schema->getExpression($path));
+		}
+	}
 
-		if ($isCrossLevelFlat) {
-			$relative = $source->relativeTo($level);
-			$child = $this->getChildForFlat($branch, $relative);
+	private function bindFieldSchema(LoadBranch $branch, RepresentationFieldSchema $field): void
+	{
+		$outputName = $field->getPath();
+		$fieldName = $field->getFieldName();
+		$sourcePath = $field->getSourcePath();
+
+		if ($sourcePath !== []) {
+			$child = $this->getChildForFlat($branch, $sourcePath);
 
 			if ($child instanceof RelationLoadBranch) {
 				$this->emitOwnField($child, $fieldName);
 				$child->requireFields([$fieldName]);
-				$branch->bindPlaceToChildDestination($outputName, $relative, $fieldName);
+				$branch->bindPlaceToChildDestination($outputName, $sourcePath, $fieldName);
 
 				return;
 			}
 		}
 
-		$sqlOnly = $this->isRequiredOnly($branch, $outputName);
-		$sqlKey = $this->selectField($branch, $fieldRef, $outputName, $this->aliasPath($branch), $sqlOnly);
+		$fieldRef = $this->fieldRefFor($branch, $field);
+		$sqlKey = $this->selectField(
+			$branch,
+			$fieldRef,
+			$outputName,
+			$this->aliasPath($branch),
+			$field->isImplicit(),
+		);
 		$branch->bindPlaceToLoadKey($outputName, $sqlKey);
 	}
 
-	private function bindNonFieldColumn(LoadBranch $branch, SelectionItem $selection): void
-	{
-		$outputName = $selection->getSelectionKey();
+	private function bindExpressionSchema(
+		LoadBranch $branch,
+		RepresentationExpressionSchema $expressionSchema,
+	): void {
+		$outputName = $expressionSchema->getPath();
 		$query = $branch->getQuery();
 		$preferred = $this->aliases->aliasForPath($this->aliasPath($branch), $outputName);
 		$existing = $query->getSelections()->findBySelectionKey($preferred);
@@ -91,7 +142,7 @@ final class LoadFieldPlanner
 		}
 
 		$sqlKey = $this->aliases->ensureFreeAlias($query, $preferred);
-		$expression = $selection->getExpression();
+		$expression = $expressionSchema->getExpression();
 
 		if ($expression instanceof AliasedExpression) {
 			$expression = $expression->getExpression();
@@ -108,9 +159,52 @@ final class LoadFieldPlanner
 			$query,
 			$rebound,
 			$sqlKey,
-			$this->isRequiredOnly($branch, $outputName),
+			false,
 		);
 		$branch->bindPlaceToLoadKey($outputName, $sqlKey);
+	}
+
+	private function fieldRefFor(LoadBranch $branch, RepresentationFieldSchema $field): FieldRef
+	{
+		$level = $branch->getProjectionLevel();
+		$sourcePath = $field->getSourcePath();
+		$fieldName = $field->getFieldName();
+
+		if ($sourcePath === []) {
+			$fieldRef = $level instanceof RelationRef
+				? $level->field($fieldName)
+				: $branch->getQuery()->field($fieldName);
+
+			if (! $fieldRef instanceof FieldRef) {
+				throw new LogicException(sprintf(
+					"Cannot bind schema field '%s' because it does not resolve to a query field.",
+					$fieldName,
+				));
+			}
+
+			return $fieldRef;
+		}
+
+		$relation = null;
+		foreach ($sourcePath as $segment) {
+			$relation = $relation === null
+				? ($level instanceof RelationRef ? $level->relation($segment) : $branch->getQuery()->relation($segment))
+				: $relation->relation($segment);
+		}
+
+		if (! $relation instanceof RelationRef) {
+			if ($level instanceof RelationRef) {
+				throw LoadRuntimeException::queryNotConfigured($level);
+			}
+
+			throw new LogicException(sprintf(
+				"Cannot bind schema field '%s' because source path '%s' could not be remapped onto this query level.",
+				$fieldName,
+				implode('.', $sourcePath),
+			));
+		}
+
+		return $relation->field($fieldName);
 	}
 
 	private function emitOwnField(LoadBranch $branch, string $fieldName): void
@@ -125,8 +219,7 @@ final class LoadFieldPlanner
 		$fieldRef = $level instanceof RelationRef
 			? $level->field($fieldName)
 			: $branch->getQuery()->field($fieldName);
-		$sqlOnly = $this->isRequiredOnly($branch, $placeKey);
-		$sqlKey = $this->selectField($branch, $fieldRef, $placeKey, $this->aliasPath($branch), $sqlOnly);
+		$sqlKey = $this->selectField($branch, $fieldRef, $placeKey, $this->aliasPath($branch), true);
 		$branch->bindPlaceToLoadKey($placeKey, $sqlKey);
 	}
 
@@ -204,15 +297,6 @@ final class LoadFieldPlanner
 		}
 
 		return $segments;
-	}
-
-	private function isRequiredOnly(LoadBranch $branch, string $outputName): bool
-	{
-		$selection = $branch->getSelections()->findBySelectionKey($outputName);
-
-		return ! $selection instanceof SelectionItem
-			|| $selection->hasTag(SelectionTag::INTERNAL)
-			|| ! $selection->isExplicit();
 	}
 
 	/**

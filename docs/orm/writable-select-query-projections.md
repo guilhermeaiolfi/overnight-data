@@ -117,7 +117,7 @@ $session->sync($user);
 $session->flush();
 ```
 
-Intended meaning: `authorName` writes to `authors.name` for the author row identified by hidden INTERNAL selections on the posts-level payload. Those keys stay off the public nested objects (`stripInternalKeys` walks nested arrays). Graph attach alone cannot adopt multi-source nested flats; the writable tracker flat-hydrates those nested items first using per-relation identities from `QueryRepresentationIdentityPlanner::planIdentities()`.
+Intended meaning: `authorName` writes to `authors.name` for the author row identified by the hidden schema path (`author.id`) on the assembled posts-level payload. Those keys stay off the public nested objects. Graph attach alone cannot adopt multi-source nested flats; the writable tracker flat-hydrates those nested items first using per-relation `QuerySourceIdentities`.
 
 ## Existing relation item from query
 

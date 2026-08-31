@@ -115,7 +115,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$columns = array_keys(LifecycleEvents::$registerColumns['posts']);
 		sort($columns);
 
-		self::assertSame(['authorId', 'id', 'userId'], $columns);
+		self::assertSame(['authorId', 'id', 'title', 'userId'], $columns);
 	}
 
 	public function testRequestedPublicFieldsRemainSeparateFromInternallyRequiredNodeColumns(): void
@@ -625,7 +625,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 
 	private function prepareRuntime(SelectQuery $query): LoadRuntime
 	{
-		$runtime = new LoadRuntime($query, new LifecycleExecutor());
+		$runtime = new LoadRuntime($query, new LifecycleExecutor(), $query->projection());
 		$method = new ReflectionMethod(LoadRuntime::class, 'prepare');
 		$method->setAccessible(true);
 		$method->invoke($runtime);

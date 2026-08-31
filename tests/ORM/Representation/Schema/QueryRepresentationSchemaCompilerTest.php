@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Representation\Schema;
 
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationIdentityPlanner;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
+use ON\Data\ORM\Representation\Schema\Query\QuerySourceIdentities;
 use function ON\Data\Query\query;
 use ON\Data\Query\Schema\QueryRepresentationSchemaCompiler;
 use ON\Data\Query\Selection\SelectionTag;
@@ -141,16 +141,13 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertTrue($schema->getField('id')->isRootSource());
 		self::assertSame(['company'], $schema->getField('name')->getSourcePath());
 
-		$internalSelections = $query->getSelections()->getByTag(SelectionTag::INTERNAL);
-		self::assertCount(1, $internalSelections);
-		self::assertTrue($internalSelections[0]->hasTag(SelectionTag::INTERNAL));
-
-		$identities = $compilation->getIdentities();
-		self::assertNotNull($identities->getResultKey(['company'], 'id'));
-		self::assertSame(
-			$internalSelections[0]->getSelectionKey(),
-			$identities->getResultKey(['company'], 'id'),
-		);
+		$companyIdPath = $this->implicitSourceFieldPath($schema, ['company'], 'id');
+		self::assertSame('company.id', $companyIdPath);
+		self::assertTrue($schema->getField($companyIdPath)->isImplicit());
+		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
+		self::assertNull($compilation->getIdentities()->getResultKey(['company'], 'id'));
+		$companySource = $this->sourceAt($compilation->getSources(), ['company']);
+		self::assertSame($companyIdPath, $companySource->getFieldPath('id'));
 	}
 
 	public function testCompileReturnsRepresentationSchemaWithoutInternalSelections(): void
@@ -169,22 +166,27 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
 	}
 
-	public function testPreparePlanAddsInternalIdentitySelectionsWhenCompileWouldNot(): void
+	public function testPreparePlanDoesNotAddInternalWhenCompileAddsSourcePrimaryKey(): void
 	{
 		$registry = $this->makeRegistryWithCompany();
 		$users = $registry->getCollection('users');
 
 		$schemaQuery = query($users, fn (SelectQuery $query) => $query
 			->select($query->id, $query->company->name->as('name')));
-		$this->compiler->compile($schemaQuery);
+		$schema = $this->compiler->compile($schemaQuery);
+		self::assertSame('company.id', $this->implicitSourceFieldPath($schema, ['company'], 'id'));
 		self::assertCount(0, $schemaQuery->getSelections()->getByTag(SelectionTag::INTERNAL));
 
 		$resultQuery = query($users, fn (SelectQuery $query) => $query
 			->select($query->id, $query->company->name->as('name')));
 		$compilation = $this->preparePlan($resultQuery);
 
-		self::assertCount(1, $resultQuery->getSelections()->getByTag(SelectionTag::INTERNAL));
-		self::assertNotNull($compilation->getIdentities()->getResultKey(['company'], 'id'));
+		self::assertCount(0, $resultQuery->getSelections()->getByTag(SelectionTag::INTERNAL));
+		self::assertNull($compilation->getIdentities()->getResultKey(['company'], 'id'));
+		self::assertSame(
+			$this->implicitSourceFieldPath($compilation->getSchema(), ['company'], 'id'),
+			$this->sourceAt($compilation->getSources(), ['company'])->getFieldPath('id'),
+		);
 	}
 
 	public function testPreparePlanReturnsQueryRepresentationPlanWithSourcePathKeyedIdentities(): void
@@ -198,8 +200,12 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 
 		self::assertInstanceOf(QueryRepresentationPlan::class, $compilation);
 		self::assertTrue($compilation->getSchema()->getField('name')->getSourcePath() === ['company']);
-		self::assertNotNull($compilation->getIdentities()->getResultKey(['company'], 'id'));
+		self::assertNull($compilation->getIdentities()->getResultKey(['company'], 'id'));
 		self::assertNull($compilation->getIdentities()->getResultKey([], 'id'));
+		self::assertSame(
+			$this->implicitSourceFieldPath($compilation->getSchema(), ['company'], 'id'),
+			$this->sourceAt($compilation->getSources(), ['company'])->getFieldPath('id'),
+		);
 	}
 
 	public function testPreparePlanCarriesStructuralRepresentationSources(): void
@@ -260,11 +266,9 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 
 		$identities = $compilation->getIdentities();
 		self::assertNull($identities->getResultKey([], 'id'));
-		self::assertNotNull($identities->getResultKey(['manager'], 'id'));
-
-		$internal = $query->getSelections()->getByTag(SelectionTag::INTERNAL);
-		self::assertCount(1, $internal);
-		self::assertSame($internal[0]->getSelectionKey(), $identities->getResultKey(['manager'], 'id'));
+		self::assertNull($identities->getResultKey(['manager'], 'id'));
+		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
+		self::assertSame('manager.id', $this->implicitSourceFieldPath($schema, ['manager'], 'id'));
 	}
 
 	public function testInternalIdentityFieldPathsDoNotCollideWithVisibleAliases(): void
@@ -278,8 +282,13 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$schema = $compilation->getSchema();
 
 		self::assertTrue($schema->hasField('company_name'));
-		self::assertFalse($schema->hasField('company.id'));
-		self::assertNotNull($compilation->getIdentities()->getResultKey(['company'], 'id'));
+		self::assertTrue($schema->hasField('company.id'));
+		self::assertTrue($schema->getField('company.id')->isImplicit());
+		self::assertSame('id', $schema->getField('company.id')->getFieldName());
+		self::assertSame(['company'], $schema->getField('company.id')->getSourcePath());
+		self::assertNull($compilation->getIdentities()->getResultKey(['company'], 'id'));
+		self::assertSame('company.id', $this->implicitSourceFieldPath($schema, ['company'], 'id'));
+		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
 	}
 
 	public function testCompilesSelectedRootRelation(): void
@@ -333,6 +342,9 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertSame(['author'], $postsSchema->getField('authorName')->getSourcePath());
 		self::assertSame('users', $postsSchema->getField('authorName')->getCollectionName());
 		self::assertTrue($postsSchema->getField('authorName')->shouldSkipWhenMissing());
+		self::assertTrue($postsSchema->hasField('author.id'));
+		self::assertTrue($postsSchema->getField('author.id')->isImplicit());
+		self::assertSame(['author'], $postsSchema->getField('author.id')->getSourcePath());
 	}
 
 	public function testCompilesNestedAliasedExpressionsOnRelationLevel(): void
@@ -600,6 +612,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertTrue($posts->getField('id')->isReadOnly());
 		self::assertSame([], $posts->getField('title')->getSourcePath());
 		self::assertSame([], $posts->getField('id')->getSourcePath());
+		self::assertFalse($posts->hasField('user_id'));
 	}
 
 	public function testReturnsNewRepresentationSchemaEachTime(): void
@@ -618,9 +631,42 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 	{
 		$schema = $this->compiler->compile($query);
 		$sources = RepresentationSource::fromRepresentationSchema($schema);
-		$identities = (new QueryRepresentationIdentityPlanner())->planIdentities($query, $sources);
+		$identities = new QuerySourceIdentities($sources);
 
 		return new QueryRepresentationPlan($schema, $sources, $identities);
+	}
+
+	/**
+	 * @param list<string> $sourcePath
+	 */
+	private function implicitSourceFieldPath(RepresentationSchema $schema, array $sourcePath, string $fieldName): string
+	{
+		foreach ($schema->getImplicitFields() as $field) {
+			if ($field->getFieldName() === $fieldName && $field->getSourcePath() === $sourcePath) {
+				return $field->getPath();
+			}
+		}
+
+		self::fail(sprintf(
+			'Expected implicit field "%s" for source path "%s".',
+			$fieldName,
+			implode('.', $sourcePath),
+		));
+	}
+
+	/**
+	 * @param list<RepresentationSource> $sources
+	 * @param list<string> $sourcePath
+	 */
+	private function sourceAt(array $sources, array $sourcePath): RepresentationSource
+	{
+		foreach ($sources as $source) {
+			if ($source->getPath() === $sourcePath) {
+				return $source;
+			}
+		}
+
+		self::fail(sprintf('Expected representation source for path "%s".', implode('.', $sourcePath)));
 	}
 
 	private function makeRegistry(): Registry
