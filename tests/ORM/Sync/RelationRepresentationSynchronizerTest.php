@@ -238,7 +238,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		self::assertSame([$kept], $collection->getItems());
 	}
 
-	public function testSchemaFullLoadKnowledgeMarksCollectionAndRemovesAbsentItems(): void
+	public function testSchemaFullLoadKnowledgeMarksCollectionAndTreatsUnloadedItemsAsAdds(): void
 	{
 		$kept = new stdClass();
 		$removed = new stdClass();
@@ -252,7 +252,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 			),
 		);
 		self::assertTrue($touched[0]->isFullyLoaded());
-		self::assertSame([], $touched[0]->getAdded());
+		self::assertEqualsCanonicalizing([$kept, $removed], $touched[0]->getAdded());
 		self::assertSame([], $touched[0]->getRemoved());
 
 		$this->sync(
@@ -263,8 +263,8 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 			$this->manyStates($touched[0]),
 		);
 
-		self::assertSame([], $touched[0]->getAdded());
-		self::assertSame([$removed], $touched[0]->getRemoved());
+		self::assertSame([$kept], $touched[0]->getAdded());
+		self::assertSame([], $touched[0]->getRemoved());
 		self::assertSame([$kept], $touched[0]->getItems());
 	}
 
@@ -290,7 +290,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 			),
 		);
 		self::assertTrue($touched[0]->isPartiallyLoaded());
-		self::assertSame([], $touched[0]->getAdded());
+		self::assertEqualsCanonicalizing([$kept, $removed], $touched[0]->getAdded());
 
 		$this->sync(
 			$this->trackedMapWithRelated(

@@ -89,14 +89,8 @@ final class RelationRepresentationSynchronizer
 			RelationCardinality::MANY,
 			$relationSchema->getRelatedSchema(),
 		);
-		$establishBaseline = $relation->isUnloaded()
-			&& $relationSchema->getLoadKnowledge() !== RelationLoadKnowledge::Unknown;
 		$this->applyLoadKnowledge($relation, $relationSchema);
 		$relation->syncFromItems($items);
-		if ($establishBaseline) {
-			// Query-loaded membership is a snapshot, not pending add/remove intent.
-			$relation->clearChanges();
-		}
 		$this->touch($relation, $touched, $touchedIds);
 	}
 
