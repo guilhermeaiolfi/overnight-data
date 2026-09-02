@@ -9,6 +9,7 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 ### Added
 
+- **Definition plugins** — `extend()` / `getPlugin()` on definition nodes. `UiDefinitionPlugin` owns `interface()` / `display()` and the widget classes (`DropdownInterface`, `ImageDisplay`, …). `CycleCollectionPlugin` holds collection `entity` / `repository` / `mapper` / `scope`. Docs: [`docs/definition-api.md`](docs/definition-api.md), [`docs/definition-extension-guide.md`](docs/definition-extension-guide.md).
 - **Write-path database value recovery** — after insert, `CycleCommandExecutor` recovers omitted columns (SQL defaults, identity, triggers), not only `DatabaseGenerator` fields. After update, it rereads `DatabaseGenerator` `When::UPDATE` columns. Cycle `RETURNING` is used when the insert builder supports it; otherwise the adapter uses `lastInsertID` for a simple PK plus a Cycle `select()` for remaining columns. `ConvertingCommandExecutor` converts recovered storage values back to PHP. `FlushScheduler` merges recovered values into `RecordState` on insert and update. There is still no `Session::refresh()`.
 
 ### Fixed
@@ -19,6 +20,8 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 ### Changed
 
+- **UI and Cycle collection metadata moved to plugins** — `Field` / `Relation` no longer expose `interface()` / `display()`. Attach `UiDefinitionPlugin`. Collection `entity()` / `repository()` / `mapper()` / `scope()` moved to `CycleCollectionPlugin`. Relation `cascade()` / `load()` stay on the relation.
+- **Field `comment()` removed** — use `description()`.
 - **Representation schema kernel** — place types (`RepresentationSchema` and field/relation/expression/source nodes) live in `ON\Data\Schema`. `QueryRepresentationSchemaCompiler` lives in `ON\Data\Query\Schema`. Query assemble no longer imports ORM. Writable identity locators (`QueryRepresentationPlan`, `QuerySourceIdentities`) stay in ORM; there is no separate identity planner.
 - **Single place compile per fetch** — `SelectQuery::projection()` is the only schema compile. Writable `prepare()` calls it and `beginFetch()` reuses that schema. `LoadFieldPlanner` binds SQL from schema scalar paths (result shape, including source-qualified implicit ids such as `company.id`). Join/correlation keys stay on loaders via `requireFields()` SQL emit, not as schema fields. `QuerySourceIdentities` reads those schema paths; `QueryRepresentationIdentityPlanner` is removed.
 - **Single attach walk** — `RepresentationAdoptionEngine::attach()` binds every schema source then walks relation children. There is no `isFlatAttachment()` / `buildFlat()` / `attachGraph()` fork. Writable `track()` hydrates from the assembled row (hidden ids such as `company.id` stay on that row) and constructs loaded `ToManyRelationState` / `ToOneRelationState` from those children (`::full` / `::partial` / constructor), so it does not call `session.sync()` after attach. Missing fetched identity throws instead of adopting the object as new; `writable()` does not add primary-key columns. `AdoptionPolicy` remains Hydrate / Identify / Patch / Create. `map()->to()` is unchanged. `AdoptionRecordResolver` and `QuerySourceIdentities` locator maps (`add()` / `getResultKey()`) are removed; identities read schema paths only.

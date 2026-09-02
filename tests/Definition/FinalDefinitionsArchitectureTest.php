@@ -7,6 +7,7 @@ namespace Tests\ON\Data\Definition;
 use ON\Data\Definition\Collection\Collection;
 use ON\Data\Definition\Exception\InvalidDefinitionClassException;
 use ON\Data\Definition\Interface\TextareaInterface;
+use ON\Data\Definition\Plugin\UiDefinitionPlugin;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\Definition\Relation\M2MThrough;
@@ -35,21 +36,26 @@ final class FinalDefinitionsArchitectureTest extends TestCase
 	{
 		$field = (new Registry())->collection('posts')->field('title', 'string');
 
-		$field->display(CustomDisplay::class)->type('badge')->color('green')->end();
-		$field->interface(CustomInterface::class)->limit(80)->end();
+		$field->extend(
+			UiDefinitionPlugin::create()
+				->display(CustomDisplay::class)->type('badge')->color('green')->end()
+				->interface(CustomInterface::class)->limit(80)->end(),
+		);
 
+		$ui = $field->all()['extend'][UiDefinitionPlugin::class];
+		self::assertIsArray($ui);
 		self::assertSame(
 			CustomDisplay::createDefinition([
 				'type' => 'badge',
 				'color' => 'green',
 			]),
-			$field->all()['display'],
+			$ui['display'],
 		);
 		self::assertSame(
 			CustomInterface::createDefinition([
 				'limit' => 80,
 			]),
-			$field->all()['interface'],
+			$ui['interface'],
 		);
 	}
 
@@ -77,8 +83,13 @@ final class FinalDefinitionsArchitectureTest extends TestCase
 						'title' => [
 							'class' => ViewField::class,
 							'type' => 'string',
-							'display' => ['class' => stdClass::class],
-							'interface' => ['class' => stdClass::class],
+							'extend' => [
+								UiDefinitionPlugin::class => [
+									'class' => UiDefinitionPlugin::class,
+									'display' => ['class' => stdClass::class],
+									'interface' => ['class' => stdClass::class],
+								],
+							],
 						],
 					],
 				],
@@ -101,13 +112,13 @@ final class FinalDefinitionsArchitectureTest extends TestCase
 		}
 
 		try {
-			$registry->getView('summary')?->getField('title')?->getDisplay();
+			$registry->getView('summary')?->getField('title')?->getPlugin(UiDefinitionPlugin::class)?->getDisplay();
 			self::fail('Expected invalid display class discriminator to fail on access.');
 		} catch (InvalidDefinitionClassException) {
 		}
 
 		$this->expectException(InvalidDefinitionClassException::class);
-		$registry->getView('summary')?->getField('title')?->getInterface();
+		$registry->getView('summary')?->getField('title')?->getPlugin(UiDefinitionPlugin::class)?->getInterface();
 	}
 
 	public function testManyToManyThroughRestoresWithoutMutatingDefinitionArray(): void
@@ -172,8 +183,11 @@ final class FinalDefinitionsArchitectureTest extends TestCase
 
 		self::assertInstanceOf(CustomOwnedRelation::class, $relation);
 		$relation->options()->strategy('prefetch')->flags(['visible' => true])->end();
-		$relation->display(CustomDisplay::class)->type('relation')->end();
-		$relation->interface(TextareaInterface::class)->limit(3)->end();
+		$relation->extend(
+			UiDefinitionPlugin::create()
+				->display(CustomDisplay::class)->type('relation')->end()
+				->interface(TextareaInterface::class)->limit(3)->end(),
+		);
 
 		$all = $registry->all();
 		$restored = new Registry($all);

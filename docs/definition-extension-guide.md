@@ -2,9 +2,31 @@
 
 `ON\Data` supports a class-based, array-backed extension model. Custom definition nodes participate in registry export and restoration only when they follow the same storage and ownership rules as the built-in nodes.
 
-## Supported extension points
+## Plugins
 
-You can extend the definition layer with custom subclasses of:
+Prefer a `DefinitionPlugin` subclass when you need typed extras without growing `Collection` / `Field` / `Relation` methods.
+
+```php
+$users->extend(
+    SoftDeletePlugin::create()->column('deleted_at')
+);
+
+$plugin = $users->getPlugin(SoftDeletePlugin::class);
+$plugin?->getColumn();
+```
+
+- `create()` returns an unbound draft (not yet stored on a host node).
+- Nested fluent `end()` returns the plugin so you can keep configuring it.
+- `extend($plugin)` copies the draft payload onto the host under `'extend' => [PluginClass::class => data]`.
+- `getPlugin(PluginClass::class)` restores a bound instance over that slot.
+
+Built-in plugins: `UiDefinitionPlugin` (interface + display widgets) and `CycleCollectionPlugin` (entity / repository / mapper / scope).
+
+Custom plugins must extend `DefinitionPlugin`, use `definitionDefaults()`, keep plain array data, and avoid a custom constructor.
+
+## Supported subclass points
+
+You can still extend the definition layer with custom subclasses of:
 
 - `Collection`
 - `Field`
@@ -13,7 +35,7 @@ You can extend the definition layer with custom subclasses of:
 - relation definitions
 - display definitions
 - interface-definition nodes
-- nested child nodes owned by those custom definitions
+- nested child nodes owned by those custom definitions or by plugins
 
 ## Required contract
 
@@ -39,7 +61,7 @@ Definition exports may contain only arrays, strings, integers, floats, booleans,
 
 ## Ownership rules
 
-- Do not create orphan stored nodes and attach them later.
-- Create custom nodes through the owning API and class-string extension points.
+- Do not create orphan stored nodes and attach them later, except plugin drafts: `DefinitionPlugin::create()` is unbound until `extend()` copies its array onto the host.
+- Create custom fields, relations, displays, and interfaces through the owning API and class-string extension points.
 - Names come from owner map keys and are not mutable.
 - Stored definition nodes cannot be cloned.

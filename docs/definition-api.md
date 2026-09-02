@@ -6,7 +6,8 @@
 
 - `Registry` owns the root collection and view definitions.
 - `Collection` and `ViewDefinition` own fields, relations, and definition metadata.
-- Child nodes such as fields, relations, displays, interfaces, and nested definition objects own their own defaults and nested arrays.
+- Child nodes such as fields, relations, and nested definition objects own their own defaults and nested arrays.
+- Plugins attach extra typed data through `extend()` / `getPlugin()` (UI widgets, Cycle collection bridges, and custom plugin classes).
 - Definitions are created through owner APIs such as `Registry::collection()`, `DefinitionInterface::field()`, and `DefinitionInterface::relation()`.
 - `Key` represents simple and composite collection identities.
 
@@ -54,11 +55,46 @@ Canonical arrays are produced by the node class that owns them.
 
 Legacy caches that depended on registry-side normalization or field-level `pk` migration are no longer supported. Regenerate those caches from current fluent definitions before restoring them.
 
+## Plugins
+
+Typed extras that are not part of query/ORM kernel live on plugins. `DefinitionPlugin::create()` returns an unbound draft. `extend()` copies that payload onto the host node (collection, field, relation, or view). Last write for the same plugin class on that node wins. Restore with `getPlugin($class)`.
+
+```php
+$users->field('status', 'string')
+    ->extend(
+        UiDefinitionPlugin::create()
+            ->interface(DropdownInterface::class)
+                ->choices(['draft' => 'Draft'])
+                ->end()
+            ->display(RawDisplay::class)
+                ->type('badge')
+                ->end()
+    )
+    ->end();
+
+$ui = $users->getField('status')?->getPlugin(UiDefinitionPlugin::class);
+$ui?->getInterface()->getChoices();
+$ui?->getDisplay()->getType();
+
+$users->extend(
+    CycleCollectionPlugin::create()
+        ->entity(User::class)
+        ->repository(UserRepository::class)
+        ->mapper(UserMapper::class)
+        ->scope(NotDeletedScope::class)
+);
+```
+
+Stored under `'extend' => [PluginClass::class => payload]`. Nested `interface()` / `display()` `end()` returns the plugin; plugin `end()` after attach returns the host node.
+
+Widget classes (`DropdownInterface`, `ImageDisplay`, …) are unchanged. They are children of `UiDefinitionPlugin`, not of `Field` / `Relation`.
+
+`searchable()`, `filterable()`, `sensible()`, `validation()`, `description()`, and `required()` stay on `Field`. Relation `cascade()` and `load()` stay on the relation.
+
+Field `comment()` is removed; use `description()`.
+
 ## External schema metadata
 
-Some collection and relation fields exist primarily so external tools can bridge `ON\Data` definitions into another runtime (for example Overnight generating Cycle ORM schema):
+Cycle collection class names (`entity`, `repository`, `mapper`, `scope`) live on `CycleCollectionPlugin`. ON\Data Session persistence, query loading, and `ConvertingCommandExecutor` do not use them.
 
-- collection `entity()`, `repository()`, `mapper()`, `scope()`
-- relation `cascade()`, `load()` / `getLoadStrategy()`
-
-`ON\Data` Session persistence, query loading, and `ConvertingCommandExecutor` do not use those knobs. Prefer `exclusive()` for owned-child delete-on-unlink behavior inside ON\Data.
+Relation `cascade()` / `load()` remain on the relation definition. Prefer `exclusive()` for owned-child delete-on-unlink behavior inside ON\Data.

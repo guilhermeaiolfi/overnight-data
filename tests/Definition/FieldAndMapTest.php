@@ -7,6 +7,7 @@ namespace Tests\ON\Data\Definition;
 use ON\Data\Definition\Display\BooleanDisplay;
 use ON\Data\Definition\Exception\FieldException;
 use ON\Data\Definition\Interface\TextareaInterface;
+use ON\Data\Definition\Plugin\UiDefinitionPlugin;
 use ON\Data\Definition\Registry;
 use PHPUnit\Framework\TestCase;
 
@@ -36,15 +37,19 @@ final class FieldAndMapTest extends TestCase
 			->nullable(true)
 			->unique(true)
 			->indexed(true)
-			->comment('column-comment')
 			->numericPrecision(4)
 			->dataType('varchar')
 			->defaultValue('fallback')
 			->maxLength(320);
 
-		$field->display(BooleanDisplay::class)->type('boolean')->labelOn('Yes')->end();
-		$field->interface(TextareaInterface::class)->limit(500)->end();
+		$field->extend(
+			UiDefinitionPlugin::create()
+				->display(BooleanDisplay::class)->type('boolean')->labelOn('Yes')->end()
+				->interface(TextareaInterface::class)->limit(500)->end(),
+		);
 		$field->metadata('group', 'identity');
+
+		$ui = $field->getPlugin(UiDefinitionPlugin::class);
 
 		self::assertSame('email', $field->getName());
 		self::assertSame('mail', $field->getAlias());
@@ -68,14 +73,13 @@ final class FieldAndMapTest extends TestCase
 		self::assertTrue($field->isNullable());
 		self::assertTrue($field->isUnique());
 		self::assertTrue($field->isIndexed());
-		self::assertSame('column-comment', $field->getComment());
 		self::assertSame(4, $field->getNumericPrecision());
 		self::assertSame('varchar', $field->getDataType());
 		self::assertSame('fallback', $field->getDefaultValue());
 		self::assertSame(320, $field->getMaxLength());
 		self::assertSame('identity', $field->metadata('group'));
-		self::assertInstanceOf(BooleanDisplay::class, $field->getDisplay());
-		self::assertInstanceOf(TextareaInterface::class, $field->getInterface());
+		self::assertInstanceOf(BooleanDisplay::class, $ui?->getDisplay());
+		self::assertInstanceOf(TextareaInterface::class, $ui?->getInterface());
 	}
 
 	public function testMissingFieldTypeThrowsCurrentException(): void

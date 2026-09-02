@@ -5,16 +5,12 @@ declare(strict_types=1);
 namespace ON\Data\Definition\Field;
 
 use ON\Data\Definition\DefinitionInterface;
-use ON\Data\Definition\Display\DisplayTrait;
 use ON\Data\Definition\Exception\FieldException;
-use ON\Data\Definition\Interface\InterfaceTrait;
 use ON\Data\Definition\MetadataTrait;
 use ON\Data\Support\DefinitionNode;
 
 class Field extends DefinitionNode implements FieldInterface
 {
-	use DisplayTrait;
-	use InterfaceTrait;
 	use SchemaTrait;
 	use MetadataTrait;
 
@@ -44,7 +40,6 @@ class Field extends DefinitionNode implements FieldInterface
 			'numeric_precision' => 2,
 			'default_value' => null,
 			'data_type' => null,
-			'comment' => null,
 			'auto_increment' => false,
 			'generator' => null,
 			'filterable' => true,
@@ -247,8 +242,7 @@ class Field extends DefinitionNode implements FieldInterface
 
 	protected function initializeRuntimeState(): void
 	{
-		$this->display = null;
-		$this->interface = null;
+		parent::initializeRuntimeState();
 		$this->metadataMap = null;
 	}
 }

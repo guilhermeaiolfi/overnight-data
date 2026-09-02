@@ -7,9 +7,7 @@ namespace Tests\ON\Data\Fixture;
 use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\DefinitionInterface;
-use ON\Data\Definition\Display\DisplayTrait;
 use ON\Data\Definition\Field\FieldInterface;
-use ON\Data\Definition\Interface\InterfaceTrait;
 use ON\Data\Definition\Internal\DefinitionFactory;
 use ON\Data\Definition\MetadataTrait;
 use ON\Data\Definition\Relation\RelationCardinality;
@@ -22,8 +20,6 @@ use ON\Data\Support\DefinitionNode;
 
 final class CustomOwnedRelation extends DefinitionNode implements RelationInterface
 {
-	use DisplayTrait;
-	use InterfaceTrait;
 	use MetadataTrait;
 
 	private ?CustomRelationOptions $options = null;
@@ -316,8 +312,7 @@ final class CustomOwnedRelation extends DefinitionNode implements RelationInterf
 
 	protected function initializeRuntimeState(): void
 	{
-		$this->display = null;
-		$this->interface = null;
+		parent::initializeRuntimeState();
 		$this->metadataMap = null;
 		$this->options = null;
 

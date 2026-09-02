@@ -42,6 +42,9 @@ Git tags use the `vMAJOR.MINOR.PATCH` form (for example `v1.1.1`) so releases ar
 Notable recent breaks worth checking explicitly:
 
 - `Session::flush()` / `FlushExecutor` require `TransactionalCommandExecutorInterface`. Plain `CommandExecutorInterface` implementations are rejected with `NonTransactionalFlushException`.
+- Field and relation `interface()` / `display()` moved to `UiDefinitionPlugin` via `extend()` / `getPlugin()`.
+- Collection `entity()` / `repository()` / `mapper()` / `scope()` moved to `CycleCollectionPlugin`.
+- Field `comment()` is gone; use `description()`.
 
 ## Reporting issues
 
