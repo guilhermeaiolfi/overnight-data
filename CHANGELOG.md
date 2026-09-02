@@ -9,7 +9,7 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 ### Added
 
-- **Definition plugins** — `extend()` / `getPlugin()` on definition nodes. `UiDefinitionPlugin` owns `interface()` / `display()` and the widget classes (`DropdownInterface`, `ImageDisplay`, …). `CycleCollectionPlugin` holds collection `entity` / `repository` / `mapper` / `scope`. Docs: [`docs/definition-api.md`](docs/definition-api.md), [`docs/definition-extension-guide.md`](docs/definition-extension-guide.md).
+- **Definition plugins** — `extend(PluginClass::class)` / `getPlugin()` on definition nodes, same in-place class-string create as `display()` / `interface()`. `extend($class, $value)` sets the plugin `value` and stays on the host. `UiDefinitionPlugin` owns `interface()` / `display()` and the widget classes (`DropdownInterface`, `ImageDisplay`, …). `CycleCollectionPlugin` holds collection `entity` / `repository` / `mapper` / `scope`. Docs: [`docs/definition-api.md`](docs/definition-api.md), [`docs/definition-extension-guide.md`](docs/definition-extension-guide.md).
 - **Write-path database value recovery** — after insert, `CycleCommandExecutor` recovers omitted columns (SQL defaults, identity, triggers), not only `DatabaseGenerator` fields. After update, it rereads `DatabaseGenerator` `When::UPDATE` columns. Cycle `RETURNING` is used when the insert builder supports it; otherwise the adapter uses `lastInsertID` for a simple PK plus a Cycle `select()` for remaining columns. `ConvertingCommandExecutor` converts recovered storage values back to PHP. `FlushScheduler` merges recovered values into `RecordState` on insert and update. There is still no `Session::refresh()`.
 
 ### Fixed

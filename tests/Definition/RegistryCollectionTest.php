@@ -52,13 +52,12 @@ final class RegistryCollectionTest extends TestCase
 		$collection
 			->database('analytics')
 			->parentCollection('base_report')
-			->extend(
-				CycleCollectionPlugin::create()
-					->entity(stdClass::class)
-					->scope('ReportScope')
-					->repository('ReportRepository')
-					->mapper(CustomMapper::class),
-			)
+			->extend(CycleCollectionPlugin::class)
+				->entity(stdClass::class)
+				->scope('ReportScope')
+				->repository('ReportRepository')
+				->mapper(CustomMapper::class)
+				->end()
 			->source(CustomSource::class)
 			->note('report-note')
 			->description('report-description')

@@ -7,17 +7,26 @@
 Prefer a `DefinitionPlugin` subclass when you need typed extras without growing `Collection` / `Field` / `Relation` methods.
 
 ```php
-$users->extend(
-    SoftDeletePlugin::create()->column('deleted_at')
-);
+$users->extend(SoftDeletePlugin::class, 'deleted_at');
 
 $plugin = $users->getPlugin(SoftDeletePlugin::class);
-$plugin?->getColumn();
+$plugin?->getValue();
 ```
 
-- `create()` returns an unbound draft (not yet stored on a host node).
-- Nested fluent `end()` returns the plugin so you can keep configuring it.
-- `extend($plugin)` copies the draft payload onto the host under `'extend' => [PluginClass::class => data]`.
+One-value plugins can be an empty `DefinitionPlugin` subclass. `extend($class, $value)` stores that payload on `value` and returns the host, so there is no nested setter or `end()`.
+
+Omit the second argument to enter the plugin when it has more to configure:
+
+```php
+$users->extend(SoftDeletePlugin::class)
+    ->value('deleted_at')
+    ->end();
+```
+
+- `extend(PluginClass::class)` creates the plugin in place on the host array slot, the same way `display(RawDisplay::class)` and `interface(DropdownInterface::class)` create widgets.
+- Nested fluent `end()` returns the plugin so you can keep configuring it; plugin `end()` returns the host.
+- `extend(PluginClass::class, $value)` sets `value` and stays on the host.
+- A second `extend()` for the same class resumes the bound plugin instead of replacing it.
 - `getPlugin(PluginClass::class)` restores a bound instance over that slot.
 
 Built-in plugins: `UiDefinitionPlugin` (interface + display widgets) and `CycleCollectionPlugin` (entity / repository / mapper / scope).
@@ -61,7 +70,7 @@ Definition exports may contain only arrays, strings, integers, floats, booleans,
 
 ## Ownership rules
 
-- Do not create orphan stored nodes and attach them later, except plugin drafts: `DefinitionPlugin::create()` is unbound until `extend()` copies its array onto the host.
-- Create custom fields, relations, displays, and interfaces through the owning API and class-string extension points.
+- Do not create orphan stored nodes and attach them later.
+- Create custom fields, relations, displays, interfaces, and plugins through the owning API and class-string extension points.
 - Names come from owner map keys and are not mutable.
 - Stored definition nodes cannot be cloned.

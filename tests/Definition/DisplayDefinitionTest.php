@@ -24,9 +24,7 @@ final class DisplayDefinitionTest extends TestCase
 	public function testDisplayClassesKeepCurrentDefaultsAndConfiguration(): void
 	{
 		$field = (new Registry())->collection('post')->field('title', 'string');
-		$field->extend(
-			UiDefinitionPlugin::create()->display(RawDisplay::class)->type('raw')->end(),
-		);
+		$field->extend(UiDefinitionPlugin::class)->display(RawDisplay::class)->type('raw')->end();
 		$ui = $field->getPlugin(UiDefinitionPlugin::class);
 		$raw = $ui?->getDisplay();
 
@@ -36,17 +34,15 @@ final class DisplayDefinitionTest extends TestCase
 		self::assertSame($ui, $raw->end());
 
 		$booleanField = $field->end()->field('active', 'bool');
-		$booleanField->extend(
-			UiDefinitionPlugin::create()
-				->display(BooleanDisplay::class)
-					->labelOn('On')
-					->labelOff('Off')
-					->iconOn('check')
-					->iconOff('x')
-					->colorOn('green')
-					->colorOff('red')
-					->end(),
-		);
+		$booleanField->extend(UiDefinitionPlugin::class)
+			->display(BooleanDisplay::class)
+				->labelOn('On')
+				->labelOff('Off')
+				->iconOn('check')
+				->iconOff('x')
+				->colorOn('green')
+				->colorOff('red')
+				->end();
 		$boolean = $booleanField->getPlugin(UiDefinitionPlugin::class)?->getDisplay();
 		self::assertInstanceOf(BooleanDisplay::class, $boolean);
 		self::assertSame('On', $boolean->getLabelOn());
@@ -75,7 +71,7 @@ final class DisplayDefinitionTest extends TestCase
 	private function displayOnNewField(FieldInterface $field, string $name, string $type, string $displayClass): RawDisplay
 	{
 		$next = $field->end()->field($name, $type);
-		$next->extend(UiDefinitionPlugin::create()->display($displayClass)->end());
+		$next->extend(UiDefinitionPlugin::class)->display($displayClass)->end();
 		$display = $next->getPlugin(UiDefinitionPlugin::class)?->getDisplay();
 		self::assertInstanceOf($displayClass, $display);
 

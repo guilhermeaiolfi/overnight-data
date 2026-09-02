@@ -36,11 +36,9 @@ final class FinalDefinitionsArchitectureTest extends TestCase
 	{
 		$field = (new Registry())->collection('posts')->field('title', 'string');
 
-		$field->extend(
-			UiDefinitionPlugin::create()
-				->display(CustomDisplay::class)->type('badge')->color('green')->end()
-				->interface(CustomInterface::class)->limit(80)->end(),
-		);
+		$field->extend(UiDefinitionPlugin::class)
+			->display(CustomDisplay::class)->type('badge')->color('green')->end()
+			->interface(CustomInterface::class)->limit(80)->end();
 
 		$ui = $field->all()['extend'][UiDefinitionPlugin::class];
 		self::assertIsArray($ui);
@@ -183,11 +181,9 @@ final class FinalDefinitionsArchitectureTest extends TestCase
 
 		self::assertInstanceOf(CustomOwnedRelation::class, $relation);
 		$relation->options()->strategy('prefetch')->flags(['visible' => true])->end();
-		$relation->extend(
-			UiDefinitionPlugin::create()
-				->display(CustomDisplay::class)->type('relation')->end()
-				->interface(TextareaInterface::class)->limit(3)->end(),
-		);
+		$relation->extend(UiDefinitionPlugin::class)
+			->display(CustomDisplay::class)->type('relation')->end()
+			->interface(TextareaInterface::class)->limit(3)->end();
 
 		$all = $registry->all();
 		$restored = new Registry($all);

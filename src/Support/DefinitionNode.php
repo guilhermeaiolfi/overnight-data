@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace ON\Data\Support;
 
+use InvalidArgumentException;
 use LogicException;
 use ON\Data\Definition\Exception\InvalidDefinitionClassException;
+use ON\Data\Definition\Internal\DefinitionFactory;
 use ON\Data\Definition\Plugin\DefinitionPlugin;
 use ON\Data\Definition\Registry;
 
@@ -83,17 +85,46 @@ abstract class DefinitionNode extends Dot
 	}
 
 	/**
-	 * Attach a plugin payload. Last write for the same plugin class on this node wins.
+	 * Create or resume a plugin on this node.
+	 *
+	 * Omit the value to enter the plugin; {@see DefinitionPlugin::end()} returns this host.
+	 * Pass a value to store it on the plugin and stay on this host.
+	 *
+	 * @template T of DefinitionPlugin
+	 * @param class-string<T> $class
+	 * @return ($values is array{} ? T : static)
 	 */
-	public function extend(DefinitionPlugin $plugin): static
+	public function extend(string $class, mixed ...$values): DefinitionPlugin|static
 	{
-		$class = $plugin::class;
-		if (! isset($this->items['extend']) || ! is_array($this->items['extend'])) {
-			$this->items['extend'] = [];
+		if (count($values) > 1) {
+			throw new InvalidArgumentException('extend() accepts at most one plugin value.');
 		}
 
-		$this->items['extend'][$class] = $plugin->all();
-		unset($this->plugins[$class]);
+		if (! is_a($class, DefinitionPlugin::class, true)) {
+			throw new InvalidDefinitionClassException(sprintf('Invalid plugin class "%s".', $class));
+		}
+
+		if (isset($this->items['extend'][$class]) && is_array($this->items['extend'][$class])) {
+			$plugin = $this->getPlugin($class);
+			if ($plugin === null) {
+				throw new InvalidDefinitionClassException(sprintf('Invalid plugin class "%s".', $class));
+			}
+		} else {
+			if (! isset($this->items['extend']) || ! is_array($this->items['extend'])) {
+				$this->items['extend'] = [];
+			}
+
+			$this->items['extend'][$class] = [];
+			$slot = &$this->items['extend'][$class];
+			$plugin = DefinitionFactory::createPlugin($this, $class, $slot, $class);
+			$this->plugins[$class] = $plugin;
+		}
+
+		if ($values === []) {
+			return $plugin;
+		}
+
+		$plugin->value($values[0]);
 
 		return $this;
 	}

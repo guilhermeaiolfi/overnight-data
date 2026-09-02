@@ -31,22 +31,20 @@ final class RegistryStorageTest extends TestCase
 		$id = $users->field('id', 'int', CustomField::class)
 			->column('user_id')
 			->required(true)
-			->extend(
-				UiDefinitionPlugin::create()
-					->display(CustomDisplay::class)->type('badge')->color('green')->end()
-					->interface(CustomInterface::class)->limit(32)->end(),
-			)
+			->extend(UiDefinitionPlugin::class)
+				->display(CustomDisplay::class)->type('badge')->color('green')->end()
+				->interface(CustomInterface::class)->limit(32)->end()
+				->end()
 			->metadata('kind', 'pk');
 
 		$manager = $users->relation('manager', CustomRelation::class)
 			->collection('users')
 			->innerKey('id')
 			->outerKey('id')
-			->extend(
-				UiDefinitionPlugin::create()
-					->display(CustomDisplay::class)->type('relation')->color('blue')->end()
-					->interface(CustomInterface::class)->limit(12)->end(),
-			)
+			->extend(UiDefinitionPlugin::class)
+				->display(CustomDisplay::class)->type('relation')->color('blue')->end()
+				->interface(CustomInterface::class)->limit(12)->end()
+				->end()
 			->metadata('role', 'self');
 
 		$all = $registry->all();
@@ -81,11 +79,10 @@ final class RegistryStorageTest extends TestCase
 		$field = $registry->collection('posts')
 			->field('title', 'string')
 			->required(true)
-			->extend(
-				UiDefinitionPlugin::create()
-					->display(CustomDisplay::class)->type('headline')->color('red')->end()
-					->interface(CustomInterface::class)->limit(80)->end(),
-			);
+			->extend(UiDefinitionPlugin::class)
+				->display(CustomDisplay::class)->type('headline')->color('red')->end()
+				->interface(CustomInterface::class)->limit(80)->end()
+				->end();
 
 		$ui = $field->getPlugin(UiDefinitionPlugin::class);
 		self::assertSame($registry->getCollection('posts'), $registry->getCollection('posts'));

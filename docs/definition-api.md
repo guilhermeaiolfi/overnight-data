@@ -57,35 +57,37 @@ Legacy caches that depended on registry-side normalization or field-level `pk` m
 
 ## Plugins
 
-Typed extras that are not part of query/ORM kernel live on plugins. `DefinitionPlugin::create()` returns an unbound draft. `extend()` copies that payload onto the host node (collection, field, relation, or view). Last write for the same plugin class on that node wins. Restore with `getPlugin($class)`.
+Typed extras that are not part of query/ORM kernel live on plugins. `extend(PluginClass::class)` creates the plugin in place on the host (collection, field, relation, or view), the same way `display()` / `interface()` create widgets. A second `extend()` for the same class resumes that plugin. Restore with `getPlugin($class)`.
+
+Pass a second argument to set the plugin `value` and stay on the host. That is the one-value form; omit it to enter the plugin and configure named fields or nested widgets.
 
 ```php
+$users->extend(SoftDeletePlugin::class, 'deleted_at');
+
 $users->field('status', 'string')
-    ->extend(
-        UiDefinitionPlugin::create()
-            ->interface(DropdownInterface::class)
-                ->choices(['draft' => 'Draft'])
-                ->end()
-            ->display(RawDisplay::class)
-                ->type('badge')
-                ->end()
-    )
+    ->extend(UiDefinitionPlugin::class)
+        ->interface(DropdownInterface::class)
+            ->choices(['draft' => 'Draft'])
+            ->end()
+        ->display(RawDisplay::class)
+            ->type('badge')
+            ->end()
+        ->end()
     ->end();
 
 $ui = $users->getField('status')?->getPlugin(UiDefinitionPlugin::class);
 $ui?->getInterface()->getChoices();
 $ui?->getDisplay()->getType();
 
-$users->extend(
-    CycleCollectionPlugin::create()
-        ->entity(User::class)
-        ->repository(UserRepository::class)
-        ->mapper(UserMapper::class)
-        ->scope(NotDeletedScope::class)
-);
+$users->extend(CycleCollectionPlugin::class)
+    ->entity(User::class)
+    ->repository(UserRepository::class)
+    ->mapper(UserMapper::class)
+    ->scope(NotDeletedScope::class)
+    ->end();
 ```
 
-Stored under `'extend' => [PluginClass::class => payload]`. Nested `interface()` / `display()` `end()` returns the plugin; plugin `end()` after attach returns the host node.
+Stored under `'extend' => [PluginClass::class => payload]`. Nested `interface()` / `display()` `end()` returns the plugin; plugin `end()` returns the host node. `extend($class, $value)` stores `value` and returns the host.
 
 Widget classes (`DropdownInterface`, `ImageDisplay`, …) are unchanged. They are children of `UiDefinitionPlugin`, not of `Field` / `Relation`.
 

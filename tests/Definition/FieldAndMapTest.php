@@ -42,11 +42,9 @@ final class FieldAndMapTest extends TestCase
 			->defaultValue('fallback')
 			->maxLength(320);
 
-		$field->extend(
-			UiDefinitionPlugin::create()
-				->display(BooleanDisplay::class)->type('boolean')->labelOn('Yes')->end()
-				->interface(TextareaInterface::class)->limit(500)->end(),
-		);
+		$field->extend(UiDefinitionPlugin::class)
+			->display(BooleanDisplay::class)->type('boolean')->labelOn('Yes')->end()
+			->interface(TextareaInterface::class)->limit(500)->end();
 		$field->metadata('group', 'identity');
 
 		$ui = $field->getPlugin(UiDefinitionPlugin::class);

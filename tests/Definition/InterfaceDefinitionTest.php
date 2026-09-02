@@ -20,9 +20,7 @@ final class InterfaceDefinitionTest extends TestCase
 	public function testInterfaceClassesKeepCurrentDefaultsAndOptions(): void
 	{
 		$field = (new Registry())->collection('post')->field('title', 'string');
-		$field->extend(
-			UiDefinitionPlugin::create()->interface(ManyToManyInterface::class)->end(),
-		);
+		$field->extend(UiDefinitionPlugin::class)->interface(ManyToManyInterface::class)->end();
 		$many = $field->getPlugin(UiDefinitionPlugin::class)?->getInterface();
 		self::assertInstanceOf(ManyToManyInterface::class, $many);
 
@@ -49,7 +47,7 @@ final class InterfaceDefinitionTest extends TestCase
 		self::assertSame($field->getPlugin(UiDefinitionPlugin::class), $many->end());
 
 		$tagsField = $field->end()->field('tags', 'string');
-		$tagsField->extend(UiDefinitionPlugin::create()->interface(TagsInterface::class)->end());
+		$tagsField->extend(UiDefinitionPlugin::class)->interface(TagsInterface::class)->end();
 		$tags = $tagsField->getPlugin(UiDefinitionPlugin::class)?->getInterface();
 		self::assertInstanceOf(TagsInterface::class, $tags);
 		$tags
@@ -83,7 +81,7 @@ final class InterfaceDefinitionTest extends TestCase
 	{
 		$type = $name === 'enabled' ? 'bool' : 'string';
 		$next = $field->end()->field($name, $type);
-		$next->extend(UiDefinitionPlugin::create()->interface($interfaceClass)->end());
+		$next->extend(UiDefinitionPlugin::class)->interface($interfaceClass)->end();
 		$interface = $next->getPlugin(UiDefinitionPlugin::class)?->getInterface();
 		self::assertInstanceOf($interfaceClass, $interface);
 
