@@ -102,7 +102,7 @@ final class RepresentationSourceTest extends TestCase
 		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
 
 		$source = $schema->getSources()[0];
-		self::assertSame(['userId'], $source->getPrimaryKeyPlacePaths());
+		self::assertSame(['userId'], $source->getPrimaryKeyPaths());
 	}
 
 	public function testPrimaryKeyPlacePathsKeepNullSlotsWhenAKeyIsUnbound(): void
@@ -117,7 +117,7 @@ final class RepresentationSourceTest extends TestCase
 		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
 
 		$source = $schema->getSources()[0];
-		self::assertSame([null], $source->getPrimaryKeyPlacePaths());
+		self::assertSame([null], $source->getPrimaryKeyPaths());
 	}
 
 	/**

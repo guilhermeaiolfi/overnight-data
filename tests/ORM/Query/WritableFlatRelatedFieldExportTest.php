@@ -115,13 +115,6 @@ final class WritableFlatRelatedFieldExportTest extends TestCase
 
 	private function assertInternalSelectionsAreNotExported(SelectQuery $query, stdClass $user): void
 	{
-		foreach (get_object_vars($user) as $name => $_) {
-			self::assertFalse(
-				str_starts_with((string) $name, '_od_internal_'),
-				sprintf('Internal path "%s" must not be exported on the result.', $name),
-			);
-		}
-
 		foreach ($query->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
 			self::assertFalse(
 				property_exists($user, $selection->getSelectionKey()),
@@ -212,7 +205,7 @@ final class AssertingInternalCompanyIdSelectionExecutor implements QueryExecutor
 
 		foreach ($query->getSelections()->getAll() as $selection) {
 			$key = $selection->getSelectionKey();
-			if (str_contains($key, '.') || str_starts_with($key, '_od_internal_') || $selection->hasTag(SelectionTag::INTERNAL)) {
+			if ($selection->hasTag(SelectionTag::INTERNAL) || str_contains($key, '.')) {
 				$identitySelections[] = $selection;
 			}
 		}
@@ -244,7 +237,7 @@ final class InternalSelectionRowFactory
 	{
 		foreach ($query->getSelections()->getAll() as $selection) {
 			$key = $selection->getSelectionKey();
-			if (str_contains($key, '.') || str_starts_with($key, '_od_internal_') || $selection->hasTag(SelectionTag::INTERNAL)) {
+			if ($selection->hasTag(SelectionTag::INTERNAL) || str_contains($key, '.')) {
 				$row[$key] = 5;
 			}
 		}

@@ -18,7 +18,7 @@ interface WritableResultHandler
 	/**
 	 * Prepare a query for writable export before rows are fetched.
 	 *
-	 * Compiles place schema (and identity maps from that schema). Does not
+	 * Compiles fetch schema (and identity maps from that schema). Does not
 	 * add INTERNAL identity selections. The returned token is owned by the
 	 * caller for this fetch and passed to {@see track()} (or discarded if the
 	 * fetch yields nothing to track).
@@ -28,7 +28,7 @@ interface WritableResultHandler
 	/**
 	 * Track materialized writable objects after fetch.
 	 *
-	 * @param list<array<string, mixed>> $rawRows full rows including INTERNAL keys
+	 * @param list<array<string, mixed>> $rawRows identity overlay (implicit + PK paths, nested overlays)
 	 * @param list<object>               $objects public objects in the same order as $rawRows
 	 */
 	public function track(

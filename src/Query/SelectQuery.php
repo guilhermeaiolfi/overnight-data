@@ -99,11 +99,6 @@ final class SelectQuery implements QuerySourceInterface
 
 	private ?RepresentationSchema $fetchSchema = null;
 
-	/**
-	 * Cached once per fetch for {@see publicRow()} nested cleanup.
-	 */
-	private ?RelationSelectionTree $publicRowRelations = null;
-
 	public function __construct(
 		private readonly CollectionInterface|DerivedSelectQuery $source,
 		private ?QueryExecutorInterface $executor = null,
@@ -293,7 +288,6 @@ final class SelectQuery implements QuerySourceInterface
 		$copy->resultClass = $this->resultClass;
 		$copy->writableHandler = $this->writableHandler;
 		$copy->fetchSchema = null;
-		$copy->publicRowRelations = null;
 
 		return $copy;
 	}
@@ -461,7 +455,7 @@ final class SelectQuery implements QuerySourceInterface
 	/**
 	 * Place schema from the last {@see fetchAll()} / {@see fetchOne()} begin.
 	 *
-	 * Compiled when writable or relation loads need schema-driven placement.
+	 * Compiled when writable or relation loads need schema-driven paths.
 	 * Null for plain reads that skip compile (proposal 0003 / lazy schema).
 	 */
 	public function getFetchSchema(): ?RepresentationSchema
@@ -593,8 +587,9 @@ final class SelectQuery implements QuerySourceInterface
 		$handler = $this->writableHandler;
 		$preparation = $this->beginFetch($handler);
 		$runtime = $this->getLoadRuntime(fresh: true);
-		$rows = $runtime->fetchAll();
-		$publicRows = $this->publicRows($rows);
+		$fetched = $runtime->fetchAll();
+		$publicRows = $this->publicRows($fetched);
+		$identityRows = $runtime->getIdentityRows() ?? $publicRows;
 
 		if ($this->resultClass === null) {
 			$materialized = $publicRows;
@@ -604,7 +599,7 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		if ($handler !== null && $preparation !== null) {
-			$handler->track($this, $preparation, $rows, $materialized);
+			$handler->track($this, $preparation, $identityRows, $materialized);
 		}
 
 		return $materialized;
@@ -696,6 +691,7 @@ final class SelectQuery implements QuerySourceInterface
 			}
 
 			$publicRow = $this->publicRow($row);
+			$identityRows = $runtime->getIdentityRows() ?? [$publicRow];
 
 			if ($this->resultClass === null) {
 				$materialized = $publicRow;
@@ -705,7 +701,7 @@ final class SelectQuery implements QuerySourceInterface
 			}
 
 			if ($handler !== null && $preparation !== null && is_object($materialized)) {
-				$handler->track($this, $preparation, [$row], [$materialized]);
+				$handler->track($this, $preparation, $identityRows, [$materialized]);
 			}
 
 			return $materialized;
@@ -717,7 +713,7 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
-	 * Resolve place schema before LoadRuntime when row assemble needs it.
+	 * Resolve fetch schema before LoadRuntime when row assemble needs it.
 	 *
 	 * Writable prepares first (identity planning may mutate selections) and
 	 * reuses that schema. Otherwise compile once for aliases, flats, and
@@ -725,8 +721,6 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	private function beginFetch(?WritableResultHandler $handler): ?WritablePreparation
 	{
-		$this->publicRowRelations = null;
-
 		if ($handler !== null) {
 			$preparation = $handler->prepare($this);
 			$this->applyPreparationSchema($preparation);
@@ -734,7 +728,7 @@ final class SelectQuery implements QuerySourceInterface
 			return $preparation;
 		}
 
-		// Count wrappers and other derived sources have no collection place schema.
+		// Count wrappers and other derived sources have no collection schema.
 		if ($this->isDerivedSource() || ! $this->needsRowAssemble()) {
 			$this->fetchSchema = null;
 
@@ -757,7 +751,7 @@ final class SelectQuery implements QuerySourceInterface
 
 	/**
 	 * Whether fetch rows need remapped assemble (aliases, flats, or relation loads).
-	 * When true, {@see beginFetch()} compiles a place {@see RepresentationSchema}.
+	 * When true, {@see beginFetch()} compiles a {@see RepresentationSchema}.
 	 */
 	public function needsRowAssemble(): bool
 	{
@@ -967,7 +961,8 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
-	 * Drop INTERNAL / SQL_ONLY selection keys from a result row (and nested relation payloads).
+	 * Drop root INTERNAL / SQL_ONLY selection keys (fast path and {@see iterate()}).
+	 * Assemble never copies those keys onto the public row.
 	 *
 	 * @param array<string, mixed> $row
 	 *
@@ -975,42 +970,16 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	private function publicRow(array $row): array
 	{
-		$relations = $this->publicRowRelations ??= $this->getRelationSelections();
-
-		return $this->stripTaggedPrivateKeys(
-			$row,
-			$this->selections,
-			$relations->childrenOf(null),
-			$relations,
-			$this->fetchSchema,
-		);
-	}
-
-	/**
-	 * @param array<string, mixed> $row
-	 * @param array<string, RelationSelection> $childRelations relation name => selection
-	 *
-	 * @return array<string, mixed>
-	 */
-	private function stripTaggedPrivateKeys(
-		array $row,
-		SelectionList $selections,
-		array $childRelations,
-		RelationSelectionTree $relations,
-		?RepresentationSchema $schema = null,
-	): array {
 		$privateKeys = [];
 
 		foreach ([SelectionTag::INTERNAL, SelectionTag::SQL_ONLY] as $tag) {
-			foreach ($selections->getByTag($tag) as $selection) {
+			foreach ($this->selections->getByTag($tag) as $selection) {
 				$privateKeys[$selection->getSelectionKey()] = true;
 			}
 		}
 
-		if ($schema instanceof RepresentationSchema) {
-			foreach ($schema->getImplicitScalarPaths() as $path) {
-				$privateKeys[$path] = true;
-			}
+		if ($privateKeys === []) {
+			return $row;
 		}
 
 		$public = [];
@@ -1020,44 +989,7 @@ final class SelectQuery implements QuerySourceInterface
 				continue;
 			}
 
-			if (! is_string($key) || ! is_array($value) || ! isset($childRelations[$key])) {
-				$public[$key] = $value;
-
-				continue;
-			}
-
-			$child = $childRelations[$key];
-			$grandchildren = $relations->childrenOf($child);
-			$childSchema = $schema instanceof RepresentationSchema && $schema->hasRelation($key)
-				? $schema->getRelation($key)->getRelatedSchema()
-				: null;
-
-			if ($value !== [] && array_is_list($value)) {
-				$public[$key] = array_map(
-					function (mixed $item) use ($child, $grandchildren, $relations, $childSchema): mixed {
-						return is_array($item)
-							? $this->stripTaggedPrivateKeys(
-								$item,
-								$child->getSelections(),
-								$grandchildren,
-								$relations,
-								$childSchema,
-							)
-							: $item;
-					},
-					$value,
-				);
-
-				continue;
-			}
-
-			$public[$key] = $this->stripTaggedPrivateKeys(
-				$value,
-				$child->getSelections(),
-				$grandchildren,
-				$relations,
-				$childSchema,
-			);
+			$public[$key] = $value;
 		}
 
 		return $public;

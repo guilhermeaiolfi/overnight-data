@@ -193,11 +193,11 @@ Practical guidance:
 - Nested separate-query branches multiply round-trips (one continuation query per loaded branch level per key chunk, not one query per parent row).
 - Override batch size by providing a custom `AbstractLoader` subclass that overrides `separateQueryBatchSize()` (built-in loaders are final; no public RelationRef knob yet).
 
-## Place vs fetch (assemble)
+## Path vs fetch (assemble)
 
-Structured loads separate **fetch destinations** (`LoadBranch` tree — one per attached relation) from **place** (where values land on the result). Flat related fields (for example `authorName` from `posts.author`) place on the parent; they do not invent an `author` attach unless that relation is also loaded.
+Structured loads separate **fetch destinations** (`LoadBranch` tree — one per attached relation) from **path** (where values land on the result). Flat related fields (for example `authorName` from `posts.author`) stay on the parent path; they do not invent an `author` attach unless that relation is also loaded.
 
-Assemble builds public scalar keys from `RepresentationSchema::getPublicScalarPaths()` whenever row assemble runs (aliases, flats, relation loads). `SelectQuery::needsRowAssemble()` drives a single `projection()` compile in `beginFetch()` (writable `prepare()` compiles via the same `projection()` and reuses that schema). `LoadFieldPlanner` binds schema scalar paths, then emits loader `requireFields()` that are not place. Query `EXPLICIT` tags are not a place fallback. See [`orm/representation-schema.md`](../orm/representation-schema.md).
+Assemble builds public scalar keys from `RepresentationSchema::getPublicScalarPaths()` whenever row assemble runs (aliases, flats, relation loads). Implicit source primary keys and other PK paths go on a parallel identity overlay for writable `track()`. `SelectQuery::needsRowAssemble()` drives a single `projection()` compile in `beginFetch()` (writable `prepare()` compiles via the same `projection()` and reuses that schema). `LoadFieldPlanner` binds schema scalar paths, then emits loader `requireFields()` that are not schema paths. Query `EXPLICIT` tags are not a path fallback. See [`orm/representation-schema.md`](../orm/representation-schema.md).
 
 ## Architecture Guardrails
 

@@ -7,7 +7,7 @@ namespace ON\Data\Schema;
 use ON\Data\Schema\Exception\InvalidSchemaException;
 
 /**
- * Computed / non-column scalar place path on a representation shape.
+ * Computed / non-column scalar path on a representation shape.
  *
  * Always non-writable for Session sync and adoption; does not participate in
  * {@see RepresentationSource} grouping.

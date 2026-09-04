@@ -46,6 +46,13 @@ final class LoadRuntime
 
 	private ?LoadFieldPlanner $fieldPlanner = null;
 
+	/**
+	 * Same-level identity overlays from the last assemble, or null on the fast path.
+	 *
+	 * @var list<array<string, mixed>>|null
+	 */
+	private ?array $identityRows = null;
+
 	public function __construct(
 		private readonly SelectQuery $rootQuery,
 		private readonly QueryExecutorInterface $executor,
@@ -58,7 +65,9 @@ final class LoadRuntime
 
 	public function fetchAll(): array
 	{
-		// Plain own-field reads: executor already returns place keys.
+		$this->identityRows = null;
+
+		// Plain own-field reads: executor already returns schema paths.
 		// Renames, flats, and INTERNAL/SQL_ONLY remaps need assemble.
 		if (! $this->rootQuery->needsRowAssemble()) {
 			return $this->executor->fetchAll($this->rootQuery);
@@ -68,17 +77,21 @@ final class LoadRuntime
 		$rows = $this->executor->fetchAll($this->rootQuery);
 
 		if ($this->rootBranch->getChildren() === []) {
-			return $this->outputProcessor->processRawRows($this->rootBranch, $rows);
+			return $this->storeAssembledRows(
+				$this->outputProcessor->processRawRows($this->rootBranch, $rows),
+			);
 		}
 
 		$this->rootBranch->parseRows($rows);
 		$this->runContinuationsFor($this->rootQuery);
 
-		return $this->outputProcessor->processRoot($this->rootBranch);
+		return $this->storeAssembledRows($this->outputProcessor->processRoot($this->rootBranch));
 	}
 
 	public function fetchOne(): ?array
 	{
+		$this->identityRows = null;
+
 		if (! $this->rootQuery->needsRowAssemble()) {
 			return $this->executor->fetchOne($this->rootQuery);
 		}
@@ -91,13 +104,42 @@ final class LoadRuntime
 		}
 
 		if ($this->rootBranch->getChildren() === []) {
-			return $this->outputProcessor->processRawRows($this->rootBranch, [$row])[0] ?? null;
+			$public = $this->storeAssembledRows(
+				$this->outputProcessor->processRawRows($this->rootBranch, [$row]),
+			);
+
+			return $public[0] ?? null;
 		}
 
 		$this->rootBranch->parseRows([$row]);
 		$this->runContinuationsFor($this->rootQuery);
 
-		return $this->outputProcessor->processRoot($this->rootBranch)[0] ?? null;
+		$public = $this->storeAssembledRows($this->outputProcessor->processRoot($this->rootBranch));
+
+		return $public[0] ?? null;
+	}
+
+	/**
+	 * Identity overlays from the last {@see fetchAll()} / {@see fetchOne()} assemble.
+	 * Null when the fast path skipped assemble (caller may use public rows).
+	 *
+	 * @return list<array<string, mixed>>|null
+	 */
+	public function getIdentityRows(): ?array
+	{
+		return $this->identityRows;
+	}
+
+	/**
+	 * @param array{0: list<array<string, mixed>>, 1: list<array<string, mixed>>} $assembled
+	 * @return list<array<string, mixed>>
+	 */
+	private function storeAssembledRows(array $assembled): array
+	{
+		[$public, $identity] = $assembled;
+		$this->identityRows = $identity;
+
+		return $public;
 	}
 
 	/**
@@ -204,7 +246,7 @@ final class LoadRuntime
 	{
 		return $this->fieldPlanner ??= new LoadFieldPlanner(
 			$this->aliases,
-			$this->schema ?? throw LoadRuntimeException::placeSchemaMissing(),
+			$this->schema ?? throw LoadRuntimeException::schemaMissing(),
 		);
 	}
 

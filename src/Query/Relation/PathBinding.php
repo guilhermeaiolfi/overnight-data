@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation;
 
 /**
- * One place key's fetch home: the load-local parser key, and optionally a
+ * One schema path's fetch home: the load-local parser key, and optionally a
  * loaded to-one child destination to read from instead of this branch's row.
  */
-final class PlaceBinding
+final class PathBinding
 {
 	/**
 	 * @param list<string>|null $childPath relation names from this branch to the child destination

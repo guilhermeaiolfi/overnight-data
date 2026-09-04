@@ -12,10 +12,10 @@ use ON\Data\Schema\RepresentationSource;
 /**
  * Adoption identity map for a prepared writable query (one per {@see QueryRepresentationPlan}).
  *
- * {@see getIdentity()} reads primary-key values from the assembled row using each
- * source's prepared PK place paths (including source-qualified Implicit paths such as
- * `company.id`). Call it with a raw assembled row when resolving Keys during
- * adopt — the map itself is not per row.
+ * {@see getIdentity()} reads primary-key values from the identity overlay using each
+ * source's prepared PK paths (including source-qualified Implicit paths such as
+ * `company.id`). Call it with that overlay when resolving Keys during adopt — the
+ * map itself is not per row. Public non-PK fields are read from the object.
  *
  * This is NOT the session RecordState identity map: it does not hold RecordState
  * objects. Keying by source path (rather than collection name) lets root and
@@ -55,10 +55,10 @@ final class QuerySourceIdentities implements RepresentationSourceIdentities
 		$collection = $source->getCollection();
 		$values = [];
 		$fieldNames = $collection->getPrimaryKey();
-		$placePaths = $source->getPrimaryKeyPlacePaths();
+		$pkPaths = $source->getPrimaryKeyPaths();
 
 		foreach ($fieldNames as $index => $fieldName) {
-			$path = $placePaths[$index] ?? null;
+			$path = $pkPaths[$index] ?? null;
 			if ($path === null || ! array_key_exists($path, $sourceRow)) {
 				return null;
 			}

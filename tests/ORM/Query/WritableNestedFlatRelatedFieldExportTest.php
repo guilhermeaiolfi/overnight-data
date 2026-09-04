@@ -10,6 +10,7 @@ use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\Session;
 use ON\Data\Query\Relation\Loader\BelongsToLoader;
 use ON\Data\Query\Relation\Loader\HasManyLoader;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -41,9 +42,9 @@ final class WritableNestedFlatRelatedFieldExportTest extends TestCase
 		self::assertInstanceOf(stdClass::class, $post);
 		self::assertSame(10, $post->id);
 		self::assertSame('Ana', $post->authorName);
+		self::assertFalse(property_exists($user, 'author.id'));
+		self::assertFalse(property_exists($post, 'author.id'));
 		self::assertFalse(property_exists($post, 'author'));
-		self::assertFalse($this->hasInternalProperty($user));
-		self::assertFalse($this->hasInternalProperty($post));
 
 		$post->authorName = 'Grace';
 		$session->sync($user);
@@ -55,17 +56,6 @@ final class WritableNestedFlatRelatedFieldExportTest extends TestCase
 		self::assertSame($authors, $command->getCollection());
 		self::assertSame(['id' => 7], $command->getIdentity());
 		self::assertSame(['name' => 'Grace'], $command->getChanges());
-	}
-
-	private function hasInternalProperty(object $object): bool
-	{
-		foreach (get_object_vars($object) as $name => $_) {
-			if (str_starts_with((string) $name, '_od_internal_')) {
-				return true;
-			}
-		}
-
-		return false;
 	}
 
 	private function makeRegistry(): Registry
@@ -145,7 +135,7 @@ final class NestedFlatWritableExecutor implements QueryExecutorInterface
 		foreach ($query->getSelections()->getAll() as $selection) {
 			$key = $selection->getSelectionKey();
 
-			if (str_contains($key, '.') || str_starts_with($key, '_od_internal_')) {
+			if ($selection->hasTag(SelectionTag::INTERNAL) || str_contains($key, '.')) {
 				$row[$key] = 7;
 			}
 		}

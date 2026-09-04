@@ -30,7 +30,7 @@ $user->profileName
   -> profiles#5.name
 ```
 
-The public object does not need to expose `profile_id`. The query/runtime may include hidden internal identity selections so the adopter can track the concrete record behind `profileName`. Selections tagged `SelectionTag::INTERNAL` are stripped from public array and object results, but they are required for writable flat projection tracking.
+The public object does not need to expose `profile_id`. Assemble writes the hidden source id (`profile.id`) onto the identity overlay that `track()` receives. Root `SelectionTag::INTERNAL` / `SQL_ONLY` keys are masked from public array and object results on the fast path and `iterate()`; they are not the identity bus.
 
 When a writable projection is created by `SelectQuery`, the query is the field-target declaration.
 
@@ -39,7 +39,7 @@ Writable export requirements:
 - `to(stdClass::class)` or `to(MutableDto::class)` (concrete, non-readonly, mutable public properties)
 - an explicit `Session` is required (`Session` implements `WritableResultHandler`; that is the Query↔ORM bridge)
 - the returned object is what Session tracks (same identity)
-- **identity must be in the fetched row** — select the collection primary key, or use a shape that already loads it (for example a flattened related field whose assemble backfills a hidden source id). `writable()` does not add identity columns. Results without identity are never tracked
+- **identity must be in the identity overlay** — select the collection primary key (copied onto the overlay), or use a shape that already loads it (for example a flattened related field whose assemble backfills a hidden source id). `writable()` does not add identity columns. Results without identity are never tracked
 - scalar sync reads go through `map($representation)->to(stdClass::class)`; relation `ONE`/`MANY` targets are read from the live object so related instances stay tracked
 - selection aliases / schema paths are the contract: DTO properties (or `MapFrom`) must match them; avoid `MapTo` that renames those keys when mapping back to a bag
 - `prepare()` returns a `WritablePreparation` token (concretely `QueryRepresentationPlan`); the query holds it for that fetch and passes it to `track()`
@@ -89,7 +89,7 @@ $user->profileName
 
 `flush()` updates `profiles.name`, not `users.name`.
 
-The query/projection adopter must have enough identity in the assembled row to resolve `profiles#5`. Flattened related fields get Implicit source primary-key paths (such as `profile.id`) on the schema; assemble fetches those when the shape needs them, with or without `writable()`. If that identity is missing from the executed result, tracking throws rather than guessing the target row or treating the object as new. `writable()` does not add those columns.
+The query/projection adopter must have enough identity in the identity overlay to resolve `profiles#5`. Flattened related fields get Implicit source primary-key paths (such as `profile.id`) on the schema; assemble fetches those onto the overlay when the shape needs them, with or without `writable()`. If that identity is missing from the executed result, tracking throws rather than guessing the target row or treating the object as new. `writable()` does not add those columns.
 
 ## Nested flattened related field
 
@@ -118,7 +118,7 @@ $session->sync($user);
 $session->flush();
 ```
 
-Intended meaning: `authorName` writes to `authors.name` for the author row identified by the hidden schema path (`author.id`) on the assembled posts-level payload. Those keys stay off the public nested objects. Attach walks the posts-level schema once: bind posts + author sources from the nested assembled row, then continue into any loaded relation children.
+Intended meaning: `authorName` writes to `authors.name` for the author row identified by the hidden schema path (`author.id`) on the posts-level identity overlay. Those keys stay off the public nested objects. Attach walks the posts-level schema once: bind posts + author sources from the nested overlay, then continue into any loaded relation children.
 
 ## Existing relation item from query
 

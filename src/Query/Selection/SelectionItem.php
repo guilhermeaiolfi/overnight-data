@@ -88,11 +88,6 @@ final class SelectionItem
 		return $this->hasTag(SelectionTag::EXPLICIT);
 	}
 
-	public function isImplicit(): bool
-	{
-		return ! $this->isExplicit();
-	}
-
 	/**
 	 * @return list<string>
 	 */

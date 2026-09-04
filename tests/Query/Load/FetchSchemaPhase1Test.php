@@ -9,6 +9,7 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Session;
 use ON\Data\Query\Relation\Loader\BelongsToLoader;
 use ON\Data\Query\Relation\Loader\HasManyLoader;
+use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -16,7 +17,7 @@ use Tests\ON\Data\Support\RecordingCommandExecutor;
 
 final class FetchSchemaPhase1Test extends TestCase
 {
-	public function testReadFetchCompilesPlaceSchemaBeforeResults(): void
+	public function testReadFetchCompilesSchemaBeforeResults(): void
 	{
 		$users = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
@@ -150,7 +151,7 @@ final class FetchSchemaPhase1Executor implements QueryExecutorInterface
 		foreach ($query->getSelections()->getAll() as $selection) {
 			$key = $selection->getSelectionKey();
 
-			if (str_contains($key, '.') || str_starts_with($key, '_od_internal_')) {
+			if ($selection->hasTag(SelectionTag::INTERNAL) || str_contains($key, '.')) {
 				$row[$key] = 7;
 			}
 		}

@@ -11,7 +11,7 @@ use ON\Data\Schema\RepresentationSource;
  * Input for {@see RepresentationAdoptionEngine::attach()}.
  *
  * Required: schema + policy.
- * Optional only when needed: identities, sourceRow (query lookup bag), intent (flat ops).
+ * Optional only when needed: identities, sourceRow (identity overlay / query lookup bag), intent (flat ops).
  */
 final class RepresentationAdoptionContext
 {

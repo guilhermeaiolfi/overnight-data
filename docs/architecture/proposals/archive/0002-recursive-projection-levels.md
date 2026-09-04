@@ -1,8 +1,15 @@
 # Proposal 0002: Recursive projection levels
 
-Status: **Accepted** — Phases A–D landed on `feat/recursive-projection-levels`. Living contract: [`docs/query/relation-loading.md`](../../query/relation-loading.md) and [`docs/orm/representation-schema.md`](../../orm/representation-schema.md).
+Status: **Accepted / closed** — archived.
 
-Relates to: [`0001-representation-schema-as-reusable-model.md`](./0001-representation-schema-as-reusable-model.md) (`query($schema)` reopen remains open; this proposal does not implement it).
+**Living contract:** [`../../../query/relation-loading.md`](../../../query/relation-loading.md) and [`../../../orm/representation-schema.md`](../../../orm/representation-schema.md).  
+**Remaining reopen work:** [`../0001-representation-schema-as-reusable-model.md`](../0001-representation-schema-as-reusable-model.md).
+
+This file keeps the design record and acceptance checklists. Do not treat it as the active contract.
+
+Phases A–D landed. Nested `select()` shares root’s `SelectionList` model (fields, aliases, expressions, flats, nested loads). `RelationRef::fields()` was removed.
+
+Relates to: [`../0001-representation-schema-as-reusable-model.md`](../0001-representation-schema-as-reusable-model.md) (`query($schema)` reopen remains open; this proposal does not implement it).
 
 This document is the design record for unifying root and nested relation projection so every level shares one selection model.
 
@@ -223,7 +230,7 @@ Subquery-as-nested-selection is the same emit path as other value expressions; d
 ### Phase C — writable nested flat projections ✅
 
 1. Extend identity planning / adoption for nested-level flat `sourcePath`s — `QueryRepresentationIdentityPlanner::planIdentities()`, per-relation identities on `QueryRepresentationPlan`, pre-attach flat hydrate in `WritableQueryResultTracker`, branch INTERNAL registration, recursive strip of `_od_internal_*` from public nested payloads.
-2. Document writable boundaries per level (same rules as root, recursively) — see [`writable-select-query-projections.md`](../../orm/writable-select-query-projections.md).
+2. Document writable boundaries per level (same rules as root, recursively) — see [`writable-select-query-projections.md`](../../../orm/writable-select-query-projections.md).
 
 ### Phase D — JOIN loader parity (nested flats) ✅
 
@@ -374,8 +381,8 @@ $u->posts->select(
 
 ## References
 
-- [`docs/query/relation-loading.md`](../../query/relation-loading.md) — current nested `select()` model (string short form; `fields()` removed)
-- [`docs/query/query-model.md`](../../query/query-model.md) — root `select()` vocabulary
-- [`docs/orm/representation-schema.md`](../../orm/representation-schema.md) — already-recursive schema
-- [`docs/orm/writable-select-query-projections.md`](../../orm/writable-select-query-projections.md) — root flat writable projections
-- [`0001-representation-schema-as-reusable-model.md`](./0001-representation-schema-as-reusable-model.md) — durable schema / reopen (depends on this direction)
+- [`docs/query/relation-loading.md`](../../../query/relation-loading.md) — current nested `select()` model (string short form; `fields()` removed)
+- [`docs/query/query-model.md`](../../../query/query-model.md) — root `select()` vocabulary
+- [`docs/orm/representation-schema.md`](../../../orm/representation-schema.md) — already-recursive schema
+- [`docs/orm/writable-select-query-projections.md`](../../../orm/writable-select-query-projections.md) — root flat writable projections
+- [`0001-representation-schema-as-reusable-model.md`](../0001-representation-schema-as-reusable-model.md) — durable schema / reopen (depends on this direction)

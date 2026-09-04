@@ -42,9 +42,11 @@ Current Cycle shape:
 
 ```php
 ON\Data\Database\Cycle\CycleRuntimeFactory
-    connect(ConnectionConfig $config): DataRuntime
-    create(Cycle\Database\DatabaseInterface $database): DataRuntime
+    connect(ConnectionConfig $config, ?ConversionGateway $gateway = null, ...): DataRuntime
+    create(Cycle\Database\DatabaseInterface $database, ?ConversionGateway $gateway = null, ...): DataRuntime
 ```
+
+Optional conversion args wrap command execution (`ConvertingCommandExecutor`). They do not change `DataRuntime` and are not a core SQL compiler.
 
 Future Doctrine shape:
 

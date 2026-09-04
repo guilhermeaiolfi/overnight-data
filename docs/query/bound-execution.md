@@ -76,7 +76,7 @@ $row = $runtime->query($postUser)->fetchOne(['post_id' => 1, 'user_id' => 2]);
 $row = $runtime->query($users)->fetchOne($users->getKey(2));
 ```
 
-When assemble runs (aliases, flats, or relation loads), implicit source primary keys are placed on the assembled row and stripped from public array and object results. `writable()` does not add identity columns. A writable fetch whose row lacks the root primary key is not tracked.
+When assemble runs (aliases, flats, or relation loads), implicit source primary keys land on a same-level identity overlay passed to writable `track()`, not on the public row. Explicit public paths such as `$users->company->id` stay public (`company.id` as a selected field). Root INTERNAL/SQL_ONLY keys are masked from public array and object results on the fast path and `iterate()`. `writable()` does not add identity columns. A writable fetch whose overlay lacks the root primary key is not tracked.
 
 Writable export requirements:
 

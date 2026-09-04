@@ -283,14 +283,6 @@ final class SelectionList implements IteratorAggregate, Countable
 	/**
 	 * @return list<SelectionItem>
 	 */
-	public function getImplicit(): array
-	{
-		return $this->filter(static fn (SelectionItem $selection): bool => $selection->isImplicit())->getAll();
-	}
-
-	/**
-	 * @return list<SelectionItem>
-	 */
 	public function getByTag(string $tag): array
 	{
 		$tag = trim($tag);

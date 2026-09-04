@@ -10,19 +10,18 @@ The files linked below are the current reference material.
 - [`../CHANGELOG.md`](../CHANGELOG.md): Release history.
 - [`../UPGRADE.md`](../UPGRADE.md): What docs mean, upgrade expectations, no compatibility promise.
 
-## Architecture decisions
+## Architecture
+
+Folder convention: [`architecture/README.md`](./architecture/README.md). Living how-it-works docs are the Query and ORM sections below.
 
 Accepted lasting choices (rationale + consequences):
 
 - [`architecture/decisions/0001-database-adapter-boundary.md`](./architecture/decisions/0001-database-adapter-boundary.md): Database adapter boundary and compilation target.
-- [`architecture/decisions/0002-fetch-loadbranch-vs-place-schema.md`](./architecture/decisions/0002-fetch-loadbranch-vs-place-schema.md): Fetch (`LoadBranch`) vs place (`RepresentationSchema`); living detail in [`orm/representation-schema.md`](./orm/representation-schema.md).
-
-## Architecture proposals
+- [`architecture/decisions/0002-fetch-loadbranch-vs-place-schema.md`](./architecture/decisions/0002-fetch-loadbranch-vs-place-schema.md): Fetch (`LoadBranch`) vs path (`RepresentationSchema`); living detail in [`orm/representation-schema.md`](./orm/representation-schema.md).
 
 Open designs (not done until accepted and built). Closed proposals live under [`architecture/proposals/archive/`](./architecture/proposals/archive/).
 
-- [`architecture/proposals/0001-representation-schema-as-reusable-model.md`](./architecture/proposals/0001-representation-schema-as-reusable-model.md): Reusable shape / `query($schema)` reopen — see also living [`orm/representation-schema.md`](./orm/representation-schema.md).
-- [`architecture/proposals/0002-recursive-projection-levels.md`](./architecture/proposals/0002-recursive-projection-levels.md): **Accepted** — nested `select()` parity with root (JOIN and SEPARATE). Remaining reopen work is 0001.
+- [`architecture/proposals/0001-representation-schema-as-reusable-model.md`](./architecture/proposals/0001-representation-schema-as-reusable-model.md): Reusable shape / `query($schema)` reopen — schema model landed; reopen and `projection()` memoization remain.
 
 ## Definitions
 

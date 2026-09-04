@@ -511,7 +511,7 @@ final class RepresentationAdoptionEngine
 	}
 
 	/**
-	 * Read each place once. Identity uses the source binding path.
+	 * Read each path once. Identity uses the source binding path.
 	 *
 	 * @return array{0: array<string, PathReadResult>, 1: array<string, mixed>}
 	 */
@@ -539,10 +539,10 @@ final class RepresentationAdoptionEngine
 	}
 
 	/**
-	 * Fold present places onto collection fields.
+	 * Fold present paths onto collection fields.
 	 *
 	 * Writable aliases of the same field must agree and win. Read-only aliases
-	 * are output: they fill a field only when no writable place is present
+	 * are output: they fill a field only when no writable path is present
 	 * (implicit identity, read-only-only projections).
 	 *
 	 * @param array<string, PathReadResult> $readsByPath
@@ -600,7 +600,7 @@ final class RepresentationAdoptionEngine
 		$fieldName = $fieldSchema->getFieldName();
 		if (array_key_exists($fieldName, $values) && $values[$fieldName] !== $value) {
 			throw new StateException(sprintf(
-				"Cannot bind projection source for collection '%s' because places '%s' and '%s' disagree on field '%s'.",
+				"Cannot bind projection source for collection '%s' because paths '%s' and '%s' disagree on field '%s'.",
 				$source->getCollection()->getName(),
 				$paths[$fieldName],
 				$fieldSchema->getPath(),
@@ -738,14 +738,14 @@ final class RepresentationAdoptionEngine
 		array $readsByPath,
 		bool $hydrate = false,
 	): Key {
-		$fromPlace = $this->placeKeyFromReads($source, $readsByPath);
-		if ($fromPlace instanceof Key) {
+		$fromKey = $this->keyFromPathReads($source, $readsByPath);
+		if ($fromKey instanceof Key) {
 			$external = $context->getIdentities()?->getIdentity(
 				$source->getPath(),
 				$context->getSourceRow(),
 			);
 			if ($external instanceof Key) {
-				$conflict = $external->conflictingIdentityField($fromPlace->getValues());
+				$conflict = $external->conflictingIdentityField($fromKey->getValues());
 				if ($conflict !== null) {
 					throw new StateException(sprintf(
 						"Cannot bind projection source for collection '%s' because intent identity field '%s' disagrees with the representation.",
@@ -755,7 +755,7 @@ final class RepresentationAdoptionEngine
 				}
 			}
 
-			return $fromPlace;
+			return $fromKey;
 		}
 
 		$external = $context->getIdentities()?->getIdentity(
@@ -794,7 +794,7 @@ final class RepresentationAdoptionEngine
 	/**
 	 * @param array<string, PathReadResult> $readsByPath
 	 */
-	private function placeKeyFromReads(RepresentationSource $source, array $readsByPath): ?Key
+	private function keyFromPathReads(RepresentationSource $source, array $readsByPath): ?Key
 	{
 		$collection = $source->getCollection();
 		$values = [];

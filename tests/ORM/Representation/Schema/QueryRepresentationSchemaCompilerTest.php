@@ -86,7 +86,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertTrue($schema->getField('id')->isImplicit());
 		self::assertFalse($schema->getField('id')->shouldSkipWhenMissing());
 		self::assertTrue($schema->getField('name')->isWritable());
-		self::assertTrue($schema->getField('name')->isPublicPlace());
+		self::assertTrue($schema->getField('name')->isPublic());
 		self::assertSame(['name'], $schema->getPublicScalarPaths());
 		self::assertSame(['id'], $schema->getImplicitScalarPaths());
 		self::assertSame([$schema->getField('name')], $schema->getPublicFields());

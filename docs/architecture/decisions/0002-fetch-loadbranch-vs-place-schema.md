@@ -1,58 +1,60 @@
-# ADR 0002: Fetch (`LoadBranch`) vs place (`RepresentationSchema`)
+# ADR 0002: Fetch (`LoadBranch`) vs path (`RepresentationSchema`)
 
 Status: Accepted
 
 Supersedes proposal [`../proposals/archive/0003-load-graph-and-schema-as-place.md`](../proposals/archive/0003-load-graph-and-schema-as-place.md) (archived).
 
-Living contract: [`../../orm/representation-schema.md`](../../orm/representation-schema.md) and [`../../query/relation-loading.md`](../../query/relation-loading.md).
+Living contract: [`../../orm/representation-schema.md`](../../orm/representation-schema.md) and [`../../query/relation-loading.md`](../../query/relation-loading.md). Archived proposal 0003 still says “place” for this same concern.
 
 ## Context
 
-Nested `select()` made one authoring API, but fetch, place, and row-fold still shared one tangled tree (`RelationRef` + `SelectionList` + parser aliases + assemble). That spread placement across aliases, parser keys, output processor, and schema `sourcePath`, and invited parallel “plan” types (`LoadGraph`, `FetchPlan`, `ProjectionLayout`).
+Nested `select()` made one authoring API, but fetch, path, and row-fold still shared one tangled tree (`RelationRef` + `SelectionList` + parser aliases + assemble). That spread mapping across aliases, parser keys, output processor, and schema `sourcePath`, and invited parallel “plan” types (`LoadGraph`, `FetchPlan`, `ProjectionLayout`).
 
 ## Decision
 
-Keep **two** first-class concerns. Do **not** invent a third place/fetch plan type.
+Keep **two** first-class concerns. Do **not** invent a third path/fetch plan type.
 
 | Concern | Artifact | Role |
 |---|---|---|
-| **Place** | `RepresentationSchema` (path index, `sourcePath`, relations, Public/Implicit) | Where values sit on the representation; ORM provenance |
-| **Fetch** | `LoadBranch` tree (root + one branch per `RelationSelection` attach) | What to load per destination; JOIN/SEPARATE; place→load binds |
+| **Path** | `RepresentationSchema` (path index, `sourcePath`, relations, Public/Implicit) | Where values sit on the representation; ORM provenance |
+| **Fetch** | `LoadBranch` tree (root + one branch per `RelationSelection` attach) | What to load per destination; JOIN/SEPARATE; path→load binds |
 
 ```text
 select()
-   ├─► RepresentationSchema   // place
+   ├─► RepresentationSchema   // path
    └─► RelationSelectionTree  // which attaches exist
            ▼
      LoadBranch tree          // fetch destinations
            ▼
      load() → planScalars → parser
            ▼
-     assemble(schema, PlaceBinding)  // when needsRowAssemble()
+     assemble(schema, PathBinding)  // when needsRowAssemble()
 ```
 
 ### Invariants
 
 1. **Destination = RelationSelection attaches (+ root)**, not every schema `sourcePath`. Flat `$posts->author->name` does not create an author attach.
-2. **Flats:** place stays on the parent (`authorName`, `sourcePath=['author']`). Fetch home is the parent unless a loaded to-one child destination already covers that path — then require the field on the child and assemble from the child bag.
-3. **Parser keys are load-local.** Public naming is schema place (`getPublicScalarPaths()` when assemble runs).
-4. **`EXPLICIT` is authoring/fetch**, not assemble place. Place roles on schema are `Public` | `Implicit`.
-5. **Query may import `RepresentationSchema`** as the intentional place boundary; fetch tags stay on Query.
+2. **Flats:** the path stays on the parent (`authorName`, `sourcePath=['author']`). Fetch home is the parent unless a loaded to-one child destination already covers that path — then require the field on the child and assemble from the child bag.
+3. **Parser keys are load-local.** Public naming is the schema path (`getPublicScalarPaths()` when assemble runs).
+4. **`EXPLICIT` is authoring/fetch**, not assemble path. Path roles on schema are `Public` | `Implicit`.
+5. **Query may import `RepresentationSchema`** as the intentional path boundary; fetch tags stay on Query.
 
 ### Rejected
 
-- `LoadGraph` / `FetchPlan` / `ProjectionLayout` as parallel place or fetch inventories  
+- `LoadGraph` / `FetchPlan` / `ProjectionLayout` as parallel path or fetch inventories  
 - Inventing destinations only because a flat `sourcePath` exists  
-- Hybrid assemble that falls back to `EXPLICIT` tags for public place when a schema is compiled  
+- Hybrid assemble that falls back to `EXPLICIT` tags for public paths when a schema is compiled  
 
 ## Consequences
 
-- When `SelectQuery::needsRowAssemble()` is true, `beginFetch()` compiles (or reuses) a place schema; `RelationOutputProcessor` places only via `getPublicScalarPaths()`.
-- Plain own-field reads skip assemble and schema compile (executor keys already match place).
-- Fetch prepare is destinations + `load()` (JOIN/SEPARATE and mark required names), then one `planScalars` that walks that level’s schema scalar paths (`getPaths()`, skipping relation containers) and binds `placePath → loadKey`, then emits SQL for loader `requireFields()` that are not schema place. Hidden source ids use source-qualified Implicit paths (`company.id`). JOIN uses dotted `posts.title`. Then parser. Nested parser nodes are still created children-first (`AbstractLoader::register`); the root node is created before top-level `initNode` so loaders can see the parent node. Do not add a third place/fetch plan type.
-- Deferred separately: `query($schema)` reopen (proposal 0001).
+- When `SelectQuery::needsRowAssemble()` is true, `beginFetch()` compiles (or reuses) a path schema; assemble writes public scalars via `getPublicScalarPaths()` and identity overlay keys via Implicit/PK paths.
+- Plain own-field reads skip assemble and schema compile (executor keys already match paths).
+- Do not add a third path/fetch plan type. Fetch stays on `LoadBranch`; path stays on `RepresentationSchema`.
+- Deferred separately: `query($schema)` reopen ([`../proposals/0001-representation-schema-as-reusable-model.md`](../proposals/0001-representation-schema-as-reusable-model.md)).
 
 ## References
 
-- Archived implementation history: [`../proposals/archive/0003-load-graph-and-schema-as-place.md`](../proposals/archive/0003-load-graph-and-schema-as-place.md)  
-- Related open work: [`../proposals/0001-representation-schema-as-reusable-model.md`](../proposals/0001-representation-schema-as-reusable-model.md), [`../proposals/0002-recursive-projection-levels.md`](../proposals/0002-recursive-projection-levels.md)  
+- Living path model: [`../../orm/representation-schema.md`](../../orm/representation-schema.md)
+- Nested `select()` (landed): [`../proposals/archive/0002-recursive-projection-levels.md`](../proposals/archive/0002-recursive-projection-levels.md)
+- Archived implementation history: [`../proposals/archive/0003-load-graph-and-schema-as-place.md`](../proposals/archive/0003-load-graph-and-schema-as-place.md)
+- Related open work: [`../proposals/0001-representation-schema-as-reusable-model.md`](../proposals/0001-representation-schema-as-reusable-model.md)  

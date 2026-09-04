@@ -219,7 +219,7 @@ final class CycleQueryTranslator
 			$sql = $this->translateExpression($expression, $context);
 
 			if ($root || $aliased || $derived) {
-				if ($root && $selection->isImplicit() && $backendName === null) {
+				if ($root && ! $selection->isExplicit() && $backendName === null) {
 					if ($aliased) {
 						$logicalName = $selection->getSelectionKey();
 					}

@@ -265,7 +265,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		]], $users->fetchAll());
 	}
 
-	public function testAliasOnlyFetchCompilesPlaceSchemaAndAssemblesFromPublicPaths(): void
+	public function testAliasOnlyFetchCompilesSchemaAndAssemblesFromPublicPaths(): void
 	{
 		$users = new SelectQuery(
 			$this->makeBasicRegistry(ExecutingLifecycleLoader::class)->getCollection('users'),

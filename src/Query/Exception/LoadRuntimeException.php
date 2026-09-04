@@ -112,22 +112,22 @@ final class LoadRuntimeException extends LogicException
 		));
 	}
 
-	public static function placeSchemaMissing(): self
+	public static function schemaMissing(): self
 	{
 		return new self(
-			'Row assemble requires a compiled RepresentationSchema place model; SelectQuery must compile fetch schema before LoadRuntime assemble.',
+			'Row assemble requires a compiled RepresentationSchema; SelectQuery must compile fetch schema before LoadRuntime assemble.',
 		);
 	}
 
 	/**
 	 * @param list<string> $relationPath
 	 */
-	public static function placeSchemaNodeMissing(array $relationPath): self
+	public static function schemaNodeMissing(array $relationPath): self
 	{
 		$path = $relationPath === [] ? '(root)' : implode('.', $relationPath);
 
 		return new self(sprintf(
-			'Row assemble could not resolve RepresentationSchema place node for relation path "%s".',
+			'Row assemble could not resolve RepresentationSchema node for relation path "%s".',
 			$path,
 		));
 	}

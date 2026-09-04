@@ -1,12 +1,24 @@
 # Proposal 0001: RepresentationSchema as reusable query model
 
-Status: **Proposed** — partially landed; **canonical living model is** [`docs/orm/representation-schema.md`](../../orm/representation-schema.md) (path-as-index, Public/Implicit, expressions, place-first assemble). This proposal keeps the reopen / reusable-model discussion.
+Status: **Proposed** — schema model landed; remaining work is reopen + compile memoization.
 
-Supersedes / relates to: current `SelectQuery::projection()` → `RepresentationSchema`.
+**Canonical living model:** [`docs/orm/representation-schema.md`](../../orm/representation-schema.md) (path-as-index, Public/Implicit, expressions, path-first assemble).
 
-**Depends on** [`0002-recursive-projection-levels.md`](./0002-recursive-projection-levels.md). **Place/fetch:** [`../decisions/0002-fetch-loadbranch-vs-place-schema.md`](../decisions/0002-fetch-loadbranch-vs-place-schema.md) (accepted; archived proposal [`archive/0003-load-graph-and-schema-as-place.md`](./archive/0003-load-graph-and-schema-as-place.md)).
+**Depends on** [`archive/0002-recursive-projection-levels.md`](./archive/0002-recursive-projection-levels.md) (accepted). **Fetch/path:** [`../decisions/0002-fetch-loadbranch-vs-place-schema.md`](../decisions/0002-fetch-loadbranch-vs-place-schema.md) (accepted; archived proposal [`archive/0003-load-graph-and-schema-as-place.md`](./archive/0003-load-graph-and-schema-as-place.md)).
 
-This document freezes the design discussion so other work can land first and still influence the final shape.
+This document freezes the remaining design: define a result shape once, vary only conditions.
+
+## Landed (do not re-litigate)
+
+These were Phase 1 of the original write-up and now live in the schema spec and compiler:
+
+- `RepresentationExpressionSchema` plus path maps (`fields` / `relations` / `expressions` / `paths[]`)
+- Path collision across all three node kinds
+- Compiler keeps aliased non-`FieldRef` selections at every level
+- Session sync walks fields + relations only; expression paths are ignored
+- Recursive nested schemas with the same node kinds as root (proposal 0002)
+
+`SelectQuery::projection()` compiles that graph today. It is **not** memoized, and `query()` does not accept a schema.
 
 ## Problem
 
@@ -37,18 +49,19 @@ Today:
 
 - `Collection` = table definition (not a select shape).
 - `SelectQuery` = full read intent including `where` / `order` / `limit` (ephemeral, not a shared model).
-- `RepresentationSchema` via `projection()` = place + write provenance; **aliased** non-`FieldRef` expressions compile to `RepresentationExpressionSchema`; there is no schema → query reopen; compilation is uncached across calls.
+- `RepresentationSchema` via `projection()` = path + write provenance, including expressions.
+- There is no schema → query reopen; compilation is uncached across calls.
 
 There is no first-class “define this result structure once, vary only conditions” artifact.
 
-## Goals
+## Goals (remaining)
 
-1. **One public durable artifact** for result shape — extend `RepresentationSchema`, do not invent a parallel `QueryPlan` / selection-graph type.
-2. Shape includes **all selections** needed for a stable application result: fields, relation loads, **and** expressions / aggregates / subqueries.
+1. **One public durable artifact** for result shape — keep `RepresentationSchema`, do not invent a parallel `QueryPlan` / selection-graph type.
+2. Shape already includes fields, relation loads, and expressions; reopen must restore **all three**.
 3. Root **`where` / `having` / `orderBy` / `limit` / `offset` are not part of the shape** — they stay on ephemeral `SelectQuery` instances.
-4. Session sync / `update` / `create` keep using the **writable field + relation** subset; computed selections are read-only and ignored by sync.
+4. Session sync / `update` / `create` keep using the **writable field + relation** subset; computed selections stay read-only.
 5. `query($schema)` (and/or `$schema->toQuery()`) materializes a fresh `SelectQuery` with the shape’s selections applied.
-6. Compiling `SelectQuery` → schema remains the authoring path; schema compile should be **memoizable / cacheable** (in-process first).
+6. Compiling `SelectQuery` → schema should be **memoizable / cacheable** (in-process first).
 
 ## Non-goals (this proposal)
 
@@ -64,7 +77,7 @@ There is no first-class “define this result structure once, vary only conditio
 | Concern | Owner |
 |---|---|
 | Table / columns / relations metadata | `Collection` (unchanged) |
-| Durable result shape + write provenance | `RepresentationSchema` (extended) |
+| Durable result shape + write provenance | `RepresentationSchema` (already the path graph) |
 | One-shot filters, sort, page | `SelectQuery` (unchanged role) |
 | Persistence | `Session` + field/relation schema nodes (unchanged contract) |
 
@@ -76,61 +89,7 @@ SelectQuery  ──projection()──►  RepresentationSchema  (durable, cachea
                                SelectQuery + where/order/limit  (ephemeral)
 ```
 
-## Schema model extension
-
-### Existing nodes (keep)
-
-1. **`RepresentationFieldSchema`** — scalar path → collection field (+ `sourcePath`, writability, `skipWhenMissing`).
-2. **`RepresentationRelationSchema`** — relation path → nested `RepresentationSchema` (+ load knowledge).
-
-### New node
-
-3. **`RepresentationExpressionSchema`** — computed / non-column selection:
-   - public path / alias (same path-collision rules as fields/relations)
-   - expression AST (`ValueExpressionInterface` or equivalent stored form)
-   - always **non-writable** for Session sync
-   - does not participate in record-field adoption
-
-Suggested storage on `RepresentationSchema`:
-
-```text
-fields[]       path → RepresentationFieldSchema
-relations[]    path → RepresentationRelationSchema
-expressions[]  path → RepresentationExpressionSchema
-paths[]        ordered union of all paths (collision across all three maps)
-```
-
-Exact property names are implementation detail; path uniqueness across all node kinds is required.
-
-### What belongs on the schema
-
-| Included | Excluded |
-|---|---|
-| Root collection | Root `where` / `having` |
-| Field selections (+ aliases as paths) | Root `orderBy` |
-| Flat related field selections (`sourcePath`) | Root `limit` / `offset` |
-| Relation selection tree (fields / nested) | Executor / Session / result class |
-| Expression / aggregate / subquery selections | Ad-hoc joins used only for filtering |
-| Writability / PK enrichment on field nodes | |
-
-Relation-branch default `where` / `order` / `limit` (ATK-like scoped relations) is **out of v1** unless a follow-up explicitly adds it; instance queries may still configure relations after reopen if the query API allows.
-
-## API
-
-### Authoring (exists, behavior expands)
-
-```php
-$schema = $query->projection(); // RepresentationSchema
-```
-
-Compiler changes:
-
-- Continue compiling `FieldRef` / aliased `FieldRef` → field schemas (including relation-sourced flat fields).
-- Continue compiling relation selections → relation schemas.
-- **Stop dropping** non-`FieldRef` scalar selections; compile them → `RepresentationExpressionSchema`.
-- Session-facing enrichment (read-only PK injection, writability, `skipWhenMissing`) stays on field nodes only.
-
-### Reopen (new)
+## Reopen (new)
 
 Either or both (prefer helper + optional method):
 
@@ -147,8 +106,11 @@ Semantics of reopen:
 4. Apply relation schemas as relation load / `select(...)` configuration.
 5. Leave root conditions, sorts, limit, offset empty.
 6. Do not attach writable handler or result class unless explicitly decided later.
+7. Re-emit Implicit source PKs as fetch SQL from schema paths (`company.id`); do not run a second identity planner.
 
 `query(SelectQuery)` rules today (must `as()` for subquery source) stay unchanged; `RepresentationSchema` is a new accepted source kind.
+
+Star/`all()` is **already expanded** at compile (living spec: never store `"*"` as a path). Reopen restores the resolved Public field list, not a star token.
 
 ### Writes (unchanged call shape)
 
@@ -186,16 +148,17 @@ Optional later optimization: keep a template query on the schema and `copy()` it
 
 ## Phasing
 
-### Phase 1 — in-process reusable model (this proposal’s MVP)
+### Phase 1 — in-process reusable model (remaining MVP)
 
-1. Add `RepresentationExpressionSchema`.
-2. Extend `RepresentationSchema` path maps + collision rules.
-3. Compiler keeps expression selections.
-4. Implement schema → `SelectQuery` apply (`query($schema)` and/or `toQuery()`).
-5. Memoize `SelectQuery::projection()`.
-6. Tests: compile round-trip selection fidelity; reopen + extra where; sync still ignores expressions; path collisions.
+Landed: expression nodes, path maps, collision rules, compiler fidelity, recursive levels.
 
-Approx. effort (rough): **~300–450 production LOC**, **~550–850 with tests**.
+Still to build:
+
+1. Implement schema → `SelectQuery` apply (`query($schema)` and/or `toQuery()`).
+2. Memoize `SelectQuery::projection()`.
+3. Tests: compile round-trip selection fidelity; reopen + extra where; sync still ignores expressions; Implicit PK re-emit.
+
+Approx. remaining effort (rough): smaller than the original 300–450 production LOC estimate; reopen + memoize + tests is the bulk.
 
 ### Phase 2 — durable freeze (optional follow-up)
 
@@ -207,34 +170,37 @@ Approx. effort (rough): **~300–450 production LOC**, **~550–850 with tests**
 
 - Template-query memo + `copy()` on reopen.
 - Relation default scopes on schema.
-- Docs rename of “persistence provenance” → “result shape + provenance” in `representation-schema.md`.
 
 ## Compatibility / migration
 
-- Existing field/relation schemas and Session behavior remain valid.
+- Existing field/relation/expression schemas and Session behavior remain valid.
 - `projection()` return type stays `RepresentationSchema`.
-- Callers that assumed non-field selections were absent from schemas must tolerate expression nodes (inspect APIs should expose them explicitly).
+- Callers that inspect schemas already see expression nodes.
 - No change required to definition registry format.
 
 ## Open questions (may be influenced by other work)
 
 1. **Bound executor on reopen** — `query($schema)` unbound vs requiring `DataRuntime` / carrying executor on schema?
-2. **Star / DEFAULT selections** — store resolved field list vs preserve star and resolve at reopen?
-3. **Expression storage form** — live `ValueExpressionInterface` only in v1, or an intermediate serializable IR early?
-4. **`toQuery()` vs only `query($schema)`** — one or both in public API?
-5. **Flat join-sourced fields** — already partially modeled via `sourcePath`; any reopen gaps vs compiler?
-6. **Identity / INTERNAL selections** — implicit source PKs live on the durable schema (`company.id`); fetch plumbing stays off-schema. Reopen must re-emit that SQL, not a second identity planner.
-7. **Naming** — keep `RepresentationSchema` vs later rename to `Projection` (type rename is not required for MVP)?
-8. **Interaction with upcoming ideas** — leave room for alternate authoring or storage of shapes without forking a second public tree.
+2. **`toQuery()` vs only `query($schema)`** — one or both in public API?
+3. **Expression storage form** — live `ValueExpressionInterface` only in v1 (`object` on `RepresentationExpressionSchema` today), or an intermediate serializable IR early?
+4. **Flat join-sourced fields** — already modeled via `sourcePath`; any reopen gaps vs compiler?
+5. **Naming** — keep `RepresentationSchema` vs later rename to `Projection` (type rename is not required for MVP)?
+6. **Interaction with upcoming ideas** — leave room for alternate authoring or storage of shapes without forking a second public tree.
 
-## Acceptance criteria (Phase 1)
+Resolved from the living spec (not open):
 
-- [ ] A query with field + expression + relation selections compiles to one `RepresentationSchema` that retains all three kinds.
+- **Star / DEFAULT** — store the expanded Public field list; do not preserve `"*"` on the schema.
+- **Identity / INTERNAL** — Implicit source PKs live on the durable schema (`company.id`); fetch plumbing stays off-schema.
+
+## Acceptance criteria (Phase 1 remainder)
+
+- [x] A query with field + expression + relation selections compiles to one `RepresentationSchema` that retains all three kinds.
+- [x] Path collision across field / relation / expression is rejected.
+- [x] `$session->update($dto, $schema)` / sync does not write expression paths.
 - [ ] `query($schema)->where(...)->fetchAll()` returns the same columnar/alias structure as the original select (modulo where).
-- [ ] `$session->update($dto, $schema)` / sync does not write expression paths.
-- [ ] Path collision across field / relation / expression is rejected.
 - [ ] `projection()` on the same `SelectQuery` instance is memoized.
-- [ ] Docs: this proposal linked from the docs index; implementation docs updated when built.
+- [x] Docs: this proposal linked from the docs index.
+- [ ] Living docs updated when reopen is built.
 
 ## References
 

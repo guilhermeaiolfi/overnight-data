@@ -11,7 +11,7 @@ final class SelectionTag
 	/** User-authored selection (replaces SelectionItem::$explicit). */
 	public const EXPLICIT = 'explicit';
 
-	/** Not visible in public output / place (opt-out; default is visible). */
+	/** Not visible in public output (opt-out; default is visible). */
 	public const INTERNAL = 'internal';
 
 	public const IDENTITY = 'identity';

@@ -8,13 +8,13 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Schema\Exception\InvalidSchemaException;
 
 /**
- * One structural scalar representation path with writability, place role, and
+ * One structural scalar representation path with writability, path role, and
  * optional skip-when-missing adoption behavior.
  *
  * Exists as the leaf node of RepresentationSchema used by scalar sync and flat
  * projection adoption. {@see RepresentationFieldRole::Public} paths form the
- * representation place spine; {@see RepresentationFieldRole::Implicit} paths are
- * not authored place (e.g. PK backfill for adoption).
+ * representation path spine; {@see RepresentationFieldRole::Implicit} paths are
+ * not authored paths (e.g. PK backfill for adoption).
  *
  * Presence: when skip-when-missing is omitted, related sources
  * (non-empty sourcePath) skip adoption/sync if that record is absent;
@@ -103,7 +103,7 @@ final class RepresentationFieldSchema
 		return $this->role;
 	}
 
-	public function isPublicPlace(): bool
+	public function isPublic(): bool
 	{
 		return $this->role === RepresentationFieldRole::Public;
 	}

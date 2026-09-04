@@ -13,7 +13,7 @@ use ON\Data\Schema\RepresentationSchema;
  * {@see WritableResultHandler::track()} understands it. The usual concrete value is
  * the ORM query representation plan.
  *
- * When prepare already compiled a place {@see RepresentationSchema} (then planned
+ * When prepare already compiled a {@see RepresentationSchema} (then planned
  * identities), {@see getFetchSchema()} returns it so {@see SelectQuery} does not
  * recompile.
  */

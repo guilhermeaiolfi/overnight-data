@@ -3,11 +3,11 @@
 Status: **Accepted / closed** — archived.
 
 **Decision record:** [`../../decisions/0002-fetch-loadbranch-vs-place-schema.md`](../../decisions/0002-fetch-loadbranch-vs-place-schema.md)  
-**Living place model:** [`../../../orm/representation-schema.md`](../../../orm/representation-schema.md)
+**Living path model:** [`../../../orm/representation-schema.md`](../../../orm/representation-schema.md)
 
 This file keeps implementation history and checklists. Do not treat it as the active contract.
 
-Relates to: [`../0002-recursive-projection-levels.md`](../0002-recursive-projection-levels.md), [`../0001-representation-schema-as-reusable-model.md`](../0001-representation-schema-as-reusable-model.md).
+Relates to: [`0002-recursive-projection-levels.md`](./0002-recursive-projection-levels.md), [`../0001-representation-schema-as-reusable-model.md`](../0001-representation-schema-as-reusable-model.md).
 
 ## Closing note (current)
 

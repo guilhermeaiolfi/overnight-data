@@ -156,7 +156,7 @@ $rows = $u
     ->fetchAll();
 ```
 
-The runtime may still include hidden required fields for identity or writable projection tracking. Selections tagged `SelectionTag::INTERNAL` are stripped from public array and object results.
+Assemble may still fetch hidden required fields for identity. Implicit source primary keys land on the identity overlay for writable `track()`, not on public results. Root selections tagged `SelectionTag::INTERNAL` or `SQL_ONLY` are masked from public array and object results.
 
 Relation loading remains explicit through `RelationRef` branches. Prefer including them in `select()`:
 

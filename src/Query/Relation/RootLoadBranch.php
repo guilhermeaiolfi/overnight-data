@@ -44,7 +44,7 @@ final class RootLoadBranch extends LoadBranch
 	 */
 	public function requirePrimaryKey(): array
 	{
-		$placeKeys = $this->requireFields($this->getCollection()->getPrimaryKey());
+		$paths = $this->requireFields($this->getCollection()->getPrimaryKey());
 
 		foreach ($this->getCollection()->getPrimaryKey() as $fieldName) {
 			$selection = $this->findOwnFieldSelection($this->getCollection()->getField($fieldName)->getName());
@@ -63,7 +63,7 @@ final class RootLoadBranch extends LoadBranch
 			$this->selections->add($selection->getExpression(), $tags);
 		}
 
-		return $placeKeys;
+		return $paths;
 	}
 
 	public function createNode(): RootNode

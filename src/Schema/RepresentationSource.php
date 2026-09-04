@@ -7,10 +7,10 @@ namespace ON\Data\Schema;
 use ON\Data\Definition\Collection\CollectionInterface;
 
 /**
- * Place fields grouped by originating record (one collection + source path).
+ * Schema fields grouped by originating record (one collection + source path).
  *
- * {@see getFields()} is the only inventory: every placement on this record.
- * {@see getBinding()} is a lookup of the first placement for a collection field.
+ * {@see getFields()} is the only inventory: every path on this record.
+ * {@see getBinding()} is a lookup of the first path for a collection field.
  *
  * Carries only structure. External per-source identities for adoption are
  * supplied by the ORM identity maps.
@@ -26,12 +26,12 @@ final class RepresentationSource
 	private array $fields;
 
 	/**
-	 * Place paths for {@see CollectionInterface::getPrimaryKey()}, in that order.
+	 * Schema paths for {@see CollectionInterface::getPrimaryKey()}, in that order.
 	 * A missing binding is a null slot — identity is incomplete.
 	 *
 	 * @var list<string|null>
 	 */
-	private array $primaryKeyPlacePaths = [];
+	private array $primaryKeyPaths = [];
 
 	/**
 	 * @param list<string> $path
@@ -46,7 +46,7 @@ final class RepresentationSource
 		$this->fields = array_values($fields);
 
 		foreach ($this->collection->getPrimaryKey() as $fieldName) {
-			$this->primaryKeyPlacePaths[] = $this->getBinding($fieldName)?->getPath();
+			$this->primaryKeyPaths[] = $this->getBinding($fieldName)?->getPath();
 		}
 	}
 
@@ -87,7 +87,7 @@ final class RepresentationSource
 	}
 
 	/**
-	 * First placement of this collection field on this source.
+	 * First path of this collection field on this source.
 	 */
 	public function getBinding(string $fieldName): ?RepresentationFieldSchema
 	{
@@ -106,13 +106,13 @@ final class RepresentationSource
 	}
 
 	/**
-	 * Place paths for primary-key fields, in collection PK order.
+	 * Schema paths for primary-key fields, in collection PK order.
 	 *
 	 * @return list<string|null>
 	 */
-	public function getPrimaryKeyPlacePaths(): array
+	public function getPrimaryKeyPaths(): array
 	{
-		return $this->primaryKeyPlacePaths;
+		return $this->primaryKeyPaths;
 	}
 
 	/**

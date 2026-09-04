@@ -181,7 +181,7 @@ final class QueryModelTest extends TestCase
 			$selections,
 		));
 		self::assertFalse($explicit[0]->hasTag(SelectionTag::DEFAULT));
-		self::assertTrue($selections[0]->isImplicit());
+		self::assertFalse($selections[0]->isExplicit());
 	}
 
 	public function testSelectCreatesAnExplicitSelectionUsingTheCachedFieldReference(): void
@@ -1277,7 +1277,9 @@ final class QueryModelTest extends TestCase
 
 		self::assertInstanceOf(SelectionList::class, $selections);
 		self::assertCount(2, $selections->getExplicit());
-		self::assertCount(1, $selections->getImplicit());
+		self::assertCount(1, $selections->filter(
+			static fn (SelectionItem $selection): bool => ! $selection->isExplicit(),
+		)->getAll());
 		self::assertCount(1, $selections->getByTag(SelectionTag::RELATION));
 		self::assertCount(1, $selections->filter(static fn (SelectionItem $selection): bool => $selection->hasTag('result-grouping-key'))->getAll());
 	}
@@ -1671,7 +1673,7 @@ final class QueryModelTest extends TestCase
 
 		self::assertCount(2, $selections);
 		self::assertCount(1, $required);
-		self::assertTrue($required[0]->isImplicit());
+		self::assertFalse($required[0]->isExplicit());
 		self::assertSame(['relation-key', SelectionTag::COLUMN, 'result-grouping-key'], $required[0]->getTags());
 	}
 

@@ -35,9 +35,9 @@ abstract class LoadBranch
 	private array $children = [];
 
 	/**
-	 * @var array<string, PlaceBinding>
+	 * @var array<string, PathBinding>
 	 */
-	private array $placeBindings = [];
+	private array $pathBindings = [];
 
 	/**
 	 * @var list<string>
@@ -56,30 +56,30 @@ abstract class LoadBranch
 
 	public function getRepresentationSchema(): RepresentationSchema
 	{
-		return $this->representationSchema ?? throw LoadRuntimeException::placeSchemaMissing();
+		return $this->representationSchema ?? throw LoadRuntimeException::schemaMissing();
 	}
 
-	public function bindPlaceToLoadKey(string $placeKey, string $loadKey): void
+	public function bindPathToLoadKey(string $path, string $loadKey): void
 	{
-		$this->placeBindings[$placeKey] = new PlaceBinding($loadKey);
+		$this->pathBindings[$path] = new PathBinding($loadKey);
 	}
 
 	/**
 	 * @param list<string> $relativePath relation names from this branch to the child destination
 	 */
-	public function bindPlaceToChildDestination(string $placeKey, array $relativePath, string $loadKey): void
+	public function bindPathToChildDestination(string $path, array $relativePath, string $loadKey): void
 	{
-		$this->placeBindings[$placeKey] = new PlaceBinding($loadKey, array_values($relativePath));
+		$this->pathBindings[$path] = new PathBinding($loadKey, array_values($relativePath));
 	}
 
-	public function hasPlaceBinding(string $placeKey): bool
+	public function hasPathBinding(string $path): bool
 	{
-		return isset($this->placeBindings[$placeKey]);
+		return isset($this->pathBindings[$path]);
 	}
 
-	public function loadKeyForPlace(string $placeKey): string
+	public function loadKeyForPath(string $path): string
 	{
-		return ($this->placeBindings[$placeKey] ?? null)?->getLoadKey() ?? $placeKey;
+		return ($this->pathBindings[$path] ?? null)?->getLoadKey() ?? $path;
 	}
 
 	/**
@@ -87,8 +87,8 @@ abstract class LoadBranch
 	 * fields use the field name as the bag key; local flats and non-field
 	 * internals use the output name. Child-bag flats are omitted.
 	 *
-	 * Built from {@see PlaceBinding} after the schema-path planner runs; not a
-	 * second walk of {@see SelectionList} COLUMN tags as place.
+	 * Built from {@see PathBinding} after the schema-path planner runs; not a
+	 * second walk of {@see SelectionList} COLUMN tags as schema paths.
 	 *
 	 * @return array<string, string>
 	 */
@@ -96,12 +96,12 @@ abstract class LoadBranch
 	{
 		$map = [];
 
-		foreach ($this->placeBindings as $placeKey => $binding) {
+		foreach ($this->pathBindings as $path => $binding) {
 			if ($binding->isChildDestination()) {
 				continue;
 			}
 
-			$name = $this->bagKeyForPlace($placeKey);
+			$name = $this->bagKeyForPath($path);
 
 			if (isset($map[$name])) {
 				continue;
@@ -116,9 +116,9 @@ abstract class LoadBranch
 	/**
 	 * @return list<string>|null
 	 */
-	public function childPathForPlace(string $placeKey): ?array
+	public function childPathForPath(string $path): ?array
 	{
-		return ($this->placeBindings[$placeKey] ?? null)?->getChildPath();
+		return ($this->pathBindings[$path] ?? null)?->getChildPath();
 	}
 
 	public function setNode(AbstractNode $node): void
@@ -139,14 +139,14 @@ abstract class LoadBranch
 	abstract public function getCollection(): CollectionInterface;
 
 	/**
-	 * Projection level this branch places onto: root {@see SelectQuery} or nested {@see RelationRef}.
+	 * Projection level this branch writes onto: root {@see SelectQuery} or nested {@see RelationRef}.
 	 */
 	abstract public function getProjectionLevel(): SelectQuery|RelationRef;
 
 	abstract public function getSelections(): SelectionList;
 
 	/**
-	 * Register own-level fields as REQUIRED. Returns place keys (not SQL aliases).
+	 * Register own-level fields as REQUIRED. Returns schema paths (not SQL aliases).
 	 * {@see LoadFieldPlanner::emitRequiredFields()} emits SQL after schema bind.
 	 *
 	 * @param list<string> $fieldNames
@@ -285,19 +285,19 @@ abstract class LoadBranch
 	}
 
 	/**
-	 * Parser-bag key for a place (output name): own collection field name, or
+	 * Parser-bag key for a schema path (output name): own collection field name, or
 	 * the output name for flats / internals.
 	 */
-	public function bagKeyForPlace(string $placeKey): string
+	public function bagKeyForPath(string $path): string
 	{
-		if ($this->childPathForPlace($placeKey) !== null) {
-			return $this->loadKeyForPlace($placeKey);
+		if ($this->childPathForPath($path) !== null) {
+			return $this->loadKeyForPath($path);
 		}
 
-		$selection = $this->getSelections()->findBySelectionKey($placeKey);
+		$selection = $this->getSelections()->findBySelectionKey($path);
 
 		if (! $selection instanceof SelectionItem) {
-			return $placeKey;
+			return $path;
 		}
 
 		return $this->parserColumnName($selection);

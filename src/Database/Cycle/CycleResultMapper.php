@@ -40,7 +40,7 @@ final class CycleResultMapper
 				);
 			}
 
-			if (! $column->visible() && ! str_starts_with($column->logicalName(), '_od_internal_')) {
+			if (! $column->visible()) {
 				continue;
 			}
 

@@ -411,19 +411,22 @@ final class QueryArchitectureTest extends TestCase
 		$outputProcessor = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/RelationOutputProcessor.php');
 		self::assertStringContainsString('getPublicScalarPaths()', $outputProcessor);
 		self::assertStringContainsString('getImplicitScalarPaths()', $outputProcessor);
+		self::assertStringContainsString('getPrimaryKeyPaths()', $outputProcessor);
 		self::assertStringContainsString('getRepresentationSchema()', $outputProcessor);
+		self::assertStringNotContainsString('SelectionTag::INTERNAL', $outputProcessor);
 		self::assertStringNotContainsString('getExpression()->getField()->getName()', $outputProcessor);
 
 		$loadRuntime = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/LoadRuntime.php');
 		self::assertStringContainsString('needsRowAssemble()', $loadRuntime);
 		self::assertStringContainsString('planScalars()', $loadRuntime);
+		self::assertStringContainsString('getIdentityRows()', $loadRuntime);
 		self::assertStringNotContainsString('includeCrossLevelFlats', $loadRuntime);
 		self::assertStringNotContainsString('bindAllDestinations', $loadRuntime);
 		self::assertStringNotContainsString('getExpression()->getField()->getName()', $loadRuntime);
 
 		$loadFieldPlanner = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/LoadFieldPlanner.php');
 		self::assertStringContainsString('getPaths()', $loadFieldPlanner);
-		self::assertStringContainsString('bindPlacePath', $loadFieldPlanner);
+		self::assertStringContainsString('private function bindPath(', $loadFieldPlanner);
 		self::assertStringContainsString('schemaFor', $loadFieldPlanner);
 		self::assertStringContainsString('setRepresentationSchema', $loadFieldPlanner);
 		self::assertStringContainsString('private readonly RepresentationSchema $schema', $loadFieldPlanner);
@@ -432,7 +435,9 @@ final class QueryArchitectureTest extends TestCase
 
 		$selectQuery = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/SelectQuery.php');
 		self::assertStringContainsString('$this->projection()', $selectQuery);
+		self::assertStringContainsString('getIdentityRows()', $selectQuery);
 		self::assertStringNotContainsString('compileFetchSchema', $selectQuery);
+		self::assertStringNotContainsString('stripTaggedPrivateKeys', $selectQuery);
 
 		foreach ([
 			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/BelongsToLoader.php',

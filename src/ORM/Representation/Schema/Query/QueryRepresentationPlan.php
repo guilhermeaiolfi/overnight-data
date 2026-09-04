@@ -15,7 +15,7 @@ use ON\Data\Schema\RepresentationSource;
  * Sources are always {@see RepresentationSchema::getSources()} — not a second list.
  *
  * Also serves as the {@see WritablePreparation} token so SelectQuery can reuse the
- * prepared place schema without a second compile.
+ * prepared schema without a second compile.
  */
 final class QueryRepresentationPlan implements WritablePreparation
 {

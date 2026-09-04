@@ -18,10 +18,10 @@ use ON\Data\Schema\RepresentationSchema;
 
 /**
  * For each schema scalar path at this level, choose where it is fetched, select
- * SQL, and bind place path → SQL alias.
+ * SQL, and bind schema path → SQL alias.
  *
  * Destinations are existing {@see LoadBranch} nodes (this level, or a loaded to-one child).
- * Does not invent attaches for flats. Place comes only from {@see RepresentationSchema}.
+ * Does not invent attaches for flats. Paths come only from {@see RepresentationSchema}.
  */
 final class LoadFieldPlanner
 {
@@ -32,7 +32,7 @@ final class LoadFieldPlanner
 	}
 
 	/**
-	 * Emit SQL and bind place path → SQL alias for this branch.
+	 * Emit SQL and bind schema path → SQL alias for this branch.
 	 */
 	public function bindBranch(LoadBranch $branch): void
 	{
@@ -43,14 +43,14 @@ final class LoadFieldPlanner
 				continue;
 			}
 
-			$this->bindPlacePath($branch, $schema, $path);
+			$this->bindPath($branch, $schema, $path);
 		}
 
 		$this->emitRequiredFields($branch);
 	}
 
 	/**
-	 * Emit SQL for loader-required join/correlation keys that are not schema place.
+	 * Emit SQL for loader-required join/correlation keys that are not schema paths.
 	 */
 	public function emitRequiredFields(LoadBranch $branch): void
 	{
@@ -66,24 +66,24 @@ final class LoadFieldPlanner
 		}
 
 		if (! $branch instanceof RelationLoadBranch) {
-			throw LoadRuntimeException::placeSchemaMissing();
+			throw LoadRuntimeException::schemaMissing();
 		}
 
 		$path = $branch->getRelationRef()->getPath();
 		$node = $this->schema->findRelatedSchemaAt($path);
 		if (! $node instanceof RepresentationSchema) {
-			throw LoadRuntimeException::placeSchemaNodeMissing($path);
+			throw LoadRuntimeException::schemaNodeMissing($path);
 		}
 
 		return $node;
 	}
 
-	private function bindPlacePath(
+	private function bindPath(
 		LoadBranch $branch,
 		RepresentationSchema $schema,
 		string $path,
 	): void {
-		if ($branch->hasPlaceBinding($path)) {
+		if ($branch->hasPathBinding($path)) {
 			return;
 		}
 
@@ -110,7 +110,7 @@ final class LoadFieldPlanner
 			if ($child instanceof RelationLoadBranch) {
 				$this->emitOwnField($child, $fieldName);
 				$child->requireFields([$fieldName]);
-				$branch->bindPlaceToChildDestination($outputName, $sourcePath, $fieldName);
+				$branch->bindPathToChildDestination($outputName, $sourcePath, $fieldName);
 
 				return;
 			}
@@ -124,7 +124,7 @@ final class LoadFieldPlanner
 			$this->aliasPath($branch),
 			$field->isImplicit(),
 		);
-		$branch->bindPlaceToLoadKey($outputName, $sqlKey);
+		$branch->bindPathToLoadKey($outputName, $sqlKey);
 	}
 
 	private function bindExpressionSchema(
@@ -137,7 +137,7 @@ final class LoadFieldPlanner
 		$existing = $query->getSelections()->findBySelectionKey($preferred);
 
 		if ($existing instanceof SelectionItem && $existing->getFieldRef() === null) {
-			$branch->bindPlaceToLoadKey($outputName, $preferred);
+			$branch->bindPathToLoadKey($outputName, $preferred);
 
 			return;
 		}
@@ -150,7 +150,7 @@ final class LoadFieldPlanner
 		}
 
 		if (! $expression instanceof ValueExpressionInterface) {
-			$branch->bindPlaceToLoadKey($outputName, $outputName);
+			$branch->bindPathToLoadKey($outputName, $outputName);
 
 			return;
 		}
@@ -162,7 +162,7 @@ final class LoadFieldPlanner
 			$sqlKey,
 			false,
 		);
-		$branch->bindPlaceToLoadKey($outputName, $sqlKey);
+		$branch->bindPathToLoadKey($outputName, $sqlKey);
 	}
 
 	private function fieldRefFor(LoadBranch $branch, RepresentationFieldSchema $field): FieldRef
@@ -210,9 +210,9 @@ final class LoadFieldPlanner
 
 	private function emitOwnField(LoadBranch $branch, string $fieldName): void
 	{
-		$placeKey = $branch->requireFields([$fieldName])[0];
+		$path = $branch->requireFields([$fieldName])[0];
 
-		if ($branch->hasPlaceBinding($placeKey) && $branch->childPathForPlace($placeKey) === null) {
+		if ($branch->hasPathBinding($path) && $branch->childPathForPath($path) === null) {
 			return;
 		}
 
@@ -220,8 +220,8 @@ final class LoadFieldPlanner
 		$fieldRef = $level instanceof RelationRef
 			? $level->field($fieldName)
 			: $branch->getQuery()->field($fieldName);
-		$sqlKey = $this->selectField($branch, $fieldRef, $placeKey, $this->aliasPath($branch), true);
-		$branch->bindPlaceToLoadKey($placeKey, $sqlKey);
+		$sqlKey = $this->selectField($branch, $fieldRef, $path, $this->aliasPath($branch), true);
+		$branch->bindPathToLoadKey($path, $sqlKey);
 	}
 
 	/**

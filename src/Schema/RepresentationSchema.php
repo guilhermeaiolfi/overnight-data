@@ -10,13 +10,13 @@ use ON\Data\Schema\Exception\InvalidSchemaException;
 use stdClass;
 
 /**
- * Place + persistence provenance graph for one representation shape: a root
+ * Path + persistence provenance graph for one representation shape: a root
  * collection plus field, relation, and expression path maps.
  *
  * Nested relations and flat `sourcePath` fields live on the same graph.
  * Attach binds {@see getSources()} then walks {@see getRelations()}.
  *
- * Query assemble uses {@see getPublicScalarPaths()} as the place spine when a
+ * Query assemble uses {@see getPublicScalarPaths()} as the path spine when a
  * fetch schema is compiled for row assemble (Public fields + expressions;
  * Implicit paths excluded).
  *
@@ -163,7 +163,7 @@ final class RepresentationSchema
 	}
 
 	/**
-	 * Public place keys for flat related fields at this level (`sourcePath !== []`).
+	 * Public scalar paths for flat related fields at this level (`sourcePath !== []`).
 	 * Implicit paths and own-level fields are omitted.
 	 *
 	 * @return list<string>
@@ -171,12 +171,12 @@ final class RepresentationSchema
 	public function getFlatFieldPaths(): array
 	{
 		return $this->fieldPaths($this->filterFields(
-			static fn (RepresentationFieldSchema $field): bool => $field->isPublicPlace() && $field->getSourcePath() !== [],
+			static fn (RepresentationFieldSchema $field): bool => $field->isPublic() && $field->getSourcePath() !== [],
 		));
 	}
 
 	/**
-	 * Flat place keys at a nested relation path from this root (empty = this level).
+	 * Flat scalar paths at a nested relation path from this root (empty = this level).
 	 *
 	 * @param list<string> $relationPath
 	 * @return list<string>
@@ -189,7 +189,7 @@ final class RepresentationSchema
 	}
 
 	/**
-	 * Ordered public scalar place paths at this level (Public fields + expressions).
+	 * Ordered public scalar paths at this level (Public fields + expressions).
 	 * Excludes Implicit paths and relation containers.
 	 *
 	 * @return list<string>
@@ -212,7 +212,7 @@ final class RepresentationSchema
 	}
 
 	/**
-	 * Ordered Implicit scalar paths at this level (identity backfill, not public place).
+	 * Ordered Implicit scalar paths at this level (identity backfill, not public paths).
 	 *
 	 * @return list<string>
 	 */
