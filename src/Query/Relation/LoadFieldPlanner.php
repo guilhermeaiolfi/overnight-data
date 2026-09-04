@@ -37,7 +37,7 @@ final class LoadFieldPlanner
 	public function bindBranch(LoadBranch $branch): void
 	{
 		$schema = $this->schemaFor($branch);
-		$branch->attachPlaceSchema($schema);
+		$branch->setRepresentationSchema($schema);
 		foreach ($schema->getPaths() as $path) {
 			if ($schema->hasRelation($path)) {
 				continue;

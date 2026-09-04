@@ -44,53 +44,19 @@ abstract class LoadBranch
 	 */
 	private array $requiredFieldNames = [];
 
-	private ?RepresentationSchema $placeSchema = null;
+	private ?RepresentationSchema $representationSchema = null;
 
 	/**
-	 * @var list<string>
+	 * Bind this branch's schema node for the current fetch.
 	 */
-	private array $publicPlaceKeys = [];
-
-	/**
-	 * @var list<string>
-	 */
-	private array $implicitPlaceKeys = [];
-
-	/**
-	 * Snapshot this branch's schema node for the current fetch.
-	 *
-	 * Public/implicit path sets are taken once here; assemble must not rediscover them.
-	 */
-	public function attachPlaceSchema(RepresentationSchema $schema): void
+	public function setRepresentationSchema(RepresentationSchema $schema): void
 	{
-		$this->placeSchema = $schema;
-		$this->publicPlaceKeys = $schema->getPublicScalarPaths();
-		$this->implicitPlaceKeys = $schema->getImplicitScalarPaths();
+		$this->representationSchema = $schema;
 	}
 
-	public function getPlaceSchema(): RepresentationSchema
+	public function getRepresentationSchema(): RepresentationSchema
 	{
-		return $this->placeSchema ?? throw LoadRuntimeException::placeSchemaMissing();
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	public function getPublicPlaceKeys(): array
-	{
-		$this->getPlaceSchema();
-
-		return $this->publicPlaceKeys;
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	public function getImplicitPlaceKeys(): array
-	{
-		$this->getPlaceSchema();
-
-		return $this->implicitPlaceKeys;
+		return $this->representationSchema ?? throw LoadRuntimeException::placeSchemaMissing();
 	}
 
 	public function bindPlaceToLoadKey(string $placeKey, string $loadKey): void

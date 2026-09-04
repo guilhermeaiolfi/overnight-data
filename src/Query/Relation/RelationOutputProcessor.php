@@ -315,15 +315,15 @@ final class RelationOutputProcessor
 	}
 
 	/**
-	 * Ordered public place keys snapshotted on this branch at plan time
-	 * ({@see LoadBranch::getPublicPlaceKeys()}). Implicit PK backfill is omitted.
+	 * Ordered public place keys from this branch's schema node
+	 * ({@see RepresentationSchema::getPublicScalarPaths()}). Implicit PK backfill is omitted.
 	 * Query EXPLICIT tags are not a place fallback.
 	 *
 	 * @return list<string>
 	 */
 	private function placeKeysFor(LoadBranch $branch): array
 	{
-		return $branch->getPublicPlaceKeys();
+		return $branch->getRepresentationSchema()->getPublicScalarPaths();
 	}
 
 	/**
@@ -331,7 +331,7 @@ final class RelationOutputProcessor
 	 */
 	private function implicitPlaceKeysFor(LoadBranch $branch): array
 	{
-		return $branch->getImplicitPlaceKeys();
+		return $branch->getRepresentationSchema()->getImplicitScalarPaths();
 	}
 
 	/**

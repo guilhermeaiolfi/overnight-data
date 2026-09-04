@@ -220,7 +220,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		self::assertContains('name', LifecycleEvents::$plannedRootColumns);
 	}
 
-	public function testPrepareSnapshotsPublicAndImplicitPlaceKeysOnEachBranch(): void
+	public function testPrepareSetsRepresentationSchemaOnEachBranch(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
 		$users->posts->separate();
@@ -230,20 +230,10 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$rootBranch = $this->readProperty($runtime, 'rootBranch');
 		$posts = array_values($this->readProperty($runtime, 'branches'))[0];
 
-		self::assertSame($schema, $rootBranch->getPlaceSchema());
-		self::assertSame($schema->getPublicScalarPaths(), $rootBranch->getPublicPlaceKeys());
-		self::assertSame($schema->getImplicitScalarPaths(), $rootBranch->getImplicitPlaceKeys());
+		self::assertSame($schema, $rootBranch->getRepresentationSchema());
 		self::assertSame(
 			$schema->getRelation('posts')->getRelatedSchema(),
-			$posts->getPlaceSchema(),
-		);
-		self::assertSame(
-			$schema->getRelation('posts')->getRelatedSchema()->getPublicScalarPaths(),
-			$posts->getPublicPlaceKeys(),
-		);
-		self::assertSame(
-			$schema->getRelation('posts')->getRelatedSchema()->getImplicitScalarPaths(),
-			$posts->getImplicitPlaceKeys(),
+			$posts->getRepresentationSchema(),
 		);
 	}
 

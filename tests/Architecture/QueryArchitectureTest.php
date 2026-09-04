@@ -409,8 +409,9 @@ final class QueryArchitectureTest extends TestCase
 		self::assertStringNotContainsString('getExpression()->getField()->getName()', $abstractLoader);
 
 		$outputProcessor = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/RelationOutputProcessor.php');
-		self::assertStringContainsString('getPublicPlaceKeys()', $outputProcessor);
-		self::assertStringContainsString('getImplicitPlaceKeys()', $outputProcessor);
+		self::assertStringContainsString('getPublicScalarPaths()', $outputProcessor);
+		self::assertStringContainsString('getImplicitScalarPaths()', $outputProcessor);
+		self::assertStringContainsString('getRepresentationSchema()', $outputProcessor);
 		self::assertStringNotContainsString('getExpression()->getField()->getName()', $outputProcessor);
 
 		$loadRuntime = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/LoadRuntime.php');
@@ -424,7 +425,7 @@ final class QueryArchitectureTest extends TestCase
 		self::assertStringContainsString('getPaths()', $loadFieldPlanner);
 		self::assertStringContainsString('bindPlacePath', $loadFieldPlanner);
 		self::assertStringContainsString('schemaFor', $loadFieldPlanner);
-		self::assertStringContainsString('attachPlaceSchema', $loadFieldPlanner);
+		self::assertStringContainsString('setRepresentationSchema', $loadFieldPlanner);
 		self::assertStringContainsString('private readonly RepresentationSchema $schema', $loadFieldPlanner);
 		self::assertStringNotContainsString('getByTag', $loadFieldPlanner);
 		self::assertStringNotContainsString('SelectionTag::COLUMN', $loadFieldPlanner);
