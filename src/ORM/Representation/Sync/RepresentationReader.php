@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Sync;
 
 use function ON\Data\Mapper\map;
-use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Session;
 use ON\Data\Schema\RepresentationRelationSchema;
 use ON\Data\Schema\RepresentationSchema;
@@ -23,7 +22,7 @@ final class RepresentationReader
 		$values = [];
 		foreach ($schema->getFields() as $fieldSchema) {
 			$path = $fieldSchema->getPath();
-			$values[$path] = $this->readPath($bag, $path);
+			$values[$path] = $this->readPath($bag, $path)->requireValue();
 		}
 
 		return $values;
@@ -50,12 +49,9 @@ final class RepresentationReader
 				continue;
 			}
 
-			try {
-				$values[$fieldSchema->getFieldName()] = $this->readPath(
-					$bag,
-					$fieldSchema->getPath(),
-				);
-			} catch (SyncException) {
+			$result = $this->readPath($bag, $fieldSchema->getPath());
+			if ($result->isPresent()) {
+				$values[$fieldSchema->getFieldName()] = $result->requireValue();
 			}
 		}
 
@@ -64,35 +60,75 @@ final class RepresentationReader
 
 	/**
 	 * Resolve a dotted path on an object (live representation or mapped scalar bag).
+	 *
+	 * @return PathReadResult<mixed>
 	 */
-	public function readPath(object $source, string $path): mixed
+	public function readPath(object $source, string $path): PathReadResult
 	{
 		$properties = get_object_vars($source);
 		if (array_key_exists($path, $properties)) {
-			return $properties[$path];
+			return PathReadResult::present($properties[$path]);
 		}
 
 		$current = $source;
 		foreach (explode('.', $path) as $segment) {
-			$current = $this->readSegment($current, $segment, $path);
+			if (is_array($current)) {
+				if (! ctype_digit($segment)) {
+					return PathReadResult::invalid(sprintf(
+						"Cannot read representation path '%s' because segment '%s' is not an array offset.",
+						$path,
+						$segment
+					));
+				}
+
+				$offset = (int) $segment;
+				if (! array_key_exists($offset, $current)) {
+					return PathReadResult::missing(sprintf("Cannot read representation path '%s' because segment '%s' is missing.", $path, $segment));
+				}
+
+				$current = $current[$offset];
+
+				continue;
+			}
+
+			if (is_object($current)) {
+				$properties = get_object_vars($current);
+				if (! array_key_exists($segment, $properties)) {
+					return PathReadResult::missing(sprintf("Cannot read representation path '%s' because segment '%s' is missing.", $path, $segment));
+				}
+
+				$current = $properties[$segment];
+
+				continue;
+			}
+
+			return PathReadResult::invalid(sprintf(
+				"Cannot read representation path '%s' because segment '%s' is not on an object or supported array path.",
+				$path,
+				$segment
+			));
 		}
 
-		return $current;
+		return PathReadResult::present($current);
 	}
 
 	/**
 	 * @param callable(non-empty-string): Throwable $error
-	 *
-	 * @return list<object>
+	 * @return PathReadResult<list<object>>
 	 */
 	public function readItems(
 		object $representation,
 		RepresentationRelationSchema $schema,
 		callable $error,
-	): array {
-		$value = $this->readPath($representation, $schema->getPath());
+	): PathReadResult {
+		$result = $this->readPath($representation, $schema->getPath());
+		if (! $result->isPresent()) {
+			return $result;
+		}
+
+		$value = $result->requireValue();
 		if ($value === null) {
-			return [];
+			return PathReadResult::present([]);
 		}
 
 		if (! is_iterable($value)) {
@@ -114,20 +150,26 @@ final class RepresentationReader
 			$items[] = $item;
 		}
 
-		return $items;
+		return PathReadResult::present($items);
 	}
 
 	/**
 	 * @param callable(non-empty-string): Throwable $error
+	 * @return PathReadResult<object|null>
 	 */
 	public function readTarget(
 		object $representation,
 		RepresentationRelationSchema $schema,
 		callable $error,
-	): ?object {
-		$value = $this->readPath($representation, $schema->getPath());
+	): PathReadResult {
+		$result = $this->readPath($representation, $schema->getPath());
+		if (! $result->isPresent()) {
+			return $result;
+		}
+
+		$value = $result->requireValue();
 		if ($value === null || is_object($value)) {
-			return $value;
+			return PathReadResult::present($value);
 		}
 
 		throw $error(sprintf(
@@ -142,53 +184,5 @@ final class RepresentationReader
 		$bag = map($representation)->to(stdClass::class);
 
 		return $bag;
-	}
-
-	private function readSegment(mixed $current, string $segment, string $path): mixed
-	{
-		if (is_array($current)) {
-			return $this->readArraySegment($current, $segment, $path);
-		}
-
-		if (is_object($current)) {
-			return $this->readObjectSegment($current, $segment, $path);
-		}
-
-		throw new SyncException(sprintf(
-			"Cannot read representation path '%s' because segment '%s' is not on an object or supported array path.",
-			$path,
-			$segment
-		));
-	}
-
-	/**
-	 * @param array<mixed> $current
-	 */
-	private function readArraySegment(array $current, string $segment, string $path): mixed
-	{
-		if (! ctype_digit($segment)) {
-			throw new SyncException(sprintf(
-				"Cannot read representation path '%s' because segment '%s' is not an array offset.",
-				$path,
-				$segment
-			));
-		}
-
-		$offset = (int) $segment;
-		if (! array_key_exists($offset, $current)) {
-			throw new SyncException(sprintf("Cannot read representation path '%s' because segment '%s' is missing.", $path, $segment));
-		}
-
-		return $current[$offset];
-	}
-
-	private function readObjectSegment(object $current, string $segment, string $path): mixed
-	{
-		$properties = get_object_vars($current);
-		if (! array_key_exists($segment, $properties)) {
-			throw new SyncException(sprintf("Cannot read representation path '%s' because segment '%s' is missing.", $path, $segment));
-		}
-
-		return $properties[$segment];
 	}
 }

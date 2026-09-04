@@ -165,6 +165,42 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		self::assertInstanceOf(RecordState::class, $userRecord);
 	}
 
+	public function testSourceRowValuesTakePrecedenceOverVisibleObjectProperties(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$companies = $registry->getCollection('companies');
+		$schema = $this->projectionSchema($users, $companies);
+		$session = new Session(new RecordingCommandExecutor());
+
+		$this->adoptFlatProjection($this->flatUser(99, 'Object value'), $this->compilation($schema, $this->identitiesFor($schema)), [
+			'id' => 1,
+			'name' => 'Source row value',
+			'company.id' => 5,
+		], $session);
+
+		self::assertInstanceOf(RecordState::class, $session->getRecords()->getByKey($users->getKey(1)));
+		self::assertNull($session->getRecords()->getByKey($users->getKey(99)));
+		self::assertSame('Source row value', $session->getRecords()->getByKey($companies->getKey(5))?->getValue('name'));
+	}
+
+	public function testExplicitNullSourceRowIdentityDoesNotFallBackToVisibleObjectProperty(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$companies = $registry->getCollection('companies');
+		$schema = $this->projectionSchema($users, $companies);
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage('results without identity are never tracked');
+
+		$this->adoptFlatProjection($this->flatUser(99, 'Acme'), $this->compilation($schema, $this->identitiesFor($schema)), [
+			'id' => null,
+			'name' => 'Acme',
+			'company.id' => 5,
+		], new Session(new RecordingCommandExecutor()));
+	}
+
 	public function testThrowsWhenMapEntryIsMissingAndVisibleObjectLacksKey(): void
 	{
 		$registry = $this->makeRegistry();

@@ -70,15 +70,11 @@ final class RelationRepresentationSynchronizer
 		$owner = $relationItem->getOwnerRecord();
 		$relationName = $relationItem->getRelationName();
 
-		try {
-			$items = $this->reader->readItems($representation, $relationSchema, $this->syncError(...));
-		} catch (SyncException $exception) {
-			if (! $relationSchema->shouldSkipWhenMissing() || ! str_contains($exception->getMessage(), ' is missing.')) {
-				throw $exception;
-			}
-
+		$result = $this->reader->readItems($representation, $relationSchema, $this->syncError(...));
+		if ($result->isMissing() && $relationSchema->shouldSkipWhenMissing()) {
 			return;
 		}
+		$items = $result->requireValue();
 		foreach ($items as $item) {
 			$this->requireTrackedRepresentation($states, $item, $relationSchema->getPath());
 		}
@@ -121,15 +117,11 @@ final class RelationRepresentationSynchronizer
 		$owner = $relationItem->getOwnerRecord();
 		$relationName = $relationItem->getRelationName();
 
-		try {
-			$target = $this->reader->readTarget($representation, $relationSchema, $this->syncError(...));
-		} catch (SyncException $exception) {
-			if (! $relationSchema->shouldSkipWhenMissing() || ! str_contains($exception->getMessage(), ' is missing.')) {
-				throw $exception;
-			}
-
+		$result = $this->reader->readTarget($representation, $relationSchema, $this->syncError(...));
+		if ($result->isMissing() && $relationSchema->shouldSkipWhenMissing()) {
 			return;
 		}
+		$target = $result->requireValue();
 		if ($target !== null) {
 			$this->requireTrackedRepresentation($states, $target, $relationSchema->getPath());
 		}

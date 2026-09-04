@@ -93,6 +93,57 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$this->sync($this->representations($this->trackedWithOneRelation(RecordState::new($this->users()), ['profile' => 'bad'])));
 	}
 
+	public function testMissingRelationPathsAreSkippedOnlyWhenConfigured(): void
+	{
+		foreach ([RelationCardinality::MANY, RelationCardinality::SINGLE] as $cardinality) {
+			$owner = RecordState::new($this->users());
+			$schema = new RepresentationSchema($this->users());
+			$schema->addRelation($this->relationSchema($owner, $cardinality, skipWhenMissing: true));
+
+			$touched = $this->sync($this->representations($this->tracked($this->representation([]), $schema, [$owner])));
+
+			self::assertSame([], $touched);
+		}
+	}
+
+	public function testMissingRelationPathsThrowWhenNotConfiguredToSkip(): void
+	{
+		foreach ([RelationCardinality::MANY, RelationCardinality::SINGLE] as $cardinality) {
+			$owner = RecordState::new($this->users());
+			$schema = new RepresentationSchema($this->users());
+			$schema->addRelation($this->relationSchema($owner, $cardinality));
+
+			try {
+				$this->sync($this->representations($this->tracked($this->representation([]), $schema, [$owner])));
+				self::fail('Expected a required relation path to fail synchronization.');
+			} catch (SyncException $exception) {
+				self::assertStringContainsString('is missing', $exception->getMessage());
+			}
+		}
+	}
+
+	public function testInvalidRelationPathsThrowEvenWhenMissingPathsCanBeSkipped(): void
+	{
+		foreach ([RelationCardinality::MANY, RelationCardinality::SINGLE] as $cardinality) {
+			$owner = RecordState::new($this->users());
+			$relationPath = $cardinality->isMany() ? 'wrapper.posts' : 'wrapper.profile';
+			$schema = new RepresentationSchema($this->users());
+			$schema->addRelation($this->relationSchema(
+				$owner,
+				$cardinality,
+				path: $relationPath,
+				skipWhenMissing: true,
+			));
+
+			try {
+				$this->sync($this->representations($this->tracked($this->representation(['wrapper' => 'invalid']), $schema, [$owner])));
+				self::fail('Expected invalid relation path traversal to fail synchronization.');
+			} catch (SyncException $exception) {
+				self::assertStringContainsString($relationPath, $exception->getMessage());
+			}
+		}
+	}
+
 	public function testExistingToOneRelationStateInMapIsReused(): void
 	{
 		$owner = RecordState::new($this->users());
@@ -492,21 +543,25 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		RecordState $owner,
 		RelationCardinality $cardinality,
 		bool $fullyLoaded = false,
+		?string $path = null,
+		bool $skipWhenMissing = false,
 	): RepresentationRelationSchema {
 		if ($cardinality->isSingle()) {
 			return new RepresentationRelationSchema(
-				'profile',
+				$path ?? 'profile',
 				$owner->getCollection(),
 				'profile',
 				$this->profileSchema(),
+				skipWhenMissing: $skipWhenMissing,
 			);
 		}
 
 		return new RepresentationRelationSchema(
-			'posts',
+			$path ?? 'posts',
 			$owner->getCollection(),
 			'posts',
 			$this->postSchema(),
+			skipWhenMissing: $skipWhenMissing,
 			loadKnowledge: $fullyLoaded
 				? RelationLoadKnowledge::Full
 				: RelationLoadKnowledge::Unknown,

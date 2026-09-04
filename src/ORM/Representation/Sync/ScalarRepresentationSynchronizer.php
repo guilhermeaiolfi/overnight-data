@@ -70,18 +70,12 @@ final class ScalarRepresentationSynchronizer
 		$values = [];
 
 		foreach ($state->getWritableFieldItems() as $item) {
-			try {
-				$values[$item->getPath()] = $this->reader->readPath(
-					$representation,
-					$item->getPath()
-				);
-			} catch (SyncException $exception) {
-				if (str_contains($exception->getMessage(), ' is missing.')) {
-					continue;
-				}
-
-				throw $exception;
+			$result = $this->reader->readPath($representation, $item->getPath());
+			if ($result->isMissing()) {
+				continue;
 			}
+
+			$values[$item->getPath()] = $result->requireValue();
 		}
 
 		return $values;

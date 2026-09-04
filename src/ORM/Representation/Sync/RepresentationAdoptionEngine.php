@@ -6,7 +6,6 @@ namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Relation\RelationStateStore;
@@ -161,7 +160,7 @@ final class RepresentationAdoptionEngine
 
 			if ($relationSchema->isMany()) {
 				$items = [];
-				foreach ($this->reader->readItems($representation, $relationSchema, $this->relationError(...)) as $index => $item) {
+				foreach ($this->reader->readItems($representation, $relationSchema, $this->relationError(...))->requireValue() as $index => $item) {
 					$childRow = $this->childSourceRow($rawChildren, $index, many: true);
 					$this->attachRecursive(
 						$item,
@@ -187,7 +186,7 @@ final class RepresentationAdoptionEngine
 			}
 
 			if ($relationSchema->isSingle()) {
-				$target = $this->reader->readTarget($representation, $relationSchema, $this->relationError(...));
+				$target = $this->reader->readTarget($representation, $relationSchema, $this->relationError(...))->requireValue();
 				if ($target !== null) {
 					$childRow = $this->childSourceRow($rawChildren, 0, many: false);
 					$this->attachRecursive(
@@ -668,11 +667,11 @@ final class RepresentationAdoptionEngine
 				return null;
 			}
 
-			try {
-				$value = $this->readPlaceValue($representation, $path, $context->getSourceRow());
-			} catch (SyncException) {
+			$result = $this->readPlaceValue($representation, $path, $context->getSourceRow());
+			if (! $result->isPresent()) {
 				return null;
 			}
+			$value = $result->requireValue();
 
 			if ($value === null) {
 				return null;
@@ -699,15 +698,15 @@ final class RepresentationAdoptionEngine
 		foreach ($source->getFields() as $fieldSchema) {
 			$fieldName = $fieldSchema->getFieldName();
 
-			try {
-				$value = $this->readPlaceValue(
-					$representation,
-					$fieldSchema->getPath(),
-					$context->getSourceRow(),
-				);
-			} catch (SyncException) {
+			$result = $this->readPlaceValue(
+				$representation,
+				$fieldSchema->getPath(),
+				$context->getSourceRow(),
+			);
+			if (! $result->isPresent()) {
 				continue;
 			}
+			$value = $result->requireValue();
 
 			if ($value === null && array_key_exists($fieldName, $primaryKey)) {
 				continue;
@@ -733,15 +732,15 @@ final class RepresentationAdoptionEngine
 	): array {
 		$values = [];
 		foreach ($source->getFields() as $fieldSchema) {
-			try {
-				$value = $this->readPlaceValue(
-					$representation,
-					$fieldSchema->getPath(),
-					$context->getSourceRow(),
-				);
-			} catch (SyncException) {
+			$result = $this->readPlaceValue(
+				$representation,
+				$fieldSchema->getPath(),
+				$context->getSourceRow(),
+			);
+			if (! $result->isPresent()) {
 				continue;
 			}
+			$value = $result->requireValue();
 
 			$fieldName = $fieldSchema->getFieldName();
 			if ($value === null && in_array($fieldName, $source->getCollection()->getPrimaryKey(), true)) {
@@ -769,13 +768,9 @@ final class RepresentationAdoptionEngine
 				continue;
 			}
 
-			try {
-				$values[$fieldName] = $this->readPlaceValue(
-					$representation,
-					$path,
-					$context->getSourceRow(),
-				);
-			} catch (SyncException) {
+			$result = $this->readPlaceValue($representation, $path, $context->getSourceRow());
+			if ($result->isPresent()) {
+				$values[$fieldName] = $result->requireValue();
 			}
 		}
 
@@ -785,10 +780,10 @@ final class RepresentationAdoptionEngine
 	/**
 	 * @param array<string, mixed>|null $sourceRow
 	 */
-	private function readPlaceValue(object $representation, string $path, ?array $sourceRow): mixed
+	private function readPlaceValue(object $representation, string $path, ?array $sourceRow): PathReadResult
 	{
 		if ($sourceRow !== null && array_key_exists($path, $sourceRow)) {
-			return $sourceRow[$path];
+			return PathReadResult::present($sourceRow[$path]);
 		}
 
 		return $this->reader->readPath($representation, $path);

@@ -279,6 +279,25 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 		self::assertSame('new@example.test', $record->getValue('email'));
 	}
 
+	public function testInvalidCurrentPathStopsSynchronizationBeforeUpdatesAreApplied(): void
+	{
+		$record = RecordState::new($this->users(), ['name' => 'A1', 'email' => 'old@example.test']);
+		$tracked = $this->tracked($this->representation(['author' => 'Ada', 'email' => 'new@example.test']), $this->schema(
+			$this->field('author.name', $record->getCollection(), 'name'),
+			$this->field('email', $record->getCollection(), 'email'),
+		), $record);
+
+		try {
+			$this->synchronizer()->sync($this->representations($tracked), new RecordStateStore());
+			self::fail('Expected invalid path traversal to fail synchronization.');
+		} catch (SyncException $exception) {
+			self::assertStringContainsString('author.name', $exception->getMessage());
+		}
+
+		self::assertSame('A1', $record->getValue('name'));
+		self::assertSame('old@example.test', $record->getValue('email'));
+	}
+
 	public function testNullValueIsHandledAsNormalValue(): void
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);

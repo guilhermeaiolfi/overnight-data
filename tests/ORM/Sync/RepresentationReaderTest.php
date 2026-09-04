@@ -6,6 +6,7 @@ namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
+use ON\Data\ORM\Representation\Sync\PathReadStatus;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
 use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationRelationSchema;
@@ -60,6 +61,53 @@ final class RepresentationReaderTest extends TestCase
 		);
 	}
 
+	public function testReadPathDistinguishesPresentNullMissingAndInvalidPaths(): void
+	{
+		$row = new stdClass();
+		$row->author = new stdClass();
+		$row->author->name = null;
+
+		$present = $this->reader()->readPath($row, 'author.name');
+		self::assertSame(PathReadStatus::Present, $present->getStatus());
+		self::assertTrue($present->isPresent());
+		self::assertNull($present->requireValue());
+
+		$missing = $this->reader()->readPath($row, 'author.email');
+		self::assertSame(PathReadStatus::Missing, $missing->getStatus());
+		self::assertTrue($missing->isMissing());
+
+		$row->author = 'Ada';
+		$invalid = $this->reader()->readPath($row, 'author.name');
+		self::assertSame(PathReadStatus::Invalid, $invalid->getStatus());
+		self::assertTrue($invalid->isInvalid());
+	}
+
+	public function testReadPathPreservesLiteralDottedPropertyPrecedenceAndArrayPathRules(): void
+	{
+		$row = new stdClass();
+		$row->{'author.name'} = 'Literal';
+		$row->author = ['name' => 'Nested'];
+
+		self::assertSame('Literal', $this->reader()->readPath($row, 'author.name')->requireValue());
+
+		$row = new stdClass();
+		$row->posts = [new stdClass()];
+		$row->posts[0]->title = 'Hello';
+		self::assertSame('Hello', $this->reader()->readPath($row, 'posts.0.title')->requireValue());
+		self::assertTrue($this->reader()->readPath($row, 'posts.first.title')->isInvalid());
+		self::assertTrue($this->reader()->readPath($row, 'posts.1.title')->isMissing());
+	}
+
+	public function testUnsuccessfulReadPathRetainsStrictReadError(): void
+	{
+		$result = $this->reader()->readPath(new stdClass(), 'name');
+
+		$this->expectException(SyncException::class);
+		$this->expectExceptionMessage("segment 'name' is missing");
+
+		$result->requireValue();
+	}
+
 	public function testRejectsMissingPathSegment(): void
 	{
 		$this->expectException(SyncException::class);
@@ -101,6 +149,16 @@ final class RepresentationReaderTest extends TestCase
 		self::assertSame(['id' => 123], $values);
 	}
 
+	public function testBaselineValuesIgnoresInvalidNonKeyPaths(): void
+	{
+		$representation = $this->representation(['author' => 'Ada']);
+		$schema = $this->fieldSchema('author.name');
+
+		$values = $this->reader()->baselineValues($representation, $schema);
+
+		self::assertSame([], $values);
+	}
+
 	public function testBaselineValuesDoesNotOverwriteSeedKeys(): void
 	{
 		$key = $this->posts()->getKey(['id' => 123]);
@@ -128,14 +186,14 @@ final class RepresentationReaderTest extends TestCase
 		$item = new stdClass();
 		$representation = $this->representation(['posts' => [$item]]);
 
-		self::assertSame([$item], $this->reader()->readItems($representation, $this->postsRelationSchema(), $this->syncError(...)));
+		self::assertSame([$item], $this->reader()->readItems($representation, $this->postsRelationSchema(), $this->syncError(...))->requireValue());
 	}
 
 	public function testTreatsNullManyRelationAsEmptyList(): void
 	{
 		$representation = $this->representation(['posts' => null]);
 
-		self::assertSame([], $this->reader()->readItems($representation, $this->postsRelationSchema(), $this->syncError(...)));
+		self::assertSame([], $this->reader()->readItems($representation, $this->postsRelationSchema(), $this->syncError(...))->requireValue());
 	}
 
 	public function testRejectsNonIterableManyRelationValue(): void
@@ -165,7 +223,7 @@ final class RepresentationReaderTest extends TestCase
 		$target = new stdClass();
 		$representation = $this->representation(['profile' => $target]);
 
-		self::assertSame($target, $this->reader()->readTarget($representation, $this->profileRelationSchema(), $this->syncError(...)));
+		self::assertSame($target, $this->reader()->readTarget($representation, $this->profileRelationSchema(), $this->syncError(...))->requireValue());
 	}
 
 	public function testRelationTargetPreservesLiveObjectIdentityOnDto(): void
@@ -177,7 +235,7 @@ final class RepresentationReaderTest extends TestCase
 
 		self::assertSame(
 			$target,
-			$this->reader()->readTarget($dto, $this->profileRelationSchema(), $this->syncError(...))
+			$this->reader()->readTarget($dto, $this->profileRelationSchema(), $this->syncError(...))->requireValue()
 		);
 	}
 
@@ -199,7 +257,7 @@ final class RepresentationReaderTest extends TestCase
 	{
 		$representation = $this->representation(['profile' => null]);
 
-		self::assertNull($this->reader()->readTarget($representation, $this->profileRelationSchema(), $this->syncError(...)));
+		self::assertNull($this->reader()->readTarget($representation, $this->profileRelationSchema(), $this->syncError(...))->requireValue());
 	}
 
 	public function testRejectsInvalidSingleRelationTarget(): void
