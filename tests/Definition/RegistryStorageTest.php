@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Definition;
 
 use ON\Data\Definition\Exception\InvalidDefinitionDataException;
+use ON\Data\Definition\Plugin\UiDefinitionPlugin;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\View\ViewDefinition;
 use ON\Data\Definition\View\ViewField;
@@ -30,16 +31,20 @@ final class RegistryStorageTest extends TestCase
 		$id = $users->field('id', 'int', CustomField::class)
 			->column('user_id')
 			->required(true)
-			->display(CustomDisplay::class)->type('badge')->color('green')->end()
-			->interface(CustomInterface::class)->limit(32)->end()
+			->extend(UiDefinitionPlugin::class)
+				->display(CustomDisplay::class)->type('badge')->color('green')->end()
+				->interface(CustomInterface::class)->limit(32)->end()
+				->end()
 			->metadata('kind', 'pk');
 
 		$manager = $users->relation('manager', CustomRelation::class)
 			->collection('users')
 			->innerKey('id')
 			->outerKey('id')
-			->display(CustomDisplay::class)->type('relation')->color('blue')->end()
-			->interface(CustomInterface::class)->limit(12)->end()
+			->extend(UiDefinitionPlugin::class)
+				->display(CustomDisplay::class)->type('relation')->color('blue')->end()
+				->interface(CustomInterface::class)->limit(12)->end()
+				->end()
 			->metadata('role', 'self');
 
 		$all = $registry->all();
@@ -48,8 +53,8 @@ final class RegistryStorageTest extends TestCase
 		self::assertSame(CustomCollection::class, $all['collections']['users']['class']);
 		self::assertSame(CustomField::class, $all['collections']['users']['fields']['id']['class']);
 		self::assertSame(CustomRelation::class, $all['collections']['users']['relations']['manager']['class']);
-		self::assertSame(CustomDisplay::class, $all['collections']['users']['fields']['id']['display']['class']);
-		self::assertSame(CustomInterface::class, $all['collections']['users']['fields']['id']['interface']['class']);
+		self::assertSame(CustomDisplay::class, $all['collections']['users']['fields']['id']['extend'][UiDefinitionPlugin::class]['display']['class']);
+		self::assertSame(CustomInterface::class, $all['collections']['users']['fields']['id']['extend'][UiDefinitionPlugin::class]['interface']['class']);
 		self::assertArrayNotHasKey('name', $all['collections']['users']);
 		self::assertArrayNotHasKey('name', $all['collections']['users']['fields']['id']);
 		self::assertArrayNotHasKey('name', $all['collections']['users']['relations']['manager']);
@@ -64,8 +69,8 @@ final class RegistryStorageTest extends TestCase
 		self::assertSame($manager->getName(), $restoredUsers->getRelation('manager')?->getName());
 		self::assertInstanceOf(CustomField::class, $restoredUsers->getField('id'));
 		self::assertInstanceOf(CustomRelation::class, $restoredUsers->getRelation('manager'));
-		self::assertInstanceOf(CustomDisplay::class, $restoredUsers->getField('id')->getDisplay());
-		self::assertInstanceOf(CustomInterface::class, $restoredUsers->getField('id')->getInterface());
+		self::assertInstanceOf(CustomDisplay::class, $restoredUsers->getField('id')?->getPlugin(UiDefinitionPlugin::class)?->getDisplay());
+		self::assertInstanceOf(CustomInterface::class, $restoredUsers->getField('id')?->getPlugin(UiDefinitionPlugin::class)?->getInterface());
 	}
 
 	public function testWrappersStayBoundToMasterArrayWithStableIdentity(): void
@@ -74,13 +79,16 @@ final class RegistryStorageTest extends TestCase
 		$field = $registry->collection('posts')
 			->field('title', 'string')
 			->required(true)
-			->display(CustomDisplay::class)->type('headline')->color('red')->end()
-			->interface(CustomInterface::class)->limit(80)->end();
+			->extend(UiDefinitionPlugin::class)
+				->display(CustomDisplay::class)->type('headline')->color('red')->end()
+				->interface(CustomInterface::class)->limit(80)->end()
+				->end();
 
+		$ui = $field->getPlugin(UiDefinitionPlugin::class);
 		self::assertSame($registry->getCollection('posts'), $registry->getCollection('posts'));
 		self::assertSame($field, $registry->getCollection('posts')?->getField('title'));
-		self::assertSame($field->getDisplay(), $field->getDisplay());
-		self::assertSame($field->getInterface(), $field->getInterface());
+		self::assertSame($ui?->getDisplay(), $ui?->getDisplay());
+		self::assertSame($ui?->getInterface(), $ui?->getInterface());
 
 		$field->required(false);
 		self::assertFalse($registry->all()['collections']['posts']['fields']['title']['required']);

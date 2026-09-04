@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace ON\Data\Support;
 
+use InvalidArgumentException;
 use LogicException;
+use ON\Data\Definition\Exception\InvalidDefinitionClassException;
+use ON\Data\Definition\Internal\DefinitionFactory;
+use ON\Data\Definition\Plugin\DefinitionPlugin;
 use ON\Data\Definition\Registry;
 
 /**
@@ -17,6 +21,11 @@ abstract class DefinitionNode extends Dot
 	private readonly Registry|self $owner;
 
 	private readonly string $name;
+
+	/**
+	 * @var array<class-string<DefinitionPlugin>, DefinitionPlugin>
+	 */
+	private array $plugins = [];
 
 	final protected function __construct(Registry|self $owner, string $name, array &$items)
 	{
@@ -76,6 +85,97 @@ abstract class DefinitionNode extends Dot
 	}
 
 	/**
+	 * Create or resume a plugin on this node.
+	 *
+	 * Omit the value to enter the plugin; {@see DefinitionPlugin::end()} returns this host.
+	 * Pass a value to store it on the plugin and stay on this host.
+	 *
+	 * @template T of DefinitionPlugin
+	 * @param class-string<T> $class
+	 * @return ($values is array{} ? T : static)
+	 */
+	public function extend(string $class, mixed ...$values): DefinitionPlugin|static
+	{
+		if (count($values) > 1) {
+			throw new InvalidArgumentException('extend() accepts at most one plugin value.');
+		}
+
+		if (! is_a($class, DefinitionPlugin::class, true)) {
+			throw new InvalidDefinitionClassException(sprintf('Invalid plugin class "%s".', $class));
+		}
+
+		if (isset($this->items['extend'][$class]) && is_array($this->items['extend'][$class])) {
+			$plugin = $this->getPlugin($class);
+			if ($plugin === null) {
+				throw new InvalidDefinitionClassException(sprintf('Invalid plugin class "%s".', $class));
+			}
+		} else {
+			if (! isset($this->items['extend']) || ! is_array($this->items['extend'])) {
+				$this->items['extend'] = [];
+			}
+
+			$this->items['extend'][$class] = [];
+			$slot = &$this->items['extend'][$class];
+			$plugin = DefinitionFactory::createPlugin($this, $class, $slot, $class);
+			$this->plugins[$class] = $plugin;
+		}
+
+		if ($values === []) {
+			return $plugin;
+		}
+
+		$plugin->value($values[0]);
+
+		return $this;
+	}
+
+	public function hasPlugin(string $class): bool
+	{
+		return isset($this->items['extend'][$class]) && is_array($this->items['extend'][$class]);
+	}
+
+	/**
+	 * @template T of DefinitionPlugin
+	 * @param class-string<T> $class
+	 * @return T|null
+	 */
+	public function getPlugin(string $class): ?DefinitionPlugin
+	{
+		if (! is_a($class, DefinitionPlugin::class, true)) {
+			throw new InvalidDefinitionClassException(sprintf('Invalid plugin class "%s".', $class));
+		}
+
+		if (isset($this->plugins[$class])) {
+			/** @var T $cached */
+			$cached = $this->plugins[$class];
+
+			return $cached;
+		}
+
+		if (! $this->hasPlugin($class)) {
+			return null;
+		}
+
+		$slot = &$this->items['extend'][$class];
+		$storedClass = $slot['class'] ?? $class;
+		if (! is_string($storedClass) || $storedClass !== $class) {
+			throw new InvalidDefinitionClassException(sprintf(
+				'Plugin slot "%s" has mismatched class discriminator "%s".',
+				$class,
+				is_string($storedClass) ? $storedClass : gettype($storedClass),
+			));
+		}
+
+		$slot['class'] = $class;
+
+		/** @var T $plugin */
+		$plugin = $class::fromDefinition($this, $class, $slot);
+		$this->plugins[$class] = $plugin;
+
+		return $plugin;
+	}
+
+	/**
 	 * @return array<array-key, mixed>
 	 */
 	protected static function definitionDefaults(): array
@@ -85,6 +185,7 @@ abstract class DefinitionNode extends Dot
 
 	protected function initializeRuntimeState(): void
 	{
+		$this->plugins = [];
 	}
 
 	protected function owner(): Registry|self

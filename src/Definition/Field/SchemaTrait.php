@@ -28,7 +28,6 @@ trait SchemaTrait
 			'numeric_precision' => 2,
 			'default_value' => null,
 			'data_type' => null,
-			'comment' => null,
 			'auto_increment' => false,
 			'generator' => null,
 			'filterable' => true,
@@ -299,20 +298,6 @@ trait SchemaTrait
 	public function isIndexed(): bool
 	{
 		return (bool) $this->get('indexed');
-	}
-
-	public function comment(string $comment): self
-	{
-		$this->set('comment', $comment);
-
-		return $this;
-	}
-
-	public function getComment(): ?string
-	{
-		$value = $this->get('comment');
-
-		return is_string($value) ? $value : null;
 	}
 
 	public function end(): FieldInterface|RelationInterface

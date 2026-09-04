@@ -154,6 +154,7 @@ class M2MThrough extends DefinitionNode
 
 	protected function initializeRuntimeState(): void
 	{
+		parent::initializeRuntimeState();
 		$this->keyPairing = null;
 	}
 

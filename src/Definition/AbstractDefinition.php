@@ -83,6 +83,8 @@ abstract class AbstractDefinition extends DefinitionNode implements DefinitionIn
 
 	protected function initializeRuntimeState(): void
 	{
+		parent::initializeRuntimeState();
+
 		if (isset($this->items['fields']) && is_array($this->items['fields'])) {
 			$fieldItems = &$this->items['fields'];
 		} else {

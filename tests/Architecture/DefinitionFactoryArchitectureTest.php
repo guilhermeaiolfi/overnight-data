@@ -9,6 +9,8 @@ use ON\Data\Definition\Display\RawDisplay;
 use ON\Data\Definition\Field\Field;
 use ON\Data\Definition\Interface\AbstractInterface;
 use ON\Data\Definition\Internal\DefinitionFactory;
+use ON\Data\Definition\Plugin\CycleCollectionPlugin;
+use ON\Data\Definition\Plugin\UiDefinitionPlugin;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\AbstractRelation;
 use ON\Data\Definition\Relation\M2MThrough;
@@ -37,6 +39,8 @@ final class DefinitionFactoryArchitectureTest extends TestCase
 			M2MThrough::class,
 			ViewDefinition::class,
 			ViewField::class,
+			UiDefinitionPlugin::class,
+			CycleCollectionPlugin::class,
 		];
 
 		foreach ($classes as $class) {

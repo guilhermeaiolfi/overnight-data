@@ -13,7 +13,6 @@ use ON\Data\Definition\Relation\HasManyRelation;
 use ON\Data\Definition\Relation\HasOneRelation;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Key;
-use stdClass;
 
 class Collection extends AbstractDefinition implements CollectionInterface
 {
@@ -23,11 +22,7 @@ class Collection extends AbstractDefinition implements CollectionInterface
 			'class' => static::class,
 			'table' => '',
 			'database' => 'default',
-			'entity' => stdClass::class,
 			'parentCollection' => null,
-			'scope' => null,
-			'repository' => null,
-			'mapper' => null,
 			'source' => null,
 			'note' => null,
 			'description' => null,
@@ -62,21 +57,6 @@ class Collection extends AbstractDefinition implements CollectionInterface
 		return (string) $this->get('table');
 	}
 
-	/**
-	 * Entity class for external Cycle ORM schema bridges. Unused by ON\Data Session persistence.
-	 */
-	public function entity(string $entity): self
-	{
-		$this->set('entity', $entity);
-
-		return $this;
-	}
-
-	public function getEntity(): string
-	{
-		return (string) $this->get('entity');
-	}
-
 	public function database(string $database): self
 	{
 		$this->set('database', $database);
@@ -99,57 +79,6 @@ class Collection extends AbstractDefinition implements CollectionInterface
 	public function getParentCollection(): ?string
 	{
 		$value = $this->get('parentCollection');
-
-		return is_string($value) ? $value : null;
-	}
-
-	/**
-	 * Scope class for external Cycle ORM schema bridges. Unused by ON\Data Session persistence.
-	 */
-	public function scope(string $scope): self
-	{
-		$this->set('scope', $scope);
-
-		return $this;
-	}
-
-	public function getScope(): ?string
-	{
-		$value = $this->get('scope');
-
-		return is_string($value) ? $value : null;
-	}
-
-	/**
-	 * Repository class for external Cycle ORM schema bridges. Unused by ON\Data Session persistence.
-	 */
-	public function repository(?string $repository): self
-	{
-		$this->set('repository', $repository);
-
-		return $this;
-	}
-
-	public function getRepository(): ?string
-	{
-		$value = $this->get('repository');
-
-		return is_string($value) ? $value : null;
-	}
-
-	/**
-	 * Mapper class for external Cycle ORM schema bridges. Unused by ON\Data Session persistence.
-	 */
-	public function mapper(?string $mapper): self
-	{
-		$this->set('mapper', $mapper);
-
-		return $this;
-	}
-
-	public function getMapper(): ?string
-	{
-		$value = $this->get('mapper');
 
 		return is_string($value) ? $value : null;
 	}

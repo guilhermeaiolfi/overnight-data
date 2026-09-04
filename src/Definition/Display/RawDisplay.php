@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\Definition\Display;
 
 use Exception;
-use ON\Data\Definition\Field\FieldInterface;
-use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Support\DefinitionNode;
 
 class RawDisplay extends DefinitionNode implements DisplayInterface
@@ -31,10 +29,14 @@ class RawDisplay extends DefinitionNode implements DisplayInterface
 		return (string) $this->get('type');
 	}
 
-	/** @return RelationInterface|FieldInterface */
-	public function end(): mixed
+	public function end(): DefinitionNode
 	{
-		return $this->owner();
+		$owner = $this->owner();
+		if (! $owner instanceof DefinitionNode) {
+			throw new Exception('Display owner is invalid.');
+		}
+
+		return $owner;
 	}
 
 	public function setOptions(array $options): self

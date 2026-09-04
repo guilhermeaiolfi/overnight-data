@@ -15,17 +15,9 @@ use ON\Data\Key;
 
 interface CollectionInterface extends DefinitionInterface
 {
-	public function entity(string $entity): self;
-
-	public function getEntity(): string;
-
 	public function table(string $table): self;
 
 	public function getTable(): string;
-
-	public function scope(string $scope): self;
-
-	public function getScope(): ?string;
 
 	public function source(?string $source): self;
 
@@ -34,14 +26,6 @@ interface CollectionInterface extends DefinitionInterface
 	public function database(string $database): self;
 
 	public function getDatabase(): string;
-
-	public function repository(?string $repository): self;
-
-	public function getRepository(): ?string;
-
-	public function mapper(?string $mapper): self;
-
-	public function getMapper(): ?string;
 
 	public function hidden(bool $hidden): self;
 

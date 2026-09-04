@@ -6,23 +6,12 @@ namespace ON\Data\Definition\Relation;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\DefinitionInterface;
-use ON\Data\Definition\Display\DisplayInterface;
-use ON\Data\Definition\Display\RawDisplay;
 use ON\Data\Definition\Field\FieldInterface;
-use ON\Data\Definition\Interface\InterfaceInterface;
 use ON\Data\ORM\Relation\Persistence\RelationPersistencePlannerInterface;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 
 interface RelationInterface
 {
-	public function display(string $type = RawDisplay::class): DisplayInterface;
-
-	public function getDisplay(): DisplayInterface;
-
-	public function interface(string $className): InterfaceInterface;
-
-	public function getInterface(): InterfaceInterface;
-
 	public function getParent(): DefinitionInterface;
 
 	public function getName(): string;

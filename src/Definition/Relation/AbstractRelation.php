@@ -8,10 +8,8 @@ use InvalidArgumentException;
 use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\DefinitionInterface;
-use ON\Data\Definition\Display\DisplayTrait;
 use ON\Data\Definition\Exception\InvalidRelationParentException;
 use ON\Data\Definition\Field\FieldInterface;
-use ON\Data\Definition\Interface\InterfaceTrait;
 use ON\Data\Definition\MetadataTrait;
 use ON\Data\ORM\Relation\Persistence\RelationPersistencePlannerInterface;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
@@ -19,8 +17,6 @@ use ON\Data\Support\DefinitionNode;
 
 abstract class AbstractRelation extends DefinitionNode implements RelationInterface
 {
-	use DisplayTrait;
-	use InterfaceTrait;
 	use MetadataTrait;
 
 	protected ?RelationKeyPairing $keyPairing = null;
@@ -410,8 +406,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 
 	protected function initializeRuntimeState(): void
 	{
-		$this->display = null;
-		$this->interface = null;
+		parent::initializeRuntimeState();
 		$this->metadataMap = null;
 		$this->keyPairing = null;
 	}

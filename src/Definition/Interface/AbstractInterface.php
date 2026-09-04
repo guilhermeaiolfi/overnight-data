@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\Definition\Interface;
 
 use Exception;
-use ON\Data\Definition\Field\FieldInterface;
-use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Support\DefinitionNode;
 
 abstract class AbstractInterface extends DefinitionNode implements InterfaceInterface
@@ -44,9 +42,13 @@ abstract class AbstractInterface extends DefinitionNode implements InterfaceInte
 		return $properties;
 	}
 
-	/** @return RelationInterface|FieldInterface */
-	public function end(): mixed
+	public function end(): DefinitionNode
 	{
-		return $this->owner();
+		$owner = $this->owner();
+		if (! $owner instanceof DefinitionNode) {
+			throw new Exception('Interface owner is invalid.');
+		}
+
+		return $owner;
 	}
 }

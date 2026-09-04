@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Definition;
 
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Definition\Plugin\CycleCollectionPlugin;
 use ON\Data\Definition\Registry;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -45,28 +46,31 @@ final class RegistryCollectionTest extends TestCase
 		$registry = new Registry();
 		$collection = $registry->collection('report');
 
-		self::assertNull($collection->getMapper());
+		self::assertFalse($collection->hasPlugin(CycleCollectionPlugin::class));
 		self::assertNull($collection->getSource());
 
 		$collection
 			->database('analytics')
-			->entity(stdClass::class)
 			->parentCollection('base_report')
-			->scope('ReportScope')
-			->repository('ReportRepository')
-			->mapper(CustomMapper::class)
+			->extend(CycleCollectionPlugin::class)
+				->entity(stdClass::class)
+				->scope('ReportScope')
+				->repository('ReportRepository')
+				->mapper(CustomMapper::class)
+				->end()
 			->source(CustomSource::class)
 			->note('report-note')
 			->description('report-description')
 			->hidden(true)
 			->table('custom_reports');
 
+		$cycle = $collection->getPlugin(CycleCollectionPlugin::class);
 		self::assertSame('analytics', $collection->getDatabase());
-		self::assertSame(stdClass::class, $collection->getEntity());
+		self::assertSame(stdClass::class, $cycle?->getEntity());
 		self::assertSame('base_report', $collection->getParentCollection());
-		self::assertSame('ReportScope', $collection->getScope());
-		self::assertSame('ReportRepository', $collection->getRepository());
-		self::assertSame(CustomMapper::class, $collection->getMapper());
+		self::assertSame('ReportScope', $cycle?->getScope());
+		self::assertSame('ReportRepository', $cycle?->getRepository());
+		self::assertSame(CustomMapper::class, $cycle?->getMapper());
 		self::assertSame(CustomSource::class, $collection->getSource());
 		self::assertSame('report-note', $collection->getNote());
 		self::assertSame('report-description', $collection->getDescription());

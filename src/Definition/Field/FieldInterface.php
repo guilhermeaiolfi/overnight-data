@@ -5,32 +5,11 @@ declare(strict_types=1);
 namespace ON\Data\Definition\Field;
 
 use ON\Data\Definition\DefinitionInterface;
-use ON\Data\Definition\Display\DisplayInterface;
-use ON\Data\Definition\Display\RawDisplay;
 use ON\Data\Definition\Field\Generator\FieldGeneratorInterface;
 use ON\Data\Definition\Field\Generator\When;
-use ON\Data\Definition\Interface\InterfaceInterface;
 
 interface FieldInterface
 {
-	/**
-	 * @template T of DisplayInterface
-	 * @param class-string<T> $type
-	 * @return T
-	 */
-	public function display(string $type = RawDisplay::class): DisplayInterface;
-
-	public function getDisplay(): DisplayInterface;
-
-	/**
-	 * @template T of InterfaceInterface
-	 * @param class-string<T> $className
-	 * @return T
-	 */
-	public function interface(string $className): InterfaceInterface;
-
-	public function getInterface(): InterfaceInterface;
-
 	public function getName(): string;
 
 	public function alias(string $alias): self;
@@ -93,10 +72,6 @@ interface FieldInterface
 	public function indexed(bool $indexed): self;
 
 	public function isIndexed(): bool;
-
-	public function comment(string $comment): self;
-
-	public function getComment(): ?string;
 
 	public function numericPrecision(int $numericPrecision): self;
 

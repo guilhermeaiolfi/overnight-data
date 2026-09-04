@@ -10,6 +10,7 @@ use ON\Data\Definition\Display\DisplayInterface;
 use ON\Data\Definition\Exception\InvalidDefinitionClassException;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Interface\InterfaceInterface;
+use ON\Data\Definition\Plugin\DefinitionPlugin;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Definition\View\ViewDefinitionInterface;
@@ -162,6 +163,19 @@ final class DefinitionFactory
 		$interface = self::restore($owner, $name, $slot, InterfaceInterface::class, 'interface');
 
 		return $interface;
+	}
+
+	/**
+	 * @param class-string<DefinitionPlugin> $class
+	 * @param array<string, mixed> $slot
+	 * @param array<string, mixed> $values
+	 */
+	public static function createPlugin(DefinitionNode $owner, string $name, array &$slot, string $class, array $values = []): DefinitionPlugin
+	{
+		/** @var DefinitionPlugin $plugin */
+		$plugin = self::create($owner, $name, $slot, $class, DefinitionPlugin::class, 'plugin', $values);
+
+		return $plugin;
 	}
 
 	/**
