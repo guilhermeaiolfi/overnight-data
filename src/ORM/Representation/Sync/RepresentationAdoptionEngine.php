@@ -362,12 +362,12 @@ final class RepresentationAdoptionEngine
 			$pathKey = $source->getPathKey();
 			$op = $opsByPath[$pathKey] ?? null;
 			$policy = $this->policyForSource($representation, $context, $source, $op);
-			[$firstByField, $presentValues] = $this->readSourceFields($representation, $source, $context);
+			[$readsByPath, $presentValues] = $this->readSourceFields($representation, $source, $context);
 
 			$record = $this->bindSourceRecord(
 				$source,
 				$policy,
-				$firstByField,
+				$readsByPath,
 				$presentValues,
 				$context,
 				$records,
@@ -511,8 +511,8 @@ final class RepresentationAdoptionEngine
 	}
 
 	/**
-	 * Read each placed field once. First alias per field name drives identity;
-	 * last present value wins for initial values.
+	 * Read each place once. Present aliases of the same collection field must agree.
+	 * Identity uses the source binding path, not a collapsed field-name bag.
 	 *
 	 * @return array{0: array<string, PathReadResult>, 1: array<string, mixed>}
 	 */
@@ -521,37 +521,67 @@ final class RepresentationAdoptionEngine
 		RepresentationSource $source,
 		RepresentationAdoptionContext $context,
 	): array {
-		$firstByField = [];
-		$presentValues = [];
+		$readsByPath = [];
 
 		foreach ($source->getFields() as $fieldSchema) {
-			$fieldName = $fieldSchema->getFieldName();
-			$result = $this->readPlaceValue(
+			$path = $fieldSchema->getPath();
+			if (array_key_exists($path, $readsByPath)) {
+				continue;
+			}
+
+			$readsByPath[$path] = $this->readPlaceValue(
 				$representation,
-				$fieldSchema->getPath(),
+				$path,
 				$context->getSourceRow(),
 			);
-
-			if (! array_key_exists($fieldName, $firstByField)) {
-				$firstByField[$fieldName] = $result;
-			}
-
-			if ($result->isPresent()) {
-				$presentValues[$fieldName] = $result->requireValue();
-			}
 		}
 
-		return [$firstByField, $presentValues];
+		return [$readsByPath, $this->agreedPresentValues($source, $readsByPath)];
 	}
 
 	/**
-	 * @param array<string, PathReadResult> $firstByField
+	 * @param array<string, PathReadResult> $readsByPath
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function agreedPresentValues(RepresentationSource $source, array $readsByPath): array
+	{
+		$values = [];
+		$paths = [];
+
+		foreach ($source->getFields() as $fieldSchema) {
+			$result = $readsByPath[$fieldSchema->getPath()] ?? null;
+			if (! $result instanceof PathReadResult || ! $result->isPresent()) {
+				continue;
+			}
+
+			$fieldName = $fieldSchema->getFieldName();
+			$value = $result->requireValue();
+			if (array_key_exists($fieldName, $values) && $values[$fieldName] !== $value) {
+				throw new StateException(sprintf(
+					"Cannot bind projection source for collection '%s' because places '%s' and '%s' disagree on field '%s'.",
+					$source->getCollection()->getName(),
+					$paths[$fieldName],
+					$fieldSchema->getPath(),
+					$fieldName,
+				));
+			}
+
+			$values[$fieldName] = $value;
+			$paths[$fieldName] = $fieldSchema->getPath();
+		}
+
+		return $values;
+	}
+
+	/**
+	 * @param array<string, PathReadResult> $readsByPath
 	 * @param array<string, mixed> $presentValues
 	 */
 	private function bindSourceRecord(
 		RepresentationSource $source,
 		AdoptionPolicy $policy,
-		array $firstByField,
+		array $readsByPath,
 		array $presentValues,
 		RepresentationAdoptionContext $context,
 		RecordStateStore $records,
@@ -560,7 +590,7 @@ final class RepresentationAdoptionEngine
 		$values = $this->initialValuesForPolicy($source, $policy, $presentValues);
 
 		if ($policy === AdoptionPolicy::Create) {
-			$key = $this->tryCompleteKey($source, $context, $firstByField);
+			$key = $this->tryCompleteKey($source, $context, $readsByPath);
 			if ($key instanceof Key) {
 				$existing = $records->getActive(
 					$key,
@@ -582,7 +612,7 @@ final class RepresentationAdoptionEngine
 		}
 
 		if ($policy === AdoptionPolicy::Hydrate || $policy === AdoptionPolicy::Identify) {
-			$key = $this->resolveExistingKey($source, $context, $firstByField, hydrate: true);
+			$key = $this->resolveExistingKey($source, $context, $readsByPath, hydrate: true);
 			$record = $records->getByKey($key);
 
 			if ($record instanceof RecordState) {
@@ -600,7 +630,7 @@ final class RepresentationAdoptionEngine
 			return RecordState::clean($key, $values);
 		}
 
-		$key = $this->resolveExistingKey($source, $context, $firstByField);
+		$key = $this->resolveExistingKey($source, $context, $readsByPath);
 
 		return $records->bindExisting(
 			$key,
@@ -647,30 +677,30 @@ final class RepresentationAdoptionEngine
 	 * treated as "no key". Do not narrow this catch: Create must not start
 	 * throwing those errors.
 	 *
-	 * @param array<string, PathReadResult> $firstByField
+	 * @param array<string, PathReadResult> $readsByPath
 	 */
 	private function tryCompleteKey(
 		RepresentationSource $source,
 		RepresentationAdoptionContext $context,
-		array $firstByField,
+		array $readsByPath,
 	): ?Key {
 		try {
-			return $this->resolveExistingKey($source, $context, $firstByField, hydrate: true);
+			return $this->resolveExistingKey($source, $context, $readsByPath, hydrate: true);
 		} catch (StateException) {
 			return null;
 		}
 	}
 
 	/**
-	 * @param array<string, PathReadResult> $firstByField
+	 * @param array<string, PathReadResult> $readsByPath
 	 */
 	private function resolveExistingKey(
 		RepresentationSource $source,
 		RepresentationAdoptionContext $context,
-		array $firstByField,
+		array $readsByPath,
 		bool $hydrate = false,
 	): Key {
-		$fromPlace = $this->placeKeyFromReads($source, $firstByField);
+		$fromPlace = $this->placeKeyFromReads($source, $readsByPath);
 		if ($fromPlace instanceof Key) {
 			$external = $context->getIdentities()?->getIdentity(
 				$source->getPath(),
@@ -696,7 +726,7 @@ final class RepresentationAdoptionEngine
 		);
 		if ($external instanceof Key) {
 			$conflict = $external->conflictingIdentityField(
-				$this->readablePrimaryKeyFromReads($source, $firstByField),
+				$this->readablePrimaryKeyFromReads($source, $readsByPath),
 			);
 			if ($conflict !== null) {
 				throw new StateException(sprintf(
@@ -724,15 +754,20 @@ final class RepresentationAdoptionEngine
 	}
 
 	/**
-	 * @param array<string, PathReadResult> $firstByField
+	 * @param array<string, PathReadResult> $readsByPath
 	 */
-	private function placeKeyFromReads(RepresentationSource $source, array $firstByField): ?Key
+	private function placeKeyFromReads(RepresentationSource $source, array $readsByPath): ?Key
 	{
 		$collection = $source->getCollection();
 		$values = [];
 
 		foreach ($collection->getPrimaryKey() as $fieldName) {
-			$result = $firstByField[$fieldName] ?? null;
+			$path = $source->getFieldPath($fieldName);
+			if ($path === null) {
+				return null;
+			}
+
+			$result = $readsByPath[$path] ?? null;
 			if (! $result instanceof PathReadResult || ! $result->isPresent()) {
 				return null;
 			}
@@ -749,15 +784,20 @@ final class RepresentationAdoptionEngine
 	}
 
 	/**
-	 * @param array<string, PathReadResult> $firstByField
+	 * @param array<string, PathReadResult> $readsByPath
 	 *
 	 * @return array<string, mixed>
 	 */
-	private function readablePrimaryKeyFromReads(RepresentationSource $source, array $firstByField): array
+	private function readablePrimaryKeyFromReads(RepresentationSource $source, array $readsByPath): array
 	{
 		$values = [];
 		foreach ($source->getCollection()->getPrimaryKey() as $fieldName) {
-			$result = $firstByField[$fieldName] ?? null;
+			$path = $source->getFieldPath($fieldName);
+			if ($path === null) {
+				continue;
+			}
+
+			$result = $readsByPath[$path] ?? null;
 			if ($result instanceof PathReadResult && $result->isPresent()) {
 				$values[$fieldName] = $result->requireValue();
 			}

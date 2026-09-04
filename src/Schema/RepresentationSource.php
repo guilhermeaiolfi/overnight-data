@@ -7,10 +7,13 @@ namespace ON\Data\Schema;
 use ON\Data\Definition\Collection\CollectionInterface;
 
 /**
- * Structural grouping of representation fields that originate from one source path.
+ * Place fields grouped by originating record (one collection + source path).
  *
- * Carries only representation/source structure. External per-source identities
- * for adoption are supplied by the ORM identity maps.
+ * {@see getFields()} is every placement on this record, including extra aliases.
+ * {@see getBinding()} is the unique collection-field → first placement map.
+ *
+ * Carries only structure. External per-source identities for adoption are
+ * supplied by the ORM identity maps.
  *
  * Prefer {@see RepresentationSchema::getSources()} for the memoized list; this factory
  * remains for one-off derivation.
@@ -21,6 +24,8 @@ final class RepresentationSource
 	private array $path;
 	/** @var list<RepresentationFieldSchema> */
 	private array $fields;
+	/** @var array<string, RepresentationFieldSchema> */
+	private array $bindings = [];
 
 	/**
 	 * @param list<string> $path
@@ -33,6 +38,13 @@ final class RepresentationSource
 	) {
 		$this->path = array_values($path);
 		$this->fields = array_values($fields);
+
+		foreach ($this->fields as $field) {
+			$name = $field->getFieldName();
+			if (! array_key_exists($name, $this->bindings)) {
+				$this->bindings[$name] = $field;
+			}
+		}
 	}
 
 	/**
@@ -68,18 +80,20 @@ final class RepresentationSource
 
 	public function hasField(string $fieldName): bool
 	{
-		return $this->getFieldPath($fieldName) !== null;
+		return $this->getBinding($fieldName) instanceof RepresentationFieldSchema;
+	}
+
+	/**
+	 * First placement of this collection field on this source.
+	 */
+	public function getBinding(string $fieldName): ?RepresentationFieldSchema
+	{
+		return $this->bindings[$fieldName] ?? null;
 	}
 
 	public function getFieldPath(string $fieldName): ?string
 	{
-		foreach ($this->fields as $field) {
-			if ($field->getFieldName() === $fieldName) {
-				return $field->getPath();
-			}
-		}
-
-		return null;
+		return $this->getBinding($fieldName)?->getPath();
 	}
 
 	/**

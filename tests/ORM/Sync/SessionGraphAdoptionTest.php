@@ -11,7 +11,9 @@ use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\ORM\Session;
+use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationRelationSchema;
+use ON\Data\Schema\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
@@ -130,6 +132,46 @@ final class SessionGraphAdoptionTest extends TestCase
 		self::assertTrue($record->isDirty());
 		self::assertNull($record->getValue('name'));
 		self::assertSame(['name'], $record->getDirtyFields());
+	}
+
+	public function testTwoPlaceAliasesOfTheSameFieldAdoptWhenTheyAgree(): void
+	{
+		$root = $this->representation(['id' => 10, 'name' => 'Ada', 'displayName' => 'Ada']);
+		$records = new RecordStateStore();
+		$reps = new RepresentationStateStore();
+
+		$this->session($reps, $records)->sync($root, $this->userSchemaWithNameAlias());
+
+		$record = $reps->get($root)?->getSingleRecord();
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertTrue($record->isNew());
+		self::assertSame('Ada', $record->getValue('name'));
+	}
+
+	public function testTwoPlaceAliasesOfTheSameFieldThrowWhenTheyDisagree(): void
+	{
+		$root = $this->representation(['id' => 10, 'name' => 'Ada', 'displayName' => 'Other']);
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage("disagree on field 'name'");
+
+		$this->session(new RepresentationStateStore(), new RecordStateStore())
+			->sync($root, $this->userSchemaWithNameAlias());
+	}
+
+	public function testMissingBindingPlaceStillAdoptsAPresentAliasOfTheSameField(): void
+	{
+		$root = new stdClass();
+		$root->id = 10;
+		$root->displayName = 'Ada';
+		$records = new RecordStateStore();
+		$reps = new RepresentationStateStore();
+
+		$this->session($reps, $records)->sync($root, $this->userSchemaWithNameAlias());
+
+		$record = $reps->get($root)?->getSingleRecord();
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertSame('Ada', $record->getValue('name'));
 	}
 
 	public function testUntrackedRootWithoutSchemaThrows(): void
@@ -397,6 +439,17 @@ final class SessionGraphAdoptionTest extends TestCase
 			new RecordingCommandExecutor(),
 			context: $this->context($representations, $records ?? new RecordStateStore()),
 		);
+	}
+
+	private function userSchemaWithNameAlias(): RepresentationSchema
+	{
+		$users = $this->users();
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('id', $users, 'id'));
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$schema->addField(new RepresentationFieldSchema('displayName', $users, 'name'));
+
+		return $schema;
 	}
 
 	private function trackedRootWithPosts(object $root): RepresentationState

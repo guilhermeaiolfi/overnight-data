@@ -248,9 +248,9 @@ final class RepresentationSchema
 	{
 		$sourceKey = RepresentationFieldSchema::sourcePathKey($sourcePath);
 
-		foreach ($this->fields as $field) {
-			if ($field->getSourcePathKey() === $sourceKey && $field->getFieldName() === $fieldName) {
-				return $field;
+		foreach ($this->getSources() as $source) {
+			if ($source->getPathKey() === $sourceKey) {
+				return $source->getBinding($fieldName);
 			}
 		}
 

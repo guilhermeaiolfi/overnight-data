@@ -63,6 +63,29 @@ final class RepresentationSourceTest extends TestCase
 		self::assertFalse($sources[1]->hasField('companyName'));
 		self::assertSame('companyName', $sources[1]->getFieldPath('name'));
 		self::assertSame('companyId', $sources[1]->getFieldPath('id'));
+		self::assertSame('companyName', $sources[1]->getBinding('name')?->getPath());
+		self::assertSame($sources[1]->getFields()[0], $sources[1]->getBinding('name'));
+	}
+
+	public function testFirstPlacementIsTheBindingWhenTheSameFieldIsAliasedTwice(): void
+	{
+		$registry = new Registry();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+
+		$schema = new RepresentationSchema($users);
+		$first = new RepresentationFieldSchema('name', $users, 'name');
+		$second = new RepresentationFieldSchema('displayName', $users, 'name');
+		$schema->addField($first);
+		$schema->addField($second);
+
+		$source = $schema->getSources()[0];
+		self::assertSame([$first, $second], $source->getFields());
+		self::assertSame($first, $source->getBinding('name'));
+		self::assertSame('name', $source->getFieldPath('name'));
+		self::assertSame($first, $schema->getFieldForSource([], 'name'));
 	}
 
 	/**
