@@ -9,8 +9,8 @@ use ON\Data\Definition\Collection\CollectionInterface;
 /**
  * Place fields grouped by originating record (one collection + source path).
  *
- * {@see getFields()} is every placement on this record, including extra aliases.
- * {@see getBinding()} is the unique collection-field → first placement map.
+ * {@see getFields()} is the only inventory: every placement on this record.
+ * {@see getBinding()} is a lookup of the first placement for a collection field.
  *
  * Carries only structure. External per-source identities for adoption are
  * supplied by the ORM identity maps.
@@ -24,8 +24,6 @@ final class RepresentationSource
 	private array $path;
 	/** @var list<RepresentationFieldSchema> */
 	private array $fields;
-	/** @var array<string, RepresentationFieldSchema> */
-	private array $bindings = [];
 
 	/**
 	 * @param list<string> $path
@@ -38,13 +36,6 @@ final class RepresentationSource
 	) {
 		$this->path = array_values($path);
 		$this->fields = array_values($fields);
-
-		foreach ($this->fields as $field) {
-			$name = $field->getFieldName();
-			if (! array_key_exists($name, $this->bindings)) {
-				$this->bindings[$name] = $field;
-			}
-		}
 	}
 
 	/**
@@ -88,7 +79,13 @@ final class RepresentationSource
 	 */
 	public function getBinding(string $fieldName): ?RepresentationFieldSchema
 	{
-		return $this->bindings[$fieldName] ?? null;
+		foreach ($this->fields as $field) {
+			if ($field->getFieldName() === $fieldName) {
+				return $field;
+			}
+		}
+
+		return null;
 	}
 
 	public function getFieldPath(string $fieldName): ?string
