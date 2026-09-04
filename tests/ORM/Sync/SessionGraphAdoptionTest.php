@@ -148,7 +148,7 @@ final class SessionGraphAdoptionTest extends TestCase
 		self::assertSame('Ada', $record->getValue('name'));
 	}
 
-	public function testTwoPlaceAliasesOfTheSameFieldThrowWhenTheyDisagree(): void
+	public function testTwoWritablePlaceAliasesOfTheSameFieldThrowWhenTheyDisagree(): void
 	{
 		$root = $this->representation(['id' => 10, 'name' => 'Ada', 'displayName' => 'Other']);
 
@@ -157,6 +157,32 @@ final class SessionGraphAdoptionTest extends TestCase
 
 		$this->session(new RepresentationStateStore(), new RecordStateStore())
 			->sync($root, $this->userSchemaWithNameAlias());
+	}
+
+	public function testReadOnlyPlaceAliasDoesNotOverrideOrConflictWithWritableField(): void
+	{
+		$root = $this->representation(['id' => 10, 'name' => 'Ada', 'upperName' => 'ADA']);
+		$records = new RecordStateStore();
+		$reps = new RepresentationStateStore();
+
+		$this->session($reps, $records)->sync($root, $this->userSchemaWithReadOnlyNameAlias());
+
+		$record = $reps->get($root)?->getSingleRecord();
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertSame('Ada', $record->getValue('name'));
+	}
+
+	public function testReadOnlyPlaceAliasFillsFieldWhenNoWritablePlaceIsPresent(): void
+	{
+		$root = $this->representation(['id' => 10, 'upperName' => 'ADA']);
+		$records = new RecordStateStore();
+		$reps = new RepresentationStateStore();
+
+		$this->session($reps, $records)->sync($root, $this->userSchemaWithReadOnlyNameAlias());
+
+		$record = $reps->get($root)?->getSingleRecord();
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertSame('ADA', $record->getValue('name'));
 	}
 
 	public function testMissingBindingPlaceStillAdoptsAPresentAliasOfTheSameField(): void
@@ -448,6 +474,17 @@ final class SessionGraphAdoptionTest extends TestCase
 		$schema->addField(new RepresentationFieldSchema('id', $users, 'id'));
 		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
 		$schema->addField(new RepresentationFieldSchema('displayName', $users, 'name'));
+
+		return $schema;
+	}
+
+	private function userSchemaWithReadOnlyNameAlias(): RepresentationSchema
+	{
+		$users = $this->users();
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('id', $users, 'id'));
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$schema->addField(new RepresentationFieldSchema('upperName', $users, 'name', writable: false));
 
 		return $schema;
 	}

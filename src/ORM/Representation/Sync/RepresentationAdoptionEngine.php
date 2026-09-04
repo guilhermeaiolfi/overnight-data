@@ -511,8 +511,7 @@ final class RepresentationAdoptionEngine
 	}
 
 	/**
-	 * Read each place once. Present aliases of the same collection field must agree.
-	 * Identity uses the source binding path, not a collapsed field-name bag.
+	 * Read each place once. Identity uses the source binding path.
 	 *
 	 * @return array{0: array<string, PathReadResult>, 1: array<string, mixed>}
 	 */
@@ -540,14 +539,22 @@ final class RepresentationAdoptionEngine
 	}
 
 	/**
+	 * Fold present places onto collection fields.
+	 *
+	 * Writable aliases of the same field must agree and win. Read-only aliases
+	 * are output: they fill a field only when no writable place is present
+	 * (implicit identity, read-only-only projections).
+	 *
 	 * @param array<string, PathReadResult> $readsByPath
 	 *
 	 * @return array<string, mixed>
 	 */
 	private function agreedPresentValues(RepresentationSource $source, array $readsByPath): array
 	{
-		$values = [];
-		$paths = [];
+		$writable = [];
+		$writablePaths = [];
+		$readOnly = [];
+		$readOnlyPaths = [];
 
 		foreach ($source->getFields() as $fieldSchema) {
 			$result = $readsByPath[$fieldSchema->getPath()] ?? null;
@@ -555,23 +562,54 @@ final class RepresentationAdoptionEngine
 				continue;
 			}
 
-			$fieldName = $fieldSchema->getFieldName();
-			$value = $result->requireValue();
-			if (array_key_exists($fieldName, $values) && $values[$fieldName] !== $value) {
-				throw new StateException(sprintf(
-					"Cannot bind projection source for collection '%s' because places '%s' and '%s' disagree on field '%s'.",
-					$source->getCollection()->getName(),
-					$paths[$fieldName],
-					$fieldSchema->getPath(),
-					$fieldName,
-				));
+			if ($fieldSchema->isWritable()) {
+				$this->assignPresentAlias(
+					$source,
+					$writable,
+					$writablePaths,
+					$fieldSchema,
+					$result->requireValue(),
+				);
+
+				continue;
 			}
 
-			$values[$fieldName] = $value;
-			$paths[$fieldName] = $fieldSchema->getPath();
+			$this->assignPresentAlias(
+				$source,
+				$readOnly,
+				$readOnlyPaths,
+				$fieldSchema,
+				$result->requireValue(),
+			);
 		}
 
-		return $values;
+		return $writable + array_diff_key($readOnly, $writable);
+	}
+
+	/**
+	 * @param array<string, mixed> $values
+	 * @param array<string, string> $paths
+	 */
+	private function assignPresentAlias(
+		RepresentationSource $source,
+		array &$values,
+		array &$paths,
+		RepresentationFieldSchema $fieldSchema,
+		mixed $value,
+	): void {
+		$fieldName = $fieldSchema->getFieldName();
+		if (array_key_exists($fieldName, $values) && $values[$fieldName] !== $value) {
+			throw new StateException(sprintf(
+				"Cannot bind projection source for collection '%s' because places '%s' and '%s' disagree on field '%s'.",
+				$source->getCollection()->getName(),
+				$paths[$fieldName],
+				$fieldSchema->getPath(),
+				$fieldName,
+			));
+		}
+
+		$values[$fieldName] = $value;
+		$paths[$fieldName] = $fieldSchema->getPath();
 	}
 
 	/**
