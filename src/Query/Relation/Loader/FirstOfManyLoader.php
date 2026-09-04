@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation\Loader;
 
 use ON\Data\Query\Exception\RelationLoaderException;
-use ON\Data\Query\Expression\StarExpression;
-use function ON\Data\Query\query;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
@@ -14,17 +12,12 @@ use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
-use ON\Data\Query\Selection\SelectionItem;
-use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
 use ON\Data\Query\Sort\SortDirection;
-use ON\Data\Query\SourceMap;
-use function ON\Data\Query\x;
 
 final class FirstOfManyLoader extends AbstractLoader
 {
-	private const RANK_ALIAS = '__ondata_rank';
 	private const DERIVED_ALIAS = '__ondata_first_of_many';
 
 	public function getDefaultLoadStrategy(): LoadStrategy
@@ -92,39 +85,14 @@ final class FirstOfManyLoader extends AbstractLoader
 	 */
 	private function rankedQuery(RelationLoadBranch $branch, SelectQuery $childQuery, array $orderBy): SelectQuery
 	{
-		$inner = $childQuery->copy();
-		$partitionBy = [];
-
-		foreach ($branch->getRelationRef()->getDefinition()->getKeyPairing()->getRightFields() as $fieldName) {
-			$partitionBy[] = $inner->field($fieldName);
-		}
-
-		// Keeping the default star alongside projected columns makes MySQL reject
-		// the derived table (Duplicate column name).
-		$inner->getSelections()->removeByTag(SelectionTag::DEFAULT);
-		$inner->getSelections()->ensureInternalExpression(
-			x()->fn()->rowNumber()->over(
-				partitionBy: $partitionBy,
-				orderBy: array_map(
-					static fn (Sort $sort): Sort => $sort->rebind(SourceMap::of($childQuery, $inner)),
-					$orderBy,
-				),
-			),
-			self::RANK_ALIAS,
+		$partitioned = PartitionedRelationQuery::wrap(
+			$childQuery,
+			$branch->getRelationRef()->getDefinition()->getKeyPairing()->getRightFields(),
+			$orderBy,
+			self::DERIVED_ALIAS,
 		);
 
-		$ranked = $inner->as(self::DERIVED_ALIAS);
-		$outer = query($ranked);
-
-		$outer->getSelections()->removeByTag(SelectionTag::DEFAULT);
-		$outer->getSelections()->merge(
-			$inner->getSelections()
-				->filterByTag(SelectionTag::COLUMN)
-				->filter(static fn (SelectionItem $selection): bool => ! $selection->getExpression() instanceof StarExpression)
-				->projectDerivedTo($ranked, $outer),
-		);
-
-		return $outer->where($ranked->field(self::RANK_ALIAS)->eq(1));
+		return $partitioned->getQuery()->where($partitioned->rank()->eq(1));
 	}
 
 	private function deterministicOrder(RelationLoadBranch $branch): array
