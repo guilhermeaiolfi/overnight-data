@@ -6,6 +6,7 @@ namespace ON\Data\Query\Relation;
 
 use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\QuerySourceInterface;
@@ -14,6 +15,7 @@ use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Schema\RepresentationSchema;
 
 abstract class LoadBranch
 {
@@ -41,6 +43,55 @@ abstract class LoadBranch
 	 * @var list<string>
 	 */
 	private array $requiredFieldNames = [];
+
+	private ?RepresentationSchema $placeSchema = null;
+
+	/**
+	 * @var list<string>
+	 */
+	private array $publicPlaceKeys = [];
+
+	/**
+	 * @var list<string>
+	 */
+	private array $implicitPlaceKeys = [];
+
+	/**
+	 * Snapshot this branch's schema node for the current fetch.
+	 *
+	 * Public/implicit path sets are taken once here; assemble must not rediscover them.
+	 */
+	public function attachPlaceSchema(RepresentationSchema $schema): void
+	{
+		$this->placeSchema = $schema;
+		$this->publicPlaceKeys = $schema->getPublicScalarPaths();
+		$this->implicitPlaceKeys = $schema->getImplicitScalarPaths();
+	}
+
+	public function getPlaceSchema(): RepresentationSchema
+	{
+		return $this->placeSchema ?? throw LoadRuntimeException::placeSchemaMissing();
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	public function getPublicPlaceKeys(): array
+	{
+		$this->getPlaceSchema();
+
+		return $this->publicPlaceKeys;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	public function getImplicitPlaceKeys(): array
+	{
+		$this->getPlaceSchema();
+
+		return $this->implicitPlaceKeys;
+	}
 
 	public function bindPlaceToLoadKey(string $placeKey, string $loadKey): void
 	{

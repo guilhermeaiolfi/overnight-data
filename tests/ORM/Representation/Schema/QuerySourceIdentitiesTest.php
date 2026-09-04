@@ -49,4 +49,59 @@ final class QuerySourceIdentitiesTest extends TestCase
 		self::assertNotNull($identity);
 		self::assertSame(['id' => 5], $identity->getValues());
 	}
+
+	public function testGetIdentityReturnsNullWhenAPrimaryKeyPlaceIsMissingFromTheRow(): void
+	{
+		$registry = new Registry();
+		$registry->collection('companies')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+		$companies = $registry->getCollection('companies');
+		$identities = new QuerySourceIdentities([
+			new RepresentationSource(
+				['company'],
+				$companies,
+				[
+					new RepresentationFieldSchema('name', $companies, 'name', sourcePath: ['company']),
+					new RepresentationFieldSchema(
+						'company.id',
+						$companies,
+						'id',
+						writable: false,
+						sourcePath: ['company'],
+						role: RepresentationFieldRole::Implicit,
+					),
+				],
+			),
+		]);
+
+		self::assertNull($identities->getIdentity(['company'], [
+			'name' => 'Acme',
+		]));
+	}
+
+	public function testGetIdentityReturnsNullWhenAPrimaryKeyHasNoPlacePath(): void
+	{
+		$registry = new Registry();
+		$registry->collection('companies')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+		$companies = $registry->getCollection('companies');
+		$identities = new QuerySourceIdentities([
+			new RepresentationSource(
+				['company'],
+				$companies,
+				[
+					new RepresentationFieldSchema('name', $companies, 'name', sourcePath: ['company']),
+				],
+			),
+		]);
+
+		self::assertNull($identities->getIdentity(['company'], [
+			'id' => 5,
+			'name' => 'Acme',
+		]));
+	}
 }

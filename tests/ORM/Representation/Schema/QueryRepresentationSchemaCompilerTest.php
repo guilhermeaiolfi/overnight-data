@@ -197,6 +197,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$compilation = $this->preparePlan($query);
 
 		self::assertInstanceOf(QueryRepresentationPlan::class, $compilation);
+		self::assertSame($compilation->getSchema()->getSources(), $compilation->getSources());
 		self::assertTrue($compilation->getSchema()->getField('name')->getSourcePath() === ['company']);
 		self::assertSame(
 			$this->implicitSourceFieldPath($compilation->getSchema(), ['company'], 'id'),
@@ -622,10 +623,9 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 	private function preparePlan(SelectQuery $query): QueryRepresentationPlan
 	{
 		$schema = $this->compiler->compile($query);
-		$sources = RepresentationSource::fromRepresentationSchema($schema);
-		$identities = new QuerySourceIdentities($sources);
+		$identities = new QuerySourceIdentities($schema->getSources());
 
-		return new QueryRepresentationPlan($schema, $sources, $identities);
+		return new QueryRepresentationPlan($schema, $identities);
 	}
 
 	/**

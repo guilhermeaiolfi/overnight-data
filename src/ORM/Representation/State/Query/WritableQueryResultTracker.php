@@ -8,7 +8,6 @@ use InvalidArgumentException;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
-use ON\Data\ORM\Representation\Schema\Query\QuerySourceIdentities;
 use ON\Data\ORM\Representation\Sync\AdoptionPolicy;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionContext;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionEngine;
@@ -37,11 +36,7 @@ final class WritableQueryResultTracker implements WritableResultHandler
 
 	public function prepare(SelectQuery $query): WritablePreparation
 	{
-		$schema = $query->projection();
-		$sources = $schema->getSources();
-		$identities = new QuerySourceIdentities($sources);
-
-		return new QueryRepresentationPlan($schema, $sources, $identities);
+		return new QueryRepresentationPlan($query->projection());
 	}
 
 	public function track(

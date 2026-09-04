@@ -315,15 +315,15 @@ final class RelationOutputProcessor
 	}
 
 	/**
-	 * Ordered public place keys for this branch level from the fetch schema
-	 * ({@see RepresentationSchema::getPublicScalarPaths()} — Public fields + expressions;
-	 * Implicit PK backfill omitted). Query EXPLICIT tags are not a place fallback.
+	 * Ordered public place keys snapshotted on this branch at plan time
+	 * ({@see LoadBranch::getPublicPlaceKeys()}). Implicit PK backfill is omitted.
+	 * Query EXPLICIT tags are not a place fallback.
 	 *
 	 * @return list<string>
 	 */
 	private function placeKeysFor(LoadBranch $branch): array
 	{
-		return $this->schemaNodeFor($branch)->getPublicScalarPaths();
+		return $branch->getPublicPlaceKeys();
 	}
 
 	/**
@@ -331,35 +331,7 @@ final class RelationOutputProcessor
 	 */
 	private function implicitPlaceKeysFor(LoadBranch $branch): array
 	{
-		return $this->schemaNodeFor($branch)->getImplicitScalarPaths();
-	}
-
-	private function schemaNodeFor(LoadBranch $branch): RepresentationSchema
-	{
-		if (! $this->schema instanceof RepresentationSchema) {
-			throw LoadRuntimeException::placeSchemaMissing();
-		}
-
-		$relationPath = $this->relationPathFor($branch);
-		$node = $this->schema->findRelatedSchemaAt($relationPath);
-
-		if (! $node instanceof RepresentationSchema) {
-			throw LoadRuntimeException::placeSchemaNodeMissing($relationPath);
-		}
-
-		return $node;
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	private function relationPathFor(LoadBranch $branch): array
-	{
-		if ($branch instanceof RelationLoadBranch) {
-			return $branch->getRelationRef()->getPath();
-		}
-
-		return [];
+		return $branch->getImplicitPlaceKeys();
 	}
 
 	/**

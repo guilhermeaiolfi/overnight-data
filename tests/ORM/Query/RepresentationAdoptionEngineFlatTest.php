@@ -21,7 +21,6 @@ use ON\Data\Schema\RepresentationFieldRole;
 use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationRelationSchema;
 use ON\Data\Schema\RepresentationSchema;
-use ON\Data\Schema\RepresentationSource;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
@@ -230,7 +229,7 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('results without identity are never tracked');
 
-		$this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, new QuerySourceIdentities(RepresentationSource::fromRepresentationSchema($schema))), [
+		$this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, new QuerySourceIdentities($schema->getSources())), [
 			'id' => 1,
 			'name' => 'Acme',
 		], $session);
@@ -435,7 +434,6 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 	): QueryRepresentationPlan {
 		return new QueryRepresentationPlan(
 			$schema,
-			RepresentationSource::fromRepresentationSchema($schema),
 			$identities,
 		);
 	}
@@ -451,7 +449,7 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 
 	private function identitiesFor(RepresentationSchema $schema): QuerySourceIdentities
 	{
-		return new QuerySourceIdentities(RepresentationSource::fromRepresentationSchema($schema));
+		return new QuerySourceIdentities($schema->getSources());
 	}
 
 	private function projectionSchema(

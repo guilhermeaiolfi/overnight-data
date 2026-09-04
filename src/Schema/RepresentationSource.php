@@ -26,6 +26,14 @@ final class RepresentationSource
 	private array $fields;
 
 	/**
+	 * Place paths for {@see CollectionInterface::getPrimaryKey()}, in that order.
+	 * A missing binding is a null slot — identity is incomplete.
+	 *
+	 * @var list<string|null>
+	 */
+	private array $primaryKeyPlacePaths = [];
+
+	/**
 	 * @param list<string> $path
 	 * @param list<RepresentationFieldSchema> $fields
 	 */
@@ -36,6 +44,10 @@ final class RepresentationSource
 	) {
 		$this->path = array_values($path);
 		$this->fields = array_values($fields);
+
+		foreach ($this->collection->getPrimaryKey() as $fieldName) {
+			$this->primaryKeyPlacePaths[] = $this->getBinding($fieldName)?->getPath();
+		}
 	}
 
 	/**
@@ -91,6 +103,16 @@ final class RepresentationSource
 	public function getFieldPath(string $fieldName): ?string
 	{
 		return $this->getBinding($fieldName)?->getPath();
+	}
+
+	/**
+	 * Place paths for primary-key fields, in collection PK order.
+	 *
+	 * @return list<string|null>
+	 */
+	public function getPrimaryKeyPlacePaths(): array
+	{
+		return $this->primaryKeyPlacePaths;
 	}
 
 	/**

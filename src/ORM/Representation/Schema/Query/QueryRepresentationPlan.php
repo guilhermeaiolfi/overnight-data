@@ -9,26 +9,23 @@ use ON\Data\Schema\RepresentationSchema;
 use ON\Data\Schema\RepresentationSource;
 
 /**
- * Writable prepare() result: schema, sources, and the query-scoped
+ * Writable prepare() result: schema and the query-scoped
  * {@see QuerySourceIdentities} map (schema paths for the whole fetch).
+ *
+ * Sources are always {@see RepresentationSchema::getSources()} — not a second list.
  *
  * Also serves as the {@see WritablePreparation} token so SelectQuery can reuse the
  * prepared place schema without a second compile.
  */
 final class QueryRepresentationPlan implements WritablePreparation
 {
-	/** @var list<RepresentationSource> */
-	private array $sources;
+	private QuerySourceIdentities $identities;
 
-	/**
-	 * @param list<RepresentationSource> $sources
-	 */
 	public function __construct(
 		private RepresentationSchema $schema,
-		array $sources,
-		private QuerySourceIdentities $identities,
+		?QuerySourceIdentities $identities = null,
 	) {
-		$this->sources = array_values($sources);
+		$this->identities = $identities ?? new QuerySourceIdentities($schema->getSources());
 	}
 
 	public function getSchema(): RepresentationSchema
@@ -46,7 +43,7 @@ final class QueryRepresentationPlan implements WritablePreparation
 	 */
 	public function getSources(): array
 	{
-		return $this->sources;
+		return $this->schema->getSources();
 	}
 
 	/**

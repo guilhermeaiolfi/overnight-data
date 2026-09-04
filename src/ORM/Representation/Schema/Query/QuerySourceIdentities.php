@@ -13,7 +13,7 @@ use ON\Data\Schema\RepresentationSource;
  * Adoption identity map for a prepared writable query (one per {@see QueryRepresentationPlan}).
  *
  * {@see getIdentity()} reads primary-key values from the assembled row using each
- * source's schema field path (including source-qualified Implicit paths such as
+ * source's prepared PK place paths (including source-qualified Implicit paths such as
  * `company.id`). Call it with a raw assembled row when resolving Keys during
  * adopt — the map itself is not per row.
  *
@@ -54,9 +54,11 @@ final class QuerySourceIdentities implements RepresentationSourceIdentities
 
 		$collection = $source->getCollection();
 		$values = [];
+		$fieldNames = $collection->getPrimaryKey();
+		$placePaths = $source->getPrimaryKeyPlacePaths();
 
-		foreach ($collection->getPrimaryKey() as $fieldName) {
-			$path = $source->getFieldPath($fieldName);
+		foreach ($fieldNames as $index => $fieldName) {
+			$path = $placePaths[$index] ?? null;
 			if ($path === null || ! array_key_exists($path, $sourceRow)) {
 				return null;
 			}

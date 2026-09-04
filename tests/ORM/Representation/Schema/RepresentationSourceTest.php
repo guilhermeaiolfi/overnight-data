@@ -88,6 +88,38 @@ final class RepresentationSourceTest extends TestCase
 		self::assertSame($first, $schema->getFieldForSource([], 'name'));
 	}
 
+	public function testPrimaryKeyPlacePathsFollowFirstBindingInKeyOrder(): void
+	{
+		$registry = new Registry();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('userId', $users, 'id'));
+		$schema->addField(new RepresentationFieldSchema('id', $users, 'id'));
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+
+		$source = $schema->getSources()[0];
+		self::assertSame(['userId'], $source->getPrimaryKeyPlacePaths());
+	}
+
+	public function testPrimaryKeyPlacePathsKeepNullSlotsWhenAKeyIsUnbound(): void
+	{
+		$registry = new Registry();
+		$users = $registry->collection('users')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+
+		$source = $schema->getSources()[0];
+		self::assertSame([null], $source->getPrimaryKeyPlacePaths());
+	}
+
 	/**
 	 * @param list<string> $path
 	 */
