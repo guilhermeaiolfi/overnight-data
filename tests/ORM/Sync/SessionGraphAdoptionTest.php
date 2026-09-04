@@ -99,6 +99,39 @@ final class SessionGraphAdoptionTest extends TestCase
 		self::assertTrue($record->isNew());
 	}
 
+	public function testUntrackedRootCreateKeepsNonKeyNullAndOmitsNullPrimaryKey(): void
+	{
+		$root = $this->representation(['id' => null, 'name' => null]);
+		$records = new RecordStateStore();
+		$reps = new RepresentationStateStore();
+
+		$this->session($reps, $records)->sync($root, $this->userSchemaWithId());
+
+		$record = $reps->get($root)?->getSingleRecord();
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertTrue($record->isNew());
+		self::assertFalse(array_key_exists('id', $record->getValues()));
+		self::assertArrayHasKey('name', $record->getValues());
+		self::assertNull($record->getValue('name'));
+	}
+
+	public function testUntrackedRootPatchKeepsNonKeyNull(): void
+	{
+		$root = $this->representation(['id' => 10, 'name' => null]);
+		$records = new RecordStateStore();
+		$reps = new RepresentationStateStore();
+		$session = $this->session($reps, $records);
+		$session->update($root);
+
+		$session->sync($root, $this->userSchemaWithId());
+
+		$record = $reps->get($root)?->getSingleRecord();
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertTrue($record->isDirty());
+		self::assertNull($record->getValue('name'));
+		self::assertSame(['name'], $record->getDirtyFields());
+	}
+
 	public function testUntrackedRootWithoutSchemaThrows(): void
 	{
 		$this->expectException(SyncException::class);

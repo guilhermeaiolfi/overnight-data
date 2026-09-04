@@ -26,8 +26,9 @@ use ON\Data\Schema\RepresentationSource;
  * Schema-driven attachment of representations into session stores.
  *
  * Distinct from {@see Session::adopt()}, which stores an already-built
- * {@see RepresentationState}. This entry binds every source on the schema,
- * then walks relation children — one pass, not a flat/graph fork.
+ * {@see RepresentationState}. This entry resolves each source's policy,
+ * identity, and initial values from one field read, binds Create /
+ * existing-clean / existing-patched records, then walks relation children.
  *
  * Policy ({@see AdoptionPolicy}): Hydrate | Identify | Patch | Create.
  * Query hydrate prefers values on {@see RepresentationAdoptionContext::getSourceRow()}.
@@ -334,10 +335,10 @@ final class RepresentationAdoptionEngine
 			);
 		}
 
-		$intent = $context->getIntent();
-		$opsByPath = $this->indexFlatOps($intent?->getFlatOps() ?? []);
+		$opsByPath = $this->indexFlatOps($context->getIntent()?->getFlatOps() ?? []);
 		$recordsBySourceKey = [];
 		$rootRecord = null;
+		$flatCreates = [];
 
 		foreach ($schema->getRelations() as $relationSchema) {
 			if ($relationSchema->getOwnerCollectionName() !== $schema->getCollection()->getName()) {
@@ -361,11 +362,13 @@ final class RepresentationAdoptionEngine
 			$pathKey = $source->getPathKey();
 			$op = $opsByPath[$pathKey] ?? null;
 			$policy = $this->policyForSource($representation, $context, $source, $op);
+			[$firstByField, $presentValues] = $this->readSourceFields($representation, $source, $context);
 
-			$record = $this->resolveSourceRecord(
-				$representation,
+			$record = $this->bindSourceRecord(
 				$source,
 				$policy,
+				$firstByField,
+				$presentValues,
 				$context,
 				$records,
 			);
@@ -374,32 +377,32 @@ final class RepresentationAdoptionEngine
 			if ($source->isRoot()) {
 				$rootRecord = $record;
 			}
+
+			if ($op instanceof FlatIntentOp && $op->isCreate()) {
+				$flatCreates[] = $source;
+			}
 		}
 
 		if ($rootRecord instanceof RecordState) {
-			foreach ($sources as $source) {
+			foreach ($flatCreates as $source) {
 				if ($source->isRoot()) {
 					continue;
 				}
 
-				$pathKey = $source->getPathKey();
-				$op = $opsByPath[$pathKey] ?? null;
-				if ($op instanceof FlatIntentOp && $op->isCreate()) {
-					if (! $relations instanceof RelationStateStore) {
-						throw new StateException(
-							'Cannot register flat create relation add without a RelationStateStore.',
-						);
-					}
+				if (! $relations instanceof RelationStateStore) {
+					throw new StateException(
+						'Cannot register flat create relation add without a RelationStateStore.',
+					);
+				}
 
-					$related = $recordsBySourceKey[$pathKey] ?? null;
-					if ($related instanceof RecordState) {
-						$this->registerRelationAdd(
-							$rootRecord,
-							$source,
-							$related,
-							$relations,
-						);
-					}
+				$related = $recordsBySourceKey[$source->getPathKey()] ?? null;
+				if ($related instanceof RecordState) {
+					$this->registerRelationAdd(
+						$rootRecord,
+						$source,
+						$related,
+						$relations,
+					);
 				}
 			}
 		}
@@ -507,18 +510,57 @@ final class RepresentationAdoptionEngine
 		return $policy;
 	}
 
-	private function resolveSourceRecord(
+	/**
+	 * Read each placed field once. First alias per field name drives identity;
+	 * last present value wins for initial values.
+	 *
+	 * @return array{0: array<string, PathReadResult>, 1: array<string, mixed>}
+	 */
+	private function readSourceFields(
 		object $representation,
 		RepresentationSource $source,
+		RepresentationAdoptionContext $context,
+	): array {
+		$firstByField = [];
+		$presentValues = [];
+
+		foreach ($source->getFields() as $fieldSchema) {
+			$fieldName = $fieldSchema->getFieldName();
+			$result = $this->readPlaceValue(
+				$representation,
+				$fieldSchema->getPath(),
+				$context->getSourceRow(),
+			);
+
+			if (! array_key_exists($fieldName, $firstByField)) {
+				$firstByField[$fieldName] = $result;
+			}
+
+			if ($result->isPresent()) {
+				$presentValues[$fieldName] = $result->requireValue();
+			}
+		}
+
+		return [$firstByField, $presentValues];
+	}
+
+	/**
+	 * @param array<string, PathReadResult> $firstByField
+	 * @param array<string, mixed> $presentValues
+	 */
+	private function bindSourceRecord(
+		RepresentationSource $source,
 		AdoptionPolicy $policy,
+		array $firstByField,
+		array $presentValues,
 		RepresentationAdoptionContext $context,
 		RecordStateStore $records,
 	): RecordState {
 		$collection = $source->getCollection();
+		$values = $this->initialValuesForPolicy($source, $policy, $presentValues);
 
 		if ($policy === AdoptionPolicy::Create) {
-			$values = $this->patchInitialValues($representation, $source, $context);
-			$key = $this->tryCompleteKey($representation, $source, $context);
+			$key = $this->tryCompleteKey($source, $context, $firstByField);
 			if ($key instanceof Key) {
 				$existing = $records->getActive(
 					$key,
@@ -540,11 +582,25 @@ final class RepresentationAdoptionEngine
 		}
 
 		if ($policy === AdoptionPolicy::Hydrate || $policy === AdoptionPolicy::Identify) {
-			return $this->resolveHydrateRecord($representation, $source, $context, $records);
+			$key = $this->resolveExistingKey($source, $context, $firstByField, hydrate: true);
+			$record = $records->getByKey($key);
+
+			if ($record instanceof RecordState) {
+				if ($record->isRemoved()) {
+					throw new StateException(sprintf(
+						"Cannot build projection representation for collection '%s' because key '%s' is already tracked as removed.",
+						$collection->getName(),
+						$key->getDebugString(),
+					));
+				}
+
+				return $record;
+			}
+
+			return RecordState::clean($key, $values);
 		}
 
-		$key = $this->resolveExistingKey($representation, $source, $context);
-		$values = $this->patchInitialValues($representation, $source, $context);
+		$key = $this->resolveExistingKey($source, $context, $firstByField);
 
 		return $records->bindExisting(
 			$key,
@@ -557,57 +613,71 @@ final class RepresentationAdoptionEngine
 		);
 	}
 
-	private function resolveHydrateRecord(
-		object $representation,
+	/**
+	 * Hydrate/Identify omit nulls. Patch/Create keep non-key nulls and drop null primary keys.
+	 *
+	 * @param array<string, mixed> $presentValues
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function initialValuesForPolicy(
 		RepresentationSource $source,
-		RepresentationAdoptionContext $context,
-		RecordStateStore $records,
-	): RecordState {
-		$key = $this->resolveExistingKey($representation, $source, $context, hydrate: true);
-		$values = $this->hydrateInitialValues($representation, $source, $context);
-		$record = $records->getByKey($key);
+		AdoptionPolicy $policy,
+		array $presentValues,
+	): array {
+		$omitAllNulls = $policy === AdoptionPolicy::Hydrate || $policy === AdoptionPolicy::Identify;
+		$primaryKey = $source->getCollection()->getPrimaryKey();
+		$values = [];
 
-		if ($record instanceof RecordState) {
-			if ($record->isRemoved()) {
-				throw new StateException(sprintf(
-					"Cannot build projection representation for collection '%s' because key '%s' is already tracked as removed.",
-					$source->getCollection()->getName(),
-					$key->getDebugString(),
-				));
+		foreach ($presentValues as $fieldName => $value) {
+			if ($value === null && ($omitAllNulls || in_array($fieldName, $primaryKey, true))) {
+				continue;
 			}
 
-			return $record;
+			$values[$fieldName] = $value;
 		}
 
-		return RecordState::clean($key, $values);
+		return $values;
 	}
 
+	/**
+	 * Create uses an assigned key only to reuse an already-tracked record.
+	 *
+	 * Any identity failure — missing key, conflict with intent identity — is
+	 * treated as "no key". Do not narrow this catch: Create must not start
+	 * throwing those errors.
+	 *
+	 * @param array<string, PathReadResult> $firstByField
+	 */
 	private function tryCompleteKey(
-		object $representation,
 		RepresentationSource $source,
 		RepresentationAdoptionContext $context,
+		array $firstByField,
 	): ?Key {
 		try {
-			return $this->resolveExistingKey($representation, $source, $context, hydrate: true);
+			return $this->resolveExistingKey($source, $context, $firstByField, hydrate: true);
 		} catch (StateException) {
 			return null;
 		}
 	}
 
+	/**
+	 * @param array<string, PathReadResult> $firstByField
+	 */
 	private function resolveExistingKey(
-		object $representation,
 		RepresentationSource $source,
 		RepresentationAdoptionContext $context,
+		array $firstByField,
 		bool $hydrate = false,
 	): Key {
-		$fromObject = $this->completeKeyFromPlace($representation, $source, $context);
-		if ($fromObject instanceof Key) {
+		$fromPlace = $this->placeKeyFromReads($source, $firstByField);
+		if ($fromPlace instanceof Key) {
 			$external = $context->getIdentities()?->getIdentity(
 				$source->getPath(),
 				$context->getSourceRow(),
 			);
 			if ($external instanceof Key) {
-				$conflict = $external->conflictingIdentityField($fromObject->getValues());
+				$conflict = $external->conflictingIdentityField($fromPlace->getValues());
 				if ($conflict !== null) {
 					throw new StateException(sprintf(
 						"Cannot bind projection source for collection '%s' because intent identity field '%s' disagrees with the representation.",
@@ -617,7 +687,7 @@ final class RepresentationAdoptionEngine
 				}
 			}
 
-			return $fromObject;
+			return $fromPlace;
 		}
 
 		$external = $context->getIdentities()?->getIdentity(
@@ -626,7 +696,7 @@ final class RepresentationAdoptionEngine
 		);
 		if ($external instanceof Key) {
 			$conflict = $external->conflictingIdentityField(
-				$this->readablePrimaryKeyValues($representation, $source, $context),
+				$this->readablePrimaryKeyFromReads($source, $firstByField),
 			);
 			if ($conflict !== null) {
 				throw new StateException(sprintf(
@@ -653,26 +723,21 @@ final class RepresentationAdoptionEngine
 		));
 	}
 
-	private function completeKeyFromPlace(
-		object $representation,
-		RepresentationSource $source,
-		RepresentationAdoptionContext $context,
-	): ?Key {
+	/**
+	 * @param array<string, PathReadResult> $firstByField
+	 */
+	private function placeKeyFromReads(RepresentationSource $source, array $firstByField): ?Key
+	{
 		$collection = $source->getCollection();
 		$values = [];
 
 		foreach ($collection->getPrimaryKey() as $fieldName) {
-			$path = $source->getFieldPath($fieldName);
-			if ($path === null) {
+			$result = $firstByField[$fieldName] ?? null;
+			if (! $result instanceof PathReadResult || ! $result->isPresent()) {
 				return null;
 			}
 
-			$result = $this->readPlaceValue($representation, $path, $context->getSourceRow());
-			if (! $result->isPresent()) {
-				return null;
-			}
 			$value = $result->requireValue();
-
 			if ($value === null) {
 				return null;
 			}
@@ -684,92 +749,16 @@ final class RepresentationAdoptionEngine
 	}
 
 	/**
+	 * @param array<string, PathReadResult> $firstByField
+	 *
 	 * @return array<string, mixed>
 	 */
-	private function hydrateInitialValues(
-		object $representation,
-		RepresentationSource $source,
-		RepresentationAdoptionContext $context,
-	): array {
-		$collection = $source->getCollection();
-		$values = [];
-		$primaryKey = array_flip($collection->getPrimaryKey());
-
-		foreach ($source->getFields() as $fieldSchema) {
-			$fieldName = $fieldSchema->getFieldName();
-
-			$result = $this->readPlaceValue(
-				$representation,
-				$fieldSchema->getPath(),
-				$context->getSourceRow(),
-			);
-			if (! $result->isPresent()) {
-				continue;
-			}
-			$value = $result->requireValue();
-
-			if ($value === null && array_key_exists($fieldName, $primaryKey)) {
-				continue;
-			}
-
-			if ($value === null) {
-				continue;
-			}
-
-			$values[$fieldName] = $value;
-		}
-
-		return $values;
-	}
-
-	/**
-	 * @return array<string, mixed>
-	 */
-	private function patchInitialValues(
-		object $representation,
-		RepresentationSource $source,
-		RepresentationAdoptionContext $context,
-	): array {
-		$values = [];
-		foreach ($source->getFields() as $fieldSchema) {
-			$result = $this->readPlaceValue(
-				$representation,
-				$fieldSchema->getPath(),
-				$context->getSourceRow(),
-			);
-			if (! $result->isPresent()) {
-				continue;
-			}
-			$value = $result->requireValue();
-
-			$fieldName = $fieldSchema->getFieldName();
-			if ($value === null && in_array($fieldName, $source->getCollection()->getPrimaryKey(), true)) {
-				continue;
-			}
-
-			$values[$fieldName] = $value;
-		}
-
-		return $values;
-	}
-
-	/**
-	 * @return array<string, mixed>
-	 */
-	private function readablePrimaryKeyValues(
-		object $representation,
-		RepresentationSource $source,
-		RepresentationAdoptionContext $context,
-	): array {
+	private function readablePrimaryKeyFromReads(RepresentationSource $source, array $firstByField): array
+	{
 		$values = [];
 		foreach ($source->getCollection()->getPrimaryKey() as $fieldName) {
-			$path = $source->getFieldPath($fieldName);
-			if ($path === null) {
-				continue;
-			}
-
-			$result = $this->readPlaceValue($representation, $path, $context->getSourceRow());
-			if ($result->isPresent()) {
+			$result = $firstByField[$fieldName] ?? null;
+			if ($result instanceof PathReadResult && $result->isPresent()) {
 				$values[$fieldName] = $result->requireValue();
 			}
 		}

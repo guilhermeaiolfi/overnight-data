@@ -184,6 +184,24 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		self::assertSame('Source row value', $session->getRecords()->getByKey($companies->getKey(5))?->getValue('name'));
 	}
 
+	public function testHydrateOmitsNullNonKeyValuesFromInitialSnapshot(): void
+	{
+		$registry = $this->makeRegistry();
+		$companies = $registry->getCollection('companies');
+		$schema = $this->projectionSchema($registry->getCollection('users'), $companies);
+		$session = new Session(new RecordingCommandExecutor());
+
+		$this->adoptFlatProjection($this->flatUser(1, 'ignored'), $this->compilation($schema, $this->identitiesFor($schema)), [
+			'id' => 1,
+			'name' => null,
+			'company.id' => 5,
+		], $session);
+
+		$company = $session->getRecords()->getByKey($companies->getKey(5));
+		self::assertInstanceOf(RecordState::class, $company);
+		self::assertFalse(array_key_exists('name', $company->getValues()));
+	}
+
 	public function testExplicitNullSourceRowIdentityDoesNotFallBackToVisibleObjectProperty(): void
 	{
 		$registry = $this->makeRegistry();
