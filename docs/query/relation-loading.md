@@ -1,6 +1,6 @@
 # Relation Loading
 
-Relation loading is configured through cached `RelationRef` branches. Pass a `RelationRef` to `SelectQuery::select()` to include nested relation results, or configure the ref before fetching. Root scalar expressions and relation refs can share one `select()` call.
+Relation loading is configured through cached `RelationRef` branches. Pass a `RelationRef` to `SelectQuery::select()` to include nested relation results, or configure the ref before fetching. Root scalar expressions and relation refs can share one `select()` call. Fetch destinations vs result paths are read steps R2 and R8 in [`../read-write.md`](../read-write.md).
 
 ## Selecting Relations
 

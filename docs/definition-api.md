@@ -1,6 +1,6 @@
 # Definition API
 
-`ON\Data` stores collection and view metadata in a single canonical `Registry` array. The public definition API is built around array-backed wrappers that read and write directly against that shared structure.
+`ON\Data` stores collection and view metadata in a single canonical `Registry` array. The public definition API is built around array-backed wrappers that read and write directly against that shared structure. This is shared step S1 in [`read-write.md`](./read-write.md).
 
 ## Overview
 

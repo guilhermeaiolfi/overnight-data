@@ -1,6 +1,6 @@
 # Architecture records
 
-Living how-it-works docs live under [`../orm/`](../orm/) and [`../query/`](../query/). This tree is for **why** and **not yet**.
+Living how-it-works docs live under [`../read-write.md`](../read-write.md) (birds-eye pipeline), [`../orm/`](../orm/), and [`../query/`](../query/). This tree is for **why** and **not yet**.
 
 | Folder | What belongs here |
 |---|---|

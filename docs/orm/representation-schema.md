@@ -31,6 +31,8 @@ It is separate from:
 
 Query may import `RepresentationSchema` as the intentional path boundary (no separate `ProjectionLayout`). Fetch tags stay on Query.
 
+The necessary path vs fetch split (read steps R2–R3, write step W2) is in [`../read-write.md`](../read-write.md).
+
 ---
 
 ## Path as index (spine)

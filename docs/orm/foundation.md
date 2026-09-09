@@ -15,7 +15,7 @@ database/query -> RecordState -> Representation
 Representation -> sync() -> RecordState -> flush() -> database
 ```
 
-The ORM persists synchronized record state, not PHP objects directly.
+The ORM persists synchronized record state, not PHP objects directly. The necessary read and write steps, and where they currently live, are in [`../read-write.md`](../read-write.md).
 
 `FieldType` implementations and representations remain the conversion authority. SQL dialect differences stay delegated to Cycle Database / DBAL integration.
 

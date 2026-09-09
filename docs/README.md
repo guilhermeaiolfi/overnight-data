@@ -10,9 +10,13 @@ The files linked below are the current reference material.
 - [`../CHANGELOG.md`](../CHANGELOG.md): Release history.
 - [`../UPGRADE.md`](../UPGRADE.md): What docs mean, upgrade expectations, no compatibility promise.
 
+## Overview
+
+- [`read-write.md`](./read-write.md): What must happen on reads and writes, then where it currently lives (class and file pointers). The steps are the design; class layout can change.
+
 ## Architecture
 
-Folder convention: [`architecture/README.md`](./architecture/README.md). Living how-it-works docs are the Query and ORM sections below.
+Folder convention: [`architecture/README.md`](./architecture/README.md). Living how-it-works docs are [`read-write.md`](./read-write.md) plus the Query and ORM sections below.
 
 Accepted lasting choices (rationale + consequences):
 

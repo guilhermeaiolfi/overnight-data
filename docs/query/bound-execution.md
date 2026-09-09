@@ -116,3 +116,5 @@ Selections, conditions, grouping, ordering, pagination, and cached references ar
 - `SelectQuery` depends only on `QueryExecutorInterface`.
 - Backend translation, semantic checks, SQL generation, and result fetching stay backend-owned.
 - The data layer should remain useful even when an optional ORM is absent.
+
+The necessary read steps (declare, path vs fetch, convert, assemble, materialize, optional tracking) are in [`../read-write.md`](../read-write.md).

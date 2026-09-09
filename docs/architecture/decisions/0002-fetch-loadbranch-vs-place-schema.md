@@ -4,7 +4,7 @@ Status: Accepted
 
 Supersedes proposal [`../proposals/archive/0003-load-graph-and-schema-as-place.md`](../proposals/archive/0003-load-graph-and-schema-as-place.md) (archived).
 
-Living contract: [`../../orm/representation-schema.md`](../../orm/representation-schema.md) and [`../../query/relation-loading.md`](../../query/relation-loading.md). Archived proposal 0003 still says “place” for this same concern.
+Living contract: [`../../orm/representation-schema.md`](../../orm/representation-schema.md) and [`../../query/relation-loading.md`](../../query/relation-loading.md). Birds-eye: read step R2 in [`../../read-write.md`](../../read-write.md). Archived proposal 0003 still says “place” for this same concern.
 
 ## Context
 

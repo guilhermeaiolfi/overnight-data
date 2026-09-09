@@ -171,6 +171,7 @@ GitHub Actions runs `composer validate --strict` and `composer check` on PHP 8.3
 - [`CHANGELOG.md`](CHANGELOG.md) lists release history.
 - [`UPGRADE.md`](UPGRADE.md) — what docs mean, and that there is no compatibility promise.
 - `docs/README.md` is the full documentation index.
+- [`docs/read-write.md`](docs/read-write.md) is the birds-eye read/write pipeline (necessary steps, then current class pointers).
 - `docs/definition-api.md` documents the canonical registry and definition API.
 - `docs/definition-extension-guide.md` documents supported definition extension points and storage rules.
 - `docs/mapper-runtime-guide.md` documents the mapper runtime, conversion system, and runtime registration surface.

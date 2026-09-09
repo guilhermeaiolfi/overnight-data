@@ -2,7 +2,7 @@
 
 `ON\Data\Query` provides a database-independent read-query model centered on `SelectQuery`.
 
-It models intent only. SQL translation, backend-specific semantics, and execution strategy stay outside the core query model.
+It models intent only. SQL translation, backend-specific semantics, and execution strategy stay outside the core query model. The necessary read steps this model serves are in [`../read-write.md`](../read-write.md).
 
 ## Constructing a query
 

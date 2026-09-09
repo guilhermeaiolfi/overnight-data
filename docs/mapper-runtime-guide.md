@@ -2,7 +2,7 @@
 
 `ON\Data` includes scalar conversion and recursive structural mapping under `ON\Data\Mapper`.
 
-The mapper runtime supports arrays, `stdClass`, and public-property DTOs. It also supports definition-aware scalar conversion through `->args($definition)`, ad-hoc scalar metadata through `->fieldMap(...)`, dotted-key expansion, and representation-aware conversion routed through canonical PHP values.
+The mapper runtime supports arrays, `stdClass`, and public-property DTOs. It also supports definition-aware scalar conversion through `->args($definition)`, ad-hoc scalar metadata through `->fieldMap(...)`, dotted-key expansion, and representation-aware conversion routed through canonical PHP values. That conversion authority is shared step S2 in [`read-write.md`](./read-write.md).
 
 ## Core concepts
 

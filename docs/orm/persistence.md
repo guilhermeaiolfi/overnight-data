@@ -25,6 +25,8 @@ CommandExecutorInterface
 
 `FlushExecutor` coordinates the pipeline as representation sync, relation persistence planning, then record flushing. `Session` owns the in-memory runtime stores used by that flow: weak `RepresentationStateStore`, strong `RecordStateStore`, strong `ToManyRelationStore`, and strong `ToOneRelationStore`.
 
+The necessary write steps (and the matching read steps) are in [`../read-write.md`](../read-write.md). This document is the current how-it-works for scalar commands, relation planners, and Cycle execution.
+
 ## State And Sync
 
 `RecordState` is the persistence source of truth. It stores canonical PHP values keyed by collection field name, the original clean snapshot, lifecycle state, and identity through `ON\Data\Key`.

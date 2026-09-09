@@ -1,6 +1,6 @@
 # Session save API
 
-ON Data persists through **bind → sync → flush**:
+ON Data persists through **bind → sync → flush**. The necessary write steps behind these calls are in [`../read-write.md`](../read-write.md).
 
 ```text
 update / create / detach / remove   → register intent (and relation unlink)
