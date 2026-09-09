@@ -44,12 +44,13 @@ select()
 - `LoadGraph` / `FetchPlan` / `ProjectionLayout` as parallel path or fetch inventories  
 - Inventing destinations only because a flat `sourcePath` exists  
 - Hybrid assemble that falls back to `EXPLICIT` tags for public paths when a schema is compiled  
+- `MaterializedRow` (or any per-row public/identity/child object) wrapping the identity overlay. Assemble already writes a same-level overlay beside public rows. `SelectQuery::publicRow()` is only the fast-path / `iterate()` `INTERNAL` / `SQL_ONLY` mask. Do not break `WritableResultHandler::track()` to pass a carrier; adoption already reads nested overlay arrays.
 
 ## Consequences
 
-- When `SelectQuery::needsRowAssemble()` is true, `beginFetch()` compiles (or reuses) a path schema; assemble writes public scalars via `getPublicScalarPaths()` and identity overlay keys via Implicit/PK paths.
+- When `SelectQuery::needsRowAssemble()` is true, `beginFetch()` compiles (or reuses) a path schema; assemble writes public scalars via `getPublicScalarPaths()` and identity overlay keys via Implicit/PK paths. `LoadRuntime` keeps those overlays beside public rows for writable `track()`; the fast path uses public rows as the overlay.
 - Plain own-field reads skip assemble and schema compile (executor keys already match paths).
-- Do not add a third path/fetch plan type. Fetch stays on `LoadBranch`; path stays on `RepresentationSchema`.
+- Do not add a third path/fetch plan type. Fetch stays on `LoadBranch`; path stays on `RepresentationSchema`. Identity stays overlay arrays, not a per-row carrier type.
 - Deferred separately: `query($schema)` reopen ([`../proposals/0001-representation-schema-as-reusable-model.md`](../proposals/0001-representation-schema-as-reusable-model.md)).
 
 ## References
