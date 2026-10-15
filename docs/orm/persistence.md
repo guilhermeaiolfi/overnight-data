@@ -25,6 +25,8 @@ CommandExecutorInterface
 
 `FlushExecutor` coordinates the pipeline as representation sync, relation persistence planning, then record flushing. `Session` owns the in-memory runtime stores used by that flow: weak `RepresentationStateStore`, strong `RecordStateStore`, strong `RelationStateStore` for both to-many and to-one state.
 
+Normal callers use `Session::flush()`. `FlushScheduler::run()` is the lower-level command scheduler: it plans record commands, resolves dependencies, executes commands, and finalizes record state. It does not synchronize representations, plan relation changes, or open a transaction. `run(..., deferFinalizers: true)` returns a `DeferredFlushResult` so `FlushExecutor` can finalize record state only after commit.
+
 The necessary write steps (and the matching read steps) are in [`../read-write.md`](../read-write.md). This document is the current how-it-works for scalar commands, relation planners, and Cycle execution.
 
 ## State And Sync

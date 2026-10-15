@@ -1,6 +1,6 @@
 # ORM Foundation
 
-This document records the foundation concepts for the `ON\Data` ORM. Some early sections describe the intended architecture before the runtime existed; current persistence behavior is documented in [`persistence.md`](./persistence.md), and the recursive representation schema model is documented in [`representation-schema.md`](./representation-schema.md).
+This guide describes the current ORM model and component responsibilities. See [`persistence.md`](./persistence.md) for command execution, [`session-save-api.md`](./session-save-api.md) for write examples, and [`representation-schema.md`](./representation-schema.md) for the schema model.
 
 The current implementation includes production record state, representation tracking, scalar sync, relation representation sync, relation persistence planning, scalar command planning, flush orchestration, session orchestration, and Cycle-backed scalar command execution. It still does not include lazy loading, generated repositories, service containers, events, proxy objects, `EntityManager`, or `UnitOfWork`.
 
@@ -8,20 +8,18 @@ The library remains standalone `ON\Data`. The Registry remains the owner of one 
 
 ## Persistence Model
 
-The ORM foundation is not the classic "entity object = row" model. The planned flow is:
+The ORM foundation is not the classic "entity object = row" model. The flow is:
 
 ```text
 database/query -> RecordState -> Representation
 Representation -> sync() -> RecordState -> flush() -> database
 ```
 
-The ORM persists synchronized record state, not PHP objects directly. The necessary read and write steps, and where they currently live, are in [`../read-write.md`](../read-write.md).
+`Session::flush()` applies staged write intents, synchronizes tracked objects, plans relation changes, and executes commands transactionally. `sync()` provides early synchronization and validation without database writes. The ORM persists synchronized record state. The necessary read and write steps, and where they currently live, are in [`../read-write.md`](../read-write.md).
 
 `FieldType` implementations and representations remain the conversion authority. SQL dialect differences stay delegated to Cycle Database / DBAL integration.
 
-Keep the existing mapper direction: `map($source)->to(...)`. ORM result-target work should extend that mental model instead of introducing a reversed or parallel mapper vocabulary.
-
-Public getters should use `getSomething()` naming. Keep code simple and readable, and avoid speculative containers, event systems, proxy systems, or duplicated metadata.
+Mapping uses `map($source)->to(...)`; query object targets use the same direction.
 
 ## RecordState
 
@@ -36,7 +34,7 @@ It stores:
 - dirty fields;
 - lifecycle state;
 - identity values through `ON\Data\Key`, including composite keys;
-- relation state metadata later.
+- in-memory revision history used by representation baselines and rollback. Relation state is stored separately in `RelationStateStore`.
 
 Identity is first-class through the existing `ON\Data\Key` type. It includes the collection name, primary-key values in definition key order, composite-key support, and canonical PHP values.
 
@@ -57,8 +55,9 @@ It stores:
 - the structure-only `RepresentationSchema`;
 - `RepresentationFieldStateItem` entries that attach structural field schemas to concrete `RecordState` objects and baseline record revisions;
 - `RepresentationRelationStateItem` entries that attach structural relation schemas to concrete owner `RecordState` objects;
-- writable/read-only flags per mapped slot through field schemas;
-- relation collection loaded state later.
+- writable/read-only flags per mapped slot through field schemas.
+
+Relation membership and completeness live in `RelationStateStore`.
 
 It does not store baseline field values. When sync needs an old value, it asks the owning `RecordState` history for the value at the tracked baseline revision.
 
@@ -77,6 +76,7 @@ $row = $query
         $u->posts->author->name->as('authorName'),
     )
     ->to(stdClass::class)
+    ->writable($session)
     ->fetchOne();
 
 $row->userName = 'New user';
@@ -99,27 +99,31 @@ authorName -> authors[id].name
 
 ## Sync
 
-Use `sync()` for both new and changed representations:
+Use `create()` for a new row and `update()` for an existing row. Both stage intent; a root needs a supplied or tracked schema, while a nested object can inherit its owning relation's schema. Primary-key presence does not choose create versus update.
 
 ```php
-$session->sync($user);
-$session->flush();
+$session->update($dto, $schema);
+$session->flush(); // admit the staged graph, synchronize, then write
 ```
 
-Do not design a public `persist()` API for create/update. The ORM decides whether the representation is new, whether it points at a new record, or whether it mutates already-known record state.
+`sync($object)` walks its schema graph and admits untracked children. An untracked object without explicit update intent defaults to a new record. `sync($object, $schema)` can admit a new entity-shaped root; mixed projections need existing concrete bindings or the staged write API. See [`session-save-api.md`](./session-save-api.md) for lifecycle and flat-source operations.
+
+`sync()` without an argument applies pending intents and synchronizes tracked objects. Pre-flush synchronization uses the same strict tracked-object path. Merely assigning an untracked child to an already-tracked object is insufficient: stage the owner with `update($owner)` or walk it with `sync($owner)` first. Unresolved staged intents fail before database writes.
 
 Deletion remains explicit:
 
 ```php
-$session->remove($user);
+$session->remove($user); // requires an already-tracked object representing one root record
 $session->flush();
 ```
 
-The exact deletion method name may remain open until the write API is designed.
+`identify($collection, $key)` attaches a key-only existing reference without querying or writing its fields. `detach($child, $owner, $relation)` expresses unlinking separately from deleting the child row.
+
+Write admission happens before the flush transaction. When persistence fails, admitted writes remain tracked for retry; record values, revision history, and tracked field baselines are restored together.
 
 ## Conflict Detection
 
-`sync()` must be explicit and conflict-aware.
+Synchronization is conflict-aware, whether requested explicitly or performed during flush.
 
 Field-level conflict rule:
 
@@ -149,22 +153,19 @@ $session->sync($representation1)
 
 The default result is conflict. The ORM must not silently overwrite `A2` with `A3` because representation 1 was based on stale data.
 
-Future explicit policies may exist:
+Scalar synchronization validates all plans as one batch: differing proposed values for the same concrete record field are rejected before any plan is applied. Missing properties are skipped; a present `null` is a value. Read-only fields are not written.
 
-```php
-$session->sync($representation, ConflictPolicy::OVERWRITE);
-$session->refresh($representation);
-```
-
-Default `sync()` remains safe.
+Explicit staged `update()` calls have ordered PATCH semantics: later patches to the same field win, as with successive explicit synchronization of those patches. This differs from conflicting edits to independently loaded writable objects. There is no public overwrite conflict policy or `Session::refresh()`.
 
 ## Runtime Stores
 
-Avoid object-first identity-map terminology. `Session` owns runtime stores:
+`SessionContext`, owned by `Session`, holds four runtime stores:
 
 ```text
 ON\Data\Key / RecordState state hash -> RecordState
 weak representation object -> RepresentationState
+owner record + relation name -> to-many / to-one relation state
+weak representation object -> staged RepresentationIntent
 ```
 
 Classic ORMs usually map identity to entity object. This ORM maps identity to record state, then allows many representations over that state.
@@ -173,17 +174,17 @@ Classic ORMs usually map identity to entity object. This ORM maps identity to re
 
 The store is responsible for aliasing both handles to the same `RecordState`. Scalar insert/flush logic calls `RecordStateStore::indexKey($state)` after assigning a generated key so keyed references can resolve the same state that was previously known only by local state hash.
 
-Flat projection identity resolution first uses visible field values, then falls back to `QuerySourceIdentities`' locator map for hidden primary-key result columns. Structural schemas have no concrete record to resolve until adoption creates `RepresentationFieldStateItem` or `RepresentationRelationStateItem` entries.
+`QuerySourceIdentities` reads primary-key paths from the assembled identity overlay using prepared schema sources. It holds neither per-row records nor a second locator map. Source paths distinguish different occurrences of the same collection. Structural schemas have no concrete record to resolve until adoption creates state items.
 
-`RecordStateStore` is not an object identity store. It strongly owns record state for the current session/unit of work. `ToManyRelationStore` and `ToOneRelationStore` also strongly own relation runtime state for the session.
+`RecordStateStore` is not an object identity store. It strongly owns record state for the current session/unit of work. `RelationStateStore` also strongly owns to-many and to-one relation runtime state for the session. `RepresentationIntentStore` uses weak object keys for staged create/update intent and source operations.
 
 `RepresentationStateStore` remains separate and tracks PHP representation object identity with weak keys. It does not keep representation objects alive in long-lived workers. When a representation object becomes otherwise unreachable, its store entry can disappear after garbage collection.
 
-Use one `Session` per request/job in long-lived workers. If a session is intentionally reused, call `Session::clear()` to clear record, representation, collection, and reference stores between jobs.
+Use one `Session` per request/job in long-lived workers. If a session is intentionally reused, call `Session::clear()` to clear record, representation, relation, and intent stores between jobs.
 
 ## SelectQuery Integration
 
-Do not introduce `EntityQuery`. The existing `SelectQuery` remains the one read-query API.
+`SelectQuery` is the read-query API.
 
 Result targets keep the existing mapping direction:
 
@@ -191,14 +192,13 @@ Result targets keep the existing mapping direction:
 $query->to(User::class);
 $query->to(UserSummary::class);
 $query->to(stdClass::class);
-$query->to([]);
+// Omit to() for array results.
 ```
 
 A `SelectQuery` with a target representation and no explicit `select()` uses the root collection's default scalar field selection. This is the normal root entity load:
 
 ```php
 $users = query($users)
-    ->where(fn ($u) => $u->active->equals(true))
     ->to(User::class)
     ->fetchAll();
 ```
@@ -211,7 +211,7 @@ map/hydrate each row to User
 track one root RecordState per row when ORM tracking is active
 ```
 
-The current v1.0 implementation defines root default fields as all normal root scalar fields. Later releases may become smarter based on target representation requirements.
+Root default fields are all normal root scalar fields.
 
 Default root selection is root-only. It must not auto-load relations; pass a `RelationRef` to `select()` (or configure the ref before fetch) for nested loading:
 
@@ -226,7 +226,7 @@ $users = $u
     ->fetchAll();
 ```
 
-A bare `$u->posts` in `select()` loads all visible related fields. Relation-only `select()` keeps default root scalars. Do not add `with()` for this.
+A bare `$u->posts` in `select()` loads all visible related fields. Relation-only `select()` keeps default root scalars.
 
 `stdClass` and array targets use the same omitted-selection rule:
 
@@ -235,14 +235,12 @@ $rows = query($users)
     ->to(stdClass::class)
     ->fetchAll();
 
-$rows = query($users)
-    ->to([])
-    ->fetchAll();
+$rows = query($users)->fetchAll(); // arrays
 ```
 
 Both produce root field representations. When ORM tracking is active, each `stdClass` object can be tracked as a root record representation.
 
-Any explicit `select(...)` disables the default root field selection:
+An explicit scalar selection replaces the default root scalar selection:
 
 ```php
 $rows = query($users)
@@ -251,7 +249,7 @@ $rows = query($users)
     ->fetchAll();
 ```
 
-That uses the explicit selection only, plus hidden required fields for identity/tracking if needed.
+That uses the explicit selection. Existing implicit selections can provide hidden identity fields required by the query shape. `writable()` does not add primary-key columns; missing fetched identity raises an error rather than adopting a fetched object as new.
 
 Writable results require lineage. A selected direct field can be writable if identity data is available:
 
@@ -267,35 +265,19 @@ $u->name->upper()->as('title');
 
 Expressions cannot safely reverse back into `users.name` without explicit support.
 
-If writable lineage requires primary-key fields that the user did not select publicly, the ORM/query pipeline may use existing implicit selection mechanisms instead of exposing those fields in the final result shape.
+`writable($session)` requires a supported mutable object target: `stdClass` or a mutable DTO. Arrays are query projections, not tracked root objects. Partial object results can be writable when their selected fields have known lineage and identity. See [`writable-select-query-projections.md`](./writable-select-query-projections.md).
 
 Hidden required fields must not appear in the final mapped representation unless explicitly selected or mapped.
 
-Relation loading uses `RelationRef` branch configuration, including refs passed to `SelectQuery::select()`. Do not add `with()`.
+Relation loading uses `RelationRef` branch configuration, including refs passed to `SelectQuery::select()`. There is no separate `with()` API.
 
 Relations remain class-based and pluggable. Relation definitions remain the source of relation intent; ORM write behavior is implemented by relation persistence planners that interpret those definitions.
 
 ## Schema Metadata
 
-Do not create a heavy `EntityMetadataRegistry`. Avoid duplicated metadata that redefines fields, field types, relations, storage names, or primary keys already known by collection definitions.
+Collection definitions own field types, relations, storage names, and primary keys. Representation schemas refer to that metadata rather than duplicating it in an entity metadata registry.
 
-Use this terminology:
-
-```text
-RepresentationMap
-RepresentationSchema
-RepresentationState
-```
-
-`RepresentationSchema` is the reusable mapping shape. It is not limited to instance-level tracking and can represent:
-
-```text
-root representation schema
-child representation schema/template
-relation item schema/template
-```
-
-Use this same concept for child and relation item mapping until implementation proves a separate `ChildRepresentationTemplate` class is necessary.
+`RepresentationSchema` is the reusable mapping shape for roots and related items. `RepresentationState` binds it to concrete records.
 
 The distinction is:
 
@@ -304,7 +286,7 @@ RepresentationSchema
     reusable mapping shape
 
 RepresentationState
-    concrete object + field/relation state items + baseline record revisions
+    concrete record bindings + baseline record revisions (object association lives in the store)
 ```
 
 Concrete runtime attachment may need local record state that is more precise than collection + field + `sourcePath`. A structure-only schema is reusable, but it is ambiguous for multiple new child records:
@@ -339,21 +321,11 @@ A `stdClass` may be persistable if it has representation schema and lineage. A r
 
 ## Partial Results
 
-Do not allow unsafe partial mutable managed entities.
+Partial arrays are query projections. Partial `stdClass` and mutable DTO objects can be writable for selected direct fields with known lineage and identity. Missing fields are not overwritten during sync; a present `null` is a write. Expressions are read-only by default.
 
-- partial arrays are projections;
-- partial DTOs are projections unless writable lineage exists for selected direct fields;
-- partial `stdClass` can be writable only for fields with known lineage and identity;
-- missing fields are not overwritten;
-- expressions are read-only by default.
+## Relation loading
 
-Partial explicit selections must not overwrite missing fields during sync. A fully default-selected root representation can be treated as the normal writable root case. Partial class representations should be treated carefully as projection-like unless the ORM explicitly tracks selected fields field-by-field.
-
-## Lazy Loading
-
-Lazy loading is dangerous and is not implemented. If it is supported later, it must be explicit and disableable. Accessing an unloaded relation in the default/strict mode should throw rather than silently treating the relation as empty.
-
-Query-driven structured loads already record membership completeness on `RepresentationRelationSchema` (`RelationLoadKnowledge`: Unknown / Partial / Full). Unqualified relation selections are Full; relation `where` / `limit` / `offset` are Partial. Only Full collections may replace/remove absent members on sync.
+There is no lazy loading. Query-driven structured loads record membership completeness on `RepresentationRelationSchema` (`RelationLoadKnowledge`: Unknown / Partial / Full). Unqualified relation selections are Full; relation `where` / `limit` / `offset` are Partial. Only Full collections may remove absent members during reconciliation. An unloaded or partial relation must never be treated as the complete database membership.
 
 ## Cascades
 
@@ -362,13 +334,6 @@ Query-driven structured loads already record membership completeness on `Represe
 Relation definitions still store `cascade` and `load` metadata because external tools (notably Overnight’s Cycle ORM schema generator) read those values when bridging definitions into Cycle schema options. Treat them as interoperability metadata for that path, not as ON\Data flush semantics.
 
 ON\Data also does not implement lazy loading. Relation `load('lazy'|'eager')` is similarly stored for external schema consumers; query relation loading is always explicit through `RelationRef` configuration.
-
-Guardrails for any future ON\Data cascade policy:
-
-- unloaded collections are not empty;
-- orphan removal requires a known removed child or a fully loaded collection;
-- cascade remove must not accidentally load/delete huge graphs;
-- relation write behavior belongs to relation write planners.
 
 ## Relation State
 
@@ -379,13 +344,12 @@ unloaded
 partial
 full
 ```
-```
 
 Rules:
 
 - adding a child to an unloaded collection is valid;
 - removing one known child from an unloaded collection can be valid;
-- replacing an unloaded collection must be rejected or represented as an explicit full replacement;
+- assigning an array to an unloaded collection supplies additions, not a complete replacement;
 - an unloaded collection must never be treated as empty.
 
 Relation tracking state must be ORM-owned. A DTO may expose a plain array, but that array alone cannot distinguish:
@@ -419,132 +383,40 @@ $relationState->remove($post);
 
 The default DTO array is not itself a change-notifying collection wrapper.
 
-The intended object concept is `ToManyRelationState`.
+`ToManyRelationState` owns the owner record, relation name, load state, known items, pending additions/removals, and reusable child schema. Known items are the in-memory view, not necessarily the full database relation. `isEmptyKnown()` does not prove the database relation is empty.
 
-It should eventually own:
+Query hydration seeds baseline membership directly. Inbound synchronization onto an unloaded collection treats present items as pending additions. `ToOneRelationState` keeps baseline and current target identities so the planner can distinguish unchanged, replaced, and cleared references.
 
-```text
-owner record
-relation definition/ref
-loaded state
-added children
-removed children
-child RepresentationSchema
-backing collection
-```
+Relation state records intent; configured persistence planners translate it into foreign-key changes, through-row commands, or deletion where the relation's exclusive policy requires it. A backing collection adapter is not required, and a generic collection library does not own these ORM semantics.
 
-When a new child is added, the relation collection should apply the child `RepresentationSchema` for that relation item.
+## Synchronization responsibilities
 
-Do not hard-depend on Doctrine Collections, Illuminate Collections, Loophp Collections, or any other collection package in the ORM foundation. Relation tracking is ORM-specific because the ORM needs owner record, relation definition, loaded state, child schema, added/removed children, cascade/orphan behavior, and relation persistence planning. Generic collection libraries do not know those things.
+`RepresentationReader` reads scalar bags through the mapper and relation paths from live objects. It distinguishes missing properties from present `null` values and supports numeric array path segments. It does not persist values.
 
-Later, allow backing collection adapters/factories, similar to Cycle's collection factory approach. A third-party collection can be backing storage or an exposed collection API, but it cannot own ORM relation semantics.
+`ScalarRepresentationSynchronizer` reads current values, detects conflicts, and produces `SyncPlan` instances containing field updates and conflicts. It validates the batch before applying plans. `SyncPlan::apply()` writes planned values into records and acknowledges field baselines.
 
-## Future Namespaces
+Several field updates can target one record. Persistence planning reads that record's aggregated dirty values and can emit one update command for all its changed fields. Sync plans do not assemble SQL commands.
 
-Likely future production namespaces:
+## Where to make changes
 
-```text
-ON\Data\ORM
-ON\Data\ORM\State
-ON\Data\ORM\Sync
-ON\Data\ORM\Persistence
-ON\Data\ORM\Relation
-ON\Data\ORM\Exception
-```
+| Change | Starting point |
+| --- | --- |
+| Public write operations and staged intent admission | `Session` |
+| Bind schema sources and admit object graphs | `RepresentationAdoptionEngine` |
+| Prepare and track writable query results | `WritableQueryResultTracker` |
+| Field conflicts, sync planning, and batch application | `ScalarRepresentationSynchronizer` |
+| Reconcile exposed relation values with runtime state | `RelationRepresentationSynchronizer` |
+| Translate relation deltas into persistence work | `RelationPersistencePlanner` and the relation's configured planner |
+| Transactional flush orchestration and rollback | `FlushExecutor` |
+| Schedule scalar/dependent commands and finalize record state | `FlushScheduler` |
+| Convert command values or execute backend commands | `ConvertingCommandExecutor` / `CycleCommandExecutor` |
 
-These namespaces ship in v1.0.
+`WritableQueryResultTracker` passes results to `RepresentationAdoptionEngine::attach()` to bind sources and walk relation children. `Session::adopt()` stores ready state; it does not perform another graph walk, synchronize values, or execute writes.
 
-## Phase 1A State Primitives
+Normal callers use `Session::flush()`. `FlushScheduler::run()` is a lower-level scheduling operation, not a substitute for session synchronization, relation planning, or transactional orchestration. See [`persistence.md`](./persistence.md) for those boundaries.
 
-Phase 1A introduces the first production ORM state primitives only:
+## Current limits
 
-- `RecordLifecycle`
-- `RecordHistory`
-- `RecordState`
-- `RecordStateStore`
-- `RepresentationFieldSchema`
-- `RepresentationSchema`
-- `RepresentationState`
-- `RepresentationStateStore`
-- `SyncConflict`
-- `SyncConflictDetector`
+The ORM does not provide lazy loading, generated repositories, proxy objects, a service container, an event system, an entity metadata registry, or separate `EntityManager` / `UnitOfWork` classes. There is no session transaction API, database optimistic locking, or `Session::refresh()`.
 
-Phase 1A did not introduce `EntityQuery`, `with()`, repositories, lazy loading, `sync()` runtime, `flush()` runtime, write planning, SQL commands, or a public `persist()` API. Later Phase 2 work added scalar sync, flush orchestration, and neutral scalar persistence commands; see [`persistence.md`](./persistence.md).
-
-## Phase 1D Relation Collection Primitives
-
-Phase 1D introduces `ON\Data\ORM\Relation\ToManyRelationState` as the ORM-owned relation collection primitive. Plain arrays remain valid read/projection values, but they are not writable relation persistence trackers because they cannot own loaded state or add/remove intent.
-
-`ToManyRelationState` owns the owner `RecordState`, relation name, loaded state, known in-memory items, local added/removed child intent, and the reusable child `RepresentationSchema` template. Known items are only the in-memory view currently held by the collection; they are not necessarily the full database relation. `isEmptyKnown()` means no items are currently known in memory, not that the database relation is empty. The collection stores the child schema for later relation runtime work, but it does not mutate that reusable template, apply the schema, or register tracked child representations in this phase.
-
-Adding a child to an unloaded collection is allowed and makes the collection partially loaded because at least one item is now known, while the complete database set remains unknown. Removing one known object reference from an unloaded collection is also allowed and does not imply the relation is empty. Removing from a relation collection removes the relation link intent; it is not necessarily deletion of the child entity.
-
-Future ORM runtime will apply the child schema to child `RecordState` instances and register tracked child representations. Third-party collection libraries may later provide backing adapters, but they do not own ORM relation semantics.
-
-## Phase 1E Child Representation Adoption
-
-Phase 1E introduces `Session::adopt()` as the session-layer store of a ready `RepresentationState` (records into `RecordStateStore`, representation into `RepresentationStateStore`). Building or walking a graph/flat projection is `RepresentationAdoptionEngine::attach()`, not another `adopt*` on Session.
-
-Typical child tracking builds `RepresentationState::fromRecords($schema, [root => $record])` then calls `Session::adopt()`. Relation runtime can use a `ToManyRelationState` child's schema the same way when adding a post object to a user's relation.
-
-`ToManyRelationState` still owns relation add/remove intent. Adoption only tracks the child representation; it does not add the item to the relation collection, inspect relation loaded state, sync representation values, persist, flush, write SQL, or mutate the child schema template.
-
-## Phase 1F Representation Value Reading
-
-Phase 1F introduces `ON\Data\ORM\Representation\Sync\RepresentationReader` as the small service that reads current values from object and `stdClass` representations using `RepresentationSchema` paths.
-
-The reader distinguishes a missing public property from a present `null` value, preserves schema insertion order, and supports simple dot paths through public properties. Numeric path segments can read array offsets for straightforward cases such as `posts.0.title`.
-
-It only reads current representation values. It does not sync values into `RecordState`, convert values, mutate representations, persist, flush, call getters/setters, inspect private properties, or write SQL. Future mapper/property-access integration can expand this beyond public properties and simple paths.
-
-## Phase 1G Sync Planning
-
-Phase 1G introduces `SyncPlan` and `SyncFieldUpdate` as the planning layer between tracked representations and sync application. Scalar sync planning and apply now live in `ScalarRepresentationSynchronizer`.
-
-`ScalarRepresentationSynchronizer` reads current representation values through `RepresentationReader`, detects conflicts, and produces a `SyncPlan` containing path-specific conflicts plus planned field updates. Read-only schemas are ignored for updates, conflicted paths are not planned as updates, and duplicate target updates with conflicting values are rejected instead of implying last-write-wins.
-
-Different fields on the same `RecordState` remain separate `SyncFieldUpdate` entries. Later scalar sync and flush runtime aggregate them through the dirty `RecordState`; current relation persistence planning is described in [`persistence.md`](./persistence.md).
-
-Planning does not mutate `RecordState`, update tracked baseline revisions, convert values, persist, flush, or apply the updates. Applying a `SyncPlan` is handled by the Phase 2 scalar synchronization runtime described in [`persistence.md`](./persistence.md). This completes the Phase 1 state/sync foundation.
-
-## Phase 1 Completed Foundation
-
-Phase 1 introduced only in-memory state, representation tracking, relation intent tracking, value reading, conflict detection, and sync-planning primitives. It did not introduce public `sync()`, `flush()`, `EntityManager`, query hydration runtime, repositories, database writes, relation write planners, or lazy loading. Later Phase 2 work added scalar sync/flush services and scalar database writes without adding an `EntityManager`, `UnitOfWork`, repositories, or lazy loading. Phase 3 adds relation representation sync and relation persistence planning; see [`persistence.md`](./persistence.md).
-
-`RecordState` is the canonical aggregation point for synchronized changes. `ScalarRepresentationSynchronizer` produces field-level `SyncFieldUpdate` objects in a `SyncPlan` and applies them to `RecordState`; it does not group database commands or clear conflicts by itself. Multiple different fields on the same `RecordState` may appear as separate `SyncFieldUpdate` entries. Scalar sync rejects duplicate updates when the same concrete record target and same field receive conflicting values in the same plan.
-
-Scalar sync-apply logic applies planned field updates to `RecordState`. Scalar flush/write planning aggregates dirty values from `RecordState::getDirtyValues()` into database commands, such as one update per record when possible.
-
-```text
-rep1 changes users.name
-rep2 changes users.email
-rep3 changes users.status
-
-Each representation can produce separate sync updates.
-
-After scalar sync apply:
-    one RecordState has dirty values:
-        name
-        email
-        status
-
-Scalar flush can group those dirty values into one database update for the users record.
-```
-
-`ToManyRelationState` tracks relation add/remove intent only. It does not persist, adopt, or write relations. `Session::adopt()` adopts tracking only; it does not sync values. `RepresentationReader` reads current values only; it does not convert, mutate, or sync. `SyncPlan` is a description of conflicts and possible field updates, not an apply operation.
-
-## Remaining Non-Goals
-
-Do not introduce as part of the current ORM persistence layer:
-
-- EntityManager;
-- UnitOfWork;
-- lazy loading;
-- generated repositories;
-- entity metadata registry;
-- service container;
-- event system;
-- proxy objects;
-- a separate transaction API on `Session`;
-- stale-row detection;
-- `Session::refresh()` of an existing row (write-path recovery of omitted insert columns and `DatabaseGenerator` update columns is implemented).
+Write-path recovery of omitted insert columns and `DatabaseGenerator` update columns is implemented. It does not provide general refresh of an existing row.

@@ -23,6 +23,7 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 ### Changed
 
+- **Removed unused `RecordFlusher` wrapper** — normal persistence continues through `Session::flush()` / `FlushExecutor`. Low-level scheduling uses `FlushScheduler::run()` directly; see [`UPGRADE.md`](UPGRADE.md) for the former wrapper's call equivalents. Scheduler and database integration coverage retain command-result, generated-key, and deferred-finalization checks.
 - **Staged writes are consumed by flush** — `Session::flush()` and argument-free `sync()` apply pending `update()` / `create()` intents. Explicit `sync($object)` remains available for early attachment and validation. Nested intent registration order is supported through the staged owner's schema; unresolved intents raise an error before writes.
 - **UI and Cycle collection metadata moved to plugins** — `Field` / `Relation` no longer expose `interface()` / `display()`. Attach `UiDefinitionPlugin`. Collection `entity()` / `repository()` / `mapper()` / `scope()` moved to `CycleCollectionPlugin`. Relation `cascade()` / `load()` stay on the relation.
 - **Field `comment()` removed** — use `description()`.
