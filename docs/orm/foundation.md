@@ -388,7 +388,7 @@ Rules:
 - replacing an unloaded collection must be rejected or represented as an explicit full replacement;
 - an unloaded collection must never be treated as empty.
 
-Mutable relation collections must be ORM-owned. Plain arrays cannot safely represent writable relation mutations because they cannot notify the ORM and cannot distinguish:
+Relation tracking state must be ORM-owned. A DTO may expose a plain array, but that array alone cannot distinguish:
 
 ```text
 unloaded
@@ -399,20 +399,25 @@ full replacement
 local projection change
 ```
 
-Plain arrays may still be read/projection values, but they are not writable relation trackers. Do not support this as a persistence operation:
+`RelationRepresentationSynchronizer` reads array membership at synchronization and reconciles it with `ToManyRelationState`, which owns the completeness knowledge and pending deltas. Adding an item to a partial or unknown relation is supported; removing absent members is allowed only for a fully loaded relation. `Session::detach()` provides explicit unlink intent without implying a complete collection.
+
+For example, a new child can be attached through the owner's schema before flush:
 
 ```php
 $user->posts[] = $post;
+$session->create($post);
+$session->sync($user); // walk the owner's relation schemas and adopt the child
+$session->flush();
 ```
 
-Writable relation add/remove must go through an ORM-owned relation collection:
+The runtime relation state also supports explicit add/remove operations:
 
 ```php
-$user->posts->add($post);
-$user->posts->remove($post);
+$relationState->add($post);
+$relationState->remove($post);
 ```
 
-A future explicit Session API may also expose relation mutations without a collection wrapper.
+The default DTO array is not itself a change-notifying collection wrapper.
 
 The intended object concept is `ToManyRelationState`.
 

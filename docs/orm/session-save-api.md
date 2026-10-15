@@ -1,14 +1,22 @@
 # Session save API
 
-ON Data persists through **bind → sync → flush**. The necessary write steps behind these calls are in [`../read-write.md`](../read-write.md).
+ON Data persists through **bind → synchronize → write**. `flush()` performs synchronization for staged writes and tracked objects; `sync()` lets callers synchronize and validate earlier without writing. The necessary write steps behind these calls are in [`../read-write.md`](../read-write.md).
 
 ```text
 update / create / detach / remove   → register intent (and relation unlink)
 sync($object)                       → adopt RepresentationState + push values into RecordState
-flush()                             → write commands (also syncs already-tracked representations)
+sync()                              → apply pending intents + synchronize all tracked objects
+flush()                             → apply pending intents + synchronize + write commands
 ```
 
-Pending `update` / `create` intents live in `RepresentationIntentStore` until `sync()`. Flush does **not** apply those intents; call `sync()` first after `update`/`create`.
+Pending `update` / `create` intents live in `RepresentationIntentStore` until `sync($object)`, `sync()`, or `flush()` applies them. A root needs a supplied or tracked schema. A nested object can inherit its schema when a staged owning graph is attached, regardless of intent registration order. An unresolved intent raises `SyncException` before database writes; it is never silently ignored.
+
+```php
+$session->update($dto, $map);
+$session->flush(); // no explicit sync required
+```
+
+Staging applies in memory before the flush transaction. If persistence fails, admitted writes remain tracked for retry; record history and tracked field baselines are restored together with record values. Explicit `sync()` does not write or commit.
 
 ## Shape: `RepresentationSchema`
 
@@ -39,6 +47,8 @@ $session->flush();
 | `identify($collection, $key)` | Existing row by key only — **no** field writes |
 | Primary key on the projection / `->identity()` | Resolves **which** row for `update` — does not choose create vs update |
 
+Explicit `update()` calls retain ordered PATCH semantics: when multiple staged DTOs patch the same field of the same row, the later patch wins, just as when each patch is explicitly synchronized before the next. This differs from independently editing two query-loaded writable objects: conflicting edits in a scalar sync batch raise `SyncException` instead of silently overwriting one another.
+
 Optional root identity when the PK is not on the DTO:
 
 ```php
@@ -47,7 +57,7 @@ $session->update($dto, $map)->identity(['id' => 10]);
 
 If both `identity()` and a readable PK on the DTO are present, they must agree.
 
-Nested objects use the same verbs (lifecycle only until parent `sync`):
+Nested objects use the same verbs (lifecycle only until the owning graph is admitted by `sync` or `flush`):
 
 ```php
 $session->update($dto, $map);
@@ -88,7 +98,7 @@ $session->remove($post);                           // DELETE the post row
 
 `detach` is a facade over `ToManyRelationState::remove` / to-one clear. Relation planners own through-row vs FK null behavior.
 
-Owner must already be tracked (`sync` first).
+Owner must already be tracked (`sync` or `flush` the staged owner first).
 
 ## To-one clear
 
@@ -117,8 +127,8 @@ $session->flush();
 $user = $q->to(stdClass::class)->writable($session)->fetchOne();
 // or: $q->to(UserRow::class)->writable($session)->fetchOne();
 $user->name = 'Ada';
-$session->sync($user); // recommended; flush also syncs already-tracked objects
+$session->sync($user); // optional early synchronization; flush also synchronizes
 $session->flush();
 ```
 
-Pending `update`/`create` intents (including schema overlays on a tracked object) are **not** applied by flush — call `sync` first.
+Pending `update`/`create` intents, including schema overlays on tracked objects, are applied by `flush()`. Keep `sync($object)` when early graph attachment or validation is useful. Merely assigning an untracked child to an already-tracked object does not stage a graph: call `update($owner)` or `sync($owner)` to walk that graph.

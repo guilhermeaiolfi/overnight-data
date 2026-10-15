@@ -43,7 +43,7 @@ Database → record meaning → user-facing object. Tracking is optional until t
 
 ## Writes
 
-Intent → tracked records → relation effects → commands → storage. Flush does not invent lifecycle; it writes what sync already admitted.
+Intent → tracked records → relation effects → commands → storage. `update` / `create` declare lifecycle. `flush()` admits explicitly staged work, synchronizes tracked objects, then writes; `sync()` can perform admission and synchronization earlier without writing.
 
 | Id | What must happen | Why |
 |---|---|---|
@@ -89,8 +89,8 @@ Grouped by current package. If you redesign, keep the step and move or merge the
 |---|---|---|
 | Read only | `query(…)->select(…)->fetchAll()` | Stops at R9. No session, no baseline. |
 | Read writable | `to(…)->writable($session)->fetchOne()` | R1–R10. Same object is tracked as clean. |
-| Write inbound graph | `update` / `create`, then `sync`, then `flush` | W1–W14. Flush also re-syncs already-tracked objects. |
-| Write loaded object | `sync($obj)`, then `flush()` | Skip W1 if hydrate already set lifecycle. Do not skip W3–W6. |
+| Write inbound graph | `update` / `create`, then `flush` (`sync` optional) | W1–W14. Staged roots supply schemas for their nested intents. |
+| Write loaded object | `flush()` (`sync($obj)` optional) | Skip W1 if hydrate already set lifecycle. Flush performs W3–W6. Stage or explicitly sync the owner to discover newly assigned untracked children. |
 | Unlink vs delete | `detach` vs `remove` | W7/W8 vs W6 delete. Relation planners own FK vs through-row. |
 
 ## Rethinkable
@@ -98,7 +98,7 @@ Grouped by current package. If you redesign, keep the step and move or merge the
 These are current implementation choices, not the work itself:
 
 - `Session` as the container
-- two public calls (`sync` then `flush`)
+- the optional early synchronization call (`sync`)
 - Cycle as the adapter
 - `RepresentationSchema` as the path type
 - command objects as the write boundary

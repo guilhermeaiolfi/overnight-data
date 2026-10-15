@@ -23,7 +23,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for release history and [`docs/quickstart.md`
 - Relation loading: structured relation selection for nested results, loader-owned join or separate-query execution, and parser-backed result assembly for built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relations.
 - ORM persistence: `RecordState`-backed scalar insert/update/delete planning, scalar and relation representation synchronization, configured relation persistence planning, `FlushExecutor` / `Session` orchestration, Cycle-backed command execution, affected-row validation, and simple auto-increment primary-key merge after inserts.
 - Query result export: array results by default, read-only `stdClass` and public-property class export, and writable `stdClass` or mutable public-property DTO query export with flat projection provenance.
-- Session save API: `update` / `create` / `detach` with `SelectQuery::projection()` or `schemaOf()` for inbound shapes; pending intents apply on `sync()`, then `flush()`.
+- Session save API: `update` / `create` / `detach` with `SelectQuery::projection()` or `schemaOf()` for inbound shapes; `flush()` applies pending intents and writes changes. `sync()` is available for early synchronization and validation.
 
 ## Query shape and persistence source are independent
 
@@ -109,7 +109,7 @@ Public-property class export requirements:
 - Public result keys must match public properties (or constructor/promoted parameters via the mapper).
 - Nested typed object properties may be materialized into their declared classes when supported.
 - Array relation/list properties annotated as `@var list<stdClass>` (or another item class) receive arrays of those items; bare `array` properties keep nested arrays.
-- Writable export is `stdClass`-only for now.
+- Writable export supports `stdClass` and concrete, non-readonly DTOs with mutable public properties.
 
 ## Writable export requirements
 

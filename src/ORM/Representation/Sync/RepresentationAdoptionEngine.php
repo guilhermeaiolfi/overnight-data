@@ -80,6 +80,15 @@ final class RepresentationAdoptionEngine
 		RepresentationAttachmentMode $mode,
 		array &$visited,
 	): RepresentationState {
+		if (isset($visited[spl_object_id($representation)])) {
+			return $reps->get($representation) ?? throw new StateException('Visited representation is missing tracked state.');
+		}
+
+		$intent = $context->getIntent();
+		if ($intent !== null && ($intent->getFlatOps() !== [] || $intent->getSchema() instanceof RepresentationSchema)) {
+			$mode = RepresentationAttachmentMode::Replace;
+		}
+
 		if ($mode === RepresentationAttachmentMode::Add && $reps->has($representation)) {
 			$tracked = $reps->get($representation);
 			if (! $tracked instanceof RepresentationState) {
@@ -94,6 +103,9 @@ final class RepresentationAdoptionEngine
 				$relations,
 				$visited,
 			);
+			if ($intent !== null) {
+				$this->intents?->remove($representation);
+			}
 
 			return $tracked;
 		}
@@ -118,6 +130,9 @@ final class RepresentationAdoptionEngine
 			$relations,
 			$visited,
 		);
+		if ($intent !== null) {
+			$this->intents?->remove($representation);
+		}
 
 		return $state;
 	}
@@ -165,7 +180,7 @@ final class RepresentationAdoptionEngine
 					$childRow = $this->childSourceRow($rawChildren, $index, many: true);
 					$this->attachRecursive(
 						$item,
-						$this->childContext($context, $relationSchema->getRelatedSchema(), $childRow),
+						$this->childContext($context, $relationSchema->getRelatedSchema(), $childRow, $item),
 						$records,
 						$reps,
 						$relations,
@@ -192,7 +207,7 @@ final class RepresentationAdoptionEngine
 					$childRow = $this->childSourceRow($rawChildren, 0, many: false);
 					$this->attachRecursive(
 						$target,
-						$this->childContext($context, $relationSchema->getRelatedSchema(), $childRow),
+						$this->childContext($context, $relationSchema->getRelatedSchema(), $childRow, $target),
 						$records,
 						$reps,
 						$relations,
@@ -216,17 +231,24 @@ final class RepresentationAdoptionEngine
 		RepresentationAdoptionContext $parent,
 		RepresentationSchema $relatedSchema,
 		?array $childRow,
+		object $representation,
 	): RepresentationAdoptionContext {
 		$policy = $parent->getPolicy();
+		$intent = null;
 		if ($policy !== AdoptionPolicy::Hydrate && $policy !== AdoptionPolicy::Identify) {
 			$policy = AdoptionPolicy::Create;
+			$intent = $this->intents?->get($representation);
+			$relatedSchema = $intent?->getSchema() ?? $relatedSchema;
 		}
 
 		return new RepresentationAdoptionContext(
 			schema: $relatedSchema,
 			policy: $policy,
-			identities: new QuerySourceIdentities($relatedSchema->getSources()),
+			identities: $intent !== null
+				? StaticSourceIdentities::fromIntent($relatedSchema, $intent)
+				: new QuerySourceIdentities($relatedSchema->getSources()),
 			sourceRow: $childRow,
+			intent: $intent,
 		);
 	}
 

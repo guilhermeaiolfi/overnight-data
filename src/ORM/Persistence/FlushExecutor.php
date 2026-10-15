@@ -66,7 +66,7 @@ final class FlushExecutor
 				$records = $context->getRecords();
 
 				// Sync already-tracked representations into RecordState / relation state.
-				// Pending Session::update/create intents are NOT applied here — call Session::sync() first.
+				// Session applies pending update/create intents before entering the flush transaction.
 				$syncResult = $this->syncer->sync($context);
 				$relationResult = $this->relationPlanner->plan($context);
 				$flush = $this->scheduler->run(

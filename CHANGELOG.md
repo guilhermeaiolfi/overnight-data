@@ -23,6 +23,7 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 ### Changed
 
+- **Staged writes are consumed by flush** — `Session::flush()` and argument-free `sync()` apply pending `update()` / `create()` intents. Explicit `sync($object)` remains available for early attachment and validation. Nested intent registration order is supported through the staged owner's schema; unresolved intents raise an error before writes.
 - **UI and Cycle collection metadata moved to plugins** — `Field` / `Relation` no longer expose `interface()` / `display()`. Attach `UiDefinitionPlugin`. Collection `entity()` / `repository()` / `mapper()` / `scope()` moved to `CycleCollectionPlugin`. Relation `cascade()` / `load()` stay on the relation.
 - **Field `comment()` removed** — use `description()`.
 - **Representation schema kernel** — place types (`RepresentationSchema` and field/relation/expression/source nodes) live in `ON\Data\Schema`. `QueryRepresentationSchemaCompiler` lives in `ON\Data\Query\Schema`. Query assemble no longer imports ORM. Writable identity locators (`QueryRepresentationPlan`, `QuerySourceIdentities`) stay in ORM; there is no separate identity planner.

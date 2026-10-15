@@ -21,6 +21,12 @@ final class RepresentationIntentStore
 		return $this->intents[$representation] ?? null;
 	}
 
+	/** @return iterable<object, RepresentationIntent> */
+	public function getAll(): iterable
+	{
+		return $this->intents;
+	}
+
 	public function has(object $representation): bool
 	{
 		return isset($this->intents[$representation]);

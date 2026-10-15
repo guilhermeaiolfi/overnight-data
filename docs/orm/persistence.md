@@ -16,14 +16,14 @@ RelationRepresentationSynchronizer
 RelationPersistencePlanner
   ToManyRelationState / ToOneRelationState changes -> RecordState mutations and/or extra persistence commands
 
-RecordFlusher
+FlushScheduler
   RecordState lifecycle/dirty state -> InsertCommand / UpdateCommand / DeleteCommand
 
 CommandExecutorInterface
   executes neutral commands
 ```
 
-`FlushExecutor` coordinates the pipeline as representation sync, relation persistence planning, then record flushing. `Session` owns the in-memory runtime stores used by that flow: weak `RepresentationStateStore`, strong `RecordStateStore`, strong `ToManyRelationStore`, and strong `ToOneRelationStore`.
+`FlushExecutor` coordinates the pipeline as representation sync, relation persistence planning, then record flushing. `Session` owns the in-memory runtime stores used by that flow: weak `RepresentationStateStore`, strong `RecordStateStore`, strong `RelationStateStore` for both to-many and to-one state.
 
 The necessary write steps (and the matching read steps) are in [`../read-write.md`](../read-write.md). This document is the current how-it-works for scalar commands, relation planners, and Cycle execution.
 
@@ -33,7 +33,7 @@ The necessary write steps (and the matching read steps) are in [`../read-write.m
 
 Representations are user-facing objects or values. A representation object can drift from its record state until synchronization happens. `RepresentationStateStore` associates the object with `RepresentationState` through weak object keys, so the session does not keep otherwise-unused representation objects alive. `ScalarRepresentationSynchronizer` reads field schemas only and applies planned representation field updates into `RecordState` while preserving the conflict rules from the ORM foundation: a representation based on a stale record revision cannot silently overwrite a newer record value.
 
-`Session::sync(?object $representation = null, ?RepresentationSchema $schema = null)` is the explicit graph entry point. With no argument it strictly syncs already-tracked representations. With an object it walks that object's explicit `RepresentationRelationSchema` graph, syncs scalar values into `RecordState`, and syncs relation values into `ToManyRelationState` / `ToOneRelationState` runtime state. It returns `SyncResult`, containing scalar sync plans and touched relation changes. It does not plan relation persistence, flush records, execute commands, mark records clean, or clear relation changes.
+`Session::sync(?object $representation = null, ?RepresentationSchema $schema = null)` is the explicit graph entry point. With no argument it first applies all pending update/create intents, then syncs tracked representations. Flush applies the same pending intents before starting its write transaction. With an object it walks that object's explicit `RepresentationRelationSchema` graph, syncs scalar values into `RecordState`, and syncs relation values into `ToManyRelationState` / `ToOneRelationState` runtime state. It returns `SyncResult`, containing scalar sync plans and touched relation changes. Scalar plans are validated as one batch: differing values targeting the same concrete record field are rejected before any plan is applied. It does not plan relation persistence, flush records, execute commands, mark records clean, or clear relation changes.
 
 For an untracked root object, `sync($object, $schema)` requires a root `RepresentationSchema` that targets exactly one root collection through its field schemas and/or relation owner schemas. This entry point is for entity-shaped object schemas. A schema with no resolvable collection, or a mixed/projection schema spanning multiple collections, cannot create a root `RecordState` and raises `StateException`. When the schema is valid, the root is tracked from that schema, then the method follows only explicit relation schemas. For `MANY` relation schemas, `null` means an empty collection and a non-null value must be iterable objects. For `ONE` relation schemas, `null` means no target and a non-null value must be an object. Each discovered untracked related object is tracked with that relation schema's `getRelatedSchema()`, and the walk continues recursively while guarding object identity cycles.
 
@@ -104,9 +104,9 @@ For scalar foreign-key relation shapes, the has-many, belongs-to, and has-one pl
 
 Neutral ORM persistence commands may also temporarily carry `ValueRef` values while they remain inside the flush pipeline. `CommandPlanner` and relation planners can build `InsertCommand`, `UpdateCommand`, and `DeleteCommand` instances that still contain unresolved references. `CommandValueResolver` collapses resolved command references in place before execution and rejects unresolved references at the adapter boundary.
 
-`RecordFlusher` flushes records in waves. Before each planning attempt it resolves any now-ready references and only plans records whose command-relevant values are concrete. This allows generated-key dependencies such as a new user with a new has-many post, a new belongs-to target with a new owner, or a new has-one owner with a new target to flush as parent/source insert first, generated value merge second, dependent record command third.
+`FlushScheduler` flushes records in waves. Before each planning attempt it resolves any now-ready references and only plans records whose command-relevant values are concrete. This allows generated-key dependencies such as a new user with a new has-many post, a new belongs-to target with a new owner, or a new has-one owner with a new target to flush as parent/source insert first, generated value merge second, dependent record command third.
 
-Many-to-many through-row commands use `ValueRef` for mapped owner and target key fields. Because relation commands execute after `RecordFlusher`, generated owner and target keys can be merged into their records first, then `CommandValueResolver` resolves the through-row command before it reaches `CommandExecutorInterface`.
+Many-to-many through-row commands use `ValueRef` for mapped owner and target key fields. Within each scheduling wave, ready record writes execute before extra relation commands. Generated owner and target keys can therefore be merged into their records before `CommandValueResolver` resolves a through-row command for `CommandExecutorInterface`.
 
 ## Commands
 
@@ -127,7 +127,7 @@ Each command carries the owning `CollectionInterface` plus canonical field-keyed
 
 Composite identity remains first-class. Update and delete identities are keyed by primary-key field name in definition order.
 
-`RecordFlusher` preserves command result order by actual execution wave. Clean records do not block a flush, and removed keyless records are discarded without a command. Removed keyed records only require concrete delete identity values; unresolved non-identity values do not block deletion.
+`FlushScheduler` preserves command result order by actual execution wave. Clean records do not block a flush, and removed keyless records are discarded without a command. Removed keyed records only require concrete delete identity values; unresolved non-identity values do not block deletion.
 
 ## Execution
 
@@ -160,7 +160,7 @@ When the actual affected-row count does not match the command policy, flush rais
 
 ## Generated Values
 
-`CommandResult` can carry generated values keyed by field name. `RecordFlusher` merges those values into the inserted `RecordState`, marks the record clean, and indexes it by `ON\Data\Key` when the key becomes complete.
+`CommandResult` can carry generated values keyed by field name. `FlushScheduler` merges those values into the inserted `RecordState`, marks the record clean, and indexes it by `ON\Data\Key` when the key becomes complete.
 
 Field definitions declare generation with `->generator($classOrInstance, $arg = null, $when = null)`:
 
@@ -257,14 +257,14 @@ Generated database values and omitted insert columns are recovered after insert 
 
 - synchronizes representation fields and relation values into ORM runtime state
 - plans configured relation persistence changes into scalar mutations and/or commands
-- flushes changed records through `RecordFlusher`
+- flushes changed records through `FlushScheduler`
 - returns `FlushResult` with sync plans and command results
 
 `Session` is the small runtime container around tracked representations and records. It provides public entry points for explicitly syncing an object graph and flushing planned persistence work.
 
 This is deliberately not an `EntityManager`. There is no repository API, object proxy system, lifecycle event system, generated model layer, or relation cascade writer. `sync($object)` is graph synchronization only; it is not a cascade policy, orphan-removal policy, generated-key dependency sorter, or transaction boundary. `remove($object)` only removes an already-tracked representation that maps to one concrete record.
 
-If a transaction fails, record values, lifecycle, revision history, and tracked representation baselines are restored together so edits can be retried.
+Pending write admission happens in memory before persistence. If a transaction fails, record values, lifecycle, revision history, and tracked representation baselines are restored together; admitted writes stay tracked for retry.
 
 `Session::flush()` always runs inside a database transaction via `TransactionalCommandExecutorInterface` (including `ConvertingCommandExecutor` wrapping `CycleCommandExecutor`). Executors that omit that interface are rejected with `NonTransactionalFlushException`. There is no separate transaction API on `Session`.
 

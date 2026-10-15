@@ -292,12 +292,46 @@ final class Session implements WritableResultHandler
 			return $this->syncer->sync($this->context, $representation);
 		}
 
+		$this->applyPendingIntents();
+
 		return $this->syncer->sync($this->context);
 	}
 
 	public function flush(): FlushResult
 	{
+		$this->applyPendingIntents();
+
 		return $this->flusher->flush($this->context);
+	}
+
+	private function applyPendingIntents(): void
+	{
+		$pending = [];
+		foreach ($this->context->getIntents()->getAll() as $representation => $intent) {
+			$pending[] = $representation;
+		}
+
+		while ($pending !== []) {
+			$before = count($pending);
+			foreach ($pending as $index => $representation) {
+				$intent = $this->context->getIntents()->get($representation);
+				if ($intent === null) {
+					unset($pending[$index]);
+
+					continue;
+				}
+				if ($intent?->getSchema() === null && ! $this->getRepresentations()->has($representation)) {
+					continue;
+				}
+
+				$this->applyIntent($representation, null);
+				unset($pending[$index]);
+			}
+
+			if (count($pending) === $before) {
+				throw new SyncException('Cannot apply pending write intents without a root RepresentationSchema. Supply a schema on update/create or stage an owning graph.');
+			}
+		}
 	}
 
 	private function applyIntent(object $representation, ?RepresentationSchema $schema): void
@@ -316,9 +350,6 @@ final class Session implements WritableResultHandler
 		$policy = $intent?->isCreate() === true
 			? AdoptionPolicy::Create
 			: ($intent?->isUpdate() === true ? AdoptionPolicy::Patch : AdoptionPolicy::Create);
-		$mode = $intent !== null && ($intent->getFlatOps() !== [] || $intent->getSchema() instanceof RepresentationSchema)
-			? RepresentationAttachmentMode::Replace
-			: RepresentationAttachmentMode::Add;
 		$identities = $intent !== null
 			? StaticSourceIdentities::fromIntent($resolvedSchema, $intent)
 			: null;
@@ -334,7 +365,6 @@ final class Session implements WritableResultHandler
 			$this->getRecords(),
 			$this->getRepresentations(),
 			$this->getRelations(),
-			$mode,
 		);
 
 		if ($intent !== null) {

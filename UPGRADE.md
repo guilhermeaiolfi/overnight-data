@@ -41,6 +41,7 @@ Git tags use the `vMAJOR.MINOR.PATCH` form (for example `v1.1.1`) so releases ar
 
 Notable recent breaks worth checking explicitly:
 
+- `Session::flush()` now applies staged `update()` / `create()` intents, including schema overlays, without requiring an explicit `sync()` first. Calls that previously staged writes and then flushed without writing now persist them. `sync()` without an object also consumes staged intents. Unresolved intents fail instead of being ignored.
 - `Session::flush()` / `FlushExecutor` require `TransactionalCommandExecutorInterface`. Plain `CommandExecutorInterface` implementations are rejected with `NonTransactionalFlushException`.
 - Field and relation `interface()` / `display()` moved to `UiDefinitionPlugin` via `extend(UiDefinitionPlugin::class)` / `getPlugin()`.
 - Collection `entity()` / `repository()` / `mapper()` / `scope()` moved to `CycleCollectionPlugin`.

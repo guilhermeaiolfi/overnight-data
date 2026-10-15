@@ -8,7 +8,7 @@ use ON\Data\Key;
 use ON\Data\Schema\RepresentationSchema;
 
 /**
- * Pending update/create intent for one representation until sync().
+ * Pending update/create intent for one representation until sync() or flush().
  */
 final class RepresentationIntent
 {

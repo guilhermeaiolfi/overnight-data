@@ -11,6 +11,7 @@ use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\ORM\Session;
+use ON\Data\Query\SelectQuery;
 use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationRelationSchema;
 use ON\Data\Schema\RepresentationSchema;
@@ -22,6 +23,30 @@ use Tests\ON\Data\Support\RecordingCommandExecutor;
 final class SessionGraphAdoptionTest extends TestCase
 {
 	use OrmFixture;
+
+	public function testStagedCyclicGraphBindsEachObjectOnlyOnceWithExplicitSchemas(): void
+	{
+		$users = $this->users();
+		$users->belongsTo('manager', 'users')->innerKey('manager_id')->outerKey('id')->nullable(true);
+		$query = new SelectQuery($users);
+		$query->select($query->name);
+		$query->manager->select('name');
+		$schema = $query->projection();
+		$first = (object) ['name' => 'First'];
+		$second = (object) ['name' => 'Second'];
+		$first->manager = $second;
+		$second->manager = $first;
+		$session = new Session(new RecordingCommandExecutor());
+		$session->create($first, $schema);
+		$session->create($second, $schema);
+
+		$session->sync();
+
+		self::assertCount(2, $session->getRecords()->getAll());
+		self::assertCount(2, $session->getRepresentations()->getAll());
+		self::assertSame('First', $session->getRepresentations()->get($first)->requireRootRecord()->getValue('name'));
+		self::assertSame('Second', $session->getRepresentations()->get($second)->requireRootRecord()->getValue('name'));
+	}
 
 	public function testAdoptRootWithNoRelationSchemasReturnsEmptyResult(): void
 	{
