@@ -18,12 +18,6 @@ use ON\Data\Mapper\Support\MappingNodePropertyFinder;
 
 final class DefinitionNodeResolver implements CacheableNodeResolverInterface
 {
-	private ?DefinitionArgumentLocator $runtimeLocator = null;
-
-	private ?BranchTargetInferrer $runtimeInferrer = null;
-
-	private ?MappingNodePropertyFinder $runtimePropertyFinder = null;
-
 	public function __construct(
 		private readonly ?DefinitionArgumentLocator $locator = null,
 		private readonly ?BranchTargetInferrer $inferrer = null,
@@ -114,32 +108,19 @@ final class DefinitionNodeResolver implements CacheableNodeResolverInterface
 		MappingRuntime $runtime,
 	): DefinitionArgumentLocator {
 		return $this->locator
-			?? (
-				$this->runtimeLocator
-				??= $runtime->getSharedInstance(
-					DefinitionArgumentLocator::class,
-				)
-			);
+			?? $runtime->getSharedInstance(DefinitionArgumentLocator::class);
 	}
 
 	private function getInferrer(
 		MappingRuntime $runtime,
 	): BranchTargetInferrer {
 		return $this->inferrer
-			?? (
-				$this->runtimeInferrer
-				??= $runtime->getSharedInstance(
-					BranchTargetInferrer::class,
-				)
-			);
+			?? $runtime->getSharedInstance(BranchTargetInferrer::class);
 	}
 
 	private function getPropertyFinder(
 		MappingRuntime $runtime,
 	): MappingNodePropertyFinder {
-		return $this->runtimePropertyFinder
-			??= $runtime->getSharedInstance(
-				MappingNodePropertyFinder::class,
-			);
+		return $runtime->getSharedInstance(MappingNodePropertyFinder::class);
 	}
 }

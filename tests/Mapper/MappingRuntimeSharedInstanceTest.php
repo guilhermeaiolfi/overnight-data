@@ -4,16 +4,25 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Mapper;
 
+use ON\Data\Definition\Registry;
 use ON\Data\Mapper\ConversionGateway;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\MappingRuntime;
 use ON\Data\Mapper\Resolution\BranchNodeResolution;
 use ON\Data\Mapper\Resolution\BranchNodeResolutionInterface;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
+use ON\Data\Mapper\Resolver\DefinitionNodeResolver;
+use ON\Data\Mapper\Resolver\GenericNodeResolver;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
+use ON\Data\Mapper\Resolver\ReflectionPropertyNodeResolver;
+use ON\Data\Mapper\Support\BranchTargetInferrer;
+use ON\Data\Mapper\Support\DefinitionArgumentLocator;
+use ON\Data\Mapper\Support\MappingNodePropertyFinder;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use ReflectionProperty;
+use WeakReference;
 
 final class MappingRuntimeSharedInstanceTest extends TestCase
 {
@@ -121,21 +130,44 @@ final class MappingRuntimeSharedInstanceTest extends TestCase
 		self::assertSame(0, SharedInstanceProbeService::$constructions);
 	}
 
-	public function testRuntimeSharedInstancesRemainInternalStateOnly(): void
+	#[DataProvider('builtinResolvers')]
+	public function testRetainedResolverDoesNotRetainOperationHelpers(string $resolverClass, mixed $target): void
 	{
-		$runtime = new MappingRuntime(ConversionGateway::createDefault()->getMapperManager());
-		$runtime->getSharedInstance(SharedInstanceProbeService::class);
+		$registry = new Registry();
+		$registry->collection('children')->primaryKey('id')->field('id', 'int')->end()->field('parent_id', 'int')->end();
+		$parents = $registry->collection('parents')->primaryKey('id')->field('id', 'int')->end();
+		$parents->hasMany('child', 'children')->innerKey('id')->outerKey('parent_id');
+		$gateway = ConversionGateway::createDefault();
+		$runtime = new MappingRuntime($gateway->getMapperManager());
+		$options = (new MappingOptions($gateway))->withArguments([$parents]);
+		$node = MappingNode::root(['child' => []], $target, $options)->createChildNode('child', []);
+		$resolver = new $resolverClass();
+		self::assertInstanceOf(BranchNodeResolutionInterface::class, $resolver->resolve($node, $runtime));
+		$helpers = [];
+		foreach ([BranchTargetInferrer::class, DefinitionArgumentLocator::class, MappingNodePropertyFinder::class] as $helperClass) {
+			$helpers[$helperClass] = WeakReference::create($runtime->getSharedInstance($helperClass));
+		}
 
-		self::assertArrayHasKey(
-			SharedInstanceProbeService::class,
-			$this->sharedInstancesProperty()->getValue($runtime),
-		);
+		unset($runtime);
+		gc_collect_cycles();
+
+		foreach ($helpers as $helperClass => $helper) {
+			self::assertNull($helper->get(), $helperClass);
+		}
 	}
 
-	private function sharedInstancesProperty(): ReflectionProperty
+	/** @return iterable<string, array{class-string<NodeResolverInterface>, mixed}> */
+	public static function builtinResolvers(): iterable
 	{
-		return new ReflectionProperty(MappingRuntime::class, 'sharedInstances');
+		yield 'definition' => [DefinitionNodeResolver::class, []];
+		yield 'reflection' => [ReflectionPropertyNodeResolver::class, SharedHelperTarget::class];
+		yield 'generic' => [GenericNodeResolver::class, []];
 	}
+}
+
+final class SharedHelperTarget
+{
+	public array $child = [];
 }
 
 final class SharedInstanceProbeService

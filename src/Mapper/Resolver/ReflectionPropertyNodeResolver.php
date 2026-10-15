@@ -22,10 +22,6 @@ use stdClass;
 
 final class ReflectionPropertyNodeResolver implements CacheableNodeResolverInterface
 {
-	private ?MappingNodePropertyFinder $runtimePropertyFinder = null;
-
-	private ?BranchTargetInferrer $runtimeInferrer = null;
-
 	public function __construct(
 		private readonly ?BranchTargetInferrer $inferrer = null,
 	) {
@@ -128,21 +124,13 @@ final class ReflectionPropertyNodeResolver implements CacheableNodeResolverInter
 	private function getPropertyFinder(
 		MappingRuntime $runtime,
 	): MappingNodePropertyFinder {
-		return $this->runtimePropertyFinder
-			??= $runtime->getSharedInstance(
-				MappingNodePropertyFinder::class,
-			);
+		return $runtime->getSharedInstance(MappingNodePropertyFinder::class);
 	}
 
 	private function getInferrer(
 		MappingRuntime $runtime,
 	): BranchTargetInferrer {
 		return $this->inferrer
-			?? (
-				$this->runtimeInferrer
-				??= $runtime->getSharedInstance(
-					BranchTargetInferrer::class,
-				)
-			);
+			?? $runtime->getSharedInstance(BranchTargetInferrer::class);
 	}
 }
