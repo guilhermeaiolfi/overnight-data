@@ -60,7 +60,7 @@ Intent → tracked records → relation effects → commands → storage. Flush 
 | W11 | Convert command values PHP → storage | Same conversion authority as reads, opposite direction. Adapters should not invent a second type system. |
 | W12 | Execute as one transaction; validate affected rows | A half-written graph is worse than failing. Zero-row updates usually mean the identity was wrong. |
 | W13 | Merge generated and defaulted values back into records | Later commands and later reads in this session must see the real identity. |
-| W14 | On failure, restore in-memory snapshots | A rolled-back insert must not leave a generated id in PHP as if it committed. |
+| W14 | On failure, restore record values, history, and representation baselines together | A rolled-back insert must not leave a generated id in PHP as if it committed; a retry must still see the pending edits. |
 
 ## Where it currently happens
 

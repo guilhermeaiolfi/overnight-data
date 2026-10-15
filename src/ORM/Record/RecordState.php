@@ -325,6 +325,7 @@ final class RecordState
 	 */
 	public function restorePersistenceSnapshot(array $snapshot): void
 	{
+		$this->history->discardAfter($snapshot['revision']);
 		$this->key = $snapshot['key'];
 		$this->lifecycle = $snapshot['lifecycle'];
 		$this->revision = $snapshot['revision'];

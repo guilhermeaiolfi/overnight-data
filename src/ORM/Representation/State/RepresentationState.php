@@ -264,6 +264,12 @@ final class RepresentationState
 		));
 	}
 
+	/** Restore baselines from a pre-flush clone after a transaction failure. @internal */
+	public function restoreSyncBaselines(self $snapshot): void
+	{
+		$this->fieldItems = $snapshot->fieldItems;
+	}
+
 	/**
 	 * Deliberate post-sync acknowledgement only.
 	 *

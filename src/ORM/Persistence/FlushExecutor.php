@@ -52,6 +52,10 @@ final class FlushExecutor
 		$flush = null;
 		$relationResult = null;
 		$recordSnapshots = $this->snapshotRecords($context);
+		$representationSnapshots = [];
+		foreach ($context->getRepresentations()->getAll() as $state) {
+			$representationSnapshots[] = [$state, clone $state];
+		}
 
 		try {
 			$result = $transactionalExecutor->transaction(function () use (
@@ -78,6 +82,9 @@ final class FlushExecutor
 			});
 		} catch (Throwable $exception) {
 			$this->restoreRecords($recordSnapshots);
+			foreach ($representationSnapshots as [$state, $snapshot]) {
+				$state->restoreSyncBaselines($snapshot);
+			}
 
 			throw $exception;
 		}

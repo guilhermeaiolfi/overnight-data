@@ -142,6 +142,41 @@ final class FlushExecutorTest extends TestCase
 		(new FlushExecutor($executor))->flush($this->context(new RepresentationStateStore(), $this->records($record)));
 	}
 
+	public function testFailedFlushRestoresBaselinesAndHistorySoAnEditedObjectCanBeRetried(): void
+	{
+		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'Original']);
+		$object = $this->representation(['name' => 'Changed']);
+		$tracked = $this->tracked($object, $this->schema(['name' => [$record, 'name']]));
+		$context = $this->context($this->representations($tracked), $this->records($record));
+		$executor = new CallbackCommandExecutor(static function (CommandInterface $command, array $commands): CommandResult {
+			if (count($commands) === 1) {
+				throw new LogicException('transient failure');
+			}
+
+			return new CommandResult(1);
+		});
+		$flusher = new FlushExecutor($executor);
+
+		try {
+			$flusher->flush($context);
+			self::fail('Expected the first flush to fail.');
+		} catch (LogicException $exception) {
+			self::assertSame('transient failure', $exception->getMessage());
+		}
+
+		self::assertSame('Original', $record->getValue('name'));
+		self::assertSame(1, $record->getRevision());
+		self::assertSame(1, $tracked->getFieldItem('name')->getBaselineRevision());
+		self::assertSame([1], $record->getHistory()->getRevisions());
+
+		$result = $flusher->flush($context);
+		self::assertCount(1, $result->getCommandResults());
+		self::assertSame('Changed', $record->getValue('name'));
+		self::assertTrue($record->isClean());
+		$object->name = 'Changed again';
+		self::assertCount(1, $flusher->flush($context)->getCommandResults());
+	}
+
 	public function testFailedFlushDoesNotExecuteLaterDependentCommands(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();

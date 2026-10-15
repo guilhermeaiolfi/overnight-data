@@ -264,6 +264,8 @@ Generated database values and omitted insert columns are recovered after insert 
 
 This is deliberately not an `EntityManager`. There is no repository API, object proxy system, lifecycle event system, generated model layer, or relation cascade writer. `sync($object)` is graph synchronization only; it is not a cascade policy, orphan-removal policy, generated-key dependency sorter, or transaction boundary. `remove($object)` only removes an already-tracked representation that maps to one concrete record.
 
+If a transaction fails, record values, lifecycle, revision history, and tracked representation baselines are restored together so edits can be retried.
+
 `Session::flush()` always runs inside a database transaction via `TransactionalCommandExecutorInterface` (including `ConvertingCommandExecutor` wrapping `CycleCommandExecutor`). Executors that omit that interface are rejected with `NonTransactionalFlushException`. There is no separate transaction API on `Session`.
 
 ## Current Limits

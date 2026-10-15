@@ -103,6 +103,17 @@ final class RecordHistory
 		}
 	}
 
+	/** Discard values produced by a rolled-back persistence attempt. @internal */
+	public function discardAfter(int $revision): void
+	{
+		$this->assertPositiveRevision($revision);
+		foreach (array_keys($this->snapshots) as $recordedRevision) {
+			if ($recordedRevision > $revision) {
+				unset($this->snapshots[$recordedRevision]);
+			}
+		}
+	}
+
 	private function assertPositiveRevision(int $revision): void
 	{
 		if ($revision < 1) {
