@@ -274,12 +274,20 @@ final class RepresentationState
 	 * Deliberate post-sync acknowledgement only.
 	 *
 	 * @param array<string, RecordState> $touchedRecords
+	 * @param array<string, mixed>|null $currentValues When supplied, acknowledge only values confirmed by this representation.
 	 */
-	public function acceptSyncedRecords(array $touchedRecords): void
+	public function acceptSyncedRecords(array $touchedRecords, ?array $currentValues = null): void
 	{
 		foreach ($this->fieldItems as $path => $item) {
 			$record = $item->getRecord();
 			if (! array_key_exists($record->getStateHash(), $touchedRecords)) {
+				continue;
+			}
+			if ($currentValues !== null && (
+				! array_key_exists($path, $currentValues)
+				|| ! $item->hasCurrentRecordValue()
+				|| $currentValues[$path] !== $item->getCurrentRecordValue()
+			)) {
 				continue;
 			}
 

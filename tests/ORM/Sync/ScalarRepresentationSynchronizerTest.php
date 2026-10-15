@@ -91,6 +91,57 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 		self::assertSame('B2', $second->getValue('name'));
 	}
 
+	public function testConflictingUpdatesAcrossRepresentationsAreRejectedBeforeAnyWrites(): void
+	{
+		$record = RecordState::new($this->users(), ['name' => 'Original']);
+		$schema = $this->schema($this->field('name', $record->getCollection(), 'name'));
+		$first = $this->tracked($this->representation(['name' => 'Alice']), $schema, $record);
+		$second = $this->tracked($this->representation(['name' => 'Bob']), $schema, $record);
+
+		$this->expectException(SyncException::class);
+		$this->expectExceptionMessage('multiple values');
+
+		try {
+			$this->synchronizer()->sync($this->representations($first, $second), new RecordStateStore());
+		} finally {
+			self::assertSame('Original', $record->getValue('name'));
+			self::assertSame(1, $first->getFieldItem('name')->getBaselineRevision());
+			self::assertSame(1, $second->getFieldItem('name')->getBaselineRevision());
+		}
+	}
+
+	public function testMatchingUpdatesAcrossRepresentationsRemainIdempotent(): void
+	{
+		$record = RecordState::new($this->users(), ['name' => 'Original']);
+		$schema = $this->schema($this->field('name', $record->getCollection(), 'name'));
+		$first = $this->tracked($this->representation(['name' => 'Alice']), $schema, $record);
+		$second = $this->tracked($this->representation(['name' => 'Alice']), $schema, $record);
+		$representations = $this->representations($first, $second);
+
+		$this->synchronizer()->sync($representations, new RecordStateStore());
+		$this->synchronizer()->sync($representations, new RecordStateStore());
+
+		self::assertSame('Alice', $record->getValue('name'));
+		self::assertSame(2, $record->getRevision());
+	}
+
+	public function testDisjointEditsOnOneRecordRemainStableAcrossRepeatedSyncs(): void
+	{
+		$record = RecordState::new($this->users(), ['name' => 'Original', 'email' => 'old@example.test']);
+		$schema = $this->schema(
+			$this->field('name', $record->getCollection(), 'name'),
+			$this->field('email', $record->getCollection(), 'email'),
+		);
+		$first = $this->tracked($this->representation(['name' => 'Alice', 'email' => 'old@example.test']), $schema, $record);
+		$second = $this->tracked($this->representation(['name' => 'Original', 'email' => 'new@example.test']), $schema, $record);
+		$representations = $this->representations($first, $second);
+
+		$this->synchronizer()->sync($representations, new RecordStateStore());
+		$this->synchronizer()->sync($representations, new RecordStateStore());
+
+		self::assertSame(['name' => 'Alice', 'email' => 'new@example.test'], $record->getValues());
+	}
+
 	public function testReadOnlySchemasAreNotAppliedAsUpdates(): void
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);

@@ -30,27 +30,46 @@ final class ScalarRepresentationSynchronizer
 		$states = $representations->getAll();
 		$plans = [];
 		$plannedStates = [];
+		$plannedValues = [];
 
 		foreach ($states as $representation => $state) {
-			$plans[] = $this->buildPlan($representation, $state, $records);
+			$currentValues = $this->readWritableValues($representation, $state);
+			$plans[] = $this->buildPlan($state, $records, $currentValues);
 			$plannedStates[] = $state;
+			$plannedValues[] = $currentValues;
 		}
 
 		$this->assertNoConflicts($plans);
+		$this->assertNoConflictingUpdates($plans);
 
 		foreach ($plannedStates as $index => $state) {
-			$plans[$index]->apply($state);
+			$plans[$index]->apply($state, $plannedValues[$index]);
 		}
 
 		return $plans;
 	}
 
+	/** @param list<SyncPlan> $plans */
+	private function assertNoConflictingUpdates(array $plans): void
+	{
+		$updatesByTarget = [];
+		foreach ($plans as $plan) {
+			foreach ($plan->getUpdates() as $update) {
+				$target = $update->getRecord()->getStateHash() . "\0" . $update->getField();
+				if (isset($updatesByTarget[$target])) {
+					$this->assertDuplicateTargetHasSameValue($updatesByTarget[$target], $update->getValue(), $update->getSchema()->getPath());
+				}
+				$updatesByTarget[$target] = $update;
+			}
+		}
+	}
+
+	/** @param array<string, mixed> $currentValues */
 	private function buildPlan(
-		object $representation,
 		RepresentationState $state,
 		RecordStateStore $records,
+		array $currentValues,
 	): SyncPlan {
-		$currentValues = $this->readWritableValues($representation, $state);
 		$conflicts = $this->conflicts->detect(
 			$state,
 			$currentValues,

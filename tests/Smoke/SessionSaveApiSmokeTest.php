@@ -7,6 +7,7 @@ namespace Tests\ON\Data\Smoke;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
+use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Session;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
@@ -240,6 +241,33 @@ final class SessionSaveApiSmokeTest extends TestCase
 		$session->flush();
 
 		self::assertSame(['name' => 'Old'], $harness->fetchRow('SELECT name FROM users WHERE id = 1'));
+	}
+
+	public function testFlushRejectsConflictingWritableObjectsBeforeChangingTheDatabase(): void
+	{
+		$harness = SqliteMemoryHarness::create();
+		$harness->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
+		$harness->exec("INSERT INTO users VALUES (1, 'Original')");
+		[$users] = $this->flatRegistry();
+		$session = new Session($harness->commandExecutor);
+		$query = $harness->database->query($users);
+		$query->select($query->id, $query->name)->to(stdClass::class)->writable($session);
+		$first = $query->fetchOne(1);
+		$second = $query->fetchOne(1);
+		$first->name = 'Alice';
+		$second->name = 'Bob';
+
+		try {
+			$session->flush();
+			self::fail('Expected conflicting edits to be rejected.');
+		} catch (SyncException $exception) {
+			self::assertStringContainsString('multiple values', $exception->getMessage());
+		}
+		self::assertSame(['name' => 'Original'], $harness->fetchRow('SELECT name FROM users WHERE id = 1'));
+
+		$second->name = 'Alice';
+		$session->flush();
+		self::assertSame(['name' => 'Alice'], $harness->fetchRow('SELECT name FROM users WHERE id = 1'));
 	}
 
 	public function testDetachIdentifiedChildFromUnloadedM2M(): void

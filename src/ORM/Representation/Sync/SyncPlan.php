@@ -56,8 +56,10 @@ final class SyncPlan
 
 	/**
 	 * Apply planned field writes into RecordState and acknowledge baselines on $state.
+	 *
+	 * @param array<string, mixed>|null $currentValues Captured representation values for field-level acknowledgement.
 	 */
-	public function apply(RepresentationState $state): void
+	public function apply(RepresentationState $state, ?array $currentValues = null): void
 	{
 		$touchedRecords = [];
 
@@ -67,6 +69,6 @@ final class SyncPlan
 			$touchedRecords[$record->getStateHash()] = $record;
 		}
 
-		$state->acceptSyncedRecords($touchedRecords);
+		$state->acceptSyncedRecords($touchedRecords, $currentValues);
 	}
 }
