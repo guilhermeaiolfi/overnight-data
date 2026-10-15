@@ -5,14 +5,13 @@ declare(strict_types=1);
 namespace ON\Data\Mapper;
 
 use ON\Data\Mapper\Exception\MappingException;
+use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
 use ON\Data\Mapper\Writer\WriterInterface;
 
 final class MappingRuntime
 {
-	private ?FieldConversionCoordinator $converter = null;
-
 	/**
 	 * @var array<class-string, object>
 	 */
@@ -66,11 +65,36 @@ final class MappingRuntime
 		LeafNodeResolutionInterface $leaf,
 		MappingNode $node,
 	): mixed {
-		return $this->getConverter()->convert(
-			value: $value,
-			leaf: $leaf,
-			node: $node,
-		);
+		if ($leaf->getType() === null) {
+			return $value;
+		}
+
+		$options = $node->getOptions();
+		$from = $options->getSourceRepresentation();
+		$to = $options->getOutputRepresentation();
+
+		if ($from === null && $to === null) {
+			return $value;
+		}
+
+		try {
+			return $this->mapperManager->getGateway()->to(
+				$from ?? PhpRepresentation::class,
+				$value,
+				$to ?? PhpRepresentation::class,
+				$leaf,
+			);
+		} catch (MappingException $exception) {
+			if ($node->getPath() === '') {
+				throw $exception;
+			}
+
+			throw new MappingException(
+				sprintf("Failed converting value at path '%s'.", $node->getPath()),
+				0,
+				$exception,
+			);
+		}
 	}
 
 	private function mapCollection(
@@ -170,11 +194,6 @@ final class MappingRuntime
 
 		return $this->resolverChains[$key]
 			??= $this->mapperManager->createResolverChain($options);
-	}
-
-	private function getConverter(): FieldConversionCoordinator
-	{
-		return $this->converter ??= $this->mapperManager->createFieldConversionCoordinator();
 	}
 
 	private function isConversionEnabled(

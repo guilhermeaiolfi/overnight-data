@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Mapper;
 
+use InvalidArgumentException;
 use ON\Data\Mapper\ConversionGateway;
-use ON\Data\Mapper\FieldConversionCoordinator;
+use ON\Data\Mapper\Exception\ConversionException;
+use ON\Data\Mapper\Exception\MappingException;
+use ON\Data\Mapper\FieldMap;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
@@ -17,7 +20,6 @@ use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
 use PHPUnit\Framework\TestCase;
-use ReflectionProperty;
 use Tests\ON\Data\Fixture\ApiRepresentation;
 use Tests\ON\Data\Fixture\TrackingApiCodec;
 use Tests\ON\Data\Fixture\TrackingCustomFieldType;
@@ -25,27 +27,38 @@ use Tests\ON\Data\Fixture\TrackingWireCodec;
 
 final class MappingRuntimeConversionGateTest extends TestCase
 {
+	public function testRecursiveConversionFailureKeepsPathAndPreviousException(): void
+	{
+		try {
+			map(['child' => ['id' => 'invalid']], null, $this->gateway())
+				->from(WireRepresentation::class)
+				->fieldMap(FieldMap::fromArray(['child.id' => 'int']))
+				->to([]);
+			self::fail('Expected the invalid integer to fail conversion.');
+		} catch (MappingException $exception) {
+			self::assertSame("Failed converting value at path 'child.id'.", $exception->getMessage());
+			self::assertInstanceOf(ConversionException::class, $exception->getPrevious());
+			self::assertInstanceOf(InvalidArgumentException::class, $exception->getPrevious()->getPrevious());
+		}
+	}
+
+	public function testRootConversionFailurePreservesOriginalException(): void
+	{
+		$gateway = $this->gateway();
+		$node = MappingNode::root('invalid', [], (new MappingOptions($gateway))->withSourceRepresentation(WireRepresentation::class));
+
+		try {
+			$this->runtimeFor($gateway)->convert('invalid', LeafNodeResolution::named('id', 'int'), $node);
+			self::fail('Expected the invalid integer to fail conversion.');
+		} catch (MappingException $exception) {
+			self::assertSame(ConversionException::class, $exception::class);
+			self::assertInstanceOf(InvalidArgumentException::class, $exception->getPrevious());
+		}
+	}
+
 	protected function setUp(): void
 	{
 		TrackingCustomFieldType::reset();
-	}
-
-	public function testOrdinaryMappingsDoNotCreateConversionCoordinator(): void
-	{
-		$gateway = $this->gateway();
-		$runtime = $this->runtimeFor($gateway);
-
-		self::assertSame(
-			['id' => 1, 'name' => 'Ada'],
-			$runtime->mapNode(
-				MappingNode::root(
-					source: ['id' => 1, 'name' => 'Ada'],
-					target: [],
-					options: new MappingOptions($gateway),
-				),
-			),
-		);
-		self::assertNull($this->converterProperty()->getValue($runtime));
 	}
 
 	public function testMappingWithoutRepresentationsNeverInvokesConversionGateway(): void
@@ -65,7 +78,6 @@ final class MappingRuntimeConversionGateTest extends TestCase
 			),
 		);
 		self::assertSame([], TrackingCustomFieldType::calls());
-		self::assertNull($this->converterProperty()->getValue($runtime));
 	}
 
 	public function testSourceRepresentationAloneStillInvokesConversion(): void
@@ -86,7 +98,6 @@ final class MappingRuntimeConversionGateTest extends TestCase
 			),
 		);
 		self::assertSame(['wireCodec:toPhp'], TrackingCustomFieldType::calls());
-		self::assertInstanceOf(FieldConversionCoordinator::class, $this->converterProperty()->getValue($runtime));
 	}
 
 	public function testOutputRepresentationAloneStillInvokesConversion(): void
@@ -107,7 +118,6 @@ final class MappingRuntimeConversionGateTest extends TestCase
 			),
 		);
 		self::assertSame(['apiCodec:fromPhp'], TrackingCustomFieldType::calls());
-		self::assertInstanceOf(FieldConversionCoordinator::class, $this->converterProperty()->getValue($runtime));
 	}
 
 	public function testSourceAndOutputRepresentationsTogetherStillInvokeConversion(): void
@@ -129,7 +139,6 @@ final class MappingRuntimeConversionGateTest extends TestCase
 			),
 		);
 		self::assertSame(['wireCodec:toPhp', 'apiCodec:fromPhp'], TrackingCustomFieldType::calls());
-		self::assertInstanceOf(FieldConversionCoordinator::class, $this->converterProperty()->getValue($runtime));
 	}
 
 	public function testCollectionsRetainSameOutputWhenConversionIsDisabled(): void
@@ -156,7 +165,6 @@ final class MappingRuntimeConversionGateTest extends TestCase
 			),
 		);
 		self::assertSame([], TrackingCustomFieldType::calls());
-		self::assertNull($this->converterProperty()->getValue($runtime));
 	}
 
 	public function testRecursiveLeafConversionStillWorks(): void
@@ -188,7 +196,6 @@ final class MappingRuntimeConversionGateTest extends TestCase
 			),
 		);
 		self::assertSame([], TrackingCustomFieldType::calls());
-		self::assertInstanceOf(FieldConversionCoordinator::class, $this->converterProperty()->getValue($runtime));
 	}
 
 	private function gateway(): ConversionGateway
@@ -206,11 +213,6 @@ final class MappingRuntimeConversionGateTest extends TestCase
 		return new MappingRuntime(
 			mapperManager: $gateway->getMapperManager(),
 		);
-	}
-
-	private function converterProperty(): ReflectionProperty
-	{
-		return new ReflectionProperty(MappingRuntime::class, 'converter');
 	}
 }
 

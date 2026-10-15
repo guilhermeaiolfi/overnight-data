@@ -85,7 +85,6 @@ final class MapperArchitectureTest extends TestCase
 			'/MappingBranch.php',
 			'/Writer/WriterStateInterface.php',
 			'/functions.php',
-			'/FieldConversionCoordinator.php',
 			'/Mapper/MapperInterface.php',
 			'/Mapper/ArrayMapper.php',
 			'/Mapper/ObjectMapper.php',

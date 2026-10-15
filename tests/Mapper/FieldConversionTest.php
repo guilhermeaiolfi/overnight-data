@@ -6,7 +6,6 @@ namespace Tests\ON\Data\Mapper;
 
 use DateTimeImmutable;
 use ON\Data\Mapper\ConversionGateway;
-use ON\Data\Mapper\FieldConversionCoordinator;
 use ON\Data\Mapper\FieldMap;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\MappingNode;
@@ -30,7 +29,7 @@ use Tests\ON\Data\Fixture\ReflectedArticleDto;
 use Tests\ON\Data\Fixture\StatusEnum;
 use Tests\ON\Data\Fixture\UserInputDto;
 
-final class FieldConversionCoordinatorTest extends TestCase
+final class FieldConversionTest extends TestCase
 {
 	public function testReflectionPropertyResolverUsesMapperProperty(): void
 	{
@@ -163,42 +162,42 @@ final class FieldConversionCoordinatorTest extends TestCase
 		self::assertNull($resolver->resolve($numericNode, $this->runtimeFor($numericNode)));
 	}
 
-	public function testCoordinatorLeavesValueUnchangedWithoutRepresentations(): void
+	public function testRuntimeLeavesValueUnchangedWithoutRepresentations(): void
 	{
-		$coordinator = new FieldConversionCoordinator($this->gateway());
+		$runtime = new MappingRuntime($this->gateway()->getMapperManager());
 		$node = $this->sourceNode('age', '42');
 		$field = (new ReflectionPropertyNodeResolver())->resolve($node, $this->runtimeFor($node));
 
-		self::assertSame('42', $coordinator->convert('42', $field, $node));
+		self::assertSame('42', $runtime->convert('42', $field, $node));
 	}
 
-	public function testCoordinatorConvertsFromWireToPhp(): void
+	public function testRuntimeConvertsFromWireToPhp(): void
 	{
-		$coordinator = new FieldConversionCoordinator($this->gateway());
+		$runtime = new MappingRuntime($this->gateway()->getMapperManager());
 		$node = $this->sourceNode('age', '42', $this->options()->withSourceRepresentation(WireRepresentation::class));
 		$field = (new ReflectionPropertyNodeResolver())->resolve($node, $this->runtimeFor($node));
 
-		self::assertSame(42, $coordinator->convert('42', $field, $node));
+		self::assertSame(42, $runtime->convert('42', $field, $node));
 	}
 
-	public function testCoordinatorConvertsFromPhpToWire(): void
+	public function testRuntimeConvertsFromPhpToWire(): void
 	{
-		$coordinator = new FieldConversionCoordinator($this->gateway());
+		$runtime = new MappingRuntime($this->gateway()->getMapperManager());
 		$node = $this->sourceNode('name', 42, $this->options()->withOutputRepresentation(WireRepresentation::class));
 		$field = (new ReflectionPropertyNodeResolver())->resolve($node, $this->runtimeFor($node));
 
-		self::assertSame('42', $coordinator->convert(42, $field, $node));
+		self::assertSame('42', $runtime->convert(42, $field, $node));
 	}
 
-	public function testCoordinatorLeavesPassthroughValuesUnchanged(): void
+	public function testRuntimeLeavesPassthroughValuesUnchanged(): void
 	{
-		$coordinator = new FieldConversionCoordinator($this->gateway());
+		$runtime = new MappingRuntime($this->gateway()->getMapperManager());
 		$node = MappingNode::root([], [], $this->options()->withSourceRepresentation(WireRepresentation::class))
 			->createChildNode('age', '42');
 
 		self::assertSame(
 			'42',
-			$coordinator->convert(
+			$runtime->convert(
 				'42',
 				LeafNodeResolution::passthrough('age'),
 				$node,
@@ -211,7 +210,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 		$gateway = new ConversionGateway();
 		$gateway->getMapperManager()->register(CustomFieldType::class);
 
-		$coordinator = new FieldConversionCoordinator($gateway);
+		$runtime = new MappingRuntime($gateway->getMapperManager());
 		$resolver = new class () implements NodeResolverInterface {
 			public function resolve(
 				MappingNode $node,
@@ -226,7 +225,7 @@ final class FieldConversionCoordinatorTest extends TestCase
 			->createChildNode('code', 'ada');
 		$field = $resolver->resolve($node, $this->runtimeFor($node));
 
-		self::assertSame('ADA', $coordinator->convert('ada', $field, $node));
+		self::assertSame('ADA', $runtime->convert('ada', $field, $node));
 	}
 
 	public function testMapperRuntimeUsesSameConversionThroughDifferentCombinations(): void

@@ -302,9 +302,9 @@ final class MapperManager
 		return $chain;
 	}
 
-	public function createFieldConversionCoordinator(): FieldConversionCoordinator
+	public function getGateway(): ConversionGateway
 	{
-		return new FieldConversionCoordinator($this->gateway);
+		return $this->gateway;
 	}
 
 	/**

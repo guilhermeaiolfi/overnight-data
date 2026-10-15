@@ -227,7 +227,22 @@ Default registered runtime components:
 - resolvers: `FieldMapNodeResolver`, `DefinitionNodeResolver`, `ReflectionPropertyNodeResolver`, `GenericNodeResolver`, `PassthroughNodeResolver`
 - field types: the built-in scalar handlers listed above
 
-Mappers and writers are cached reusable instances. Resolvers are constructed per mapping. Field types and codecs are static classes and are never instantiated.
+Registered mappers and writers are cached reusable instances. Explicit overrides that are not registered are constructed when selected. Resolvers are constructed as needed for each mapping operation, then their chains are reused within that operation, including recursive branches and collections. Field types and codecs are static classes and are never instantiated.
+
+Ownership follows these lifetimes:
+
+| Owner | Creates and retains |
+|---|---|
+| `MapperManager` | Mappers, writers, and resolvers through the configured component constructor; cached mapper/writer instances |
+| `MappingRuntime` | One operation's resolver chains, collection resolution caches, and lazily created shared helpers |
+| `MappingBranch` | One branch's output state, created by its writer |
+| `ConversionGateway` | Scalar conversion routes through field types and codecs |
+
+`MappingRuntime::getSharedInstance()` is the sole cache for operation-scoped helpers such as `BranchTargetInferrer`, `MappingNodePropertyFinder`, and `DefinitionArgumentLocator`. Built-in resolvers request those helpers from their current runtime without retaining extra copies of the references. Constructor-injected helper instances still take precedence. Keeping a resolver alive therefore does not retain helpers from a finished operation.
+
+`MappingRuntime::convert()` owns mapping-specific conversion: it skips untyped values and mappings without representations, supplies the PHP representation for an unspecified side, and adds the failing node path to conversion errors. It delegates scalar conversion to the manager's gateway (`MapperManager::getGateway()`). `FieldConversionCoordinator` and `MapperManager::createFieldConversionCoordinator()` have been removed.
+
+The component constructor hook still receives the requested component class and the same gateway. Registration and prepend order are unchanged. The shared-helper cache constructs its own helper instances and does not use that hook.
 
 ## Fluent mapping API
 
@@ -279,9 +294,9 @@ By default, `map(...)->to(stdClass::class)` still converts the **root** value in
 
 ## Mapping execution model
 
-A mapper processes one source branch level at a time. It owns writer preparation, immediate child enumeration, node resolution, conversion, recursive branch dispatch, writing, and writer finalization. Concrete mappers only decide whether they can map a source value and how to enumerate that value's immediate children.
+A mapper processes one source branch level at a time. Concrete mappers decide whether they can map a source value, enumerate its immediate children, and pass each child to `MappingBranch::write()`. The branch owns writer state, node resolution, writing, and finalization; the runtime supplies conversion and recursive dispatch.
 
-When a child resolves as a branch, recursive dispatch flows through `MapperManager::mapNode()`. Mapper selection therefore happens from the branch's runtime source value, which allows hybrid trees such as array root -> object child -> array grandchild.
+When a child resolves as a branch, recursive dispatch flows through `MappingRuntime::mapNode()`. Mapper selection therefore happens from the branch's runtime source value, which allows hybrid trees such as array root -> object child -> array grandchild.
 
 ## Object writer behavior
 
@@ -358,6 +373,6 @@ Definition metadata therefore still wins over reflection, while `FieldMap` wins 
 
 ## Current limitations
 
-- no ORM or framework integration
+- framework container wiring is supplied by the host application
 - no complete PHPDoc parsing beyond the currently supported DTO list forms
 - no decimal arithmetic, scale or precision policy, or bigint arithmetic helpers
