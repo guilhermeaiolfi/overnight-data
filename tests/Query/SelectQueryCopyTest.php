@@ -15,7 +15,6 @@ use function ON\Data\Query\query;
 use ON\Data\Query\SelectQuery;
 use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
-use ReflectionProperty;
 use stdClass;
 
 final class SelectQueryCopyTest extends TestCase
@@ -24,11 +23,12 @@ final class SelectQueryCopyTest extends TestCase
 	{
 		$users = $this->makeQuery('users');
 		$users->where(x()->eq($users->name, 'Ada'))->limit(1)->to(stdClass::class);
+		$conditions = $users->getConditions();
 
 		$copy = $users->copy();
 
 		self::assertNotSame($users, $copy);
-		self::assertSame($users->getConditions(), $users->getConditions());
+		self::assertSame($conditions, $users->getConditions());
 		self::assertCount(1, $users->getConditions());
 		self::assertSame(1, $users->getLimit());
 		self::assertSame(stdClass::class, $users->getResultClass());
@@ -41,9 +41,13 @@ final class SelectQueryCopyTest extends TestCase
 	public function testCopyPreservesExecutorBinding(): void
 	{
 		$executor = new class () implements QueryExecutorInterface {
+			public ?SelectQuery $executedQuery = null;
+
 			public function fetchAll(SelectQuery $query): array
 			{
-				return [];
+				$this->executedQuery = $query;
+
+				return [['id' => 7, 'name' => 'Ada']];
 			}
 
 			public function fetchOne(SelectQuery $query): ?array
@@ -61,8 +65,8 @@ final class SelectQueryCopyTest extends TestCase
 		$copy = $users->copy();
 
 		self::assertTrue($copy->isExecutable());
-		$executorProperty = new ReflectionProperty(SelectQuery::class, 'executor');
-		self::assertSame($executor, $executorProperty->getValue($copy));
+		self::assertSame([['id' => 7, 'name' => 'Ada']], $copy->fetchAll());
+		self::assertSame($copy, $executor->executedQuery);
 	}
 
 	public function testCopyPreservesSelectionsWithCollidingResultNamesForExecutorValidation(): void

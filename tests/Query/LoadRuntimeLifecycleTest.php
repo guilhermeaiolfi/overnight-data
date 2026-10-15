@@ -12,7 +12,6 @@ use ON\Data\Query\Relation\Loader\HasManyLoader;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationLoadBranch;
-use ON\Data\Query\Relation\RelationOutputProcessor;
 use ON\Data\Query\Relation\RootLoadBranch;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\CollectionNode;
@@ -24,8 +23,6 @@ use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
-use ReflectionMethod;
-use ReflectionProperty;
 
 final class LoadRuntimeLifecycleTest extends TestCase
 {
@@ -40,6 +37,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		LifecycleEvents::$initCalls = [];
 		LifecycleEvents::$topLevelParentNodeIsRoot = false;
 		LifecycleEvents::$plannedRootColumns = [];
+		LifecycleEvents::$branches = [];
 	}
 
 	public function testNamedContinuationRunsAfterParentRowsAreParsed(): void
@@ -90,6 +88,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 
 		self::assertCount(1, LifecycleEvents::$returnedNodes);
 		self::assertInstanceOf(CollectionNode::class, LifecycleEvents::$returnedNodes[0]);
+		self::assertSame(LifecycleEvents::$returnedNodes[0], LifecycleEvents::$branches['posts']->getNode());
 		self::assertSame(['posts' => 1], LifecycleEvents::$initCalls);
 	}
 
@@ -98,7 +97,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$users = new SelectQuery($this->makeNestedRegistry()->getCollection('users'), new NestedLifecycleExecutor());
 		$users->posts->author->separate();
 
-		$this->prepareRuntime($users);
+		$users->fetchAll();
 
 		self::assertSame([
 			'initNode:author',
@@ -110,7 +109,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	{
 		$users = new SelectQuery($this->makeNestedRegistry()->getCollection('users'), new NestedLifecycleExecutor());
 		$users->posts->author->separate();
-		$this->prepareRuntime($users);
+		$users->fetchAll();
 
 		$columns = array_keys(LifecycleEvents::$registerColumns['posts']);
 		sort($columns);
@@ -120,11 +119,13 @@ final class LoadRuntimeLifecycleTest extends TestCase
 
 	public function testRequestedPublicFieldsRemainSeparateFromInternallyRequiredNodeColumns(): void
 	{
-		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
+		$users = new SelectQuery($this->makeBasicRegistry(ExecutingLifecycleLoader::class)->getCollection('users'), new LifecycleExecutor());
 		$users->posts->select('title');
-		$runtime = $this->prepareRuntime($users);
-		$branches = $this->readProperty($runtime, 'branches');
-		$branch = array_values($branches)[0];
+		self::assertSame([[
+			'id' => 1, 'name' => 'Ada',
+			'posts' => [['title' => 'Hello']],
+		]], $users->fetchAll());
+		$branch = LifecycleEvents::$branches['posts'];
 
 		self::assertSame(['title'], $this->publicFieldNames($branch));
 		self::assertSame(['title', 'id', 'userId'], $this->parserFieldNames($branch));
@@ -143,9 +144,9 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
 		$users->posts->select('title');
-		$runtime = $this->prepareRuntime($users);
-		$rootBranch = $this->readProperty($runtime, 'rootBranch');
-		$branch = array_values($this->readProperty($runtime, 'branches'))[0];
+		$users->fetchAll();
+		$branch = LifecycleEvents::$branches['posts'];
+		$rootBranch = $branch->getParent();
 
 		self::assertInstanceOf(SelectionList::class, $rootBranch->getSelections());
 		self::assertInstanceOf(SelectionList::class, $branch->getSelections());
@@ -157,26 +158,32 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		self::assertFalse(method_exists(RelationLoadBranch::class, 'getPublicFields'));
 	}
 
-	public function testLoadRuntimeOwnsOutputProcessor(): void
+	public function testLoadRuntimeSeparatesPublicOutputFromIdentityRows(): void
 	{
-		$runtime = new LoadRuntime(
-			new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor()),
-			new LifecycleExecutor(),
-		);
+		$executor = new LifecycleExecutor();
+		$users = new SelectQuery($this->makeBasicRegistry(ExecutingLifecycleLoader::class)->getCollection('users'), $executor);
+		$users->select($users->name);
+		$users->posts->select('title')->separate();
+		$runtime = new LoadRuntime($users, $executor, $users->projection());
 
-		self::assertInstanceOf(RelationOutputProcessor::class, $this->readProperty($runtime, 'outputProcessor'));
+		self::assertSame([[
+			'name' => 'Ada',
+			'posts' => [['title' => 'Hello']],
+		]], $runtime->fetchAll());
+		self::assertSame([[
+			'id' => 1,
+			'posts' => [['id' => 10]],
+		]], $runtime->getIdentityRows());
 	}
 
 	public function testTopLevelRelationBranchesUseTheRootBranchAsParent(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
 		$users->posts->separate();
-		$runtime = $this->prepareRuntime($users);
-		$branches = $this->readProperty($runtime, 'branches');
-		$rootBranch = $this->readProperty($runtime, 'rootBranch');
-		$branch = array_values($branches)[0];
+		$users->fetchAll();
+		$branch = LifecycleEvents::$branches['posts'];
+		$rootBranch = $branch->getParent();
 
-		self::assertSame($rootBranch, $branch->getParent());
 		self::assertInstanceOf(RootLoadBranch::class, $rootBranch);
 		self::assertInstanceOf(RelationLoadBranch::class, $branch);
 		self::assertSame([$branch], $rootBranch->getChildren());
@@ -186,22 +193,24 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	{
 		$employees = new SelectQuery($this->makeCompositeDedupRegistry()->getCollection('employees'), new CompositeDedupExecutor());
 		$employees->badges->select('label');
-		$employees->select($employees->tenantId, $employees->name);
+		$employees->select($employees->accountId);
 
 		self::assertSame([
 			[
-				'tenantId' => 1,
-				'name' => 'Ada',
+				'accountId' => 10,
 				'badges' => [
 					['label' => 'Core'],
 				],
 			],
 			[
-				'tenantId' => 1,
-				'name' => 'Grace',
+				'accountId' => 10,
 				'badges' => [
 					['label' => 'Core'],
 				],
+			],
+			[
+				'accountId' => 20,
+				'badges' => [['label' => 'Ops']],
 			],
 		], $employees->fetchAll());
 	}
@@ -211,25 +220,25 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$users = new SelectQuery($this->makeRootRequirementRegistry()->getCollection('users'), new LifecycleExecutor());
 		$users->posts->separate();
 		$users->select($users->name);
-		$runtime = $this->prepareRuntime($users);
-		$rootBranch = $this->readProperty($runtime, 'rootBranch');
-		$rootNode = $rootBranch->getNode();
-		$columns = $this->readProperty($rootNode, 'columns');
+		$users->fetchAll();
+		$rootBranch = LifecycleEvents::$branches['posts']->getParent();
 
-		self::assertArrayHasKey('name', $columns);
+		self::assertArrayHasKey('name', $rootBranch->getRemapColumns());
 		self::assertContains('name', LifecycleEvents::$plannedRootColumns);
+		self::assertSame([[['name' => 'Ada']]], LifecycleEvents::$referenceSnapshots);
 	}
 
-	public function testPrepareSetsRepresentationSchemaOnEachBranch(): void
+	public function testFetchSuppliesRepresentationSchemaToLoaderBranches(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
 		$users->posts->separate();
 		$users->select($users->name);
-		$runtime = $this->prepareRuntime($users);
-		$schema = $this->readProperty($runtime, 'schema');
-		$rootBranch = $this->readProperty($runtime, 'rootBranch');
-		$posts = array_values($this->readProperty($runtime, 'branches'))[0];
+		$users->fetchAll();
+		$schema = $users->getFetchSchema();
+		$posts = LifecycleEvents::$branches['posts'];
+		$rootBranch = $posts->getParent();
 
+		self::assertNotNull($schema);
 		self::assertSame($schema, $rootBranch->getRepresentationSchema());
 		self::assertSame(
 			$schema->getRelation('posts')->getRelatedSchema(),
@@ -329,16 +338,15 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	{
 		$users = new SelectQuery($this->makeHiddenRootRequirementRegistry()->getCollection('users'), new HiddenRootRequirementExecutor());
 		$users->posts->separate();
-		$runtime = $this->prepareRuntime($users);
-		$rootBranch = $this->readProperty($runtime, 'rootBranch');
-		$columns = $this->readProperty($rootBranch->getNode(), 'columns');
-
-		self::assertArrayHasKey('secret', $columns);
 		self::assertSame([[
 			'id' => 1,
 			'name' => 'Ada',
 			'posts' => [],
 		]], $users->fetchAll());
+		$rootBranch = LifecycleEvents::$branches['posts']->getParent();
+		self::assertArrayHasKey('secret', $rootBranch->getRemapColumns());
+		self::assertSame(['secret'], LifecycleEvents::$plannedRootColumns);
+		self::assertSame([[['secret' => 'shh']]], LifecycleEvents::$referenceSnapshots);
 	}
 
 	public function testRootFieldRequirementsReuseAnExistingPublicAlias(): void
@@ -346,64 +354,78 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$users = new SelectQuery($this->makeRootRequirementRegistry()->getCollection('users'), new AliasedRootSelectionExecutor());
 		$users->posts->separate();
 		$users->select($users->name->as('title'));
-		$runtime = $this->prepareRuntime($users);
-		$rootBranch = $this->readProperty($runtime, 'rootBranch');
-		$columns = $this->readProperty($rootBranch->getNode(), 'columns');
-		$selections = $this->readProperty($rootBranch, 'selections');
+		$rows = $users->fetchAll();
+		$rootBranch = LifecycleEvents::$branches['posts']->getParent();
+		$selections = $rootBranch->getSelections();
 		$titleSelection = $selections->getByTag(SelectionTag::EXPLICIT)[0];
 
-		self::assertSame(['name' => 'title', 'id' => 'id'], $columns);
+		self::assertSame(['name' => 'title', 'id' => 'id'], $rootBranch->getRemapColumns());
 		self::assertSame(['title'], LifecycleEvents::$plannedRootColumns);
 		self::assertTrue($titleSelection->hasTag(SelectionTag::EXPLICIT));
 		self::assertTrue($titleSelection->hasTag(SelectionTag::REQUIRED));
+		self::assertSame([[['name' => 'Ada']]], LifecycleEvents::$referenceSnapshots);
 		self::assertSame([[
 			'title' => 'Ada',
 			'posts' => [],
-		]], $users->fetchAll());
+		]], $rows);
 	}
 
-	public function testJoinedAndLinkedAttachmentModesAreRecordedDuringLoadAndAppliedDuringRegistration(): void
+	public function testJoinedAndLinkedAttachmentsBothPopulatePublicOutput(): void
 	{
 		$users = new SelectQuery($this->makeMixedAttachmentRegistry()->getCollection('users'), new MixedAttachmentExecutor());
 		$users->profile->separate();
 		$users->posts->separate();
-		$runtime = $this->prepareRuntime($users);
-		$rootNode = $this->readProperty($runtime, 'rootBranch')->getNode();
-		$profileNode = $rootNode->getNode('profile');
-		$postsNode = $rootNode->getNode('posts');
+		$rows = $users->fetchAll();
 
 		self::assertSame([
 			'profile' => true,
 			'posts' => false,
 		], LifecycleEvents::$attachmentModes);
-		self::assertTrue($this->readProperty($profileNode, 'joined'));
-		self::assertFalse($this->readProperty($postsNode, 'joined'));
+		self::assertSame([[
+			'id' => 1,
+			'name' => 'Ada',
+			'userId' => 1,
+			'profile' => ['id' => 50, 'userId' => 1, 'bio' => 'Bio'],
+			'posts' => [['id' => 10, 'userId' => 1, 'title' => 'Hello']],
+		]], $rows);
 	}
 
 	public function testExplicitStrategyOverridesLoaderDefaultDuringRuntimePlanning(): void
 	{
-		$users = new SelectQuery($this->makeBasicRegistry(HasManyLoader::class)->getCollection('users'), new LifecycleExecutor());
-		$users->posts->join();
-		$runtime = $this->prepareRuntime($users);
-		$branch = array_values($this->readProperty($runtime, 'branches'))[0];
+		$executor = $this->createMock(QueryExecutorInterface::class);
+		$executor->expects(self::once())->method('fetchAll')->willReturnCallback(
+			static function (SelectQuery $query): array {
+				self::assertCount(1, $query->getJoins());
 
-		self::assertTrue($branch->isJoinedAttachment());
+				return [[
+					'id' => 1, 'name' => 'Ada',
+					'posts.id' => 10, 'posts.userId' => 1, 'posts.title' => 'Hello',
+				]];
+			},
+		);
+		$users = new SelectQuery($this->makeBasicRegistry(HasManyLoader::class)->getCollection('users'), $executor);
+		$users->posts->join();
+
+		self::assertSame([[
+			'id' => 1, 'name' => 'Ada',
+			'posts' => [['id' => 10, 'userId' => 1, 'title' => 'Hello']],
+		]], $users->fetchAll());
 	}
 
 	public function testNestedCustomLoadersAttachJoinedAndLinkedChildrenWithoutCustomRegisterOverrides(): void
 	{
 		$users = new SelectQuery($this->makeNestedAttachmentRegistry()->getCollection('users'), new NestedAttachmentExecutor());
-		$users->posts->author->separate();
+		$users->posts->select('id', 'userId', 'authorId', 'title', 'postId');
+		$users->posts->author->select('id', 'name')->separate();
 		$users->posts->comments->separate();
-		$runtime = $this->prepareRuntime($users);
-		$rootNode = $this->readProperty($runtime, 'rootBranch')->getNode();
-		$postsNode = $rootNode->getNode('posts');
-		$authorNode = $postsNode->getNode('author');
-		$commentsNode = $postsNode->getNode('comments');
-
-		self::assertFalse($this->readProperty($postsNode, 'joined'));
-		self::assertTrue($this->readProperty($authorNode, 'joined'));
-		self::assertFalse($this->readProperty($commentsNode, 'joined'));
+		self::assertSame([[
+			'id' => 1, 'name' => 'Ada',
+			'posts' => [[
+				'id' => 10, 'userId' => 1, 'authorId' => 7, 'title' => 'Hello', 'postId' => 10,
+				'author' => ['id' => 7, 'name' => 'Ana'],
+				'comments' => [['id' => 100, 'postId' => 10, 'body' => 'Hi']],
+			]],
+		]], $users->fetchAll());
 		self::assertSame([
 			'author' => 1,
 			'comments' => 1,
@@ -435,7 +457,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$users = new SelectQuery($this->makeTopLevelParentNodeRegistry()->getCollection('users'), new LifecycleExecutor());
 		$users->posts->separate();
 
-		$this->prepareRuntime($users);
+		$users->fetchAll();
 
 		self::assertTrue(LifecycleEvents::$topLevelParentNodeIsRoot);
 	}
@@ -546,9 +568,11 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$users = $registry->collection('users');
 		$users->field('id', 'int');
 		$users->field('name', 'string');
+		// Overlap with child columns makes accidental joined parsing produce an extra post.
+		$users->field('userId', 'int');
 		$users->primaryKey('id');
 		$users->hasOne('profile', 'profiles')->innerKey('id')->outerKey('userId')->loader(JoinedProfileLoader::class)->end();
-		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('userId')->loader(LinkedPostsLoader::class)->end();
+		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('userId')->loader(ExecutingLifecycleLoader::class)->end();
 
 		return $registry;
 	}
@@ -573,6 +597,8 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$posts->field('userId', 'int');
 		$posts->field('authorId', 'int');
 		$posts->field('title', 'string');
+		// Overlap with comment columns makes accidental joined parsing produce an extra comment.
+		$posts->field('postId', 'int');
 		$posts->primaryKey('id');
 		$posts->belongsTo('author', 'authors')->innerKey('authorId')->outerKey('id')->loader(NestedAuthorLoader::class)->end();
 		$posts->hasMany('comments', 'comments')->innerKey('id')->outerKey('postId')->loader(NestedCommentsLoader::class)->end();
@@ -640,41 +666,25 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		return $this->makeBasicRegistry(TopLevelParentNodeLoader::class);
 	}
 
-	private function prepareRuntime(SelectQuery $query): LoadRuntime
+	public function testAliasedCompositeKeysDeduplicateRootsAndAttachChildren(): void
 	{
-		$runtime = new LoadRuntime($query, new LifecycleExecutor(), $query->projection());
-		$method = new ReflectionMethod(LoadRuntime::class, 'prepare');
-		$method->setAccessible(true);
-		$method->invoke($runtime);
-
-		return $runtime;
-	}
-
-	public function testRootBranchOwnsIdentityAliasesForRootPrimaryKey(): void
-	{
-		$users = new SelectQuery($this->makeCompositeDedupRegistry()->getCollection('employees'), new CompositeDedupExecutor());
+		$users = new SelectQuery($this->makeCompositeDedupRegistry()->getCollection('employees'), new CompositeDedupExecutor(aliasedRoot: true));
 		$users->badges->select('label');
-		$users->select($users->tenantId, $users->name);
-		$runtime = $this->prepareRuntime($users);
-		$rootBranch = $this->readProperty($runtime, 'rootBranch');
-		$selections = $this->readProperty($rootBranch, 'selections');
-		$identityAliases = array_map(
-			static fn (object $selection): string => $selection->getSelectionKey(),
-			$selections->getByTag(SelectionTag::IDENTITY),
-		);
-		$rootIdentityFields = $this->readProperty($rootBranch->getRootNode(), 'identityFields');
+		$users->select($users->tenantId->as('tenant'), $users->name->as('employee'));
 
-		self::assertCount(2, $identityAliases);
-		self::assertSame($identityAliases, $rootIdentityFields);
+		self::assertSame([
+			['tenant' => 1, 'employee' => 'Ada', 'badges' => [['label' => 'Core']]],
+			['tenant' => 1, 'employee' => 'Grace', 'badges' => [['label' => 'Core']]],
+			['tenant' => 2, 'employee' => 'Ada', 'badges' => [['label' => 'Ops']]],
+		], $users->fetchAll());
 	}
 
 	public function testRootPrimaryKeySelectionsAreTrackedAsIdentityItems(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
 		$users->posts->separate();
-		$runtime = $this->prepareRuntime($users);
-		$rootBranch = $this->readProperty($runtime, 'rootBranch');
-		$selections = $this->readProperty($rootBranch, 'selections');
+		$users->fetchAll();
+		$selections = LifecycleEvents::$branches['posts']->getParent()->getSelections();
 
 		self::assertInstanceOf(SelectionList::class, $selections);
 		self::assertSame(['id'], array_map(
@@ -698,14 +708,6 @@ final class LoadRuntimeLifecycleTest extends TestCase
 				['id' => 10, 'userId' => 1, 'title' => 'Hello'],
 			],
 		]], $users->fetchAll());
-	}
-
-	private function readProperty(object $object, string $name): mixed
-	{
-		$property = new ReflectionProperty($object, $name);
-		$property->setAccessible(true);
-
-		return $property->getValue($object);
 	}
 
 	/**
@@ -733,6 +735,9 @@ final class LoadRuntimeLifecycleTest extends TestCase
 
 final class LifecycleEvents
 {
+	/** @var array<string, RelationLoadBranch> Branches received by the custom loader callback. */
+	public static array $branches = [];
+
 	/**
 	 * @var list<string>
 	 */
@@ -929,8 +934,8 @@ final class NestedLifecycleExecutor implements QueryExecutorInterface
 				'userId' => 1,
 				'authorId' => 7,
 				'title' => 'Hello',
-				'posts.author.id' => 7,
-				'posts.author.name' => 'Ana',
+				'author.id' => 7,
+				'author.name' => 'Ana',
 			]],
 			default => [],
 		};
@@ -955,6 +960,7 @@ final class MixedAttachmentExecutor implements QueryExecutorInterface
 			'users' => [[
 				'name' => 'Ada',
 				'id' => 1,
+				'userId' => 1,
 				'profile.id' => 50,
 				'profile.userId' => 1,
 				'profile.bio' => 'Bio',
@@ -989,8 +995,9 @@ final class NestedAttachmentExecutor implements QueryExecutorInterface
 				'userId' => 1,
 				'authorId' => 7,
 				'title' => 'Hello',
-				'posts.author.id' => 7,
-				'posts.author.name' => 'Ana',
+				'postId' => 10,
+				'author.id' => 7,
+				'author.name' => 'Ana',
 			]],
 			'comments' => [[
 				'id' => 100,
@@ -1048,20 +1055,33 @@ final class MultiPassBoundaryExecutor implements QueryExecutorInterface
 
 final class CompositeDedupExecutor implements QueryExecutorInterface
 {
+	public function __construct(private readonly bool $aliasedRoot = false)
+	{
+	}
+
 	public function fetchAll(SelectQuery $query): array
 	{
-		return match ($query->getCollection()->getName()) {
+		$rows = match ($query->getCollection()->getName()) {
 			'employees' => [
 				['tenantId' => 1, 'accountId' => 10, 'name' => 'Ada'],
+				['tenantId' => 1, 'accountId' => 10, 'name' => 'Ada'],
 				['tenantId' => 1, 'accountId' => 10, 'name' => 'Grace'],
+				['tenantId' => 2, 'accountId' => 20, 'name' => 'Ada'],
 			],
 			'employee_badges' => [
 				['tenantId' => 1, 'employeeName' => 'Ada', 'label' => 'Core'],
 				['tenantId' => 1, 'employeeName' => 'Ada', 'label' => 'Core'],
 				['tenantId' => 1, 'employeeName' => 'Grace', 'label' => 'Core'],
+				['tenantId' => 2, 'employeeName' => 'Ada', 'label' => 'Ops'],
 			],
 			default => [],
 		};
+
+		if ($this->aliasedRoot && $query->getCollection()->getName() === 'employees') {
+			return array_map(static fn (array $row): array => ['tenant' => $row['tenantId'], 'employee' => $row['name']], $rows);
+		}
+
+		return $rows;
 	}
 
 	public function fetchOne(SelectQuery $query): ?array
@@ -1077,9 +1097,15 @@ final class CompositeDedupExecutor implements QueryExecutorInterface
 
 abstract class LifecycleTestLoader extends AbstractLoader
 {
+	public function recordReferences(RelationLoadBranch $branch, LoadRuntime $runtime): void
+	{
+		LifecycleEvents::$referenceSnapshots[] = $branch->getReferenceValues();
+	}
+
 	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
 	{
 		$relation = $branch->getRelationRef();
+		LifecycleEvents::$branches[$relation->getName()] = $branch;
 		$definition = $relation->getDefinition();
 		$node = new CollectionNode(
 			$branch->getRemapColumns(),
@@ -1246,6 +1272,7 @@ final class RootFieldRequirementLoader extends LifecycleTestLoader
 	{
 		LifecycleEvents::$plannedRootColumns = $branch->getParent()->requireFields(['name']);
 		$this->prepareSeparateQuery($branch, $runtime);
+		$runtime->continueWith($branch, 'recordReferences');
 	}
 }
 
@@ -1255,6 +1282,7 @@ final class HiddenRootFieldRequirementLoader extends LifecycleTestLoader
 	{
 		LifecycleEvents::$plannedRootColumns = $branch->getParent()->requireFields(['secret']);
 		$this->prepareSeparateQuery($branch, $runtime);
+		$runtime->continueWith($branch, 'recordReferences');
 	}
 }
 
@@ -1282,14 +1310,6 @@ final class JoinedProfileLoader extends AbstractLoader
 		$runtime->setQueryContext($branch, $queryRelation->getQuery(), $this->join($queryRelation), $queryRelation);
 		$branch->requireFields(['id', 'userId']);
 		$branch->getParent()->requireFields(['id']);
-	}
-}
-
-final class LinkedPostsLoader extends LifecycleTestLoader
-{
-	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
-	{
-		$this->prepareSeparateQuery($branch, $runtime);
 	}
 }
 
