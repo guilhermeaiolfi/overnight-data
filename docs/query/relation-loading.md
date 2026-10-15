@@ -177,6 +177,8 @@ The acquisition strategy is loader-owned. A relation selection may override the 
 
 `fetchAll()` and `fetchOne()` support structured relation loading. `iterate()` does not.
 
+For `fetchOne()` with a joined to-many branch in the root SQL query, the runtime first selects one SQL row to identify the root, then fetches all matching joined rows for that root before assembly. The follow-up query uses the complete root primary key and removes limit/offset so children are not truncated. Other query conditions remain in effect. This uses two root queries only for that multiplying JOIN case; simple reads, to-one joins, and separate-query relation loads retain their existing execution paths.
+
 ## Batch size and separate-query correlation
 
 HasMany, M2M, and FirstOfMany default to `SEPARATE_QUERY`. After the parent/root batch is fetched, the loader correlates children with parent key values:

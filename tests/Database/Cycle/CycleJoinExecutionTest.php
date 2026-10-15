@@ -174,6 +174,48 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testFetchOneLoadsEveryJoinedChildForTheFirstRoot(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts->select('id', 'title')->join();
+		$users->select($users->name)->orderBy($users->id->asc(), $users->posts->id->asc());
+
+		self::assertSame([
+			'name' => 'Ada',
+			'posts' => [['id' => 1, 'title' => 'Hello'], ['id' => 2, 'title' => 'World']],
+		], $users->fetchOne());
+		self::assertNull($users->fetchOne(999));
+		self::assertSame('Grace', $users->fetchOne(2)['name']);
+	}
+
+	public function testFetchOneJoinedChildrenPreservesAliasesPaginationAndQueryReuse(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts->select('id', 'title')->join();
+		$users->select($users->id->as('userId'), $users->name)
+			->orderBy($users->id->asc(), $users->posts->id->asc())->limit(1)->offset(1);
+
+		$first = $users->fetchOne();
+		self::assertSame(1, $first['userId']);
+		self::assertArrayNotHasKey('id', $first);
+		self::assertCount(2, $first['posts']);
+		self::assertSame($first, $users->fetchOne());
+		self::assertSame(1, $users->getLimit());
+		self::assertSame(1, $users->getOffset());
+	}
+
+	public function testFetchOneLoadsJoinedChildrenUsingTheCompleteCompositeRootKey(): void
+	{
+		$accounts = $this->database->query($this->registry->getCollection('accounts'));
+		$accounts->employees->select('name')->join();
+		$accounts->select($accounts->name)->orderBy($accounts->employees->name->asc());
+
+		self::assertSame([
+			'name' => 'Platform',
+			'employees' => [['name' => 'Ada'], ['name' => 'Grace']],
+		], $accounts->fetchOne(['tenantId' => 1, 'id' => 10]));
+	}
+
 	public function testHasManyJoinCanFlatProjectAuthorNameOntoPostRows(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));

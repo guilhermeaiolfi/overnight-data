@@ -111,12 +111,38 @@ final class LoadRuntime
 			return $public[0] ?? null;
 		}
 
-		$this->rootBranch->parseRows([$row]);
+		$this->rootBranch->parseRows($this->rowsForFirstRoot($row));
 		$this->runContinuationsFor($this->rootQuery);
 
 		$public = $this->storeAssembledRows($this->outputProcessor->processRoot($this->rootBranch));
 
 		return $public[0] ?? null;
+	}
+
+	/**
+	 * A single SQL row does not contain the whole root when a joined branch is to-many.
+	 * Select the root using the original pagination, then fetch its complete joined rows.
+	 *
+	 * @param array<string, mixed> $firstRow
+	 * @return list<array<string, mixed>>
+	 */
+	private function rowsForFirstRoot(array $firstRow): array
+	{
+		foreach ($this->branches as $branch) {
+			if (! $branch->isJoinedAttachment() || ! $branch->returnsMany() || $branch->getQuery() !== $this->rootQuery) {
+				continue;
+			}
+
+			$query = $this->rootQuery->copy()->limit(null)->offset(null);
+			$columns = $this->rootBranch->getRemapColumns();
+			foreach ($this->rootBranch->getCollection()->getPrimaryKey() as $fieldName) {
+				$query->where($query->field($fieldName)->eq($firstRow[$columns[$fieldName]]));
+			}
+
+			return $this->executor->fetchAll($query);
+		}
+
+		return [$firstRow];
 	}
 
 	/**
