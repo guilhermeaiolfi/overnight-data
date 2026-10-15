@@ -15,6 +15,7 @@ use ON\Data\Query\SelectQuery;
 use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationRelationSchema;
 use ON\Data\Schema\RepresentationSchema;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
@@ -23,6 +24,54 @@ use Tests\ON\Data\Support\RecordingCommandExecutor;
 final class SessionGraphAdoptionTest extends TestCase
 {
 	use OrmFixture;
+
+	#[DataProvider('childWritePolicies')]
+	public function testChildIntentPreservesIndependentFlatSourcePolicy(bool $createChild, ?string $flatOperation): void
+	{
+		$users = $this->users();
+		$users->hasMany('reports', 'users')->innerKey('id')->outerKey('manager_id');
+		$users->belongsTo('manager', 'users')->innerKey('manager_id')->outerKey('id');
+		$childSchema = new RepresentationSchema($users);
+		$childSchema->addField(new RepresentationFieldSchema('id', $users, 'id'));
+		$childSchema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$childSchema->addField(new RepresentationFieldSchema('managerId', $users, 'id', sourcePath: ['manager']));
+		$childSchema->addField(new RepresentationFieldSchema('managerName', $users, 'name', sourcePath: ['manager']));
+		$ownerSchema = new RepresentationSchema($users);
+		$ownerSchema->addField(new RepresentationFieldSchema('id', $users, 'id'));
+		$ownerSchema->addRelation(new RepresentationRelationSchema('reports', $users, 'reports', $childSchema));
+		$child = (object) ['id' => 20, 'name' => 'Child', 'managerId' => 30, 'managerName' => 'Manager'];
+		$owner = (object) ['id' => 10, 'reports' => [$child]];
+		$session = new Session(new RecordingCommandExecutor());
+		$intent = $createChild ? $session->create($child) : $session->update($child);
+		if ($flatOperation === 'update') {
+			$intent->update('manager');
+		} elseif ($flatOperation === 'create') {
+			$intent->create('manager');
+		}
+
+		$session->sync($owner, $ownerSchema);
+
+		$state = $session->getRepresentations()->get($child);
+		self::assertInstanceOf(RepresentationState::class, $state);
+		$childRecord = $state->requireRootRecord();
+		$managerRecord = $state->getFieldItem('managerName')->getRecord();
+		self::assertSame($createChild, $childRecord->isNew());
+		self::assertSame(! $createChild, $childRecord->isDirty());
+		self::assertSame($flatOperation !== 'update', $managerRecord->isNew());
+		self::assertSame($flatOperation === 'update', $managerRecord->isDirty());
+		self::assertSame('Child', $childRecord->getValue('name'));
+		self::assertSame('Manager', $managerRecord->getValue('name'));
+		self::assertFalse($session->getContext()->getIntents()->has($child));
+	}
+
+	/** @return iterable<string, array{bool, ?string}> */
+	public static function childWritePolicies(): iterable
+	{
+		yield 'update child, default flat create' => [false, null];
+		yield 'update child, explicit flat update' => [false, 'update'];
+		yield 'update child, explicit flat create' => [false, 'create'];
+		yield 'create child, explicit flat update' => [true, 'update'];
+	}
 
 	public function testStagedCyclicGraphBindsEachObjectOnlyOnceWithExplicitSchemas(): void
 	{

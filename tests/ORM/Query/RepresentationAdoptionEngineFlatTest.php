@@ -7,26 +7,80 @@ namespace Tests\ON\Data\ORM\Query;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\Record\RecordLifecycle;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\Query\QuerySourceIdentities;
 use ON\Data\ORM\Representation\State\RepresentationState;
+use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\ORM\Representation\Sync\AdoptionPolicy;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionContext;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionEngine;
+use ON\Data\ORM\Representation\Sync\RepresentationIntent;
+use ON\Data\ORM\Representation\Sync\RepresentationIntentLifecycle;
+use ON\Data\ORM\Representation\Sync\RepresentationIntentStore;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\SessionContext;
 use ON\Data\Schema\RepresentationFieldRole;
 use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationRelationSchema;
 use ON\Data\Schema\RepresentationSchema;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
 
 final class RepresentationAdoptionEngineFlatTest extends TestCase
 {
+	#[DataProvider('rootIntentPolicies')]
+	public function testRootIntentPrecedenceDoesNotOverrideFlatDefaults(
+		AdoptionPolicy $policy,
+		?RepresentationIntentLifecycle $storedLifecycle,
+		?RepresentationIntentLifecycle $contextLifecycle,
+		RecordLifecycle $expectedRoot,
+		RecordLifecycle $expectedRelated,
+	): void {
+		$users = $this->makeSelfRelationRegistry()->getCollection('users');
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('id', $users, 'id'));
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$schema->addField(new RepresentationFieldSchema('managerId', $users, 'id', sourcePath: ['manager']));
+		$schema->addField(new RepresentationFieldSchema('managerName', $users, 'name', sourcePath: ['manager']));
+		$object = (object) ['id' => 10, 'name' => 'User', 'managerId' => 20, 'managerName' => 'Manager'];
+		$intents = new RepresentationIntentStore();
+		if ($storedLifecycle !== null) {
+			$intents->set($object, new RepresentationIntent($storedLifecycle));
+		}
+
+		$state = (new RepresentationAdoptionEngine(intents: $intents))->attach(
+			$object,
+			new RepresentationAdoptionContext(
+				schema: $schema,
+				policy: $policy,
+				intent: $contextLifecycle !== null ? new RepresentationIntent($contextLifecycle) : null,
+			),
+			new RecordStateStore(),
+			new RepresentationStateStore(),
+		);
+
+		self::assertSame($expectedRoot, $state->requireRootRecord()->getLifecycle());
+		self::assertSame($expectedRelated, $state->getFieldItem('managerName')->getRecord()->getLifecycle());
+		self::assertSame('User', $state->requireRootRecord()->getValue('name'));
+		self::assertSame('Manager', $state->getFieldItem('managerName')->getRecord()->getValue('name'));
+	}
+
+	/** @return iterable<string, array{AdoptionPolicy, ?RepresentationIntentLifecycle, ?RepresentationIntentLifecycle, RecordLifecycle, RecordLifecycle}> */
+	public static function rootIntentPolicies(): iterable
+	{
+		yield 'stored update overrides create default' => [AdoptionPolicy::Create, RepresentationIntentLifecycle::Update, null, RecordLifecycle::DIRTY, RecordLifecycle::NEW];
+		yield 'stored create overrides patch default' => [AdoptionPolicy::Patch, RepresentationIntentLifecycle::Create, null, RecordLifecycle::NEW, RecordLifecycle::DIRTY];
+		yield 'hydrate ignores stored create' => [AdoptionPolicy::Hydrate, RepresentationIntentLifecycle::Create, null, RecordLifecycle::CLEAN, RecordLifecycle::CLEAN];
+		yield 'identify ignores stored update' => [AdoptionPolicy::Identify, RepresentationIntentLifecycle::Update, null, RecordLifecycle::CLEAN, RecordLifecycle::CLEAN];
+		yield 'stored update precedes supplied create' => [AdoptionPolicy::Create, RepresentationIntentLifecycle::Update, RepresentationIntentLifecycle::Create, RecordLifecycle::DIRTY, RecordLifecycle::NEW];
+		yield 'supplied create overrides patch default' => [AdoptionPolicy::Patch, null, RepresentationIntentLifecycle::Create, RecordLifecycle::NEW, RecordLifecycle::DIRTY];
+	}
+
 	public function testBuildsFlatObjectWithFieldsFromTwoCollections(): void
 	{
 		$registry = $this->makeRegistry();

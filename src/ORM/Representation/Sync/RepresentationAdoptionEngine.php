@@ -65,6 +65,7 @@ final class RepresentationAdoptionEngine
 			$relations,
 			$mode,
 			$visited,
+			$this->rootPolicyForContext($context, $this->intents?->get($representation)),
 		);
 	}
 
@@ -79,6 +80,7 @@ final class RepresentationAdoptionEngine
 		?RelationStateStore $relations,
 		RepresentationAttachmentMode $mode,
 		array &$visited,
+		?AdoptionPolicy $rootPolicy = null,
 	): RepresentationState {
 		if (isset($visited[spl_object_id($representation)])) {
 			return $reps->get($representation) ?? throw new StateException('Visited representation is missing tracked state.');
@@ -110,7 +112,8 @@ final class RepresentationAdoptionEngine
 			return $tracked;
 		}
 
-		$state = $this->bindSources($representation, $context, $records, $relations);
+		$rootPolicy ??= $this->rootPolicyForContext($context, $context->getIntent());
+		$state = $this->bindSources($representation, $context, $rootPolicy, $records, $relations);
 
 		foreach ($state->getUniqueRecords() as $record) {
 			$records->add($record);
@@ -345,6 +348,7 @@ final class RepresentationAdoptionEngine
 	private function bindSources(
 		object $representation,
 		RepresentationAdoptionContext $context,
+		AdoptionPolicy $rootPolicy,
 		RecordStateStore $records,
 		?RelationStateStore $relations = null,
 	): RepresentationState {
@@ -383,7 +387,7 @@ final class RepresentationAdoptionEngine
 
 			$pathKey = $source->getPathKey();
 			$op = $opsByPath[$pathKey] ?? null;
-			$policy = $this->policyForSource($representation, $context, $source, $op);
+			$policy = $this->policyForSource($context, $source, $op, $rootPolicy);
 			[$readsByPath, $presentValues] = $this->readSourceFields($representation, $source, $context);
 
 			$record = $this->bindSourceRecord(
@@ -502,34 +506,43 @@ final class RepresentationAdoptionEngine
 		}
 	}
 
-	private function policyForSource(
-		object $representation,
+	/**
+	 * Resolve the root binding policy once. Child contexts already carry the
+	 * staged intent read by childContext(); source binding never rereads it.
+	 * The context policy remains the default for flat related sources.
+	 */
+	private function rootPolicyForContext(
 		RepresentationAdoptionContext $context,
-		RepresentationSource $source,
-		?FlatIntentOp $op,
+		?RepresentationIntent $storedIntent,
 	): AdoptionPolicy {
-		if ($op instanceof FlatIntentOp) {
-			return $op->isCreate() ? AdoptionPolicy::Create : AdoptionPolicy::Patch;
-		}
-
 		$policy = $context->getPolicy();
 		if ($policy === AdoptionPolicy::Hydrate || $policy === AdoptionPolicy::Identify) {
 			return $policy;
 		}
 
-		if ($source->isRoot() && $this->intents instanceof RepresentationIntentStore) {
-			$stored = $this->intents->get($representation);
-			if ($stored instanceof RepresentationIntent) {
-				return $stored->isCreate() ? AdoptionPolicy::Create : AdoptionPolicy::Patch;
-			}
+		if ($storedIntent !== null) {
+			return $storedIntent->isCreate() ? AdoptionPolicy::Create : AdoptionPolicy::Patch;
 		}
 
 		$intent = $context->getIntent();
-		if ($source->isRoot() && $intent instanceof RepresentationIntent && $intent->isCreate()) {
+		if ($intent !== null && $intent->isCreate()) {
 			return AdoptionPolicy::Create;
 		}
 
 		return $policy;
+	}
+
+	private function policyForSource(
+		RepresentationAdoptionContext $context,
+		RepresentationSource $source,
+		?FlatIntentOp $op,
+		AdoptionPolicy $rootPolicy,
+	): AdoptionPolicy {
+		if ($op instanceof FlatIntentOp) {
+			return $op->isCreate() ? AdoptionPolicy::Create : AdoptionPolicy::Patch;
+		}
+
+		return $source->isRoot() ? $rootPolicy : $context->getPolicy();
 	}
 
 	/**

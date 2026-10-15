@@ -68,6 +68,8 @@ $session->sync($dto);
 $session->flush();
 ```
 
+During write admission, a child's staged `update()` or `create()` selects the lifecycle of its root record. Flat related sources on that child still default to Create; use the child's intent builder, such as `update($child)->update('manager')`, to patch a flat related source. A child without a staged intent defaults to Create even when its owner is updated. Already-tracked children retain their existing binding unless an explicit schema or flat operation requires replacement.
+
 Attach an existing related row without writing its fields:
 
 ```php

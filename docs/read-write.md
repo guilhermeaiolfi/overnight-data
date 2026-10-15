@@ -93,6 +93,16 @@ Grouped by current package. If you redesign, keep the step and move or merge the
 | Write loaded object | `flush()` (`sync($obj)` optional) | Skip W1 if hydrate already set lifecycle. Flush performs W3–W6. Stage or explicitly sync the owner to discover newly assigned untracked children. |
 | Unlink vs delete | `detach` vs `remove` | W7/W8 vs W6 delete. Relation planners own FK vs through-row. |
 
+## Maintaining adoption policy
+
+`Session` supplies the requested root mode and schema. `WritableQueryResultTracker` supplies Hydrate input for query results. Both enter `RepresentationAdoptionEngine`; `RepresentationSyncer` continues to synchronize already-tracked representations.
+
+Inside the adoption engine, `childContext()` captures a nested object's staged intent, explicit schema, and identity. `rootPolicyForContext()` resolves the root record's binding policy once from that input. For direct root attachment, the engine takes one intent-store snapshot at entry; child attachment reuses the intent in its context. `policyForSource()` then chooses an explicit flat operation, the resolved root policy, or the context's default for a related source. It does not consult the intent store.
+
+The root policy and flat-source default are distinct: a staged child update patches that child's root while its flat related sources still default to Create. Hydrate and Identify keep their modes regardless of stored write intents. Explicit flat operations retain precedence. Relation-only schemas with no scalar sources retain their existing empty-root binding path.
+
+Change root intent precedence in `rootPolicyForContext()`, child schema/identity inheritance in `childContext()`, and flat operation precedence in `policyForSource()`. Graph traversal, scalar synchronization, relation synchronization, and transactional flush remain separate responsibilities.
+
 ## Rethinkable
 
 These are current implementation choices, not the work itself:
