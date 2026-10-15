@@ -512,7 +512,7 @@ final class FlushExecutorTest extends TestCase
 		self::assertSame(['name' => 'A2'], $command->getValues());
 	}
 
-	public function testDirtyRecordChangedThroughRepresentationSyncIsUpdatedAndMarkedCleanByRecordFlusher(): void
+	public function testDirtyRecordChangedThroughRepresentationSyncIsUpdatedAndMarkedClean(): void
 	{
 		$users = $this->users();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'A1']);
@@ -533,7 +533,7 @@ final class FlushExecutorTest extends TestCase
 		self::assertSame(['id' => 10, 'name' => 'A2'], $record->getOriginalValues());
 	}
 
-	public function testRemovedRecordsAreHandledByRecordFlusher(): void
+	public function testRemovedRecordsExecuteDeleteCommandsAndLeaveTheRecordStore(): void
 	{
 		$users = $this->users();
 		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'A1']);
@@ -815,7 +815,7 @@ final class FlushExecutorTest extends TestCase
 		self::assertFalse($reference->hasChanges());
 	}
 
-	public function testRelationPersistencePlanningRunsBeforeRecordFlusher(): void
+	public function testRelationPersistencePlanningRunsBeforeRecordScheduling(): void
 	{
 		RecordingRelationPersistencePlanner::$mutateOwnerField = 'name';
 		RecordingRelationPersistencePlanner::$mutateOwnerValue = 'planned';

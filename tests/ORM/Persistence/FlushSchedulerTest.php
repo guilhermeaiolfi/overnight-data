@@ -530,6 +530,7 @@ final class FlushSchedulerTest extends TestCase
 		$flush->finalize();
 		self::assertTrue($record->isClean());
 		self::assertTrue($record->hasKey());
+		self::assertSame($record, $states->getByKey($users->getKey(10)));
 	}
 
 	/**

@@ -756,7 +756,7 @@ final class SessionTest extends TestCase
 		self::assertTrue($record->isClean());
 	}
 
-	public function testFlushRemovesSuccessfullyDeletedRecordsFromOwnedMapThroughRecordFlusher(): void
+	public function testFlushRemovesSuccessfullyDeletedRecordsFromOwnedMap(): void
 	{
 		$executor = new RecordingCommandExecutor();
 		$session = new Session($executor);

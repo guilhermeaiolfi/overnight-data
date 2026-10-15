@@ -528,7 +528,7 @@ final class SessionGraphAdoptionTest extends TestCase
 		self::assertIsString($engine);
 		self::assertStringNotContainsString('RelationPersistencePlanner', $engine);
 		self::assertStringNotContainsString('FlushExecutor', $engine);
-		self::assertStringNotContainsString('RecordFlusher', $engine);
+		self::assertStringNotContainsString('FlushScheduler', $engine);
 		self::assertStringNotContainsString('CommandExecutor', $engine);
 		self::assertStringNotContainsString('clearChanges', $engine);
 	}

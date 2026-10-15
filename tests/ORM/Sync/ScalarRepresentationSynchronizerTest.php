@@ -310,7 +310,7 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 
 		self::assertIsString($source);
 		self::assertStringNotContainsString('ON\\Data\\ORM\\Persistence', $source);
-		self::assertStringNotContainsString('RecordFlusher', $source);
+		self::assertStringNotContainsString('FlushScheduler', $source);
 		self::assertStringNotContainsString('CommandExecutor', $source);
 		self::assertStringNotContainsString('CommandInterface', $source);
 	}

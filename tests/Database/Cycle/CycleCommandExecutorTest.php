@@ -21,8 +21,8 @@ use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\ConvertingCommandExecutor;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\FlushExecutor;
+use ON\Data\ORM\Persistence\FlushScheduler;
 use ON\Data\ORM\Persistence\InsertCommand;
-use ON\Data\ORM\Persistence\RecordFlusher;
 use ON\Data\ORM\Persistence\TransactionalCommandExecutorInterface;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\Record\RecordState;
@@ -205,7 +205,7 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertSame('member', $this->fetchMembershipRole(3, 30));
 	}
 
-	public function testRecordFlusherMergesGeneratedAutoIncrementPrimaryKeyValue(): void
+	public function testSchedulerMergesGeneratedAutoIncrementPrimaryKeyValue(): void
 	{
 		$users = $this->users();
 		$record = RecordState::new($users, [
@@ -215,7 +215,7 @@ final class CycleCommandExecutorTest extends TestCase
 		$states = new RecordStateStore();
 		$states->add($record);
 
-		(new RecordFlusher($this->executor))->flush($states);
+		(new FlushScheduler($this->executor))->run($states);
 
 		$key = $users->getKey(3);
 		self::assertTrue($record->isClean());
@@ -518,7 +518,7 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertStringNotContainsString('ConversionGateway', $source);
 		self::assertStringNotContainsString('PhpRepresentation', $source);
 		self::assertStringNotContainsString('StorageRepresentation', $source);
-		self::assertStringNotContainsString('RecordFlusher', $source);
+		self::assertStringNotContainsString('FlushScheduler', $source);
 		self::assertStringNotContainsString('FlushExecutor', $source);
 		self::assertStringNotContainsString('Registry', $source);
 	}
