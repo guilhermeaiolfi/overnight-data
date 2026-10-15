@@ -431,7 +431,7 @@ final class CycleJoinExecutionTest extends TestCase
 			->orderBy($users->posts->title->asc())
 			->fetchAll();
 
-		self::assertCount(1, $users->getJoins());
+		self::assertSame([], $users->getJoins());
 		self::assertSame([
 			['posts.title' => 'Graph'],
 			['posts.title' => 'Hello'],
@@ -463,7 +463,7 @@ final class CycleJoinExecutionTest extends TestCase
 			->orderBy($orders->id->asc())
 			->fetchAll();
 
-		self::assertCount(2, $orders->getJoins());
+		self::assertSame([], $orders->getJoins());
 		self::assertSame([
 			['billingAddress.city' => 'Sao Paulo', 'shippingAddress.city' => 'Rio'],
 			['billingAddress.city' => 'Rio', 'shippingAddress.city' => 'Sao Paulo'],
@@ -1844,15 +1844,16 @@ final class CycleJoinExecutionTest extends TestCase
 		);
 	}
 
-	public function testCountMatchesLiveQueryIncludingLoaderJoins(): void
+	public function testCountRemainsStableAcrossFetchesThatGenerateLoaderJoins(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 		$users->profile->load();
+		self::assertSame(3, $users->count());
 		$loaded = $users->select($users->name)->fetchAll();
 
-		self::assertNotSame([], $users->getJoins());
+		self::assertSame([], $users->getJoins());
 		self::assertCount(2, $loaded);
-		self::assertSame(2, $users->count());
+		self::assertSame(3, $users->count());
 	}
 
 	public function testCountUsesDistinctPrimaryKeyWhenJoinsMultiplyRows(): void

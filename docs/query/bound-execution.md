@@ -65,7 +65,7 @@ Read-only object export also supports lazy iteration: `to(...)->iterate()` yield
 
 ### Identity fetch
 
-`fetchOne($identity)` is sugar for constraining the root collection primary key for that execution only. `$identity` may be a scalar (single-column PK), an associative or positional composite array, or a `Key`. The constraint is tagged `ConditionTag::IDENTITY`, AND-combined with existing user `where()` clauses, and removed after the fetch returns.
+`fetchOne($identity)` is sugar for constraining the root collection primary key for that execution only. `$identity` may be a scalar (single-column PK), an associative or positional composite array, or a `Key`. The constraint is tagged `ConditionTag::IDENTITY` and AND-combined with existing user `where()` clauses on an execution copy. It never changes the reusable query's conditions, including when an executor makes a nested identity fetch or throws.
 
 Identity fetch requires a collection-root query (`FROM` is a collection, not a derived/`as()` query source). Nested or aliased query sources raise `InvalidArgumentException`. Wrong arity or a `Key` for another collection raises the usual primary-key exceptions from `Collection::getKey()`.
 
@@ -99,7 +99,17 @@ Bound queries expose:
 - `iterate()`
 - `count()`
 
-`fetchAll()`, `fetchOne()`, and `iterate()` all go through `LoadRuntime` after the query resolves its executor (`getLoadRuntime()`). `LoadRuntime` uses a fast path when there are no relation selections; `iterate()` still rejects relation selections because structured loading may need the full parent batch.
+`fetchAll()`, `fetchOne()`, and `iterate()` each create a local `LoadRuntime` after resolving the query's executor. The query does not cache the runtime, parser results, or identity rows. `LoadRuntime` uses a fast path when no row assembly is needed; `iterate()` still rejects relation selections because structured loading may need the full parent batch.
+
+### Reusing a query
+
+Fetch preparation uses the existing `SelectQuery::copy()` for writable queries, relation references, joins, aliases requiring assembly, and identity fetches. Loader-generated joins and selections belong to that execution copy. Changing a relation from `join()` to `separate()` after a fetch therefore starts from the authored query rather than a previously prepared SQL shape. Failed preparation or execution also leaves the authored shape intact.
+
+Plain root reads without those features still pass the original query instance to the executor. Custom executors should inspect the query they receive: a prepared fetch receives its execution copy. Writable handlers receive that same per-fetch query for both `prepare()` and `track()`, along with the unchanged preparation-token API. They still track the exact object instances returned to the caller.
+
+`getFetchSchema()` remains available on the reusable query. It exposes the schema from the last successfully prepared `fetchAll()` or `fetchOne()`, even when execution returns no rows or fails. Plain reads that skip schema compilation leave it null. It is diagnostic metadata, not a retained load runtime. Iteration keeps the existing raw-row semantics and does not compile a fetch schema.
+
+`count()` keeps caller-authored joins and filters while ignoring relation load selections. A prior fetch no longer changes the count by leaving loader-generated joins on the reusable query. An inner joined load can therefore return fewer roots than `count()`; express required relation membership with a filter or explicit join when the count should include that restriction.
 
 `count()` copies and reshapes the live query, then runs ordinary `fetchOne()` on an aggregate select. Bound executors must translate ordinary aggregate expressions. Grouped and composite-key counts also emit a derived `FROM` (`SelectQuery::as(...)`) that the executor must support. There is no executor-specific count API.
 

@@ -95,8 +95,6 @@ final class SelectQuery implements QuerySourceInterface
 
 	private ?WritableResultHandler $writableHandler = null;
 
-	private ?Relation\LoadRuntime $runtime = null;
-
 	private ?RepresentationSchema $fetchSchema = null;
 
 	public function __construct(
@@ -149,7 +147,6 @@ final class SelectQuery implements QuerySourceInterface
 	public function detach(): self
 	{
 		$this->executor = null;
-		$this->runtime = null;
 
 		return $this;
 	}
@@ -584,22 +581,24 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	public function fetchAll(): array
 	{
-		$handler = $this->writableHandler;
-		$preparation = $this->beginFetch($handler);
-		$runtime = $this->getLoadRuntime(fresh: true);
-		$fetched = $runtime->fetchAll();
-		$publicRows = $this->publicRows($fetched);
-		$identityRows = $runtime->getIdentityRows() ?? $publicRows;
+		$executionQuery = $this->fetchQuery();
+		$handler = $executionQuery->writableHandler;
+		$preparation = $executionQuery->beginFetch($handler);
+		$this->fetchSchema = $executionQuery->fetchSchema;
+		$loadRuntime = $executionQuery->createLoadRuntime();
+		$fetched = $loadRuntime->fetchAll();
+		$publicRows = $executionQuery->publicRows($fetched);
+		$identityRows = $loadRuntime->getIdentityRows() ?? $publicRows;
 
-		if ($this->resultClass === null) {
+		if ($executionQuery->resultClass === null) {
 			$materialized = $publicRows;
 		} else {
 			/** @var list<object> $materialized */
-			$materialized = map($publicRows)->collection()->to($this->resultClass);
+			$materialized = map($publicRows)->collection()->to($executionQuery->resultClass);
 		}
 
 		if ($handler !== null && $preparation !== null) {
-			$handler->track($this, $preparation, $identityRows, $materialized);
+			$handler->track($executionQuery, $preparation, $identityRows, $materialized);
 		}
 
 		return $materialized;
@@ -626,7 +625,6 @@ final class SelectQuery implements QuerySourceInterface
 		$countQuery->offset = null;
 		$countQuery->resultClass = null;
 		$countQuery->writableHandler = null;
-		$countQuery->runtime = null;
 
 		foreach ($countQuery->relationRefs as $relation) {
 			$relation->clearSelection();
@@ -676,40 +674,36 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	public function fetchOne(Key|array|string|int|float|bool|null $identity = null): array|object|null
 	{
+		$executionQuery = $identity !== null ? $this->copy() : $this->fetchQuery();
 		if ($identity !== null) {
-			$this->applyIdentityConstraint($identity);
+			$executionQuery->applyIdentityConstraint($identity);
 		}
 
-		try {
-			$handler = $this->writableHandler;
-			$preparation = $this->beginFetch($handler);
-			$runtime = $this->getLoadRuntime(fresh: true);
-			$row = $runtime->fetchOne();
+		$handler = $executionQuery->writableHandler;
+		$preparation = $executionQuery->beginFetch($handler);
+		$this->fetchSchema = $executionQuery->fetchSchema;
+		$loadRuntime = $executionQuery->createLoadRuntime();
+		$row = $loadRuntime->fetchOne();
 
-			if ($row === null) {
-				return null;
-			}
-
-			$publicRow = $this->publicRow($row);
-			$identityRows = $runtime->getIdentityRows() ?? [$publicRow];
-
-			if ($this->resultClass === null) {
-				$materialized = $publicRow;
-			} else {
-				/** @var object $materialized */
-				$materialized = map($publicRow)->to($this->resultClass);
-			}
-
-			if ($handler !== null && $preparation !== null && is_object($materialized)) {
-				$handler->track($this, $preparation, $identityRows, [$materialized]);
-			}
-
-			return $materialized;
-		} finally {
-			if ($identity !== null) {
-				$this->conditions->removeByTag(ConditionTag::IDENTITY);
-			}
+		if ($row === null) {
+			return null;
 		}
+
+		$publicRow = $executionQuery->publicRow($row);
+		$identityRows = $loadRuntime->getIdentityRows() ?? [$publicRow];
+
+		if ($executionQuery->resultClass === null) {
+			$materialized = $publicRow;
+		} else {
+			/** @var object $materialized */
+			$materialized = map($publicRow)->to($executionQuery->resultClass);
+		}
+
+		if ($handler !== null && $preparation !== null && is_object($materialized)) {
+			$handler->track($executionQuery, $preparation, $identityRows, [$materialized]);
+		}
+
+		return $materialized;
 	}
 
 	/**
@@ -847,28 +841,34 @@ final class SelectQuery implements QuerySourceInterface
 			throw RelationSelectionException::iterateNotSupported();
 		}
 
-		$rows = $this->getLoadRuntime()->iterate();
+		$executionQuery = $this->fetchQuery();
+		$rows = $executionQuery->createLoadRuntime()->iterate();
 
-		if ($this->resultClass === null) {
-			return $this->publicIterable($rows);
+		if ($executionQuery->resultClass === null) {
+			return $executionQuery->publicIterable($rows);
 		}
 
-		return $this->mapPublicRows($rows, $this->resultClass);
+		return $executionQuery->mapPublicRows($rows, $executionQuery->resultClass);
 	}
 
-	private function getLoadRuntime(bool $fresh = false): Relation\LoadRuntime
+	/**
+	 * Loaders and SQL translation may add selections and joins. Keep those on
+	 * a per-fetch copy; plain root reads preserve the executor's query instance.
+	 */
+	private function fetchQuery(): self
 	{
-		if ($fresh) {
-			$this->runtime = null;
+		if ($this->writableHandler !== null || $this->relationRefs !== [] || $this->joins !== [] || $this->needsRowAssemble()) {
+			return $this->copy();
 		}
 
-		if ($this->runtime !== null) {
-			return $this->runtime;
-		}
+		return $this;
+	}
 
+	private function createLoadRuntime(): Relation\LoadRuntime
+	{
 		$executor = $this->executor ?? throw QueryNotExecutableException::forQuery($this);
 
-		return $this->runtime = new Relation\LoadRuntime($this, $executor, $this->fetchSchema);
+		return new Relation\LoadRuntime($this, $executor, $this->fetchSchema);
 	}
 
 	/**

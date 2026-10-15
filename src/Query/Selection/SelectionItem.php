@@ -80,7 +80,11 @@ final class SelectionItem
 				: $expression->as($this->getSelectionKey());
 		}
 
-		return $expression->as($this->getSelectionKey());
+		if ($this->selectionKey === null || $expression->getSelectionKey() === $this->selectionKey) {
+			return $expression;
+		}
+
+		return $expression->as($this->selectionKey);
 	}
 
 	public function isExplicit(): bool

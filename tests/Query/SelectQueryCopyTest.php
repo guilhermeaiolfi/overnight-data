@@ -65,6 +65,20 @@ final class SelectQueryCopyTest extends TestCase
 		self::assertSame($executor, $executorProperty->getValue($copy));
 	}
 
+	public function testCopyPreservesSelectionsWithCollidingResultNamesForExecutorValidation(): void
+	{
+		$query = $this->makeQuery('users');
+		$query->select($query->id, $query->name->as('id'));
+
+		$copy = $query->copy();
+
+		self::assertCount(2, $copy->getSelections());
+		self::assertSame(
+			['id', 'id'],
+			array_map(static fn ($item): string => $item->getSelectionKey(), $copy->getSelections()->getAll()),
+		);
+	}
+
 	public function testCopySharesDerivedFromInstance(): void
 	{
 		$inner = $this->makeQuery('users')->select(x()->literal(1)->as('marker'));

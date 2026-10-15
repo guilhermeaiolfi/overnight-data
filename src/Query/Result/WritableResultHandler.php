@@ -17,6 +17,7 @@ interface WritableResultHandler
 {
 	/**
 	 * Prepare a query for writable export before rows are fetched.
+	 * The query is the per-fetch execution copy, also supplied to track().
 	 *
 	 * Compiles fetch schema (and identity maps from that schema). Does not
 	 * add INTERNAL identity selections. The returned token is owned by the
