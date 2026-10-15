@@ -51,6 +51,19 @@ final class ConversionGatewayTest extends TestCase
 		);
 	}
 
+	public function testGatewaysKeepIndependentFieldTypeRegistrations(): void
+	{
+		$first = ConversionGateway::createDefault();
+		$second = ConversionGateway::createDefault();
+		$first->getMapperManager()->register(CustomFieldType::class);
+		$field = LeafNodeResolution::named('value', 'custom');
+
+		self::assertSame('payload', $first->to(PhpRepresentation::class, 'PAYLOAD', WireRepresentation::class, $field));
+
+		$this->expectException(FieldTypeNotFoundException::class);
+		$second->to(PhpRepresentation::class, 'PAYLOAD', WireRepresentation::class, $field);
+	}
+
 	public function testStorageDateStringConvertsToPhpDate(): void
 	{
 		$gateway = ConversionGateway::createDefault();
