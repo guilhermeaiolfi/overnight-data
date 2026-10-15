@@ -115,29 +115,43 @@ final class MapperManager
 		ConversionGateway $gateway,
 		?Closure $constructor = null,
 	): self {
-		$manager = new self($gateway, $constructor);
-		$manager->register(ArrayMapper::class);
-		$manager->register(ObjectMapper::class);
-		$manager->register(ArrayWriter::class);
-		$manager->register(ObjectWriter::class);
-		$manager->register(FieldMapNodeResolver::class);
-		$manager->register(DefinitionNodeResolver::class);
-		$manager->register(ReflectionPropertyNodeResolver::class);
-		$manager->register(GenericNodeResolver::class);
-		$manager->register(PassthroughNodeResolver::class);
-		$manager->register(StringFieldType::class);
-		$manager->register(PassthroughFieldType::class);
-		$manager->register(BoolFieldType::class);
-		$manager->register(BackedEnumFieldType::class);
-		$manager->register(IntFieldType::class);
-		$manager->register(BigIntFieldType::class);
-		$manager->register(DecimalFieldType::class);
-		$manager->register(FloatFieldType::class);
-		$manager->register(JsonFieldType::class);
-		$manager->register(UrlFieldType::class);
-		$manager->register(DateFieldType::class);
-		$manager->register(DateTimeFieldType::class);
-		$manager->register(DateTimeWireCodec::class);
+		$manager = $gateway->getMapperManager();
+		if ($constructor !== null) {
+			$manager->setConstructor($constructor);
+		}
+		$existingFieldTypes = $manager->fieldTypes;
+		$existingFieldTypeCodecs = $manager->fieldTypeCodecs;
+
+		foreach ([
+			ArrayMapper::class,
+			ObjectMapper::class,
+			ArrayWriter::class,
+			ObjectWriter::class,
+			FieldMapNodeResolver::class,
+			DefinitionNodeResolver::class,
+			ReflectionPropertyNodeResolver::class,
+			GenericNodeResolver::class,
+			PassthroughNodeResolver::class,
+			StringFieldType::class,
+			PassthroughFieldType::class,
+			BoolFieldType::class,
+			BackedEnumFieldType::class,
+			IntFieldType::class,
+			BigIntFieldType::class,
+			DecimalFieldType::class,
+			FloatFieldType::class,
+			JsonFieldType::class,
+			UrlFieldType::class,
+			DateFieldType::class,
+			DateTimeFieldType::class,
+			DateTimeWireCodec::class,
+		] as $component) {
+			if (! $manager->has($component)) {
+				$manager->register($component);
+			}
+		}
+		$manager->fieldTypes = $existingFieldTypes + $manager->fieldTypes;
+		$manager->fieldTypeCodecs = array_replace_recursive($manager->fieldTypeCodecs, $existingFieldTypeCodecs);
 
 		return $manager;
 	}

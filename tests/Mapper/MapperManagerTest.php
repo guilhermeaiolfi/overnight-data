@@ -25,11 +25,17 @@ use ON\Data\Mapper\Field\JsonFieldType;
 use ON\Data\Mapper\Field\PassthroughFieldType;
 use ON\Data\Mapper\Field\StringFieldType;
 use ON\Data\Mapper\Field\UrlFieldType;
+use ON\Data\Mapper\FieldMap;
+use ON\Data\Mapper\FieldTypeCodecInterface;
+use ON\Data\Mapper\FieldTypeInterface;
 use ON\Data\Mapper\Mapper\ArrayMapper;
 use ON\Data\Mapper\Mapper\ObjectMapper;
 use ON\Data\Mapper\MapperManager;
 use ON\Data\Mapper\MappingOptions;
+use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Representation\WireRepresentation;
+use ON\Data\Mapper\Resolution\LeafNodeResolution;
+use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 use ON\Data\Mapper\Resolver\DefinitionNodeResolver;
 use ON\Data\Mapper\Resolver\FieldMapNodeResolver;
 use ON\Data\Mapper\Resolver\GenericNodeResolver;
@@ -385,6 +391,90 @@ final class MapperManagerTest extends TestCase
 		self::assertSame(DateTimeWireCodec::class, $manager->resolveFieldTypeCodec(DateTimeFieldType::class, WireRepresentation::class));
 	}
 
+	public function testCreateDefaultOnEmptyGatewayUsesTheSameRegistryForMappingAndConversion(): void
+	{
+		$gateway = new ConversionGateway();
+		$manager = MapperManager::createDefault($gateway);
+
+		self::assertSame(
+			['id' => 42],
+			$manager->map(
+				['id' => '42'],
+				[],
+				(new MappingOptions($gateway))
+					->withSourceRepresentation(WireRepresentation::class)
+					->withFieldMap(FieldMap::fromArray(['id' => 'int'])),
+			),
+		);
+		self::assertSame($manager, $gateway->getMapperManager());
+	}
+
+	public function testCreateDefaultKeepsCustomRegistrationsAndReusableInstances(): void
+	{
+		$gateway = $this->gateway();
+		$original = $gateway->getMapperManager();
+		$original->register(TrackingCustomFieldType::class);
+		$original->register(TrackingWireCodec::class);
+		$mapper = $original->getMapper(ArrayMapper::class);
+		$writer = $original->getWriter(ArrayWriter::class);
+		$manager = MapperManager::createDefault($gateway);
+		$manager->register(ReplacementTrackingWireCodec::class);
+
+		self::assertSame(
+			'replacement-wire<payload>',
+			$gateway->to(PhpRepresentation::class, 'payload', WireRepresentation::class, LeafNodeResolution::named('payload', 'tracked')),
+		);
+		self::assertSame($mapper, $manager->getMapper(ArrayMapper::class));
+		self::assertSame($writer, $manager->getWriter(ArrayWriter::class));
+		self::assertSame($original->getRegisteredResolvers(), $manager->getRegisteredResolvers());
+	}
+
+	public function testCreateDefaultKeepsItsConstructorWhenCalledAgainWithoutOne(): void
+	{
+		$gateway = new ConversionGateway();
+		$constructed = [];
+		MapperManager::createDefault(
+			$gateway,
+			static function (string $component, ConversionGateway $runtime) use (&$constructed, $gateway): object {
+				self::assertSame($gateway, $runtime);
+				$constructed[] = $component;
+
+				return new $component();
+			},
+		);
+		$manager = MapperManager::createDefault($gateway);
+
+		self::assertSame(['id' => 42], $manager->map(['id' => 42], [], new MappingOptions($gateway)));
+		self::assertContains(ArrayMapper::class, $constructed);
+		self::assertContains(ArrayWriter::class, $constructed);
+	}
+
+	public function testCreateDefaultPreservesAliasesAndCodecsRegisteredBeforeDefaults(): void
+	{
+		$gateway = new ConversionGateway();
+		$gateway->getMapperManager()->register(FactoryCustomStringFieldType::class);
+		$gateway->getMapperManager()->register(FactoryCustomDateTimeWireCodec::class);
+		$string = LeafNodeResolution::named('name', 'string');
+		$date = LeafNodeResolution::named('created_at', DateTimeFieldType::class);
+		self::assertSame('custom<payload>', $gateway->to(PhpRepresentation::class, 'payload', WireRepresentation::class, $string));
+		self::assertSame('custom-date', $gateway->to(PhpRepresentation::class, 'payload', WireRepresentation::class, $date));
+
+		$manager = MapperManager::createDefault($gateway);
+
+		self::assertSame('custom<payload>', $gateway->to(PhpRepresentation::class, 'payload', WireRepresentation::class, $string));
+		self::assertSame('custom-date', $gateway->to(PhpRepresentation::class, 'payload', WireRepresentation::class, $date));
+		self::assertSame(
+			['name' => 'custom<payload>', 'id' => 42],
+			$manager->map(
+				['name' => 'payload', 'id' => '42'],
+				[],
+				(new MappingOptions($gateway))
+					->withOutputRepresentation(WireRepresentation::class)
+					->withFieldMap(FieldMap::fromArray(['name' => 'string', 'id' => 'int'])),
+			),
+		);
+	}
+
 	public function testExplicitResolverClassesStillPrecedeDefaultResolvers(): void
 	{
 		$manager = MapperManager::createDefault($this->gateway());
@@ -544,5 +634,51 @@ final class MapperManagerTest extends TestCase
 		$reflection = new ReflectionProperty($manager, 'resolvedFieldTypeCodecs');
 
 		return $reflection->getValue($manager);
+	}
+}
+
+final class FactoryCustomStringFieldType implements FieldTypeInterface
+{
+	public static function getNames(): array
+	{
+		return ['string'];
+	}
+
+	public static function getStorageType(): string
+	{
+		return 'string';
+	}
+
+	public static function toPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
+	{
+		return $value;
+	}
+
+	public static function fromPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
+	{
+		return 'custom<' . (string) $value . '>';
+	}
+}
+
+final class FactoryCustomDateTimeWireCodec implements FieldTypeCodecInterface
+{
+	public static function getFieldType(): string
+	{
+		return DateTimeFieldType::class;
+	}
+
+	public static function getRepresentation(): string
+	{
+		return WireRepresentation::class;
+	}
+
+	public static function toPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
+	{
+		return $value;
+	}
+
+	public static function fromPhp(mixed $value, LeafNodeResolutionInterface $field): mixed
+	{
+		return 'custom-date';
 	}
 }

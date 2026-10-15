@@ -220,6 +220,8 @@ Each `ConversionGateway` owns one `MapperManager`:
 $runtime = $gateway->getMapperManager();
 ```
 
+`MapperManager::createDefault($gateway)` configures and returns that same manager. It adds missing built-in components without replacing the manager or recreating cached mappers and writers. Existing field type aliases and codecs retain precedence over defaults, including registrations made before default initialization. Later explicit registrations still override earlier ones. An optional component constructor is applied through `setConstructor()`, which still rejects changes after reusable components have been created; omitting it keeps the current constructor.
+
 Default registered runtime components:
 
 - mappers: `ArrayMapper`, `ObjectMapper`

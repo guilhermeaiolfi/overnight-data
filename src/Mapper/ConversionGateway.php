@@ -35,7 +35,7 @@ final class ConversionGateway
 	public static function createDefault(): self
 	{
 		$gateway = new self();
-		$gateway->mapperManager = MapperManager::createDefault($gateway);
+		MapperManager::createDefault($gateway);
 
 		return $gateway;
 	}
