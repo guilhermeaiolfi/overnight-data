@@ -4,23 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Smoke\Support;
 
-use Cycle\Database\DatabaseInterface;
-use Cycle\Database\StatementInterface;
-use ON\Data\Database\Cycle\ConnectionConfig;
-use ON\Data\Database\Cycle\CycleConnectionFactory;
-use ON\Data\Database\Cycle\CycleRuntimeFactory;
+use ON\Data\Database\ConnectionConfig;
+use ON\Data\Database\Pdo\PdoConnection;
+use ON\Data\Database\SqlRuntimeFactory;
 use ON\Data\DataRuntime;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 
-/**
- * Shared in-memory SQLite setup for smoke tests.
- *
- * Uses the same ConnectionConfig::dsn('sqlite', 'sqlite::memory:') path as CycleRuntimeFactory::connect().
- */
 final class SqliteMemoryHarness
 {
 	private function __construct(
-		public readonly DatabaseInterface $cycleDatabase,
+		public readonly PdoConnection $connection,
 		public readonly DataRuntime $database,
 		public readonly CommandExecutorInterface $commandExecutor,
 	) {
@@ -28,16 +21,11 @@ final class SqliteMemoryHarness
 
 	public static function create(): self
 	{
-		return self::fromConnectionConfig(ConnectionConfig::dsn('sqlite', 'sqlite::memory:'));
-	}
-
-	public static function fromConnectionConfig(ConnectionConfig $config): self
-	{
-		$cycleDatabase = (new CycleConnectionFactory())->createDatabase($config);
-		$runtime = (new CycleRuntimeFactory())->create($cycleDatabase);
+		$connection = PdoConnection::connect(new ConnectionConfig('sqlite::memory:'));
+		$runtime = (new SqlRuntimeFactory())->create($connection);
 
 		return new self(
-			$cycleDatabase,
+			$connection,
 			$runtime,
 			$runtime->getCommandExecutor(),
 		);
@@ -45,18 +33,16 @@ final class SqliteMemoryHarness
 
 	public function exec(string $sql): void
 	{
-		$this->cycleDatabase->execute($sql);
+		$this->connection->execute($sql);
 	}
 
 	/**
-	 * @param array<int|string, mixed> $parameters
+	 * @param list<mixed> $parameters
 	 *
 	 * @return array<string, mixed>|null
 	 */
 	public function fetchRow(string $sql, array $parameters = []): ?array
 	{
-		$row = $this->cycleDatabase->query($sql, $parameters)->fetch(StatementInterface::FETCH_ASSOC);
-
-		return is_array($row) ? $row : null;
+		return $this->connection->fetchOne($sql, $parameters);
 	}
 }

@@ -74,7 +74,7 @@ $posts->select($posts->all());
 
 ## Result export
 
-By default, bound queries return arrays. Object export is opt-in through `to(...)`. Bound execution starts from `DataRuntime` (for example via `CycleRuntimeFactory`):
+By default, bound queries return arrays. Object export is opt-in through `to(...)`. Bound execution starts from `DataRuntime` (for example via `SqlRuntimeFactory`):
 
 ```php
 $rows = $runtime->query($users)->fetchAll();
@@ -262,4 +262,4 @@ Use getters to inspect the built query:
 - The query model is database-independent.
 - Query objects may be relation-aware, but relation-specific join rules stay inside relation loaders.
 - Built-in loaders own whether a relation branch uses joins or separate queries during structured loading.
-- SQL dialect handling should be delegated to backend adapters such as Cycle Database or Doctrine DBAL rather than hand-coded in the query model.
+- The SQL compiler delegates engine-specific syntax to its dialect.

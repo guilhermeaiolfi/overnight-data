@@ -2,14 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Tests\ON\Data\Database\Cycle;
+namespace Tests\ON\Data\Database\Sql;
 
-use Cycle\Database\Query\QueryParameters;
 use DateTimeImmutable;
-use ON\Data\Database\Cycle\ConnectionConfig;
-use ON\Data\Database\Cycle\CycleRuntimeFactory;
 use ON\Data\Database\Exception\QueryExecutionException;
 use ON\Data\Database\Exception\UnsupportedQueryException;
+use ON\Data\Database\SqlRuntimeFactory;
 use ON\Data\DataRuntime;
 use ON\Data\Definition\Registry;
 use ON\Data\Query\Expression\SubqueryExpression;
@@ -23,11 +21,9 @@ use ReflectionClass;
 use Tests\ON\Data\Fixture\CustomRelation;
 
 #[RequiresPhpExtension('pdo_sqlite')]
-final class CycleQueryExecutionTest extends TestCase
+final class SqlQueryExecutionTest extends TestCase
 {
-	private string $databasePath;
-
-	private string $dsn;
+	private PDO $pdo;
 
 	private ?Registry $registry = null;
 
@@ -35,27 +31,15 @@ final class CycleQueryExecutionTest extends TestCase
 
 	protected function setUp(): void
 	{
-		$this->databasePath = tempnam(sys_get_temp_dir(), 'ondata-cycle-');
-		$this->dsn = 'sqlite:' . str_replace('\\', '/', $this->databasePath);
+		$this->pdo = new PDO('sqlite::memory:');
 		$this->registry = $this->makeRegistry();
 
 		$this->seedDatabase();
 
-		$this->database = (new CycleRuntimeFactory())->connect(ConnectionConfig::dsn('sqlite', $this->dsn));
+		$this->database = (new SqlRuntimeFactory())->create($this->pdo);
 	}
 
-	protected function tearDown(): void
-	{
-		$this->database = null;
-		$this->registry = null;
-		gc_collect_cycles();
-
-		if (is_file($this->databasePath)) {
-			@unlink($this->databasePath);
-		}
-	}
-
-	public function testFactoryBindsExecutableQueriesAndMapsFieldsThroughCycle(): void
+	public function testFactoryBindsExecutableQueriesAndMapsFields(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 
@@ -809,7 +793,7 @@ final class CycleQueryExecutionTest extends TestCase
 
 	public function testLazyIterationWrapsBackendMappingFailures(): void
 	{
-		$pdo = new PDO($this->dsn);
+		$pdo = $this->pdo;
 		$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 		$pdo->exec("UPDATE users SET created_at = 'not-a-datetime' WHERE id = 2");
 
@@ -998,7 +982,7 @@ final class CycleQueryExecutionTest extends TestCase
 
 	private function seedDatabase(): void
 	{
-		$pdo = new PDO($this->dsn);
+		$pdo = $this->pdo;
 		$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 		$pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, mail_address TEXT, active INTEGER, created_at TEXT, profile_json TEXT, nickname TEXT NULL, score INTEGER)');
@@ -1022,12 +1006,9 @@ final class CycleQueryExecutionTest extends TestCase
 		$executor = $executorProperty->getValue($this->database);
 
 		$executorReflection = new ReflectionClass($executor);
-		$translatorProperty = $executorReflection->getProperty('translator');
-		$translator = $translatorProperty->getValue($executor);
+		$compilerProperty = $executorReflection->getProperty('compiler');
+		$compiler = $compilerProperty->getValue($executor);
 
-		$translated = $translator->translate($query);
-		$parameters = new QueryParameters();
-
-		return $translated->query()->sqlStatement($parameters);
+		return $compiler->compile($query)->sql;
 	}
 }

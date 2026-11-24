@@ -1,6 +1,6 @@
 # ADR 0001: Database Adapter Boundary and Compilation Target
 
-Status: Accepted
+Status: Superseded by [ADR 0003](0003-direct-sql-compilation.md).
 
 ## Context
 

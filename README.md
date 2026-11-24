@@ -2,7 +2,7 @@
 
 `ON\Data` is a standalone PHP data-layer library focused on metadata definitions, value conversion, mapping, database-independent read-query modeling, relation loading, and ORM persistence.
 
-It is independent from the Overnight framework. The package can be consumed on its own and may be integrated elsewhere later.
+It is independent from the Overnight framework and requires PHP 8.3+ with no runtime Composer packages. The built-in SQL runtime uses PDO and the PDO driver for your database. Implement `ConnectionInterface` to reuse the SQL runtime with a different connection library.
 
 ## Stability
 
@@ -10,7 +10,7 @@ This package does **not** offer a SemVer compatibility promise. Version tags ide
 
 Docs describe current behavior for orientation. They are not a support or “stable API” list. See [`UPGRADE.md`](UPGRADE.md).
 
-Typical starting points today (convenience only, not a supported surface): `CycleRuntimeFactory` / `DataRuntime`, `SelectQuery`, `Session`.
+Typical starting points today (convenience only, not a supported surface): `SqlRuntimeFactory` / `DataRuntime`, `SelectQuery`, `Session`.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for release history and [`docs/quickstart.md`](docs/quickstart.md) for a first end-to-end walkthrough.
 
@@ -19,9 +19,9 @@ See [`CHANGELOG.md`](CHANGELOG.md) for release history and [`docs/quickstart.md`
 - Field metadata and conversion: field types, representations, codecs, and the `ConversionGateway` used to convert values through canonical PHP representations.
 - Mapper runtime: recursive mapping across arrays, `stdClass`, and public-property DTOs, with definition-aware resolution, `FieldMap` support, delayed object creation for constructor and readonly targets, and reusable mapper/writer/resolver registration through `MapperManager`.
 - Query model: database-independent `SelectQuery`, field and relation refs, selections, aliases, semantic value operations, aggregates, subqueries, joins, conditions, grouping, ordering, and pagination.
-- Bound execution: optional execution binding through `ON\Data\Database\QueryExecutorInterface`, plus `DataRuntime` / `CycleRuntimeFactory` and `ConnectionConfig`.
+- Bound execution: optional execution binding through `ON\Data\Database\QueryExecutorInterface`, plus `DataRuntime` / `SqlRuntimeFactory` and `ConnectionConfig`.
 - Relation loading: structured relation selection for nested results, loader-owned join or separate-query execution, and parser-backed result assembly for built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relations.
-- ORM persistence: `RecordState`-backed scalar insert/update/delete planning, scalar and relation representation synchronization, configured relation persistence planning, `FlushExecutor` / `Session` orchestration, Cycle-backed command execution, affected-row validation, and simple auto-increment primary-key merge after inserts.
+- ORM persistence: `RecordState`-backed scalar insert/update/delete planning, scalar and relation representation synchronization, configured relation persistence planning, `FlushExecutor` / `Session` orchestration, parameterized SQL command execution, affected-row validation, and simple auto-increment primary-key merge after inserts.
 - Query result export: array results by default, read-only `stdClass` and public-property class export, and writable `stdClass` or mutable public-property DTO query export with flat projection provenance.
 - Session save API: `update` / `create` / `detach` with `SelectQuery::projection()` or `schemaOf()` for inbound shapes; `flush()` applies pending intents and writes changes. `sync()` is available for early synchronization and validation.
 
@@ -29,7 +29,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for release history and [`docs/quickstart.md`
 
 The result object is flat, but writable query export remembers where each property came from. A property aliased from a related field still updates the underlying table column after `sync()` and `flush()`. This works through writable query provenance and flat projection adoption.
 
-Given a bound query and a `Session` backed by a command executor (for example from `CycleRuntimeFactory` / `ConvertingCommandExecutor`):
+Given a bound query and a `Session` backed by a command executor (for example from `SqlRuntimeFactory` / `ConvertingCommandExecutor`):
 
 ```php
 $user = $q
@@ -124,7 +124,7 @@ Public-property class export requirements:
 - Structured relation loading supports the built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relation types.
 - Built-in `FirstOfMany` loading is separate-query-only, uses windowed ranking on supported SQL backends, and requires deterministic relation-level `orderBy` metadata; JOIN loading is intentionally unsupported.
 - No automatic relation cascade writes or broad orphan-removal policy unless explicitly implemented by a relation planner. Relation definition `cascade()` / `load()` metadata is stored for interoperability with external Cycle ORM schema tools; `ON\Data` Session persistence does not interpret those flags. Use `exclusive()` for owned-child unlink deletion.
-- `Session::flush()` requires `TransactionalCommandExecutorInterface` and always runs inside that executor-backed transaction (including `ConvertingCommandExecutor` wrapping `CycleCommandExecutor`). Non-transactional executors are rejected. There is no separate transaction API on `Session`.
+- `Session::flush()` requires `TransactionalCommandExecutorInterface` and always runs inside that executor-backed transaction (including `ConvertingCommandExecutor` wrapping `SqlCommandExecutor`). Non-transactional executors are rejected. There is no separate transaction API on `Session`.
 - No optimistic locking or stale-row revision conflict handling beyond representation sync baseline checks.
 - No lazy loading.
 - No repositories, `EntityManager`, `UnitOfWork`, events, proxies, or generated model layer.
@@ -182,7 +182,7 @@ GitHub Actions runs `composer validate --strict` and `composer check` on PHP 8.3
 - `docs/query/bound-execution.md` documents bound execution, result modes, and the data runtime.
 - `docs/query/relation-loading.md` documents relation selection, nested loading, and loader ownership boundaries.
 - `docs/orm/foundation.md` documents ORM foundation concepts, state primitives, representation lineage, sync conflicts, and relation guardrails.
-- `docs/orm/persistence.md` documents the ORM persistence pipeline, affected-row validation, Cycle command executor boundary, generated-key support, relation persistence planning boundary, and write-side limitations.
+- `docs/orm/persistence.md` documents the ORM persistence pipeline, affected-row validation, SQL command executor boundary, generated-key support, relation persistence planning boundary, and write-side limitations.
 - `docs/orm/representation-schema.md` documents representation schema, flat projection adoption, mapper/query/tracking boundaries, and scalar sync guardrails.
 - `docs/orm/writable-select-query-projections.md` documents writable `SelectQuery` projection provenance, flattened related-field updates, relation intent from queried objects, and current projection boundaries.
 - `docs/orm/session-save-api.md` documents `update` / `create` / `detach` / `sync` / `flush`, `SelectQuery::projection()`, and `RepresentationIntentStore`.

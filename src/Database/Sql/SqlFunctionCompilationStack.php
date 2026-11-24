@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\Database\Cycle;
+namespace ON\Data\Database\Sql;
 
 use ON\Data\Query\Expression\FunctionCallExpression;
 use ON\Data\Query\QueryFunction\FunctionCompilationException;
@@ -10,7 +10,7 @@ use ON\Data\Query\QueryFunction\FunctionCompilationException;
 /**
  * @internal
  */
-final class CycleFunctionCompilationStack
+final class SqlFunctionCompilationStack
 {
 	/**
 	 * @var array<int, true>

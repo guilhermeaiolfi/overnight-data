@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\Database\Cycle;
+namespace ON\Data\Database\Sql;
 
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Representation\PhpRepresentation;
@@ -12,7 +12,7 @@ use ON\Data\Mapper\Resolution\LeafNodeResolution;
 /**
  * @internal
  */
-final class CycleResultMapper
+final class SqlResultMapper
 {
 	public function __construct(
 		private readonly ConversionGateway $gateway,
@@ -23,7 +23,7 @@ final class CycleResultMapper
 	 * @param array<string, mixed> $row
 	 * @return array<string, mixed>
 	 */
-	public function map(array $row, CycleTranslatedQuery $query): array
+	public function map(array $row, CompiledQuery $query): array
 	{
 		$mapped = [];
 

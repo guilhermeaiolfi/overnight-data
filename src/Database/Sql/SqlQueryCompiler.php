@@ -2,16 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\Database\Cycle;
+namespace ON\Data\Database\Sql;
 
-use Cycle\Database\DatabaseInterface;
-use Cycle\Database\Injection\FragmentInterface;
-use Cycle\Database\Injection\Parameter;
-use Cycle\Database\Injection\ParameterInterface;
-use Cycle\Database\Injection\SubQuery;
-use Cycle\Database\Query\QueryParameters;
-use Cycle\Database\Query\SelectQuery as CycleSelectQuery;
+use ON\Data\Database\DatabasePlatformInterface;
 use ON\Data\Database\Exception\UnsupportedQueryException;
+use ON\Data\Database\Sql\Dialect\DialectInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Mapper\ConversionGateway;
@@ -54,64 +49,39 @@ use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Query\Sort\Sort;
 use ON\Data\Query\Sort\SortDirection;
 
 /**
  * @internal
  */
-final class CycleQueryTranslator
+final class SqlQueryCompiler
 {
 	public function __construct(
-		private readonly DatabaseInterface $database,
+		private readonly DialectInterface $dialect,
+		private readonly DatabasePlatformInterface $platform,
 		private readonly ConversionGateway $gateway,
+		private readonly string $tablePrefix = '',
 	) {
 	}
 
-	public function translate(SelectQuery $query): CycleTranslatedQuery
+	public function compile(SelectQuery $query, ?int $maxRows = null): CompiledQuery
 	{
-		$context = new CycleTranslationContext($query, $this->database->getDriver()->getQueryCompiler());
+		$context = new SqlTranslationContext($query);
 
-		return $context->within($query, function () use ($query, $context): CycleTranslatedQuery {
-			$cycle = $this->database->select();
-			$cycle->from($this->fromSource($query, $context));
+		return $context->within($query, function () use ($query, $context, $maxRows): CompiledQuery {
+			[$sql, , $columns] = $this->compileSelect($query, $context, true, maxRows: $maxRows);
 
-			[$columns, $resultColumns] = $this->translateSelections($query, $context, true);
-			$cycle->columns($columns);
-
-			foreach ($query->getConditions() as $condition) {
-				$cycle->where($this->translateCondition($condition, $context)->toCycleFragment());
-			}
-
-			foreach ($query->getGroups() as $group) {
-				$cycle->groupBy($this->translateExpression($group, $context)->toCycleFragment());
-			}
-
-			foreach ($query->getHavingConditions() as $condition) {
-				$cycle->having($this->translateCondition($condition, $context)->toCycleFragment());
-			}
-
-			foreach ($query->getSorts() as $sort) {
-				$cycle->orderBy(
-					$this->translateExpression($sort->getExpression(), $context)->toCycleFragment(),
-					$sort->getDirection() === SortDirection::ASC ? CycleSelectQuery::SORT_ASC : CycleSelectQuery::SORT_DESC,
-				);
-			}
-
-			$this->translateJoins($query, $cycle, $context);
-
-			$cycle->limit($query->getLimit());
-			$cycle->offset($query->getOffset());
-
-			return new CycleTranslatedQuery($cycle, $resultColumns);
+			return new CompiledQuery($sql->sql(), $sql->parameters(), $columns);
 		});
 	}
 
 	/**
-	 * @return array{0: list<string|FragmentInterface>, 1: list<CycleResultColumn>}
+	 * @return array{0: list<SqlFragment>, 1: list<SqlResultColumn>}
 	 */
 	private function translateSelections(
 		SelectQuery $query,
-		CycleTranslationContext $context,
+		SqlTranslationContext $context,
 		bool $root,
 		bool $derived = false,
 	): array {
@@ -138,7 +108,7 @@ final class CycleQueryTranslator
 					: $selectionExpression;
 				$logicalNames = $expression instanceof StarExpression
 					? array_map(
-						static fn (CycleResultColumn $column): string => $column->logicalName(),
+						static fn (SqlResultColumn $column): string => $column->logicalName(),
 						$this->starResultColumns($expression),
 					)
 					: [$this->resolveRootResultName($query, $selection, $expression)];
@@ -173,14 +143,14 @@ final class CycleQueryTranslator
 				) {
 					$columnsToExpand = $this->expandCollectionStar($expression->getSource(), $context);
 					foreach ($columnsToExpand as $column) {
-						$columns[] = $column->toCycleFragment();
+						$columns[] = $column;
 					}
 				} elseif ($root && $expression->getSource() instanceof DerivedSelectQuery) {
 					foreach ($this->expandSourceStar($expression, $context) as $column) {
-						$columns[] = $column->toCycleFragment();
+						$columns[] = $column;
 					}
 				} else {
-					$columns[] = $this->translateStar($expression, $context)->toCycleFragment();
+					$columns[] = $this->translateStar($expression, $context);
 				}
 
 				if ($root) {
@@ -214,15 +184,15 @@ final class CycleQueryTranslator
 						: (DerivedOutputColumns::expressionOutputName($expression) ?? $selection->getSelectionKey()));
 
 				$columns[] = SqlFragment::withParameters(
-					$sql->sql() . ' AS ' . $this->quoteResultAlias($alias),
+					$sql->sql() . ' AS ' . $this->quote($alias),
 					$sql->parameters(),
-				)->toCycleFragment();
+				);
 			} else {
-				$columns[] = $sql->toCycleFragment();
+				$columns[] = $sql;
 			}
 
 			if ($root) {
-				$resultColumns[] = new CycleResultColumn(
+				$resultColumns[] = new SqlResultColumn(
 					$backendName ?? sprintf('__ondata_implicit_%d', $index),
 					$logicalName ?? sprintf('__ondata_implicit_%d', $index),
 					$visible,
@@ -279,7 +249,7 @@ final class CycleQueryTranslator
 
 	private function translateCondition(
 		ConditionInterface $condition,
-		CycleTranslationContext $context,
+		SqlTranslationContext $context,
 		?Join $joinContext = null,
 	): SqlFragment {
 		return match (true) {
@@ -298,7 +268,7 @@ final class CycleQueryTranslator
 
 	private function translateComparison(
 		ComparisonCondition $condition,
-		CycleTranslationContext $context,
+		SqlTranslationContext $context,
 		?Join $joinContext = null,
 	): SqlFragment {
 		$left = $condition->getLeft();
@@ -333,7 +303,7 @@ final class CycleQueryTranslator
 
 	private function translateLogical(
 		LogicalCondition $condition,
-		CycleTranslationContext $context,
+		SqlTranslationContext $context,
 		?Join $joinContext = null,
 	): SqlFragment {
 		$operator = $condition->getOperator() === LogicalOperator::AND ? ' AND ' : ' OR ';
@@ -352,7 +322,7 @@ final class CycleQueryTranslator
 
 	private function translateNullCondition(
 		NullCondition $condition,
-		CycleTranslationContext $context,
+		SqlTranslationContext $context,
 		?Join $joinContext = null,
 	): SqlFragment {
 		$expression = $this->translateExpression($condition->getExpression(), $context, null, $joinContext);
@@ -369,7 +339,7 @@ final class CycleQueryTranslator
 
 	private function translateIn(
 		InCondition $condition,
-		CycleTranslationContext $context,
+		SqlTranslationContext $context,
 		?Join $joinContext = null,
 	): SqlFragment {
 		$expression = $this->translateExpression($condition->getExpression(), $context, null, $joinContext);
@@ -406,7 +376,7 @@ final class CycleQueryTranslator
 		);
 	}
 
-	private function translateExists(ExistsCondition $condition, CycleTranslationContext $context): SqlFragment
+	private function translateExists(ExistsCondition $condition, SqlTranslationContext $context): SqlFragment
 	{
 		$subquery = $this->compileNestedQuery($condition->getQuery(), $context, QueryUsage::EXISTS_SUBQUERY);
 
@@ -421,7 +391,7 @@ final class CycleQueryTranslator
 
 	private function translateExpression(
 		ValueExpressionInterface $expression,
-		CycleTranslationContext $context,
+		SqlTranslationContext $context,
 		?FieldInterface $literalFieldContext = null,
 		?Join $joinContext = null,
 	): SqlFragment {
@@ -441,9 +411,9 @@ final class CycleQueryTranslator
 
 	public function translateExpressionForFunction(
 		ValueExpressionInterface $expression,
-		CycleTranslationContext $context,
+		SqlTranslationContext $context,
 		?Join $joinContext,
-		CycleFunctionCompilationStack $stack,
+		SqlFunctionCompilationStack $stack,
 	): SqlFragment {
 		if ($expression instanceof FunctionCallExpression) {
 			return $this->translateFunctionCall($expression, $context, $joinContext, $stack);
@@ -454,16 +424,16 @@ final class CycleQueryTranslator
 
 	public function quoteIdentifierForFunction(string $identifier): string
 	{
-		return $this->quote($identifier);
+		return $this->quoteQualified(...explode('.', $identifier));
 	}
 
 	private function translateFunctionCall(
 		FunctionCallExpression $expression,
-		CycleTranslationContext $context,
+		SqlTranslationContext $context,
 		?Join $joinContext = null,
-		?CycleFunctionCompilationStack $stack = null,
+		?SqlFunctionCompilationStack $stack = null,
 	): SqlFragment {
-		$stack ??= new CycleFunctionCompilationStack();
+		$stack ??= new SqlFunctionCompilationStack();
 		$stack->enter($expression);
 
 		try {
@@ -474,10 +444,10 @@ final class CycleQueryTranslator
 				throw InvalidQueryFunctionException::mustImplement($function);
 			}
 
-			$compilationContext = new CycleFunctionCompilationContext(
+			$compilationContext = new SqlFunctionCompilationContext(
 				$this,
 				$context,
-				new CycleDatabasePlatform($this->database),
+				$this->platform,
 				$joinContext,
 				$stack,
 			);
@@ -489,14 +459,14 @@ final class CycleQueryTranslator
 
 			return SqlFragment::withParameters(
 				$compiled->getSql(),
-				CycleFunctionCompilationContext::adaptParameters($compiled->getParameters()),
+				$compiled->getParameters(),
 			);
 		} finally {
 			$stack->leave($expression);
 		}
 	}
 
-	private function translateStar(StarExpression $expression, CycleTranslationContext $context): SqlFragment
+	private function translateStar(StarExpression $expression, SqlTranslationContext $context): SqlFragment
 	{
 		return SqlFragment::raw($this->quote($context->aliasFor($expression->getSource())) . '.*');
 	}
@@ -504,7 +474,7 @@ final class CycleQueryTranslator
 	/**
 	 * @return list<SqlFragment>
 	 */
-	private function expandSourceStar(StarExpression $expression, CycleTranslationContext $context): array
+	private function expandSourceStar(StarExpression $expression, SqlTranslationContext $context): array
 	{
 		$alias = $context->aliasFor($expression->getSource());
 		$columns = [];
@@ -513,7 +483,7 @@ final class CycleQueryTranslator
 			$columns[] = SqlFragment::raw(
 				$this->quoteQualified($alias, $column->backendName())
 				. ' AS '
-				. $this->quoteResultAlias($column->logicalName()),
+				. $this->quote($column->logicalName()),
 			);
 		}
 
@@ -523,7 +493,7 @@ final class CycleQueryTranslator
 	/**
 	 * @return list<SqlFragment>
 	 */
-	private function expandCollectionStar(SelectQuery $query, CycleTranslationContext $context): array
+	private function expandCollectionStar(SelectQuery $query, SqlTranslationContext $context): array
 	{
 		$from = $query->getFrom();
 
@@ -539,7 +509,7 @@ final class CycleQueryTranslator
 			$columns[] = SqlFragment::raw(
 				$this->quoteQualified($alias, $field->getColumn())
 				. ' AS '
-				. $this->quoteResultAlias($field->getName()),
+				. $this->quote($field->getName()),
 			);
 		}
 
@@ -547,7 +517,7 @@ final class CycleQueryTranslator
 	}
 
 	/**
-	 * @return list<CycleResultColumn>
+	 * @return list<SqlResultColumn>
 	 */
 	private function starResultColumns(StarExpression $expression): array
 	{
@@ -558,7 +528,7 @@ final class CycleQueryTranslator
 
 			foreach ($source->getCollection()->getVisibleFields() as $fieldName) {
 				$field = $source->getCollection()->getField($fieldName);
-				$columns[] = new CycleResultColumn($field->getColumn(), $field->getName(), true, $field);
+				$columns[] = new SqlResultColumn($field->getColumn(), $field->getName(), true, $field);
 			}
 
 			return $columns;
@@ -566,7 +536,7 @@ final class CycleQueryTranslator
 
 		if ($source instanceof SelectQuery || $source instanceof DerivedSelectQuery) {
 			return array_map(
-				static fn (string $name): CycleResultColumn => new CycleResultColumn($name, $name, true),
+				static fn (string $name): SqlResultColumn => new SqlResultColumn($name, $name, true),
 				$this->derivedSelectionNames($source),
 			);
 		}
@@ -590,13 +560,13 @@ final class CycleQueryTranslator
 	{
 		return SqlFragment::withParameters(
 			$expression->getSql(),
-			array_map(static fn (mixed $value): Parameter => new Parameter($value), $expression->getParameters()),
+			$expression->getParameters(),
 		);
 	}
 
 	private function translateFieldRef(
 		FieldRef $field,
-		CycleTranslationContext $context,
+		SqlTranslationContext $context,
 		?Join $joinContext = null,
 	): SqlFragment {
 		$context->assertAccessible($field);
@@ -623,7 +593,7 @@ final class CycleQueryTranslator
 
 	private function translateSourceField(
 		SourceFieldExpression $field,
-		CycleTranslationContext $context,
+		SqlTranslationContext $context,
 	): SqlFragment {
 		$context->assertSourceAccessible($field->getSource());
 
@@ -641,7 +611,7 @@ final class CycleQueryTranslator
 			));
 		}
 
-		return SqlFragment::raw($this->quoteColumnReference(
+		return SqlFragment::raw($this->quoteQualified(
 			$context->aliasFor($source),
 			$field->getName(),
 		));
@@ -660,12 +630,12 @@ final class CycleQueryTranslator
 			);
 		}
 
-		return SqlFragment::withParameters('?', [new Parameter($value)]);
+		return SqlFragment::withParameters('?', [$value]);
 	}
 
 	private function translateAggregate(
 		AggregateExpression $expression,
-		CycleTranslationContext $context,
+		SqlTranslationContext $context,
 		?Join $joinContext = null,
 	): SqlFragment {
 		if ($expression->getExpression() instanceof StarExpression) {
@@ -690,7 +660,7 @@ final class CycleQueryTranslator
 
 	private function translateValueOperation(
 		ValueOperationExpression $expression,
-		CycleTranslationContext $context,
+		SqlTranslationContext $context,
 		?Join $joinContext = null,
 	): SqlFragment {
 		$arguments = array_map(
@@ -705,7 +675,7 @@ final class CycleQueryTranslator
 			ValueOperation::LOWER => 'LOWER(' . $sqlArguments[0] . ')',
 			ValueOperation::COALESCE => 'COALESCE(' . implode(', ', $sqlArguments) . ')',
 			ValueOperation::ADD => '(' . implode(' + ', $sqlArguments) . ')',
-			ValueOperation::CONCAT => $this->concatSql($sqlArguments),
+			ValueOperation::CONCAT => $this->dialect->compileConcat($sqlArguments),
 		};
 
 		return SqlFragment::withParameters($sql, $parameters);
@@ -713,7 +683,7 @@ final class CycleQueryTranslator
 
 	private function translateWindowFunction(
 		WindowFunctionExpression $expression,
-		CycleTranslationContext $context,
+		SqlTranslationContext $context,
 		?Join $joinContext = null,
 	): SqlFragment {
 		$window = $expression->getWindow();
@@ -721,26 +691,21 @@ final class CycleQueryTranslator
 		$parameters = [];
 
 		if ($window !== null && $window->getPartitionBy() !== []) {
-			$partition = array_map(
+			$partition = SqlFragment::join(', ', array_map(
 				fn (ValueExpressionInterface $partition): SqlFragment => $this->translateExpression($partition, $context, null, $joinContext),
 				$window->getPartitionBy(),
-			);
-			$parts[] = 'PARTITION BY ' . implode(', ', array_map(static fn (SqlFragment $fragment): string => $fragment->sql(), $partition));
-			array_push($parameters, ...$this->mergeParameters($partition));
+			));
+			$parts[] = 'PARTITION BY ' . $partition->sql();
+			array_push($parameters, ...$partition->parameters());
 		}
 
 		if ($window !== null && $window->getOrderings() !== []) {
-			$order = array_map(
-				fn ($sort): SqlFragment => SqlFragment::withParameters(
-					$this->translateExpression($sort->getExpression(), $context, null, $joinContext)->sql()
-						. ' '
-						. ($sort->getDirection() === SortDirection::ASC ? 'ASC' : 'DESC'),
-					$this->translateExpression($sort->getExpression(), $context, null, $joinContext)->parameters(),
-				),
+			$order = SqlFragment::join(', ', array_map(
+				fn (Sort $sort): SqlFragment => $this->translateSort($sort, $context, $joinContext),
 				$window->getOrderings(),
-			);
-			$parts[] = 'ORDER BY ' . implode(', ', array_map(static fn (SqlFragment $fragment): string => $fragment->sql(), $order));
-			array_push($parameters, ...$this->mergeParameters($order));
+			));
+			$parts[] = 'ORDER BY ' . $order->sql();
+			array_push($parameters, ...$order->parameters());
 		}
 
 		return SqlFragment::withParameters(
@@ -749,29 +714,26 @@ final class CycleQueryTranslator
 		);
 	}
 
-	private function concatSql(array $arguments): string
+	private function translateSort(Sort $sort, SqlTranslationContext $context, ?Join $joinContext = null): SqlFragment
 	{
-		$type = strtolower($this->database->getType());
+		$expression = $this->translateExpression($sort->getExpression(), $context, null, $joinContext);
 
-		return match (true) {
-			str_contains($type, 'mysql'),
-			str_contains($type, 'maria'),
-			str_contains($type, 'sqlserver'),
-			str_contains($type, 'sqlsrv') => 'CONCAT(' . implode(', ', $arguments) . ')',
-			default => '(' . implode(' || ', $arguments) . ')',
-		};
+		return SqlFragment::withParameters(
+			$expression->sql() . ($sort->getDirection() === SortDirection::ASC ? ' ASC' : ' DESC'),
+			$expression->parameters(),
+		);
 	}
 
 	private function compileNestedQuery(
 		SelectQuery $query,
-		CycleTranslationContext $context,
+		SqlTranslationContext $context,
 		QueryUsage $usage,
 	): SqlFragment {
 		return $context->within($query, function () use ($query, $context, $usage): SqlFragment {
-			[$cycle, $columns] = $this->compileCycleSelect($query, $context, false);
+			[$sql, $selectionCount] = $this->compileSelect($query, $context, false);
 
 			if ($usage === QueryUsage::SCALAR_SUBQUERY || $usage === QueryUsage::IN_SUBQUERY) {
-				if (count($columns) !== 1) {
+				if ($selectionCount !== 1) {
 					throw UnsupportedQueryException::forQuery(
 						$query,
 						$usage === QueryUsage::SCALAR_SUBQUERY
@@ -781,104 +743,135 @@ final class CycleQueryTranslator
 				}
 			}
 
-			$params = new QueryParameters();
-			$sql = $cycle->sqlStatement($params);
-
-			return SqlFragment::withParameters('(' . $sql . ')', $params->getParameters());
+			return SqlFragment::withParameters('(' . $sql->sql() . ')', $sql->parameters());
 		});
 	}
 
 	/**
-	 * @return array{0: CycleSelectQuery, 1: list<string|FragmentInterface>, 2: list<CycleResultColumn>}
+	 * @return array{SqlFragment, int, list<SqlResultColumn>}
 	 */
-	private function compileCycleSelect(
+	private function compileSelect(
 		SelectQuery $query,
-		CycleTranslationContext $context,
+		SqlTranslationContext $context,
 		bool $root,
 		bool $derived = false,
+		?int $maxRows = null,
 	): array {
-		$cycle = $this->database->select();
-		$cycle->from($this->fromSource($query, $context));
+		$from = $this->fromSource($query, $context);
+		[$selections, $resultColumns] = $this->translateSelections($query, $context, $root, $derived);
+		$condition = fn (ConditionInterface $condition): SqlFragment => $this->translateCondition($condition, $context);
+		$where = array_map($condition, $query->getConditions());
+		$groups = array_map(
+			fn (ValueExpressionInterface $expression): SqlFragment => $this->translateExpression($expression, $context),
+			$query->getGroups(),
+		);
+		$having = array_map($condition, $query->getHavingConditions());
+		$sorts = array_map(fn (Sort $sort): SqlFragment => $this->translateSort($sort, $context), $query->getSorts());
+		$joins = $this->translateJoins($query, $context);
 
-		[$columns, $resultColumns] = $this->translateSelections($query, $context, $root, $derived);
-		$cycle->columns($columns === [] ? [SqlFragment::raw('1')->toCycleFragment()] : $columns);
-
-		foreach ($query->getConditions() as $condition) {
-			$cycle->where($this->translateCondition($condition, $context)->toCycleFragment());
+		$limit = $query->getLimit();
+		if ($maxRows !== null) {
+			$limit = $limit === null ? $maxRows : min($limit, $maxRows);
 		}
 
-		foreach ($query->getGroups() as $group) {
-			$cycle->groupBy($this->translateExpression($group, $context)->toCycleFragment());
+		$parts = [
+			$this->dialect->compileSelectPrefix($limit),
+			SqlFragment::join(', ', $selections === [] ? [SqlFragment::raw($root ? '*' : '1')] : $selections),
+			SqlFragment::raw('FROM'),
+			$from,
+			...$joins,
+		];
+		foreach ([
+			['WHERE', ' AND ', $where],
+			['GROUP BY', ', ', $groups],
+			['HAVING', ' AND ', $having],
+			['ORDER BY', ', ', $sorts],
+		] as [$keyword, $separator, $fragments]) {
+			if ($fragments !== []) {
+				$parts[] = SqlFragment::raw($keyword);
+				$parts[] = SqlFragment::join($separator, $fragments);
+			}
 		}
 
-		foreach ($query->getHavingConditions() as $condition) {
-			$cycle->having($this->translateCondition($condition, $context)->toCycleFragment());
+		$pagination = $this->dialect->compileLimitOffset($limit, $query->getOffset(), $sorts !== [], ! $root);
+		if ($pagination->sql() !== '') {
+			$parts[] = $pagination;
 		}
 
-		foreach ($query->getSorts() as $sort) {
-			$cycle->orderBy(
-				$this->translateExpression($sort->getExpression(), $context)->toCycleFragment(),
-				$sort->getDirection() === SortDirection::ASC ? CycleSelectQuery::SORT_ASC : CycleSelectQuery::SORT_DESC,
-			);
-		}
-
-		$this->translateJoins($query, $cycle, $context);
-
-		$cycle->limit($query->getLimit());
-		$cycle->offset($query->getOffset());
-
-		return [$cycle, $columns, $resultColumns];
+		return [SqlFragment::join(' ', $parts), count($selections), $resultColumns];
 	}
 
-	private function fromSource(SelectQuery $query, CycleTranslationContext $context): FragmentInterface
+	private function fromSource(SelectQuery $query, SqlTranslationContext $context): SqlFragment
 	{
-		if ($query->getFrom() instanceof DerivedSelectQuery) {
-			$derived = $query->getFrom();
-			$innerQuery = $derived->getInnerQuery();
+		$from = $query->getFrom();
+		if ($from instanceof DerivedSelectQuery) {
+			$innerQuery = $from->getInnerQuery();
 			$inner = $context->within(
 				$innerQuery,
-				fn (): CycleSelectQuery => $this->compileCycleSelect($innerQuery, $context, false, true)[0],
+				fn (): SqlFragment => $this->compileSelect($innerQuery, $context, false, true)[0],
 			);
 
-			return new SubQuery($inner, $derived->requireAlias());
+			return SqlFragment::withParameters(
+				'(' . $inner->sql() . ') AS ' . $this->quote($from->requireAlias()),
+				$inner->parameters(),
+			);
 		}
-
-		$from = $query->getFrom();
 
 		if (! $from instanceof CollectionInterface) {
 			throw UnsupportedQueryException::forQuery($query, 'query source must be a collection or aliased subquery');
 		}
 
-		$source = $this->database->getPrefix() . $this->resolvePhysicalSource($from);
-
 		return SqlFragment::raw(
-			$this->quote($source) . ' AS ' . $this->quote($context->aliasFor($query))
-		)->toCycleFragment();
+			$this->physicalTable($from) . ' AS ' . $this->quote($context->aliasFor($query)),
+		);
 	}
 
-	private function resolvePhysicalSource(CollectionInterface $collection): string
+	private function physicalTable(CollectionInterface $collection): string
 	{
 		$table = $collection->getTable();
 
-		return $table !== '' ? $table : $collection->getName();
+		return $this->dialect->quoteTable($table !== '' ? $table : $collection->getName(), $this->tablePrefix);
 	}
 
-	private function translateJoins(SelectQuery $query, CycleSelectQuery $cycle, CycleTranslationContext $context): void
+	/** @return list<SqlFragment> */
+	private function translateJoins(SelectQuery $query, SqlTranslationContext $context): array
 	{
+		$joins = [];
 		foreach ($query->getJoins() as $join) {
-			$cycle->join(
-				$join->getType() === JoinType::INNER ? 'INNER' : 'LEFT',
-				$this->database->getPrefix() . $this->resolvePhysicalSource($join->getCollection()),
-				$context->aliasFor($join),
-				$this->translateJoinConditions($query, $join, $context)->toCycleFragment(),
+			$type = match ($join->getType()) {
+				JoinType::INNER => 'INNER',
+				JoinType::LEFT => 'LEFT',
+			};
+			$alias = $this->quote($context->aliasFor($join));
+			$conditions = $this->translateJoinConditions($query, $join, $context);
+			$joins[] = SqlFragment::withParameters(
+				$type . ' JOIN ' . $this->physicalTable($join->getCollection()) . ' AS ' . $alias . ' ON ' . $conditions->sql(),
+				$conditions->parameters(),
 			);
 		}
+
+		return $joins;
+	}
+
+	/**
+	 * @param list<SqlFragment> $fragments
+	 * @return list<SqlFragment>
+	 */
+	private function parenthesize(array $fragments): array
+	{
+		return array_map(
+			static fn (SqlFragment $fragment): SqlFragment => SqlFragment::withParameters(
+				'(' . $fragment->sql() . ')',
+				$fragment->parameters(),
+			),
+			$fragments,
+		);
 	}
 
 	private function translateJoinConditions(
 		SelectQuery $query,
 		Join $join,
-		CycleTranslationContext $context,
+		SqlTranslationContext $context,
 	): SqlFragment {
 		$conditions = $join->getConditions();
 
@@ -894,13 +887,7 @@ final class CycleQueryTranslator
 			$conditions,
 		);
 
-		return SqlFragment::withParameters(
-			implode(
-				' AND ',
-				array_map(static fn (SqlFragment $fragment): string => '(' . $fragment->sql() . ')', $fragments),
-			),
-			$this->mergeParameters($fragments),
-		);
+		return SqlFragment::join(' AND ', $this->parenthesize($fragments));
 	}
 
 	private function resolveFieldSource(
@@ -934,7 +921,7 @@ final class CycleQueryTranslator
 
 	/**
 	 * @param list<SqlFragment> $fragments
-	 * @return list<ParameterInterface>
+	 * @return list<mixed>
 	 */
 	private function mergeParameters(array $fragments): array
 	{
@@ -965,31 +952,11 @@ final class CycleQueryTranslator
 
 	private function quote(string $identifier): string
 	{
-		return $this->database->getDriver()->getQueryCompiler()->quoteIdentifier($identifier);
+		return $this->dialect->quoteIdentifier($identifier);
 	}
 
 	private function quoteQualified(string ...$identifiers): string
 	{
 		return implode('.', array_map($this->quote(...), $identifiers));
-	}
-
-	/**
-	 * Table + column, keeping dotted result aliases as one identifier.
-	 *
-	 * Cycle's quoteIdentifier splits on `.` (`"author.name"` → `"author"."name"`),
-	 * which breaks derived-table references to JOIN aliases such as `author.name`.
-	 */
-	private function quoteColumnReference(string $table, string $column): string
-	{
-		$quotedColumn = str_contains($column, '.')
-			? $this->quoteResultAlias($column)
-			: $this->quote($column);
-
-		return $this->quote($table) . '.' . $quotedColumn;
-	}
-
-	private function quoteResultAlias(string $alias): string
-	{
-		return '"' . str_replace('"', '""', $alias) . '"';
 	}
 }

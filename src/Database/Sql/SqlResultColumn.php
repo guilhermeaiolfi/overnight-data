@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\Database\Cycle;
+namespace ON\Data\Database\Sql;
 
 use ON\Data\Definition\Field\FieldInterface;
 
 /**
  * @internal
  */
-final class CycleResultColumn
+final class SqlResultColumn
 {
 	public function __construct(
 		private readonly string $backendName,

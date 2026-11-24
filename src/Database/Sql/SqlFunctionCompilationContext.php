@@ -2,10 +2,8 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\Database\Cycle;
+namespace ON\Data\Database\Sql;
 
-use Cycle\Database\Injection\Parameter;
-use Cycle\Database\Injection\ParameterInterface;
 use ON\Data\Database\DatabasePlatformInterface;
 use ON\Data\Query\Expression\FunctionCallExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
@@ -17,14 +15,14 @@ use ON\Data\Query\QueryFunction\FunctionCompilationException;
 /**
  * @internal
  */
-final class CycleFunctionCompilationContext implements FunctionCompilationContextInterface
+final class SqlFunctionCompilationContext implements FunctionCompilationContextInterface
 {
 	public function __construct(
-		private readonly CycleQueryTranslator $translator,
-		private readonly CycleTranslationContext $translationContext,
+		private readonly SqlQueryCompiler $translator,
+		private readonly SqlTranslationContext $translationContext,
 		private readonly DatabasePlatformInterface $platform,
 		private readonly ?Join $joinContext,
-		private readonly CycleFunctionCompilationStack $stack,
+		private readonly SqlFunctionCompilationStack $stack,
 	) {
 	}
 
@@ -60,22 +58,5 @@ final class CycleFunctionCompilationContext implements FunctionCompilationContex
 	public function quoteIdentifier(string $identifier): string
 	{
 		return $this->translator->quoteIdentifierForFunction($identifier);
-	}
-
-	/**
-	 * @param list<mixed> $parameters
-	 * @return list<ParameterInterface>
-	 */
-	public static function adaptParameters(array $parameters): array
-	{
-		$adapted = [];
-
-		foreach ($parameters as $parameter) {
-			$adapted[] = $parameter instanceof ParameterInterface
-				? $parameter
-				: new Parameter($parameter);
-		}
-
-		return $adapted;
 	}
 }

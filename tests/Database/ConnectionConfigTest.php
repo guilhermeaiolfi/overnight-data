@@ -4,35 +4,30 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Database;
 
-use ON\Data\Database\Cycle\ConnectionConfig;
+use InvalidArgumentException;
+use ON\Data\Database\ConnectionConfig;
+use PDO;
 use PHPUnit\Framework\TestCase;
-use ReflectionClass;
 
 final class ConnectionConfigTest extends TestCase
 {
-	public function testConnectionConfigDoesNotExposeSqliteMemoryState(): void
+	public function testConfigCarriesPdoOptionsAndTablePrefix(): void
 	{
-		$reflection = new ReflectionClass(ConnectionConfig::class);
-
-		self::assertFalse($reflection->hasProperty('sqliteMemory'));
-		self::assertFalse($reflection->hasMethod('sqliteMemory'));
-		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Database/ConnectionConfig.php');
-	}
-
-	public function testDsnConstructorKeepsGenericConnectionFields(): void
-	{
-		$config = ConnectionConfig::dsn(
-			driver: 'sqlite',
+		$config = new ConnectionConfig(
 			dsn: 'sqlite::memory:',
-			databaseName: 'app',
-			connectionName: 'main',
+			options: [PDO::ATTR_TIMEOUT => 10],
 			tablePrefix: 'on_',
 		);
 
-		self::assertSame('sqlite', $config->driver);
 		self::assertSame('sqlite::memory:', $config->dsn);
-		self::assertSame('app', $config->databaseName);
-		self::assertSame('main', $config->connectionName);
+		self::assertSame([PDO::ATTR_TIMEOUT => 10], $config->options);
 		self::assertSame('on_', $config->tablePrefix);
+	}
+
+	public function testConfigRequiresADsn(): void
+	{
+		$this->expectException(InvalidArgumentException::class);
+		$this->expectExceptionMessage('requires a PDO DSN');
+		new ConnectionConfig(' ');
 	}
 }

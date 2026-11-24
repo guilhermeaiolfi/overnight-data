@@ -27,7 +27,7 @@ CommandExecutorInterface
 
 Normal callers use `Session::flush()`. `FlushScheduler::run()` is the lower-level command scheduler: it plans record commands, resolves dependencies, executes commands, and finalizes record state. It does not synchronize representations, plan relation changes, or open a transaction. `run(..., deferFinalizers: true)` returns a `DeferredFlushResult` so `FlushExecutor` can finalize record state only after commit.
 
-The necessary write steps (and the matching read steps) are in [`../read-write.md`](../read-write.md). This document is the current how-it-works for scalar commands, relation planners, and Cycle execution.
+The necessary write steps (and the matching read steps) are in [`../read-write.md`](../read-write.md). This document is the current how-it-works for scalar commands, relation planners, and SQL execution.
 
 ## State And Sync
 
@@ -141,14 +141,12 @@ public function execute(CommandInterface $command): CommandResult;
 
 `ConvertingCommandExecutor` is the adapter-agnostic write boundary. It projects command field values from canonical PHP to storage through `ConversionGateway` (`PhpRepresentation` → `StorageRepresentation`), using the same conversion authority as query literal binding and result mapping. It does not mutate the original command objects.
 
-`CycleCommandExecutor` is the built-in Cycle backend executor. It uses Cycle Database query builders for insert, update, and delete. At the Cycle adapter boundary it resolves:
+The built-in `SqlCommandExecutor` runs parameterized insert, update, and delete statements. `SqlCommandCompiler` resolves the physical SQL names.
 
-- physical table name from `CollectionInterface::getTable()`
-- physical column names from each field's `getColumn()`
+- The table comes from `CollectionInterface::getTable()` with the connection's table prefix.
+- Column names come from the field definitions. An unknown command field raises `InvalidCommandException`.
 
-Unknown command field names are rejected with `InvalidCommandException`; they are not passed through as raw column names. Command and `RecordState` values remain canonical PHP until `ConvertingCommandExecutor`. Backend executors such as `CycleCommandExecutor` receive storage values.
-
-`CycleCommandExecutor` defensively calls `CommandValueResolver::assertReady()` before using query builders. A `ValueRef` that cannot be resolved is rejected with `InvalidCommandException` instead of being bound into SQL. The executor does not build raw SQL strings. When used through `FlushExecutor`, it participates in flush-scoped transactions through `TransactionalCommandExecutorInterface`.
+Command and `RecordState` values remain canonical PHP until `ConvertingCommandExecutor`. The SQL executor receives storage values and calls `CommandValueResolver::assertReady()` before compilation. An unresolved `ValueRef` raises `InvalidCommandException`. The executor delegates flush transactions to `ConnectionInterface`.
 
 Database executors must implement `TransactionalCommandExecutorInterface`. `FlushExecutor` runs the whole command wave inside one executor transaction and throws `NonTransactionalFlushException` when the executor does not implement that interface.
 
@@ -192,42 +190,34 @@ use ON\Data\Definition\Field\Generator\When;
     ->end()
 ```
 
-- `DatabaseGenerator` — database-owned (identity / sequence / DB default). Optional `$arg` is a sequence name (string) or `['sequence' => '...']` used as schema metadata for the column default (and passed through to `lastInsertID($sequence)` on the non-RETURNING path). Executors fill `CommandResult`:
-  - **Insert readback**: any collection field omitted from the insert payload (SQL `DEFAULT`, identity, triggers), not only fields tagged `DatabaseGenerator`.
-  - **Update readback**: fields tagged `DatabaseGenerator` for `When::UPDATE` (and omitted from the UPDATE SET by `CommandPlanner`).
-  - drivers whose insert builder implements Cycle `ReturningInterface` (Postgres, and SQLite on Cycle Database 2.22+) recover those insert columns via `RETURNING`. Cycle’s statement wrapper forces `FETCH_ASSOC`, so values are read from an assoc row. If PDO reports `rowCount()` 0 but a value was recovered, affected rows are treated as 1. If nothing mapped, SQLite still counts the write via `SELECT CHANGES()`;
-  - otherwise the Cycle adapter recovers a single DB-generated primary key through `lastInsertID($sequence)`, then reads any remaining omitted insert columns (or `When::UPDATE` columns after update) with a Cycle `select()` keyed by identity. Cycle’s stock `Driver::lastInsertID()` currently ignores the sequence argument and calls PDO without a name; passing the sequence is best-effort for custom/future drivers that honor it. MySQL autoincrement typically does not need a sequence name.
-  - recovered storage values are converted back to canonical PHP by `ConvertingCommandExecutor`. There is no `Session::refresh()` API; this is write-path completion of `CommandResult` only.
+- `DatabaseGenerator` — database-owned (identity / sequence / DB default). Optional `$arg` is a sequence name (string) or `['sequence' => '...']` used as schema metadata for the column default (and passed through to `lastInsertId($sequence)` on the non-RETURNING path). Executors fill `CommandResult`:
+  - The insert and update readback rules below determine which values are recovered. `ConvertingCommandExecutor` converts them back to canonical PHP.
 - `UuidGenerator` — PHP-owned RFC 4122 UUID v4 string (`xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`). No constructor arg.
 - `NowGenerator` — PHP-owned `DateTimeImmutable('now')`. Optional `$arg` is a timezone name (e.g. `UTC`) or pass `new NowGenerator('UTC')` / `new NowGenerator(new DateTimeZone('UTC'))`.
 - `PhpFieldGeneratorInterface` — PHP-owned; `CommandPlanner` runs `generate()` above adapters before INSERT/UPDATE (`When` bitmask). `$arg` may be a scalar, a list of constructor args, or a single constructor value.
 - Instances are allowed when they implement `GeneratorDefinitionArgInterface` (or you pass an explicit `$arg`); they flatten into the array definition as `class` + `arg`.
 - `autoIncrement(true)` is sugar for `generator(DatabaseGenerator::class, null, When::INSERT)`.
 
-`CycleCommandExecutor` recovers database-assigned values when:
+`SqlCommandExecutor` requests omitted insert columns, such as SQL defaults and generated keys. An explicit `null` in the insert payload counts as a supplied value. Update readback uses a follow-up `SELECT` for fields tagged `DatabaseGenerator` with `When::UPDATE`, so it can see changes made by triggers.
 
-- **Insert**: collection fields omitted from the insert payload (SQL defaults, identity, triggers). Fields present on the command, including explicit `null`, are not reread.
-- **Update**: fields tagged `DatabaseGenerator` for `When::UPDATE`.
-- **RETURNING path** (Postgres, and SQLite on Cycle Database 2.22+): omitted insert columns are requested in one `RETURNING` clause and read from an assoc result row. Affected rows come from `rowCount()` unless that is 0 and a generated value was recovered, in which case the insert counts as 1 row. If PDO still reports 0 and nothing mapped (common on SQLite when an omitted unused column is not a real table column), SQLite uses `SELECT CHANGES()` so the written row is still counted;
-- **`lastInsertID` + select path** (MySQL, and SQLite before Cycle 2.22): a single non-composite DB-generated primary key is recovered via `lastInsertID($sequence)` after `execute()`. Remaining omitted insert columns, and `When::UPDATE` columns after update, are read with a Cycle `select()` when identity is complete.
+PostgreSQL, SQLite 3.35+, and MariaDB 10.5+ support `INSERT ... RETURNING`. SQL Server uses `OUTPUT INSERTED`. A returned row counts as one affected row. For SQLite inserts that report zero and return no row, the executor checks `SELECT CHANGES()` on the same connection.
 
-Numeric integer strings are normalized to `int`. Recovered values remain keyed by field name even when the physical column name differs. `ConvertingCommandExecutor` converts those storage values to canonical PHP before `FlushScheduler` merges them into `RecordState` (insert and update).
+MySQL and older SQLite or MariaDB use a single generated primary key from `lastInsertId($sequence)` and then `SELECT` any remaining values when a complete identity is available. An application-assigned key also works for the follow-up query. SQLite `RETURNING` exposes values from before AFTER triggers. SQL Server `OUTPUT` exposes pre-trigger values and fails on tables with enabled INSERT triggers. Set `insertReturning: false` in `ConnectionConfig` or `PdoConnection` to select the fallback on either engine. Supply a key for SQL Server inserts on this path because the driver's last identity can come from a table written by a trigger.
 
-Multi-field insert recovery on the `lastInsertID` path still requires a complete identity (recovered PK or application-assigned key). Composite keys are recovered through `RETURNING` when the insert builder supports it; they are not recovered via `lastInsertID`. Explicit sequence `NEXTVAL` pre-allocation (client-side id before insert) is not implemented. There is no `Session::refresh()` of an unchanged row. PHP generators for non-PK fields are supported through definition + `CommandPlanner`.
+Generated values use field names as keys. `ConvertingCommandExecutor` converts their storage types before `FlushScheduler` merges them into `RecordState`.
 
 Generated values are merged into in-memory record state as soon as the insert command succeeds so later dependent commands in the same flush can resolve concrete foreign-key values. When the flush transaction fails, `FlushExecutor` restores in-memory record snapshots so rolled-back generated values are not left exposed after failure. Relation change markers remain pending so a full retry can plan again.
 
 ## Small Example
 
 ```php
-use Cycle\Database\DatabaseInterface;
-use ON\Data\Database\Cycle\CycleCommandExecutor;
+use ON\Data\Database\SqlRuntimeFactory;
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Persistence\ConvertingCommandExecutor;
+use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Session;
 
-// Schema/table creation and Cycle Database bootstrap live outside ON\Data.
-/** @var DatabaseInterface $cycleDatabase */
+// Use a PDO connection with the app_users table already created.
+/** @var PDO $pdo */
 
 $registry = new Registry();
 $users = $registry
@@ -237,7 +227,8 @@ $users = $registry
     ->field('id', 'int')->column('user_id')->autoIncrement(true)->end()
     ->field('name', 'string')->column('full_name')->end();
 
-$session = new Session(new ConvertingCommandExecutor(new CycleCommandExecutor($cycleDatabase)));
+$runtime = (new SqlRuntimeFactory())->create($pdo);
+$session = new Session($runtime->getCommandExecutor());
 
 $record = RecordState::new($users, [
     'name' => 'Ada Lovelace',
@@ -249,9 +240,7 @@ $session->flush();
 $generatedId = $record->getValue('id');
 ```
 
-`CycleRuntimeFactory` wires `ConvertingCommandExecutor` around `CycleCommandExecutor` automatically.
-
-Generated database values and omitted insert columns are recovered after insert via `RETURNING` when the Cycle insert builder supports it (including SQLite on Cycle Database 2.22+), otherwise via `lastInsertID($sequence)` plus a Cycle `select()` for remaining columns. After update, `DatabaseGenerator` `When::UPDATE` columns are reread the same way. PHP field generators are supported for any field through `->generator()`. Relation persistence planning is limited to configured planners that produce scalar mutations and/or commands. Physical table and column mapping happens in `CycleCommandExecutor` using collection and field metadata.
+`SqlRuntimeFactory` wires `ConvertingCommandExecutor` around `SqlCommandExecutor` automatically.
 
 ## Public Runtime
 
@@ -268,7 +257,7 @@ This is deliberately not an `EntityManager`. There is no repository API, object 
 
 Pending write admission happens in memory before persistence. If a transaction fails, record values, lifecycle, revision history, and tracked representation baselines are restored together; admitted writes stay tracked for retry.
 
-`Session::flush()` always runs inside a database transaction via `TransactionalCommandExecutorInterface` (including `ConvertingCommandExecutor` wrapping `CycleCommandExecutor`). Executors that omit that interface are rejected with `NonTransactionalFlushException`. There is no separate transaction API on `Session`.
+`Session::flush()` always runs inside a database transaction via `TransactionalCommandExecutorInterface` (including `ConvertingCommandExecutor` wrapping `SqlCommandExecutor`). Executors that omit that interface are rejected with `NonTransactionalFlushException`. There is no separate transaction API on `Session`.
 
 ## Current Limits
 

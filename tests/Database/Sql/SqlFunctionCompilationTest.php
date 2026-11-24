@@ -2,12 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Tests\ON\Data\Database\Cycle;
+namespace Tests\ON\Data\Database\Sql;
 
-use Cycle\Database\Query\QueryParameters;
-use ON\Data\Database\Cycle\ConnectionConfig;
-use ON\Data\Database\Cycle\CycleRuntimeFactory;
 use ON\Data\Database\DatabaseFamily;
+use ON\Data\Database\SqlRuntimeFactory;
 use ON\Data\DataRuntime;
 use ON\Data\Definition\Registry;
 use ON\Data\Query\Expression\FunctionCallExpression;
@@ -30,11 +28,9 @@ use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
 #[RequiresPhpExtension('pdo_sqlite')]
-final class CycleFunctionCompilationTest extends TestCase
+final class SqlFunctionCompilationTest extends TestCase
 {
-	private string $databasePath;
-
-	private string $dsn;
+	private PDO $pdo;
 
 	private Registry $registry;
 
@@ -42,20 +38,10 @@ final class CycleFunctionCompilationTest extends TestCase
 
 	protected function setUp(): void
 	{
-		$this->databasePath = tempnam(sys_get_temp_dir(), 'ondata-fn-');
-		$this->dsn = 'sqlite:' . str_replace('\\', '/', $this->databasePath);
+		$this->pdo = new PDO('sqlite::memory:');
 		$this->registry = $this->makeRegistry();
 		$this->seedDatabase();
-		$this->database = (new CycleRuntimeFactory())->connect(ConnectionConfig::dsn('sqlite', $this->dsn));
-	}
-
-	protected function tearDown(): void
-	{
-		gc_collect_cycles();
-
-		if (is_file($this->databasePath)) {
-			@unlink($this->databasePath);
-		}
+		$this->database = (new SqlRuntimeFactory())->create($this->pdo);
 	}
 
 	public function testUserFunctionCanDelegateToConcat(): void
@@ -232,7 +218,7 @@ final class CycleFunctionCompilationTest extends TestCase
 
 	private function seedDatabase(): void
 	{
-		$pdo = new PDO($this->dsn);
+		$pdo = $this->pdo;
 		$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 		$pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, first_name TEXT, last_name TEXT, created_at TEXT, "odd-created" TEXT)');
 		$pdo->exec('CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER, created_at TEXT)');
@@ -247,13 +233,10 @@ final class CycleFunctionCompilationTest extends TestCase
 		$executor = $executorProperty->getValue($this->database);
 
 		$executorReflection = new ReflectionClass($executor);
-		$translatorProperty = $executorReflection->getProperty('translator');
-		$translator = $translatorProperty->getValue($executor);
+		$compilerProperty = $executorReflection->getProperty('compiler');
+		$compiler = $compilerProperty->getValue($executor);
 
-		$translated = $translator->translate($query);
-		$parameters = new QueryParameters();
-
-		return $translated->query()->sqlStatement($parameters);
+		return $compiler->compile($query)->sql;
 	}
 }
 

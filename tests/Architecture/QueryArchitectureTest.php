@@ -61,7 +61,7 @@ final class QueryArchitectureTest extends TestCase
 		}
 	}
 
-	public function testNeutralDatabaseSurfaceDoesNotExposeCycleNamespacesOutsideBackendFolder(): void
+	public function testDatabaseSurfaceDoesNotImportCycle(): void
 	{
 		$root = dirname(__DIR__, 2) . '/src/Database';
 		$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root));
@@ -72,20 +72,12 @@ final class QueryArchitectureTest extends TestCase
 				continue;
 			}
 
-			$normalizedPath = str_replace('\\', '/', $file->getPathname());
-
-			if (
-				str_contains($normalizedPath, '/src/Database/Cycle/')
-			) {
-				continue;
-			}
-
 			$contents = (string) file_get_contents($file->getPathname());
 
 			self::assertStringNotContainsString(
 				'Cycle\\',
 				$contents,
-				sprintf('Neutral database surface leaked Cycle namespace in %s', $file->getPathname()),
+				sprintf('Database runtime imported the Cycle namespace in %s', $file->getPathname()),
 			);
 		}
 	}
@@ -636,7 +628,6 @@ final class QueryArchitectureTest extends TestCase
 		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Database/Database.php');
 		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Database/DatabaseInterface.php');
 		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Database/DataRuntime.php');
-		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Database/ConnectionConfig.php');
 		self::assertFileExists(dirname(__DIR__, 2) . '/src/DataRuntime.php');
 	}
 

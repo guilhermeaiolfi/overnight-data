@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Query;
 
 use DateTimeImmutable;
-use ON\Data\Database\Cycle\CycleQueryExecutor;
 use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\Database\QueryExecutorInterface;
+use ON\Data\Database\Sql\SqlQueryExecutor;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Mapper\ConversionGateway;
@@ -236,7 +236,7 @@ final class SelectQueryFetchIsolationTest extends TestCase
 			}
 		};
 		$harness = $this->database();
-		$backend = new CycleQueryExecutor($harness->cycleDatabase, ConversionGateway::createDefault());
+		$backend = new SqlQueryExecutor($harness->connection, ConversionGateway::createDefault());
 		$executedQuery = null;
 		$executor = $this->createMock(QueryExecutorInterface::class);
 		$executor->expects(self::once())->method('fetchAll')->willReturnCallback(

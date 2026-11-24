@@ -2,14 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Tests\ON\Data\Database\Cycle;
+namespace Tests\ON\Data\Database\Sql;
 
 use Closure;
-use Cycle\Database\Query\QueryParameters;
-use ON\Data\Database\Cycle\ConnectionConfig;
-use ON\Data\Database\Cycle\CycleRuntimeFactory;
 use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\Database\QueryExecutorInterface;
+use ON\Data\Database\SqlRuntimeFactory;
 use ON\Data\DataRuntime;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\FirstOfManyRelation;
@@ -35,11 +33,9 @@ use Tests\ON\Data\Support\RecordingCommandExecutor;
 use Tests\ON\Data\Support\StubQueryRowProjector;
 
 #[RequiresPhpExtension('pdo_sqlite')]
-final class CycleJoinExecutionTest extends TestCase
+final class SqlJoinExecutionTest extends TestCase
 {
-	private string $databasePath;
-
-	private string $dsn;
+	private PDO $pdo;
 
 	private ?Registry $registry = null;
 
@@ -47,22 +43,10 @@ final class CycleJoinExecutionTest extends TestCase
 
 	protected function setUp(): void
 	{
-		$this->databasePath = tempnam(sys_get_temp_dir(), 'ondata-joins-');
-		$this->dsn = 'sqlite:' . str_replace('\\', '/', $this->databasePath);
+		$this->pdo = new PDO('sqlite::memory:');
 		$this->registry = $this->makeRegistry();
 		$this->seedDatabase();
-		$this->database = (new CycleRuntimeFactory())->connect(ConnectionConfig::dsn('sqlite', $this->dsn));
-	}
-
-	protected function tearDown(): void
-	{
-		$this->database = null;
-		$this->registry = null;
-		gc_collect_cycles();
-
-		if (is_file($this->databasePath)) {
-			@unlink($this->databasePath);
-		}
+		$this->database = (new SqlRuntimeFactory())->create($this->pdo);
 	}
 
 	public function testExplicitJoinSupportsSelectionsConditionsAndOrdering(): void
@@ -588,7 +572,7 @@ final class CycleJoinExecutionTest extends TestCase
 
 	public function testSeparateHasManyChunksParentKeysAcrossMultipleQueries(): void
 	{
-		$pdo = new PDO($this->dsn);
+		$pdo = $this->pdo;
 		for ($id = 4; $id <= 101; $id++) {
 			$pdo->prepare('INSERT INTO users (id, name, company_id) VALUES (?, ?, NULL)')
 				->execute([$id, 'User' . $id]);
@@ -2389,7 +2373,7 @@ final class CycleJoinExecutionTest extends TestCase
 
 	private function seedDatabase(): void
 	{
-		$pdo = new PDO($this->dsn);
+		$pdo = $this->pdo;
 		$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 		$pdo->exec('CREATE TABLE companies (id INTEGER PRIMARY KEY, name TEXT, active INTEGER)');
@@ -2453,12 +2437,10 @@ final class CycleJoinExecutionTest extends TestCase
 	private function compileSqlWithExecutor(QueryExecutorInterface $executor, SelectQuery $query): string
 	{
 		$reflection = new ReflectionClass($executor);
-		$property = $reflection->getProperty('translator');
-		$translator = $property->getValue($executor);
-		$translated = $translator->translate($query);
-		$parameters = new QueryParameters();
+		$property = $reflection->getProperty('compiler');
+		$compiler = $property->getValue($executor);
 
-		return $translated->query()->sqlStatement($parameters);
+		return $compiler->compile($query)->sql;
 	}
 }
 

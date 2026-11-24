@@ -14,7 +14,7 @@ They are **not**:
 
 Anything under `ON\Data\` may move, rename, or change behavior. `@internal` markers, if present, are optional hints only; their absence does not mean a type is stable.
 
-Typical integration paths people start from today: `CycleRuntimeFactory` / `DataRuntime`, `SelectQuery`, and `Session`. That is convenience for orientation, **not** a supported public surface.
+Typical integration paths people start from today: `SqlRuntimeFactory` / `DataRuntime`, `SelectQuery`, and `Session`. That is convenience for orientation, **not** a supported public surface.
 
 ## Expectation
 
@@ -39,7 +39,27 @@ Git tags use the `vMAJOR.MINOR.PATCH` form (for example `v1.1.1`) so releases ar
 2. Diff against your pin and update call sites.
 3. Run your test suite and static analysis after upgrading.
 
-Notable recent breaks worth checking explicitly:
+### Database runtime
+
+The built-in Cycle Database adapter has been replaced by direct SQL compilation and PDO. Replace imports from `ON\Data\Database\Cycle` with `ON\Data\Database\SqlRuntimeFactory` and `ON\Data\Database\ConnectionConfig`. Construct the config from a PDO DSN with optional credentials, PDO options, and a table prefix.
+
+```php
+use ON\Data\Database\ConnectionConfig;
+use ON\Data\Database\SqlRuntimeFactory;
+
+$factory = new SqlRuntimeFactory();
+$runtime = $factory->connect(new ConnectionConfig('sqlite:/path/to/app.sqlite'));
+// If you already have a configured PDO:
+$runtime = $factory->create($pdo);
+```
+
+For PostgreSQL schema selection, use schema-qualified collection tables or configure `search_path` on the PDO connection before calling `create()`. Custom query functions can still call `platform()->nativeDriver()`. The PDO adapter now returns the PDO handle there.
+
+SQLite 3.35+ connections use `INSERT ... RETURNING` by default. Applications that previously read values after an AFTER INSERT trigger can set `insertReturning: false` in `ConnectionConfig` to keep the follow-up read by key.
+
+If your application still uses Cycle for its own database access, retain its Composer dependency and supply an ON\Data `ConnectionInterface` implementation to reuse that connection for compiled SQL. `CycleCollectionPlugin` still provides definition metadata for external Cycle ORM tools.
+
+### Other recent breaks
 
 - Custom relation loaders no longer implement `register()` / `initNode()` or construct `ON\Data\Query\Result\Parser\*` nodes (the `Result\Parser` subsystem was removed). In `load()`, register a row collector via `$runtime->collectWith($branch, ...)` (using `KeyPairCollector` or any `RowCollectorInterface` / closure) and deferred work via `$runtime->continueWith($branch, $this->loadData(...))`. In `loadData()`, call `$runtime->execute($branch, $query, $collector)` (or `$runtime->ingest($branch, $rows, $collector)` for non-SQL sources).
 - `ON\Data\ORM\Persistence\RecordFlusher` was removed. Normal persistence uses `Session::flush()`. For low-level callers, replace `flush($records)` with `FlushScheduler::run($records)->getCommandResults()` and `flushDeferred($records)` with `FlushScheduler::run($records, [], true)`. The scheduler does not add synchronization, relation planning, or transaction handling.

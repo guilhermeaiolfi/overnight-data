@@ -2,9 +2,8 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\Database\Cycle;
+namespace ON\Data\Database\Sql;
 
-use Cycle\Database\Driver\CompilerInterface;
 use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\Query\DerivedSelectQuery;
 use ON\Data\Query\Expression\FieldRef;
@@ -14,7 +13,7 @@ use ON\Data\Query\SelectQuery;
 /**
  * @internal
  */
-final class CycleTranslationContext
+final class SqlTranslationContext
 {
 	/**
 	 * @var array<int, string>
@@ -35,18 +34,12 @@ final class CycleTranslationContext
 
 	public function __construct(
 		private readonly SelectQuery $root,
-		private readonly CompilerInterface $compiler,
 	) {
 	}
 
 	public function root(): SelectQuery
 	{
 		return $this->root;
-	}
-
-	public function compiler(): CompilerInterface
-	{
-		return $this->compiler;
 	}
 
 	public function aliasFor(QuerySourceInterface $source): string

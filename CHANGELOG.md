@@ -10,16 +10,15 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 ### Added
 
 - **Definition plugins** — `extend(PluginClass::class)` / `getPlugin()` on definition nodes, same in-place class-string create as `display()` / `interface()`. `extend($class, $value)` sets the plugin `value` and stays on the host. `UiDefinitionPlugin` owns `interface()` / `display()` and the widget classes (`DropdownInterface`, `ImageDisplay`, …). `CycleCollectionPlugin` holds collection `entity` / `repository` / `mapper` / `scope`. Docs: [`docs/definition-api.md`](docs/definition-api.md), [`docs/definition-extension-guide.md`](docs/definition-extension-guide.md).
-- **Write-path database value recovery** — after insert, `CycleCommandExecutor` recovers omitted columns (SQL defaults, identity, triggers), not only `DatabaseGenerator` fields. After update, it rereads `DatabaseGenerator` `When::UPDATE` columns. Cycle `RETURNING` is used when the insert builder supports it; otherwise the adapter uses `lastInsertID` for a simple PK plus a Cycle `select()` for remaining columns. `ConvertingCommandExecutor` converts recovered storage values back to PHP. `FlushScheduler` merges recovered values into `RecordState` on insert and update. There is still no `Session::refresh()`.
+- **Direct SQL runtime** compiles parameterized statements for SQLite, PostgreSQL, MySQL, MariaDB, and SQL Server. Use `SqlRuntimeFactory` with an existing PDO handle, a DSN, or your own `ConnectionInterface` adapter. The package no longer requires `cycle/database`.
+- **Write-path database value recovery** reads omitted insert columns and database-generated update values. `ConvertingCommandExecutor` converts recovered storage values to PHP before `FlushScheduler` merges them into the record.
 
 ### Fixed
 
 - **Flush retry state** — transaction failures restore representation baselines and discard rolled-back record history revisions along with record values, so retries preserve edits and generated-key writes can be retried.
 - **Conflicting representation edits** — scalar sync validates proposed record/field writes across all representation plans before applying any, rejecting differing values instead of silently overwriting an edit.
 - **Joined to-many `fetchOne()`** — identifies the first root, then retrieves all of its matching joined rows before assembly; root aliases and composite identities are preserved.
-- **SQLite generated-key inserts on Cycle Database 2.22+** — Cycle 2.22’s SQLite `InsertQuery` implements `ReturningInterface`, so pending autoincrement inserts use `RETURNING`. PDO SQLite often reports `rowCount()` 0 for that statement. `CycleCommandExecutor` reads `RETURNING` as an assoc row and treats a recovered generated value as one affected row.
-- **SQLite inserts with a fully supplied payload** — when every column is on the INSERT (application-assigned primary keys) there is no `RETURNING` readback, and PDO still reports `rowCount()` 0. `CycleCommandExecutor` uses `SELECT CHANGES()` after `lastInsertID` (PDO SQLite clears lastInsertID on the next statement) so flush still sees one affected row.
-- **SQLite `RETURNING` inserts that recover no mapped values** — Cycle 2.22+ SQLite still uses `RETURNING` for omitted collection fields (for example an unselected `email` next to an application-assigned primary key). PDO reports `rowCount()` 0, and a `RETURNING` identifier that is not a real column can come back as a double-quoted string literal that does not map to a field. `CycleCommandExecutor` then uses `SELECT CHANGES()` so flush still counts the written row.
+- **SQLite insert counts** use the row returned by `RETURNING` even when no generated fields map. If an insert produces no row and reports zero affected rows, the executor checks `SELECT CHANGES()` on the same connection.
 
 ### Changed
 

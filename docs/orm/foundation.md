@@ -2,7 +2,7 @@
 
 This guide describes the current ORM model and component responsibilities. See [`persistence.md`](./persistence.md) for command execution, [`session-save-api.md`](./session-save-api.md) for write examples, and [`representation-schema.md`](./representation-schema.md) for the schema model.
 
-The current implementation includes production record state, representation tracking, scalar sync, relation representation sync, relation persistence planning, scalar command planning, flush orchestration, session orchestration, and Cycle-backed scalar command execution. It still does not include lazy loading, generated repositories, service containers, events, proxy objects, `EntityManager`, or `UnitOfWork`.
+The current implementation includes production record state, representation tracking, scalar sync, relation representation sync, relation persistence planning, scalar command planning, flush orchestration, session orchestration, and parameterized SQL command execution. It still does not include lazy loading, generated repositories, service containers, events, proxy objects, `EntityManager`, or `UnitOfWork`.
 
 The library remains standalone `ON\Data`. The Registry remains the owner of one plain-array definition tree, and definition objects remain wrappers over that array. ORM state, unit-of-work behavior, identity maps, lazy loading, relation write planning, and representation synchronization rules belong outside the Registry.
 
@@ -17,7 +17,7 @@ Representation -> sync() -> RecordState -> flush() -> database
 
 `Session::flush()` applies staged write intents, synchronizes tracked objects, plans relation changes, and executes commands transactionally. `sync()` provides early synchronization and validation without database writes. The ORM persists synchronized record state. The necessary read and write steps, and where they currently live, are in [`../read-write.md`](../read-write.md).
 
-`FieldType` implementations and representations remain the conversion authority. SQL dialect differences stay delegated to Cycle Database / DBAL integration.
+`FieldType` implementations and representations remain the conversion authority. SQL dialects are implemented at the SQL compiler boundary.
 
 Mapping uses `map($source)->to(...)`; query object targets use the same direction.
 
@@ -409,7 +409,7 @@ Several field updates can target one record. Persistence planning reads that rec
 | Translate relation deltas into persistence work | `RelationPersistencePlanner` and the relation's configured planner |
 | Transactional flush orchestration and rollback | `FlushExecutor` |
 | Schedule scalar/dependent commands and finalize record state | `FlushScheduler` |
-| Convert command values or execute backend commands | `ConvertingCommandExecutor` / `CycleCommandExecutor` |
+| Convert command values or execute backend commands | `ConvertingCommandExecutor` / `SqlCommandExecutor` |
 
 `WritableQueryResultTracker` passes results to `RepresentationAdoptionEngine::attach()` to bind sources and walk relation children. `Session::adopt()` stores ready state; it does not perform another graph walk, synchronize values, or execute writes.
 

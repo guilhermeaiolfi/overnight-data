@@ -209,7 +209,7 @@ Assemble builds public scalar keys from `RepresentationSchema::getPublicScalarPa
 - Generic query and runtime code may contain relation-aware plumbing, but not relation-specific join rules.
 - Relation loaders own relation-specific query construction details.
 - Relations remain class-based and pluggable.
-- SQL dialect differences should be delegated to Cycle Database or Doctrine DBAL rather than hand-coded in the data layer.
+- The SQL compiler handles engine-specific syntax through its dialect.
 - The data layer must remain useful without the optional ORM.
 
 ## Relation source identity during copies

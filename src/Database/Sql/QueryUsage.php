@@ -2,15 +2,12 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\Database\Cycle;
+namespace ON\Data\Database\Sql;
 
-/**
- * @internal
- */
+/** @internal */
 enum QueryUsage
 {
 	case SCALAR_SUBQUERY;
 	case IN_SUBQUERY;
 	case EXISTS_SUBQUERY;
-	case DERIVED_TABLE;
 }

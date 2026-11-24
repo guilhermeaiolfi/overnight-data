@@ -2,15 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Tests\ON\Data\Database\Cycle;
+namespace Tests\ON\Data\Database\Sql;
 
-use Cycle\Database\Config\DatabaseConfig;
-use Cycle\Database\Config\SQLite\DsnConnectionConfig;
-use Cycle\Database\Config\SQLiteDriverConfig;
-use Cycle\Database\DatabaseInterface;
-use Cycle\Database\DatabaseManager;
 use DateTimeImmutable;
-use ON\Data\Database\Cycle\CycleCommandExecutor;
+use ON\Data\Database\Pdo\PdoConnection;
+use ON\Data\Database\Sql\SqlCommandExecutor;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\Generator\DatabaseGenerator;
 use ON\Data\Definition\Field\Generator\When;
@@ -35,15 +31,9 @@ use ReflectionClass;
 use Throwable;
 
 #[RequiresPhpExtension('pdo_sqlite')]
-final class CycleCommandExecutorTest extends TestCase
+final class SqlCommandExecutorTest extends TestCase
 {
-	private string $databasePath;
-
-	private string $dsn;
-
 	private ?PDO $pdo = null;
-
-	private ?DatabaseInterface $database = null;
 
 	private ?ConvertingCommandExecutor $executor = null;
 
@@ -53,42 +43,12 @@ final class CycleCommandExecutorTest extends TestCase
 
 	protected function setUp(): void
 	{
-		$this->databasePath = tempnam(sys_get_temp_dir(), 'ondata-cycle-write-');
-		$this->dsn = 'sqlite:' . str_replace('\\', '/', $this->databasePath);
-		$this->pdo = new PDO($this->dsn);
-		$this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+		$this->pdo = new PDO('sqlite::memory:');
+		$connection = new PdoConnection($this->pdo);
 		$this->seedDatabase($this->pdo);
-
-		$manager = new DatabaseManager(new DatabaseConfig([
-			'default' => 'default',
-			'databases' => [
-				'default' => ['connection' => 'sqlite'],
-			],
-			'connections' => [
-				'sqlite' => new SQLiteDriverConfig(
-					connection: new DsnConnectionConfig($this->dsn),
-				),
-			],
-		]));
-
-		$this->database = $manager->database('default');
-		$this->executor = new ConvertingCommandExecutor(new CycleCommandExecutor($this->database));
+		$this->executor = new ConvertingCommandExecutor(new SqlCommandExecutor($connection));
 		$this->users = $this->makeUsers();
 		$this->memberships = $this->makeMemberships();
-	}
-
-	protected function tearDown(): void
-	{
-		$this->executor = null;
-		$this->database = null;
-		$this->pdo = null;
-		$this->users = null;
-		$this->memberships = null;
-		gc_collect_cycles();
-
-		if (is_file($this->databasePath)) {
-			@unlink($this->databasePath);
-		}
 	}
 
 	public function testInsertCommandUsesCollectionTableAndMapsFieldNamesToColumns(): void
@@ -223,7 +183,7 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertSame($record, $states->getByKey($key));
 	}
 
-	public function testFlushExecutorUsesCycleExecutorTransactionAndRollsBackFailedFlush(): void
+	public function testFlushExecutorRollsBackFailedFlush(): void
 	{
 		$users = $this->users();
 		$first = RecordState::new($users, [
@@ -523,25 +483,6 @@ final class CycleCommandExecutorTest extends TestCase
 		self::assertStringNotContainsString('Registry', $source);
 	}
 
-	public function testExecutorUsesCycleBuildersInsteadOfManualSqlGeneration(): void
-	{
-		$source = $this->executorSource();
-
-		self::assertStringContainsString('->insert(', $source);
-		self::assertStringContainsString('->update(', $source);
-		self::assertStringContainsString('->delete(', $source);
-		self::assertStringContainsString('->select(', $source);
-		self::assertStringContainsString('sqlStatement', $source);
-		self::assertStringContainsString('DatabaseInterface::WRITE', $source);
-		self::assertStringContainsString('->execute(', $source);
-		self::assertStringContainsString('FETCH_ASSOC', $source);
-		self::assertStringContainsString('SELECT CHANGES()', $source);
-		self::assertStringNotContainsString('SELECT *', $source);
-		self::assertStringNotContainsString('INSERT ', $source);
-		self::assertStringNotContainsString('UPDATE ', $source);
-		self::assertStringNotContainsString('DELETE ', $source);
-	}
-
 	public function testInsertReportsDriverAffectedRows(): void
 	{
 		$users = $this->makeUsers();
@@ -612,18 +553,6 @@ final class CycleCommandExecutorTest extends TestCase
 		);
 	}
 
-	public function testNonIntegerCycleAffectedRowsResultIsTreatedAsZero(): void
-	{
-		$cycleExecutor = new CycleCommandExecutor($this->database);
-		$reflection = new ReflectionClass(CycleCommandExecutor::class);
-		$method = $reflection->getMethod('affectedRows');
-
-		self::assertSame(0, $method->invoke($cycleExecutor, false));
-		self::assertSame(0, $method->invoke($cycleExecutor, '1'));
-		self::assertSame(0, $method->invoke($cycleExecutor, -1));
-		self::assertSame(2, $method->invoke($cycleExecutor, 2));
-	}
-
 	/**
 	 * @return array{title: string, status: string, stamp: string}|null
 	 */
@@ -675,7 +604,7 @@ final class CycleCommandExecutorTest extends TestCase
 
 	private function executorSource(): string
 	{
-		$reflection = new ReflectionClass(CycleCommandExecutor::class);
+		$reflection = new ReflectionClass(SqlCommandExecutor::class);
 		$fileName = $reflection->getFileName();
 
 		self::assertIsString($fileName);

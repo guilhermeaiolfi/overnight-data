@@ -24,25 +24,33 @@ use ON\Data\Query\SelectQuery;
 $u = new SelectQuery($users, $executor);
 ```
 
-Or use a runtime backed by the built-in Cycle adapter:
+Use the built-in SQL runtime to open a PDO connection from a DSN.
 
 ```php
-use ON\Data\Database\Cycle\ConnectionConfig;
-use ON\Data\Database\Cycle\CycleRuntimeFactory;
+use ON\Data\Database\ConnectionConfig;
+use ON\Data\Database\SqlRuntimeFactory;
 
-$runtime = (new CycleRuntimeFactory())->connect(ConnectionConfig::dsn('sqlite', 'sqlite::memory:'));
+$runtime = (new SqlRuntimeFactory())->connect(new ConnectionConfig('sqlite:/path/to/app.sqlite'));
 $u = $runtime->query($users);
 ```
 
-`CycleRuntimeFactory::connect()` creates Cycle connection infrastructure internally, then wires ON\Data query and command executors from that connection.
+`SqlRuntimeFactory::connect()` creates a PDO connection and shares it across the query and command executors.
 
-If you already have a configured Cycle database, build the runtime from that adapter connection:
+Pass an existing PDO handle to reuse its connection settings, transaction, or in-memory SQLite database.
 
 ```php
-use ON\Data\Database\Cycle\CycleRuntimeFactory;
+use ON\Data\Database\SqlRuntimeFactory;
 
-$runtime = (new CycleRuntimeFactory())->create($cycleDatabase);
+$runtime = (new SqlRuntimeFactory())->create($pdo);
 ```
+
+The PDO wrapper enables exception mode, preserves SQL result labels with `PDO::CASE_NATURAL`, and uses native prepares where supported.
+
+You can also pass an ON\Data `ConnectionInterface`. Its methods consume SQL with positional `?` placeholders and matching parameter lists. DML returning rows uses the fetch methods. An adapter must keep a write, its generated ID, and any follow-up read on the same physical connection. Its transaction callback should participate in an existing transaction and roll back its own writes on failure.
+
+Use `new SqlRuntimeFactory(insertReturning: false)` if a custom SQLite, MariaDB, or SQL Server connection needs insert readback by key. A MariaDB adapter can opt in with `insertReturning: true` when its server supports `INSERT ... RETURNING`.
+
+The compiler supplies dialects for SQLite, PostgreSQL, MySQL, MariaDB, and SQL Server. PDO execution requires the corresponding PHP extension (`pdo_sqlite`, `pdo_pgsql`, `pdo_mysql`, or `pdo_sqlsrv`). PDO yields rows lazily to ON\Data, and the driver may buffer its result set.
 
 ## Result modes
 

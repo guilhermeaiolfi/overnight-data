@@ -72,14 +72,19 @@ The same registry metadata drives SQL mapping during query execution.
 
 ## 4. Connect and run a bound query
 
-`CycleRuntimeFactory::connect()` returns an ON\Data runtime backed by the built-in Cycle Database adapter.
+`SqlRuntimeFactory` wires query and command execution to the supplied PDO connection. Use the same handle to create the example tables and query them in memory.
 
 ```php
-use ON\Data\Database\Cycle\ConnectionConfig;
-use ON\Data\Database\Cycle\CycleRuntimeFactory;
+use ON\Data\Database\SqlRuntimeFactory;
 use function ON\Data\Query\x;
 
-$runtime = (new CycleRuntimeFactory())->connect(ConnectionConfig::dsn('sqlite', 'sqlite::memory:'));
+$pdo = new PDO('sqlite::memory:');
+$pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, active INTEGER)');
+$pdo->exec('CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER, title TEXT, published INTEGER)');
+$pdo->exec("INSERT INTO users VALUES (1, 'Ada', 1), (2, 'Grace', 1)");
+$pdo->exec("INSERT INTO posts VALUES (10, 1, 'Hello', 1), (11, 1, 'Draft', 0), (12, 2, 'Notes', 1)");
+
+$runtime = (new SqlRuntimeFactory())->create($pdo);
 
 $query = $runtime->query($users);
 
@@ -89,8 +94,6 @@ $rows = $query
     ->orderBy($query->id->asc())
     ->fetchAll();
 ```
-
-This example assumes matching SQLite tables already exist for the definitions above.
 
 ## 5. Load nested relations
 

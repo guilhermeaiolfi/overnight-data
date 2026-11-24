@@ -54,9 +54,10 @@ final class DataRuntimeTest extends TestCase
 			'Cycle\\',
 			'Doctrine\\',
 			'ConnectionConfig',
-			'CycleConnectionFactory',
-			'CycleQueryExecutor',
-			'CycleCommandExecutor',
+			'ConnectionInterface',
+			'SqlRuntimeFactory',
+			'SqlQueryExecutor',
+			'SqlCommandExecutor',
 			'DoctrineQueryExecutor',
 			'DoctrineCommandExecutor',
 		] as $forbidden) {
