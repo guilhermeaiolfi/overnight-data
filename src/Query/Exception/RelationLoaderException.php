@@ -78,6 +78,14 @@ final class RelationLoaderException extends InvalidArgumentException
 		));
 	}
 
+	public static function joinedLoadRequiresParentQuery(RelationRef $relation): self
+	{
+		return new self(sprintf(
+			'Relation "%s" cannot use JOIN loading because its parent branch has no query context. Use separate-query loading instead.',
+			implode('.', $relation->getPath()),
+		));
+	}
+
 	public static function firstOfManyJoinNotSupported(RelationRef $relation): self
 	{
 		return new self(sprintf(

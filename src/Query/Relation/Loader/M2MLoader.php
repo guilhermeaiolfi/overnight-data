@@ -10,58 +10,17 @@ use ON\Data\Definition\Relation\M2MThrough;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
-use ON\Data\Query\Relation\ColumnRole;
+use ON\Data\Query\Relation\KeyEncoder;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationKeyQuery;
 use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
-use ON\Data\Query\Result\Parser\AbstractNode;
-use ON\Data\Query\Result\Parser\SingularNode;
+use ON\Data\Query\Relation\ResultRecord;
 use ON\Data\Query\SelectQuery;
 
 final class M2MLoader extends AbstractLoader
 {
-	private const THROUGH_CONTAINER = '__target';
-
-	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
-	{
-		$relation = $branch->getRelationRef();
-		$definition = $relation->getDefinition();
-
-		if (! $definition instanceof M2MRelation) {
-			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');
-		}
-
-		$through = $this->through($relation, $definition);
-		$parentToThrough = $definition->getKeyPairing();
-		$throughToTarget = $through->getKeyPairing();
-		$throughInnerKeys = $through->getInnerKeys();
-		$throughOuterKeys = $through->getOuterKeys();
-		$throughFieldNames = array_values(array_unique([
-			...$throughInnerKeys,
-			...$throughOuterKeys,
-		]));
-		$throughRemap = $this->allocateThroughColumns($branch, $runtime, $throughFieldNames);
-
-		$targetNode = new SingularNode(
-			$branch->getRemapColumns(),
-			$relation->getCollection()->getPrimaryKey(),
-			$throughToTarget->getRightFields(),
-			$throughOuterKeys,
-		);
-		$branch->setPublicPayloadChild(self::THROUGH_CONTAINER);
-
-		return new M2MThroughNode(
-			$throughRemap,
-			$throughFieldNames,
-			$throughInnerKeys,
-			$parentToThrough->getLeftFields(),
-			self::THROUGH_CONTAINER,
-			$targetNode,
-		);
-	}
-
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 		$relation = $branch->getRelationRef();
@@ -91,16 +50,46 @@ final class M2MLoader extends AbstractLoader
 		$throughSource = $query->join(
 			$through->getCollection(),
 			$definition->isNullable() ? JoinType::LEFT : JoinType::INNER,
-			implode('.', $relation->getPath()) . '@through',
+			$this->throughJoinName($relation),
 		);
 
 		RelationKeyQuery::addJoinConditions($throughToTarget->reverse(), $throughSource, $query);
 
-		$branch->setJoinedAttachment(false);
 		$runtime->setQueryContext($branch, $query, $query);
+
+		$throughInnerAliases = [];
+
+		foreach ($through->getInnerKeys() as $fieldName) {
+			$throughInnerAliases[] = $runtime->selectAuxiliaryColumn($branch, $throughSource->field($fieldName));
+		}
+
+		$parentFields = $parentToThrough->getLeftFields();
+		$runtime->collectWith(
+			$branch,
+			static function (RelationLoadBranch $branch, array $row) use ($parentFields, $throughInnerAliases): ?ResultRecord {
+				$record = $branch->ingestRecord($branch->extractRow($row));
+
+				if ($record === null) {
+					return null;
+				}
+
+				$throughTuple = KeyEncoder::extractTuple($throughInnerAliases, $row);
+
+				if ($throughTuple === null) {
+					return $record;
+				}
+
+				$parent = $branch->getParent();
+
+				foreach ($parent->findRecordsByKey($parentFields, $throughTuple) as $parentRecord) {
+					$parent->attachChild($parentRecord, $branch, $record);
+				}
+
+				return $record;
+			},
+		);
 		$branch->requireFields($relation->getCollection()->getPrimaryKey());
-		$branch->requireFields($throughToTarget->getRightFields());
-		$parent->requireFields($parentToThrough->getLeftFields());
+		$parent->requireFields($parentFields);
 		$runtime->continueWith($branch, $this->loadData(...));
 	}
 
@@ -173,30 +162,6 @@ final class M2MLoader extends AbstractLoader
 		} catch (LogicException) {
 			throw RelationLoaderException::missingThrough($relation);
 		}
-	}
-
-	/**
-	 * @param list<string> $fieldNames
-	 * @return array<string, string> field name => SQL alias
-	 */
-	private function allocateThroughColumns(
-		RelationLoadBranch $branch,
-		LoadRuntime $runtime,
-		array $fieldNames,
-	): array {
-		$relation = $branch->getRelationRef();
-		$source = $this->throughSource($relation, $branch->getQuery());
-		$remap = [];
-
-		foreach ($fieldNames as $fieldName) {
-			$remap[$fieldName] = $runtime->selectAuxiliaryColumn(
-				$branch,
-				$source->field($fieldName),
-				ColumnRole::JoinKey,
-			);
-		}
-
-		return $remap;
 	}
 
 	private function throughSource(RelationRef $relation, SelectQuery $query): QuerySourceInterface

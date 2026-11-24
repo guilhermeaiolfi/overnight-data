@@ -9,6 +9,7 @@ use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Exception\LoadRuntimeException;
+use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
@@ -16,7 +17,6 @@ use ON\Data\Query\Expression\SourceFieldExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;
-use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Schema\RepresentationSchema;
 
@@ -30,11 +30,16 @@ final class LoadRuntime
 	/** @var array<int, Closure(RelationLoadBranch, LoadRuntime): void> */
 	private array $continuations = [];
 
+	/** @var array<int, Closure(RelationLoadBranch, array<string, mixed>, ?ResultRecord): ?ResultRecord> */
+	private array $collectors = [];
+
+	private bool $prepared = false;
+
 	private RootLoadBranch $rootBranch;
 
 	private RelationOutputProcessor $outputProcessor;
 
-	private ColumnIndex $columns;
+	private FetchMapping $mapping;
 
 	/**
 	 * Same-level identity overlays from the last assemble, or null on the fast path.
@@ -50,7 +55,7 @@ final class LoadRuntime
 	) {
 		$this->rootBranch = new RootLoadBranch($rootQuery);
 		$this->outputProcessor = new RelationOutputProcessor($schema);
-		$this->columns = new ColumnIndex();
+		$this->mapping = new FetchMapping();
 	}
 
 	public function fetchAll(): array
@@ -70,7 +75,10 @@ final class LoadRuntime
 			);
 		}
 
-		$this->rootBranch->parseRows($rows);
+		foreach ($rows as $row) {
+			$this->ingestSqlRow($this->rootBranch, $row);
+		}
+
 		$this->loadChildBranches($this->rootBranch);
 
 		return $this->storeAssembledRows($this->outputProcessor->processRoot($this->rootBranch));
@@ -99,7 +107,10 @@ final class LoadRuntime
 			return $public[0] ?? null;
 		}
 
-		$this->rootBranch->parseRows($this->rowsForFirstRoot($row));
+		foreach ($this->rowsForFirstRoot($row) as $sqlRow) {
+			$this->ingestSqlRow($this->rootBranch, $sqlRow);
+		}
+
 		$this->loadChildBranches($this->rootBranch);
 
 		$public = $this->storeAssembledRows($this->outputProcessor->processRoot($this->rootBranch));
@@ -117,12 +128,12 @@ final class LoadRuntime
 	private function rowsForFirstRoot(array $firstRow): array
 	{
 		foreach ($this->branches as $branch) {
-			if (! $branch->isJoinedAttachment() || ! $branch->returnsMany() || $branch->getQuery() !== $this->rootQuery) {
+			if (! $branch->isJoinedAttachment() || ! $branch->returnsMany() || ! $branch->hasQuery() || $branch->getQuery() !== $this->rootQuery) {
 				continue;
 			}
 
 			$query = $this->rootQuery->copy()->limit(null)->offset(null);
-			$columns = $this->rootBranch->getRemapColumns();
+			$columns = $this->rootBranch->getColumns();
 			foreach ($this->rootBranch->getCollection()->getPrimaryKey() as $fieldName) {
 				$query->where($query->field($fieldName)->eq($firstRow[$columns[$fieldName]]));
 			}
@@ -144,9 +155,9 @@ final class LoadRuntime
 		return $this->identityRows;
 	}
 
-	public function getColumnIndex(): ColumnIndex
+	public function getFetchMapping(): FetchMapping
 	{
-		return $this->columns;
+		return $this->mapping;
 	}
 
 	/**
@@ -164,6 +175,11 @@ final class LoadRuntime
 	public function getQueryRelation(RelationLoadBranch $branch): RelationRef
 	{
 		$parent = $branch->getParent();
+
+		if (! $parent->hasQuery()) {
+			throw RelationLoaderException::joinedLoadRequiresParentQuery($branch->getRelationRef());
+		}
+
 		$query = $parent->getQuery();
 
 		if ($parent->getQueryLocalRelation() === null) {
@@ -191,21 +207,37 @@ final class LoadRuntime
 	public function selectAuxiliaryColumn(
 		RelationLoadBranch $branch,
 		ValueExpressionInterface $expression,
-		ColumnRole $role = ColumnRole::JoinKey,
 	): string {
-		return $this->columns->allocateAuxiliary($branch->getQuery(), $branch, $expression, $role);
+		return $this->mapping->allocateColumn($branch->getQuery(), $expression);
+	}
+
+	/**
+	 * Register how fetched rows for this branch become {@see ResultRecord}s
+	 * attached to parent record(s).
+	 *
+	 * @param RowCollectorInterface|Closure(RelationLoadBranch, array<string, mixed>, ?ResultRecord): ?ResultRecord $collector
+	 */
+	public function collectWith(RelationLoadBranch $branch, RowCollectorInterface|Closure $collector): void
+	{
+		$key = RelationSelection::pathKey($branch->getRelationRef()->getPath());
+
+		if ($this->prepared || ($this->branches[$key] ?? null) !== $branch) {
+			throw new LoadRuntimeException('Row collectors must be registered during branch setup.');
+		}
+
+		$this->collectors[spl_object_id($branch)] = $this->normalizeCollector($collector);
 	}
 
 	/**
 	 * Register deferred work during loader setup. It runs after the parent rows
-	 * are parsed and before this branch's descendants load.
+	 * are loaded and before this branch's descendants load.
 	 *
 	 * @param Closure(RelationLoadBranch, LoadRuntime): void $load
 	 */
 	public function continueWith(RelationLoadBranch $branch, Closure $load): void
 	{
 		$key = RelationSelection::pathKey($branch->getRelationRef()->getPath());
-		if ($this->rootBranch->hasNode() || ($this->branches[$key] ?? null) !== $branch) {
+		if ($this->prepared || ($this->branches[$key] ?? null) !== $branch) {
 			throw new LoadRuntimeException('Deferred loader work must be registered during branch setup.');
 		}
 
@@ -217,32 +249,54 @@ final class LoadRuntime
 		$this->continuations[$id] = $load;
 	}
 
-	public function execute(RelationLoadBranch $branch, SelectQuery $query): void
-	{
-		$rows = $this->executor->fetchAll($query);
+	/**
+	 * Execute a query for $branch and ingest every returned row through $collector
+	 * (or the collector registered via {@see collectWith()}).
+	 *
+	 * @param RowCollectorInterface|Closure(RelationLoadBranch, array<string, mixed>, ?ResultRecord): ?ResultRecord|null $collector
+	 */
+	public function execute(
+		RelationLoadBranch $branch,
+		SelectQuery $query,
+		RowCollectorInterface|Closure|null $collector = null,
+	): void {
+		$this->ingest($branch, $this->executor->fetchAll($query), $collector);
+	}
+
+	/**
+	 * Ingest raw rows from any source (SQL query, cache, external service) for
+	 * $branch through $collector (or the collector registered via {@see collectWith()}).
+	 *
+	 * @param iterable<array<string, mixed>> $rows
+	 * @param RowCollectorInterface|Closure(RelationLoadBranch, array<string, mixed>, ?ResultRecord): ?ResultRecord|null $collector
+	 */
+	public function ingest(
+		RelationLoadBranch $branch,
+		iterable $rows,
+		RowCollectorInterface|Closure|null $collector = null,
+	): void {
+		$resolvedCollector = $collector !== null ? $this->normalizeCollector($collector) : null;
 
 		foreach ($rows as $row) {
-			$branch->getNode()->parseRow($row);
+			$this->ingestSqlRow($branch, $row, null, $resolvedCollector);
 		}
 	}
 
 	public function getLoadStrategy(RelationLoadBranch $branch): LoadStrategy
 	{
-		return $branch->getSelection()->getStrategy()
-			?? $branch->getLoader()->getDefaultLoadStrategy();
-	}
+		$explicit = $branch->getSelection()->getStrategy();
 
-	public function registerBranch(RelationLoadBranch $branch): AbstractNode
-	{
-		$node = $branch->getLoader()->register($branch, $this);
-
-		if (! $node instanceof AbstractNode) {
-			throw LoadRuntimeException::nodeNotRegistered($branch->getRelationRef());
+		if ($explicit !== null) {
+			return $explicit;
 		}
 
-		$branch->setNode($node);
+		$default = $branch->getLoader()->getDefaultLoadStrategy();
 
-		return $node;
+		if ($default === LoadStrategy::JOIN && ! $branch->getParent()->hasQuery()) {
+			return LoadStrategy::SEPARATE_QUERY;
+		}
+
+		return $default;
 	}
 
 	/**
@@ -259,7 +313,7 @@ final class LoadRuntime
 
 	private function prepare(): void
 	{
-		if ($this->rootBranch->hasNode()) {
+		if ($this->prepared) {
 			return;
 		}
 
@@ -270,8 +324,8 @@ final class LoadRuntime
 		$this->createBranches();
 		$this->configureBranches();
 		$this->planColumns($schema);
-		$this->createParserTree();
-		$this->columns->applyToQueries();
+		$this->mapping->applyToQueries();
+		$this->prepared = true;
 	}
 
 	private function createBranches(): void
@@ -291,15 +345,23 @@ final class LoadRuntime
 		foreach ($this->relationBranchesByDepth() as $branch) {
 			$branch->getLoader()->load($branch, $this);
 
-			if (! $branch->hasQuery() || $branch->getQuery()->getCollection()->getName() === '') {
+			if (! $branch->hasQuery() && ! isset($this->continuations[spl_object_id($branch)])) {
 				throw LoadRuntimeException::queryNotConfigured($branch->getRelationRef());
+			}
+
+			if ($branch->hasQuery() && $branch->getQuery()->getCollection()->getName() === '') {
+				throw LoadRuntimeException::queryNotConfigured($branch->getRelationRef());
+			}
+
+			if ($branch->isJoinedAttachment() && ! isset($this->collectors[spl_object_id($branch)])) {
+				throw LoadRuntimeException::collectorNotConfigured($branch->getRelationRef());
 			}
 		}
 	}
 
 	private function planColumns(RepresentationSchema $rootSchema): void
 	{
-		$this->columns->planBranch($this->rootBranch, $rootSchema);
+		$this->mapping->planBranch($this->rootBranch, $rootSchema);
 
 		$relationBranches = $this->relationBranchesByDepth();
 
@@ -311,13 +373,20 @@ final class LoadRuntime
 				throw LoadRuntimeException::schemaNodeMissing($path);
 			}
 
-			$this->columns->planBranch($branch, $nodeSchema);
+			if ($branch->hasQuery()) {
+				$this->mapping->planBranch($branch, $nodeSchema);
+			} else {
+				$branch->setRepresentationSchema($nodeSchema);
+				$branch->setFetchMapping($this->mapping);
+			}
 		}
 
-		$this->columns->planRequiredFields($this->rootBranch);
+		$this->mapping->planRequiredFields($this->rootBranch);
 
 		foreach ($relationBranches as $branch) {
-			$this->columns->planRequiredFields($branch);
+			if ($branch->hasQuery()) {
+				$this->mapping->planRequiredFields($branch);
+			}
 		}
 	}
 
@@ -335,25 +404,52 @@ final class LoadRuntime
 		return $branches;
 	}
 
-	private function createParserTree(): void
-	{
-		$rootNode = $this->rootBranch->createNode();
+	/**
+	 * Ingest one row for $branch and recursively ingest any joined children.
+	 *
+	 * @param array<string, mixed> $sqlRow
+	 * @param (Closure(RelationLoadBranch, array<string, mixed>, ?ResultRecord): ?ResultRecord)|null $collectorOverride
+	 */
+	private function ingestSqlRow(
+		LoadBranch $branch,
+		array $sqlRow,
+		?ResultRecord $joinedParent = null,
+		?Closure $collectorOverride = null,
+	): ?ResultRecord {
+		if ($branch instanceof RelationLoadBranch) {
+			$collector = $collectorOverride
+				?? $this->collectors[spl_object_id($branch)]
+				?? throw LoadRuntimeException::collectorNotConfigured($branch->getRelationRef());
 
-		foreach ($this->rootBranch->getChildren() as $branch) {
-			$this->registerBranch($branch);
+			$record = $collector($branch, $sqlRow, $joinedParent);
+		} else {
+			$record = $branch->ingestRecord($branch->extractRow($sqlRow));
 		}
 
-		foreach ($this->rootBranch->getChildren() as $branch) {
-			$node = $branch->getNode();
+		if ($record === null) {
+			return null;
+		}
 
-			if ($branch->isJoinedAttachment()) {
-				$rootNode->joinNode($branch->getRelationRef()->getName(), $node);
-
+		foreach ($branch->getChildren() as $child) {
+			if (! $child->isJoinedAttachment()) {
 				continue;
 			}
 
-			$rootNode->linkNode($branch->getRelationRef()->getName(), $node);
+			$this->ingestSqlRow($child, $sqlRow, $record);
 		}
+
+		return $record;
+	}
+
+	/**
+	 * @param RowCollectorInterface|Closure(RelationLoadBranch, array<string, mixed>, ?ResultRecord): ?ResultRecord $collector
+	 * @return Closure(RelationLoadBranch, array<string, mixed>, ?ResultRecord): ?ResultRecord
+	 */
+	private function normalizeCollector(RowCollectorInterface|Closure $collector): Closure
+	{
+		return $collector instanceof RowCollectorInterface
+			? $collector->collect(...)
+			: $collector;
 	}
 
 	private function loadChildBranches(LoadBranch $parent): void

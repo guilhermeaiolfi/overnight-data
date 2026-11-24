@@ -52,6 +52,41 @@ final class RootLoadLocalProjectionTest extends TestCase
 		]], $query->fetchAll());
 	}
 
+	public function testRootOnlyAssembledProjectionOmitsAbsentSqlAlias(): void
+	{
+		$query = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new RootLoadLocalExecutor([
+				'id' => 1,
+			]),
+		);
+		$query->select($query->id, $query->name->as('display'));
+
+		$rows = $query->fetchAll();
+
+		self::assertSame([['id' => 1]], $rows);
+		self::assertArrayNotHasKey('display', $rows[0]);
+		self::assertSame(['id' => 1], $query->fetchOne());
+	}
+
+	public function testRootOnlyAssembledProjectionPreservesPresentNullSqlAlias(): void
+	{
+		$query = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new RootLoadLocalExecutor([
+				'id' => 1,
+				'name' => null,
+			]),
+		);
+		$query->select($query->id, $query->name->as('display'));
+
+		$rows = $query->fetchAll();
+
+		self::assertSame([['id' => 1, 'display' => null]], $rows);
+		self::assertArrayHasKey('display', $rows[0]);
+		self::assertSame(['id' => 1, 'display' => null], $query->fetchOne());
+	}
+
 	private function makeRegistry(): Registry
 	{
 		$registry = new Registry();

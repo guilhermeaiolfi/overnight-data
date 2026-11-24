@@ -10,8 +10,8 @@ use ON\Data\Schema\RepresentationSchema;
 
 /**
  * @phpstan-type ProjectedRow array{public: array<string, mixed>, identity: array<string, mixed>}
- * @phpstan-type HiddenPromotionItem array{identity: string, value: mixed, overlay: mixed}
- * @phpstan-type HiddenPromotion array{branch: RelationLoadBranch, collection: bool, value: mixed, overlay: mixed, items: list<HiddenPromotionItem>}
+ * @phpstan-type HiddenPromotionItem array{identity: int, value: mixed, overlay: mixed}
+ * @phpstan-type HiddenPromotion array{branch: RelationLoadBranch, collection: bool, value: mixed, overlay: mixed, items: array<int, HiddenPromotionItem>}
  * @phpstan-type HiddenPromotions array<string, HiddenPromotion>
  */
 final class RelationOutputProcessor
@@ -33,7 +33,7 @@ final class RelationOutputProcessor
 		$publicPaths = $this->publicScalarPathsFor($root);
 		$projected = [];
 
-		foreach ($root->getRootNode()->getResult() as $record) {
+		foreach ($root->getRecords() as $record) {
 			$projected[] = $this->projectLevelRecord($root, $record, $publicPaths, projectScalars: true, promotionParent: 'root');
 		}
 
@@ -60,7 +60,7 @@ final class RelationOutputProcessor
 		foreach ($rows as $row) {
 			$projected[] = $this->projectLevelRecord(
 				$root,
-				$this->sqlRowToBag($root, $row),
+				new ResultRecord($root->extractRow($row, includeMissingAsNull: false)),
 				$publicPaths,
 				projectScalars: true,
 				promotionParent: 'root',
@@ -88,52 +88,26 @@ final class RelationOutputProcessor
 	}
 
 	/**
-	 * @param array<string, mixed> $row
-	 * @return array<string, mixed>
-	 */
-	private function sqlRowToBag(LoadBranch $branch, array $row): array
-	{
-		$bag = [];
-
-		foreach ($branch->getRemapColumns() as $column => $sql) {
-			if (array_key_exists($sql, $row)) {
-				$bag[$column] = $row[$sql];
-			}
-		}
-
-		return $bag;
-	}
-
-	/**
+	 * @param ResultRecord|list<ResultRecord>|null $value
 	 * @return list<ProjectedRow>|ProjectedRow|null
 	 */
-	private function buildVisibleOutput(RelationLoadBranch $branch, mixed $value): array|null
+	private function buildVisibleOutput(RelationLoadBranch $branch, ResultRecord|array|null $value): array|null
 	{
 		if ($branch->returnsMany()) {
 			$projected = [];
 
-			foreach (is_array($value) ? $value : [] as $item) {
-				$record = $this->payloadRecord($branch, is_array($item) ? $item : []);
-
-				if ($record === null) {
-					continue;
-				}
-
+			foreach (is_array($value) ? $value : [] as $record) {
 				$projected[] = $this->buildVisibleRecord($branch, $record);
 			}
 
 			return $projected;
 		}
 
-		if ($value === null) {
+		if (! $value instanceof ResultRecord) {
 			return null;
 		}
 
-		$record = $this->payloadRecord($branch, is_array($value) ? $value : []);
-
-		return $record === null
-			? null
-			: $this->buildVisibleRecord($branch, $record);
+		return $this->buildVisibleRecord($branch, $value);
 	}
 
 	/**
@@ -163,35 +137,35 @@ final class RelationOutputProcessor
 	}
 
 	/**
+	 * @param ResultRecord|list<ResultRecord>|null $value
 	 * @return HiddenPromotions
 	 */
-	private function collectHiddenOutput(RelationLoadBranch $branch, mixed $value): array
+	private function collectHiddenOutput(RelationLoadBranch $branch, ResultRecord|array|null $value): array
 	{
 		if ($branch->returnsMany()) {
 			$promoted = $this->defaultHiddenPromotions($branch, true);
 
-			foreach (is_array($value) ? $value : [] as $item) {
+			foreach (is_array($value) ? $value : [] as $record) {
 				$this->mergeHiddenCollectionPromotions(
 					$promoted,
-					$this->collectHiddenRecordOutput($branch, is_array($item) ? $item : []),
+					$this->collectHiddenRecordOutput($branch, $record),
 				);
 			}
 
 			return $promoted;
 		}
 
-		if ($value === null) {
+		if (! $value instanceof ResultRecord) {
 			return $this->defaultHiddenPromotions($branch);
 		}
 
-		return $this->collectHiddenRecordOutput($branch, is_array($value) ? $value : []);
+		return $this->collectHiddenRecordOutput($branch, $value);
 	}
 
 	/**
-	 * @param array<string, mixed> $record
 	 * @return ProjectedRow
 	 */
-	private function buildVisibleRecord(RelationLoadBranch $branch, array $record): array
+	private function buildVisibleRecord(RelationLoadBranch $branch, ResultRecord $record): array
 	{
 		return $this->projectLevelRecord(
 			$branch,
@@ -204,12 +178,11 @@ final class RelationOutputProcessor
 
 	/**
 	 * @param list<string> $publicPaths
-	 * @param array<string, mixed> $record
 	 * @return ProjectedRow
 	 */
 	private function projectLevelRecord(
 		LoadBranch $branch,
-		array $record,
+		ResultRecord $record,
 		array $publicPaths,
 		bool $projectScalars,
 		string $promotionParent,
@@ -223,7 +196,7 @@ final class RelationOutputProcessor
 
 		foreach ($branch->getChildren() as $child) {
 			$name = $child->getRelationRef()->getName();
-			$value = $record[$name] ?? ($child->returnsMany() ? [] : null);
+			$value = $record->children[$name] ?? ($child->returnsMany() ? [] : null);
 
 			if ($child->getSelection()->isVisible()) {
 				[$public[$name], $identity[$name]] = $this->splitVisibleOutput(
@@ -242,10 +215,9 @@ final class RelationOutputProcessor
 
 	/**
 	 * @param list<string> $publicPaths
-	 * @param array<string, mixed> $record
 	 * @return array{0: array<string, mixed>, 1: array<string, mixed>}
 	 */
-	private function projectScalars(LoadBranch $branch, array $record, array $publicPaths): array
+	private function projectScalars(LoadBranch $branch, ResultRecord $record, array $publicPaths): array
 	{
 		$public = [];
 		$identity = [];
@@ -273,21 +245,26 @@ final class RelationOutputProcessor
 
 	/**
 	 * @param array<string, mixed> $item
-	 * @param array<string, mixed> $record
 	 */
-	private function assignPathValue(array &$item, LoadBranch $branch, array $record, string $path): bool
+	private function assignPathValue(array &$item, LoadBranch $branch, ResultRecord $record, string $path): bool
 	{
-		$binding = $branch->getColumnIndex()->resolvePath($branch, $path);
+		$binding = $branch->getFetchMapping()->resolvePath($branch, $path);
 
 		if ($binding === null) {
+			if (! $branch->hasQuery() && array_key_exists($path, $record->values)) {
+				$item[$path] = $record->values[$path];
+
+				return true;
+			}
+
 			return false;
 		}
 
-		$loadKey = $binding['bagKey'];
+		$valueKey = $binding['valueKey'];
 		$childPath = $binding['childPath'];
 
 		if ($childPath !== null) {
-			$fromChild = $this->scalarFromChildPath($branch, $record, $childPath, $loadKey);
+			$fromChild = $this->scalarFromChildPath($branch, $record, $childPath, $valueKey);
 
 			if ($fromChild['found']) {
 				$item[$path] = $fromChild['value'];
@@ -298,8 +275,8 @@ final class RelationOutputProcessor
 			return false;
 		}
 
-		if (array_key_exists($loadKey, $record)) {
-			$item[$path] = $record[$loadKey];
+		if (array_key_exists($valueKey, $record->values)) {
+			$item[$path] = $record->values[$valueKey];
 
 			return true;
 		}
@@ -308,15 +285,14 @@ final class RelationOutputProcessor
 	}
 
 	/**
-	 * @param array<string, mixed> $record
 	 * @param list<string> $relativePath
 	 * @return array{found: bool, value: mixed}
 	 */
 	private function scalarFromChildPath(
 		LoadBranch $branch,
-		array $record,
+		ResultRecord $record,
 		array $relativePath,
-		string $loadKey,
+		string $valueKey,
 	): array {
 		$currentRecord = $record;
 		$currentBranch = $branch;
@@ -324,32 +300,26 @@ final class RelationOutputProcessor
 		foreach ($relativePath as $segment) {
 			$child = $this->childBranchNamed($currentBranch, $segment);
 
-			if (! $child instanceof RelationLoadBranch) {
+			if (! $child instanceof RelationLoadBranch || $child->returnsMany()) {
 				return ['found' => false, 'value' => null];
 			}
 
-			$raw = $currentRecord[$segment] ?? null;
+			$next = $currentRecord->children[$segment] ?? null;
 
-			if ($raw === null) {
+			if ($next === null) {
 				return ['found' => true, 'value' => null];
 			}
 
-			if (! is_array($raw) || $child->returnsMany()) {
+			if (! $next instanceof ResultRecord) {
 				return ['found' => false, 'value' => null];
 			}
 
-			$payload = $this->payloadRecord($child, $raw);
-
-			if ($payload === null) {
-				return ['found' => true, 'value' => null];
-			}
-
-			$currentRecord = $payload;
+			$currentRecord = $next;
 			$currentBranch = $child;
 		}
 
-		if (array_key_exists($loadKey, $currentRecord)) {
-			return ['found' => true, 'value' => $currentRecord[$loadKey]];
+		if (array_key_exists($valueKey, $currentRecord->values)) {
+			return ['found' => true, 'value' => $currentRecord->values[$valueKey]];
 		}
 
 		return ['found' => false, 'value' => null];
@@ -367,10 +337,6 @@ final class RelationOutputProcessor
 	}
 
 	/**
-	 * Ordered public scalar paths from this branch's schema node
-	 * ({@see RepresentationSchema::getPublicScalarPaths()}). Implicit PK backfill is omitted.
-	 * Query EXPLICIT tags are not a path fallback.
-	 *
 	 * @return list<string>
 	 */
 	private function publicScalarPathsFor(LoadBranch $branch): array
@@ -387,29 +353,28 @@ final class RelationOutputProcessor
 	}
 
 	/**
-	 * @param array<string, mixed> $record
 	 * @return HiddenPromotions
 	 */
-	private function collectHiddenRecordOutput(RelationLoadBranch $branch, array $record): array
+	private function collectHiddenRecordOutput(RelationLoadBranch $branch, ResultRecord $record): array
 	{
 		$promoted = [];
-		$payload = $this->payloadRecord($branch, $record) ?? [];
 
 		foreach ($branch->getChildren() as $child) {
 			$name = $child->getRelationRef()->getName();
-			$value = $payload[$name] ?? ($child->returnsMany() ? [] : null);
+			$value = $record->children[$name] ?? ($child->returnsMany() ? [] : null);
 
 			if ($child->getSelection()->isVisible()) {
 				$items = $this->projectPromotionItems($child, $value);
+				$first = $items !== [] ? reset($items) : null;
 				$promoted[$name] = [
 					'branch' => $child,
 					'collection' => $child->returnsMany(),
 					'value' => $child->returnsMany()
 						? array_column($items, 'value')
-						: ($items[0]['value'] ?? null),
+						: ($first['value'] ?? null),
 					'overlay' => $child->returnsMany()
 						? array_column($items, 'overlay')
-						: ($items[0]['overlay'] ?? null),
+						: ($first['overlay'] ?? null),
 					'items' => $items,
 				];
 
@@ -462,21 +427,24 @@ final class RelationOutputProcessor
 	}
 
 	/**
-	 * @return list<HiddenPromotionItem>
+	 * @param ResultRecord|list<ResultRecord>|null $value
+	 * @return array<int, HiddenPromotionItem>
 	 */
-	private function projectPromotionItems(RelationLoadBranch $branch, mixed $value): array
+	private function projectPromotionItems(RelationLoadBranch $branch, ResultRecord|array|null $value): array
 	{
 		if ($branch->returnsMany()) {
 			$items = [];
 
 			foreach (is_array($value) ? $value : [] as $record) {
-				if (! is_array($record)) {
+				$identity = spl_object_id($record);
+
+				if (isset($items[$identity])) {
 					continue;
 				}
 
 				$projected = $this->buildVisibleRecord($branch, $record);
-				$items[] = [
-					'identity' => $this->recordIdentity($branch, $record),
+				$items[$identity] = [
+					'identity' => $identity,
 					'value' => $projected['public'],
 					'overlay' => $projected['identity'],
 				];
@@ -485,34 +453,20 @@ final class RelationOutputProcessor
 			return $items;
 		}
 
-		if (! is_array($value)) {
+		if (! $value instanceof ResultRecord) {
 			return [];
 		}
 
+		$identity = spl_object_id($value);
 		$projected = $this->buildVisibleRecord($branch, $value);
 
-		return [[
-			'identity' => $this->recordIdentity($branch, $value),
-			'value' => $projected['public'],
-			'overlay' => $projected['identity'],
-		]];
-	}
-
-	/**
-	 * @param array<string, mixed> $record
-	 * @return array<string, mixed>|null
-	 */
-	private function payloadRecord(LoadBranch $branch, array $record): ?array
-	{
-		$container = $branch->getPublicPayloadChild();
-
-		if ($container === null) {
-			return $record;
-		}
-
-		$payload = $record[$container] ?? null;
-
-		return is_array($payload) ? $payload : null;
+		return [
+			$identity => [
+				'identity' => $identity,
+				'value' => $projected['public'],
+				'overlay' => $projected['identity'],
+			],
+		];
 	}
 
 	/**
@@ -568,42 +522,14 @@ final class RelationOutputProcessor
 				throw RelationSelectionException::ambiguousPromotion($this->promotionPath($branch), $name);
 			}
 
-			foreach ($entry['items'] as $item) {
-				if (! $this->containsPromotionItem($target[$name]['items'], $item['identity'])) {
-					$target[$name]['items'][] = $item;
+			foreach ($entry['items'] as $recordId => $item) {
+				if (! isset($target[$name]['items'][$recordId])) {
+					$target[$name]['items'][$recordId] = $item;
 					$target[$name]['value'][] = $item['value'];
 					$target[$name]['overlay'][] = $item['overlay'];
 				}
 			}
 		}
-	}
-
-	/**
-	 * @param list<HiddenPromotionItem> $existing
-	 */
-	private function containsPromotionItem(array $existing, string $candidateIdentity): bool
-	{
-		foreach ($existing as $item) {
-			if ($item['identity'] === $candidateIdentity) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	/**
-	 * @param array<string, mixed> $value
-	 */
-	private function recordIdentity(RelationLoadBranch $branch, array $value): string
-	{
-		$identity = [];
-
-		foreach ($branch->getRelationRef()->getCollection()->getPrimaryKey() as $fieldName) {
-			$identity[$fieldName] = $value[$fieldName] ?? null;
-		}
-
-		return json_encode($identity, JSON_THROW_ON_ERROR);
 	}
 
 	private function promotionPath(RelationLoadBranch $branch): string

@@ -165,7 +165,7 @@ Partial relations require a query template with their original constraints. Reop
 public scalars via `getPublicScalarPaths()` and identity overlay keys via
 `getImplicitScalarPaths()` plus each source's `getPrimaryKeyPaths()`.
 Writable `prepare()` compiles the schema from the execution query and passes it
-to assembly. `ColumnIndex` binds schema scalar paths and loader-required fields
+to assembly. `FetchMapping` binds schema scalar paths and loader-required fields
 to SQL column aliases. Loaders declare join keys through `requireFields()`.
 Hidden source primary keys are Implicit fields with source-qualified paths
 (`company.id`) when they would collide with root `id`; they stay on the

@@ -161,7 +161,7 @@ $users->posts
 
 That means "top 3 posts per user", not "top 3 posts total".
 
-Built-in `M2M` loading uses a loader-owned through-table shape internally. The parser/runtime keeps the through row and target row distinct, then projects the target child as the public relation payload. Internal through fields are not exposed in the final array result.
+Built-in `M2M` loading joins the through table inside the separate target query, selects only the through inner key as an auxiliary SQL column via `$runtime->selectAuxiliaryColumn()`, and registers a collector via `$runtime->collectWith()` that attaches each target record directly to matching parent records. Internal through fields are never exposed in the final array result.
 
 ## Execution Model
 
@@ -179,7 +179,7 @@ The acquisition strategy is loader-owned. A relation selection may override the 
 
 For `fetchOne()` with a custom joined to-many branch in the root SQL query, the runtime first selects one SQL row to identify the root, then fetches all matching joined rows for that root before assembly. The follow-up query uses the complete root primary key and removes limit/offset so all children are available. Other query conditions remain in effect.
 
-In a custom loader, use `load()` to set the query context, attachment mode, and required fields. Register deferred work with `$runtime->continueWith($branch, $this->loadData(...))`. The callback runs once after the parent rows are parsed and before the runtime visits the branch's descendants. It can call `$runtime->execute()` for each query it needs. Registration is optional for both joined and separate branches.
+In a custom loader, use `load()` to configure query context (`$runtime->setQueryContext()`), row collection (`$runtime->collectWith($branch, ...)` accepting any `RowCollectorInterface` or closure — e.g. `KeyPairCollector` for standard FK matching), and required fields (`requireFields()`). Joined attachment is derived automatically whenever a branch shares its parent's query. Register deferred work with `$runtime->continueWith($branch, $this->loadData(...))`. The callback runs once after the parent rows are ingested and before the runtime visits the branch's descendants. It can call `$runtime->execute($branch, $query, $collector)` (for one or many queries, with an optional per-query collector override) or `$runtime->ingest($branch, $rows, $collector)` for non-SQL sources. Registration of `continueWith()` is optional for joined branches. Dynamic loaders may omit `setQueryContext()` when they register `continueWith()`, populating any descendant-requested fields (`$branch->getRequiredFieldNames()`) on stored or attached `ResultRecord`s; descendants whose default strategy is `JOIN` automatically fall back to `SEPARATE_QUERY` under a query-less parent, while an explicit `->join()` override is rejected with `RelationLoaderException`.
 
 ## Batch size and separate-query correlation
 
@@ -201,7 +201,7 @@ Practical guidance:
 
 Structured loads separate **fetch destinations** (`LoadBranch` tree — one per attached relation) from **path** (where values land on the result). Flat related fields (for example `authorName` from `posts.author`) stay on the parent path; they do not invent an `author` attach unless that relation is also loaded.
 
-Assemble builds public scalar keys from `RepresentationSchema::getPublicScalarPaths()` for aliases, flat projections, and relation loads. Primary key paths are also available through an identity overlay for writable `track()`. Each execution compiles its schema from the current query. `ColumnIndex` maps schema paths and fields requested by loaders through `requireFields()` to SQL column aliases. Plain own-field reads skip assemble. See [`orm/representation-schema.md`](../orm/representation-schema.md).
+Assemble builds public scalar keys from `RepresentationSchema::getPublicScalarPaths()` for aliases, flat projections, and relation loads. Primary key paths are also available through an identity overlay for writable `track()`. Each execution compiles its schema from the current query. `FetchMapping` maps schema paths and fields requested by loaders through `requireFields()` to SQL column aliases (`c0`, `c1`, ...). Plain own-field reads skip assemble. See [`orm/representation-schema.md`](../orm/representation-schema.md).
 
 ## Architecture Guardrails
 

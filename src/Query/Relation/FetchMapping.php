@@ -15,20 +15,17 @@ use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationSchema;
 
 /**
- * Explicit SQL column table for one fetch execution (`c0`, `c1`, `c2`, ...).
+ * Bidirectional mapping between the schema/branch abstraction and flat SQL
+ * result columns (`c0`, `c1`, `c2`, ...) for one fetch execution.
  *
- * Maps every allocated SQL alias to its owning query, branch, parser bag key,
- * optional schema path, role ({@see ColumnRole}), and SQL expression. Also
- * tracks schema paths delegated to a loaded to-one child destination.
+ * Forward: plans schema scalar paths and loader-required fields onto execution
+ * queries with collision-free aliases.
+ * Reverse: extracts branch-local record values from SQL rows and resolves
+ * schema paths (including flat fields delegated to a loaded to-one child).
  */
-final class ColumnIndex
+final class FetchMapping
 {
 	private int $nextAlias = 0;
-
-	/**
-	 * @var array<string, ColumnEntry>
-	 */
-	private array $entries = [];
 
 	/**
 	 * @var array<int, SelectQuery>
@@ -36,9 +33,11 @@ final class ColumnIndex
 	private array $queries = [];
 
 	/**
-	 * @var array<int, list<ColumnEntry>>
+	 * Allocated SQL expressions per query: [queryId][sqlAlias] => expression.
+	 *
+	 * @var array<int, array<string, ValueExpressionInterface>>
 	 */
-	private array $entriesByQuery = [];
+	private array $expressionsByQuery = [];
 
 	/**
 	 * Own-field dedup: [branchId][fieldName] => sqlAlias.
@@ -48,23 +47,23 @@ final class ColumnIndex
 	private array $ownFieldAliases = [];
 
 	/**
-	 * Parser-node remap: [branchId][bagKey] => sqlAlias.
+	 * Branch extraction map: [branchId][valueKey] => sqlAlias.
 	 *
 	 * @var array<int, array<string, string>>
 	 */
-	private array $remapByBranch = [];
+	private array $columnsByBranch = [];
 
 	/**
-	 * Schema path lookup: [branchId][schemaPath] => {bagKey, childPath}.
+	 * Schema path lookup: [branchId][schemaPath] => {valueKey, childPath}.
 	 *
-	 * @var array<int, array<string, array{bagKey: string, childPath: ?list<string>}>>
+	 * @var array<int, array<string, array{valueKey: string, childPath: ?list<string>}>>
 	 */
 	private array $pathBindings = [];
 
 	public function planBranch(LoadBranch $branch, RepresentationSchema $schema): void
 	{
 		$branch->setRepresentationSchema($schema);
-		$branch->setColumnIndex($this);
+		$branch->setFetchMapping($this);
 
 		foreach ($schema->getPaths() as $path) {
 			if ($schema->hasRelation($path)) {
@@ -85,34 +84,21 @@ final class ColumnIndex
 
 	public function planRequiredFields(LoadBranch $branch): void
 	{
-		$branch->setColumnIndex($this);
+		$branch->setFetchMapping($this);
 
 		foreach ($branch->getRequiredFieldNames() as $fieldName) {
-			$this->ensureOwnField($branch, $fieldName, ColumnRole::JoinKey, null);
+			$this->ensureOwnField($branch, $fieldName);
 		}
 	}
 
 	/**
 	 * Allocate an auxiliary SQL column on a query (for example M2M through-table
-	 * keys) without adding it to the branch's target node remap.
+	 * keys) without adding it to the branch's value extraction map.
 	 */
-	public function allocateAuxiliary(
-		SelectQuery $query,
-		LoadBranch $branch,
-		ValueExpressionInterface $expression,
-		ColumnRole $role = ColumnRole::JoinKey,
-	): string {
+	public function allocateColumn(SelectQuery $query, ValueExpressionInterface $expression): string
+	{
 		$alias = $this->nextSqlAlias();
-		$entry = new ColumnEntry(
-			$alias,
-			$query,
-			$branch,
-			'@' . $alias,
-			null,
-			$role,
-			$expression,
-		);
-		$this->recordEntry($entry);
+		$this->recordExpression($query, $alias, $expression);
 
 		return $alias;
 	}
@@ -124,17 +110,17 @@ final class ColumnIndex
 	public function applyToQueries(): void
 	{
 		foreach ($this->queries as $queryId => $query) {
-			$entries = $this->entriesByQuery[$queryId] ?? [];
+			$expressions = $this->expressionsByQuery[$queryId] ?? [];
 
-			if ($entries === []) {
+			if ($expressions === []) {
 				continue;
 			}
 
 			$query->getSelections()->clear();
 			$selects = [];
 
-			foreach ($entries as $entry) {
-				$selects[] = $entry->getExpression()->as($entry->getSqlAlias());
+			foreach ($expressions as $alias => $expression) {
+				$selects[] = $expression->as($alias);
 			}
 
 			$query->getSelections()->addExplicit($selects);
@@ -142,20 +128,41 @@ final class ColumnIndex
 	}
 
 	/**
-	 * Parser-node column remap for one branch: bagKey => sqlAlias.
+	 * Branch column map: valueKey => sqlAlias (`c0`, `c1`, ...).
 	 *
 	 * @return array<string, string>
 	 */
-	public function remapColumnsFor(LoadBranch $branch): array
+	public function columnsFor(LoadBranch $branch): array
 	{
-		return $this->remapByBranch[spl_object_id($branch)] ?? [];
+		return $this->columnsByBranch[spl_object_id($branch)] ?? [];
 	}
 
 	/**
-	 * Resolve how a schema path is read from a branch's parsed bag (or a loaded
-	 * to-one child destination's bag).
+	 * Extract branch-local values from one SQL result row.
 	 *
-	 * @return array{bagKey: string, childPath: ?list<string>}|null
+	 * @param array<string, mixed> $sqlRow
+	 * @return array<string, mixed>
+	 */
+	public function extractRow(LoadBranch $branch, array $sqlRow, bool $includeMissingAsNull = true): array
+	{
+		$values = [];
+
+		foreach ($this->columnsFor($branch) as $valueKey => $sqlAlias) {
+			if (! $includeMissingAsNull && ! array_key_exists($sqlAlias, $sqlRow)) {
+				continue;
+			}
+
+			$values[$valueKey] = $sqlRow[$sqlAlias] ?? null;
+		}
+
+		return $values;
+	}
+
+	/**
+	 * Resolve how a schema path is read from a branch's values (or a loaded
+	 * to-one child destination's values).
+	 *
+	 * @return array{valueKey: string, childPath: ?list<string>}|null
 	 */
 	public function resolvePath(LoadBranch $branch, string $path): ?array
 	{
@@ -163,24 +170,13 @@ final class ColumnIndex
 	}
 
 	/**
-	 * @return list<ColumnEntry>
+	 * Allocated SQL aliases and expressions for a query.
+	 *
+	 * @return array<string, ValueExpressionInterface>
 	 */
-	public function getEntries(): array
+	public function getExpressionsForQuery(SelectQuery $query): array
 	{
-		return array_values($this->entries);
-	}
-
-	/**
-	 * @return list<ColumnEntry>
-	 */
-	public function getEntriesForQuery(SelectQuery $query): array
-	{
-		return $this->entriesByQuery[spl_object_id($query)] ?? [];
-	}
-
-	public function getEntry(string $sqlAlias): ?ColumnEntry
-	{
-		return $this->entries[$sqlAlias] ?? null;
+		return $this->expressionsByQuery[spl_object_id($query)] ?? [];
 	}
 
 	private function planField(LoadBranch $branch, RepresentationFieldSchema $field): void
@@ -188,7 +184,6 @@ final class ColumnIndex
 		$path = $field->getPath();
 		$fieldName = $field->getFieldName();
 		$sourcePath = $field->getSourcePath();
-		$role = $field->isImplicit() ? ColumnRole::Identity : ColumnRole::Public;
 
 		if ($sourcePath !== []) {
 			$child = $this->loadedToOneChild($branch, $sourcePath);
@@ -196,7 +191,7 @@ final class ColumnIndex
 			if ($child instanceof RelationLoadBranch) {
 				$child->requireFields([$fieldName]);
 				$this->pathBindings[spl_object_id($branch)][$path] = [
-					'bagKey' => $fieldName,
+					'valueKey' => $fieldName,
 					'childPath' => array_values($sourcePath),
 				];
 
@@ -205,29 +200,20 @@ final class ColumnIndex
 
 			$source = $this->resolveFlatSource($branch, $sourcePath);
 			$alias = $this->nextSqlAlias();
-			$bagKey = '@' . $alias;
-			$entry = new ColumnEntry(
-				$alias,
-				$branch->getQuery(),
-				$branch,
-				$bagKey,
-				$path,
-				$role,
-				$source->field($fieldName),
-			);
-			$this->recordEntry($entry);
-			$this->remapByBranch[spl_object_id($branch)][$bagKey] = $alias;
+			$valueKey = '@' . $alias;
+			$this->recordExpression($branch->getQuery(), $alias, $source->field($fieldName));
+			$this->columnsByBranch[spl_object_id($branch)][$valueKey] = $alias;
 			$this->pathBindings[spl_object_id($branch)][$path] = [
-				'bagKey' => $bagKey,
+				'valueKey' => $valueKey,
 				'childPath' => null,
 			];
 
 			return;
 		}
 
-		$this->ensureOwnField($branch, $fieldName, $role, $path);
+		$this->ensureOwnField($branch, $fieldName);
 		$this->pathBindings[spl_object_id($branch)][$path] = [
-			'bagKey' => $fieldName,
+			'valueKey' => $fieldName,
 			'childPath' => null,
 		];
 	}
@@ -256,30 +242,17 @@ final class ColumnIndex
 
 		$rebound = $expression->rebind($mapBuilder->seal());
 		$alias = $this->nextSqlAlias();
-		$bagKey = '@' . $alias;
-		$entry = new ColumnEntry(
-			$alias,
-			$branch->getQuery(),
-			$branch,
-			$bagKey,
-			$path,
-			ColumnRole::Public,
-			$rebound,
-		);
-		$this->recordEntry($entry);
-		$this->remapByBranch[spl_object_id($branch)][$bagKey] = $alias;
+		$valueKey = '@' . $alias;
+		$this->recordExpression($branch->getQuery(), $alias, $rebound);
+		$this->columnsByBranch[spl_object_id($branch)][$valueKey] = $alias;
 		$this->pathBindings[spl_object_id($branch)][$path] = [
-			'bagKey' => $bagKey,
+			'valueKey' => $valueKey,
 			'childPath' => null,
 		];
 	}
 
-	private function ensureOwnField(
-		LoadBranch $branch,
-		string $fieldName,
-		ColumnRole $role,
-		?string $schemaPath,
-	): string {
+	private function ensureOwnField(LoadBranch $branch, string $fieldName): string
+	{
 		$branchId = spl_object_id($branch);
 
 		if (isset($this->ownFieldAliases[$branchId][$fieldName])) {
@@ -287,18 +260,9 @@ final class ColumnIndex
 		}
 
 		$alias = $this->nextSqlAlias();
-		$entry = new ColumnEntry(
-			$alias,
-			$branch->getQuery(),
-			$branch,
-			$fieldName,
-			$schemaPath,
-			$role,
-			$branch->getSource()->field($fieldName),
-		);
-		$this->recordEntry($entry);
+		$this->recordExpression($branch->getQuery(), $alias, $branch->getSource()->field($fieldName));
 		$this->ownFieldAliases[$branchId][$fieldName] = $alias;
-		$this->remapByBranch[$branchId][$fieldName] = $alias;
+		$this->columnsByBranch[$branchId][$fieldName] = $alias;
 
 		return $alias;
 	}
@@ -366,13 +330,11 @@ final class ColumnIndex
 		return $current instanceof RelationLoadBranch ? $current : null;
 	}
 
-	private function recordEntry(ColumnEntry $entry): void
+	private function recordExpression(SelectQuery $query, string $sqlAlias, ValueExpressionInterface $expression): void
 	{
-		$query = $entry->getQuery();
 		$queryId = spl_object_id($query);
-		$this->entries[$entry->getSqlAlias()] = $entry;
 		$this->queries[$queryId] = $query;
-		$this->entriesByQuery[$queryId][] = $entry;
+		$this->expressionsByQuery[$queryId][$sqlAlias] = $expression;
 	}
 
 	private function nextSqlAlias(): string

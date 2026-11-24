@@ -8,18 +8,17 @@ use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationLoaderException;
-use ON\Data\Query\Relation\ColumnIndex;
-use ON\Data\Query\Relation\ColumnRole;
+use ON\Data\Query\Relation\FetchMapping;
+use ON\Data\Query\Relation\KeyEncoder;
+use ON\Data\Query\Relation\KeyPairCollector;
 use ON\Data\Query\Relation\Loader\AbstractLoader;
+use ON\Data\Query\Relation\Loader\BelongsToLoader;
 use ON\Data\Query\Relation\Loader\HasManyLoader;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationLoadBranch;
+use ON\Data\Query\Relation\ResultRecord;
 use ON\Data\Query\Relation\RootLoadBranch;
-use ON\Data\Query\Result\Parser\AbstractNode;
-use ON\Data\Query\Result\Parser\CollectionNode;
-use ON\Data\Query\Result\Parser\RootNode;
-use ON\Data\Query\Result\Parser\SingularNode;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -31,65 +30,35 @@ final class LoadRuntimeLifecycleTest extends TestCase
 	{
 		LifecycleEvents::$events = [];
 		LifecycleEvents::$referenceSnapshots = [];
-		LifecycleEvents::$returnedNodes = [];
-		LifecycleEvents::$registerColumns = [];
 		LifecycleEvents::$attachmentModes = [];
-		LifecycleEvents::$initCalls = [];
-		LifecycleEvents::$topLevelParentNodeIsRoot = false;
 		LifecycleEvents::$plannedRootColumns = [];
 		LifecycleEvents::$branches = [];
 	}
 
-	public function testLoadDataRunsAfterParentRowsAreParsed(): void
+	public function testLoadDataRunsAfterParentRowsAreIngested(): void
 	{
 		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
 		$users->posts->separate();
 
 		$users->fetchAll();
 
-		self::assertSame(['load:posts', 'initNode:posts', 'loadData:posts'], LifecycleEvents::$events);
+		self::assertSame(['load:posts', 'loadData:posts'], LifecycleEvents::$events);
 		self::assertSame([['id' => 1]], LifecycleEvents::$referenceSnapshots[0]);
 	}
 
-	public function testRegisterRunsOnceAndReturnsTheNodeStoredOnTheBranch(): void
-	{
-		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), new LifecycleExecutor());
-		$users->posts->separate();
-
-		$users->fetchAll();
-
-		self::assertCount(1, LifecycleEvents::$returnedNodes);
-		self::assertInstanceOf(CollectionNode::class, LifecycleEvents::$returnedNodes[0]);
-		self::assertSame(LifecycleEvents::$returnedNodes[0], LifecycleEvents::$branches['posts']->getNode());
-		self::assertSame(['posts' => 1], LifecycleEvents::$initCalls);
-	}
-
-	public function testAbstractLoaderRegisterRecursivelyRegistersChildBranchesBeforeParentNodeConstruction(): void
-	{
-		$users = new SelectQuery($this->makeNestedRegistry()->getCollection('users'), new NestedLifecycleExecutor());
-		$users->posts->author->separate();
-
-		$users->fetchAll();
-
-		self::assertSame([
-			'initNode:author',
-			'initNode:posts',
-		], LifecycleEvents::$events);
-	}
-
-	public function testDescendantRequiredFieldsArePresentInParentParserNodeColumns(): void
+	public function testDescendantRequiredFieldsArePresentInParentBranchColumns(): void
 	{
 		$users = new SelectQuery($this->makeNestedRegistry()->getCollection('users'), new NestedLifecycleExecutor());
 		$users->posts->author->separate();
 		$users->fetchAll();
 
-		$columns = array_keys(LifecycleEvents::$registerColumns['posts']);
+		$columns = array_keys(LifecycleEvents::$branches['posts']->getColumns());
 		sort($columns);
 
 		self::assertSame(['authorId', 'id', 'title', 'userId'], $columns);
 	}
 
-	public function testColumnIndexTracksPublicIdentityAndJoinKeyRolesSeparately(): void
+	public function testFetchMappingPlansPublicAndRequiredColumnsWithoutDuplicates(): void
 	{
 		$executor = new LifecycleExecutor();
 		$users = new SelectQuery($this->makeBasicRegistry(ExecutingLifecycleLoader::class)->getCollection('users'), $executor);
@@ -102,29 +71,17 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		]], $runtime->fetchAll());
 
 		$branch = LifecycleEvents::$branches['posts'];
-		$index = $runtime->getColumnIndex();
-		self::assertInstanceOf(ColumnIndex::class, $index);
-
-		$postsRoles = [];
-		foreach ($index->getEntries() as $entry) {
-			if ($entry->getBranch() === $branch) {
-				$postsRoles[$entry->getBagKey()] = $entry->getRole();
-			}
-		}
-
-		self::assertSame([
-			'title' => ColumnRole::Public,
-			'id' => ColumnRole::Identity,
-			'userId' => ColumnRole::JoinKey,
-		], $postsRoles);
-		self::assertSame(['title', 'id', 'userId'], array_keys($branch->getRemapColumns()));
+		$mapping = $runtime->getFetchMapping();
+		self::assertInstanceOf(FetchMapping::class, $mapping);
+		self::assertSame(['title', 'id', 'userId'], array_keys($branch->getColumns()));
+		self::assertCount(3, $mapping->getExpressionsForQuery($branch->getQuery()));
 	}
 
-	public function testRelationLoadBranchNoLongerKeepsLegacySelectionOrContinuationProperties(): void
+	public function testRelationLoadBranchNoLongerKeepsLegacySelectionOrParserProperties(): void
 	{
 		$reflection = new ReflectionClass(RelationLoadBranch::class);
 
-		foreach (['parserFieldMap', 'publicFieldMap', 'parserFields', 'publicFieldOrder', 'selections', 'continuationMethod', 'continuationQuery'] as $property) {
+		foreach (['parserFieldMap', 'publicFieldMap', 'parserFields', 'publicFieldOrder', 'selections', 'continuationMethod', 'continuationQuery', 'node', 'publicPayloadChild'] as $property) {
 			self::assertFalse($reflection->hasProperty($property), $property);
 		}
 	}
@@ -135,6 +92,9 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		self::assertFalse(method_exists(RelationLoadBranch::class, 'getPublicFields'));
 		self::assertFalse(method_exists(RelationLoadBranch::class, 'getSelections'));
 		self::assertFalse(method_exists(RelationLoadBranch::class, 'setContinuation'));
+		self::assertFalse(method_exists(RelationLoadBranch::class, 'getNode'));
+		self::assertFalse(method_exists(RelationLoadBranch::class, 'hasNode'));
+		self::assertFalse(method_exists(RelationLoadBranch::class, 'getRemapColumns'));
 	}
 
 	public function testLoadRuntimeSeparatesPublicOutputFromIdentityRows(): void
@@ -194,7 +154,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		], $employees->fetchAll());
 	}
 
-	public function testRootFieldsRequiredDuringPlanningArePresentBeforeRootNodeConstruction(): void
+	public function testRootFieldsRequiredDuringPlanningArePresentBeforeExecution(): void
 	{
 		$users = new SelectQuery($this->makeRootRequirementRegistry()->getCollection('users'), new LifecycleExecutor());
 		$users->posts->separate();
@@ -202,7 +162,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$users->fetchAll();
 		$rootBranch = LifecycleEvents::$branches['posts']->getParent();
 
-		self::assertArrayHasKey('name', $rootBranch->getRemapColumns());
+		self::assertArrayHasKey('name', $rootBranch->getColumns());
 		self::assertContains('name', LifecycleEvents::$plannedRootColumns);
 		self::assertSame([[['name' => 'Ada']]], LifecycleEvents::$referenceSnapshots);
 	}
@@ -323,21 +283,21 @@ final class LoadRuntimeLifecycleTest extends TestCase
 			'posts' => [],
 		]], $users->fetchAll());
 		$rootBranch = LifecycleEvents::$branches['posts']->getParent();
-		self::assertArrayHasKey('secret', $rootBranch->getRemapColumns());
+		self::assertArrayHasKey('secret', $rootBranch->getColumns());
 		self::assertSame(['secret'], LifecycleEvents::$plannedRootColumns);
 		self::assertSame([[['secret' => 'shh']]], LifecycleEvents::$referenceSnapshots);
 	}
 
-	public function testRootFieldRequirementsReuseExistingOwnFieldColumnInColumnIndex(): void
+	public function testRootFieldRequirementsReuseExistingOwnFieldColumnInFetchMapping(): void
 	{
 		$users = new SelectQuery($this->makeRootRequirementRegistry()->getCollection('users'), new AliasedRootSelectionExecutor());
 		$users->posts->separate();
 		$users->select($users->name->as('title'));
 		$rows = $users->fetchAll();
 		$rootBranch = LifecycleEvents::$branches['posts']->getParent();
-		$remap = $rootBranch->getRemapColumns();
+		$columns = $rootBranch->getColumns();
 
-		self::assertSame(['name' => 'c0', 'id' => 'c1'], $remap);
+		self::assertSame(['name' => 'c0', 'id' => 'c1'], $columns);
 		self::assertSame(['name'], LifecycleEvents::$plannedRootColumns);
 		self::assertSame([[['name' => 'Ada']]], LifecycleEvents::$referenceSnapshots);
 		self::assertSame([[
@@ -380,7 +340,7 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		$users->fetchAll();
 	}
 
-	public function testNestedCustomLoadersAttachJoinedAndLinkedChildrenWithoutCustomRegisterOverrides(): void
+	public function testNestedCustomLoadersAttachJoinedAndLinkedChildren(): void
 	{
 		$users = new SelectQuery($this->makeNestedAttachmentRegistry()->getCollection('users'), new NestedAttachmentExecutor());
 		$users->posts->select('id', 'userId', 'authorId', 'title', 'postId');
@@ -394,11 +354,6 @@ final class LoadRuntimeLifecycleTest extends TestCase
 				'comments' => [['id' => 100, 'postId' => 10, 'body' => 'Hi']],
 			]],
 		]], $users->fetchAll());
-		self::assertSame([
-			'author' => 1,
-			'comments' => 1,
-			'posts' => 1,
-		], LifecycleEvents::$initCalls);
 	}
 
 	public function testSynchronousMultiPassLoadDataCompletesBeforeChildBranchesRun(): void
@@ -411,8 +366,6 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		self::assertSame([
 			'load:posts',
 			'load:comments',
-			'initNode:comments',
-			'initNode:posts',
 			'loadPivot:posts:start',
 			'loadPivot:posts:after-execute',
 			'loadTargets:posts',
@@ -420,14 +373,110 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		], LifecycleEvents::$events);
 	}
 
-	public function testTopLevelRelationRegisterCanAccessTheRootParentNode(): void
+	public function testDynamicCustomLoaderCanLoadWithoutStaticQueryContext(): void
 	{
-		$users = new SelectQuery($this->makeTopLevelParentNodeRegistry()->getCollection('users'), new LifecycleExecutor());
-		$users->posts->separate();
+		$users = new SelectQuery($this->makeBasicRegistry(DynamicDeferredPostsLoader::class)->getCollection('users'), new LifecycleExecutor());
+		$users->posts->select('title')->separate();
+
+		self::assertSame([[
+			'id' => 1,
+			'name' => 'Ada',
+			'posts' => [['title' => 'Dynamic Hello']],
+		]], $users->fetchAll());
+	}
+
+	public function testDynamicLoaderAttachChildRegistersAndDeduplicatesRecordsForSeparateDescendants(): void
+	{
+		$users = new SelectQuery(
+			$this->makeDynamicDescendantRegistry(DirectAttachDynamicPostsLoader::class)->getCollection('users'),
+			new DynamicDescendantExecutor(),
+		);
+		$users->posts->select('title');
+		$users->posts->comments->select('body');
+
+		$rows = $users->fetchAll();
+
+		self::assertCount(1, LifecycleEvents::$branches['posts']->getRecords());
+		self::assertSame([
+			[
+				'id' => 1,
+				'name' => 'Ada',
+				'posts' => [[
+					'title' => 'Dynamic Hello',
+					'comments' => [['body' => 'Hi']],
+				]],
+			],
+			[
+				'id' => 2,
+				'name' => 'Grace',
+				'posts' => [[
+					'title' => 'Dynamic Hello',
+					'comments' => [['body' => 'Hi']],
+				]],
+			],
+		], $rows);
+	}
+
+	public function testDefaultJoinedDescendantUnderQueryLessBranchFallsBackToSeparateQuery(): void
+	{
+		$users = new SelectQuery(
+			$this->makeDynamicDescendantRegistry(DynamicDeferredPostsLoader::class)->getCollection('users'),
+			new DynamicDescendantExecutor(),
+		);
+		$users->posts->select('title');
+		$users->posts->author->select('name');
+
+		self::assertSame([
+			[
+				'id' => 1,
+				'name' => 'Ada',
+				'posts' => [[
+					'title' => 'Dynamic Hello',
+					'author' => ['name' => 'Ana'],
+				]],
+			],
+			[
+				'id' => 2,
+				'name' => 'Grace',
+				'posts' => [],
+			],
+		], $users->fetchAll());
+	}
+
+	public function testExplicitJoinOverrideUnderQueryLessBranchIsRejected(): void
+	{
+		$executor = $this->createMock(QueryExecutorInterface::class);
+		$executor->expects(self::never())->method('fetchAll');
+
+		$users = new SelectQuery(
+			$this->makeDynamicDescendantRegistry(DynamicDeferredPostsLoader::class)->getCollection('users'),
+			$executor,
+		);
+		$users->posts->select('title');
+		$users->posts->author->select('name')->join();
+
+		$this->expectException(RelationLoaderException::class);
+		$this->expectExceptionMessage('cannot use JOIN loading because its parent branch has no query context');
 
 		$users->fetchAll();
+	}
 
-		self::assertTrue(LifecycleEvents::$topLevelParentNodeIsRoot);
+	public function testCustomJoinOnlyLoaderUnderQueryLessBranchThrowsRelationLoaderException(): void
+	{
+		$executor = $this->createMock(QueryExecutorInterface::class);
+		$executor->expects(self::never())->method('fetchAll');
+
+		$users = new SelectQuery(
+			$this->makeDynamicDescendantRegistry(DynamicDeferredPostsLoader::class, NestedAuthorLoader::class)->getCollection('users'),
+			$executor,
+		);
+		$users->posts->select('title');
+		$users->posts->author->select('name');
+
+		$this->expectException(RelationLoaderException::class);
+		$this->expectExceptionMessage('cannot use JOIN loading because its parent branch has no query context');
+
+		$users->fetchAll();
 	}
 
 	public function testAliasedCompositeKeysDeduplicateRootsAndAttachChildren(): void
@@ -443,22 +492,21 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		], $users->fetchAll());
 	}
 
-	public function testRootPrimaryKeyColumnsAreTrackedAsIdentityInColumnIndex(): void
+	public function testRootPrimaryKeyColumnsAreAllocatedInFetchMappingWhenOmittedFromPublicSelect(): void
 	{
 		$executor = new LifecycleExecutor();
 		$users = new SelectQuery($this->makeBasicRegistry(LifecycleRecordingLoader::class)->getCollection('users'), $executor);
 		$users->select($users->name);
 		$users->posts->separate();
 		$runtime = new LoadRuntime($users, $executor, $users->projection());
-		$runtime->fetchAll();
+		$rows = $runtime->fetchAll();
 
 		$rootBranch = LifecycleEvents::$branches['posts']->getParent();
-		$idAlias = $rootBranch->getRemapColumns()['id'];
-		$entry = $runtime->getColumnIndex()->getEntry($idAlias);
+		$idAlias = $rootBranch->getColumns()['id'];
+		$expressions = $runtime->getFetchMapping()->getExpressionsForQuery($users);
 
-		self::assertNotNull($entry);
-		self::assertSame(ColumnRole::Identity, $entry->getRole());
-		self::assertSame('id', $entry->getBagKey());
+		self::assertSame([['name' => 'Ada', 'posts' => []]], $rows);
+		self::assertArrayHasKey($idAlias, $expressions);
 	}
 
 	private function makeBasicRegistry(string $loader): Registry
@@ -658,9 +706,39 @@ final class LoadRuntimeLifecycleTest extends TestCase
 		return $registry;
 	}
 
-	private function makeTopLevelParentNodeRegistry(): Registry
-	{
-		return $this->makeBasicRegistry(TopLevelParentNodeLoader::class);
+	private function makeDynamicDescendantRegistry(
+		string $postsLoader,
+		string $authorLoader = BelongsToLoader::class,
+	): Registry {
+		$registry = new Registry();
+
+		$authors = $registry->collection('authors');
+		$authors->field('id', 'int');
+		$authors->field('name', 'string');
+		$authors->primaryKey('id');
+
+		$comments = $registry->collection('comments');
+		$comments->field('id', 'int');
+		$comments->field('postId', 'int');
+		$comments->field('body', 'string');
+		$comments->primaryKey('id');
+
+		$posts = $registry->collection('posts');
+		$posts->field('id', 'int');
+		$posts->field('userId', 'int');
+		$posts->field('authorId', 'int');
+		$posts->field('title', 'string');
+		$posts->primaryKey('id');
+		$posts->belongsTo('author', 'authors')->innerKey('authorId')->outerKey('id')->loader($authorLoader)->end();
+		$posts->hasMany('comments', 'comments')->innerKey('id')->outerKey('postId')->loader(HasManyLoader::class)->end();
+
+		$users = $registry->collection('users');
+		$users->field('id', 'int');
+		$users->field('name', 'string');
+		$users->primaryKey('id');
+		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('userId')->loader($postsLoader)->end();
+
+		return $registry;
 	}
 }
 
@@ -672,22 +750,11 @@ final class LifecycleEvents
 	/** @var list<string> */
 	public static array $events = [];
 
-	/** @var list<list<array<string, scalar>>> */
+	/** @var list<mixed> */
 	public static array $referenceSnapshots = [];
-
-	/** @var list<AbstractNode> */
-	public static array $returnedNodes = [];
-
-	/** @var array<string, array<string, string>> */
-	public static array $registerColumns = [];
 
 	/** @var array<string, bool> */
 	public static array $attachmentModes = [];
-
-	/** @var array<string, int> */
-	public static array $initCalls = [];
-
-	public static bool $topLevelParentNodeIsRoot = false;
 
 	/** @var list<string> */
 	public static array $plannedRootColumns = [];
@@ -947,34 +1014,15 @@ final class CompositeDedupExecutor implements QueryExecutorInterface
 
 abstract class LifecycleTestLoader extends AbstractLoader
 {
-	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
-	{
-		$relation = $branch->getRelationRef();
-		LifecycleEvents::$branches[$relation->getName()] = $branch;
-		$definition = $relation->getDefinition();
-		$node = new CollectionNode(
-			$branch->getRemapColumns(),
-			$relation->getCollection()->getPrimaryKey(),
-			$definition->getOuterKeys(),
-			$definition->getInnerKeys(),
-		);
-
-		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
-		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
-		LifecycleEvents::$returnedNodes[] = $node;
-		LifecycleEvents::$registerColumns[$relation->getName()] = $branch->getRemapColumns();
-
-		return $node;
-	}
-
 	protected function prepareSeparateQuery(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 		$relation = $branch->getRelationRef();
 		$definition = $relation->getDefinition();
+		LifecycleEvents::$branches[$relation->getName()] = $branch;
 		$query = new SelectQuery($relation->getCollection(), new LifecycleExecutor());
-		$branch->setJoinedAttachment(false);
-		LifecycleEvents::$attachmentModes[$relation->getName()] = false;
+		$runtime->collectWith($branch, new KeyPairCollector($definition->getInnerKeys(), $definition->getOuterKeys()));
 		$runtime->setQueryContext($branch, $query, $query);
+		LifecycleEvents::$attachmentModes[$relation->getName()] = $branch->isJoinedAttachment();
 		$branch->requireFields($relation->getCollection()->getPrimaryKey());
 		$branch->requireFields($definition->getOuterKeys());
 		$branch->getParent()->requireFields($definition->getInnerKeys());
@@ -995,7 +1043,7 @@ final class LifecycleRecordingLoader extends LifecycleTestLoader
 	{
 		$relation = $branch->getRelationRef();
 		LifecycleEvents::$events[] = 'loadData:' . $relation->getName();
-		LifecycleEvents::$referenceSnapshots[] = $branch->getReferenceValues();
+		LifecycleEvents::$referenceSnapshots[] = $branch->getParent()->getDistinctKeyValues($relation->getDefinition()->getInnerKeys());
 	}
 }
 
@@ -1015,21 +1063,12 @@ final class ExecutingLifecycleLoader extends LifecycleTestLoader
 
 class NestedPostsLoader extends AbstractLoader
 {
-	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
-	{
-		$relation = $branch->getRelationRef();
-		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
-		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
-		LifecycleEvents::$registerColumns['posts'] = $branch->getRemapColumns();
-
-		return new CollectionNode($branch->getRemapColumns(), ['id'], ['userId'], ['id']);
-	}
-
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 		$relation = $branch->getRelationRef();
+		LifecycleEvents::$branches[$relation->getName()] = $branch;
 		$query = new SelectQuery($relation->getCollection(), new NestedLifecycleExecutor());
-		$branch->setJoinedAttachment(false);
+		$runtime->collectWith($branch, new KeyPairCollector(['id'], ['userId']));
 		$runtime->setQueryContext($branch, $query, $query);
 		$branch->requireFields(['id', 'userId']);
 		$branch->getParent()->requireFields(['id']);
@@ -1049,20 +1088,12 @@ final class NestedAuthorLoader extends AbstractLoader
 		return LoadStrategy::JOIN;
 	}
 
-	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
-	{
-		$relation = $branch->getRelationRef();
-		LifecycleEvents::$events[] = 'initNode:' . $relation->getName();
-		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
-		LifecycleEvents::$registerColumns['author'] = $branch->getRemapColumns();
-
-		return new SingularNode($branch->getRemapColumns(), ['id'], ['id'], ['authorId']);
-	}
-
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
+		$relation = $branch->getRelationRef();
+		LifecycleEvents::$branches[$relation->getName()] = $branch;
 		$queryRelation = $runtime->getQueryRelation($branch);
-		$branch->setJoinedAttachment(true);
+		$runtime->collectWith($branch, new KeyPairCollector(['authorId'], ['id']));
 		$runtime->setQueryContext($branch, $queryRelation->getQuery(), $this->join($queryRelation), $queryRelation);
 		$branch->requireFields(['id']);
 		$branch->getParent()->requireFields(['authorId']);
@@ -1080,7 +1111,9 @@ final class RootFieldRequirementLoader extends LifecycleTestLoader
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		LifecycleEvents::$referenceSnapshots[] = $branch->getReferenceValues();
+		LifecycleEvents::$referenceSnapshots[] = $branch->getParent()->getDistinctKeyValues(
+			$branch->getRelationRef()->getDefinition()->getInnerKeys(),
+		);
 	}
 }
 
@@ -1095,7 +1128,9 @@ final class HiddenRootFieldRequirementLoader extends LifecycleTestLoader
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		LifecycleEvents::$referenceSnapshots[] = $branch->getReferenceValues();
+		LifecycleEvents::$referenceSnapshots[] = $branch->getParent()->getDistinctKeyValues(
+			$branch->getRelationRef()->getDefinition()->getInnerKeys(),
+		);
 	}
 }
 
@@ -1106,27 +1141,19 @@ final class JoinedProfileLoader extends AbstractLoader
 		return LoadStrategy::JOIN;
 	}
 
-	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
-	{
-		$relation = $branch->getRelationRef();
-		LifecycleEvents::$initCalls[$relation->getName()] = (LifecycleEvents::$initCalls[$relation->getName()] ?? 0) + 1;
-
-		return new SingularNode($branch->getRemapColumns(), ['id'], ['userId'], ['id']);
-	}
-
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 		$relation = $branch->getRelationRef();
 		$queryRelation = $runtime->getQueryRelation($branch);
-		$branch->setJoinedAttachment(true);
-		LifecycleEvents::$attachmentModes[$relation->getName()] = true;
+		$runtime->collectWith($branch, new KeyPairCollector(['id'], ['userId']));
 		$runtime->setQueryContext($branch, $queryRelation->getQuery(), $this->join($queryRelation), $queryRelation);
+		LifecycleEvents::$attachmentModes[$relation->getName()] = $branch->isJoinedAttachment();
 		$branch->requireFields(['id', 'userId']);
 		$branch->getParent()->requireFields(['id']);
 		$runtime->continueWith($branch, static function (RelationLoadBranch $branch): void {
-			$parent = $branch->getParent()->getNode();
-			if ($parent instanceof RootNode) {
-				LifecycleEvents::$referenceSnapshots[] = $parent->getResult()[0]['profile']['id'];
+			$profile = $branch->getParent()->getRecords()[0]->children['profile'] ?? null;
+			if ($profile instanceof ResultRecord) {
+				LifecycleEvents::$referenceSnapshots[] = $profile->values['id'];
 			}
 		});
 	}
@@ -1137,8 +1164,9 @@ final class SeparateNestedPostsLoader extends NestedPostsLoader
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 		$relation = $branch->getRelationRef();
+		LifecycleEvents::$branches[$relation->getName()] = $branch;
 		$query = new SelectQuery($relation->getCollection(), new NestedAttachmentExecutor());
-		$branch->setJoinedAttachment(false);
+		$runtime->collectWith($branch, new KeyPairCollector(['id'], ['userId']));
 		$runtime->setQueryContext($branch, $query, $query);
 		$branch->requireFields(['id', 'userId']);
 		$branch->getParent()->requireFields(['id']);
@@ -1152,7 +1180,7 @@ final class NestedCommentsLoader extends LifecycleTestLoader
 	{
 		$relation = $branch->getRelationRef();
 		$query = new SelectQuery($relation->getCollection(), new NestedAttachmentExecutor());
-		$branch->setJoinedAttachment(false);
+		$runtime->collectWith($branch, new KeyPairCollector($relation->getDefinition()->getInnerKeys(), $relation->getDefinition()->getOuterKeys()));
 		$runtime->setQueryContext($branch, $query, $query);
 		$branch->requireFields($relation->getCollection()->getPrimaryKey());
 		$branch->requireFields($relation->getDefinition()->getOuterKeys());
@@ -1173,7 +1201,7 @@ final class BoundaryParentLoader extends LifecycleTestLoader
 		$relation = $branch->getRelationRef();
 		LifecycleEvents::$events[] = 'load:' . $relation->getName();
 		$query = new SelectQuery($relation->getCollection(), new MultiPassBoundaryExecutor());
-		$branch->setJoinedAttachment(false);
+		$runtime->collectWith($branch, new KeyPairCollector($relation->getDefinition()->getInnerKeys(), $relation->getDefinition()->getOuterKeys()));
 		$runtime->setQueryContext($branch, $query, $query);
 		$branch->requireFields($relation->getCollection()->getPrimaryKey());
 		$branch->requireFields($relation->getDefinition()->getOuterKeys());
@@ -1198,7 +1226,7 @@ final class BoundaryChildLoader extends LifecycleTestLoader
 		$relation = $branch->getRelationRef();
 		LifecycleEvents::$events[] = 'load:' . $relation->getName();
 		$query = new SelectQuery($relation->getCollection(), new MultiPassBoundaryExecutor());
-		$branch->setJoinedAttachment(false);
+		$runtime->collectWith($branch, new KeyPairCollector($relation->getDefinition()->getInnerKeys(), $relation->getDefinition()->getOuterKeys()));
 		$runtime->setQueryContext($branch, $query, $query);
 		$branch->requireFields($relation->getCollection()->getPrimaryKey());
 		$branch->requireFields($relation->getDefinition()->getOuterKeys());
@@ -1214,17 +1242,105 @@ final class BoundaryChildLoader extends LifecycleTestLoader
 	}
 }
 
-final class TopLevelParentNodeLoader extends LifecycleTestLoader
+final class DynamicDeferredPostsLoader extends AbstractLoader
 {
-	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
-	{
-		LifecycleEvents::$topLevelParentNodeIsRoot = $branch->getParent()->getNode() instanceof RootNode;
-
-		return parent::initNode($branch, $runtime);
-	}
-
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
-		$this->prepareSeparateQuery($branch, $runtime);
+		$branch->getParent()->requireFields(['id']);
+		$runtime->continueWith($branch, $this->loadData(...));
+	}
+
+	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
+	{
+		$query = $runtime->createQuery($branch->getCollection());
+
+		$runtime->execute($branch, $query, static function (RelationLoadBranch $branch, array $row): ?ResultRecord {
+			$id = $row['id'] ?? null;
+
+			if (! is_scalar($id)) {
+				return null;
+			}
+
+			$values = [
+				'id' => $id,
+				'title' => 'Dynamic ' . (string) ($row['title'] ?? ''),
+			];
+
+			foreach ($branch->getRequiredFieldNames() as $requiredField) {
+				if (! array_key_exists($requiredField, $values) && array_key_exists($requiredField, $row)) {
+					$values[$requiredField] = $row[$requiredField];
+				}
+			}
+
+			$record = $branch->storeRecord(new ResultRecord($values), KeyEncoder::encodeTuple([$id]));
+
+			foreach ($branch->getParent()->getRecords() as $parentRecord) {
+				if (($row['userId'] ?? null) === ($parentRecord->values['id'] ?? null)) {
+					$branch->getParent()->attachChild($parentRecord, $branch, $record);
+				}
+			}
+
+			return $record;
+		});
+	}
+}
+
+final class DirectAttachDynamicPostsLoader extends AbstractLoader
+{
+	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
+	{
+		LifecycleEvents::$branches[$branch->getRelationRef()->getName()] = $branch;
+		$branch->getParent()->requireFields(['id']);
+		$runtime->continueWith($branch, $this->loadData(...));
+	}
+
+	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
+	{
+		foreach ($branch->getParent()->getRecords() as $parentRecord) {
+			$branch->getParent()->attachChild(
+				$parentRecord,
+				$branch,
+				new ResultRecord([
+					'id' => 10,
+					'authorId' => 7,
+					'title' => 'Dynamic Hello',
+				]),
+			);
+		}
+	}
+}
+
+final class DynamicDescendantExecutor implements QueryExecutorInterface
+{
+	public function fetchAll(SelectQuery $query): array
+	{
+		$rows = match ($query->getCollection()->getName()) {
+			'users' => [
+				['id' => 1, 'name' => 'Ada'],
+				['id' => 2, 'name' => 'Grace'],
+			],
+			'posts' => [
+				['id' => 10, 'userId' => 1, 'authorId' => 7, 'title' => 'Hello'],
+			],
+			'authors' => [
+				['id' => 7, 'name' => 'Ana'],
+			],
+			'comments' => [
+				['id' => 100, 'postId' => 10, 'body' => 'Hi'],
+			],
+			default => [],
+		};
+
+		return StubQueryRowProjector::projectAll($query, $rows);
+	}
+
+	public function fetchOne(SelectQuery $query): ?array
+	{
+		return $this->fetchAll($query)[0] ?? null;
+	}
+
+	public function iterate(SelectQuery $query): iterable
+	{
+		return $this->fetchAll($query);
 	}
 }

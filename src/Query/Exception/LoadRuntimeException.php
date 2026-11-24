@@ -9,14 +9,6 @@ use ON\Data\Query\Relation\RelationRef;
 
 final class LoadRuntimeException extends LogicException
 {
-	public static function nodeNotRegistered(RelationRef $relation): self
-	{
-		return new self(sprintf(
-			'Loader did not register a parser node for relation "%s".',
-			implode('.', $relation->getPath()),
-		));
-	}
-
 	public static function parentBranchMissing(RelationRef $relation): self
 	{
 		return new self(sprintf(
@@ -30,6 +22,31 @@ final class LoadRuntimeException extends LogicException
 		return new self(sprintf(
 			'Loader did not configure a result query for relation "%s".',
 			implode('.', $relation->getPath()),
+		));
+	}
+
+	public static function collectorNotConfigured(RelationRef $relation): self
+	{
+		return new self(sprintf(
+			'Loader did not configure a row collector for relation "%s".',
+			implode('.', $relation->getPath()),
+		));
+	}
+
+	public static function missingRecordField(string $field): self
+	{
+		return new self(sprintf(
+			'Configured key field "%s" is missing from the loaded record.',
+			$field,
+		));
+	}
+
+	public static function nonScalarKeyValue(string $field, mixed $value): self
+	{
+		return new self(sprintf(
+			'Key field "%s" must contain a scalar value, "%s" given.',
+			$field,
+			get_debug_type($value),
 		));
 	}
 

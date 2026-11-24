@@ -14,15 +14,11 @@ use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Relation\LoadBranch;
 use ON\Data\Query\Relation\Loader\AbstractLoader;
-use ON\Data\Query\Relation\Loader\BelongsToLoader;
-use ON\Data\Query\Relation\Loader\HasManyLoader;
-use ON\Data\Query\Relation\Loader\HasOneLoader;
 use ON\Data\Query\Relation\Loader\LoaderInterface;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationOutputProcessor;
 use ON\Data\Query\Relation\RootLoadBranch;
-use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
 use PHPUnit\Framework\TestCase;
@@ -30,7 +26,6 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use ReflectionClass;
 use ReflectionMethod;
-use ReflectionNamedType;
 use SplFileInfo;
 
 final class QueryArchitectureTest extends TestCase
@@ -107,16 +102,17 @@ final class QueryArchitectureTest extends TestCase
 		self::assertFileDoesNotExist(dirname(__DIR__, 2) . '/src/Definition/Relation/BuiltInRelationTypes.php');
 	}
 
-	public function testLoaderRegisterReturnsAnAbstractParserNode(): void
+	public function testLoaderInterfaceExposesOnlyJoinLoadAndDefaultStrategy(): void
 	{
-		$reflection = new ReflectionMethod(LoaderInterface::class, 'register');
-		$parameters = $reflection->getParameters();
+		$methods = array_map(
+			static fn (ReflectionMethod $method): string => $method->getName(),
+			(new ReflectionClass(LoaderInterface::class))->getMethods(),
+		);
+		sort($methods);
 
-		self::assertCount(2, $parameters);
-		self::assertSame(RelationLoadBranch::class, $parameters[0]->getType()?->getName());
-		self::assertSame(LoadRuntime::class, $parameters[1]->getType()?->getName());
-		self::assertInstanceOf(ReflectionNamedType::class, $reflection->getReturnType());
-		self::assertSame(AbstractNode::class, $reflection->getReturnType()->getName());
+		self::assertSame(['getDefaultLoadStrategy', 'join', 'load'], $methods);
+		self::assertFalse(method_exists(AbstractLoader::class, 'register'));
+		self::assertFalse(method_exists(AbstractLoader::class, 'initNode'));
 	}
 
 	public function testLoaderLoadReceivesRelationLoadBranch(): void
@@ -127,23 +123,6 @@ final class QueryArchitectureTest extends TestCase
 		self::assertCount(2, $parameters);
 		self::assertSame(RelationLoadBranch::class, $parameters[0]->getType()?->getName());
 		self::assertSame(LoadRuntime::class, $parameters[1]->getType()?->getName());
-	}
-
-	public function testAbstractLoaderProvidesFinalRegisterReturningAbstractNode(): void
-	{
-		$reflection = new ReflectionMethod(AbstractLoader::class, 'register');
-
-		self::assertTrue($reflection->isFinal());
-		self::assertInstanceOf(ReflectionNamedType::class, $reflection->getReturnType());
-		self::assertSame(AbstractNode::class, $reflection->getReturnType()->getName());
-	}
-
-	public function testBuiltInLoadersImplementInitNodeInsteadOfRegister(): void
-	{
-		foreach ([BelongsToLoader::class, HasOneLoader::class, HasManyLoader::class] as $class) {
-			self::assertSame(AbstractLoader::class, (new ReflectionMethod($class, 'register'))->getDeclaringClass()->getName());
-			self::assertSame($class, (new ReflectionMethod($class, 'initNode'))->getDeclaringClass()->getName());
-		}
 	}
 
 	public function testLoaderInterfaceDoesNotExposeCollectFieldsHook(): void
@@ -266,8 +245,8 @@ final class QueryArchitectureTest extends TestCase
 	public function testRootBranchOwnsPrimaryKeyRequirementHelpers(): void
 	{
 		self::assertTrue(method_exists(LoadBranch::class, 'requirePrimaryKey'));
-		self::assertTrue(method_exists(RootLoadBranch::class, 'createNode'));
-		self::assertTrue(method_exists(LoadBranch::class, 'getColumnIndex'));
+		self::assertTrue(method_exists(LoadBranch::class, 'getFetchMapping'));
+		self::assertFalse(method_exists(RootLoadBranch::class, 'createNode'));
 	}
 
 	public function testRelationOutputProcessorOwnsOutputShaping(): void
@@ -298,7 +277,7 @@ final class QueryArchitectureTest extends TestCase
 		self::assertFileDoesNotExist($root . '/PromotionItem.php');
 	}
 
-	public function testRootLoadBranchUsesColumnIndexWithoutSelectionListOrLegacyParallelArrays(): void
+	public function testRootLoadBranchUsesFetchMappingWithoutParserOrLegacyClasses(): void
 	{
 		$reflection = new ReflectionClass(RootLoadBranch::class);
 
@@ -307,16 +286,28 @@ final class QueryArchitectureTest extends TestCase
 		}
 
 		$relationDir = dirname(__DIR__, 2) . '/src/Query/Relation';
-		self::assertFileExists($relationDir . '/ColumnIndex.php');
-		self::assertFileExists($relationDir . '/ColumnRole.php');
+		self::assertFileExists($relationDir . '/FetchMapping.php');
+		self::assertFileExists($relationDir . '/ResultRecord.php');
+		self::assertFileExists($relationDir . '/KeyEncoder.php');
+		self::assertFileExists($relationDir . '/RowCollectorInterface.php');
+		self::assertFileExists($relationDir . '/KeyPairCollector.php');
+		self::assertFileDoesNotExist($relationDir . '/ColumnIndex.php');
+		self::assertFileDoesNotExist($relationDir . '/ColumnEntry.php');
+		self::assertFileDoesNotExist($relationDir . '/ColumnRole.php');
 		self::assertFileDoesNotExist($relationDir . '/LoadAliasAllocator.php');
 		self::assertFileDoesNotExist($relationDir . '/LoadFieldPlanner.php');
 		self::assertFileDoesNotExist($relationDir . '/PathBinding.php');
+		self::assertFileDoesNotExist($relationDir . '/Loader/M2MThroughNode.php');
+		self::assertDirectoryDoesNotExist(dirname(__DIR__, 2) . '/src/Query/Result/Parser');
+
+		foreach (['correlateBy', 'correlateBySqlColumns', 'attachRecord', 'getReferenceValues', 'setJoinedAttachment'] as $caseSpecificMethod) {
+			self::assertFalse(method_exists(RelationLoadBranch::class, $caseSpecificMethod), $caseSpecificMethod);
+		}
 	}
 
 	public function testRootLoadBranchDoesNotExposeLegacyRootSelectionApis(): void
 	{
-		foreach (['addPublicColumn', 'getColumns', 'getValueAliases', 'getPublicColumns', 'asParserKey', 'asRowAlias'] as $method) {
+		foreach (['addPublicColumn', 'getValueAliases', 'getPublicColumns', 'asParserKey', 'asRowAlias'] as $method) {
 			self::assertFalse(method_exists(RootLoadBranch::class, $method), $method);
 		}
 	}
@@ -396,7 +387,7 @@ final class QueryArchitectureTest extends TestCase
 		}
 	}
 
-	public function testRelationLoadingUsesColumnIndexAndRepresentationSchema(): void
+	public function testRelationLoadingUsesFetchMappingAndRepresentationSchema(): void
 	{
 		$selectQuery = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/SelectQuery.php');
 		self::assertStringContainsString('getSelectionKey()', $selectQuery);
@@ -411,7 +402,7 @@ final class QueryArchitectureTest extends TestCase
 		self::assertStringContainsString('getImplicitScalarPaths()', $outputProcessor);
 		self::assertStringContainsString('getPrimaryKeyPaths()', $outputProcessor);
 		self::assertStringContainsString('getRepresentationSchema()', $outputProcessor);
-		self::assertStringContainsString('getColumnIndex()', $outputProcessor);
+		self::assertStringContainsString('getFetchMapping()', $outputProcessor);
 		self::assertStringNotContainsString('SelectionTag::INTERNAL', $outputProcessor);
 		self::assertStringNotContainsString('getExpression()->getField()->getName()', $outputProcessor);
 
@@ -419,18 +410,17 @@ final class QueryArchitectureTest extends TestCase
 		self::assertStringContainsString('needsRowAssemble()', $loadRuntime);
 		self::assertStringContainsString('planColumns(', $loadRuntime);
 		self::assertStringContainsString('getIdentityRows()', $loadRuntime);
-		self::assertStringContainsString('ColumnIndex', $loadRuntime);
+		self::assertStringContainsString('FetchMapping', $loadRuntime);
 		self::assertStringNotContainsString('includeCrossLevelFlats', $loadRuntime);
 		self::assertStringNotContainsString('bindAllDestinations', $loadRuntime);
 		self::assertStringNotContainsString('getExpression()->getField()->getName()', $loadRuntime);
 
-		$columnIndex = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/ColumnIndex.php');
-		self::assertStringContainsString('getPaths()', $columnIndex);
-		self::assertStringContainsString('planBranch(', $columnIndex);
-		self::assertStringContainsString('ColumnRole::', $columnIndex);
-		self::assertStringContainsString('setRepresentationSchema', $columnIndex);
-		self::assertStringNotContainsString('getByTag', $columnIndex);
-		self::assertStringNotContainsString('SelectionTag::', $columnIndex);
+		$fetchMapping = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/FetchMapping.php');
+		self::assertStringContainsString('getPaths()', $fetchMapping);
+		self::assertStringContainsString('planBranch(', $fetchMapping);
+		self::assertStringContainsString('setRepresentationSchema', $fetchMapping);
+		self::assertStringNotContainsString('getByTag', $fetchMapping);
+		self::assertStringNotContainsString('SelectionTag::', $fetchMapping);
 
 		self::assertStringContainsString('$this->projection()', $selectQuery);
 		self::assertStringContainsString('getIdentityRows()', $selectQuery);
@@ -438,7 +428,6 @@ final class QueryArchitectureTest extends TestCase
 		self::assertStringNotContainsString('stripTaggedPrivateKeys', $selectQuery);
 
 		foreach ([
-			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/BelongsToLoader.php',
 			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasOneLoader.php',
 			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasManyLoader.php',
 			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/FirstOfManyLoader.php',
@@ -446,7 +435,7 @@ final class QueryArchitectureTest extends TestCase
 		] as $path) {
 			$contents = (string) file_get_contents($path);
 
-			self::assertStringContainsString('getRemapColumns()', $contents, $path);
+			self::assertStringContainsString('collectWith(', $contents, $path);
 			self::assertStringNotContainsString('sqlAliases(', $contents, $path);
 			self::assertStringNotContainsString('getExpression()->getField()->getName()', $contents, $path);
 		}
@@ -529,7 +518,6 @@ final class QueryArchitectureTest extends TestCase
 	public function testBuiltInLoadersUseRelationKeyPairingsForPairedOperations(): void
 	{
 		$simpleLoaderPaths = [
-			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/BelongsToLoader.php',
 			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasOneLoader.php',
 			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasManyLoader.php',
 		];
@@ -594,14 +582,13 @@ final class QueryArchitectureTest extends TestCase
 		self::assertStringNotContainsString('nodeIsCollectionLike(', $rootBranchContents);
 	}
 
-	public function testRuntimeOnlyAttachesRootParserNodes(): void
+	public function testRuntimeCorrelatesRecordsDirectlyWithoutParserNodes(): void
 	{
 		$contents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/LoadRuntime.php');
 
-		self::assertStringContainsString('$rootNode->joinNode(', $contents);
-		self::assertStringContainsString('$rootNode->linkNode(', $contents);
-		self::assertStringNotContainsString('$node->joinNode(', $contents);
-		self::assertStringNotContainsString('$node->linkNode(', $contents);
+		self::assertStringNotContainsString('Parser', $contents);
+		self::assertStringNotContainsString('joinNode(', $contents);
+		self::assertStringNotContainsString('linkNode(', $contents);
 	}
 
 	public function testQueryAndDatabaseInfrastructureDoesNotInterpretConcreteRelationExecutionSemantics(): void

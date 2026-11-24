@@ -8,7 +8,6 @@ use LogicException;
 use ON\Data\Definition\Relation\RelationKeyPairing;
 use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Condition\ConditionTag;
-use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
@@ -21,7 +20,6 @@ use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationKeyQuery;
 use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
-use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
@@ -70,36 +68,6 @@ abstract class AbstractLoader implements LoaderInterface
 	{
 		throw RelationLoaderException::loadingNotImplemented($branch->getRelationRef());
 	}
-
-	final public function register(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
-	{
-		foreach ($branch->getChildren() as $child) {
-			$runtime->registerBranch($child);
-		}
-
-		$node = $this->initNode($branch, $runtime);
-		$attachmentNode = $node->getRelationAttachmentNode();
-
-		foreach ($branch->getChildren() as $child) {
-			if (! $child->hasNode()) {
-				throw LoadRuntimeException::nodeNotRegistered($child->getRelationRef());
-			}
-
-			$childNode = $child->getNode();
-
-			if ($child->isJoinedAttachment()) {
-				$attachmentNode->joinNode($child->getRelationRef()->getName(), $childNode);
-
-				continue;
-			}
-
-			$attachmentNode->linkNode($child->getRelationRef()->getName(), $childNode);
-		}
-
-		return $node;
-	}
-
-	abstract protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode;
 
 	protected function assertSupportedRelationPath(RelationRef $relation): void
 	{
@@ -239,7 +207,7 @@ abstract class AbstractLoader implements LoaderInterface
 		?callable $rightSource = null,
 		?callable $finalize = null,
 	): void {
-		$references = $branch->getReferenceValues();
+		$references = $branch->getParent()->getDistinctKeyValues($pairing->getLeftFields());
 
 		if ($references === []) {
 			return;

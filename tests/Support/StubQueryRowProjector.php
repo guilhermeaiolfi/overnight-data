@@ -9,13 +9,13 @@ use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\LiteralExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Join;
-use ON\Data\Query\Relation\ColumnIndex;
+use ON\Data\Query\Relation\FetchMapping;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\SelectQuery;
 
 /**
  * Projects logical test fixture rows onto the SQL aliases (`c0`, `c1`, ...)
- * emitted onto a {@see SelectQuery} by {@see ColumnIndex}.
+ * emitted onto a {@see SelectQuery} by {@see FetchMapping}.
  */
 final class StubQueryRowProjector
 {

@@ -7,12 +7,11 @@ namespace ON\Data\Query\Relation\Loader;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\Relation\KeyPairCollector;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
-use ON\Data\Query\Result\Parser\AbstractNode;
-use ON\Data\Query\Result\Parser\CollectionNode;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
 use ON\Data\Query\SourceMap;
@@ -20,19 +19,6 @@ use ON\Data\Query\SourceMap;
 final class HasManyLoader extends AbstractLoader
 {
 	private const DERIVED_ALIAS = '__ondata_limited_has_many';
-
-	protected function initNode(RelationLoadBranch $branch, LoadRuntime $runtime): AbstractNode
-	{
-		$relationRef = $branch->getRelationRef();
-		$pairing = $relationRef->getDefinition()->getKeyPairing();
-
-		return new CollectionNode(
-			$branch->getRemapColumns(),
-			$relationRef->getCollection()->getPrimaryKey(),
-			$pairing->getRightFields(),
-			$pairing->getLeftFields(),
-		);
-	}
 
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
@@ -49,7 +35,10 @@ final class HasManyLoader extends AbstractLoader
 			throw RelationLoaderException::joinedLoadingNotImplemented($relationRef);
 		}
 
-		$branch->setJoinedAttachment(false);
+		$runtime->collectWith($branch, new KeyPairCollector(
+			$parentToChild->getLeftFields(),
+			$parentToChild->getRightFields(),
+		));
 		$query = $runtime->createQuery($relationRef->getCollection());
 		$runtime->setQueryContext($branch, $query, $query);
 

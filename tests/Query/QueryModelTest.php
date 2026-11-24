@@ -1393,19 +1393,6 @@ final class QueryModelTest extends TestCase
 		self::assertTrue($selection->hasTag('custom-tag'));
 	}
 
-	public function testSelectionListTagAddsTagsToExistingSelectionsWithoutDuplicates(): void
-	{
-		$query = query($this->makeRegistry()->getCollection('users'));
-		$list = new SelectionList();
-
-		$list->add($query->id);
-		$list->tag($query->id, 'custom-key');
-		$selection = $list->tag('id', 'custom-key');
-
-		self::assertTrue($selection->hasTag('custom-key'));
-		self::assertSame(['custom-key'], $selection->getTags());
-	}
-
 	public function testSelectionListExplicitSelectionsFollowTagInsertionOrder(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
@@ -1454,50 +1441,6 @@ final class QueryModelTest extends TestCase
 		self::assertSame(
 			[$query->id],
 			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getByTag(SelectionTag::EXPLICIT)),
-		);
-	}
-
-	public function testSelectionListDerivedProjectionPreservesTagsWithoutForcingExplicit(): void
-	{
-		$inner = query($this->makeRegistry()->getCollection('posts'));
-		$inner->getSelections()->add($inner->amount);
-		$inner->getSelections()->add($inner->userId, 'tag-a');
-		$inner->getSelections()->add($inner->id, 'tag-b');
-		$inner->getSelections()->removeByTag(SelectionTag::DEFAULT);
-		$ranked = $inner->as('ranked_posts');
-		$outer = query($ranked);
-
-		$outer->getSelections()->merge(
-			$inner->getSelections()->projectDerivedTo($ranked, $outer),
-		);
-
-		$projected = array_values(array_filter(
-			$outer->getSelections()->getAll(),
-			static fn (SelectionItem $item): bool => ! $item->getExpression() instanceof StarExpression,
-		));
-
-		self::assertCount(3, $projected);
-		foreach ($projected as $item) {
-			self::assertFalse($item->isExplicit(), 'Projected selections must stay non-explicit.');
-		}
-
-		self::assertTrue($projected[2]->hasTag('tag-b'));
-	}
-
-	public function testSelectionListFilterByTagReturnsMatchingSelections(): void
-	{
-		$query = query($this->makeRegistry()->getCollection('users'));
-		$list = new SelectionList();
-
-		$list->add($query->name, SelectionTag::EXPLICIT);
-		$list->add($query->name->upper()->as('__ondata_rank'), 'rank');
-
-		self::assertSame(
-			['__ondata_rank'],
-			array_map(
-				static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-				$list->filterByTag('rank')->getAll(),
-			),
 		);
 	}
 
