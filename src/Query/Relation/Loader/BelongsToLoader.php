@@ -42,6 +42,7 @@ final class BelongsToLoader extends AbstractLoader
 		if ($strategy === LoadStrategy::SEPARATE_QUERY) {
 			$query = $runtime->createQuery($relationRef->getCollection());
 			$runtime->setQueryContext($branch, $query, $query);
+			$runtime->continueWith($branch, $this->loadData(...));
 		} else {
 			$this->assertNoJoinedSelectionOptions($branch);
 			$queryRelation = $runtime->getQueryRelation($branch);
@@ -52,10 +53,6 @@ final class BelongsToLoader extends AbstractLoader
 		$branch->requireFields($relationRef->getCollection()->getPrimaryKey());
 		$branch->requireFields($ownerToTarget->getRightFields());
 		$parentBranch->requireFields($ownerToTarget->getLeftFields());
-
-		if ($strategy === LoadStrategy::SEPARATE_QUERY) {
-			$runtime->continueWith($branch, 'loadData');
-		}
 	}
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void

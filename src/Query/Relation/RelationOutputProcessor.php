@@ -277,8 +277,14 @@ final class RelationOutputProcessor
 	 */
 	private function assignPathValue(array &$item, LoadBranch $branch, array $record, string $path): bool
 	{
-		$loadKey = $branch->bagKeyForPath($path);
-		$childPath = $branch->childPathForPath($path);
+		$binding = $branch->getColumnIndex()->resolvePath($branch, $path);
+
+		if ($binding === null) {
+			return false;
+		}
+
+		$loadKey = $binding['bagKey'];
+		$childPath = $binding['childPath'];
 
 		if ($childPath !== null) {
 			$fromChild = $this->scalarFromChildPath($branch, $record, $childPath, $loadKey);

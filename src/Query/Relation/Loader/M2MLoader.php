@@ -8,10 +8,9 @@ use LogicException;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\Definition\Relation\M2MThrough;
 use ON\Data\Query\Exception\RelationLoaderException;
-use ON\Data\Query\Expression\AliasedExpression;
-use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\Relation\ColumnRole;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationKeyQuery;
@@ -19,7 +18,6 @@ use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\Result\Parser\SingularNode;
-use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\SelectQuery;
 
 final class M2MLoader extends AbstractLoader
@@ -44,7 +42,7 @@ final class M2MLoader extends AbstractLoader
 			...$throughInnerKeys,
 			...$throughOuterKeys,
 		]));
-		$throughAliasesByField = $this->allocateThroughAliases($branch, $runtime, $throughFieldNames);
+		$throughRemap = $this->allocateThroughColumns($branch, $runtime, $throughFieldNames);
 
 		$targetNode = new SingularNode(
 			$branch->getRemapColumns(),
@@ -54,13 +52,7 @@ final class M2MLoader extends AbstractLoader
 		);
 		$branch->setPublicPayloadChild(self::THROUGH_CONTAINER);
 
-		$throughRemap = [];
-
-		foreach ($throughFieldNames as $fieldName) {
-			$throughRemap[$fieldName] = $throughAliasesByField[$fieldName];
-		}
-
-		$throughNode = new M2MThroughNode(
+		return new M2MThroughNode(
 			$throughRemap,
 			$throughFieldNames,
 			$throughInnerKeys,
@@ -68,8 +60,6 @@ final class M2MLoader extends AbstractLoader
 			self::THROUGH_CONTAINER,
 			$targetNode,
 		);
-
-		return $throughNode;
 	}
 
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
@@ -109,10 +99,9 @@ final class M2MLoader extends AbstractLoader
 		$branch->setJoinedAttachment(false);
 		$runtime->setQueryContext($branch, $query, $query);
 		$branch->requireFields($relation->getCollection()->getPrimaryKey());
-		$branch->requireFields($this->publicFieldNames($branch));
 		$branch->requireFields($throughToTarget->getRightFields());
 		$parent->requireFields($parentToThrough->getLeftFields());
-		$runtime->continueWith($branch, 'loadData');
+		$runtime->continueWith($branch, $this->loadData(...));
 	}
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
@@ -188,29 +177,26 @@ final class M2MLoader extends AbstractLoader
 
 	/**
 	 * @param list<string> $fieldNames
-	 * @return array<string, string> field name → load alias
+	 * @return array<string, string> field name => SQL alias
 	 */
-	private function allocateThroughAliases(
+	private function allocateThroughColumns(
 		RelationLoadBranch $branch,
 		LoadRuntime $runtime,
 		array $fieldNames,
 	): array {
 		$relation = $branch->getRelationRef();
-		$query = $branch->getQuery();
-		$source = $this->throughSource($relation, $query);
-		$aliasesByField = [];
+		$source = $this->throughSource($relation, $branch->getQuery());
+		$remap = [];
 
 		foreach ($fieldNames as $fieldName) {
-			$alias = $runtime->getJoinedAlias([...$relation->getPath(), 'through'], $fieldName);
-
-			if (! $query->getSelections()->hasNamedExpression($alias)) {
-				$query->select($source->field($fieldName)->as($alias));
-			}
-
-			$aliasesByField[$fieldName] = $alias;
+			$remap[$fieldName] = $runtime->selectAuxiliaryColumn(
+				$branch,
+				$source->field($fieldName),
+				ColumnRole::JoinKey,
+			);
 		}
 
-		return $aliasesByField;
+		return $remap;
 	}
 
 	private function throughSource(RelationRef $relation, SelectQuery $query): QuerySourceInterface
@@ -229,28 +215,5 @@ final class M2MLoader extends AbstractLoader
 	private function throughJoinName(RelationRef $relation): string
 	{
 		return implode('.', $relation->getPath()) . '@through';
-	}
-
-	/**
-	 * @return list<string>
-	 */
-	private function publicFieldNames(RelationLoadBranch $branch): array
-	{
-		return array_map(
-			static function (SelectionItem $selection): string {
-				$expression = $selection->getExpression();
-
-				if ($expression instanceof AliasedExpression) {
-					$expression = $expression->getExpression();
-				}
-
-				if ($expression instanceof FieldRef) {
-					return $expression->getField()->getName();
-				}
-
-				return $selection->getSelectionKey();
-			},
-			$branch->getSelections()->getExplicit(),
-		);
 	}
 }

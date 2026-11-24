@@ -196,7 +196,7 @@ final class QueryModelTest extends TestCase
 		self::assertInstanceOf(SelectionItem::class, $selections[0]);
 		self::assertSame($field, $selections[0]->getExpression());
 		self::assertTrue($selections[0]->isExplicit());
-		self::assertSame([SelectionTag::EXPLICIT, SelectionTag::COLUMN], $selections[0]->getTags());
+		self::assertSame([SelectionTag::EXPLICIT], $selections[0]->getTags());
 	}
 
 	public function testSelectionConstructorNormalizesAndDeduplicatesTags(): void
@@ -1270,7 +1270,7 @@ final class QueryModelTest extends TestCase
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$query
 			->select($query->name, $query->email->as('mail'))
-			->require($query->id, SelectionTag::RELATION)
+			->require($query->id, 'relation-key')
 			->require($query->id, 'result-grouping-key');
 
 		$selections = $query->getSelections();
@@ -1280,7 +1280,7 @@ final class QueryModelTest extends TestCase
 		self::assertCount(1, $selections->filter(
 			static fn (SelectionItem $selection): bool => ! $selection->isExplicit(),
 		)->getAll());
-		self::assertCount(1, $selections->getByTag(SelectionTag::RELATION));
+		self::assertCount(1, $selections->getByTag('relation-key'));
 		self::assertCount(1, $selections->filter(static fn (SelectionItem $selection): bool => $selection->hasTag('result-grouping-key'))->getAll());
 	}
 
@@ -1289,7 +1289,7 @@ final class QueryModelTest extends TestCase
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$query
 			->select($query->name, $query->email->as('mail'))
-			->require($query->id, SelectionTag::RELATION);
+			->require($query->id, 'relation-key');
 
 		$filtered = $query->getSelections()->filter(
 			static fn (SelectionItem $selection): bool => $selection->isExplicit(),
@@ -1313,12 +1313,12 @@ final class QueryModelTest extends TestCase
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$query
 			->select($query->name)
-			->require($query->id, SelectionTag::RELATION)
-			->require($query->title, SelectionTag::INTERNAL);
+			->require($query->id, 'relation-key')
+			->require($query->title, 'audit-key');
 
 		$filtered = $query->getSelections()->filter(
-			static fn (SelectionItem $selection): bool => $selection->hasTag(SelectionTag::RELATION)
-				|| $selection->hasTag(SelectionTag::INTERNAL),
+			static fn (SelectionItem $selection): bool => $selection->hasTag('relation-key')
+				|| $selection->hasTag('audit-key'),
 		);
 
 		self::assertSame([$query->id, $query->title], array_map(
@@ -1332,15 +1332,15 @@ final class QueryModelTest extends TestCase
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$list = new SelectionList();
 
-		$first = $list->add($query->id, SelectionTag::RELATION);
-		$second = $list->add($query->id, [SelectionTag::INTERNAL, SelectionTag::RELATION]);
+		$first = $list->add($query->id, 'relation-key');
+		$second = $list->add($query->id, ['audit-key', 'relation-key']);
 
 		self::assertNotSame($first, $second);
-		self::assertSame([SelectionTag::RELATION, SelectionTag::COLUMN, SelectionTag::INTERNAL], $second->getTags());
+		self::assertSame(['relation-key', 'audit-key'], $second->getTags());
 		self::assertSame($second, $list->getAll()[0]);
 	}
 
-	public function testSelectionListExplicitFieldSelectionsGetColumnAndPublicTags(): void
+	public function testSelectionListExplicitFieldSelectionsGetExplicitTagOnly(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$list = new SelectionList();
@@ -1350,11 +1350,10 @@ final class QueryModelTest extends TestCase
 		$selection = $list->getAll()[0];
 
 		self::assertTrue($selection->isExplicit());
-		self::assertTrue($selection->hasTag(SelectionTag::COLUMN));
-		self::assertTrue($selection->hasTag(SelectionTag::EXPLICIT));
+		self::assertSame([SelectionTag::EXPLICIT], $selection->getTags());
 	}
 
-	public function testSelectionListExplicitAliasedExpressionGetsColumnTag(): void
+	public function testSelectionListExplicitAliasedExpressionGetsExplicitTag(): void
 	{
 		$list = new SelectionList();
 
@@ -1363,14 +1362,20 @@ final class QueryModelTest extends TestCase
 		$selection = $list->getAll()[0];
 
 		self::assertTrue($selection->isExplicit());
-		self::assertTrue($selection->hasTag(SelectionTag::COLUMN));
-		self::assertTrue($selection->hasTag(SelectionTag::EXPLICIT));
+		self::assertSame([SelectionTag::EXPLICIT], $selection->getTags());
 		self::assertSame('one', $selection->getSelectionKey());
 	}
 
-	public function testSelectionTagExposesExplicitConstant(): void
+	public function testSelectionTagExposesOnlyAuthoringConstants(): void
 	{
 		self::assertTrue(defined(SelectionTag::class . '::EXPLICIT'));
+		self::assertTrue(defined(SelectionTag::class . '::DEFAULT'));
+		self::assertFalse(defined(SelectionTag::class . '::COLUMN'));
+		self::assertFalse(defined(SelectionTag::class . '::SQL_ONLY'));
+		self::assertFalse(defined(SelectionTag::class . '::REQUIRED'));
+		self::assertFalse(defined(SelectionTag::class . '::IDENTITY'));
+		self::assertFalse(defined(SelectionTag::class . '::RELATION'));
+		self::assertFalse(defined(SelectionTag::class . '::INTERNAL'));
 	}
 
 	public function testSelectionListPromotesImplicitFieldToExplicitAndPreservesTags(): void
@@ -1378,93 +1383,14 @@ final class QueryModelTest extends TestCase
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$list = new SelectionList();
 
-		$list->add($query->title, SelectionTag::INTERNAL);
+		$list->add($query->title, 'custom-tag');
 		$list->addExplicit([$query->title]);
 
 		$selection = $list->getAll()[0];
 
 		self::assertTrue($selection->isExplicit());
-		self::assertTrue($selection->hasTag(SelectionTag::COLUMN));
 		self::assertTrue($selection->hasTag(SelectionTag::EXPLICIT));
-		self::assertTrue($selection->hasTag(SelectionTag::INTERNAL));
-	}
-
-	public function testSelectionListColumnSelectionsAreRetrievableByTag(): void
-	{
-		$query = query($this->makeRegistry()->getCollection('users'));
-		$list = new SelectionList();
-
-		$list->add($query->name, SelectionTag::EXPLICIT);
-		$list->add($query->email, SelectionTag::REQUIRED);
-		$list->add($query->id, SelectionTag::RELATION);
-		$list->add($query->title, SelectionTag::IDENTITY);
-		$list->add($query->active, SelectionTag::INTERNAL);
-		$list->ensureInternalExpression($query->name->upper(), '__ondata_rank');
-
-		self::assertSame(
-			[$query->name, $query->email, $query->id, $query->title, $query->active],
-			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getByTag(SelectionTag::COLUMN)),
-		);
-	}
-
-	public function testEnsureInternalFieldMarksFieldAsInternalColumn(): void
-	{
-		$query = query($this->makeRegistry()->getCollection('posts'));
-		$list = new SelectionList();
-
-		$selection = $list->ensureInternalField($query->userId);
-
-		self::assertTrue($selection->hasTag(SelectionTag::COLUMN));
-		self::assertTrue($selection->hasTag(SelectionTag::INTERNAL));
-		self::assertFalse($selection->hasTag(SelectionTag::EXPLICIT));
-	}
-
-	public function testSqlOnlyFieldSelectionsAreNotReturnedAsColumnSelections(): void
-	{
-		$query = query($this->makeRegistry()->getCollection('users'));
-		$list = new SelectionList();
-
-		$selection = $list->add($query->id, SelectionTag::SQL_ONLY);
-
-		self::assertTrue($selection->hasTag(SelectionTag::SQL_ONLY));
-		self::assertFalse($selection->hasTag(SelectionTag::COLUMN));
-		self::assertSame([], $list->getByTag(SelectionTag::COLUMN));
-	}
-
-	public function testEnsureInternalFieldIsReturnedAsAColumnSelection(): void
-	{
-		$query = query($this->makeRegistry()->getCollection('posts'));
-		$list = new SelectionList();
-
-		$list->ensureInternalField($query->userId);
-
-		self::assertSame(
-			['userId'],
-			array_map(static fn (SelectionItem $selection): string => $selection->getSelectionKey(), $list->getByTag(SelectionTag::COLUMN)),
-		);
-	}
-
-	public function testEnsureInternalExpressionMarksExpressionAsInternalSqlOnly(): void
-	{
-		$query = query($this->makeRegistry()->getCollection('users'));
-		$list = new SelectionList();
-
-		$selection = $list->ensureInternalExpression($query->name->upper(), '__ondata_rank');
-
-		self::assertTrue($selection->hasTag(SelectionTag::SQL_ONLY));
-		self::assertTrue($selection->hasTag(SelectionTag::INTERNAL));
-		self::assertFalse($selection->hasTag(SelectionTag::COLUMN));
-		self::assertFalse($selection->hasTag(SelectionTag::EXPLICIT));
-	}
-
-	public function testEnsureInternalExpressionIsNotReturnedAsAColumnSelection(): void
-	{
-		$query = query($this->makeRegistry()->getCollection('users'));
-		$list = new SelectionList();
-
-		$list->ensureInternalExpression($query->name->upper(), '__ondata_rank');
-
-		self::assertSame([], $list->getByTag(SelectionTag::COLUMN));
+		self::assertTrue($selection->hasTag('custom-tag'));
 	}
 
 	public function testSelectionListTagAddsTagsToExistingSelectionsWithoutDuplicates(): void
@@ -1473,20 +1399,19 @@ final class QueryModelTest extends TestCase
 		$list = new SelectionList();
 
 		$list->add($query->id);
-		$list->tag($query->id, SelectionTag::IDENTITY);
-		$selection = $list->tag('id', SelectionTag::IDENTITY);
+		$list->tag($query->id, 'custom-key');
+		$selection = $list->tag('id', 'custom-key');
 
-		self::assertTrue($selection->hasTag(SelectionTag::COLUMN));
-		self::assertTrue($selection->hasTag(SelectionTag::IDENTITY));
-		self::assertSame([SelectionTag::COLUMN, SelectionTag::IDENTITY], $selection->getTags());
+		self::assertTrue($selection->hasTag('custom-key'));
+		self::assertSame(['custom-key'], $selection->getTags());
 	}
 
-	public function testSelectionListPublicSelectionsFollowPublicTagInsertionOrder(): void
+	public function testSelectionListExplicitSelectionsFollowTagInsertionOrder(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$list = new SelectionList();
 
-		$list->add($query->id, SelectionTag::REQUIRED);
+		$list->add($query->id, 'custom-key');
 		$list->add($query->name, SelectionTag::EXPLICIT);
 		$list->add($query->id, SelectionTag::EXPLICIT);
 
@@ -1496,30 +1421,15 @@ final class QueryModelTest extends TestCase
 		);
 	}
 
-	public function testSelectionListIdentitySelectionsFollowIdentityTagInsertionOrder(): void
-	{
-		$query = query($this->makeRegistry()->getCollection('users'));
-		$list = new SelectionList();
-
-		$list->add($query->name, SelectionTag::REQUIRED);
-		$list->add($query->id, SelectionTag::IDENTITY);
-		$list->add($query->title, SelectionTag::IDENTITY);
-
-		self::assertSame(
-			[$query->id, $query->title],
-			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $list->getByTag(SelectionTag::IDENTITY)),
-		);
-	}
-
 	public function testSelectionListFilterPreservesTagDerivedViews(): void
 	{
 		$query = query($this->makeRegistry()->getCollection('users'));
 		$list = new SelectionList();
 
-		$list->add($query->id, SelectionTag::REQUIRED);
+		$list->add($query->id, 'tag-a');
 		$list->add($query->name, SelectionTag::EXPLICIT);
 		$list->add($query->id, SelectionTag::EXPLICIT);
-		$list->add($query->title, SelectionTag::IDENTITY);
+		$list->add($query->title, 'tag-b');
 
 		$filtered = $list->filter(static fn (SelectionItem $selection): bool => $selection->getExpression() !== $query->name);
 
@@ -1528,12 +1438,8 @@ final class QueryModelTest extends TestCase
 			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $filtered->getByTag(SelectionTag::EXPLICIT)),
 		);
 		self::assertSame(
-			[$query->id, $query->title],
-			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $filtered->getByTag(SelectionTag::COLUMN)),
-		);
-		self::assertSame(
 			[$query->title],
-			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $filtered->getByTag(SelectionTag::IDENTITY)),
+			array_map(static fn (SelectionItem $selection): mixed => $selection->getExpression(), $filtered->getByTag('tag-b')),
 		);
 	}
 
@@ -1551,66 +1457,31 @@ final class QueryModelTest extends TestCase
 		);
 	}
 
-	public function testSelectionListColumnProjectionPreservesTagsWithoutForcingExplicit(): void
+	public function testSelectionListDerivedProjectionPreservesTagsWithoutForcingExplicit(): void
 	{
 		$inner = query($this->makeRegistry()->getCollection('posts'));
 		$inner->getSelections()->add($inner->amount);
-		$inner->getSelections()->add($inner->userId, SelectionTag::REQUIRED);
-		$inner->getSelections()->add($inner->id, SelectionTag::RELATION);
+		$inner->getSelections()->add($inner->userId, 'tag-a');
+		$inner->getSelections()->add($inner->id, 'tag-b');
 		$inner->getSelections()->removeByTag(SelectionTag::DEFAULT);
 		$ranked = $inner->as('ranked_posts');
 		$outer = query($ranked);
 
 		$outer->getSelections()->merge(
-			$inner->getSelections()
-				->filterByTag(SelectionTag::COLUMN)
-				->projectDerivedTo($ranked, $outer),
+			$inner->getSelections()->projectDerivedTo($ranked, $outer),
 		);
 
-		$columnSelections = array_values(array_filter(
-			$outer->getSelections()->getByTag(SelectionTag::COLUMN),
+		$projected = array_values(array_filter(
+			$outer->getSelections()->getAll(),
 			static fn (SelectionItem $item): bool => ! $item->getExpression() instanceof StarExpression,
 		));
 
-		self::assertCount(3, $columnSelections);
-		foreach ($columnSelections as $item) {
-			self::assertFalse($item->isExplicit(), 'Projected column selections must stay implicit.');
-			self::assertTrue($item->hasTag(SelectionTag::COLUMN));
+		self::assertCount(3, $projected);
+		foreach ($projected as $item) {
+			self::assertFalse($item->isExplicit(), 'Projected selections must stay non-explicit.');
 		}
 
-		self::assertTrue($columnSelections[2]->hasTag(SelectionTag::RELATION));
-	}
-
-	public function testSelectionListColumnProjectionExcludesSqlOnlyFields(): void
-	{
-		$inner = query($this->makeRegistry()->getCollection('posts'));
-		$rank = x()->fn()->rowNumber()->over(
-			partitionBy: $inner->userId,
-			orderBy: $inner->id->asc(),
-		);
-		$inner->getSelections()->add($inner->amount);
-		$inner->getSelections()->ensureInternalExpression($rank, '__ondata_rank');
-		$inner->getSelections()->removeByTag(SelectionTag::DEFAULT);
-		$ranked = $inner->as('ranked_posts');
-		$outer = query($ranked);
-
-		$outer->getSelections()->merge(
-			$inner->getSelections()
-				->filterByTag(SelectionTag::COLUMN)
-				->projectDerivedTo($ranked, $outer),
-		);
-
-		self::assertSame(
-			['amount'],
-			array_map(
-				static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-				array_values(array_filter(
-					$outer->getSelections()->getByTag(SelectionTag::COLUMN),
-					static fn (SelectionItem $item): bool => ! $item->getExpression() instanceof StarExpression,
-				)),
-			),
-		);
-		self::assertFalse($outer->getSelections()->hasSelectionKey('__ondata_rank'));
+		self::assertTrue($projected[2]->hasTag('tag-b'));
 	}
 
 	public function testSelectionListFilterByTagReturnsMatchingSelections(): void
@@ -1619,13 +1490,13 @@ final class QueryModelTest extends TestCase
 		$list = new SelectionList();
 
 		$list->add($query->name, SelectionTag::EXPLICIT);
-		$list->ensureInternalExpression($query->name->upper(), '__ondata_rank');
+		$list->add($query->name->upper()->as('__ondata_rank'), 'rank');
 
 		self::assertSame(
 			['__ondata_rank'],
 			array_map(
 				static fn (SelectionItem $selection): string => $selection->getSelectionKey(),
-				$list->filterByTag(SelectionTag::SQL_ONLY)->getAll(),
+				$list->filterByTag('rank')->getAll(),
 			),
 		);
 	}
@@ -1674,7 +1545,7 @@ final class QueryModelTest extends TestCase
 		self::assertCount(2, $selections);
 		self::assertCount(1, $required);
 		self::assertFalse($required[0]->isExplicit());
-		self::assertSame(['relation-key', SelectionTag::COLUMN, 'result-grouping-key'], $required[0]->getTags());
+		self::assertSame(['relation-key', 'result-grouping-key'], $required[0]->getTags());
 	}
 
 	public function testRequireAfterSelectAnnotatesTheExistingExplicitEntry(): void
@@ -1697,7 +1568,7 @@ final class QueryModelTest extends TestCase
 		$selections = $query->getSelections()->getAll();
 		self::assertCount(1, $selections);
 		self::assertTrue($selections[0]->isExplicit());
-		self::assertSame(['relation-key', SelectionTag::COLUMN, SelectionTag::EXPLICIT], $selections[0]->getTags());
+		self::assertSame(['relation-key', SelectionTag::EXPLICIT], $selections[0]->getTags());
 
 		$query->select($query->id);
 		$selections = $query->getSelections()->getAll();

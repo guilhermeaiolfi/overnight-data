@@ -41,6 +41,7 @@ Git tags use the `vMAJOR.MINOR.PATCH` form (for example `v1.1.1`) so releases ar
 
 Notable recent breaks worth checking explicitly:
 
+- Custom relation loaders register deferred work from `load()` with `$runtime->continueWith($branch, $this->loadData(...))`. Replace string method names and chained continuations with one callback that calls each step directly. The runtime calls it after the parent rows are parsed and before loading descendants. Joined loaders can opt in through the same API.
 - `ON\Data\ORM\Persistence\RecordFlusher` was removed. Normal persistence uses `Session::flush()`. For low-level callers, replace `flush($records)` with `FlushScheduler::run($records)->getCommandResults()` and `flushDeferred($records)` with `FlushScheduler::run($records, [], true)`. The scheduler does not add synchronization, relation planning, or transaction handling.
 - `Session::flush()` now applies staged `update()` / `create()` intents, including schema overlays, without requiring an explicit `sync()` first. Calls that previously staged writes and then flushed without writing now persist them. `sync()` without an object also consumes staged intents. Unresolved intents fail instead of being ignored.
 - `Session::flush()` / `FlushExecutor` require `TransactionalCommandExecutorInterface`. Plain `CommandExecutorInterface` implementations are rejected with `NonTransactionalFlushException`.

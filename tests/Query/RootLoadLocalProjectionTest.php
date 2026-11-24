@@ -8,6 +8,7 @@ use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
+use Tests\ON\Data\Support\StubQueryRowProjector;
 
 /**
  * Without relation loads, LoadRuntime still assembles when output names differ
@@ -22,7 +23,7 @@ final class RootLoadLocalProjectionTest extends TestCase
 			$this->makeRegistry()->getCollection('users'),
 			new RootLoadLocalExecutor([
 				'id' => 1,
-				'displayName' => 'Ada',
+				'name' => 'Ada',
 			]),
 		);
 		$query->select($query->id, $query->name->as('displayName'));
@@ -39,7 +40,8 @@ final class RootLoadLocalProjectionTest extends TestCase
 			$this->makeRegistry()->getCollection('users'),
 			new RootLoadLocalExecutor([
 				'id' => 1,
-				'companyName' => 'Acme',
+				'company.name' => 'Acme',
+				'company.id' => 5,
 			]),
 		);
 		$query->select($query->id, $query->company->name->as('companyName'));
@@ -86,16 +88,16 @@ final class RootLoadLocalExecutor implements QueryExecutorInterface
 
 	public function fetchAll(SelectQuery $query): array
 	{
-		return [$this->row];
+		return [StubQueryRowProjector::project($query, $this->row)];
 	}
 
 	public function fetchOne(SelectQuery $query): ?array
 	{
-		return $this->row;
+		return StubQueryRowProjector::project($query, $this->row);
 	}
 
 	public function iterate(SelectQuery $query): iterable
 	{
-		yield $this->row;
+		yield StubQueryRowProjector::project($query, $this->row);
 	}
 }

@@ -16,6 +16,7 @@ use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
+use Tests\ON\Data\Support\StubQueryRowProjector;
 
 final class WritableQueryExportPersistenceTest extends TestCase
 {
@@ -217,8 +218,8 @@ final class UserWithPostsQueryExecutor implements QueryExecutorInterface
 	public function fetchAll(SelectQuery $query): array
 	{
 		return match ($query->getCollection()->getName()) {
-			'users' => [['id' => 1, 'name' => 'Ada']],
-			'posts' => [['id' => 10, 'title' => 'Hello', 'user_id' => 1]],
+			'users' => [StubQueryRowProjector::project($query, ['id' => 1, 'name' => 'Ada'])],
+			'posts' => [StubQueryRowProjector::project($query, ['id' => 10, 'title' => 'Hello', 'user_id' => 1])],
 			default => [],
 		};
 	}
@@ -229,7 +230,7 @@ final class UserWithPostsQueryExecutor implements QueryExecutorInterface
 			return null;
 		}
 
-		return ['id' => 1, 'name' => 'Ada'];
+		return StubQueryRowProjector::project($query, ['id' => 1, 'name' => 'Ada']);
 	}
 
 	public function iterate(SelectQuery $query): iterable
@@ -243,11 +244,11 @@ final class UserWithTwoPostsQueryExecutor implements QueryExecutorInterface
 	public function fetchAll(SelectQuery $query): array
 	{
 		return match ($query->getCollection()->getName()) {
-			'users' => [['id' => 1, 'name' => 'Ada']],
-			'posts' => [
+			'users' => [StubQueryRowProjector::project($query, ['id' => 1, 'name' => 'Ada'])],
+			'posts' => StubQueryRowProjector::projectAll($query, [
 				['id' => 10, 'title' => 'Hello', 'user_id' => 1],
 				['id' => 11, 'title' => 'World', 'user_id' => 1],
-			],
+			]),
 			default => [],
 		};
 	}
@@ -258,7 +259,7 @@ final class UserWithTwoPostsQueryExecutor implements QueryExecutorInterface
 			return null;
 		}
 
-		return ['id' => 1, 'name' => 'Ada'];
+		return StubQueryRowProjector::project($query, ['id' => 1, 'name' => 'Ada']);
 	}
 
 	public function iterate(SelectQuery $query): iterable
@@ -272,7 +273,7 @@ final class UserWithEmptyPostsQueryExecutor implements QueryExecutorInterface
 	public function fetchAll(SelectQuery $query): array
 	{
 		return match ($query->getCollection()->getName()) {
-			'users' => [['id' => 1, 'name' => 'Ada']],
+			'users' => [StubQueryRowProjector::project($query, ['id' => 1, 'name' => 'Ada'])],
 			'posts' => [],
 			default => [],
 		};
@@ -284,7 +285,7 @@ final class UserWithEmptyPostsQueryExecutor implements QueryExecutorInterface
 			return null;
 		}
 
-		return ['id' => 1, 'name' => 'Ada'];
+		return StubQueryRowProjector::project($query, ['id' => 1, 'name' => 'Ada']);
 	}
 
 	public function iterate(SelectQuery $query): iterable

@@ -7,11 +7,14 @@ namespace Tests\ON\Data\Query;
 use LogicException;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
+use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Relation\Loader\BelongsToLoader;
 use ON\Data\Query\Relation\Loader\HasManyLoader;
+use ON\Data\Query\Relation\Loader\HasOneLoader;
 use ON\Data\Query\SelectQuery;
 use function ON\Data\Query\x;
 use PHPUnit\Framework\TestCase;
+use Tests\ON\Data\Support\StubQueryRowProjector;
 
 final class NestedFlatProjectionLoadTest extends TestCase
 {
@@ -64,7 +67,7 @@ final class NestedFlatProjectionLoadTest extends TestCase
 		self::assertSame('Ana', $post['authorName']);
 	}
 
-	public function testJoinedPostsSelectCanFlatProjectAuthorNameOntoPostRows(): void
+	public function testJoinedHasOneSelectCanFlatProjectAuthorNameOntoPostRows(): void
 	{
 		$executor = new NestedJoinedFlatProjectionExecutor();
 		$users = new SelectQuery(
@@ -73,11 +76,11 @@ final class NestedFlatProjectionLoadTest extends TestCase
 		);
 
 		$users->select($users->id, $users->name);
-		$users->posts
+		$users->featuredPost
 			->select(
-				$users->posts->id,
-				$users->posts->title->as('headline'),
-				$users->posts->author->name->as('authorName'),
+				$users->featuredPost->id,
+				$users->featuredPost->title->as('headline'),
+				$users->featuredPost->author->name->as('authorName'),
 			)
 			->join();
 
@@ -86,13 +89,29 @@ final class NestedFlatProjectionLoadTest extends TestCase
 		self::assertSame([[
 			'id' => 1,
 			'name' => 'Ada',
-			'posts' => [[
+			'featuredPost' => [
 				'id' => 10,
 				'headline' => 'Hello',
 				'authorName' => 'Ana',
-			]],
+			],
 		]], $rows);
-		self::assertArrayNotHasKey('author', $rows[0]['posts'][0]);
+		self::assertArrayNotHasKey('author', $rows[0]['featuredPost']);
+	}
+
+	public function testHasManyJoinedLoadingIsRejected(): void
+	{
+		$users = new SelectQuery(
+			$this->makeRegistry()->getCollection('users'),
+			new NestedJoinedFlatProjectionExecutor(),
+		);
+
+		$users->select($users->id, $users->name);
+		$users->posts->select($users->posts->id)->join();
+
+		$this->expectException(RelationLoaderException::class);
+		$this->expectExceptionMessage('Joined relation loading is not implemented');
+
+		$users->fetchAll();
 	}
 
 	public function testSeparatePostsSelectCanProjectNestedExpressionOntoPostRows(): void
@@ -122,7 +141,7 @@ final class NestedFlatProjectionLoadTest extends TestCase
 		]], $users->fetchAll());
 	}
 
-	public function testJoinedPostsSelectCanProjectNestedExpressionOntoPostRows(): void
+	public function testJoinedHasOneSelectCanProjectNestedExpressionOntoPostRows(): void
 	{
 		$users = new SelectQuery(
 			$this->makeRegistry()->getCollection('users'),
@@ -130,10 +149,10 @@ final class NestedFlatProjectionLoadTest extends TestCase
 		);
 
 		$users->select($users->id, $users->name);
-		$users->posts
+		$users->featuredPost
 			->select(
-				$users->posts->id,
-				$users->posts->title->as('headline'),
+				$users->featuredPost->id,
+				$users->featuredPost->title->as('headline'),
 				x()->literal(1)->as('one'),
 			)
 			->join();
@@ -141,11 +160,11 @@ final class NestedFlatProjectionLoadTest extends TestCase
 		self::assertSame([[
 			'id' => 1,
 			'name' => 'Ada',
-			'posts' => [[
+			'featuredPost' => [
 				'id' => 10,
 				'headline' => 'Hello',
 				'one' => 1,
-			]],
+			],
 		]], $users->fetchAll());
 	}
 
@@ -219,8 +238,9 @@ final class NestedFlatProjectionLoadTest extends TestCase
 				continue;
 			}
 
-			self::assertFalse(
-				$query->getSelections()->hasSelectionKey('authorName'),
+			self::assertSame(
+				[],
+				$query->getJoins(),
 				'Flat must not JOIN author onto posts when an author destination exists',
 			);
 		}
@@ -275,6 +295,11 @@ final class NestedFlatProjectionLoadTest extends TestCase
 			->outerKey('userId')
 			->loader(HasManyLoader::class)
 			->end();
+		$users->hasOne('featuredPost', 'posts')
+			->innerKey('id')
+			->outerKey('userId')
+			->loader(HasOneLoader::class)
+			->end();
 
 		return $registry;
 	}
@@ -285,22 +310,22 @@ final class NestedFlatProjectionExecutor implements QueryExecutorInterface
 	public function fetchAll(SelectQuery $query): array
 	{
 		return match ($query->getCollection()->getName()) {
-			'users' => [[
+			'users' => [StubQueryRowProjector::project($query, [
 				'id' => 1,
 				'name' => 'Ada',
-			]],
-			'posts' => [[
+			])],
+			'posts' => [StubQueryRowProjector::project($query, [
 				'id' => 10,
 				'userId' => 1,
 				'authorId' => 7,
-				'headline' => 'Hello',
-				'authorName' => 'Ana',
-				'one' => 1,
-			]],
-			'authors' => [[
+				'title' => 'Hello',
+				'author.id' => 7,
+				'author.name' => 'Ana',
+			])],
+			'authors' => [StubQueryRowProjector::project($query, [
 				'id' => 7,
 				'name' => 'Ana',
-			]],
+			])],
 			default => [],
 		};
 	}
@@ -319,7 +344,7 @@ final class NestedFlatProjectionExecutor implements QueryExecutorInterface
 }
 
 /**
- * Single-query JOIN shape: root + joined posts columns (+ flat author) in one row.
+ * Single-query JOIN shape: root + joined featuredPost columns (+ flat author) in one row.
  */
 final class NestedJoinedFlatProjectionExecutor implements QueryExecutorInterface
 {
@@ -329,15 +354,15 @@ final class NestedJoinedFlatProjectionExecutor implements QueryExecutorInterface
 			throw new LogicException('Joined flat fixture only serves the root users query.');
 		}
 
-		return [[
+		return [StubQueryRowProjector::project($query, [
 			'id' => 1,
 			'name' => 'Ada',
-			'posts.id' => 10,
-			'posts.userId' => 1,
-			'posts.headline' => 'Hello',
-			'posts.authorName' => 'Ana',
-			'posts.one' => 1,
-		]];
+			'featuredPost.id' => 10,
+			'featuredPost.userId' => 1,
+			'featuredPost.title' => 'Hello',
+			'featuredPost.author.id' => 7,
+			'featuredPost.author.name' => 'Ana',
+		])];
 	}
 
 	public function fetchOne(SelectQuery $query): ?array
@@ -354,7 +379,7 @@ final class NestedJoinedFlatProjectionExecutor implements QueryExecutorInterface
 }
 
 /**
- * Posts rows intentionally omit a flat authorName column — reuse must read name from the author destination.
+ * Posts rows intentionally omit a flat author.name column — reuse must read name from the author destination.
  */
 final class NestedFlatReuseExecutor implements QueryExecutorInterface
 {
@@ -366,20 +391,20 @@ final class NestedFlatReuseExecutor implements QueryExecutorInterface
 		$this->queries[] = $query;
 
 		return match ($query->getCollection()->getName()) {
-			'users' => [[
+			'users' => [StubQueryRowProjector::project($query, [
 				'id' => 1,
 				'name' => 'Ada',
-			]],
-			'posts' => [[
+			])],
+			'posts' => [StubQueryRowProjector::project($query, [
 				'id' => 10,
 				'userId' => 1,
 				'authorId' => 7,
 				'title' => 'Hello',
-			]],
-			'authors' => [[
+			])],
+			'authors' => [StubQueryRowProjector::project($query, [
 				'id' => 7,
 				'name' => 'Ana',
-			]],
+			])],
 			default => [],
 		};
 	}

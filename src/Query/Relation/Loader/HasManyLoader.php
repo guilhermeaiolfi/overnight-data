@@ -40,30 +40,23 @@ final class HasManyLoader extends AbstractLoader
 		$definition = $relationRef->getDefinition();
 		$parentToChild = $definition->getKeyPairing();
 		$parentBranch = $branch->getParent();
-		$strategy = $runtime->getLoadStrategy($branch);
-		$branch->setJoinedAttachment($strategy === LoadStrategy::JOIN);
 
-		if ($strategy === LoadStrategy::JOIN) {
+		if ($runtime->getLoadStrategy($branch) === LoadStrategy::JOIN) {
 			if ($this->usesLimitOffset($branch)) {
 				throw RelationLoaderException::hasManyLimitOffsetJoinNotSupported($relationRef);
 			}
 
-			$this->assertNoJoinedSelectionOptions($branch);
-			$queryRelation = $runtime->getQueryRelation($branch);
-			$source = $this->join($queryRelation);
-			$runtime->setQueryContext($branch, $queryRelation->getQuery(), $source, $queryRelation);
-		} else {
-			$query = $runtime->createQuery($relationRef->getCollection());
-			$runtime->setQueryContext($branch, $query, $query);
+			throw RelationLoaderException::joinedLoadingNotImplemented($relationRef);
 		}
+
+		$branch->setJoinedAttachment(false);
+		$query = $runtime->createQuery($relationRef->getCollection());
+		$runtime->setQueryContext($branch, $query, $query);
 
 		$branch->requireFields($relationRef->getCollection()->getPrimaryKey());
 		$branch->requireFields($parentToChild->getRightFields());
 		$parentBranch->requireFields($parentToChild->getLeftFields());
-
-		if ($strategy !== LoadStrategy::JOIN) {
-			$runtime->continueWith($branch, 'loadData');
-		}
+		$runtime->continueWith($branch, $this->loadData(...));
 	}
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void

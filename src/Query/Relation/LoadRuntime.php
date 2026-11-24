@@ -4,15 +4,21 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
+use Closure;
+use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationSelectionException;
+use ON\Data\Query\Expression\AliasedExpression;
+use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\SourceFieldExpression;
+use ON\Data\Query\Expression\StarExpression;
+use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Schema\RepresentationSchema;
-use ReflectionMethod;
 
 final class LoadRuntime
 {
@@ -21,30 +27,14 @@ final class LoadRuntime
 	 */
 	private array $branches = [];
 
-	private ?string $activeMethod = null;
-
-	private bool $registering = false;
-
-	private bool $continuationRequested = false;
-
-	private ?SelectQuery $currentContinuationQuery = null;
-
-	/**
-	 * @var array<int, SelectQuery>
-	 */
-	private array $pendingContinuationQueries = [];
-
-	private int $loaderInvocationDepth = 0;
-
-	private bool $flushingPendingContinuations = false;
+	/** @var array<int, Closure(RelationLoadBranch, LoadRuntime): void> */
+	private array $continuations = [];
 
 	private RootLoadBranch $rootBranch;
 
 	private RelationOutputProcessor $outputProcessor;
 
-	private LoadAliasAllocator $aliases;
-
-	private ?LoadFieldPlanner $fieldPlanner = null;
+	private ColumnIndex $columns;
 
 	/**
 	 * Same-level identity overlays from the last assemble, or null on the fast path.
@@ -60,15 +50,13 @@ final class LoadRuntime
 	) {
 		$this->rootBranch = new RootLoadBranch($rootQuery);
 		$this->outputProcessor = new RelationOutputProcessor($schema);
-		$this->aliases = new LoadAliasAllocator();
+		$this->columns = new ColumnIndex();
 	}
 
 	public function fetchAll(): array
 	{
 		$this->identityRows = null;
 
-		// Plain own-field reads: executor already returns schema paths.
-		// Renames, flats, and INTERNAL/SQL_ONLY remaps need assemble.
 		if (! $this->rootQuery->needsRowAssemble()) {
 			return $this->executor->fetchAll($this->rootQuery);
 		}
@@ -83,7 +71,7 @@ final class LoadRuntime
 		}
 
 		$this->rootBranch->parseRows($rows);
-		$this->runContinuationsFor($this->rootQuery);
+		$this->loadChildBranches($this->rootBranch);
 
 		return $this->storeAssembledRows($this->outputProcessor->processRoot($this->rootBranch));
 	}
@@ -112,7 +100,7 @@ final class LoadRuntime
 		}
 
 		$this->rootBranch->parseRows($this->rowsForFirstRoot($row));
-		$this->runContinuationsFor($this->rootQuery);
+		$this->loadChildBranches($this->rootBranch);
 
 		$public = $this->storeAssembledRows($this->outputProcessor->processRoot($this->rootBranch));
 
@@ -156,16 +144,9 @@ final class LoadRuntime
 		return $this->identityRows;
 	}
 
-	/**
-	 * @param array{0: list<array<string, mixed>>, 1: list<array<string, mixed>>} $assembled
-	 * @return list<array<string, mixed>>
-	 */
-	private function storeAssembledRows(array $assembled): array
+	public function getColumnIndex(): ColumnIndex
 	{
-		[$public, $identity] = $assembled;
-		$this->identityRows = $identity;
-
-		return $public;
+		return $this->columns;
 	}
 
 	/**
@@ -207,22 +188,33 @@ final class LoadRuntime
 		$branch->setQueryContext($query, $source, $queryLocalRelation);
 	}
 
-	public function continueWith(RelationLoadBranch $branch, string $method = 'load'): void
+	public function selectAuxiliaryColumn(
+		RelationLoadBranch $branch,
+		ValueExpressionInterface $expression,
+		ColumnRole $role = ColumnRole::JoinKey,
+	): string {
+		return $this->columns->allocateAuxiliary($branch->getQuery(), $branch, $expression, $role);
+	}
+
+	/**
+	 * Register deferred work during loader setup. It runs after the parent rows
+	 * are parsed and before this branch's descendants load.
+	 *
+	 * @param Closure(RelationLoadBranch, LoadRuntime): void $load
+	 */
+	public function continueWith(RelationLoadBranch $branch, Closure $load): void
 	{
-		if ($this->registering) {
-			throw LoadRuntimeException::continuationNotAllowedDuringRegister($branch->getRelationRef());
+		$key = RelationSelection::pathKey($branch->getRelationRef()->getPath());
+		if ($this->rootBranch->hasNode() || ($this->branches[$key] ?? null) !== $branch) {
+			throw new LoadRuntimeException('Deferred loader work must be registered during branch setup.');
 		}
 
-		if ($this->continuationRequested) {
-			throw LoadRuntimeException::multipleContinuations($branch->getRelationRef(), $this->activeMethod ?? 'load');
+		$id = spl_object_id($branch);
+		if (isset($this->continuations[$id])) {
+			throw new LoadRuntimeException(sprintf("Deferred loader work already exists for relation '%s'.", $key));
 		}
 
-		$this->assertContinuableMethod($branch, $method);
-		$branch->setContinuation(
-			$method,
-			$this->currentContinuationQuery ?? throw LoadRuntimeException::continuationQueryMissing($branch->getRelationRef()),
-		);
-		$this->continuationRequested = true;
+		$this->continuations[$id] = $load;
 	}
 
 	public function execute(RelationLoadBranch $branch, SelectQuery $query): void
@@ -232,10 +224,6 @@ final class LoadRuntime
 		foreach ($rows as $row) {
 			$branch->getNode()->parseRow($row);
 		}
-
-		$continuationQuery = $branch->getQuery();
-		$this->currentContinuationQuery = $continuationQuery;
-		$this->pendingContinuationQueries[spl_object_id($continuationQuery)] = $continuationQuery;
 	}
 
 	public function getLoadStrategy(RelationLoadBranch $branch): LoadStrategy
@@ -244,36 +232,46 @@ final class LoadRuntime
 			?? $branch->getLoader()->getDefaultLoadStrategy();
 	}
 
+	public function registerBranch(RelationLoadBranch $branch): AbstractNode
+	{
+		$node = $branch->getLoader()->register($branch, $this);
+
+		if (! $node instanceof AbstractNode) {
+			throw LoadRuntimeException::nodeNotRegistered($branch->getRelationRef());
+		}
+
+		$branch->setNode($node);
+
+		return $node;
+	}
+
+	/**
+	 * @param array{0: list<array<string, mixed>>, 1: list<array<string, mixed>>} $assembled
+	 * @return list<array<string, mixed>>
+	 */
+	private function storeAssembledRows(array $assembled): array
+	{
+		[$public, $identity] = $assembled;
+		$this->identityRows = $identity;
+
+		return $public;
+	}
+
 	private function prepare(): void
 	{
 		if ($this->rootBranch->hasNode()) {
 			return;
 		}
 
-		$this->rootBranch->registerPublicSelections();
+		$schema = $this->schema ?? throw LoadRuntimeException::schemaMissing();
+
+		$this->assertUniqueRootSelectionNames();
 		$this->rootBranch->requirePrimaryKey();
 		$this->createBranches();
 		$this->configureBranches();
-		$this->planScalars();
+		$this->planColumns($schema);
 		$this->createParserTree();
-	}
-
-	private function planScalars(): void
-	{
-		$planner = $this->fieldPlanner();
-		$planner->bindBranch($this->rootBranch);
-
-		foreach ($this->relationBranchesByDepth() as $branch) {
-			$planner->bindBranch($branch);
-		}
-	}
-
-	private function fieldPlanner(): LoadFieldPlanner
-	{
-		return $this->fieldPlanner ??= new LoadFieldPlanner(
-			$this->aliases,
-			$this->schema ?? throw LoadRuntimeException::schemaMissing(),
-		);
+		$this->columns->applyToQueries();
 	}
 
 	private function createBranches(): void
@@ -291,12 +289,35 @@ final class LoadRuntime
 	private function configureBranches(): void
 	{
 		foreach ($this->relationBranchesByDepth() as $branch) {
-			$query = $branch->getParent()->getQuery();
-			$this->invokeLoaderMethod($branch, 'load', $query);
+			$branch->getLoader()->load($branch, $this);
 
-			if ($branch->getQuery()->getCollection()->getName() === '') {
+			if (! $branch->hasQuery() || $branch->getQuery()->getCollection()->getName() === '') {
 				throw LoadRuntimeException::queryNotConfigured($branch->getRelationRef());
 			}
+		}
+	}
+
+	private function planColumns(RepresentationSchema $rootSchema): void
+	{
+		$this->columns->planBranch($this->rootBranch, $rootSchema);
+
+		$relationBranches = $this->relationBranchesByDepth();
+
+		foreach ($relationBranches as $branch) {
+			$path = $branch->getRelationRef()->getPath();
+			$nodeSchema = $rootSchema->findRelatedSchemaAt($path);
+
+			if (! $nodeSchema instanceof RepresentationSchema) {
+				throw LoadRuntimeException::schemaNodeMissing($path);
+			}
+
+			$this->columns->planBranch($branch, $nodeSchema);
+		}
+
+		$this->columns->planRequiredFields($this->rootBranch);
+
+		foreach ($relationBranches as $branch) {
+			$this->columns->planRequiredFields($branch);
 		}
 	}
 
@@ -335,130 +356,54 @@ final class LoadRuntime
 		}
 	}
 
-	public function registerBranch(RelationLoadBranch $branch): AbstractNode
+	private function loadChildBranches(LoadBranch $parent): void
 	{
-		$previousMethod = $this->activeMethod;
-		$previousRegistering = $this->registering;
-		$this->activeMethod = 'register';
-		$this->registering = true;
-
-		try {
-			$node = $branch->getLoader()->register($branch, $this);
-		} finally {
-			$this->registering = $previousRegistering;
-			$this->activeMethod = $previousMethod;
-		}
-
-		if (! $node instanceof AbstractNode) {
-			throw LoadRuntimeException::nodeNotRegistered($branch->getRelationRef());
-		}
-
-		$branch->setNode($node);
-
-		return $node;
-	}
-
-	private function invokeLoaderMethod(RelationLoadBranch $branch, string $method, SelectQuery $query): void
-	{
-		$loader = $branch->getLoader();
-		$previousMethod = $this->activeMethod;
-		$previousContinuationRequested = $this->continuationRequested;
-		$previousCurrentContinuationQuery = $this->currentContinuationQuery;
-		$this->activeMethod = $method;
-		$this->continuationRequested = false;
-		$this->currentContinuationQuery = $query;
-		$this->loaderInvocationDepth++;
-		$branch->clearContinuation();
-
-		try {
-			$loader->{$method}($branch, $this);
-		} finally {
-			$this->loaderInvocationDepth--;
-			$this->activeMethod = $previousMethod;
-			$this->continuationRequested = $previousContinuationRequested;
-			$this->currentContinuationQuery = $previousCurrentContinuationQuery;
-		}
-
-		if ($this->loaderInvocationDepth === 0) {
-			$this->runPendingContinuations();
-		}
-	}
-
-	private function runContinuationsFor(SelectQuery $query): void
-	{
-		do {
-			$ran = false;
-
-			foreach ($this->branches as $branch) {
-				if ($branch->getContinuationQuery() !== $query) {
-					continue;
-				}
-
-				$method = $branch->getContinuationMethod();
-
-				if ($method === null) {
-					continue;
-				}
-
-				$branch->clearContinuation();
-				$this->invokeLoaderMethod($branch, $method, $query);
-				$ran = true;
+		foreach ($parent->getChildren() as $child) {
+			$load = $this->continuations[spl_object_id($child)] ?? null;
+			if ($load !== null) {
+				$load($child, $this);
 			}
-		} while ($ran);
+
+			$this->loadChildBranches($child);
+		}
 	}
 
-	private function runPendingContinuations(): void
+	private function assertUniqueRootSelectionNames(): void
 	{
-		if ($this->flushingPendingContinuations) {
-			return;
-		}
+		$usedNames = [];
 
-		$this->flushingPendingContinuations = true;
+		foreach ($this->rootQuery->getSelections()->getExplicit() as $selection) {
+			$expression = $selection->getExpression();
+			$inner = $expression instanceof AliasedExpression
+				? $expression->getExpression()
+				: $expression;
 
-		try {
-			while ($this->pendingContinuationQueries !== []) {
-				$key = array_key_first($this->pendingContinuationQueries);
+			if ($inner instanceof StarExpression) {
+				$source = $inner->getSource();
+				$names = $source instanceof SelectQuery && ! $source->isDerivedSource()
+					? $source->getCollection()->getVisibleFields()
+					: [];
+			} elseif ($expression instanceof AliasedExpression) {
+				$names = [$expression->getAlias()];
+			} elseif ($inner instanceof FieldRef) {
+				$path = $inner->getPath();
+				$names = [count($path) === 1 ? $selection->getSelectionKey() : implode('.', $path)];
+			} elseif ($inner instanceof SourceFieldExpression) {
+				$names = [$inner->getName()];
+			} else {
+				continue;
+			}
 
-				if ($key === null) {
-					break;
+			foreach ($names as $name) {
+				if (isset($usedNames[$name])) {
+					throw UnsupportedQueryException::forQuery($this->rootQuery, sprintf(
+						"duplicate root result name '%s' is not supported",
+						$name,
+					));
 				}
 
-				$query = $this->pendingContinuationQueries[$key];
-				unset($this->pendingContinuationQueries[$key]);
-				$this->runContinuationsFor($query);
+				$usedNames[$name] = true;
 			}
-		} finally {
-			$this->flushingPendingContinuations = false;
-		}
-	}
-
-	/**
-	 * Column alias for fields mounted onto a shared JOIN query.
-	 * Unique per relation path + field; callers reuse the same name on re-require.
-	 *
-	 * @param list<string> $path
-	 */
-	public function getJoinedAlias(array $path, string $fieldName): string
-	{
-		return $this->aliases->aliasForPath($path, $fieldName);
-	}
-
-	private function assertContinuableMethod(RelationLoadBranch $branch, string $method): void
-	{
-		$loader = $branch->getLoader();
-
-		if ($method === 'register' || $method === 'join') {
-			throw LoadRuntimeException::invalidContinuationMethod($branch->getRelationRef(), $method);
-		}
-
-		if (! method_exists($loader, $method)) {
-			throw LoadRuntimeException::invalidContinuationMethod($branch->getRelationRef(), $method);
-		}
-
-		$reflection = new ReflectionMethod($loader, $method);
-
-		if (! $reflection->isPublic() || $reflection->getNumberOfParameters() !== 2) {
-			throw LoadRuntimeException::invalidContinuationMethod($branch->getRelationRef(), $method);
 		}
 	}
 }

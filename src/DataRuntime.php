@@ -9,6 +9,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\Query\DerivedSelectQuery;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Schema\RepresentationSchema;
 
 final class DataRuntime
 {
@@ -18,8 +19,12 @@ final class DataRuntime
 	) {
 	}
 
-	public function query(CollectionInterface|DerivedSelectQuery $source): SelectQuery
+	public function query(CollectionInterface|DerivedSelectQuery|RepresentationSchema $source): SelectQuery
 	{
+		if ($source instanceof RepresentationSchema) {
+			return SelectQuery::fromSchema($source, $this->queryExecutor);
+		}
+
 		return new SelectQuery($source, $this->queryExecutor);
 	}
 

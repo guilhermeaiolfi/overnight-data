@@ -222,7 +222,7 @@ abstract class AbstractLoader implements LoaderInterface
 	}
 
 	/**
-	 * Run a separate-query continuation in parent-key chunks (default 100), like Doctrine eager batching.
+	 * Run separate queries in parent-key chunks (default 100).
 	 *
 	 * Callers should apply template options (where/orderBy) on {@see RelationLoadBranch::getQuery()}
 	 * before calling. Each chunk replaces {@see ConditionTag::CORRELATION} on the condition list.

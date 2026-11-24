@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation\Loader;
 
+use ON\Data\Query\DerivedOutputColumns;
 use ON\Data\Query\DerivedSelectQuery;
+use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\SourceFieldExpression;
-use ON\Data\Query\Expression\StarExpression;
 use function ON\Data\Query\query;
-use ON\Data\Query\Selection\SelectionItem;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
@@ -25,9 +25,13 @@ final class PartitionedRelationQuery
 {
 	public const RANK_ALIAS = '__ondata_rank';
 
+	/**
+	 * @param array<string, string> $partitionAliases field name => derived column alias
+	 */
 	private function __construct(
 		private readonly SelectQuery $query,
 		private readonly DerivedSelectQuery $ranked,
+		private readonly array $partitionAliases,
 	) {
 	}
 
@@ -42,43 +46,50 @@ final class PartitionedRelationQuery
 		string $derivedAlias,
 	): self {
 		$inner = $childQuery->copy();
-		$partitionBy = [];
-
-		foreach ($partitionFieldNames as $fieldName) {
-			$partitionBy[] = $inner->field($fieldName);
-		}
-
-		// Keeping the default star alongside projected columns makes MySQL reject
-		// the derived table (Duplicate column name).
 		$inner->getSelections()->removeByTag(SelectionTag::DEFAULT);
+		$carryAliases = DerivedOutputColumns::names($inner);
+
+		$partitionBy = [];
+		$partitionAliases = [];
 
 		foreach ($partitionFieldNames as $fieldName) {
-			$inner->getSelections()->ensureInternalField($inner->field($fieldName));
+			$field = $inner->field($fieldName);
+			$partitionBy[] = $field;
+			$existingAlias = self::findOwnFieldAlias($inner, $fieldName);
+
+			if ($existingAlias !== null) {
+				$partitionAliases[$fieldName] = $existingAlias;
+
+				continue;
+			}
+
+			$partAlias = '__ondata_part_' . $fieldName;
+			$inner->getSelections()->addExplicit([$field->as($partAlias)]);
+			$partitionAliases[$fieldName] = $partAlias;
 		}
 
-		$inner->getSelections()->ensureInternalExpression(
+		$inner->getSelections()->addExplicit([
 			x()->fn()->rowNumber()->over(
 				partitionBy: $partitionBy,
 				orderBy: array_map(
 					static fn (Sort $sort): Sort => $sort->rebind(SourceMap::of($childQuery, $inner)),
 					$orderBy,
 				),
-			),
-			self::RANK_ALIAS,
-		);
+			)->as(self::RANK_ALIAS),
+		]);
 
 		$ranked = $inner->as($derivedAlias);
 		$outer = query($ranked);
+		$outer->getSelections()->clear();
 
-		$outer->getSelections()->removeByTag(SelectionTag::DEFAULT);
-		$outer->getSelections()->merge(
-			$inner->getSelections()
-				->filterByTag(SelectionTag::COLUMN)
-				->filter(static fn (SelectionItem $selection): bool => ! $selection->getExpression() instanceof StarExpression)
-				->projectDerivedTo($ranked, $outer),
-		);
+		if ($carryAliases !== []) {
+			$outer->getSelections()->addExplicit(array_map(
+				static fn (string $alias) => $outer->field($alias)->as($alias),
+				$carryAliases,
+			));
+		}
 
-		return new self($outer, $ranked);
+		return new self($outer, $ranked, $partitionAliases);
 	}
 
 	public function getQuery(): SelectQuery
@@ -93,7 +104,7 @@ final class PartitionedRelationQuery
 
 	public function partitionField(string $fieldName): SourceFieldExpression
 	{
-		return $this->rankedField($fieldName);
+		return $this->rankedField($this->partitionAliases[$fieldName] ?? $fieldName);
 	}
 
 	private function rankedField(string $fieldName): SourceFieldExpression
@@ -102,5 +113,18 @@ final class PartitionedRelationQuery
 		$field = $this->ranked->field($fieldName);
 
 		return $field;
+	}
+
+	private static function findOwnFieldAlias(SelectQuery $query, string $fieldName): ?string
+	{
+		foreach ($query->getSelections()->getAll() as $selection) {
+			$fieldRef = $selection->getFieldRef();
+
+			if ($fieldRef instanceof FieldRef && $fieldRef->getSource() === $query && $fieldRef->getField()->getName() === $fieldName) {
+				return $selection->getSelectionKey();
+			}
+		}
+
+		return null;
 	}
 }

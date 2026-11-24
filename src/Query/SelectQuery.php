@@ -39,6 +39,8 @@ use ON\Data\Query\Schema\QueryRepresentationSchemaCompiler;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\Sort\Sort;
+use ON\Data\Schema\RelationLoadKnowledge;
+use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationSchema;
 
 final class SelectQuery implements QuerySourceInterface
@@ -104,6 +106,19 @@ final class SelectQuery implements QuerySourceInterface
 		$this->selections = new SelectionList();
 		$this->selections->add($this->all(), [SelectionTag::DEFAULT, SelectionTag::EXPLICIT]);
 		$this->conditions = new ConditionList();
+	}
+
+	/**
+	 * Reopen the shape of a {@see RepresentationSchema} as a fresh query.
+	 * Filters, ordering, pagination, and load strategies are execution options.
+	 * Partial relations require a query template with their original constraints.
+	 */
+	public static function fromSchema(RepresentationSchema $schema, ?QueryExecutorInterface $executor = null): self
+	{
+		$query = new self($schema->getCollection(), $executor);
+		self::applySchemaLevel($query, $schema);
+
+		return $query;
 	}
 
 	public function getQuery(): SelectQuery
@@ -413,7 +428,7 @@ final class SelectQuery implements QuerySourceInterface
 	}
 
 	/**
-	 * Compile this select into a structural RepresentationSchema for Session::update/create.
+	 * Compile this select into a structural RepresentationSchema for reuse or Session::update/create.
 	 * Does not execute the query.
 	 */
 	public function projection(): RepresentationSchema
@@ -586,8 +601,7 @@ final class SelectQuery implements QuerySourceInterface
 		$preparation = $executionQuery->beginFetch($handler);
 		$this->fetchSchema = $executionQuery->fetchSchema;
 		$loadRuntime = $executionQuery->createLoadRuntime();
-		$fetched = $loadRuntime->fetchAll();
-		$publicRows = $executionQuery->publicRows($fetched);
+		$publicRows = $loadRuntime->fetchAll();
 		$identityRows = $loadRuntime->getIdentityRows() ?? $publicRows;
 
 		if ($executionQuery->resultClass === null) {
@@ -683,13 +697,12 @@ final class SelectQuery implements QuerySourceInterface
 		$preparation = $executionQuery->beginFetch($handler);
 		$this->fetchSchema = $executionQuery->fetchSchema;
 		$loadRuntime = $executionQuery->createLoadRuntime();
-		$row = $loadRuntime->fetchOne();
+		$publicRow = $loadRuntime->fetchOne();
 
-		if ($row === null) {
+		if ($publicRow === null) {
 			return null;
 		}
 
-		$publicRow = $executionQuery->publicRow($row);
 		$identityRows = $loadRuntime->getIdentityRows() ?? [$publicRow];
 
 		if ($executionQuery->resultClass === null) {
@@ -754,10 +767,7 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		foreach ($this->selections->getAll() as $selection) {
-			if (
-				$selection->hasTag(SelectionTag::INTERNAL)
-				|| $selection->hasTag(SelectionTag::SQL_ONLY)
-			) {
+			if (! $selection->isExplicit()) {
 				continue;
 			}
 
@@ -845,7 +855,7 @@ final class SelectQuery implements QuerySourceInterface
 		$rows = $executionQuery->createLoadRuntime()->iterate();
 
 		if ($executionQuery->resultClass === null) {
-			return $executionQuery->publicIterable($rows);
+			return $rows;
 		}
 
 		return $executionQuery->mapPublicRows($rows, $executionQuery->resultClass);
@@ -869,18 +879,6 @@ final class SelectQuery implements QuerySourceInterface
 		$executor = $this->executor ?? throw QueryNotExecutableException::forQuery($this);
 
 		return new Relation\LoadRuntime($this, $executor, $this->fetchSchema);
-	}
-
-	/**
-	 * @param iterable<array<string, mixed>> $rows
-	 *
-	 * @return iterable<array<string, mixed>>
-	 */
-	private function publicIterable(iterable $rows): iterable
-	{
-		foreach ($rows as $row) {
-			yield $this->publicRow($row);
-		}
 	}
 
 	public function related(CollectionInterface $collection): self
@@ -954,61 +952,117 @@ final class SelectQuery implements QuerySourceInterface
 	{
 		foreach ($rows as $row) {
 			/** @var object $mapped */
-			$mapped = map($this->publicRow($row))->to($resultClass);
+			$mapped = map($row)->to($resultClass);
 
 			yield $mapped;
 		}
 	}
 
-	/**
-	 * Drop root INTERNAL / SQL_ONLY selection keys (fast path and {@see iterate()}).
-	 * Assemble never copies those keys onto the public row.
-	 *
-	 * @param array<string, mixed> $row
-	 *
-	 * @return array<string, mixed>
-	 */
-	private function publicRow(array $row): array
+	private static function applySchemaLevel(self|RelationRef $level, RepresentationSchema $schema, bool $selectScalars = true): void
 	{
-		$privateKeys = [];
+		$selections = [];
 
-		foreach ([SelectionTag::INTERNAL, SelectionTag::SQL_ONLY] as $tag) {
-			foreach ($this->selections->getByTag($tag) as $selection) {
-				$privateKeys[$selection->getSelectionKey()] = true;
-			}
-		}
+		foreach ($schema->getPaths() as $path) {
+			if ($selectScalars && $schema->hasField($path)) {
+				$field = $schema->getField($path);
 
-		if ($privateKeys === []) {
-			return $row;
-		}
+				if ($field->isImplicit()) {
+					continue;
+				}
 
-		$public = [];
+				$fieldRef = self::schemaFieldRef($level, $field);
+				$selections[] = ($field->getSourcePath() === [] && $path === $field->getFieldName() && $level instanceof self)
+					? $fieldRef
+					: $fieldRef->as($path);
 
-		foreach ($row as $key => $value) {
-			if (is_string($key) && isset($privateKeys[$key])) {
 				continue;
 			}
 
-			$public[$key] = $value;
+			if ($selectScalars && $schema->hasExpression($path)) {
+				$expressionSchema = $schema->getExpression($path);
+				$expression = $expressionSchema->getExpression();
+
+				if ($expression instanceof AliasedExpression) {
+					$expression = $expression->getExpression();
+				}
+
+				if (! $expression instanceof ValueExpressionInterface) {
+					throw new InvalidArgumentException(sprintf("Cannot reopen '%s' as a query expression.", $path));
+				}
+
+				$origin = $expressionSchema->getOriginSource();
+
+				if ($origin instanceof QuerySourceInterface) {
+					$sources = SourceMap::of($origin, $level);
+					if ($origin instanceof RelationRef && $level instanceof RelationRef && $origin->getPath() === $level->getPath()) {
+						$sources = $sources->with($origin->getQuery(), $level->getQuery());
+					}
+					$expression = $expression->rebind($sources);
+				}
+
+				$selections[] = $expression->as($path);
+
+				continue;
+			}
+
+			if ($schema->hasRelation($path)) {
+				$relationSchema = $schema->getRelation($path);
+				if ($path !== $relationSchema->getRelationName()) {
+					throw new InvalidArgumentException(sprintf("Cannot reopen aliased relation '%s'.", $path));
+				}
+				if ($relationSchema->getLoadKnowledge() === RelationLoadKnowledge::Partial) {
+					throw new InvalidArgumentException(sprintf("Cannot reopen partial relation '%s' without its original constraints.", $path));
+				}
+				$childRef = $level->relation($path);
+				$childSchema = $relationSchema->getRelatedSchema();
+
+				if ($relationSchema->shouldSkipWhenMissing() || $childRef->getCollection()->getName() !== $childSchema->getCollection()->getName()) {
+					throw new InvalidArgumentException(sprintf("Cannot reopen relation '%s' with custom source or missing-value rules.", $path));
+				}
+				$childRef->visible($relationSchema->isVisible());
+				self::applySchemaLevel($childRef, $childSchema, $relationSchema->hasScalarSelection());
+			}
 		}
 
-		return $public;
+		if ($selections !== []) {
+			$level->select(...$selections);
+		} elseif ($level instanceof RelationRef && $selectScalars) {
+			$level->getSelections()->clear();
+			$level->load();
+		} elseif ($level instanceof self) {
+			if ($schema->getRelations() === []) {
+				throw new InvalidArgumentException('Cannot reopen a schema without a public projection.');
+			}
+			$level->getSelections()->clear();
+		}
 	}
 
-	/**
-	 * @param list<array<string, mixed>> $rows
-	 *
-	 * @return list<array<string, mixed>>
-	 */
-	private function publicRows(array $rows): array
+	private static function schemaFieldRef(self|RelationRef $level, RepresentationFieldSchema $schema): FieldRef
 	{
-		$publicRows = [];
-
-		foreach ($rows as $row) {
-			$publicRows[] = $this->publicRow($row);
+		$sourcePath = $schema->getSourcePath();
+		if ($schema->isReadOnly() || $schema->shouldSkipWhenMissing() !== ($sourcePath !== [])) {
+			throw new InvalidArgumentException(sprintf("Cannot reopen field '%s' with custom write or missing-value rules.", $schema->getPath()));
 		}
 
-		return $publicRows;
+		$target = $level;
+
+		foreach ($sourcePath as $segment) {
+			$target = $target->relation($segment);
+		}
+
+		$field = $target->field($schema->getFieldName());
+
+		if (! $field instanceof FieldRef) {
+			throw new InvalidArgumentException(sprintf(
+				"Schema field '%s' could not be resolved to a collection field.",
+				$schema->getFieldName(),
+			));
+		}
+		if ($target->getCollection()->getName() !== $schema->getCollectionName()) {
+			throw new InvalidArgumentException(sprintf("Cannot reopen field '%s' from a different source collection.", $schema->getPath()));
+		}
+
+		return $field;
 	}
 
 	private function describeSource(QuerySourceInterface $source): string

@@ -11,8 +11,6 @@ use IteratorAggregate;
 use ON\Data\Query\DerivedOutputColumns;
 use ON\Data\Query\DerivedSelectQuery;
 use ON\Data\Query\Expression\AliasedExpression;
-use ON\Data\Query\Expression\FieldRef;
-use ON\Data\Query\Expression\SourceFieldExpression;
 use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\SelectQuery;
@@ -64,7 +62,6 @@ final class SelectionList implements IteratorAggregate, Countable
 
 		foreach ($expressions as $expression) {
 			$promoted = false;
-			$explicitTags = $this->inferTags($expression, [SelectionTag::EXPLICIT]);
 
 			foreach ($pendingEntries as $index => $entry) {
 				if ($entry->isExplicit()) {
@@ -75,14 +72,14 @@ final class SelectionList implements IteratorAggregate, Countable
 					continue;
 				}
 
-				$pendingEntries[$index] = $entry->withTags($explicitTags);
+				$pendingEntries[$index] = $entry->withTag(SelectionTag::EXPLICIT);
 				$promoted = true;
 
 				break;
 			}
 
 			if (! $promoted) {
-				$pendingEntries[] = new SelectionItem($expression, $explicitTags);
+				$pendingEntries[] = new SelectionItem($expression, [SelectionTag::EXPLICIT]);
 			}
 		}
 
@@ -101,7 +98,7 @@ final class SelectionList implements IteratorAggregate, Countable
 		ValueExpressionInterface|AliasedExpression|StarExpression $expression,
 		string|array $tags = [],
 	): SelectionItem {
-		$normalizedTags = $this->inferTags($expression, $this->normalizeTags($tags));
+		$normalizedTags = $this->normalizeTags($tags);
 
 		foreach ($this->entries as $index => $entry) {
 			if (! $this->expressionsMatch($entry->getExpression(), $expression)) {
@@ -216,52 +213,6 @@ final class SelectionList implements IteratorAggregate, Countable
 		}
 
 		return $projected;
-	}
-
-	public function ensureField(FieldRef|SourceFieldExpression $field, string $tag): SelectionItem
-	{
-		return $this->add($field, $tag);
-	}
-
-	public function ensureInternalField(FieldRef|SourceFieldExpression $field): SelectionItem
-	{
-		foreach ($this->entries as $entry) {
-			if ($entry->getSelectionKey() !== $field->getSelectionKey()) {
-				continue;
-			}
-
-			if ($entry->isExplicit() || $entry->getExpression() instanceof AliasedExpression) {
-				$tags = [SelectionTag::INTERNAL];
-				if ($entry->isExplicit()) {
-					$tags[] = SelectionTag::EXPLICIT;
-				}
-
-				return $this->add($entry->getExpression(), $tags);
-			}
-
-			break;
-		}
-
-		return $this->add($field->as($field->getSelectionKey()), SelectionTag::INTERNAL);
-	}
-
-	public function ensureInternalExpression(ValueExpressionInterface $expression, string $alias): SelectionItem
-	{
-		return $this->add($expression->as($alias), [SelectionTag::INTERNAL, SelectionTag::SQL_ONLY]);
-	}
-
-	private function expressionsMatch(
-		ValueExpressionInterface|AliasedExpression|StarExpression $left,
-		ValueExpressionInterface|AliasedExpression|StarExpression $right,
-	): bool {
-		if ($left instanceof AliasedExpression || $right instanceof AliasedExpression) {
-			return $left instanceof AliasedExpression
-				&& $right instanceof AliasedExpression
-				&& $left->getAlias() === $right->getAlias()
-				&& $left->getExpression() === $right->getExpression();
-		}
-
-		return $left === $right;
 	}
 
 	/**
@@ -408,6 +359,20 @@ final class SelectionList implements IteratorAggregate, Countable
 		return new ArrayIterator($this->entries);
 	}
 
+	private function expressionsMatch(
+		ValueExpressionInterface|AliasedExpression|StarExpression $left,
+		ValueExpressionInterface|AliasedExpression|StarExpression $right,
+	): bool {
+		if ($left instanceof AliasedExpression || $right instanceof AliasedExpression) {
+			return $left instanceof AliasedExpression
+				&& $right instanceof AliasedExpression
+				&& $left->getAlias() === $right->getAlias()
+				&& $left->getExpression() === $right->getExpression();
+		}
+
+		return $left === $right;
+	}
+
 	private function appendItem(SelectionItem $item): void
 	{
 		$this->entries[] = $item;
@@ -468,58 +433,5 @@ final class SelectionList implements IteratorAggregate, Countable
 				$this->namedExpressions[$expression->getAlias()] = $expression->getExpression();
 			}
 		}
-	}
-
-	/**
-	 * @param list<string> $callerTags
-	 * @return list<string>
-	 */
-	private function inferTags(
-		ValueExpressionInterface|AliasedExpression|StarExpression $expression,
-		array $callerTags,
-	): array {
-		$inferred = $callerTags;
-
-		// EXPLICIT means user-authored; projected columns (fields and aliased
-		// expressions) are also COLUMNs. Visibility defaults to public —
-		// INTERNAL opts out (do not infer PUBLIC).
-		if (
-			in_array(SelectionTag::EXPLICIT, $inferred, true)
-			&& ! in_array(SelectionTag::SQL_ONLY, $inferred, true)
-			&& $this->isProjectedColumn($expression)
-		) {
-			$inferred[] = SelectionTag::COLUMN;
-		}
-
-		if (
-			$this->isProjectedColumn($expression)
-			&& ! in_array(SelectionTag::SQL_ONLY, $callerTags, true)
-		) {
-			$inferred[] = SelectionTag::COLUMN;
-		}
-
-		return array_values(array_unique(array_map('trim', $inferred)));
-	}
-
-	private function isProjectedColumn(ValueExpressionInterface|AliasedExpression|StarExpression $expression): bool
-	{
-		if ($expression instanceof StarExpression) {
-			return false;
-		}
-
-		if ($expression instanceof AliasedExpression) {
-			return ! $expression->getExpression() instanceof StarExpression;
-		}
-
-		return $this->isFieldLike($expression);
-	}
-
-	private function isFieldLike(ValueExpressionInterface|AliasedExpression|StarExpression $expression): bool
-	{
-		if ($expression instanceof AliasedExpression) {
-			$expression = $expression->getExpression();
-		}
-
-		return $expression instanceof FieldRef || $expression instanceof SourceFieldExpression;
 	}
 }

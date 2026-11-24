@@ -22,6 +22,7 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use stdClass;
 use Tests\ON\Data\Smoke\Support\SqliteMemoryHarness;
+use Tests\ON\Data\Support\StubQueryRowProjector;
 use WeakReference;
 
 final class SelectQueryFetchIsolationTest extends TestCase
@@ -44,15 +45,15 @@ final class SelectQueryFetchIsolationTest extends TestCase
 		$harness = $this->database();
 		$query = $harness->database->query($this->users());
 		$query->select($query->id, $query->name)->orderBy($query->id->asc());
-		$query->posts->select('id', 'title')->join();
+		$query->featuredPost->select('id', 'title')->join();
 		$selections = $query->getSelections()->getAll();
 
 		self::assertSame([1, 2], array_column($query->fetchAll(), 'id'));
-		$query->posts->separate();
+		$query->featuredPost->separate();
 		$rows = $query->fetchAll();
 
 		self::assertSame([1, 2, 3], array_column($rows, 'id'));
-		self::assertSame([], $rows[2]['posts']);
+		self::assertNull($rows[2]['featuredPost']);
 		self::assertSame([], $query->getJoins());
 		self::assertSame($selections, $query->getSelections()->getAll());
 		self::assertNotNull($query->getFetchSchema());
@@ -72,7 +73,7 @@ final class SelectQueryFetchIsolationTest extends TestCase
 				$value = new DateTimeImmutable('2026-01-01');
 				$this->value = WeakReference::create($value);
 
-				return [['id' => 1, 'createdOn' => $value]];
+				return [StubQueryRowProjector::project($query, ['id' => 1, 'createdAt' => $value])];
 			}
 
 			public function fetchOne(SelectQuery $query): ?array
@@ -126,7 +127,7 @@ final class SelectQueryFetchIsolationTest extends TestCase
 		};
 		$query = new SelectQuery($this->users(), $executor);
 		$query->select($query->id);
-		$query->posts->select('id')->join();
+		$query->featuredPost->select('id')->join();
 		$selections = $query->getSelections()->getAll();
 
 		try {
@@ -139,7 +140,7 @@ final class SelectQueryFetchIsolationTest extends TestCase
 		self::assertSame([], $query->getJoins());
 		self::assertSame($selections, $query->getSelections()->getAll());
 		self::assertNotNull($query->getFetchSchema());
-		$query->posts->separate();
+		$query->featuredPost->separate();
 		self::assertSame([], $query->fetchAll());
 	}
 
@@ -267,6 +268,7 @@ final class SelectQueryFetchIsolationTest extends TestCase
 		$users = $registry->collection('users')->primaryKey('id')
 			->field('id', 'int')->end()->field('name', 'string')->end()->field('createdAt', 'datetime')->end();
 		$users->hasMany('posts', 'posts')->innerKey('id')->outerKey('user_id');
+		$users->hasOne('featuredPost', 'posts')->innerKey('id')->outerKey('user_id');
 
 		return $users;
 	}

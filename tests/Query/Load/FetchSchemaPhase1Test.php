@@ -9,11 +9,11 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Session;
 use ON\Data\Query\Relation\Loader\BelongsToLoader;
 use ON\Data\Query\Relation\Loader\HasManyLoader;
-use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
+use Tests\ON\Data\Support\StubQueryRowProjector;
 
 final class FetchSchemaPhase1Test extends TestCase
 {
@@ -110,15 +110,22 @@ final class FetchSchemaPhase1Executor implements QueryExecutorInterface
 	public function fetchAll(SelectQuery $query): array
 	{
 		return match ($query->getCollection()->getName()) {
-			'users' => [[
+			'users' => [StubQueryRowProjector::project($query, [
 				'id' => 1,
 				'name' => 'Ada',
-			]],
-			'posts' => [$this->postsRow($query)],
-			'authors' => [[
+			])],
+			'posts' => [StubQueryRowProjector::project($query, [
+				'id' => 10,
+				'userId' => 1,
+				'authorId' => 7,
+				'title' => 'Hello',
+				'author.id' => 7,
+				'author.name' => 'Ana',
+			])],
+			'authors' => [StubQueryRowProjector::project($query, [
 				'id' => 7,
 				'name' => 'Ana',
-			]],
+			])],
 			default => [],
 		};
 	}
@@ -133,29 +140,5 @@ final class FetchSchemaPhase1Executor implements QueryExecutorInterface
 	public function iterate(SelectQuery $query): iterable
 	{
 		return $this->fetchAll($query);
-	}
-
-	/**
-	 * @return array<string, mixed>
-	 */
-	private function postsRow(SelectQuery $query): array
-	{
-		$row = [
-			'id' => 10,
-			'userId' => 1,
-			'authorId' => 7,
-			'title' => 'Hello',
-			'authorName' => 'Ana',
-		];
-
-		foreach ($query->getSelections()->getAll() as $selection) {
-			$key = $selection->getSelectionKey();
-
-			if ($selection->hasTag(SelectionTag::INTERNAL) || str_contains($key, '.')) {
-				$row[$key] = 7;
-			}
-		}
-
-		return $row;
 	}
 }

@@ -212,6 +212,8 @@ final class QueryRepresentationSchemaCompiler
 				$relationName,
 				$relatedSchema,
 				loadKnowledge: $this->loadKnowledgeForSelection($selection),
+				visible: $selection->isVisible(),
+				hasScalarSelection: $selection->isLoaded(),
 			));
 
 			$schemasByPath[$pathKey] = $relatedSchema;
@@ -447,7 +449,7 @@ final class QueryRepresentationSchemaCompiler
 			return null;
 		}
 
-		return new RepresentationExpressionSchema($publicPath, $expression);
+		return new RepresentationExpressionSchema($publicPath, $expression, $level);
 	}
 
 	private function fieldFromSelection(SelectQuery|RelationRef $level, SelectionItem $selection): ?RepresentationFieldSchema

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Architecture;
 
+use Closure;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\BelongsToRelation;
 use ON\Data\Definition\Relation\HasManyRelation;
@@ -174,9 +175,9 @@ final class QueryArchitectureTest extends TestCase
 		self::assertSame('ON\Data\Query\Relation\RelationRef', $this->methodReturnType(RelationLoadBranch::class, 'getRelationRef'));
 		self::assertSame('ON\Data\Query\Relation\RelationRef', $this->methodReturnType('ON\Data\Query\Relation\RelationSelection', 'getRelationRef'));
 		self::assertSame('bool', $this->methodReturnType(RelationLoadBranch::class, 'returnsMany'));
-		self::assertTrue(method_exists(RelationLoadBranch::class, 'setContinuation'));
-		self::assertTrue(method_exists(RelationLoadBranch::class, 'clearContinuation'));
-		self::assertTrue(method_exists(RelationLoadBranch::class, 'getSelections'));
+		self::assertFalse(method_exists(RelationLoadBranch::class, 'setContinuation'));
+		self::assertFalse(method_exists(RelationLoadBranch::class, 'clearContinuation'));
+		self::assertFalse(method_exists(RelationLoadBranch::class, 'getSelections'));
 		self::assertFalse(method_exists(RelationLoadBranch::class, 'schedule'));
 		self::assertFalse(method_exists(RelationLoadBranch::class, 'clearSchedule'));
 		self::assertFalse(method_exists(RelationLoadBranch::class, 'getRelation'));
@@ -196,7 +197,7 @@ final class QueryArchitectureTest extends TestCase
 		self::assertFalse(method_exists(LoadBranch::class, 'setRootFieldResolver'));
 	}
 
-	public function testRuntimeDoesNotExposeLoaderBranchIdentityApis(): void
+	public function testRuntimeDoesNotExposeLoaderBranchIdentityOrStringContinuationApis(): void
 	{
 		self::assertFalse(method_exists(LoadRuntime::class, 'rootIdentityFields'));
 		self::assertFalse(method_exists(LoadRuntime::class, 'rootPrimaryKeyFields'));
@@ -213,15 +214,17 @@ final class QueryArchitectureTest extends TestCase
 		self::assertFalse(method_exists(LoadRuntime::class, 'setJoinedAttachment'));
 		self::assertFalse(method_exists(LoadRuntime::class, 'getChildBranches'));
 		self::assertFalse(method_exists(LoadRuntime::class, 'registerChildBranches'));
-		self::assertTrue(method_exists(LoadRuntime::class, 'continueWith'));
+		self::assertFalse(method_exists(LoaderInterface::class, 'loadData'));
+		self::assertSame(Closure::class, (new ReflectionMethod(LoadRuntime::class, 'continueWith'))->getParameters()[1]->getType()?->getName());
 	}
 
-	public function testContinuationVocabularyDoesNotUseLegacySchedulingNames(): void
+	public function testLoadRuntimeUsesSynchronousTypedExecutionWithoutReflection(): void
 	{
 		$runtimeContents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/LoadRuntime.php');
 		$branchContents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/RelationLoadBranch.php');
 		$exceptionContents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Exception/LoadRuntimeException.php');
 
+		self::assertStringNotContainsString('ReflectionMethod', $runtimeContents);
 		self::assertStringNotContainsString('nextPass', $runtimeContents);
 		self::assertStringNotContainsString('schedule(', $runtimeContents);
 		self::assertStringNotContainsString('clearSchedule(', $runtimeContents);
@@ -232,6 +235,7 @@ final class QueryArchitectureTest extends TestCase
 		self::assertStringNotContainsString('schedule(', $branchContents);
 		self::assertStringNotContainsString('clearSchedule(', $branchContents);
 		self::assertStringNotContainsString('boundaryQuery', $branchContents);
+		self::assertStringNotContainsString('continuation', $branchContents);
 
 		self::assertStringNotContainsString('nextPass', $exceptionContents);
 		self::assertStringNotContainsString('scheduleBoundary', $exceptionContents);
@@ -244,7 +248,7 @@ final class QueryArchitectureTest extends TestCase
 		self::assertSame(RelationLoadBranch::class, (new ReflectionMethod(LoadRuntime::class, 'setQueryContext'))->getParameters()[0]->getType()?->getName());
 		self::assertSame(RelationLoadBranch::class, (new ReflectionMethod(LoadRuntime::class, 'getQueryRelation'))->getParameters()[0]->getType()?->getName());
 		self::assertSame(RelationLoadBranch::class, (new ReflectionMethod(LoadRuntime::class, 'execute'))->getParameters()[0]->getType()?->getName());
-		self::assertSame(RelationLoadBranch::class, (new ReflectionMethod(LoadRuntime::class, 'continueWith'))->getParameters()[0]->getType()?->getName());
+		self::assertSame(RelationLoadBranch::class, (new ReflectionMethod(LoadRuntime::class, 'selectAuxiliaryColumn'))->getParameters()[0]->getType()?->getName());
 	}
 
 	public function testRuntimeDoesNotStoreActiveBranchIdentityInternally(): void
@@ -263,7 +267,7 @@ final class QueryArchitectureTest extends TestCase
 	{
 		self::assertTrue(method_exists(LoadBranch::class, 'requirePrimaryKey'));
 		self::assertTrue(method_exists(RootLoadBranch::class, 'createNode'));
-		self::assertTrue(method_exists(RootLoadBranch::class, 'getSelections'));
+		self::assertTrue(method_exists(LoadBranch::class, 'getColumnIndex'));
 	}
 
 	public function testRelationOutputProcessorOwnsOutputShaping(): void
@@ -294,18 +298,20 @@ final class QueryArchitectureTest extends TestCase
 		self::assertFileDoesNotExist($root . '/PromotionItem.php');
 	}
 
-	public function testRootLoadBranchUsesSelectionListInsteadOfLegacyParallelArrays(): void
+	public function testRootLoadBranchUsesColumnIndexWithoutSelectionListOrLegacyParallelArrays(): void
 	{
 		$reflection = new ReflectionClass(RootLoadBranch::class);
-		$contents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/RootLoadBranch.php');
 
-		self::assertTrue($reflection->hasProperty('selections'));
-
-		foreach (['columns', 'valueAliases', 'publicColumns', 'fieldParserNames', 'identityAliases'] as $property) {
+		foreach (['selections', 'columns', 'valueAliases', 'publicColumns', 'fieldParserNames', 'identityAliases'] as $property) {
 			self::assertFalse($reflection->hasProperty($property), $property);
 		}
 
-		self::assertStringContainsString('SelectionList', $contents);
+		$relationDir = dirname(__DIR__, 2) . '/src/Query/Relation';
+		self::assertFileExists($relationDir . '/ColumnIndex.php');
+		self::assertFileExists($relationDir . '/ColumnRole.php');
+		self::assertFileDoesNotExist($relationDir . '/LoadAliasAllocator.php');
+		self::assertFileDoesNotExist($relationDir . '/LoadFieldPlanner.php');
+		self::assertFileDoesNotExist($relationDir . '/PathBinding.php');
 	}
 
 	public function testRootLoadBranchDoesNotExposeLegacyRootSelectionApis(): void
@@ -390,19 +396,11 @@ final class QueryArchitectureTest extends TestCase
 		}
 	}
 
-	public function testRelationLoadingUsesSelectionKeysInsteadOfInspectingFieldBackedExpressions(): void
+	public function testRelationLoadingUsesColumnIndexAndRepresentationSchema(): void
 	{
-		$selectionKeySources = [
-			dirname(__DIR__, 2) . '/src/Query/SelectQuery.php',
-			dirname(__DIR__, 2) . '/src/Query/Relation/LoadBranch.php',
-		];
-
-		foreach ($selectionKeySources as $path) {
-			$contents = (string) file_get_contents($path);
-
-			self::assertStringContainsString('getSelectionKey()', $contents, $path);
-			self::assertStringNotContainsString('getExpression()->getField()->getName()', $contents, $path);
-		}
+		$selectQuery = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/SelectQuery.php');
+		self::assertStringContainsString('getSelectionKey()', $selectQuery);
+		self::assertStringNotContainsString('getExpression()->getField()->getName()', $selectQuery);
 
 		$abstractLoader = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/Loader/AbstractLoader.php');
 		self::assertStringNotContainsString('columnSelectionKeys', $abstractLoader);
@@ -413,27 +411,27 @@ final class QueryArchitectureTest extends TestCase
 		self::assertStringContainsString('getImplicitScalarPaths()', $outputProcessor);
 		self::assertStringContainsString('getPrimaryKeyPaths()', $outputProcessor);
 		self::assertStringContainsString('getRepresentationSchema()', $outputProcessor);
+		self::assertStringContainsString('getColumnIndex()', $outputProcessor);
 		self::assertStringNotContainsString('SelectionTag::INTERNAL', $outputProcessor);
 		self::assertStringNotContainsString('getExpression()->getField()->getName()', $outputProcessor);
 
 		$loadRuntime = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/LoadRuntime.php');
 		self::assertStringContainsString('needsRowAssemble()', $loadRuntime);
-		self::assertStringContainsString('planScalars()', $loadRuntime);
+		self::assertStringContainsString('planColumns(', $loadRuntime);
 		self::assertStringContainsString('getIdentityRows()', $loadRuntime);
+		self::assertStringContainsString('ColumnIndex', $loadRuntime);
 		self::assertStringNotContainsString('includeCrossLevelFlats', $loadRuntime);
 		self::assertStringNotContainsString('bindAllDestinations', $loadRuntime);
 		self::assertStringNotContainsString('getExpression()->getField()->getName()', $loadRuntime);
 
-		$loadFieldPlanner = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/LoadFieldPlanner.php');
-		self::assertStringContainsString('getPaths()', $loadFieldPlanner);
-		self::assertStringContainsString('private function bindPath(', $loadFieldPlanner);
-		self::assertStringContainsString('schemaFor', $loadFieldPlanner);
-		self::assertStringContainsString('setRepresentationSchema', $loadFieldPlanner);
-		self::assertStringContainsString('private readonly RepresentationSchema $schema', $loadFieldPlanner);
-		self::assertStringNotContainsString('getByTag', $loadFieldPlanner);
-		self::assertStringNotContainsString('SelectionTag::COLUMN', $loadFieldPlanner);
+		$columnIndex = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/ColumnIndex.php');
+		self::assertStringContainsString('getPaths()', $columnIndex);
+		self::assertStringContainsString('planBranch(', $columnIndex);
+		self::assertStringContainsString('ColumnRole::', $columnIndex);
+		self::assertStringContainsString('setRepresentationSchema', $columnIndex);
+		self::assertStringNotContainsString('getByTag', $columnIndex);
+		self::assertStringNotContainsString('SelectionTag::', $columnIndex);
 
-		$selectQuery = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/SelectQuery.php');
 		self::assertStringContainsString('$this->projection()', $selectQuery);
 		self::assertStringContainsString('getIdentityRows()', $selectQuery);
 		self::assertStringNotContainsString('compileFetchSchema', $selectQuery);

@@ -16,7 +16,6 @@ use ON\Data\Definition\Relation\FirstOfManyRelation;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\Query\DerivedSelectQuery;
 use ON\Data\Query\Exception\DuplicateDerivedOutputColumnException;
-use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Expression\AliasedExpression;
@@ -24,11 +23,7 @@ use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Join;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\Relation\Loader\FirstOfManyLoader;
-use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
-use ON\Data\Query\Relation\RelationLoadBranch;
-use ON\Data\Query\Relation\RelationSelection;
-use ON\Data\Query\Relation\RootLoadBranch;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\SourceMap;
 use function ON\Data\Query\x;
@@ -37,6 +32,7 @@ use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
+use Tests\ON\Data\Support\StubQueryRowProjector;
 
 #[RequiresPhpExtension('pdo_sqlite')]
 final class CycleJoinExecutionTest extends TestCase
@@ -174,11 +170,22 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testFetchOneLoadsEveryJoinedChildForTheFirstRoot(): void
+	public function testHasManyStructuredJoinStrategyIsUnsupported(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 		$users->posts->select('id', 'title')->join();
-		$users->select($users->name)->orderBy($users->id->asc(), $users->posts->id->asc());
+
+		$this->expectException(RelationLoaderException::class);
+		$this->expectExceptionMessage('Joined relation loading is not implemented');
+
+		$users->select($users->name)->fetchAll();
+	}
+
+	public function testFetchOneLoadsEveryChildForTheFirstRoot(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->posts->select('id', 'title')->orderBy($users->posts->id->asc());
+		$users->select($users->name)->orderBy($users->id->asc());
 
 		self::assertSame([
 			'name' => 'Ada',
@@ -188,12 +195,12 @@ final class CycleJoinExecutionTest extends TestCase
 		self::assertSame('Grace', $users->fetchOne(2)['name']);
 	}
 
-	public function testFetchOneJoinedChildrenPreservesAliasesPaginationAndQueryReuse(): void
+	public function testFetchOnePreservesAliasesPaginationAndQueryReuse(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
-		$users->posts->select('id', 'title')->join();
+		$users->posts->select('id', 'title')->orderBy($users->posts->id->asc());
 		$users->select($users->id->as('userId'), $users->name)
-			->orderBy($users->id->asc(), $users->posts->id->asc())->limit(1)->offset(1);
+			->orderBy($users->id->asc())->limit(1)->offset(0);
 
 		$first = $users->fetchOne();
 		self::assertSame(1, $first['userId']);
@@ -201,14 +208,14 @@ final class CycleJoinExecutionTest extends TestCase
 		self::assertCount(2, $first['posts']);
 		self::assertSame($first, $users->fetchOne());
 		self::assertSame(1, $users->getLimit());
-		self::assertSame(1, $users->getOffset());
+		self::assertSame(0, $users->getOffset());
 	}
 
-	public function testFetchOneLoadsJoinedChildrenUsingTheCompleteCompositeRootKey(): void
+	public function testFetchOneLoadsChildrenUsingTheCompleteCompositeRootKey(): void
 	{
 		$accounts = $this->database->query($this->registry->getCollection('accounts'));
-		$accounts->employees->select('name')->join();
-		$accounts->select($accounts->name)->orderBy($accounts->employees->name->asc());
+		$accounts->employees->select('name')->orderBy($accounts->employees->name->asc());
+		$accounts->select($accounts->name);
 
 		self::assertSame([
 			'name' => 'Platform',
@@ -216,70 +223,49 @@ final class CycleJoinExecutionTest extends TestCase
 		], $accounts->fetchOne(['tenantId' => 1, 'id' => 10]));
 	}
 
-	public function testHasManyJoinCanFlatProjectAuthorNameOntoPostRows(): void
+	public function testJoinedBelongsToCanFlatProjectRelatedFieldOntoAuthorRows(): void
 	{
-		$users = $this->database->query($this->registry->getCollection('users'));
-		$users->posts
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+		$posts->author
 			->select(
-				$users->posts->id,
-				$users->posts->title,
-				$users->posts->author->name->as('authorName'),
+				$posts->author->id,
+				$posts->author->name,
+				$posts->author->company->name->as('companyName'),
 			)
 			->join();
 
-		$rows = $users
-			->select($users->name)
-			->orderBy($users->id->asc(), $users->posts->title->asc())
+		$rows = $posts
+			->select($posts->title)
+			->orderBy($posts->id->asc())
 			->fetchAll();
 
 		self::assertSame([
-			[
-				'name' => 'Ada',
-				'posts' => [
-					['id' => 1, 'title' => 'Hello', 'authorName' => 'Ada'],
-					['id' => 2, 'title' => 'World', 'authorName' => 'Ada'],
-				],
-			],
-			[
-				'name' => 'Grace',
-				'posts' => [
-					['id' => 3, 'title' => 'Graph', 'authorName' => 'Grace'],
-				],
-			],
+			['title' => 'Hello', 'author' => ['id' => 1, 'name' => 'Ada', 'companyName' => 'Acme']],
+			['title' => 'World', 'author' => ['id' => 1, 'name' => 'Ada', 'companyName' => 'Acme']],
+			['title' => 'Graph', 'author' => ['id' => 2, 'name' => 'Grace', 'companyName' => 'Acme']],
 		], $rows);
-		self::assertArrayNotHasKey('author', $rows[0]['posts'][0]);
+		self::assertArrayNotHasKey('company', $rows[0]['author']);
 	}
 
-	public function testHasManyJoinCanProjectNestedExpressionOntoPostRows(): void
+	public function testJoinedBelongsToCanProjectNestedExpressionOntoAuthorRows(): void
 	{
-		$users = $this->database->query($this->registry->getCollection('users'));
-		$users->posts
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+		$posts->author
 			->select(
-				$users->posts->id,
-				$users->posts->title,
-				x()->concat($users->posts->title, '!')->as('bang'),
+				$posts->author->id,
+				x()->concat($posts->author->name, '!')->as('bang'),
 			)
 			->join();
 
-		$rows = $users
-			->select($users->name)
-			->orderBy($users->id->asc(), $users->posts->title->asc())
+		$rows = $posts
+			->select($posts->title)
+			->orderBy($posts->id->asc())
 			->fetchAll();
 
 		self::assertSame([
-			[
-				'name' => 'Ada',
-				'posts' => [
-					['id' => 1, 'title' => 'Hello', 'bang' => 'Hello!'],
-					['id' => 2, 'title' => 'World', 'bang' => 'World!'],
-				],
-			],
-			[
-				'name' => 'Grace',
-				'posts' => [
-					['id' => 3, 'title' => 'Graph', 'bang' => 'Graph!'],
-				],
-			],
+			['title' => 'Hello', 'author' => ['id' => 1, 'bang' => 'Ada!']],
+			['title' => 'World', 'author' => ['id' => 1, 'bang' => 'Ada!']],
+			['title' => 'Graph', 'author' => ['id' => 2, 'bang' => 'Grace!']],
 		], $rows);
 	}
 
@@ -343,33 +329,22 @@ final class CycleJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
-	public function testJoinedLoadDoesNotReusePublicAliasThatCollidesWithGeneratedLoadKey(): void
+	public function testJoinedLoadDoesNotCollideWithPublicAliasesLookingLikeColumnIndexKeys(): void
 	{
-		$users = $this->database->query($this->registry->getCollection('users'));
-		$users->posts
-			->select($users->posts->id, $users->posts->title)
+		$posts = $this->database->query($this->registry->getCollection('posts'));
+		$posts->author
+			->select($posts->author->id, $posts->author->name)
 			->join();
 
-		// Prefer the generated JOIN load alias as a public root column of a different field.
-		$rows = $users
-			->select($users->name->as('l_posts_id'))
-			->orderBy($users->id->asc(), $users->posts->title->asc())
+		$rows = $posts
+			->select($posts->title->as('c0'))
+			->orderBy($posts->id->asc())
 			->fetchAll();
 
 		self::assertSame([
-			[
-				'l_posts_id' => 'Ada',
-				'posts' => [
-					['id' => 1, 'title' => 'Hello'],
-					['id' => 2, 'title' => 'World'],
-				],
-			],
-			[
-				'l_posts_id' => 'Grace',
-				'posts' => [
-					['id' => 3, 'title' => 'Graph'],
-				],
-			],
+			['c0' => 'Hello', 'author' => ['id' => 1, 'name' => 'Ada']],
+			['c0' => 'World', 'author' => ['id' => 1, 'name' => 'Ada']],
+			['c0' => 'Graph', 'author' => ['id' => 2, 'name' => 'Grace']],
 		], $rows);
 	}
 
@@ -835,13 +810,12 @@ final class CycleJoinExecutionTest extends TestCase
 		self::assertStringContainsString('"q1"."user_id"', $sql);
 		self::assertStringContainsString('WHERE "__ondata_limited_has_many"."__ondata_rank" > ?', $sql);
 		self::assertStringContainsString('"__ondata_limited_has_many"."__ondata_rank" <= ?', $sql);
-		self::assertStringContainsString('ORDER BY "__ondata_limited_has_many"."userId" ASC, "__ondata_limited_has_many"."__ondata_rank" ASC', $sql);
-		self::assertStringContainsString('"__ondata_limited_has_many"."title" AS "title"', $sql);
-		self::assertStringContainsString('"__ondata_limited_has_many"."userId" AS "userId"', $sql);
+		self::assertMatchesRegularExpression('/ORDER BY "__ondata_limited_has_many"\."c\d+" ASC, "__ondata_limited_has_many"\."__ondata_rank" ASC/', $sql);
+		self::assertMatchesRegularExpression('/"__ondata_limited_has_many"\."(c\d+)" AS "\1".*"q1"\."title" AS "\1"/s', $sql);
 		self::assertStringNotContainsString('"__ondata_limited_has_many"."user_id"', $sql);
 	}
 
-	public function testHasManySeparateLimitJoinsNestedAuthorWithQuotedDottedAliases(): void
+	public function testHasManySeparateLimitJoinsNestedAuthorWithSimpleColumnIndexAliases(): void
 	{
 		$executor = $this->executorFromDatabase($this->database);
 		$recording = new RecordingQueryExecutor(
@@ -870,7 +844,7 @@ final class CycleJoinExecutionTest extends TestCase
 
 		$sql = $recording->derivedSql()[0] ?? '';
 
-		self::assertStringContainsString('"__ondata_limited_has_many"."author.name" AS "author.name"', $sql);
+		self::assertMatchesRegularExpression('/"__ondata_limited_has_many"\."c\d+" AS "c\d+"/', $sql);
 		self::assertStringNotContainsString('"__ondata_limited_has_many"."author"."name"', $sql);
 	}
 
@@ -947,22 +921,22 @@ final class CycleJoinExecutionTest extends TestCase
 
 	public function testJoinedRelationWhereAndOrderByAreRejectedForStructuredLoading(): void
 	{
-		$users = $this->database->query($this->registry->getCollection('users'));
+		$posts = $this->database->query($this->registry->getCollection('posts'));
 
 		try {
-			$users->posts->join()->where(x()->eq($users->posts->published, true));
-			$users->fetchAll();
+			$posts->author->join()->where(x()->eq($posts->author->name, 'Ada'));
+			$posts->fetchAll();
 			self::fail('Expected joined relation where rejection.');
 		} catch (RelationLoaderException $exception) {
 			self::assertStringContainsString('conditions that are not supported', $exception->getMessage());
 		}
 
-		$users = $this->database->query($this->registry->getCollection('users'));
+		$posts = $this->database->query($this->registry->getCollection('posts'));
 
 		$this->expectException(RelationLoaderException::class);
 		$this->expectExceptionMessage('ordering that is not supported');
-		$users->posts->join()->orderBy($users->posts->title->asc());
-		$users->fetchAll();
+		$posts->author->join()->orderBy($posts->author->name->asc());
+		$posts->fetchAll();
 	}
 
 	public function testRepeatedStructuredLoadStrategiesUseLatestCall(): void
@@ -1387,17 +1361,14 @@ final class CycleJoinExecutionTest extends TestCase
 		self::assertStringContainsString('ROW_NUMBER() OVER', $sql);
 		self::assertStringContainsString('PARTITION BY', $sql);
 		self::assertStringContainsString('ORDER BY', $sql);
-		self::assertStringContainsString('"q1"."created_at" AS "createdAt"', $sql);
-		self::assertMatchesRegularExpression(
-			'/"__ondata_first_of_many"\."createdAt"\s+AS\s+"createdAt"/',
-			$sql,
-		);
+		self::assertMatchesRegularExpression('/"q1"\."created_at" AS "(c\d+)"/', $sql);
+		self::assertMatchesRegularExpression('/"__ondata_first_of_many"\."c\d+" AS "c\d+"/', $sql);
 		self::assertStringNotContainsString('"__ondata_first_of_many"."created_at"', $sql);
 		self::assertStringContainsString('__ondata_rank', $sql);
 		self::assertStringContainsString('WHERE "__ondata_first_of_many"."__ondata_rank" = ?', $sql);
 		// MySQL rejects derived tables with duplicate output names; DEFAULT * must not
 		// remain beside projected columns in the windowed subquery.
-		self::assertSame(1, substr_count($sql, '"q1"."id" AS "id"'));
+		self::assertSame(1, preg_match_all('/"q1"\."id" AS "c\d+"/', $sql));
 	}
 
 	public function testFirstOfManyLoaderDoesNotGuessDerivedOutputNamesFromExpressionTypes(): void
@@ -1535,8 +1506,8 @@ final class CycleJoinExecutionTest extends TestCase
 		self::assertStringContainsString('JOIN "users" AS', $sql);
 		self::assertStringContainsString('ROW_NUMBER() OVER', $sql);
 		self::assertStringContainsString('WHERE "__ondata_first_of_many"."__ondata_rank" = ?', $sql);
-		self::assertStringContainsString('"j0"."id" AS "author.id"', $sql);
-		self::assertStringContainsString('"__ondata_first_of_many"."author.id" AS "author.id"', $sql);
+		self::assertMatchesRegularExpression('/"j0"\."id" AS "(c\d+)"/', $sql);
+		self::assertMatchesRegularExpression('/"__ondata_first_of_many"\."c\d+" AS "c\d+"/', $sql);
 		self::assertStringNotContainsString('"__ondata_first_of_many"."author_id"', $sql);
 	}
 
@@ -1751,37 +1722,6 @@ final class CycleJoinExecutionTest extends TestCase
 		$this->expectException(UnsupportedQueryException::class);
 		$this->expectExceptionMessage('cannot use unresolved relation path "company" inside ON conditions');
 		$users->select($users->name)->fetchAll();
-	}
-
-	public function testLoaderLoadRequiresRuntimeRegistrationContext(): void
-	{
-		$users = $this->database->query($this->registry->getCollection('users'));
-		$branch = new RelationLoadBranch(
-			new RelationSelection($users->posts, false, true, null),
-			new RootLoadBranch($users),
-			$users->posts->getLoader(),
-		);
-
-		$this->expectException(LoadRuntimeException::class);
-		$users->posts->getLoader()->load(
-			$branch,
-			new LoadRuntime($users, new class () implements QueryExecutorInterface {
-				public function fetchAll(SelectQuery $query): array
-				{
-					return [];
-				}
-
-				public function fetchOne(SelectQuery $query): ?array
-				{
-					return null;
-				}
-
-				public function iterate(SelectQuery $query): iterable
-				{
-					return [];
-				}
-			}),
-		);
 	}
 
 	public function testRelatedQueryExistsForHasManyBelongsToAndHasOne(): void
@@ -2609,7 +2549,7 @@ final class FirstOfManyFallbackExecutor implements QueryExecutorInterface
 			);
 		}
 
-		return match ($query->getCollection()->getName()) {
+		$rows = match ($query->getCollection()->getName()) {
 			'users' => [
 				['id' => 1, 'name' => 'Ada'],
 				['id' => 2, 'name' => 'Grace'],
@@ -2623,6 +2563,8 @@ final class FirstOfManyFallbackExecutor implements QueryExecutorInterface
 			],
 			default => [],
 		};
+
+		return StubQueryRowProjector::projectAll($query, $rows);
 	}
 
 	public function fetchOne(SelectQuery $query): ?array

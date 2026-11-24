@@ -9,7 +9,6 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Session;
 use ON\Data\Query\Relation\RelationRef;
-use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
@@ -113,10 +112,7 @@ final class SelectQueryOrmTargetTest extends TestCase
 		self::assertInstanceOf(stdClass::class, $user);
 		self::assertSame('Ada', $user->name);
 		self::assertFalse(property_exists($user, 'id'));
-
-		foreach ($query->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
-			self::assertFalse(property_exists($user, $selection->getSelectionKey()));
-		}
+		self::assertCount(1, $query->getSelections()->getAll());
 	}
 
 	public function testWritableFetchWithoutSelectedIdentityThrows(): void

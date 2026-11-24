@@ -7,13 +7,8 @@ namespace ON\Data\Query\Relation;
 use LogicException;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Query\Exception\LoadRuntimeException;
-use ON\Data\Query\Expression\AliasedExpression;
-use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Result\Parser\AbstractNode;
-use ON\Data\Query\Selection\SelectionItem;
-use ON\Data\Query\Selection\SelectionList;
-use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Schema\RepresentationSchema;
 
@@ -35,16 +30,13 @@ abstract class LoadBranch
 	private array $children = [];
 
 	/**
-	 * @var array<string, PathBinding>
-	 */
-	private array $pathBindings = [];
-
-	/**
-	 * @var list<string>
+	 * @var array<string, true>
 	 */
 	private array $requiredFieldNames = [];
 
 	private ?RepresentationSchema $representationSchema = null;
+
+	private ?ColumnIndex $columnIndex = null;
 
 	/**
 	 * Bind this branch's schema node for the current fetch.
@@ -59,66 +51,24 @@ abstract class LoadBranch
 		return $this->representationSchema ?? throw LoadRuntimeException::schemaMissing();
 	}
 
-	public function bindPathToLoadKey(string $path, string $loadKey): void
+	public function setColumnIndex(ColumnIndex $columnIndex): void
 	{
-		$this->pathBindings[$path] = new PathBinding($loadKey);
+		$this->columnIndex = $columnIndex;
+	}
+
+	public function getColumnIndex(): ColumnIndex
+	{
+		return $this->columnIndex ?? throw new LogicException('Load branch column index is not configured.');
 	}
 
 	/**
-	 * @param list<string> $relativePath relation names from this branch to the child destination
-	 */
-	public function bindPathToChildDestination(string $path, array $relativePath, string $loadKey): void
-	{
-		$this->pathBindings[$path] = new PathBinding($loadKey, array_values($relativePath));
-	}
-
-	public function hasPathBinding(string $path): bool
-	{
-		return isset($this->pathBindings[$path]);
-	}
-
-	public function loadKeyForPath(string $path): string
-	{
-		return ($this->pathBindings[$path] ?? null)?->getLoadKey() ?? $path;
-	}
-
-	/**
-	 * Local parser remap: bag name => SQL/result key. Own-level collection
-	 * fields use the field name as the bag key; local flats and non-field
-	 * internals use the output name. Child-bag flats are omitted.
-	 *
-	 * Built from {@see PathBinding} after the schema-path planner runs; not a
-	 * second walk of {@see SelectionList} COLUMN tags as schema paths.
+	 * Local parser remap: bag name => SQL alias (`c0`, `c1`, ...).
 	 *
 	 * @return array<string, string>
 	 */
 	public function getRemapColumns(): array
 	{
-		$map = [];
-
-		foreach ($this->pathBindings as $path => $binding) {
-			if ($binding->isChildDestination()) {
-				continue;
-			}
-
-			$name = $this->bagKeyForPath($path);
-
-			if (isset($map[$name])) {
-				continue;
-			}
-
-			$map[$name] = $binding->getLoadKey();
-		}
-
-		return $map;
-	}
-
-	/**
-	 * @return list<string>|null
-	 */
-	public function childPathForPath(string $path): ?array
-	{
-		return ($this->pathBindings[$path] ?? null)?->getChildPath();
+		return $this->getColumnIndex()->remapColumnsFor($this);
 	}
 
 	public function setNode(AbstractNode $node): void
@@ -143,11 +93,9 @@ abstract class LoadBranch
 	 */
 	abstract public function getProjectionLevel(): SelectQuery|RelationRef;
 
-	abstract public function getSelections(): SelectionList;
-
 	/**
-	 * Register own-level fields as REQUIRED. Returns schema paths (not SQL aliases).
-	 * {@see LoadFieldPlanner::emitRequiredFields()} emits SQL after schema bind.
+	 * Record own-level fields required for identity or join correlation.
+	 * {@see ColumnIndex::planRequiredFields()} allocates SQL columns after schema planning.
 	 *
 	 * @param list<string> $fieldNames
 	 * @return list<string>
@@ -162,20 +110,7 @@ abstract class LoadBranch
 
 		foreach ($fieldNames as $fieldName) {
 			$normalized = $this->getCollection()->getField($fieldName)->getName();
-			$this->requiredFieldNames[] = $normalized;
-			$existing = $this->findOwnFieldSelection($normalized);
-
-			if ($existing instanceof SelectionItem) {
-				$this->getSelections()->add($existing->getExpression(), SelectionTag::REQUIRED);
-				$added[] = $existing->getSelectionKey();
-
-				continue;
-			}
-
-			$this->getSelections()->add(
-				$this->ownFieldExpression($normalized),
-				[SelectionTag::REQUIRED, SelectionTag::INTERNAL],
-			);
+			$this->requiredFieldNames[$normalized] = true;
 			$added[] = $normalized;
 		}
 
@@ -187,7 +122,7 @@ abstract class LoadBranch
 	 */
 	public function getRequiredFieldNames(): array
 	{
-		return array_values(array_unique($this->requiredFieldNames));
+		return array_keys($this->requiredFieldNames);
 	}
 
 	/**
@@ -195,6 +130,7 @@ abstract class LoadBranch
 	 */
 	public function requirePrimaryKey(): array
 	{
+		/** @var non-empty-list<string> */
 		return $this->requireFields($this->getCollection()->getPrimaryKey());
 	}
 
@@ -219,6 +155,11 @@ abstract class LoadBranch
 		$this->query = $query;
 		$this->source = $source;
 		$this->queryLocalRelation = $queryLocalRelation;
+	}
+
+	public function hasQuery(): bool
+	{
+		return $this->query !== null;
 	}
 
 	public function getQuery(): SelectQuery
@@ -247,66 +188,5 @@ abstract class LoadBranch
 	protected function addChild(RelationLoadBranch $child): void
 	{
 		$this->children[] = $child;
-	}
-
-	protected function findOwnFieldSelection(string $fieldName): ?SelectionItem
-	{
-		$level = $this->getProjectionLevel();
-
-		foreach ($this->getSelections()->getAll() as $selection) {
-			$expression = $selection->getExpression();
-
-			if ($expression instanceof AliasedExpression) {
-				$expression = $expression->getExpression();
-			}
-
-			if (
-				$expression instanceof FieldRef
-				&& $expression->getSource() === $level
-				&& $expression->getField()->getName() === $fieldName
-			) {
-				return $selection;
-			}
-		}
-
-		return null;
-	}
-
-	private function parserColumnName(SelectionItem $selection): string
-	{
-		$fieldRef = $selection->getFieldRef();
-		$level = $this->getProjectionLevel();
-
-		if ($fieldRef instanceof FieldRef && $fieldRef->getSource() === $level) {
-			return $fieldRef->getField()->getName();
-		}
-
-		return $selection->getSelectionKey();
-	}
-
-	/**
-	 * Parser-bag key for a schema path (output name): own collection field name, or
-	 * the output name for flats / internals.
-	 */
-	public function bagKeyForPath(string $path): string
-	{
-		if ($this->childPathForPath($path) !== null) {
-			return $this->loadKeyForPath($path);
-		}
-
-		$selection = $this->getSelections()->findBySelectionKey($path);
-
-		if (! $selection instanceof SelectionItem) {
-			return $path;
-		}
-
-		return $this->parserColumnName($selection);
-	}
-
-	private function ownFieldExpression(string $fieldName): AliasedExpression
-	{
-		$level = $this->getProjectionLevel();
-
-		return $level->field($fieldName)->as($fieldName);
 	}
 }

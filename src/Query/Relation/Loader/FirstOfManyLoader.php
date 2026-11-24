@@ -60,7 +60,7 @@ final class FirstOfManyLoader extends AbstractLoader
 		$branch->requireFields($relationRef->getCollection()->getPrimaryKey());
 		$branch->requireFields($parentToChild->getRightFields());
 		$parentBranch->requireFields($parentToChild->getLeftFields());
-		$runtime->continueWith($branch, 'loadData');
+		$runtime->continueWith($branch, $this->loadData(...));
 	}
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void

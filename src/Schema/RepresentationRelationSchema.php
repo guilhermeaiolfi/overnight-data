@@ -18,6 +18,8 @@ final class RepresentationRelationSchema
 		private RepresentationSchema $relatedSchema,
 		private bool $skipWhenMissing = false,
 		private RelationLoadKnowledge $loadKnowledge = RelationLoadKnowledge::Unknown,
+		private bool $visible = true,
+		private bool $hasScalarSelection = true,
 	) {
 		if ($path === '') {
 			throw new InvalidSchemaException('Representation relation schema path cannot be empty.');
@@ -81,5 +83,15 @@ final class RepresentationRelationSchema
 	public function getLoadKnowledge(): RelationLoadKnowledge
 	{
 		return $this->loadKnowledge;
+	}
+
+	public function isVisible(): bool
+	{
+		return $this->visible;
+	}
+
+	public function hasScalarSelection(): bool
+	{
+		return $this->hasScalarSelection;
 	}
 }

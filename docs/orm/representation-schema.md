@@ -151,6 +151,12 @@ Writable prepare builds `QuerySourceIdentities` from schema sources (Implicit PK
 - Missing PKs for each source → Implicit field schemas  
 - Star/default → expand to Public fields  
 
+### Reopen a projection
+
+`query($schema)` and `DataRuntime::query($schema)` build a fresh query from the projection shape. The new query starts with default load strategies and empty filters, ordering, and pagination. Nested expressions can reference their original query level and its ancestors. Hidden relation paths retain their promoted output.
+
+Partial relations require a query template with their original constraints. Reopening rejects partial relations, relation path aliases, and custom write or missing-value rules that a query projection cannot express.
+
 ### Assemble (path-first)
 
 **Schema is the path base.** When `SelectQuery::needsRowAssemble()` is true
@@ -158,10 +164,9 @@ Writable prepare builds `QuerySourceIdentities` from schema sources (Implicit PK
 `RepresentationSchema` via `projection()` and `RelationOutputProcessor` writes
 public scalars via `getPublicScalarPaths()` and identity overlay keys via
 `getImplicitScalarPaths()` plus each source's `getPrimaryKeyPaths()`.
-Writable `prepare()` uses the same `projection()` and reuses that schema.
-`LoadFieldPlanner` requires the compiled schema and binds SQL from schema
-scalar paths at each load level. Query `EXPLICIT` tags are fetch/authoring
-only — not a path fallback. Join keys stay on loaders (`requireFields()`).
+Writable `prepare()` compiles the schema from the execution query and passes it
+to assembly. `ColumnIndex` binds schema scalar paths and loader-required fields
+to SQL column aliases. Loaders declare join keys through `requireFields()`.
 Hidden source primary keys are Implicit fields with source-qualified paths
 (`company.id`) when they would collide with root `id`; they stay on the
 identity overlay, not the public row.
@@ -169,7 +174,6 @@ identity overlay, not the public row.
 Plain own-field reads skip assemble and skip schema compile (executor column
 names already match paths).
 
-Fetch tags (`COLUMN`, `SQL_ONLY`, `INTERNAL`, `DEFAULT`, …) remain Query/runtime only.
 
 ### `forPrimaryKey()`
 

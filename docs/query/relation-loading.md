@@ -177,7 +177,9 @@ The acquisition strategy is loader-owned. A relation selection may override the 
 
 `fetchAll()` and `fetchOne()` support structured relation loading. `iterate()` does not.
 
-For `fetchOne()` with a joined to-many branch in the root SQL query, the runtime first selects one SQL row to identify the root, then fetches all matching joined rows for that root before assembly. The follow-up query uses the complete root primary key and removes limit/offset so children are not truncated. Other query conditions remain in effect. This uses two root queries only for that multiplying JOIN case; simple reads, to-one joins, and separate-query relation loads retain their existing execution paths.
+For `fetchOne()` with a custom joined to-many branch in the root SQL query, the runtime first selects one SQL row to identify the root, then fetches all matching joined rows for that root before assembly. The follow-up query uses the complete root primary key and removes limit/offset so all children are available. Other query conditions remain in effect.
+
+In a custom loader, use `load()` to set the query context, attachment mode, and required fields. Register deferred work with `$runtime->continueWith($branch, $this->loadData(...))`. The callback runs once after the parent rows are parsed and before the runtime visits the branch's descendants. It can call `$runtime->execute()` for each query it needs. Registration is optional for both joined and separate branches.
 
 ## Batch size and separate-query correlation
 
@@ -199,7 +201,7 @@ Practical guidance:
 
 Structured loads separate **fetch destinations** (`LoadBranch` tree — one per attached relation) from **path** (where values land on the result). Flat related fields (for example `authorName` from `posts.author`) stay on the parent path; they do not invent an `author` attach unless that relation is also loaded.
 
-Assemble builds public scalar keys from `RepresentationSchema::getPublicScalarPaths()` whenever row assemble runs (aliases, flats, relation loads). Implicit source primary keys and other PK paths go on a parallel identity overlay for writable `track()`. Do not wrap that pair in a per-row carrier type. `SelectQuery::needsRowAssemble()` drives a single `projection()` compile in `beginFetch()` (writable `prepare()` compiles via the same `projection()` and reuses that schema). `LoadFieldPlanner` binds schema scalar paths, then emits loader `requireFields()` that are not schema paths. Query `EXPLICIT` tags are not a path fallback. Fast-path own-field reads skip assemble; `SelectQuery::publicRow()` only masks query-level `INTERNAL` / `SQL_ONLY` keys. See [`orm/representation-schema.md`](../orm/representation-schema.md).
+Assemble builds public scalar keys from `RepresentationSchema::getPublicScalarPaths()` for aliases, flat projections, and relation loads. Primary key paths are also available through an identity overlay for writable `track()`. Each execution compiles its schema from the current query. `ColumnIndex` maps schema paths and fields requested by loaders through `requireFields()` to SQL column aliases. Plain own-field reads skip assemble. See [`orm/representation-schema.md`](../orm/representation-schema.md).
 
 ## Architecture Guardrails
 
@@ -219,7 +221,7 @@ Each cached relation branch is its own query source. When a query is copied, rel
 - Structured loading is not the same as arbitrary related-field projection in flat scalar selections.
 - Structured loading for built-in `FirstOfMany` is implemented as separate-query loading. JOIN loading is intentionally unsupported, deterministic relation-level `orderBy` metadata is required, and supported SQL backends use windowed ranking internally.
 - Structured loading for built-in `HasMany` supports relation-level `limit(...)` and `offset(...)` only in separate-query mode, applies them per parent, and requires deterministic selection-level `orderBy(...)`.
-- Joined structured loading for built-in `M2M` is not implemented yet.
+- Built-in `HasMany` and `M2M` use separate queries for structured loads. Flat related-field selections can still use SQL joins.
 - Relation-level `where` and `orderBy` are supported for separate-query loading first; joined relation conditions and ordering are rejected by built-in loaders.
 - Flat related FieldRefs and aliased non-field expressions in nested `select()` work with JOIN or SEPARATE. JOIN allows same-level field selections (including aliases) and default own-field projection.
 - Separate-query correlation uses `IN` (simple keys) or per-parent `OR`/`AND` (composite keys), chunked by parent-key batch (default 100); see [Batch size and separate-query correlation](#batch-size-and-separate-query-correlation).

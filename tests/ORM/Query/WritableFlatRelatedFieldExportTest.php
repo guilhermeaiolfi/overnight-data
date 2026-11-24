@@ -10,12 +10,12 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\Session;
-use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
+use Tests\ON\Data\Support\StubQueryRowProjector;
 
 final class WritableFlatRelatedFieldExportTest extends TestCase
 {
@@ -115,15 +115,8 @@ final class WritableFlatRelatedFieldExportTest extends TestCase
 
 	private function assertInternalSelectionsAreNotExported(SelectQuery $query, stdClass $user): void
 	{
-		foreach ($query->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
-			self::assertFalse(
-				property_exists($user, $selection->getSelectionKey()),
-				sprintf(
-					'Internal selection "%s" must not be exported on the result.',
-					$selection->getSelectionKey(),
-				),
-			);
-		}
+		self::assertFalse(property_exists($user, 'company.id'));
+		self::assertCount(2, $query->getSelections()->getAll());
 	}
 
 	private function makeRegistry(): Registry
@@ -159,9 +152,10 @@ final class FlatCompanyUserQueryExecutor implements QueryExecutorInterface
 
 	public function fetchOne(SelectQuery $query): ?array
 	{
-		return InternalSelectionRowFactory::withInternalCompanyId($query, [
+		return StubQueryRowProjector::project($query, [
 			'id' => 1,
-			'name' => 'Acme',
+			'company.name' => 'Acme',
+			'company.id' => 5,
 		]);
 	}
 
@@ -180,10 +174,10 @@ final class FlatCompanyUserQueryExecutorWithoutCompanyId implements QueryExecuto
 
 	public function fetchOne(SelectQuery $query): ?array
 	{
-		return [
+		return StubQueryRowProjector::project($query, [
 			'id' => 1,
-			'name' => 'Acme',
-		];
+			'company.name' => 'Acme',
+		]);
 	}
 
 	public function iterate(SelectQuery $query): iterable
@@ -201,47 +195,29 @@ final class AssertingInternalCompanyIdSelectionExecutor implements QueryExecutor
 
 	public function fetchOne(SelectQuery $query): ?array
 	{
-		$identitySelections = [];
+		$foundCompanyId = false;
 
 		foreach ($query->getSelections()->getAll() as $selection) {
-			$key = $selection->getSelectionKey();
-			if ($selection->hasTag(SelectionTag::INTERNAL) || str_contains($key, '.')) {
-				$identitySelections[] = $selection;
+			$fieldRef = $selection->getFieldRef();
+
+			if ($fieldRef !== null && $fieldRef->getPath() === ['company', 'id']) {
+				$foundCompanyId = true;
 			}
 		}
 
-		if ($identitySelections === []) {
+		if (! $foundCompanyId) {
 			throw new AssertionFailedError('Expected related-source identity selection before query execution.');
 		}
 
-		return InternalSelectionRowFactory::withInternalCompanyId($query, [
+		return StubQueryRowProjector::project($query, [
 			'id' => 1,
-			'name' => 'Acme',
+			'company.name' => 'Acme',
+			'company.id' => 5,
 		]);
 	}
 
 	public function iterate(SelectQuery $query): iterable
 	{
 		yield from $this->fetchAll($query);
-	}
-}
-
-final class InternalSelectionRowFactory
-{
-	/**
-	 * @param array<string, mixed> $row
-	 *
-	 * @return array<string, mixed>
-	 */
-	public static function withInternalCompanyId(SelectQuery $query, array $row): array
-	{
-		foreach ($query->getSelections()->getAll() as $selection) {
-			$key = $selection->getSelectionKey();
-			if ($selection->hasTag(SelectionTag::INTERNAL) || str_contains($key, '.')) {
-				$row[$key] = 5;
-			}
-		}
-
-		return $row;
 	}
 }

@@ -9,7 +9,6 @@ use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\Query\QuerySourceIdentities;
 use function ON\Data\Query\query;
 use ON\Data\Query\Schema\QueryRepresentationSchemaCompiler;
-use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use function ON\Data\Query\x;
 use ON\Data\Schema\RelationLoadKnowledge;
@@ -144,7 +143,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$companyIdPath = $this->implicitSourceFieldPath($schema, ['company'], 'id');
 		self::assertSame('company.id', $companyIdPath);
 		self::assertTrue($schema->getField($companyIdPath)->isImplicit());
-		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
+		self::assertCount(2, $query->getSelections()->getAll());
 		$companySource = $this->sourceAt($compilation->getSources(), ['company']);
 		self::assertSame($companyIdPath, $companySource->getFieldPath('id'));
 	}
@@ -162,7 +161,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertTrue($schema->hasField('id'));
 		self::assertTrue($schema->hasField('name'));
 		self::assertSame(['company'], $schema->getField('name')->getSourcePath());
-		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
+		self::assertCount(2, $query->getSelections()->getAll());
 	}
 
 	public function testPreparePlanDoesNotAddInternalWhenCompileAddsSourcePrimaryKey(): void
@@ -174,13 +173,13 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 			->select($query->id, $query->company->name->as('name')));
 		$schema = $this->compiler->compile($schemaQuery);
 		self::assertSame('company.id', $this->implicitSourceFieldPath($schema, ['company'], 'id'));
-		self::assertCount(0, $schemaQuery->getSelections()->getByTag(SelectionTag::INTERNAL));
+		self::assertCount(2, $schemaQuery->getSelections()->getAll());
 
 		$resultQuery = query($users, fn (SelectQuery $query) => $query
 			->select($query->id, $query->company->name->as('name')));
 		$compilation = $this->preparePlan($resultQuery);
 
-		self::assertCount(0, $resultQuery->getSelections()->getByTag(SelectionTag::INTERNAL));
+		self::assertCount(2, $resultQuery->getSelections()->getAll());
 		self::assertSame(
 			$this->implicitSourceFieldPath($compilation->getSchema(), ['company'], 'id'),
 			$this->sourceAt($compilation->getSources(), ['company'])->getFieldPath('id'),
@@ -261,7 +260,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertSame([], $schema->getField('name')->getSourcePath());
 		self::assertSame(['manager'], $schema->getField('managerName')->getSourcePath());
 
-		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
+		self::assertCount(2, $query->getSelections()->getAll());
 		self::assertSame('manager.id', $this->implicitSourceFieldPath($schema, ['manager'], 'id'));
 	}
 
@@ -281,7 +280,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertSame('id', $schema->getField('company.id')->getFieldName());
 		self::assertSame(['company'], $schema->getField('company.id')->getSourcePath());
 		self::assertSame('company.id', $this->implicitSourceFieldPath($schema, ['company'], 'id'));
-		self::assertCount(0, $query->getSelections()->getByTag(SelectionTag::INTERNAL));
+		self::assertCount(1, $query->getSelections()->getAll());
 	}
 
 	public function testCompilesSelectedRootRelation(): void

@@ -6,67 +6,48 @@ namespace Tests\ON\Data\Query;
 
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\ON\Data\Support\StubQueryRowProjector;
 
 final class InternalSelectionPublicOutputTest extends TestCase
 {
-	public function testInternalSelectionsAreStrippedFromFetchAllArrayOutput(): void
+	public function testImplicitIdentityColumnsNeverLeakIntoFetchAllOutput(): void
 	{
-		$query = $this->queryWithInternalSelection();
+		$query = $this->queryWithImplicitIdentity();
 
 		$rows = $query->fetchAll();
 
-		self::assertSame([['id' => 1, 'name' => 'Ada']], $rows);
-		self::assertArrayNotHasKey('_od_internal_1', $rows[0]);
+		self::assertSame([['displayName' => 'Ada']], $rows);
+		self::assertArrayNotHasKey('id', $rows[0]);
+		self::assertArrayNotHasKey('c0', $rows[0]);
+		self::assertArrayNotHasKey('c1', $rows[0]);
 	}
 
-	public function testInternalSelectionsAreStrippedFromFetchOneArrayOutput(): void
+	public function testImplicitIdentityColumnsNeverLeakIntoFetchOneOutput(): void
 	{
-		$query = $this->queryWithInternalSelection();
+		$query = $this->queryWithImplicitIdentity();
 
 		$row = $query->fetchOne();
 
-		self::assertSame(['id' => 1, 'name' => 'Ada'], $row);
-		self::assertArrayNotHasKey('_od_internal_1', $row);
+		self::assertSame(['displayName' => 'Ada'], $row);
+		self::assertArrayNotHasKey('id', $row);
 	}
 
-	public function testInternalSelectionsAreStrippedFromToStdClassOutput(): void
+	public function testImplicitIdentityColumnsNeverLeakIntoToStdClassOutput(): void
 	{
-		$query = $this->queryWithInternalSelection();
+		$query = $this->queryWithImplicitIdentity();
 
 		$row = $query->to(stdClass::class)->fetchOne();
 
 		self::assertInstanceOf(stdClass::class, $row);
-		self::assertSame(1, $row->id);
-		self::assertSame('Ada', $row->name);
-		self::assertFalse(property_exists($row, '_od_internal_1'));
+		self::assertSame('Ada', $row->displayName);
+		self::assertFalse(property_exists($row, 'id'));
+		self::assertFalse(property_exists($row, 'c0'));
 	}
 
-	public function testInternalSelectionsAreStrippedFromIterateArrayOutput(): void
-	{
-		$query = $this->queryWithInternalSelection();
-
-		$rows = iterator_to_array($query->iterate(), false);
-
-		self::assertSame([['id' => 1, 'name' => 'Ada']], $rows);
-		self::assertArrayNotHasKey('_od_internal_1', $rows[0]);
-	}
-
-	public function testInternalSelectionsAreStrippedFromToStdClassIterateOutput(): void
-	{
-		$query = $this->queryWithInternalSelection();
-
-		$rows = iterator_to_array($query->to(stdClass::class)->iterate(), false);
-
-		self::assertCount(1, $rows);
-		self::assertInstanceOf(stdClass::class, $rows[0]);
-		self::assertFalse(property_exists($rows[0], '_od_internal_1'));
-	}
-
-	public function testUserAliasStartingWithInternalPrefixIsNotStrippedUnlessTaggedInternal(): void
+	public function testUserAliasStartingWithInternalPrefixIsPreserved(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
@@ -78,7 +59,7 @@ final class InternalSelectionPublicOutputTest extends TestCase
 		self::assertSame(['id' => 1, '__od.foo' => 'Ada'], $row);
 	}
 
-	public function testPublicAliasLookingLikeLoadKeyIsNotStrippedUnlessTaggedInternal(): void
+	public function testPublicAliasLookingLikeLoadKeyIsPreserved(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
@@ -90,13 +71,24 @@ final class InternalSelectionPublicOutputTest extends TestCase
 		self::assertSame(['id' => 1, 'l_custom_name' => 'Ada'], $row);
 	}
 
-	private function queryWithInternalSelection(): SelectQuery
+	public function testPublicAliasMatchingColumnIndexSqlAliasIsPreserved(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
 		$query = new SelectQuery($users, new InternalSelectionPublicOutputExecutor());
-		$query->select($query->id, $query->name);
-		$query->getSelections()->add($query->id->as('_od_internal_1'), SelectionTag::INTERNAL);
+		$query->select($query->id, $query->name->as('c0'));
+
+		$row = $query->fetchOne();
+
+		self::assertSame(['id' => 1, 'c0' => 'Ada'], $row);
+	}
+
+	private function queryWithImplicitIdentity(): SelectQuery
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = new SelectQuery($users, new InternalSelectionPublicOutputExecutor());
+		$query->select($query->name->as('displayName'));
 
 		return $query;
 	}
@@ -123,26 +115,10 @@ final class InternalSelectionPublicOutputExecutor implements QueryExecutorInterf
 
 	public function fetchOne(SelectQuery $query): ?array
 	{
-		$row = [
+		return StubQueryRowProjector::project($query, [
 			'id' => 1,
 			'name' => 'Ada',
-		];
-
-		foreach (['__od.foo', 'l_custom_name'] as $alias) {
-			if (
-				$query->getSelections()->hasSelectionKey($alias)
-				&& ! $query->getSelections()->hasSelectionKey('name')
-			) {
-				$row[$alias] = 'Ada';
-				unset($row['name']);
-			}
-		}
-
-		foreach ($query->getSelections()->getByTag(SelectionTag::INTERNAL) as $selection) {
-			$row[$selection->getSelectionKey()] = 99;
-		}
-
-		return $row;
+		]);
 	}
 
 	public function iterate(SelectQuery $query): iterable
