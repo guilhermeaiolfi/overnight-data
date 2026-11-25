@@ -18,6 +18,19 @@ final class DatabaseGenerator implements FieldGeneratorInterface, GeneratorDefin
 	) {
 	}
 
+	public static function sequenceFromArgument(mixed $arg): ?string
+	{
+		if (is_string($arg) && $arg !== '') {
+			return $arg;
+		}
+
+		if (is_array($arg) && isset($arg['sequence']) && is_string($arg['sequence']) && $arg['sequence'] !== '') {
+			return $arg['sequence'];
+		}
+
+		return null;
+	}
+
 	public function getSequence(): ?string
 	{
 		return $this->sequence;
