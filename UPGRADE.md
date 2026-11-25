@@ -2,6 +2,10 @@
 
 `guilhermeaiolfi/overnight-data` is still evolving. This file is **not** a compatibility guarantee.
 
+## Definition and runtime changes after `b27b9e9`
+
+- A single-key `belongsTo(...)->innerKey(...)->outerKey(...)->end()` creates a missing local field using the referenced field's type and the relation's nullability. An explicitly declared field keeps its settings. If its type differs, correct the declaration using the field names and types in the exception.
+
 ## What documentation means
 
 Docs describe **how the code works today**, so you can use and debug it.

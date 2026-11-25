@@ -100,3 +100,5 @@ Field `comment()` is removed; use `description()`.
 Cycle collection class names (`entity`, `repository`, `mapper`, `scope`) live on `CycleCollectionPlugin`. ON\Data Session persistence, query loading, and `ConvertingCommandExecutor` do not use them.
 
 Relation `cascade()` / `load()` remain on the relation definition. Prefer `exclusive()` for owned-child delete-on-unlink behavior inside ON\Data.
+
+Completing a single-key belongs-to relation with `end()` creates its missing local key field using the referenced field type and the relation's nullability. An explicitly declared local field keeps its settings. A type mismatch reports both fields and their types.
