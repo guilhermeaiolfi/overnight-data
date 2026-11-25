@@ -413,12 +413,7 @@ final class SqlQueryCompiler
 		ValueExpressionInterface $expression,
 		SqlTranslationContext $context,
 		?Join $joinContext,
-		SqlFunctionCompilationStack $stack,
 	): SqlFragment {
-		if ($expression instanceof FunctionCallExpression) {
-			return $this->translateFunctionCall($expression, $context, $joinContext, $stack);
-		}
-
 		return $this->translateExpression($expression, $context, null, $joinContext);
 	}
 
@@ -431,12 +426,8 @@ final class SqlQueryCompiler
 		FunctionCallExpression $expression,
 		SqlTranslationContext $context,
 		?Join $joinContext = null,
-		?SqlFunctionCompilationStack $stack = null,
 	): SqlFragment {
-		$stack ??= new SqlFunctionCompilationStack();
-		$stack->enter($expression);
-
-		try {
+		return $context->withinFunction($expression, function () use ($expression, $context, $joinContext): SqlFragment {
 			$function = $expression->getFunction();
 			$implementation = new $function();
 
@@ -449,7 +440,6 @@ final class SqlQueryCompiler
 				$context,
 				$this->platform,
 				$joinContext,
-				$stack,
 			);
 
 			$compiled = $implementation->compile(
@@ -461,9 +451,7 @@ final class SqlQueryCompiler
 				$compiled->getSql(),
 				$compiled->getParameters(),
 			);
-		} finally {
-			$stack->leave($expression);
-		}
+		});
 	}
 
 	private function translateStar(StarExpression $expression, SqlTranslationContext $context): SqlFragment
