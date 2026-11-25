@@ -6,7 +6,7 @@ namespace ON\Data\Database\Sql;
 
 use ON\Data\Database\DatabasePlatformInterface;
 use ON\Data\Database\Exception\UnsupportedQueryException;
-use ON\Data\Database\Sql\Dialect\DialectInterface;
+use ON\Data\Database\Sql\Dialect\AbstractDialect;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Mapper\ConversionGateway;
@@ -58,7 +58,7 @@ use ON\Data\Query\Sort\SortDirection;
 final class SqlQueryCompiler
 {
 	public function __construct(
-		private readonly DialectInterface $dialect,
+		private readonly AbstractDialect $dialect,
 		private readonly DatabasePlatformInterface $platform,
 		private readonly ConversionGateway $gateway,
 		private readonly string $tablePrefix = '',

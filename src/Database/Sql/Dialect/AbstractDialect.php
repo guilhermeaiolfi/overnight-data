@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace ON\Data\Database\Sql\Dialect;
 
+use ON\Data\Database\DatabaseFamily;
 use ON\Data\Database\Sql\SqlFragment;
 
 /** @internal */
-abstract class AbstractDialect implements DialectInterface
+abstract class AbstractDialect
 {
 	protected const OPEN_QUOTE = '"';
 	protected const CLOSE_QUOTE = '"';
 	protected const UNLIMITED = '';
 	protected const DEFAULT_VALUES = 'DEFAULT VALUES';
+
+	abstract public function family(): DatabaseFamily;
 
 	final public function quoteIdentifier(string $identifier): string
 	{
@@ -54,11 +57,17 @@ abstract class AbstractDialect implements DialectInterface
 		return SqlFragment::withParameters(implode(' ', $parts), $params);
 	}
 
+	/** @param list<string> $sqlArguments */
 	public function compileConcat(array $sqlArguments): string
 	{
 		return '(' . implode(' || ', $sqlArguments) . ')';
 	}
 
+	/**
+	 * @param list<string> $columns
+	 * @param list<string> $valuePlaceholders
+	 * @param list<string> $returningColumns
+	 */
 	public function compileInsert(string $table, array $columns, array $valuePlaceholders, array $returningColumns): string
 	{
 		$sql = 'INSERT INTO ' . $table . $this->insertColumns($columns) . ' ' . $this->insertValues($valuePlaceholders);

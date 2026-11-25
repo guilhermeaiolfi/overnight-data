@@ -8,8 +8,8 @@ use ON\Data\Database\ConnectionInterface;
 use ON\Data\Database\Exception\QueryExecutionException;
 use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\Database\QueryExecutorInterface;
+use ON\Data\Database\Sql\Dialect\AbstractDialect;
 use ON\Data\Database\Sql\Dialect\DialectFactory;
-use ON\Data\Database\Sql\Dialect\DialectInterface;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Query\SelectQuery;
 use Throwable;
@@ -23,7 +23,7 @@ final class SqlQueryExecutor implements QueryExecutorInterface
 	public function __construct(
 		private readonly ConnectionInterface $connection,
 		ConversionGateway $gateway,
-		?DialectInterface $dialect = null,
+		?AbstractDialect $dialect = null,
 	) {
 		$this->compiler = new SqlQueryCompiler(
 			$dialect ?? DialectFactory::forConnection($connection),
