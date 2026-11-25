@@ -381,16 +381,7 @@ class Field extends DefinitionNode implements FieldInterface
 			return null;
 		}
 
-		$arg = $config['arg'];
-		if (is_string($arg) && $arg !== '') {
-			return $arg;
-		}
-
-		if (is_array($arg) && isset($arg['sequence']) && is_string($arg['sequence']) && $arg['sequence'] !== '') {
-			return $arg['sequence'];
-		}
-
-		return null;
+		return DatabaseGenerator::sequenceFromArgument($config['arg']);
 	}
 
 	public function isPrimaryKey(): bool
