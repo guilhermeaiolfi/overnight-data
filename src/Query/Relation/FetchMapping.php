@@ -9,7 +9,7 @@ use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
-use ON\Data\Query\SourceMapBuilder;
+use ON\Data\Query\SourceMap;
 use ON\Data\Schema\RepresentationExpressionSchema;
 use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationSchema;
@@ -232,15 +232,14 @@ final class FetchMapping
 		}
 
 		$targetSource = $branch->getQueryLocalRelation() ?? $branch->getSource();
-		$mapBuilder = new SourceMapBuilder();
-		$mapBuilder->map($branch->getProjectionLevel(), $targetSource);
+		$map = SourceMap::of($branch->getProjectionLevel(), $targetSource);
 		$originSource = $expressionSchema->getOriginSource();
 
 		if ($originSource instanceof QuerySourceInterface && $originSource !== $branch->getProjectionLevel()) {
-			$mapBuilder->map($originSource, $targetSource);
+			$map = $map->with($originSource, $targetSource);
 		}
 
-		$rebound = $expression->rebind($mapBuilder->seal());
+		$rebound = $expression->rebind($map);
 		$alias = $this->nextSqlAlias();
 		$valueKey = '@' . $alias;
 		$this->recordExpression($branch->getQuery(), $alias, $rebound);
