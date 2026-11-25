@@ -18,7 +18,7 @@ final class DocblockListTargetResolver
 	/**
 	 * @var array<class-string, array<string, class-string>>
 	 */
-	private array $importMaps = [];
+	private static array $importMaps = [];
 
 	/**
 	 * @return class-string|null
@@ -128,7 +128,7 @@ final class DocblockListTargetResolver
 		}
 
 		$class = $property->getDeclaringClass()->getName();
-		$imports = $this->importMaps[$class] ??= $this->parseImports($property);
+		$imports = self::$importMaps[$class] ??= $this->parseImports($property);
 
 		return $imports[$type] ?? null;
 	}

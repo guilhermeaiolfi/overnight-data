@@ -242,7 +242,7 @@ Ownership follows these lifetimes:
 | `MappingBranch` | One branch's output state, created by its writer |
 | `ConversionGateway` | Scalar conversion routes through field types and codecs |
 
-`MappingRuntime::getSharedInstance()` is the sole cache for operation-scoped helpers such as `BranchTargetInferrer`, `MappingNodePropertyFinder`, and `DefinitionArgumentLocator`. Built-in resolvers request those helpers from their current runtime without retaining extra copies of the references. Constructor-injected helper instances still take precedence. Keeping a resolver alive therefore does not retain helpers from a finished operation.
+The runtime owns helpers for one mapping operation. Declared property metadata and PHPDoc import maps are cached by class across operations. Source values, target instances and custom resolver state stay local to their operation.
 
 `MappingRuntime::convert()` owns mapping-specific conversion: it skips untyped values and mappings without representations, supplies the PHP representation for an unspecified side, and adds the failing node path to conversion errors. It delegates scalar conversion to the manager's gateway (`MapperManager::getGateway()`). `FieldConversionCoordinator` and `MapperManager::createFieldConversionCoordinator()` have been removed.
 
