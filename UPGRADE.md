@@ -5,6 +5,7 @@
 ## Definition and runtime changes after `b27b9e9`
 
 - Use `Session::prepare()` and `Session::track()` for direct writable-query tracking. `QueryRepresentationPlan::getFetchSchema()` returns the prepared schema.
+- If two paths in the same projection identify the same row, their values for any shared field must agree. A conflict raises an exception naming the collection, key, and field.
 
 ## What documentation means
 

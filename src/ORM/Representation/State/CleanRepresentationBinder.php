@@ -37,6 +37,16 @@ final class CleanRepresentationBinder
 			$keys[$source->getPathKey()] = $key;
 			$hash = $key->getHash();
 			if (isset($valuesByKey[$hash])) {
+				foreach (array_intersect_key($values, $valuesByKey[$hash]) as $field => $value) {
+					if ($value !== $valuesByKey[$hash][$field]) {
+						throw new StateException(sprintf(
+							"Sources for collection '%s' with key '%s' disagree on field '%s'.",
+							$source->getCollection()->getName(),
+							$key->getDebugString(),
+							$field,
+						));
+					}
+				}
 				$valuesByKey[$hash] += $values;
 			} else {
 				$valuesByKey[$hash] = $values;
