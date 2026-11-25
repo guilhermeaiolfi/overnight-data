@@ -2,6 +2,10 @@
 
 `guilhermeaiolfi/overnight-data` is still evolving. This file is **not** a compatibility guarantee.
 
+## Definition and runtime changes after `b27b9e9`
+
+- Looking up a restored collection initializes missing or non-array `fields` and `relations` slots to empty arrays. Later additions to these collections persist in registry exports.
+
 ## What documentation means
 
 Docs describe **how the code works today**, so you can use and debug it.

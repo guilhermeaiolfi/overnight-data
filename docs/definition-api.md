@@ -44,7 +44,7 @@ Canonical arrays are produced by the node class that owns them.
 `Registry::all()` returns the canonical master array.
 
 - Export validates that stored state contains plain data only.
-- Read operations do not mutate stored definitions.
+- Reads preserve canonical definitions. Looking up a collection with missing or non-array `fields` or `relations` initializes the affected slots to empty arrays.
 - Runtime wrapper caches are never exported.
 - `new Registry($registry->all())` restores the same canonical structure.
 - Restored arrays must already be canonical and include any required class discriminators for custom stored nodes.
