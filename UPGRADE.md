@@ -2,6 +2,13 @@
 
 `guilhermeaiolfi/overnight-data` is still evolving. This file is **not** a compatibility guarantee.
 
+## Definition and runtime changes after `b27b9e9`
+
+- Looking up a restored collection initializes missing or non-array `fields` and `relations` slots to empty arrays. Later additions to these collections persist in registry exports.
+- A single-key `belongsTo(...)->innerKey(...)->outerKey(...)->end()` creates a missing local field using the referenced field's type and the relation's nullability. An explicitly declared field keeps its settings. If its type differs, correct the declaration using the field names and types in the exception.
+- The mapper's concrete error types can now also be caught as `MappingException`.
+- Relation-state methods accept DTOs and `RecordState` instances directly.
+
 ## What documentation means
 
 Docs describe **how the code works today**, so you can use and debug it.

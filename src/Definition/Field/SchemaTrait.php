@@ -13,7 +13,6 @@ use ON\Data\Definition\Field\Generator\NowGenerator;
 use ON\Data\Definition\Field\Generator\PhpFieldGeneratorInterface;
 use ON\Data\Definition\Field\Generator\UuidGenerator;
 use ON\Data\Definition\Field\Generator\When;
-use ON\Data\Definition\Relation\RelationInterface;
 
 trait SchemaTrait
 {
@@ -183,16 +182,7 @@ trait SchemaTrait
 			return null;
 		}
 
-		$arg = $config['arg'];
-		if (is_string($arg) && $arg !== '') {
-			return $arg;
-		}
-
-		if (is_array($arg) && isset($arg['sequence']) && is_string($arg['sequence']) && $arg['sequence'] !== '') {
-			return $arg['sequence'];
-		}
-
-		return null;
+		return DatabaseGenerator::sequenceFromArgument($config['arg']);
 	}
 
 	public function isPrimaryKey(): bool
@@ -298,10 +288,5 @@ trait SchemaTrait
 	public function isIndexed(): bool
 	{
 		return (bool) $this->get('indexed');
-	}
-
-	public function end(): FieldInterface|RelationInterface
-	{
-		return $this->parent;
 	}
 }

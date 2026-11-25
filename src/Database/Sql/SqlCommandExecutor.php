@@ -114,7 +114,7 @@ final class SqlCommandExecutor implements CommandExecutorInterface, Transactiona
 		return new CommandResult($affected, $generated);
 	}
 
-	private function executeStatement(SqlStatement $stmt): int
+	private function executeStatement(SqlFragment $stmt): int
 	{
 		return max(0, $this->connection->execute($stmt->sql, $stmt->params));
 	}
