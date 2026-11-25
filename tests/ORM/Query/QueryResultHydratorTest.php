@@ -9,8 +9,6 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
-use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
-use ON\Data\ORM\Representation\Schema\Query\QuerySourceIdentities;
 use ON\Data\ORM\Representation\State\Query\QueryResultHydrator;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Session;
@@ -35,7 +33,7 @@ final class QueryResultHydratorTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 		$session->create($object);
 
-		$state = $this->adoptFlatProjection($object, $this->compilation($schema, $this->identitiesFor($schema)), [
+		$state = $this->adoptFlatProjection($object, $schema, [
 			'id' => 1,
 			'name' => 'Acme',
 			'company.id' => 5,
@@ -54,9 +52,8 @@ final class QueryResultHydratorTest extends TestCase
 		$schema = $this->projectionSchema($users, $companies);
 		$object = $this->flatUser(1, 'Acme');
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = $this->identitiesFor($schema);
 
-		$state = $this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
+		$state = $this->adoptFlatProjection($object, $schema, [
 			'id' => 1,
 			'name' => 'Acme',
 			'company.id' => 5,
@@ -75,9 +72,8 @@ final class QueryResultHydratorTest extends TestCase
 		$companies = $registry->getCollection('companies');
 		$schema = $this->projectionSchema($users, $companies);
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = $this->identitiesFor($schema);
 
-		$this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, $identities), [
+		$this->adoptFlatProjection($this->flatUser(1, 'Acme'), $schema, [
 			'id' => 1,
 			'name' => 'Acme',
 			'company.id' => 5,
@@ -98,9 +94,8 @@ final class QueryResultHydratorTest extends TestCase
 		$companies = $registry->getCollection('companies');
 		$schema = $this->projectionSchema($users, $companies);
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = $this->identitiesFor($schema);
 
-		$state = $this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, $identities), [
+		$state = $this->adoptFlatProjection($this->flatUser(1, 'Acme'), $schema, [
 			'id' => 1,
 			'name' => 'Acme',
 			'company.id' => 5,
@@ -121,9 +116,8 @@ final class QueryResultHydratorTest extends TestCase
 		$companies = $registry->getCollection('companies');
 		$schema = $this->projectionSchema($users, $companies);
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = $this->identitiesFor($schema);
 
-		$state = $this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, $identities), [
+		$state = $this->adoptFlatProjection($this->flatUser(1, 'Acme'), $schema, [
 			'id' => 1,
 			'name' => 'Acme',
 			'company.id' => 5,
@@ -152,9 +146,8 @@ final class QueryResultHydratorTest extends TestCase
 		$object->id = 1;
 		$object->name = 'Acme';
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = $this->identitiesFor($schema);
 
-		$this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
+		$this->adoptFlatProjection($object, $schema, [
 			'company.id' => 5,
 		], $session);
 
@@ -172,9 +165,8 @@ final class QueryResultHydratorTest extends TestCase
 		$object->id = 1;
 		$object->name = 'Acme';
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = $this->identitiesFor($schema);
 
-		$this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
+		$this->adoptFlatProjection($object, $schema, [
 			'name' => 'Acme',
 			'company.id' => 5,
 		], $session);
@@ -191,7 +183,7 @@ final class QueryResultHydratorTest extends TestCase
 		$schema = $this->projectionSchema($users, $companies);
 		$session = new Session(new RecordingCommandExecutor());
 
-		$this->adoptFlatProjection($this->flatUser(99, 'Object value'), $this->compilation($schema, $this->identitiesFor($schema)), [
+		$this->adoptFlatProjection($this->flatUser(99, 'Object value'), $schema, [
 			'id' => 1,
 			'name' => 'Source row value',
 			'company.id' => 5,
@@ -211,7 +203,7 @@ final class QueryResultHydratorTest extends TestCase
 		$schema->addField(new RepresentationFieldSchema('company_id', $users, 'company_id'));
 		$session = new Session(new RecordingCommandExecutor());
 
-		$this->adoptFlatProjection($this->flatUser(1, 'ignored'), $this->compilation($schema, $this->identitiesFor($schema)), [
+		$this->adoptFlatProjection($this->flatUser(1, 'ignored'), $schema, [
 			'id' => 1,
 			'name' => null,
 			'company.id' => 5,
@@ -236,7 +228,7 @@ final class QueryResultHydratorTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('results without identity are never tracked');
 
-		$this->adoptFlatProjection($this->flatUser(99, 'Acme'), $this->compilation($schema, $this->identitiesFor($schema)), [
+		$this->adoptFlatProjection($this->flatUser(99, 'Acme'), $schema, [
 			'id' => null,
 			'name' => 'Acme',
 			'company.id' => 5,
@@ -254,7 +246,7 @@ final class QueryResultHydratorTest extends TestCase
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('results without identity are never tracked');
 
-		$this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, new QuerySourceIdentities($schema->getSources())), [
+		$this->adoptFlatProjection($this->flatUser(1, 'Acme'), $schema, [
 			'id' => 1,
 			'name' => 'Acme',
 		], $session);
@@ -274,9 +266,8 @@ final class QueryResultHydratorTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 		$object = $this->flatUser(1, 'Acme');
 		$object->company = null;
-		$identities = $this->identitiesFor($schema);
 
-		$state = $this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
+		$state = $this->adoptFlatProjection($object, $schema, [
 			'id' => 1,
 			'name' => 'Acme',
 			'company.id' => 5,
@@ -295,9 +286,8 @@ final class QueryResultHydratorTest extends TestCase
 		$schema = $this->projectionSchema($users, $companies);
 		$object = $this->flatUser(1, 'Acme');
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = $this->identitiesFor($schema);
 
-		$state = $this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
+		$state = $this->adoptFlatProjection($object, $schema, [
 			'id' => 1,
 			'name' => 'Acme',
 			'company.id' => 5,
@@ -331,9 +321,8 @@ final class QueryResultHydratorTest extends TestCase
 		$object->managerName = 'Boss';
 
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = $this->identitiesFor($schema);
 
-		$state = $this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
+		$state = $this->adoptFlatProjection($object, $schema, [
 			'id' => 1,
 			'name' => 'Root',
 			'managerName' => 'Boss',
@@ -377,9 +366,8 @@ final class QueryResultHydratorTest extends TestCase
 		$object->managerName = 'Boss';
 
 		$session = new Session(new RecordingCommandExecutor());
-		$identities = $this->identitiesFor($schema);
 
-		$state = $this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
+		$state = $this->adoptFlatProjection($object, $schema, [
 			'id' => 1,
 			'managerName' => 'Boss',
 			'manager.id' => 9,
@@ -393,6 +381,23 @@ final class QueryResultHydratorTest extends TestCase
 		self::assertSame(['manager'], $managerField->getSourcePath());
 	}
 
+	public function testSelfJoinSelectingTheSameRowBindsOneSharedRecordWithBothFieldSets(): void
+	{
+		$users = $this->makeSelfRelationRegistry()->getCollection('users');
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('id', $users, 'id'));
+		$schema->addField(new RepresentationFieldSchema('managerId', $users, 'id', sourcePath: ['manager']));
+		$schema->addField(new RepresentationFieldSchema('managerName', $users, 'name', sourcePath: ['manager']));
+		$row = ['id' => 2, 'managerId' => 2, 'managerName' => 'Ada'];
+		$session = new Session(new RecordingCommandExecutor());
+
+		$state = $this->adoptFlatProjection((object) $row, $schema, $row, $session);
+		$root = $state->requireRootRecord();
+		self::assertSame($root, $state->getRecordForField($schema->getField('managerName')));
+		self::assertSame($root, $session->getRecords()->getByKey($users->getKey(2)));
+		self::assertSame('Ada', $root->getValue('name'));
+	}
+
 	public function testReusesExistingTrackedRecordState(): void
 	{
 		$registry = $this->makeRegistry();
@@ -403,9 +408,8 @@ final class QueryResultHydratorTest extends TestCase
 		$records = new RecordStateStore();
 		$records->add($existing);
 		$session = new Session(new RecordingCommandExecutor(), context: new SessionContext($records));
-		$identities = $this->identitiesFor($schema);
 
-		$this->adoptFlatProjection($this->flatUser(1, 'Acme'), $this->compilation($schema, $identities), [
+		$this->adoptFlatProjection($this->flatUser(1, 'Acme'), $schema, [
 			'id' => 1,
 			'name' => 'Acme',
 			'company.id' => 5,
@@ -417,26 +421,14 @@ final class QueryResultHydratorTest extends TestCase
 	/** @param array<string, mixed> $sourceRow */
 	private function adoptFlatProjection(
 		object $object,
-		QueryRepresentationPlan $compilation,
+		RepresentationSchema $schema,
 		array $sourceRow,
 		Session $session,
 	): RepresentationState {
-		return (new QueryResultHydrator())->hydrate(
+		return (new QueryResultHydrator($session->getContext()))->hydrate(
 			$object,
-			$compilation->getSchema(),
-			$sourceRow,
-			$compilation->getIdentities(),
-			$session->getContext(),
-		);
-	}
-
-	private function compilation(
-		RepresentationSchema $schema,
-		QuerySourceIdentities $identities,
-	): QueryRepresentationPlan {
-		return new QueryRepresentationPlan(
 			$schema,
-			$identities,
+			$sourceRow,
 		);
 	}
 
@@ -447,11 +439,6 @@ final class QueryResultHydratorTest extends TestCase
 		$user->name = $name;
 
 		return $user;
-	}
-
-	private function identitiesFor(RepresentationSchema $schema): QuerySourceIdentities
-	{
-		return new QuerySourceIdentities($schema->getSources());
 	}
 
 	private function projectionSchema(

@@ -2,6 +2,10 @@
 
 `guilhermeaiolfi/overnight-data` is still evolving. This file is **not** a compatibility guarantee.
 
+## Definition and runtime changes after `b27b9e9`
+
+- Use `Session::prepare()` and `Session::track()` for direct writable-query tracking. `QueryRepresentationPlan::getFetchSchema()` returns the prepared schema.
+
 ## What documentation means
 
 Docs describe **how the code works today**, so you can use and debug it.
@@ -77,4 +81,4 @@ If a release breaks something that the docs still describe as current behavior, 
 
 `RecordHistory`, `RecordState::getRevision()`, `RecordState::getHistory()`, `RepresentationFieldStateItem`, and `RepresentationRelationStateItem` have been removed. Code that builds state for `Session::adopt()` should call `RepresentationState::fromRecords($schema, $recordsBySourceKey)`. Use the empty source key for the root record and schema source keys for flat related records. Use `hasBaseline()` and `getBaseline()` to inspect a field baseline by its representation path.
 
-`RepresentationAdoptionEngine` now handles inbound Create and Patch. `WritableQueryResultTracker` uses `QueryResultHydrator` for writable results, and `Session::identify()` handles existing references independently. Application calls to `Session` use the same signatures.
+`RepresentationAdoptionEngine` handles staged creates and updates. `QueryResultHydrator` handles writable query results. It shares record binding with `Session::identify()` so both paths recognize an existing record by the same key.

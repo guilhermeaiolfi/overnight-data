@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Tests\ON\Data\ORM\Representation\Schema;
 
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Representation\Schema\Query\QuerySourceIdentities;
+use ON\Data\ORM\Representation\Sync\RepresentationSourceReader;
 use ON\Data\Schema\RepresentationFieldRole;
 use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationSource;
 use PHPUnit\Framework\TestCase;
 
-final class QuerySourceIdentitiesTest extends TestCase
+final class QuerySourceKeyTest extends TestCase
 {
 	public function testGetIdentityReadsSourceQualifiedSchemaPath(): void
 	{
@@ -22,25 +22,23 @@ final class QuerySourceIdentitiesTest extends TestCase
 			->field('name', 'string')->end();
 		$companies = $registry->getCollection('companies');
 		$path = 'company.id';
-		$identities = new QuerySourceIdentities([
-			new RepresentationSource(
-				['company'],
-				$companies,
-				[
-					new RepresentationFieldSchema('name', $companies, 'name', sourcePath: ['company']),
-					new RepresentationFieldSchema(
-						$path,
-						$companies,
-						'id',
-						writable: false,
-						sourcePath: ['company'],
-						role: RepresentationFieldRole::Implicit,
-					),
-				],
-			),
-		]);
+		$source = new RepresentationSource(
+			['company'],
+			$companies,
+			[
+				new RepresentationFieldSchema('name', $companies, 'name', sourcePath: ['company']),
+				new RepresentationFieldSchema(
+					$path,
+					$companies,
+					'id',
+					writable: false,
+					sourcePath: ['company'],
+					role: RepresentationFieldRole::Implicit,
+				),
+			],
+		);
 
-		$identity = $identities->getIdentity(['company'], [
+		$identity = RepresentationSourceReader::keyFromRow($source, [
 			'id' => 1,
 			'name' => 'Acme',
 			$path => 5,
@@ -58,25 +56,23 @@ final class QuerySourceIdentitiesTest extends TestCase
 			->field('id', 'int')->end()
 			->field('name', 'string')->end();
 		$companies = $registry->getCollection('companies');
-		$identities = new QuerySourceIdentities([
-			new RepresentationSource(
-				['company'],
-				$companies,
-				[
-					new RepresentationFieldSchema('name', $companies, 'name', sourcePath: ['company']),
-					new RepresentationFieldSchema(
-						'company.id',
-						$companies,
-						'id',
-						writable: false,
-						sourcePath: ['company'],
-						role: RepresentationFieldRole::Implicit,
-					),
-				],
-			),
-		]);
+		$source = new RepresentationSource(
+			['company'],
+			$companies,
+			[
+				new RepresentationFieldSchema('name', $companies, 'name', sourcePath: ['company']),
+				new RepresentationFieldSchema(
+					'company.id',
+					$companies,
+					'id',
+					writable: false,
+					sourcePath: ['company'],
+					role: RepresentationFieldRole::Implicit,
+				),
+			],
+		);
 
-		self::assertNull($identities->getIdentity(['company'], [
+		self::assertNull(RepresentationSourceReader::keyFromRow($source, [
 			'name' => 'Acme',
 		]));
 	}
@@ -89,17 +85,15 @@ final class QuerySourceIdentitiesTest extends TestCase
 			->field('id', 'int')->end()
 			->field('name', 'string')->end();
 		$companies = $registry->getCollection('companies');
-		$identities = new QuerySourceIdentities([
-			new RepresentationSource(
-				['company'],
-				$companies,
-				[
-					new RepresentationFieldSchema('name', $companies, 'name', sourcePath: ['company']),
-				],
-			),
-		]);
+		$source = new RepresentationSource(
+			['company'],
+			$companies,
+			[
+				new RepresentationFieldSchema('name', $companies, 'name', sourcePath: ['company']),
+			],
+		);
 
-		self::assertNull($identities->getIdentity(['company'], [
+		self::assertNull(RepresentationSourceReader::keyFromRow($source, [
 			'id' => 5,
 			'name' => 'Acme',
 		]));

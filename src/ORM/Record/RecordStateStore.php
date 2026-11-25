@@ -78,6 +78,16 @@ final class RecordStateStore
 		return $record;
 	}
 
+	/** @param array<string, mixed> $values */
+	public function bindClean(Key $key, array $values): RecordState
+	{
+		return $this->getActive($key, sprintf(
+			"Cannot build projection representation for collection '%s' because key '%s' is already tracked as removed.",
+			$key->getCollection()->getName(),
+			$key->getDebugString(),
+		)) ?? RecordState::clean($key, $values);
+	}
+
 	/**
 	 * PATCH an existing row: reuse or create a key-only clean record, then set present values.
 	 *

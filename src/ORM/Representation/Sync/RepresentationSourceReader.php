@@ -29,24 +29,44 @@ final class RepresentationSourceReader
 		return [$readsByPath, self::agreedPresentValues($source, $readsByPath)];
 	}
 
+	/** @param array<string, mixed> $row */
+	public static function keyFromRow(RepresentationSource $source, array $row): ?Key
+	{
+		$values = self::primaryKeyValues($source, static fn (string $path): mixed => $row[$path] ?? null);
+		$collection = $source->getCollection();
+
+		return count($values) === count($collection->getPrimaryKey()) ? $collection->getKey($values) : null;
+	}
+
+	/**
+	 * @param callable(string): mixed $read
+	 * @return array<string, mixed>
+	 */
+	private static function primaryKeyValues(RepresentationSource $source, callable $read): array
+	{
+		$values = [];
+		$primaryKey = $source->getCollection()->getPrimaryKey();
+		foreach ($source->getPrimaryKeyPaths() as $index => $path) {
+			if ($path !== null && ($value = $read($path)) !== null) {
+				$values[$primaryKey[$index]] = $value;
+			}
+		}
+
+		return $values;
+	}
+
 	/** @param array<string, PathReadResult<mixed>> $readsByPath */
 	public static function resolveKey(RepresentationSource $source, array $readsByPath, ?Key $identity): ?Key
 	{
 		$collection = $source->getCollection();
-		$values = [];
 		$primaryKey = $collection->getPrimaryKey();
-		foreach ($source->getPrimaryKeyPaths() as $index => $path) {
-			$result = $path === null ? null : ($readsByPath[$path] ?? null);
-			if ($result !== null && $result->isPresent()) {
-				$value = $result->requireValue();
-				if ($value !== null) {
-					$values[$primaryKey[$index]] = $value;
-				}
-			}
-		}
+		$values = self::primaryKeyValues($source, static function (string $path) use ($readsByPath): mixed {
+			$result = $readsByPath[$path] ?? null;
 
-		$key = count($values) === count($primaryKey) ? $collection->getKey($values) : null;
-		if ($identity !== null && ($conflict = $identity->conflictingIdentityField($key?->getValues() ?? $values)) !== null) {
+			return $result?->isPresent() ? $result->requireValue() : null;
+		});
+
+		if ($identity !== null && ($conflict = $identity->conflictingIdentityField($values)) !== null) {
 			throw new StateException(sprintf(
 				"Cannot bind projection source for collection '%s' because intent identity field '%s' disagrees with the representation.",
 				$collection->getName(),
@@ -54,7 +74,7 @@ final class RepresentationSourceReader
 			));
 		}
 
-		return $key ?? $identity;
+		return $identity ?? (count($values) === count($primaryKey) ? $collection->getKey($values) : null);
 	}
 
 	/**
