@@ -298,10 +298,10 @@ class Collection extends AbstractDefinition implements CollectionInterface
 					);
 				}
 
-				return new Key($this, array_combine($primaryKey, array_values($value)) ?: []);
+				return new Key($this, array_combine($primaryKey, $value));
 			}
 
-			return new Key($this, $this->canonicalizeKeyInput($value));
+			return $this->keyFromFields($value);
 		}
 
 		if (count($primaryKey) !== 1) {
@@ -315,7 +315,7 @@ class Collection extends AbstractDefinition implements CollectionInterface
 
 	public function getKeyFromRecord(array $record, bool $allowColumnNames = true): Key
 	{
-		return new Key($this, $this->canonicalizeKeyInput($record, $allowColumnNames, true, false));
+		return $this->keyFromFields($record, $allowColumnNames, true);
 	}
 
 	public function getVisibleFields(): array
@@ -388,16 +388,14 @@ class Collection extends AbstractDefinition implements CollectionInterface
 
 	/**
 	 * @param array<string, mixed> $input
-	 * @return non-empty-array<string, string|int|float|bool>
 	 */
-	private function canonicalizeKeyInput(
+	private function keyFromFields(
 		array $input,
 		bool $allowColumnNames = true,
 		bool $ignoreExtraFields = false,
-		bool $rejectDuplicateFieldAndColumn = true,
-	): array {
+	): Key {
 		$values = [];
-		$usedKeys = [];
+		$remaining = $input;
 		$primaryKeyNames = $this->getPrimaryKey();
 
 		foreach ($this->getPrimaryKeyFields() as $field) {
@@ -407,7 +405,7 @@ class Collection extends AbstractDefinition implements CollectionInterface
 			$hasColumnName = $allowColumnNames && array_key_exists($columnName, $input);
 
 			if ($hasFieldName && $hasColumnName && $fieldName !== $columnName) {
-				if ($rejectDuplicateFieldAndColumn) {
+				if (! $ignoreExtraFields) {
 					throw new InvalidPrimaryKeyException(
 						sprintf(
 							"Primary key for collection '%s' cannot define both field '%s' and column '%s'.",
@@ -431,7 +429,7 @@ class Collection extends AbstractDefinition implements CollectionInterface
 			}
 
 			if ($hasFieldName) {
-				$usedKeys[] = $fieldName;
+				unset($remaining[$fieldName]);
 				$values[$fieldName] = $input[$fieldName];
 
 				continue;
@@ -448,7 +446,7 @@ class Collection extends AbstractDefinition implements CollectionInterface
 					);
 				}
 
-				$usedKeys[] = $columnName;
+				unset($remaining[$columnName]);
 				$values[$fieldName] = $input[$columnName];
 
 				continue;
@@ -459,25 +457,14 @@ class Collection extends AbstractDefinition implements CollectionInterface
 			);
 		}
 
-		if (! $ignoreExtraFields) {
-			foreach (array_keys($input) as $inputKey) {
-				if (! in_array((string) $inputKey, $usedKeys, true)) {
-					throw new InvalidPrimaryKeyException(
-						sprintf("Unexpected primary key field '%s' for collection '%s'.", (string) $inputKey, $this->getName())
-					);
-				}
-			}
+		if (! $ignoreExtraFields && $remaining !== []) {
+			throw new InvalidPrimaryKeyException(sprintf(
+				"Unexpected primary key field '%s' for collection '%s'.",
+				(string) array_key_first($remaining),
+				$this->getName(),
+			));
 		}
 
-		foreach ($values as $fieldName => $fieldValue) {
-			if (! is_string($fieldValue) && ! is_int($fieldValue) && ! is_float($fieldValue) && ! is_bool($fieldValue)) {
-				throw new InvalidPrimaryKeyException(
-					sprintf("Primary key field '%s' for collection '%s' must be a scalar string|int|float|bool.", $fieldName, $this->getName())
-				);
-			}
-		}
-
-		/** @var non-empty-array<string, string|int|float|bool> $values */
-		return $values;
+		return new Key($this, $values);
 	}
 }
