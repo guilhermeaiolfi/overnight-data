@@ -14,6 +14,8 @@ use ON\Data\Mapper\Writer\WriterInterface;
 
 final class MapBuilder
 {
+	private MappingOptions $options;
+
 	/**
 	 * @param class-string<RepresentationInterface>|null $sourceRepresentation
 	 * @param class-string<RepresentationInterface>|null $outputRepresentation
@@ -24,17 +26,29 @@ final class MapBuilder
 	 */
 	public function __construct(
 		private mixed $source,
-		private ConversionGateway $gateway,
-		private ?string $sourceRepresentation = null,
-		private ?string $outputRepresentation = null,
-		private ?string $mapperClass = null,
-		private ?string $writerClass = null,
-		private array $resolverClasses = [],
-		private array $arguments = [],
-		private ?FieldMap $fieldMap = null,
-		private bool $collection = false,
-		private bool $shallow = false,
+		ConversionGateway $gateway,
+		?string $sourceRepresentation = null,
+		?string $outputRepresentation = null,
+		?string $mapperClass = null,
+		?string $writerClass = null,
+		array $resolverClasses = [],
+		array $arguments = [],
+		?FieldMap $fieldMap = null,
+		bool $collection = false,
+		bool $shallow = false,
 	) {
+		$this->options = new MappingOptions(
+			$gateway,
+			$sourceRepresentation,
+			$outputRepresentation,
+			$mapperClass,
+			$writerClass,
+			$resolverClasses,
+			$arguments,
+			$fieldMap,
+			$collection,
+			$shallow,
+		);
 	}
 
 	/**
@@ -42,10 +56,7 @@ final class MapBuilder
 	 */
 	public function from(string $representation): self
 	{
-		$clone = clone $this;
-		$clone->sourceRepresentation = $representation;
-
-		return $clone;
+		return $this->withOptions($this->options->withSourceRepresentation($representation));
 	}
 
 	/**
@@ -53,10 +64,7 @@ final class MapBuilder
 	 */
 	public function as(string $representation): self
 	{
-		$clone = clone $this;
-		$clone->outputRepresentation = $representation;
-
-		return $clone;
+		return $this->withOptions($this->options->withOutputRepresentation($representation));
 	}
 
 	/**
@@ -64,10 +72,7 @@ final class MapBuilder
 	 */
 	public function mapper(string $mapper): self
 	{
-		$clone = clone $this;
-		$clone->mapperClass = $mapper;
-
-		return $clone;
+		return $this->withOptions($this->options->withMapperClass($mapper));
 	}
 
 	/**
@@ -75,10 +80,7 @@ final class MapBuilder
 	 */
 	public function writer(string $writer): self
 	{
-		$clone = clone $this;
-		$clone->writerClass = $writer;
-
-		return $clone;
+		return $this->withOptions($this->options->withWriterClass($writer));
 	}
 
 	/**
@@ -86,10 +88,7 @@ final class MapBuilder
 	 */
 	public function resolver(string $resolver): self
 	{
-		$clone = clone $this;
-		$clone->resolverClasses[] = $resolver;
-
-		return $clone;
+		return $this->withOptions($this->options->withAddedResolverClass($resolver));
 	}
 
 	/**
@@ -97,34 +96,22 @@ final class MapBuilder
 	 */
 	public function args(mixed ...$arguments): self
 	{
-		$clone = clone $this;
-		$clone->arguments = $arguments;
-
-		return $clone;
+		return $this->withOptions($this->options->withArguments($arguments));
 	}
 
 	public function fieldMap(FieldMap $fieldMap): self
 	{
-		$clone = clone $this;
-		$clone->fieldMap = $fieldMap;
-
-		return $clone;
+		return $this->withOptions($this->options->withFieldMap($fieldMap));
 	}
 
 	public function collection(): self
 	{
-		$clone = clone $this;
-		$clone->collection = true;
-
-		return $clone;
+		return $this->withOptions($this->options->asCollection());
 	}
 
 	public function shallow(bool $shallow = true): self
 	{
-		$clone = clone $this;
-		$clone->shallow = $shallow;
-
-		return $clone;
+		return $this->withOptions($this->options->withShallow($shallow));
 	}
 
 	public function to(mixed $target): mixed
@@ -135,9 +122,9 @@ final class MapBuilder
 			);
 		}
 
-		return $this->gateway
+		return $this->options->getGateway()
 			->getMapperManager()
-			->map($this->source, $target, $this->createOptions());
+			->map($this->source, $target, $this->options);
 	}
 
 	public function toJson(): string
@@ -154,19 +141,11 @@ final class MapBuilder
 		}
 	}
 
-	private function createOptions(): MappingOptions
+	private function withOptions(MappingOptions $options): self
 	{
-		return new MappingOptions(
-			$this->gateway,
-			$this->sourceRepresentation,
-			$this->outputRepresentation,
-			$this->mapperClass,
-			$this->writerClass,
-			$this->resolverClasses,
-			$this->arguments,
-			$this->fieldMap,
-			collection: $this->collection,
-			shallow: $this->shallow,
-		);
+		$clone = clone $this;
+		$clone->options = $options;
+
+		return $clone;
 	}
 }
