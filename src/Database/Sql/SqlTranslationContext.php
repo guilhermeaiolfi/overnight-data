@@ -7,6 +7,8 @@ namespace ON\Data\Database\Sql;
 use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\Query\DerivedSelectQuery;
 use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\FunctionCallExpression;
+use ON\Data\Query\QueryFunction\FunctionCompilationException;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
 
@@ -24,6 +26,9 @@ final class SqlTranslationContext
 	 * @var array<int, int>
 	 */
 	private array $nextJoinAlias = [];
+
+	/** @var array<int, true> */
+	private array $activeFunctions = [];
 
 	private int $nextQueryAlias = 0;
 
@@ -125,6 +130,23 @@ final class SqlTranslationContext
 	public function contains(SelectQuery $query): bool
 	{
 		return in_array($query, $this->stack, true);
+	}
+
+	/** @param callable(): SqlFragment $compile */
+	public function withinFunction(FunctionCallExpression $expression, callable $compile): SqlFragment
+	{
+		$id = spl_object_id($expression);
+		if (isset($this->activeFunctions[$id])) {
+			throw FunctionCompilationException::recursion($expression->getFunction());
+		}
+
+		$this->activeFunctions[$id] = true;
+
+		try {
+			return $compile();
+		} finally {
+			unset($this->activeFunctions[$id]);
+		}
 	}
 
 	public function isAncestor(SelectQuery $query): bool
