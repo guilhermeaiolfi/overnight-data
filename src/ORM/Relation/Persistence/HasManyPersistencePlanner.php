@@ -8,7 +8,6 @@ use ON\Data\Definition\Relation\HasManyRelation;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\PersistenceContext;
-use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\RelationStateInterface;
 use ON\Data\ORM\Relation\ToManyRelationState;
 
@@ -46,7 +45,7 @@ final class HasManyPersistencePlanner implements RelationPersistencePlannerInter
 
 		foreach ($collection->getAdded() as $item) {
 			$child = $this->records->resolve($context, $relation, $item, 'child');
-			$this->copyOwnerKeysIntoChild($relation, $owner, $child);
+			$this->keys->copyOwnerKeys($relation, $owner, $child);
 		}
 
 		foreach ($collection->getRemoved() as $item) {
@@ -69,23 +68,5 @@ final class HasManyPersistencePlanner implements RelationPersistencePlannerInter
 
 			$this->keys->nullValues($child, $relation->getOuterKeys());
 		}
-	}
-
-	private function copyOwnerKeysIntoChild(HasManyRelation $relation, RecordState $owner, RecordState $child): void
-	{
-		$ownerCollection = $owner->getCollection()->getName();
-		$this->keys->copyValues(
-			$relation->getName(),
-			$relation->getInnerKeys(),
-			$relation->getOuterKeys(),
-			$owner,
-			$child,
-			static fn (string $relationName, string $sourceField, int|string $index): RelationPersistenceException => new RelationPersistenceException(sprintf(
-				"Relation '%s' is missing an outer key field for owner collection '%s' field '%s'.",
-				$relationName,
-				$ownerCollection,
-				$sourceField,
-			)),
-		);
 	}
 }
