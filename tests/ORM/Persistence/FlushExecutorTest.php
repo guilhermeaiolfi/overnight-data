@@ -12,10 +12,10 @@ use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Exception\NonTransactionalFlushException;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Exception\SyncException;
+use ON\Data\ORM\Persistence\CommandExecutor;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
-use ON\Data\ORM\Persistence\ConvertingCommandExecutor;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\FlushExecutor;
 use ON\Data\ORM\Persistence\InsertCommand;
@@ -385,7 +385,7 @@ final class FlushExecutorTest extends TestCase
 				return new CommandResult(1);
 			}
 		};
-		$flusher = new FlushExecutor(new ConvertingCommandExecutor($inner));
+		$flusher = new FlushExecutor(new CommandExecutor($inner));
 		$context = $this->context(new RepresentationStateStore(), $this->records());
 
 		$this->expectException(InvalidCommandException::class);

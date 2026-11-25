@@ -8,6 +8,7 @@
 - A single-key `belongsTo(...)->innerKey(...)->outerKey(...)->end()` creates a missing local field using the referenced field's type and the relation's nullability. An explicitly declared field keeps its settings. If its type differs, correct the declaration using the field names and types in the exception.
 - The mapper's concrete error types can now also be caught as `MappingException`.
 - Relation-state methods accept DTOs and `RecordState` instances directly.
+- Rename imports and instantiations of `ConvertingCommandExecutor` to `CommandExecutor`. Pass any custom `CommandValueResolver` to `CommandExecutor` or `SqlRuntimeFactory`. Direct callers of `SqlCommandExecutor` must supply storage values and can pass a custom dialect as the second argument.
 
 ## What documentation means
 

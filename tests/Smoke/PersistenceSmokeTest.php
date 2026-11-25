@@ -6,7 +6,7 @@ namespace Tests\ON\Data\Smoke;
 
 use ON\Data\Database\Sql\SqlCommandExecutor;
 use ON\Data\Definition\Registry;
-use ON\Data\ORM\Persistence\ConvertingCommandExecutor;
+use ON\Data\ORM\Persistence\CommandExecutor;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Session;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
@@ -29,7 +29,7 @@ final class PersistenceSmokeTest extends TestCase
 			->field('id', 'int')->column('user_id')->autoIncrement(true)->end()
 			->field('name', 'string')->column('full_name')->end();
 
-		$session = new Session(new ConvertingCommandExecutor(new SqlCommandExecutor($harness->connection)));
+		$session = new Session(new CommandExecutor(new SqlCommandExecutor($harness->connection)));
 
 		/** @var RecordState $record */
 		$record = RecordState::new($users, [

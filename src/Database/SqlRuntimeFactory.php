@@ -10,8 +10,8 @@ use ON\Data\Database\Sql\SqlCommandExecutor;
 use ON\Data\Database\Sql\SqlQueryExecutor;
 use ON\Data\DataRuntime;
 use ON\Data\Mapper\ConversionGateway;
+use ON\Data\ORM\Persistence\CommandExecutor;
 use ON\Data\ORM\Persistence\CommandValueResolver;
-use ON\Data\ORM\Persistence\ConvertingCommandExecutor;
 use PDO;
 
 final class SqlRuntimeFactory
@@ -42,7 +42,7 @@ final class SqlRuntimeFactory
 
 		return new DataRuntime(
 			new SqlQueryExecutor($connection, $gateway, $dialect),
-			new ConvertingCommandExecutor(new SqlCommandExecutor($connection, $resolver, $dialect), $gateway, $resolver),
+			new CommandExecutor(new SqlCommandExecutor($connection, $dialect), $gateway, $resolver),
 			$gateway,
 		);
 	}

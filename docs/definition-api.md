@@ -97,7 +97,7 @@ Field `comment()` is removed; use `description()`.
 
 ## External schema metadata
 
-Cycle collection class names (`entity`, `repository`, `mapper`, `scope`) live on `CycleCollectionPlugin`. ON\Data Session persistence, query loading, and `ConvertingCommandExecutor` do not use them.
+Cycle collection class names (`entity`, `repository`, `mapper`, `scope`) live on `CycleCollectionPlugin`. ON\Data Session persistence, query loading, and `CommandExecutor` do not use them.
 
 Relation `cascade()` / `load()` remain on the relation definition. Prefer `exclusive()` for owned-child delete-on-unlink behavior inside ON\Data.
 
