@@ -11,6 +11,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Key;
+use ON\Data\Mapper\ConversionGateway;
 use function ON\Data\Mapper\map;
 use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Condition\ConditionList;
@@ -35,6 +36,7 @@ use ON\Data\Query\Relation\RelationSelectionTree;
 use ON\Data\Query\Result\ObjectExportClassValidator;
 use ON\Data\Query\Result\WritablePreparation;
 use ON\Data\Query\Result\WritableResultHandler;
+use ON\Data\Query\Schema\ClassRepresentationSchemaCompiler;
 use ON\Data\Query\Schema\QueryRepresentationSchemaCompiler;
 use ON\Data\Query\Selection\SelectionList;
 use ON\Data\Query\Selection\SelectionTag;
@@ -42,6 +44,7 @@ use ON\Data\Query\Sort\Sort;
 use ON\Data\Schema\RelationLoadKnowledge;
 use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationSchema;
+use stdClass;
 
 final class SelectQuery implements QuerySourceInterface
 {
@@ -102,6 +105,7 @@ final class SelectQuery implements QuerySourceInterface
 	public function __construct(
 		private readonly CollectionInterface|DerivedSelectQuery $source,
 		private ?QueryExecutorInterface $executor = null,
+		private readonly ?ConversionGateway $gateway = null,
 	) {
 		$this->selections = new SelectionList();
 		$this->selections->add($this->all(), [SelectionTag::DEFAULT, SelectionTag::EXPLICIT]);
@@ -113,9 +117,12 @@ final class SelectQuery implements QuerySourceInterface
 	 * Filters, ordering, pagination, and load strategies are execution options.
 	 * Partial relations require a query template with their original constraints.
 	 */
-	public static function fromSchema(RepresentationSchema $schema, ?QueryExecutorInterface $executor = null): self
-	{
-		$query = new self($schema->getCollection(), $executor);
+	public static function fromSchema(
+		RepresentationSchema $schema,
+		?QueryExecutorInterface $executor = null,
+		?ConversionGateway $gateway = null,
+	): self {
+		$query = new self($schema->getCollection(), $executor, $gateway);
 		self::applySchemaLevel($query, $schema);
 
 		return $query;
@@ -260,7 +267,7 @@ final class SelectQuery implements QuerySourceInterface
 	 */
 	public function rebind(SourceMap $sources): self
 	{
-		$copy = new self($this->source, $this->executor);
+		$copy = new self($this->source, $this->executor, $this->gateway);
 		$map = $sources->with($this, $copy);
 
 		foreach ($this->joins as $join) {
@@ -423,6 +430,7 @@ final class SelectQuery implements QuerySourceInterface
 		ObjectExportClassValidator::assertSupported($class);
 
 		$this->resultClass = $class;
+		$this->applyTargetClassProjection($class);
 
 		return $this;
 	}
@@ -608,7 +616,7 @@ final class SelectQuery implements QuerySourceInterface
 			$materialized = $publicRows;
 		} else {
 			/** @var list<object> $materialized */
-			$materialized = map($publicRows)->collection()->to($executionQuery->resultClass);
+			$materialized = map($publicRows, gateway: $this->gateway)->collection()->to($executionQuery->resultClass);
 		}
 
 		if ($handler !== null && $preparation !== null) {
@@ -709,7 +717,7 @@ final class SelectQuery implements QuerySourceInterface
 			$materialized = $publicRow;
 		} else {
 			/** @var object $materialized */
-			$materialized = map($publicRow)->to($executionQuery->resultClass);
+			$materialized = map($publicRow, gateway: $this->gateway)->to($executionQuery->resultClass);
 		}
 
 		if ($handler !== null && $preparation !== null && is_object($materialized)) {
@@ -952,7 +960,7 @@ final class SelectQuery implements QuerySourceInterface
 	{
 		foreach ($rows as $row) {
 			/** @var object $mapped */
-			$mapped = map($row)->to($resultClass);
+			$mapped = map($row, gateway: $this->gateway)->to($resultClass);
 
 			yield $mapped;
 		}
@@ -1063,6 +1071,33 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		return $field;
+	}
+
+	/**
+	 * @param class-string $class
+	 */
+	private function applyTargetClassProjection(string $class): void
+	{
+		if (! $this->source instanceof CollectionInterface || $class === stdClass::class) {
+			return;
+		}
+
+		if (! $this->hasImplicitDefaultProjection()) {
+			return;
+		}
+
+		$schema = (new ClassRepresentationSchemaCompiler())->compile($this->source, $class);
+		if (! $schema instanceof RepresentationSchema) {
+			return;
+		}
+
+		self::applySchemaLevel($this, $schema);
+	}
+
+	private function hasImplicitDefaultProjection(): bool
+	{
+		return $this->selections->getByTag(SelectionTag::DEFAULT) !== []
+			&& $this->getRelationSelections()->isEmpty();
 	}
 
 	private function describeSource(QuerySourceInterface $source): string

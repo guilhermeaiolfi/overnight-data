@@ -202,11 +202,13 @@ final class QueryResultHydratorTest extends TestCase
 		self::assertSame('Source row value', $session->getRecords()->getByKey($companies->getKey(5))?->getValue('name'));
 	}
 
-	public function testHydrateOmitsNullNonKeyValuesFromInitialSnapshot(): void
+	public function testHydratePreservesExplicitNullAndOmitsMissingValuesFromInitialSnapshot(): void
 	{
 		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
 		$companies = $registry->getCollection('companies');
-		$schema = $this->projectionSchema($registry->getCollection('users'), $companies);
+		$schema = $this->projectionSchema($users, $companies);
+		$schema->addField(new RepresentationFieldSchema('company_id', $users, 'company_id'));
 		$session = new Session(new RecordingCommandExecutor());
 
 		$this->adoptFlatProjection($this->flatUser(1, 'ignored'), $this->compilation($schema, $this->identitiesFor($schema)), [
@@ -217,7 +219,11 @@ final class QueryResultHydratorTest extends TestCase
 
 		$company = $session->getRecords()->getByKey($companies->getKey(5));
 		self::assertInstanceOf(RecordState::class, $company);
-		self::assertFalse(array_key_exists('name', $company->getValues()));
+		self::assertTrue(array_key_exists('name', $company->getValues()));
+		self::assertNull($company->getValue('name'));
+		$user = $session->getRecords()->getByKey($users->getKey(1));
+		self::assertInstanceOf(RecordState::class, $user);
+		self::assertArrayNotHasKey('company_id', $user->getValues());
 	}
 
 	public function testExplicitNullSourceRowIdentityDoesNotFallBackToVisibleObjectProperty(): void

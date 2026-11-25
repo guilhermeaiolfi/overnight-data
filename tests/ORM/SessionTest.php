@@ -270,6 +270,23 @@ final class SessionTest extends TestCase
 		self::assertSame(['id' => 123, 'title' => 'Existing'], $record->getValues());
 	}
 
+	public function testIdentifyPreservesExplicitNullAndOmitsMissingValues(): void
+	{
+		$session = new Session(new RecordingCommandExecutor());
+		$posts = $this->posts();
+		$schema = new RepresentationSchema($posts);
+		$schema->addField(new RepresentationFieldSchema('id', $posts, 'id'));
+		$schema->addField(new RepresentationFieldSchema('title', $posts, 'title'));
+		$schema->addField(new RepresentationFieldSchema('body', $posts, 'body'));
+		$post = $this->representation(['id' => 123, 'body' => null]);
+
+		$session->identify($posts, ['id' => 123], $post, $schema);
+
+		$record = $session->getRecords()->getByKey($posts->getKey(123));
+		self::assertInstanceOf(RecordState::class, $record);
+		self::assertSame(['id' => 123, 'body' => null], $record->getOriginalValues());
+	}
+
 	public function testIdentifyTracksSuppliedGraphWithoutConsumingWriteIntents(): void
 	{
 		[$users, $posts] = $this->usersWithDefaultHasManyPosts();

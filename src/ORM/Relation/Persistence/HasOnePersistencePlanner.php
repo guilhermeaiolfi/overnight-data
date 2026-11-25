@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Relation\Persistence;
 
-use ON\Data\Definition\Relation\BelongsToRelation;
 use ON\Data\Definition\Relation\HasOneRelation;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\RelationPersistenceException;
@@ -35,7 +34,7 @@ final class HasOnePersistencePlanner implements RelationPersistencePlannerInterf
 		}
 
 		$reference = $change;
-		if (! $relation instanceof HasOneRelation || $relation instanceof BelongsToRelation) {
+		if (! $relation instanceof HasOneRelation) {
 			throw new RelationPersistenceException(sprintf(
 				"Relation '%s' must be a has-one relation to use %s.",
 				$reference->getRelationName(),

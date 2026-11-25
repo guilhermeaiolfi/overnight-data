@@ -43,6 +43,7 @@ final class SqlRuntimeFactory
 		return new DataRuntime(
 			new SqlQueryExecutor($connection, $gateway, $dialect),
 			new ConvertingCommandExecutor(new SqlCommandExecutor($connection, $resolver, $dialect), $gateway, $resolver),
+			$gateway,
 		);
 	}
 }

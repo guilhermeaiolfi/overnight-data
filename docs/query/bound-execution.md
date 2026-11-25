@@ -56,6 +56,8 @@ The compiler supplies dialects for SQLite, PostgreSQL, MySQL, MariaDB, and SQL S
 
 Bound queries return arrays by default. Object export is opt-in through `to(...)`.
 
+Queries created by `DataRuntime::query()` use the runtime's `ConversionGateway` for object export, including when reopened from a `RepresentationSchema`. Standalone `SelectQuery` instances accept an optional `gateway:` argument and use `Mapping::getDefaultGateway()` when it is omitted.
+
 `SelectQuery::count()` always executes as a scalar aggregate path: it does not apply `to(...)`, `writable(...)`, or relation loading on the count copy. See [`query-model.md`](./query-model.md#counting-matching-rows).
 
 | Call | Result |
@@ -65,9 +67,11 @@ Bound queries return arrays by default. Object export is opt-in through `to(...)
 | `$query->fetchOne($identity)` | same, with a temporary primary-key constraint (see below) |
 | `$query->iterate()` | `iterable<array<string, mixed>>` |
 | `$query->to(stdClass::class)->fetchAll()` | `list<stdClass>` |
-| `$query->to(UserRow::class)->fetchAll()` | `list<UserRow>` where `UserRow` is a no-required-constructor public-property class |
+| `$query->to(UserRow::class)->fetchAll()` | `list<UserRow>` with DTO-derived projection when no explicit `select()` / relation selection was configured |
 | `$query->to(stdClass::class)->writable($session)->fetchAll()` | tracked writable `stdClass` objects |
-| `$query->to(UserRow::class)->writable($session)->fetchAll()` | tracked writable mutable public-property DTOs |
+| `$query->to(UserRow::class)->writable($session)->fetchAll()` | tracked writable mutable public-property DTOs (including DTO-derived flat fields and nested relations) |
+
+When `to(Dto::class)` is called on a collection-root query that still has only its default root selection (no explicit `select()` and no relation selections), `SelectQuery` derives the projection directly from the DTO's visible public properties (`#[MapFrom('company.name')]` for aliases and flat related fields, nested class types and `@var list<ChildDto>` / `@param list<ChildDto>` docblocks for relations, skipping `#[Hidden]` and unmapped defaulted properties). `stdClass` and classes with no declared visible public properties keep the default root scalar selection; explicit `select()` or relation selections before `to(...)` always take precedence.
 
 Read-only object export also supports lazy iteration: `to(...)->iterate()` yields objects one row at a time. `writable(...)->iterate()` is intentionally unsupported; use `fetchAll()` or `fetchOne()`.
 

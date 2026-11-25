@@ -12,6 +12,10 @@ use ON\Data\Database\SqlRuntimeFactory;
 use ON\Data\Definition\Field\Generator\DatabaseGenerator;
 use ON\Data\Definition\Registry;
 use ON\Data\Mapper\ConversionGateway;
+use ON\Data\Mapper\Mapper\MapperInterface;
+use ON\Data\Mapper\MappingBranch;
+use ON\Data\Mapper\MappingOptions;
+use ON\Data\ORM\History\FlushHistory;
 use ON\Data\ORM\Persistence\ConvertingCommandExecutor;
 use ON\Data\ORM\Persistence\InsertCommand;
 use PDO;
@@ -80,6 +84,38 @@ final class SqlRuntimeFactoryTest extends TestCase
 		self::assertSame(['name' => 'Ada'], $result->getGeneratedValues());
 	}
 
+	public function testRuntimeSharesCustomMappingBetweenQueryResultsAndSessionFlush(): void
+	{
+		$pdo = new PDO('sqlite::memory:');
+		$pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)');
+		$pdo->exec("INSERT INTO users VALUES (1, 'Ada')");
+		$users = (new Registry())->collection('users')->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('name', 'string')->end();
+		$gateway = ConversionGateway::createDefault();
+		$gateway->getMapperManager()->prepend(RuntimeUserMapper::class);
+		$runtime = (new SqlRuntimeFactory())->create($pdo, $gateway);
+
+		$query = $runtime->query($users);
+		$query->select($query->id, $query->name)->to(RuntimeMappedUser::class);
+		$expected = new RuntimeMappedUser(1, 'ADA');
+		self::assertEquals([$expected], $query->fetchAll());
+		self::assertEquals($expected, $query->fetchOne(1));
+		self::assertEquals([$expected], iterator_to_array($query->copy()->iterate(), false));
+		$schema = $query->projection();
+		self::assertEquals($expected, $runtime->query($schema)->to(RuntimeMappedUser::class)->fetchOne());
+
+		$history = new FlushHistory();
+		$session = $runtime->session($history);
+		$created = new RuntimeMappedUser(2, 'GRACE');
+		$session->create($created, $schema);
+		$session->flush('Create user');
+
+		self::assertSame($gateway, $runtime->getGateway());
+		self::assertSame('Create user', $history->latest()?->label);
+		self::assertSame(['id' => 2, 'name' => 'grace'], $runtime->query($users)->fetchOne(2));
+	}
+
 	public function testReadAndWriteUsePrefixOnQualifiedTable(): void
 	{
 		$connection = PdoConnection::connect(new ConnectionConfig('sqlite::memory:', tablePrefix: 'app_'));
@@ -93,5 +129,41 @@ final class SqlRuntimeFactoryTest extends TestCase
 		$result = $runtime->getCommandExecutor()->execute(new InsertCommand($users, []));
 		self::assertSame(['id' => 1, 'name' => 'Ada'], $result->getGeneratedValues());
 		self::assertSame(['id' => 1, 'name' => 'Ada'], $runtime->query($users)->fetchOne());
+	}
+}
+
+final class RuntimeMappedUser
+{
+	public function __construct(public int $id, private string $name)
+	{
+	}
+
+	public function getName(): string
+	{
+		return $this->name;
+	}
+}
+
+final class RuntimeUserMapper implements MapperInterface
+{
+	public static function canMap(mixed $source, MappingOptions $options): bool
+	{
+		return $source instanceof RuntimeMappedUser
+			|| (is_array($source) && isset($source['id'], $source['name']));
+	}
+
+	public function map(MappingBranch $context): mixed
+	{
+		/** @var RuntimeMappedUser|array{id: int, name: string} $source */
+		$source = $context->getSource();
+		if ($source instanceof RuntimeMappedUser) {
+			$context->write('id', $source->id);
+			$context->write('name', strtolower($source->getName()));
+		} else {
+			$context->write('id', $source['id']);
+			$context->write('name', strtoupper($source['name']));
+		}
+
+		return $context->getResult();
 	}
 }

@@ -69,8 +69,8 @@ final class SqliteFlushHistoryTest extends TestCase
 				'affectedRows' => 1,
 				'identity' => ['id' => 1],
 				'before' => [],
-				'after' => ['title' => 'Original', 'id' => 1, 'revision' => 7],
-				'changedFields' => ['title', 'id', 'revision'],
+				'after' => ['title' => 'Original', 'id' => 1, 'revision' => 7, 'note' => null],
+				'changedFields' => ['title', 'id', 'revision', 'note'],
 				'unavailableFields' => [],
 				'reversible' => true,
 				'irreversibleReason' => null,
@@ -79,9 +79,6 @@ final class SqliteFlushHistoryTest extends TestCase
 		self::assertSame([$insert->toArray()], json_decode(json_encode($this->history->toArray(), JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR));
 
 		$this->session->clear();
-		$original = $this->db->fetchRow('SELECT * FROM items');
-		self::assertNotNull($original);
-		$this->session->getRecords()->add(RecordState::clean($items->getKey(1), $original));
 		$row = $this->loadItem($items);
 		$row->title = 'Edited';
 		$row->note = 'Written from NULL';
@@ -106,6 +103,23 @@ final class SqliteFlushHistoryTest extends TestCase
 		self::assertNull($this->db->fetchRow('SELECT * FROM items'));
 		self::assertTrue($this->history->isEmpty());
 		self::assertSame('Edited', $row->title);
+	}
+
+	public function testRevertsDeleteUsingNullReadBackFromFreshInsert(): void
+	{
+		$items = $this->items();
+		$this->insert($items, 'Original');
+		$record = $this->session->getRecords()->getByKey($items->getKey(1));
+		self::assertInstanceOf(RecordState::class, $record);
+
+		$this->session->remove($record);
+		$this->session->flush('Remove');
+		$expected = ['id' => 1, 'title' => 'Original', 'revision' => 7, 'note' => null];
+		self::assertEquals($expected, $this->history->latest()->changes[0]->before);
+		self::assertNull($this->db->fetchRow('SELECT * FROM items'));
+
+		self::assertSame('Remove', $this->reverter->revertLast()->label);
+		self::assertSame($expected, $this->db->fetchRow('SELECT * FROM items'));
 	}
 
 	public function testRevertsSeveralCommitsAndPreservesTheTargetAndSequenceGaps(): void
@@ -512,7 +526,7 @@ final class SqliteFlushHistoryTest extends TestCase
 
 	private function items(): CollectionInterface
 	{
-		$this->db->exec('CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, revision INTEGER DEFAULT 7, note TEXT)');
+		$this->db->exec('CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, revision INTEGER DEFAULT 7, note TEXT DEFAULT NULL)');
 
 		return (new Registry())->collection('items')->primaryKey('id')
 			->field('id', 'int')->autoIncrement(true)->end()

@@ -5,11 +5,10 @@ Pass a `FlushHistory` to a session or a low-level `FlushExecutor` to collect com
 ```php
 use ON\Data\ORM\History\FlushHistory;
 use ON\Data\ORM\History\FlushReverter;
-use ON\Data\ORM\Session;
 
 $executor = $runtime->getCommandExecutor();
 $history = new FlushHistory(maxEntries: 100);
-$session = new Session($executor, history: $history);
+$session = $runtime->session($history);
 
 // Stage writes on the session.
 $session->flush('Publish draft');
@@ -50,7 +49,9 @@ Use the executor for the same database and command mappings as the recorded writ
 
 The reverter checks the whole range before running inverse commands. Inserts are undone by key, updates restore captured prior values for the changed fields, and deletes reinsert a complete prior row. A through row with every field in its identity can be restored after a delete. Known zero-row operations require no inverse. The reverter checks that each inverse affects exactly one row and applies them in reverse execution order inside one transaction. After commit it trims the undone entries from the timeline. A validation or compensation failure before commit leaves both the database and journal at their pre-revert state.
 
-`isReversible()` is available on changes and commits. Check a change's `irreversibleReason` for details. Compensation requires a resolved identity and captured values. Blind PATCH updates with missing prior fields, partial deletes, unsupported commands, and updates with database-managed fields that could regenerate during undo are refused. The writable query hydrator currently omits `NULL` fields from a record's initial snapshot. An omitted value counts as missing. An explicit `null` in a trusted `RecordState::clean()` snapshot is preserved and can be restored.
+`isReversible()` is available on changes and commits. Check a change's `irreversibleReason` for details. Compensation requires a resolved identity and captured values. Blind PATCH updates with missing prior fields, partial deletes, unsupported commands, and updates with database-managed fields that could regenerate during undo are refused.
+
+Writable queries preserve selected SQL `NULL` values in the record's snapshot. An update from `NULL` can therefore be reverted to `NULL`. SQL insert readback also preserves `DEFAULT NULL` values, so deleting a freshly inserted record is reversible when its snapshot contains every field. Omitted fields are missing from the snapshot unless another source supplied them.
 
 Flush and revert must own their transaction for the journal to reflect committed work. The PDO runtime raises `HistoryException` if a history-enabled flush or revert starts inside an existing transaction. Custom adapters must provide the same commit guarantee and can report active transactions via `TransactionStateAwareInterface`. Use a separate journal per database or write scope. A shared journal also raises `HistoryException` on overlapping flushes, reverts, or journal clears.
 

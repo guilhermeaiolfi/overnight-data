@@ -15,6 +15,7 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Persistence\InsertCommand;
 use PDO;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
 
@@ -39,18 +40,33 @@ final class SqlCommandExecutorGeneratedValuesTest extends TestCase
 		self::assertSame(['id' => 7, 'status' => 'draft'], $result->getGeneratedValues());
 	}
 
-	public function testReturningRowCountsWithNoMappedValues(): void
+	/**
+	 * @param array<string, mixed> $row
+	 * @param array<string, mixed> $generated
+	 */
+	#[DataProvider('returningRows')]
+	public function testReturningRowDistinguishesNullAndMissingColumns(array $row, array $generated): void
 	{
 		$connection = $this->createMock(ConnectionInterface::class);
 		$connection->method('family')->willReturn(DatabaseFamily::PostgreSQL);
 		$connection->expects(self::once())->method('fetchOne')
 			->with('INSERT INTO "notes" ("id", "title") VALUES (?, ?) RETURNING "note_status"', [7, 'Hello'])
-			->willReturn(['note_status' => null]);
+			->willReturn($row);
 
 		$result = (new SqlCommandExecutor($connection))->execute(new InsertCommand($this->notes(), ['id' => 7, 'title' => 'Hello']));
 
 		self::assertSame(1, $result->getAffectedRows());
-		self::assertSame([], $result->getGeneratedValues());
+		self::assertSame($generated, $result->getGeneratedValues());
+	}
+
+	/** @return array<string, array{array<string, mixed>, array<string, mixed>}> */
+	public static function returningRows(): array
+	{
+		return [
+			'exact null' => [['note_status' => null], ['status' => null]],
+			'case-folded null' => [['NOTE_STATUS' => null], ['status' => null]],
+			'missing column' => [['other_column' => null], []],
+		];
 	}
 
 	public function testSqliteChangesFallbackWhenDriverReportsZero(): void

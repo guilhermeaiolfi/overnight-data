@@ -7,6 +7,7 @@ namespace Tests\ON\Data\Definition;
 use InvalidArgumentException;
 use LogicException;
 use ON\Data\Definition\Registry;
+use ON\Data\Definition\Relation\AbstractRelation;
 use ON\Data\Definition\Relation\BelongsToRelation;
 use ON\Data\Definition\Relation\FirstOfManyRelation;
 use ON\Data\Definition\Relation\HasManyRelation;
@@ -31,6 +32,26 @@ use Tests\ON\Data\Support\Relation\RecordingRelationPersistencePlanner;
 
 final class RelationDefinitionTest extends TestCase
 {
+	public function testBelongsToAndHasOneAreSiblingRelations(): void
+	{
+		self::assertFalse(is_a(BelongsToRelation::class, HasOneRelation::class, true));
+		self::assertSame(AbstractRelation::class, get_parent_class(BelongsToRelation::class));
+		self::assertSame(AbstractRelation::class, get_parent_class(HasOneRelation::class));
+	}
+
+	public function testEndingHasOneKeepsTheOwnerKeyDefinition(): void
+	{
+		$registry = new Registry();
+		$registry->collection('profile')->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('user_id', 'string')->end();
+		$users = $registry->collection('user')->primaryKey('id')->field('id', 'int')->end();
+		$users->hasOne('profile', 'profile')->innerKey('id')->outerKey('user_id')->end();
+
+		self::assertSame('int', $users->getField('id')->getType());
+		self::assertNull($users->getField('id')->getGeneratedFromRelation());
+	}
+
 	public function testSingleKeyRelationPreservesLegacyFieldAccess(): void
 	{
 		$registry = new Registry();
@@ -49,6 +70,7 @@ final class RelationDefinitionTest extends TestCase
 		self::assertSame(['user_id'], $relation->getInnerKeys());
 		self::assertSame(['id'], $relation->getOuterKeys());
 		self::assertSame('user_id', $relation->getInnerField()->getName());
+		self::assertSame('post', $relation->getInnerField()->getGeneratedFromRelation());
 		self::assertSame('id', $relation->getOuterField()->getName());
 		self::assertSame(RelationCardinality::SINGLE, $relation->getCardinality());
 		self::assertFalse($relation->isJunction());

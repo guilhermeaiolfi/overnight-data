@@ -35,9 +35,13 @@ During inbound adoption, identification, writable query hydration, and sync, the
 
 `new Session($executor, gateway: $gateway)` uses that `ConversionGateway` for representation reads in the session's default components. Sessions without an explicit gateway use `Mapping::getDefaultGateway()` for those reads. Custom mappers that override the default object mapper can be placed first with `$gateway->getMapperManager()->prepend(MyMapper::class)`.
 
+`$runtime->session()` uses the runtime's command executor and the same gateway as `$runtime->query(...)`. Pass a `FlushHistory` to `$runtime->session($history)` to journal writes. `SqlRuntimeFactory::create($pdo, $gateway)` and `connect($config, $gateway)` share the supplied gateway across SQL value conversion, query object export, and sessions created by the runtime. `$runtime->getGateway()` returns that instance.
+
 Relation paths refer to live public properties. Expose relation targets there so the session can resolve each original PHP instance to its tracked state.
 
 `RecordState` is the persistence source of truth. It stores canonical PHP values keyed by collection field name, the original clean snapshot, lifecycle state, and identity through `ON\Data\Key`.
+
+Writable query hydration and `Session::identify()` capture explicit `null` field values in clean snapshots. A field that was omitted stays absent from the snapshot.
 
 Representations are user-facing objects or values. A representation object can drift from its record state until synchronization happens. `RepresentationStateStore` associates the object with `RepresentationState` through weak object keys, so the session does not keep otherwise-unused representation objects alive. `ScalarRepresentationSynchronizer` reads field schemas only and applies planned representation field updates into `RecordState` while preserving the conflict rules from the ORM foundation: a representation edit conflicts when its value and the current record value differ from each other and from the representation baseline.
 
@@ -103,6 +107,8 @@ The built-in relation planners are:
 - `HasManyPersistencePlanner`: consumes `ToManyRelationState` changes for `HasManyRelation`, propagating owner key values into added child records and nulling child outer keys for nullable removals.
 - `BelongsToPersistencePlanner`: consumes `ToOneRelationState` changes for `BelongsToRelation`, propagating target key values into the owner record or nulling owner inner keys for nullable clears.
 - `HasOnePersistencePlanner`: consumes `ToOneRelationState` changes for `HasOneRelation`, propagating owner key values into the current target record and, when replacing or clearing, nulling the previous target outer keys when the relation is nullable.
+
+For a single-key `belongsTo`, the owner holds the foreign key in its inner field and the relation's `end()` infers that field's type from the target outer field. A `hasOne` leaves the owner field definition intact and writes the foreign key on the target.
 
 For scalar foreign-key relation shapes, the has-many, belongs-to, and has-one planners may write a `ValueRef` when the source key is not concrete yet. If the source key is already concrete, `RecordState::setValue()` collapses that reference immediately and the target record stores the concrete value. Relation planners require involved target objects to already be tracked so they can resolve each object to a `RecordState`. They do not adopt new objects, load missing relations, or orchestrate transactions.
 
@@ -210,7 +216,7 @@ PostgreSQL, SQLite 3.35+, and MariaDB 10.5+ support `INSERT ... RETURNING`. SQL 
 
 MySQL and older SQLite or MariaDB use a single generated primary key from `lastInsertId($sequence)` and then `SELECT` any remaining values when a complete identity is available. An application-assigned key also works for the follow-up query. SQLite `RETURNING` exposes values from before AFTER triggers. SQL Server `OUTPUT` exposes pre-trigger values and fails on tables with enabled INSERT triggers. Set `insertReturning: false` in `ConnectionConfig` or `PdoConnection` to select the fallback on either engine. Supply a key for SQL Server inserts on this path because the driver's last identity can come from a table written by a trigger.
 
-Generated values use field names as keys. `ConvertingCommandExecutor` converts their storage types before `FlushScheduler` merges them into `RecordState`.
+Generated values use field names as keys. A requested column returned as SQL `NULL` appears with a PHP `null` value. `ConvertingCommandExecutor` converts storage values before `FlushScheduler` merges them into `RecordState`.
 
 Generated values are merged into in-memory record state as soon as the insert command succeeds so later dependent commands in the same flush can resolve concrete foreign-key values. When the flush transaction fails, `FlushExecutor` restores in-memory record snapshots so rolled-back generated values are not left exposed after failure. Relation change markers remain pending so a full retry can plan again.
 
@@ -220,7 +226,6 @@ Generated values are merged into in-memory record state as soon as the insert co
 use ON\Data\Database\SqlRuntimeFactory;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Record\RecordState;
-use ON\Data\ORM\Session;
 
 // Use a PDO connection with the app_users table already created.
 /** @var PDO $pdo */
@@ -234,7 +239,7 @@ $users = $registry
     ->field('name', 'string')->column('full_name')->end();
 
 $runtime = (new SqlRuntimeFactory())->create($pdo);
-$session = new Session($runtime->getCommandExecutor());
+$session = $runtime->session();
 
 $record = RecordState::new($users, [
     'name' => 'Ada Lovelace',

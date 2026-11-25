@@ -185,7 +185,10 @@ $query->to(stdClass::class);
 // Omit to() for array results.
 ```
 
-A `SelectQuery` with a target representation and no explicit `select()` uses the root collection's default scalar field selection. This is the normal root entity load:
+A `SelectQuery` with a target representation and no explicit `select()` or relation selection uses:
+
+- the root collection's default scalar field selection for `stdClass`, array results, or classes with no declared visible public properties (such as private-property classes using a custom mapper);
+- a DTO-derived projection for concrete public-property DTO classes (selecting only the DTO's fields, `#[MapFrom('relation.field')]` flat paths, and typed nested relations, while skipping `#[Hidden]` and unmapped defaulted properties).
 
 ```php
 $users = query($users)
@@ -196,14 +199,14 @@ $users = query($users)
 Conceptually, that means:
 
 ```text
-select the root collection's default scalar fields
+select the root collection's default scalar fields (or the DTO's declared shape)
 map/hydrate each row to User
 track one root RecordState per row when ORM tracking is active
 ```
 
 Root default fields are all normal root scalar fields.
 
-Default root selection is root-only. It must not auto-load relations; pass a `RelationRef` to `select()` (or configure the ref before fetch) for nested loading:
+Default root selection is root-only unless the target DTO explicitly declares a relation property; otherwise pass a `RelationRef` to `select()` (or configure the ref before fetch) for nested loading:
 
 ```php
 $u = query($users);

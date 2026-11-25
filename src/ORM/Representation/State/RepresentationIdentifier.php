@@ -93,7 +93,7 @@ final class RepresentationIdentifier
 			"Cannot build projection representation for collection '%s' because key '%s' is already tracked as removed.",
 			$key->getCollection()->getName(),
 			$key->getDebugString(),
-		)) ?? RecordState::clean($key, array_filter($values, static fn (mixed $value): bool => $value !== null));
+		)) ?? RecordState::clean($key, $values);
 	}
 
 	private function relationError(string $message): StateException

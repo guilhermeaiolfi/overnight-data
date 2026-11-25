@@ -209,9 +209,11 @@ final class SqlCommandExecutor implements CommandExecutorInterface, Transactiona
 		$folded = array_change_key_case($row, CASE_LOWER);
 		foreach ($fields as $field) {
 			$column = $field->getColumn();
-			$value = array_key_exists($column, $row) ? $row[$column] : ($folded[strtolower($column)] ?? null);
-			if ($value !== null) {
-				$generated[$field->getName()] = $value;
+			$foldedColumn = strtolower($column);
+			if (array_key_exists($column, $row)) {
+				$generated[$field->getName()] = $row[$column];
+			} elseif (array_key_exists($foldedColumn, $folded)) {
+				$generated[$field->getName()] = $folded[$foldedColumn];
 			}
 		}
 
