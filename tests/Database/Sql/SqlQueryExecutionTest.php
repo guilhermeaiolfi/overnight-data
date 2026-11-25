@@ -7,9 +7,12 @@ namespace Tests\ON\Data\Database\Sql;
 use DateTimeImmutable;
 use ON\Data\Database\Exception\QueryExecutionException;
 use ON\Data\Database\Exception\UnsupportedQueryException;
+use ON\Data\Database\Pdo\PdoConnection;
+use ON\Data\Database\Sql\SqlQueryExecutor;
 use ON\Data\Database\SqlRuntimeFactory;
 use ON\Data\DataRuntime;
 use ON\Data\Definition\Registry;
+use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Query\Expression\SubqueryExpression;
 use function ON\Data\Query\query;
 use ON\Data\Query\SelectQuery;
@@ -570,6 +573,37 @@ final class SqlQueryExecutionTest extends TestCase
 			['name' => 'Grace'],
 			['name' => 'Linus'],
 		], $rows);
+	}
+
+	public function testHiddenSqlColumnSkipsPublicFieldConversion(): void
+	{
+		$this->pdo->exec("UPDATE users SET profile_json = 'invalid JSON' WHERE id = 1");
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->select($users->name)->require($users->profile, 'internal')->where($users->id->eq(1));
+
+		self::assertSame([['name' => 'Ada']], $users->fetchAll());
+	}
+
+	public function testHiddenRootStarCannotOverwriteAnExplicitAlias(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->select($users->id->as('name'))->where($users->id->eq(1));
+		$users->getSelections()->add($users->all(), 'internal');
+		$executor = new SqlQueryExecutor(new PdoConnection($this->pdo), ConversionGateway::createDefault());
+
+		self::assertSame(['name' => 1], $executor->fetchOne($users));
+	}
+
+	public function testImplicitAliasesReservePhysicalColumnNamesOfAPublicStar(): void
+	{
+		$this->pdo->exec('ALTER TABLE users RENAME COLUMN mail_address TO __ondata_implicit_0');
+		$collection = $this->registry->getCollection('users');
+		$collection->getField('email')->column('__ondata_implicit_0');
+		$users = $this->database->query($collection);
+		$users->require($users->id, 'internal')->where($users->id->eq(1));
+		$executor = new SqlQueryExecutor(new PdoConnection($this->pdo), ConversionGateway::createDefault());
+
+		self::assertSame('ada@example.test', $executor->fetchOne($users)['email']);
 	}
 
 	public function testImplicitAliasesAvoidCollisionsWithExplicitBackendNames(): void
