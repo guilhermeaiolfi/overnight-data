@@ -932,6 +932,17 @@ final class SqlJoinExecutionTest extends TestCase
 		self::assertSame(LoadStrategy::SEPARATE_QUERY, $users->getRelationSelections()->getAll()[0]->getStrategy());
 	}
 
+	public function testM2MJoinPreservesAnExistingThroughAlias(): void
+	{
+		$roles = $this->registry->getCollection('roles');
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->join($roles, name: 'roles@through');
+		$users->roles->getJoinedSource();
+
+		$names = array_map(static fn ($join): string => $join->getName(), $users->getJoins());
+		self::assertSame(['roles@through', 'roles@through_2', 'roles'], $names);
+	}
+
 	public function testItProjectsM2MTargetsWithoutExposingThroughRows(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
