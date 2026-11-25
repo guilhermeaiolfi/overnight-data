@@ -9,7 +9,6 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Relation\RelationStateStore;
-use ON\Data\ORM\Relation\RelationTarget;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\SessionContext;
@@ -287,7 +286,6 @@ final class RepresentationAdoptionEngine
 
 		$definition = $ownerCollection->getRelation($relationName);
 		$relatedSchema = RepresentationSchema::forPrimaryKey($relatedRecord->getCollection());
-		$target = RelationTarget::record($relatedRecord);
 		$state = $relations->getOrCreate(
 			$owner,
 			$relationName,
@@ -296,12 +294,12 @@ final class RepresentationAdoptionEngine
 		);
 
 		if ($state instanceof ToManyRelationState) {
-			$state->addTarget($target);
+			$state->add($relatedRecord);
 
 			return;
 		}
 
-		$state->setTarget($target);
+		$state->set($relatedRecord);
 	}
 
 	/**

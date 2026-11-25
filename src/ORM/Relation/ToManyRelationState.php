@@ -18,16 +18,18 @@ final class ToManyRelationState implements RelationStateInterface
 	 * Known in-memory relation members. This may be only a partial view of the
 	 * database relation when the collection is unloaded or partially loaded.
 	 *
-	 * @var array<string, RelationTarget>
+	 * @var array<string, object>
 	 */
 	private array $knownItems = [];
-	/** @var array<string, RelationTarget> */
+	/** @var array<string, object> */
 	private array $baselineKnownItems = [];
-	/** @var array<string, RelationTarget> */
+	/** @var array<string, object> */
 	private array $added = [];
-	/** @var array<string, RelationTarget> */
+	/** @var array<string, object> */
 	private array $removed = [];
 	private string $loadState = self::LOAD_UNLOADED;
+	/** @var array<string, RecordState> Records inserted before their primary keys were assigned. */
+	private array $unkeyedRecords = [];
 
 	/**
 	 * @param list<object> $items
@@ -50,8 +52,9 @@ final class ToManyRelationState implements RelationStateInterface
 				));
 			}
 
-			$target = RelationTarget::from($item);
-			$this->knownItems[$target->identityKey()] = $target;
+			$key = $this->memberKey($item);
+			$this->knownItems[$key] = $item;
+			$this->rememberUnkeyedRecord($item, $key);
 		}
 
 		$this->baselineKnownItems = $this->knownItems;
@@ -136,12 +139,7 @@ final class ToManyRelationState implements RelationStateInterface
 
 	public function add(object $item): void
 	{
-		$this->addTarget(RelationTarget::from($item));
-	}
-
-	public function addTarget(RelationTarget $target): void
-	{
-		$id = $target->identityKey();
+		$id = $this->memberKey($item);
 
 		unset($this->removed[$id]);
 
@@ -149,24 +147,20 @@ final class ToManyRelationState implements RelationStateInterface
 			return;
 		}
 
-		$this->knownItems[$id] = $target;
+		$this->knownItems[$id] = $item;
+		$this->rememberUnkeyedRecord($item, $id);
 		if ($this->isUnloaded()) {
 			$this->markPartiallyLoaded();
 		}
 
 		if (! array_key_exists($id, $this->baselineKnownItems)) {
-			$this->added[$id] = $target;
+			$this->added[$id] = $item;
 		}
 	}
 
 	public function remove(object $item): void
 	{
-		$this->removeTarget(RelationTarget::from($item));
-	}
-
-	public function removeTarget(RelationTarget $target): void
-	{
-		$id = $target->identityKey();
+		$id = $this->memberKey($item);
 		$isKnown = array_key_exists($id, $this->knownItems);
 
 		if ($isKnown) {
@@ -174,22 +168,40 @@ final class ToManyRelationState implements RelationStateInterface
 		}
 
 		if (array_key_exists($id, $this->added)) {
-			unset($this->added[$id]);
+			unset($this->added[$id], $this->unkeyedRecords[$id]);
 
 			return;
 		}
 
-		$this->removed[$id] = $target;
+		$this->removed[$id] = $item;
+		$this->rememberUnkeyedRecord($item, $id);
 	}
 
 	public function contains(object $item): bool
 	{
-		return array_key_exists(RelationTarget::from($item)->identityKey(), $this->knownItems);
+		return array_key_exists($this->memberKey($item), $this->knownItems);
 	}
 
-	public function containsTarget(RelationTarget $target): bool
+	/** A generated key can become available while its record is already in this relation. */
+	private function memberKey(object $item): string
 	{
-		return array_key_exists($target->identityKey(), $this->knownItems);
+		$key = RelationMemberIdentity::key($item);
+		if ($item instanceof RecordState && $item->hasKey()) {
+			foreach ($this->unkeyedRecords as $storedKey => $member) {
+				if (RelationMemberIdentity::same($member, $item)) {
+					return $storedKey;
+				}
+			}
+		}
+
+		return $key;
+	}
+
+	private function rememberUnkeyedRecord(object $item, string $key): void
+	{
+		if ($item instanceof RecordState && ! $item->hasKey()) {
+			$this->unkeyedRecords[$key] = $item;
+		}
 	}
 
 	/**
@@ -212,22 +224,14 @@ final class ToManyRelationState implements RelationStateInterface
 
 		$currentIds = [];
 		foreach ($items as $item) {
-			$target = RelationTarget::from($item);
-			$currentIds[$target->identityKey()] = true;
-			if (! $this->containsTarget($target)) {
-				$this->addTarget($target);
-			}
+			$currentIds[$this->memberKey($item)] = true;
+			$this->add($item);
 		}
 
-		foreach ($this->getItemTargets() as $known) {
-			// Pending flat/record-backed adds are not present on the DTO array.
-			if ($known->isRecord()) {
-				continue;
-			}
-
-			$id = $known->identityKey();
-			if (! array_key_exists($id, $currentIds)) {
-				$this->removeTarget($known);
+		foreach ($this->knownItems as $id => $known) {
+			// Record-backed pending adds are not represented in the DTO list.
+			if (! $known instanceof RecordState && ! isset($currentIds[$id])) {
+				$this->remove($known);
 			}
 		}
 	}
@@ -237,17 +241,6 @@ final class ToManyRelationState implements RelationStateInterface
 	 */
 	public function getItems(): array
 	{
-		return array_values(array_map(
-			static fn (RelationTarget $target): object => $target->toObject(),
-			$this->knownItems,
-		));
-	}
-
-	/**
-	 * @return list<RelationTarget>
-	 */
-	public function getItemTargets(): array
-	{
 		return array_values($this->knownItems);
 	}
 
@@ -256,17 +249,6 @@ final class ToManyRelationState implements RelationStateInterface
 	 */
 	public function getAdded(): array
 	{
-		return array_values(array_map(
-			static fn (RelationTarget $target): object => $target->toObject(),
-			$this->added,
-		));
-	}
-
-	/**
-	 * @return list<RelationTarget>
-	 */
-	public function getAddedTargets(): array
-	{
 		return array_values($this->added);
 	}
 
@@ -274,17 +256,6 @@ final class ToManyRelationState implements RelationStateInterface
 	 * @return list<object>
 	 */
 	public function getRemoved(): array
-	{
-		return array_values(array_map(
-			static fn (RelationTarget $target): object => $target->toObject(),
-			$this->removed,
-		));
-	}
-
-	/**
-	 * @return list<RelationTarget>
-	 */
-	public function getRemovedTargets(): array
 	{
 		return array_values($this->removed);
 	}
@@ -298,6 +269,15 @@ final class ToManyRelationState implements RelationStateInterface
 	{
 		$this->added = [];
 		$this->removed = [];
+		if ($this->unkeyedRecords !== []) {
+			$members = $this->knownItems;
+			$this->knownItems = $this->unkeyedRecords = [];
+			foreach ($members as $member) {
+				$key = RelationMemberIdentity::key($member);
+				$this->knownItems[$key] = $member;
+				$this->rememberUnkeyedRecord($member, $key);
+			}
+		}
 		$this->baselineKnownItems = $this->knownItems;
 	}
 
