@@ -15,6 +15,7 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
+use ON\Data\ORM\Persistence\ConvertingCommandExecutor;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\FlushExecutor;
 use ON\Data\ORM\Persistence\InsertCommand;
@@ -370,7 +371,25 @@ final class FlushExecutorTest extends TestCase
 
 		$this->expectException(NonTransactionalFlushException::class);
 
-		(new FlushExecutor($executor))->flush($this->context(new RepresentationStateStore(), $this->records($record)));
+		(new FlushExecutor($executor))->flush(
+			$this->context(new RepresentationStateStore(), $this->records($record)),
+			prepare: static fn () => self::fail('Rejected flush must leave pending work untouched.'),
+		);
+	}
+
+	public function testPreparationWaitsUntilTheDecoratedExecutorOpensATransaction(): void
+	{
+		$inner = new class () implements CommandExecutorInterface {
+			public function execute(CommandInterface $command): CommandResult
+			{
+				return new CommandResult(1);
+			}
+		};
+		$flusher = new FlushExecutor(new ConvertingCommandExecutor($inner));
+		$context = $this->context(new RepresentationStateStore(), $this->records());
+
+		$this->expectException(InvalidCommandException::class);
+		$flusher->flush($context, prepare: static fn () => self::fail('A failed transaction must leave pending work untouched.'));
 	}
 
 	public function testTransactionalFlushRunsSchedulerInsideTransactionWithImmediateValueMergeAndDeferredFinalizers(): void
