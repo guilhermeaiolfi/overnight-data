@@ -104,23 +104,18 @@ final class ObjectWriter implements WriterInterface
 		MappingNode $node,
 	): void {
 		$objectState = $this->requireState($state);
+		if ($objectState->target !== null) {
+			$this->applyWrite($objectState->target, $name, $value, $node);
+
+			return;
+		}
+
 		$objectState->values[$name] = $value;
 		$objectState->writes[] = [
 			'name' => $name,
 			'value' => $value,
 			'node' => $node,
 		];
-
-		if ($objectState->target === null) {
-			return;
-		}
-
-		$this->applyWrite(
-			target: $objectState->target,
-			name: $name,
-			value: $value,
-			node: $node,
-		);
 	}
 
 	public function getResult(
@@ -138,7 +133,6 @@ final class ObjectWriter implements WriterInterface
 		}
 
 		$reflection = $this->getReflection($target);
-		$this->assertSupportedTargetOnce($reflection);
 		[$object, $consumed] = $this->instantiateUsingResolvedValues($reflection, $objectState->values);
 
 		foreach ($objectState->writes as $write) {
@@ -205,10 +199,6 @@ final class ObjectWriter implements WriterInterface
 	private function assertSupportedTarget(ReflectionClass $reflection): void
 	{
 		$class = $reflection->getName();
-
-		if (self::supportsReflectionTarget($reflection)) {
-			return;
-		}
 
 		if ($reflection->isInterface()) {
 			throw new MappingException(sprintf("Cannot map to interface target '%s'.", $class));
