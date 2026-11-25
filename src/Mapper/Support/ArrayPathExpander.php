@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace ON\Data\Mapper\Support;
 
 use ON\Data\Mapper\Exception\MappingException;
+use ON\Data\Mapper\MappingNode;
+use ReflectionReference;
 
 final class ArrayPathExpander
 {
@@ -86,6 +88,7 @@ final class ArrayPathExpander
 
 				$existing = $current[$segment];
 				if (is_array($existing) && is_array($value)) {
+					self::detachReference($current, $segment);
 					$current[$segment] = self::mergeBranches($existing, $value, $currentPath);
 
 					return;
@@ -102,10 +105,20 @@ final class ArrayPathExpander
 				throw new MappingException(sprintf("Conflicting dotted-key path '%s'.", $currentPath));
 			}
 
+			self::detachReference($current, $segment);
 			$current = &$current[$segment];
 		}
 
 		throw new MappingException(sprintf("Malformed dotted key '%s'.", $originalKey));
+	}
+
+	/** @param array<mixed> $branch */
+	private static function detachReference(array &$branch, string $key): void
+	{
+		if (ReflectionReference::fromArrayElement($branch, $key) !== null) {
+			// Detach the entry before writing through it so expansion cannot modify the source.
+			$branch = array_replace($branch, [$key => $branch[$key]]);
+		}
 	}
 
 	/**
@@ -114,22 +127,28 @@ final class ArrayPathExpander
 	 *
 	 * @return array<mixed>
 	 */
-	private static function mergeBranches(array $left, array $right, string $path): array
+	private static function mergeBranches(array $left, array $right, string $path, int $depth = 0): array
 	{
-		$merged = $left;
+		if ($depth > MappingNode::MAX_DEPTH) {
+			throw new MappingException(sprintf(
+				"Maximum dotted-key merge depth of %d exceeded at path '%s'. The source may contain a recursive array reference.",
+				MappingNode::MAX_DEPTH,
+				$path,
+			));
+		}
 
+		$replacements = [];
 		foreach ($right as $key => $value) {
-			$childPath = $path === '' ? (string) $key : $path . '.' . (string) $key;
-
-			if (! array_key_exists($key, $merged)) {
-				$merged[$key] = $value;
+			if (! array_key_exists($key, $left)) {
+				$replacements[$key] = $value;
 
 				continue;
 			}
 
-			$existing = $merged[$key];
+			$childPath = $path === '' ? (string) $key : $path . '.' . (string) $key;
+			$existing = $left[$key];
 			if (is_array($existing) && is_array($value)) {
-				$merged[$key] = self::mergeBranches($existing, $value, $childPath);
+				$replacements[$key] = self::mergeBranches($existing, $value, $childPath, $depth + 1);
 
 				continue;
 			}
@@ -137,7 +156,7 @@ final class ArrayPathExpander
 			throw new MappingException(sprintf("Conflicting dotted-key path '%s'.", $childPath));
 		}
 
-		return $merged;
+		return array_replace($left, $replacements);
 	}
 
 	/**
@@ -149,6 +168,15 @@ final class ArrayPathExpander
 			throw new MappingException(sprintf("Malformed dotted key '%s'.", $key));
 		}
 
-		return explode('.', $key);
+		$segments = explode('.', $key, MappingNode::MAX_DEPTH + 1);
+		if (count($segments) > MappingNode::MAX_DEPTH) {
+			throw new MappingException(sprintf(
+				"Maximum dotted-key depth of %d exceeded at path '%s'.",
+				MappingNode::MAX_DEPTH,
+				$key,
+			));
+		}
+
+		return $segments;
 	}
 }

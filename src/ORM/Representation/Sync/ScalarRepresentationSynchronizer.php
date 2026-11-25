@@ -85,9 +85,10 @@ final class ScalarRepresentationSynchronizer
 	private function readWritableValues(object $representation, RepresentationState $state): array
 	{
 		$values = [];
+		$readPath = $this->reader->readPass($representation);
 
 		foreach ($state->getWritableFields() as $fieldSchema) {
-			$result = $this->reader->readPath($representation, $fieldSchema->getPath());
+			$result = $readPath($fieldSchema->getPath());
 			if ($result->isMissing()) {
 				continue;
 			}

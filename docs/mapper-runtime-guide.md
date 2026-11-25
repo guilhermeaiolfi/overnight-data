@@ -294,11 +294,26 @@ map($row)->args(new ObjectMapperOptions(convertNestedObjects: true))->to(stdClas
 
 By default, `map(...)->to(stdClass::class)` still converts the **root** value into `stdClass`, and nested arrays / nested `stdClass` still recurse. Already-concrete nested objects (for example a `FileDescriptor`) stay as themselves unless `ObjectMapperOptions(convertNestedObjects: true)` is passed.
 
+### Shallow mapping
+
+```php
+$properties = map($object, gateway: $gateway)->shallow()->to([]);
+$dto = map($row)->shallow()->to(UserDto::class);
+```
+
+`shallow()` maps immediate properties or entries to the requested target. Nested arrays and objects pass through as supplied, including cyclic values. The same mode works for array, `stdClass`, and DTO targets. For DTOs, nested values must already fit the target property or constructor parameter types. Top-level field names, resolver rules, and leaf conversions still apply. With `collection()`, each item is mapped shallowly.
+
+Object property names containing dots stay literal. For array sources, `ArrayMapper` still expands dotted keys at the level it maps, including merging overlapping paths. Pass `ArrayMapperOptions(expandDottedKeys: false)` through `args()` to keep those keys literal. Dotted keys inside untouched nested arrays stay literal.
+
+Use `shallow(false)` to restore recursive mapping on a new builder. Direct callers of `MapperManager::map()` can set the same option with `MappingOptions::withShallow()`.
+
 ## Mapping execution model
 
 A mapper processes one source branch level at a time. Concrete mappers decide whether they can map a source value, enumerate its immediate children, and pass each child to `MappingBranch::write()`. The branch owns writer state, node resolution, writing, and finalization; the runtime supplies conversion and recursive dispatch.
 
 When a child resolves as a branch, recursive dispatch flows through `MappingRuntime::mapNode()`. Mapper selection therefore happens from the branch's runtime source value, which allows hybrid trees such as array root -> object child -> array grandchild.
+
+Recursive traversal throws `MappingException` with the current path when it revisits an object already on that path or exceeds 128 branch levels below the root. The depth limit also stops recursive PHP array references when the mapper follows them. Dotted-key expansion limits keys to 128 segments and bounds recursive merges to 128 levels from the merge root. These expansion limits also apply in shallow mode when expansion is enabled.
 
 ## Object writer behavior
 

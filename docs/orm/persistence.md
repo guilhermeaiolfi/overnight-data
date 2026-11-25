@@ -31,6 +31,12 @@ The necessary write steps (and the matching read steps) are in [`../read-write.m
 
 ## State And Sync
 
+During inbound adoption, identification, writable query hydration, and sync, the session reads scalar and relation paths with `map($object, gateway: $gateway)->shallow()->to([])`. It reuses each visited object's mapped properties within one pass. Arrays, iterables, and nested objects pass through as written, so the session tracks the exact child instances exposed by the mapper. Schema paths refer to the names exposed by the mapper, and a required relation omitted from its output produces a missing-path error. The default object mapper treats properties marked `#[Hidden]` as missing. PATCH updates omit missing fields and apply explicit `null` values.
+
+`new Session($executor, gateway: $gateway)` uses that `ConversionGateway` for representation reads in the session's default components. Sessions without an explicit gateway use `Mapping::getDefaultGateway()` for those reads. Custom mappers that override the default object mapper can be placed first with `$gateway->getMapperManager()->prepend(MyMapper::class)`.
+
+Relation paths refer to live public properties. Expose relation targets there so the session can resolve each original PHP instance to its tracked state.
+
 `RecordState` is the persistence source of truth. It stores canonical PHP values keyed by collection field name, the original clean snapshot, lifecycle state, and identity through `ON\Data\Key`.
 
 Representations are user-facing objects or values. A representation object can drift from its record state until synchronization happens. `RepresentationStateStore` associates the object with `RepresentationState` through weak object keys, so the session does not keep otherwise-unused representation objects alive. `ScalarRepresentationSynchronizer` reads field schemas only and applies planned representation field updates into `RecordState` while preserving the conflict rules from the ORM foundation: a representation edit conflicts when its value and the current record value differ from each other and from the representation baseline.
@@ -278,6 +284,6 @@ For an optional, bounded journal of committed commands and transactional undo, s
 - No `Session::refresh()` of an existing row; omitted insert columns and `DatabaseGenerator` update columns are recovered on the write path via `RETURNING` or a follow-up select as documented above.
 - No batch command execution.
 - No public SQL command API.
-- Writable export supports `stdClass` and mutable public-property classes; readonly classes/properties are rejected. Sync reads scalars via the mapper (`map($dto)->to(stdClass::class)`); relation identity uses live object paths.
+- Writable export supports `stdClass` and mutable public-property classes. It rejects readonly classes and properties.
 - Writable iteration is not supported yet.
 - Flat projection provenance is for writable query export (`stdClass` or mutable DTO).

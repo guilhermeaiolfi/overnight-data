@@ -59,6 +59,10 @@ final class ReflectionPropertyNodeResolver implements CacheableNodeResolverInter
 			}
 		}
 
+		if ($node->getOptions()->isShallow()) {
+			return $name === (string) $node->getName() ? null : LeafNodeResolution::passthrough($name);
+		}
+
 		if (! BranchTargetInferrer::isStructuralValue($node->getValue())) {
 			return null;
 		}
@@ -111,7 +115,7 @@ final class ReflectionPropertyNodeResolver implements CacheableNodeResolverInter
 		MappingNode $node,
 	): bool {
 		$source = $node->getParentSource();
-		if (is_object($source) && ! $source instanceof stdClass) {
+		if (is_object($source) && $source::class !== stdClass::class) {
 			return true;
 		}
 

@@ -6,6 +6,7 @@ namespace Tests\ON\Data\ORM\Sync;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
+use ON\Data\Mapper\Attribute\Hidden;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Representation\State\RepresentationState;
@@ -52,6 +53,22 @@ final class ScalarRepresentationSynchronizerTest extends TestCase
 
 		self::assertCount(1, $plans[0]->getUpdates());
 		self::assertSame('A2', $record->getValue('name'));
+	}
+
+	public function testHiddenWritablePropertyIsTreatedAsOmitted(): void
+	{
+		$users = $this->users();
+		$record = RecordState::clean($users->getKey(10), ['id' => 10, 'name' => 'Stored']);
+		$object = new class () {
+			#[Hidden]
+			public ?string $name = null;
+		};
+		$tracked = $this->tracked($object, $this->schema($this->field('name', $users, 'name')), $record);
+
+		$plans = $this->synchronizer()->sync($this->representations($tracked));
+
+		self::assertTrue($plans[0]->isEmpty());
+		self::assertSame('Stored', $record->getValue('name'));
 	}
 
 	public function testChangedRepresentationFieldMakesCleanRecordStateDirty(): void

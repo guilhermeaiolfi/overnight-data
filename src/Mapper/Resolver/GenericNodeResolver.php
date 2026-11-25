@@ -23,6 +23,10 @@ final class GenericNodeResolver implements NodeResolverInterface
 		MappingNode $node,
 		MappingRuntime $runtime,
 	): ?BranchNodeResolutionInterface {
+		if ($node->getOptions()->isShallow()) {
+			return null;
+		}
+
 		$value = $node->getValue();
 		$parentTarget = $node->getParentTarget();
 		$convertNestedObjects = ObjectMapperOptions::fromArguments($node->getArguments())

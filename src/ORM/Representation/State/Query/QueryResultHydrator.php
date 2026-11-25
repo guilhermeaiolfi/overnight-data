@@ -114,8 +114,9 @@ final class QueryResultHydrator
 		$sources = $schema->getSources();
 		$bound = [];
 		$baselines = [];
-		$readPath = function (string $path) use ($representation, $sourceRow, &$baselines): PathReadResult {
-			$visible = $this->reader->readPath($representation, $path);
+		$readVisiblePath = $this->reader->readPass($representation);
+		$readPath = static function (string $path) use ($readVisiblePath, $sourceRow, &$baselines): PathReadResult {
+			$visible = $readVisiblePath($path);
 			$loaded = array_key_exists($path, $sourceRow) ? PathReadResult::present($sourceRow[$path]) : $visible;
 			// The shared record can already contain a pending edit. A new object starts from what it sees.
 			if ($visible->isPresent()) {

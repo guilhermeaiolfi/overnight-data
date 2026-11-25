@@ -4,26 +4,83 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Sync;
 
+use Closure;
+use ON\Data\Mapper\ConversionGateway;
+use ON\Data\Mapper\Exception\MappingException;
+use function ON\Data\Mapper\map;
+use ON\Data\Mapper\Mapping;
 use ON\Data\Schema\RepresentationRelationSchema;
 use Throwable;
+use WeakMap;
 
 final class RepresentationReader
 {
-	/**
-	 * Read initialized public properties directly from the live representation.
-	 * A literal dotted property takes precedence over traversal.
-	 *
-	 * @return PathReadResult<mixed>
-	 */
+	public function __construct(private readonly ?ConversionGateway $gateway = null)
+	{
+	}
+
+	/** @return PathReadResult<mixed> */
 	public function readPath(object $source, string $path): PathReadResult
 	{
-		$properties = get_object_vars($source);
-		if (array_key_exists($path, $properties)) {
-			return PathReadResult::present($properties[$path]);
+		return ($this->readPass($source))($path);
+	}
+
+	/**
+	 * Read paths against one representation, mapping each visited object once.
+	 *
+	 * @return Closure(string): PathReadResult<mixed>
+	 */
+	public function readPass(object $source): Closure
+	{
+		$gateway = $this->gateway ?? Mapping::getDefaultGateway();
+		$mapProperties = static function (object $object) use ($gateway): array {
+			$result = map($object, gateway: $gateway)->shallow()->to([]);
+			if (! is_array($result)) {
+				throw new MappingException('Reading representation properties requires an array mapping result.');
+			}
+
+			return $result;
+		};
+		$root = null;
+		$readNested = null;
+		/** @var WeakMap<object, array<string|int, mixed>>|null $properties */
+		$properties = null;
+
+		return static function (string $path) use ($source, $mapProperties, &$root, &$readNested, &$properties): PathReadResult {
+			$root ??= $mapProperties($source);
+			if (array_key_exists($path, $root)) {
+				return PathReadResult::present($root[$path]);
+			}
+
+			$readNested ??= static function (object $object) use ($source, $mapProperties, $root, &$properties): array {
+				if ($object === $source) {
+					return $root;
+				}
+
+				$properties ??= new WeakMap();
+
+				return $properties[$object] ??= $mapProperties($object);
+			};
+
+			return self::traversePath($root, $path, $readNested);
+		};
+	}
+
+	/**
+	 * @param array<string|int, mixed> $properties
+	 * @param callable(object): array<string|int, mixed> $propertiesOf
+	 * @return PathReadResult<mixed>
+	 */
+	private static function traversePath(array $properties, string $path, callable $propertiesOf): PathReadResult
+	{
+		$segments = explode('.', $path);
+		$first = array_shift($segments);
+		if (! array_key_exists($first, $properties)) {
+			return self::missingSegment($path, $first);
 		}
 
-		$current = $source;
-		foreach (explode('.', $path) as $segment) {
+		$current = $properties[$first];
+		foreach ($segments as $segment) {
 			if (is_array($current)) {
 				if (! ctype_digit($segment)) {
 					return PathReadResult::invalid(sprintf(
@@ -35,7 +92,7 @@ final class RepresentationReader
 
 				$offset = (int) $segment;
 				if (! array_key_exists($offset, $current)) {
-					return PathReadResult::missing(sprintf("Cannot read representation path '%s' because segment '%s' is missing.", $path, $segment));
+					return self::missingSegment($path, $segment);
 				}
 
 				$current = $current[$offset];
@@ -44,9 +101,9 @@ final class RepresentationReader
 			}
 
 			if (is_object($current)) {
-				$properties = get_object_vars($current);
+				$properties = $propertiesOf($current);
 				if (! array_key_exists($segment, $properties)) {
-					return PathReadResult::missing(sprintf("Cannot read representation path '%s' because segment '%s' is missing.", $path, $segment));
+					return self::missingSegment($path, $segment);
 				}
 
 				$current = $properties[$segment];
@@ -62,6 +119,12 @@ final class RepresentationReader
 		}
 
 		return PathReadResult::present($current);
+	}
+
+	/** @return PathReadResult<never> */
+	private static function missingSegment(string $path, string $segment): PathReadResult
+	{
+		return PathReadResult::missing(sprintf("Cannot read representation path '%s' because segment '%s' is missing.", $path, $segment));
 	}
 
 	/**

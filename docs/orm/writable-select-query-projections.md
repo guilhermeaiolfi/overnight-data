@@ -40,8 +40,9 @@ Writable export requirements:
 - an explicit `Session` is required (`Session` implements `WritableResultHandler`; that is the Query↔ORM bridge)
 - the returned object is what Session tracks (same identity)
 - **identity must be in the identity overlay** — select the collection primary key (copied onto the overlay), or use a shape that already loads it (for example a flattened related field whose assemble backfills a hidden source id). `writable()` does not add identity columns. Results without identity are never tracked
-- scalar sync reads go through `map($representation)->to(stdClass::class)`; relation `ONE`/`MANY` targets are read from the live object so related instances stay tracked
-- selection aliases / schema paths are the contract: DTO properties (or `MapFrom`) must match them; avoid `MapTo` that renames those keys when mapping back to a bag
+- hydration and sync use the session's Mapper gateway to read scalar fields and relations. Hydration captures visible scalar baselines, and sync reads current values
+- selection aliases and schema paths must match the names exposed by the Mapper. `MapFrom` can match the alias during export, and `MapTo` or a custom mapper can expose the alias during reads
+- `map($object, gateway: $gateway)->shallow()->to([])` reads one object level and preserves nested values as written. The session tracks the exact object instances exposed as `ONE` targets and `MANY` items
 - `prepare()` returns a `WritablePreparation` token (concretely `QueryRepresentationPlan`); the query holds it for that fetch and passes it to `track()`
 - one schema is compiled per fetch operation and reused across rows
 - each object still gets its own `RepresentationState`

@@ -9,6 +9,7 @@ use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\MappingException;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Mapper\ArrayMapperOptions;
+use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\Representation\StorageRepresentation;
 use ON\Data\Mapper\Representation\WireRepresentation;
 use PHPUnit\Framework\TestCase;
@@ -141,9 +142,82 @@ final class RecursiveMappingTest extends TestCase
 		$source->self = $source;
 
 		$this->expectException(MappingException::class);
-		$this->expectExceptionMessage("path 'self'");
+		$this->expectExceptionMessage("Detected object cycle at path 'self'.");
 
 		map($source)->to([]);
+	}
+
+	public function testRecursiveArrayReferencesAreBounded(): void
+	{
+		$source = [];
+		$source['self'] = &$source;
+
+		$this->expectException(MappingException::class);
+		$this->expectExceptionMessage('recursive array reference');
+
+		map($source)->to([]);
+	}
+
+	public function testRecursiveListReferencesAreBoundedInCollectionMapping(): void
+	{
+		$source = [];
+		$source[] = &$source;
+
+		$this->expectException(MappingException::class);
+		$this->expectExceptionMessage("exceeded at path '0.0.");
+
+		map($source)->collection()->to(stdClass::class);
+	}
+
+	public function testExcessivelyDeepAcyclicBranchesAreBounded(): void
+	{
+		$source = ['id' => 1];
+		for ($level = 0; $level < MappingNode::MAX_DEPTH; $level++) {
+			$source = ['next' => (object) $source];
+		}
+
+		self::assertIsArray(map($source)->to([]));
+
+		$this->expectException(MappingException::class);
+		$this->expectExceptionMessage('Maximum mapping depth');
+
+		map(['next' => $source])->to([]);
+	}
+
+	public function testRecursiveArrayReferencesAreBoundedInDottedKeyMerges(): void
+	{
+		$branch = [];
+		$branch['self'] = &$branch;
+
+		$this->expectException(MappingException::class);
+		$this->expectExceptionMessage('Maximum dotted-key merge depth');
+
+		map(['tree.self' => $branch, 'tree' => $branch])->to([]);
+	}
+
+	public function testExcessivelyDeepDottedKeysAreBounded(): void
+	{
+		$key = str_repeat('nested.', MappingNode::MAX_DEPTH) . 'leaf';
+
+		$this->expectException(MappingException::class);
+		$this->expectExceptionMessage('Maximum dotted-key depth');
+
+		map([$key => true])->to([]);
+	}
+
+	public function testDottedKeyExpansionLeavesReferencedSourceBranchesIntact(): void
+	{
+		$nested = ['original' => true];
+		$source = [
+			'branch' => ['nested' => &$nested],
+			'branch.nested.added' => true,
+		];
+
+		self::assertSame(
+			['branch' => ['nested' => ['original' => true, 'added' => true]]],
+			map($source)->shallow()->to([]),
+		);
+		self::assertSame(['original' => true], $nested);
 	}
 
 	public function testCycleProtectionCoversCollectionItems(): void

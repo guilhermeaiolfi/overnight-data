@@ -47,15 +47,19 @@ final class MappingOptionsTest extends TestCase
 			->withMapperClass(SpyArrayMapper::class)
 			->withAddedResolverClass(SpyResolver::class)
 			->withFieldMap($fieldMap)
+			->withShallow()
 			->asCollection();
 
 		self::assertNull($context->getMapperClass());
 		self::assertSame([], $context->getResolverClasses());
 		self::assertNull($context->getFieldMap());
 		self::assertFalse($context->isCollection());
+		self::assertFalse($context->isShallow());
 		self::assertSame(SpyArrayMapper::class, $updated->getMapperClass());
 		self::assertSame([SpyResolver::class], $updated->getResolverClasses());
 		self::assertSame($fieldMap, $updated->getFieldMap());
 		self::assertTrue($updated->isCollection());
+		self::assertTrue($updated->isShallow());
+		self::assertFalse($updated->withShallow(false)->isShallow());
 	}
 }

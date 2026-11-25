@@ -42,9 +42,22 @@ use ON\Data\Mapper\Resolver\ReflectionPropertyNodeResolver;
 use ON\Data\Mapper\Writer\ArrayWriter;
 use ON\Data\Mapper\Writer\ObjectWriter;
 use ON\Data\Mapper\Writer\WriterInterface;
+use stdClass;
 
 final class MapperManager
 {
+	private const DEFAULT_MAPPERS = [ArrayMapper::class, ObjectMapper::class];
+
+	private const DEFAULT_WRITERS = [ArrayWriter::class, ObjectWriter::class];
+
+	private const DEFAULT_RESOLVERS = [
+		FieldMapNodeResolver::class,
+		DefinitionNodeResolver::class,
+		ReflectionPropertyNodeResolver::class,
+		GenericNodeResolver::class,
+		PassthroughNodeResolver::class,
+	];
+
 	/**
 	 * @var list<class-string<MapperInterface>>
 	 */
@@ -123,15 +136,9 @@ final class MapperManager
 		$existingFieldTypeCodecs = $manager->fieldTypeCodecs;
 
 		foreach ([
-			ArrayMapper::class,
-			ObjectMapper::class,
-			ArrayWriter::class,
-			ObjectWriter::class,
-			FieldMapNodeResolver::class,
-			DefinitionNodeResolver::class,
-			ReflectionPropertyNodeResolver::class,
-			GenericNodeResolver::class,
-			PassthroughNodeResolver::class,
+			...self::DEFAULT_MAPPERS,
+			...self::DEFAULT_WRITERS,
+			...self::DEFAULT_RESOLVERS,
 			StringFieldType::class,
 			PassthroughFieldType::class,
 			BoolFieldType::class,
@@ -242,6 +249,30 @@ final class MapperManager
 		mixed $target,
 		MappingOptions $options,
 	): mixed {
+		$mapper = null;
+		if (
+			$options->isShallow()
+			&& $source instanceof stdClass
+			&& $source::class === stdClass::class
+			&& $target === []
+			&& $options->getMapperClass() === null
+			&& $options->getWriterClass() === null
+			&& $options->getResolverClasses() === []
+			&& $options->getFieldMap() === null
+			&& $options->getArguments() === []
+			&& ! $options->isCollection()
+			&& $options->getSourceRepresentation() === null
+			&& $options->getOutputRepresentation() === null
+			&& $this->writers === self::DEFAULT_WRITERS
+			&& $this->resolvers === self::DEFAULT_RESOLVERS
+			&& $this->constructor === null
+		) {
+			$mapper = $this->resolveMapper($source, $options);
+			if ($mapper instanceof ObjectMapper) {
+				return get_object_vars($source);
+			}
+		}
+
 		$runtime = new MappingRuntime(
 			mapperManager: $this,
 		);
@@ -252,6 +283,7 @@ final class MapperManager
 				target: $target,
 				options: $options,
 			),
+			mapper: $mapper,
 		);
 	}
 

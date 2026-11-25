@@ -7,7 +7,6 @@ namespace ON\Data\ORM\Representation\State;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
-use ON\Data\ORM\Representation\Sync\PathReadResult;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
 use ON\Data\ORM\Representation\Sync\RepresentationSourceReader;
 use ON\Data\ORM\SessionContext;
@@ -76,7 +75,7 @@ final class RepresentationIdentifier
 			$bound[''] = $this->cleanRecord($session, $key, $key->getValues());
 		}
 
-		$readPath = fn (string $path): PathReadResult => $this->reader->readPath($representation, $path);
+		$readPath = $this->reader->readPass($representation);
 		foreach ($sources as $source) {
 			[$reads, $values] = RepresentationSourceReader::read($source, $readPath);
 			$key = RepresentationSourceReader::resolveKey($source, $reads, $source->isRoot() ? $rootKey : null)

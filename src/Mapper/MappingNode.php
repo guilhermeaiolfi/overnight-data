@@ -8,6 +8,10 @@ use ON\Data\Mapper\Exception\MappingException;
 
 final readonly class MappingNode
 {
+	public const MAX_DEPTH = 128;
+
+	private int $depth;
+
 	private function __construct(
 		private string|int|null $name,
 		private mixed $value,
@@ -15,6 +19,7 @@ final readonly class MappingNode
 		private MappingOptions $options,
 		private ?self $parent,
 	) {
+		$this->depth = $parent === null ? 0 : $parent->depth + 1;
 	}
 
 	public static function root(
@@ -135,6 +140,19 @@ final readonly class MappingNode
 			$options,
 			$this->parent,
 		);
+	}
+
+	public function assertCanMap(): void
+	{
+		$this->assertNoObjectCycle();
+
+		if ($this->depth > self::MAX_DEPTH) {
+			throw new MappingException(sprintf(
+				"Maximum mapping depth of %d exceeded at path '%s'. The source may contain a recursive array reference.",
+				self::MAX_DEPTH,
+				$this->getPath(),
+			));
+		}
 	}
 
 	public function assertNoObjectCycle(): void

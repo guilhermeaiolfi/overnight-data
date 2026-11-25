@@ -7,6 +7,11 @@ namespace Tests\ON\Data\ORM;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
+use ON\Data\Mapper\ConversionGateway;
+use ON\Data\Mapper\Mapper\MapperInterface;
+use ON\Data\Mapper\Mapping;
+use ON\Data\Mapper\MappingBranch;
+use ON\Data\Mapper\MappingOptions;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Persistence\CommandResult;
@@ -17,8 +22,10 @@ use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Representation\State\RepresentationState;
+use ON\Data\ORM\Representation\Sync\RepresentationReader;
 use ON\Data\ORM\Representation\Sync\RepresentationSyncer;
 use ON\Data\ORM\Session;
+use ON\Data\Query\SelectQuery;
 use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationRelationSchema;
 use ON\Data\Schema\RepresentationSchema;
@@ -61,6 +68,135 @@ final class SessionTest extends TestCase
 		$syncerProperty = $flusherReflection->getProperty('syncer');
 
 		self::assertSame($syncer, $syncerProperty->getValue($flusher));
+	}
+
+	public function testExplicitGatewayReadsCustomMappedValuesForCreateUpdateSyncFlushAndIdentify(): void
+	{
+		$default = Mapping::getDefaultGateway();
+		$gateway = ConversionGateway::createDefault();
+		$gateway->getMapperManager()->prepend(SessionUserMapper::class);
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor, gateway: $gateway);
+		$schema = $this->userSchemaWithId();
+		$users = $schema->getCollection();
+
+		$created = new SessionMappedUser(11, 'Created');
+		$session->create($created, $schema);
+		$session->flush();
+		$insert = $executor->getCommands()[0];
+		self::assertInstanceOf(InsertCommand::class, $insert);
+		self::assertSame(['id' => 11, 'name' => 'Created'], $insert->getValues());
+
+		$updated = new SessionMappedUser(22, 'Patched');
+		$session->update($updated, $schema);
+		$session->sync($updated);
+		self::assertSame('Patched', $session->getRecords()->getByKey($users->getKey(22))?->getValue('name'));
+
+		$identified = new SessionMappedUser(33, 'Identified');
+		self::assertSame($identified, $session->identify($users, ['id' => 33], $identified, $schema));
+		$record = $session->getRecords()->getByKey($users->getKey(33));
+		self::assertTrue($record?->isClean());
+		self::assertSame('Identified', $record->getValue('name'));
+
+		$identified->rename('Synced');
+		$session->sync();
+		self::assertSame('Synced', $record->getValue('name'));
+		$identified->rename('Flushed');
+		$executor->clear();
+		$session->flush();
+		$commands = $executor->getCommands();
+		self::assertCount(2, $commands);
+		[$patch, $update] = $commands;
+		self::assertInstanceOf(UpdateCommand::class, $patch);
+		self::assertSame(['id' => 22], $patch->getIdentity());
+		self::assertSame(['name' => 'Patched'], $patch->getChanges());
+		self::assertInstanceOf(UpdateCommand::class, $update);
+		self::assertSame(['id' => 33], $update->getIdentity());
+		self::assertSame(['name' => 'Flushed'], $update->getChanges());
+		self::assertSame($default, Mapping::getDefaultGateway());
+		self::assertFalse($default->getMapperManager()->has(SessionUserMapper::class));
+	}
+
+	public function testWritableQueryHydrationUsesTheSessionGatewayForVisibleBaselines(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+		$gateway->getMapperManager()->prepend(SessionUserMapper::class);
+		$session = new Session(new RecordingCommandExecutor(), gateway: $gateway);
+		$users = $this->users();
+		$query = new SelectQuery($users);
+		$query->select($query->id, $query->name);
+		$visible = new SessionMappedUser(44, 'Visible');
+
+		$session->track($query, $session->prepare($query), [['id' => 44, 'name' => 'Loaded']], [$visible]);
+
+		$state = $session->getRepresentations()->get($visible);
+		self::assertInstanceOf(RepresentationState::class, $state);
+		self::assertSame('Visible', $state->getBaseline('name'));
+		self::assertSame('Loaded', $state->requireRootRecord()->getValue('name'));
+		$session->sync($visible);
+		self::assertSame('Loaded', $state->requireRootRecord()->getValue('name'));
+	}
+
+	public function testCustomMapperExposesPrivateRelationsForCreateSyncAndFlush(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$profiles = $users->getRegistry()->collection('profiles')
+			->primaryKey('id')
+			->field('id', 'int')->end()
+			->field('label', 'string')->end()
+			->field('user_id', 'int')->end();
+		$users->hasOne('profile', 'profiles')->innerKey('id')->outerKey('user_id');
+		$schema = $this->userTemplateSchemaFor($users);
+		$profileRelation = new RepresentationRelationSchema('profile', $users, 'profile', $this->profileTemplateSchemaFor($profiles));
+		$postsRelation = new RepresentationRelationSchema('posts', $users, 'posts', $this->postTemplateSchemaFor($posts));
+		$schema->addRelation($profileRelation);
+		$schema->addRelation($postsRelation);
+
+		$profile = new class () {
+			public int $id = 21;
+			public string $label = 'Profile';
+			public ?int $user_id = null;
+		};
+		$post = $this->representation(['id' => 31, 'title' => 'Post', 'user_id' => null]);
+		$user = new SessionMappedUser(11, 'Owner', $profile, [$post]);
+		$gateway = ConversionGateway::createDefault();
+		$gateway->getMapperManager()->prepend(SessionUserMapper::class);
+		$reader = new RepresentationReader($gateway);
+		$error = static fn (string $message): SyncException => new SyncException($message);
+		self::assertSame($profile, $reader->readTarget($user, $profileRelation, $error)->requireValue());
+		self::assertSame([$post], $reader->readItems($user, $postsRelation, $error)->requireValue());
+
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor, gateway: $gateway);
+		$session->create($user, $schema);
+		$session->sync($user);
+
+		$owner = $session->getRepresentations()->get($user)?->requireRootRecord();
+		self::assertInstanceOf(RecordState::class, $owner);
+		$one = $session->getRelations()->get($owner, 'profile');
+		$many = $session->getRelations()->get($owner, 'posts');
+		self::assertInstanceOf(ToOneRelationState::class, $one);
+		self::assertInstanceOf(ToManyRelationState::class, $many);
+		self::assertSame($profile, $one->getTarget());
+		self::assertSame([$post], $many->getItems());
+		self::assertTrue($session->getRepresentations()->has($profile));
+		self::assertTrue($session->getRepresentations()->has($post));
+
+		$profile->label = 'Edited profile';
+		$post->title = 'Edited post';
+		$session->flush();
+
+		$inserts = [];
+		foreach ($executor->getCommands() as $command) {
+			self::assertInstanceOf(InsertCommand::class, $command);
+			$inserts[$command->getCollection()->getName()] = $command->getValues();
+		}
+		self::assertCount(3, $executor->getCommands());
+		self::assertSame(['id' => 11, 'name' => 'Owner'], $inserts['users']);
+		self::assertSame(['id' => 21, 'label' => 'Edited profile', 'user_id' => 11], $inserts['profiles']);
+		self::assertSame(['id' => 31, 'title' => 'Edited post', 'user_id' => 11], $inserts['posts']);
+		self::assertSame($profile, $one->getBaselineTarget());
+		self::assertSame([$post], $many->getItems());
 	}
 
 	public function testRecordStateStoreAddRegistersExistingRecord(): void
@@ -1786,5 +1922,63 @@ final class SessionTest extends TestCase
 			->primaryKey('user_id', 'group_id')
 			->field('user_id', 'int')->end()
 			->field('group_id', 'int')->end();
+	}
+}
+
+final class SessionMappedUser
+{
+	/** @param list<object> $posts */
+	public function __construct(
+		private int $id,
+		private string $displayName,
+		private ?object $profile = null,
+		private array $posts = [],
+	) {
+	}
+
+	public function getId(): int
+	{
+		return $this->id;
+	}
+
+	public function getName(): string
+	{
+		return $this->displayName;
+	}
+
+	public function getProfile(): ?object
+	{
+		return $this->profile;
+	}
+
+	/** @return list<object> */
+	public function getPosts(): array
+	{
+		return $this->posts;
+	}
+
+	public function rename(string $name): void
+	{
+		$this->displayName = $name;
+	}
+}
+
+final class SessionUserMapper implements MapperInterface
+{
+	public static function canMap(mixed $source, MappingOptions $options): bool
+	{
+		return $source instanceof SessionMappedUser;
+	}
+
+	public function map(MappingBranch $context): mixed
+	{
+		/** @var SessionMappedUser $user */
+		$user = $context->getSource();
+		$context->write('id', $user->getId());
+		$context->write('name', $user->getName());
+		$context->write('profile', $user->getProfile());
+		$context->write('posts', $user->getPosts());
+
+		return $context->getResult();
 	}
 }

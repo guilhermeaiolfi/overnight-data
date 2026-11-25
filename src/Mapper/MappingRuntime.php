@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Mapper;
 
 use ON\Data\Mapper\Exception\MappingException;
+use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
@@ -53,11 +54,11 @@ final class MappingRuntime
 		return $instance;
 	}
 
-	public function mapNode(MappingNode $node): mixed
+	public function mapNode(MappingNode $node, ?MapperInterface $mapper = null): mixed
 	{
 		return $node->isCollection()
 			? $this->mapCollection($node)
-			: $this->mapSingle($node);
+			: $this->mapSingle($node, mapper: $mapper);
 	}
 
 	public function convert(
@@ -100,7 +101,7 @@ final class MappingRuntime
 	private function mapCollection(
 		MappingNode $node,
 	): array {
-		$node->assertNoObjectCycle();
+		$node->assertCanMap();
 
 		$source = $node->getValue();
 
@@ -161,10 +162,11 @@ final class MappingRuntime
 		?array $resolvers = null,
 		?bool $conversionEnabled = null,
 		?NodeResolutionCache $resolutionCache = null,
+		?MapperInterface $mapper = null,
 	): mixed {
-		$node->assertNoObjectCycle();
+		$node->assertCanMap();
 		$options = $node->getOptions();
-		$mapper = $this->mapperManager->resolveMapper(
+		$mapper ??= $this->mapperManager->resolveMapper(
 			source: $node->getValue(),
 			options: $options,
 		);

@@ -29,6 +29,7 @@ final class MappingOptions
 		private array $arguments = [],
 		private ?FieldMap $fieldMap = null,
 		private bool $collection = false,
+		private bool $shallow = false,
 	) {
 	}
 
@@ -93,6 +94,11 @@ final class MappingOptions
 	public function isCollection(): bool
 	{
 		return $this->collection;
+	}
+
+	public function isShallow(): bool
+	{
+		return $this->shallow;
 	}
 
 	/**
@@ -189,6 +195,14 @@ final class MappingOptions
 	{
 		$clone = clone $this;
 		$clone->collection = $collection;
+
+		return $clone;
+	}
+
+	public function withShallow(bool $shallow = true): self
+	{
+		$clone = clone $this;
+		$clone->shallow = $shallow;
 
 		return $clone;
 	}

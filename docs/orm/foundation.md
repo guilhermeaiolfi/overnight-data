@@ -381,7 +381,9 @@ Relation state records intent; configured persistence planners translate it into
 
 ## Synchronization responsibilities
 
-`RepresentationReader` reads scalar bags through the mapper and relation paths from live objects. It distinguishes missing properties from present `null` values and supports numeric array path segments. It does not persist values.
+`RepresentationReader` uses `map($object, gateway: $gateway)->shallow()->to([])` for scalar and relation paths in adoption, identification, query hydration, and sync. It maps the root and any object traversed by a dotted path once per read pass. Shallow mapping preserves arrays, iterables, and nested objects as written. To-one targets and to-many items therefore retain the original instances tracked by the session, even in cyclic graphs.
+
+A literal dotted name on the mapped root takes precedence over traversal. Array paths accept numeric offsets. The reader distinguishes omitted mapped properties, invalid traversal, and present `null` values. Both scalar and relation paths use the names exposed by the mapper. The default object mapper omits properties marked `#[Hidden]`.
 
 `ScalarRepresentationSynchronizer` reads current values, detects conflicts, and produces `SyncPlan` instances containing field updates and conflicts. It validates the batch before applying plans. `SyncPlan::apply()` writes planned values into records and acknowledges field baselines.
 

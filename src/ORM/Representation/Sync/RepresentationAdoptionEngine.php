@@ -120,7 +120,7 @@ final class RepresentationAdoptionEngine
 			$bound[''] = $this->bindEmptyRoot($context, $records);
 		}
 
-		$readPath = fn (string $path): PathReadResult => $this->reader->readPath($representation, $path);
+		$readPath = $this->reader->readPass($representation);
 		foreach ($sources as $source) {
 			$this->assertSourceFieldCollections($source);
 			$path = $source->getPathKey();

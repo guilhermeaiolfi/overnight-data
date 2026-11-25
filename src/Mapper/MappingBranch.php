@@ -155,8 +155,8 @@ final class MappingBranch
 		ResolutionNodeInterface $resolution,
 	): mixed {
 		if ($resolution instanceof BranchNodeResolutionInterface) {
-			return $value === null
-				? null
+			return $value === null || $child->getOptions()->isShallow()
+				? $value
 				: $this->runtime->mapNode(
 					$child->forMapping(
 						target: $resolution->getTarget(),

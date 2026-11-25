@@ -6,6 +6,7 @@ namespace ON\Data\ORM;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
+use ON\Data\Mapper\ConversionGateway;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\History\FlushHistory;
@@ -17,6 +18,7 @@ use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\RelationTarget;
 use ON\Data\ORM\Relation\ToManyRelationState;
+use ON\Data\ORM\Representation\State\Query\QueryResultHydrator;
 use ON\Data\ORM\Representation\State\Query\WritableQueryResultTracker;
 use ON\Data\ORM\Representation\State\RepresentationIdentifier;
 use ON\Data\ORM\Representation\State\RepresentationState;
@@ -51,11 +53,12 @@ final class Session implements WritableResultHandler
 		?RepresentationSyncer $syncer = null,
 		?SessionContext $context = null,
 		?FlushHistory $history = null,
+		?ConversionGateway $gateway = null,
 	) {
 		$this->context = $context ?? new SessionContext();
-		$this->reader = new RepresentationReader();
+		$this->reader = new RepresentationReader($gateway);
 		$this->adoptionEngine = new RepresentationAdoptionEngine($this->reader);
-		$this->syncer = $syncer ?? new RepresentationSyncer();
+		$this->syncer = $syncer ?? new RepresentationSyncer(reader: $this->reader);
 		$this->flusher = $flusher === null
 			? new FlushExecutor($executor, $this->syncer, history: $history)
 			: ($history === null ? $flusher : $flusher->withHistory($history));
@@ -445,6 +448,6 @@ final class Session implements WritableResultHandler
 
 	private function writableResultTracker(): WritableQueryResultTracker
 	{
-		return $this->writableResultTracker ??= new WritableQueryResultTracker($this);
+		return $this->writableResultTracker ??= new WritableQueryResultTracker($this, new QueryResultHydrator($this->reader));
 	}
 }

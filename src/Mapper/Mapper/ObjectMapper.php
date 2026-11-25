@@ -28,9 +28,11 @@ final class ObjectMapper implements MapperInterface
 		MappingOptions $options,
 	): bool {
 		return is_object($source)
-			&& ! $source instanceof DateTimeInterface
-			&& ! $source instanceof BackedEnum
-			&& ! $source instanceof RepresentationInterface;
+			&& ($options->isShallow() || (
+				! $source instanceof DateTimeInterface
+				&& ! $source instanceof BackedEnum
+				&& ! $source instanceof RepresentationInterface
+			));
 	}
 
 	public function map(MappingBranch $context): mixed
@@ -40,7 +42,8 @@ final class ObjectMapper implements MapperInterface
 			throw new MappingException('ObjectMapper can only map object sources.');
 		}
 
-		if ($source instanceof stdClass) {
+		$shallow = $context->getOptions()->isShallow();
+		if ($source instanceof stdClass && (! $shallow || $source::class === stdClass::class)) {
 			foreach (get_object_vars($source) as $name => $value) {
 				$context->write(
 					name: $name,
@@ -54,7 +57,11 @@ final class ObjectMapper implements MapperInterface
 		$className = $source::class;
 
 		foreach ($this->getSourceProperties($source) as $property) {
-			if (! $property->isInitialized($source) || $this->isHidden($className, $property)) {
+			if (
+				($shallow && ! $property->isDefault())
+				|| ! $property->isInitialized($source)
+				|| $this->isHidden($className, $property)
+			) {
 				continue;
 			}
 
@@ -64,7 +71,22 @@ final class ObjectMapper implements MapperInterface
 			);
 		}
 
+		if ($shallow) {
+			$this->writeDynamicProperties($source, $context);
+		}
+
 		return $context->getResult();
+	}
+
+	private function writeDynamicProperties(object $source, MappingBranch $context): void
+	{
+		// A representation's dynamic properties can differ between instances of the same class.
+		$declared = $this->hiddenSourcePropertiesByClass[$source::class];
+		foreach (get_mangled_object_vars($source) as $name => $value) {
+			if (! array_key_exists($name, $declared) && ! str_starts_with((string) $name, "\0")) {
+				$context->write(name: $name, value: $value);
+			}
+		}
 	}
 
 	/**
@@ -87,7 +109,9 @@ final class ObjectMapper implements MapperInterface
 			}
 
 			$properties[] = $property;
-			$hiddenProperties[$property->getName()] = $property->getAttributes(Hidden::class) !== [];
+			if ($property->isDefault()) {
+				$hiddenProperties[$property->getName()] = $property->getAttributes(Hidden::class) !== [];
+			}
 		}
 
 		$this->sourcePropertiesByClass[$className] = $properties;

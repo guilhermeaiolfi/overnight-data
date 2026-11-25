@@ -14,9 +14,10 @@ final class RepresentationSyncer
 	public function __construct(
 		private ?ScalarRepresentationSynchronizer $scalarSynchronizer = null,
 		private ?RelationRepresentationSynchronizer $relationSynchronizer = null,
+		?RepresentationReader $reader = null,
 	) {
-		$this->scalarSynchronizer ??= new ScalarRepresentationSynchronizer();
-		$this->relationSynchronizer ??= new RelationRepresentationSynchronizer();
+		$this->scalarSynchronizer ??= new ScalarRepresentationSynchronizer($reader);
+		$this->relationSynchronizer ??= new RelationRepresentationSynchronizer($reader);
 	}
 
 	public function sync(

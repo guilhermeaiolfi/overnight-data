@@ -92,8 +92,9 @@ Writable export requirements:
 - requires an explicit `Session`;
 - tracks the same object instance returned to the caller (no shadow copy);
 - requires the root primary key to be present on the fetched row (`writable()` does not add it; results without identity are never tracked);
-- sync reads scalar field paths through `map($representation)->to(stdClass::class)`; relation targets stay live object paths so identity is preserved;
-- DTO property names (or `MapFrom`) must match selection aliases / schema paths; avoid `MapTo` that renames those keys on the way back to a bag;
+- Hydration and sync read scalar and relation paths through the session's Mapper gateway.
+- Selection aliases and schema paths must match the names exposed by the Mapper. DTOs can use `MapFrom` for export and `MapTo` or a custom mapper for reads.
+- `map($object, gateway: $gateway)->shallow()->to([])` reads one object level and preserves nested values as written, so relation targets and items keep their original object identity.
 - compiles binding/provenance only for writable export, not for normal array queries or read-only object export;
 - compiles one binding per fetch operation and reuses it across rows;
 - still creates a distinct `RepresentationState` per object.

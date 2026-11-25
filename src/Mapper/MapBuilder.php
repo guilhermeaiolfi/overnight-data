@@ -33,6 +33,7 @@ final class MapBuilder
 		private array $arguments = [],
 		private ?FieldMap $fieldMap = null,
 		private bool $collection = false,
+		private bool $shallow = false,
 	) {
 	}
 
@@ -118,6 +119,14 @@ final class MapBuilder
 		return $clone;
 	}
 
+	public function shallow(bool $shallow = true): self
+	{
+		$clone = clone $this;
+		$clone->shallow = $shallow;
+
+		return $clone;
+	}
+
 	public function to(mixed $target): mixed
 	{
 		if (is_string($target) && class_exists($target) && is_a($target, RepresentationInterface::class, true)) {
@@ -147,7 +156,7 @@ final class MapBuilder
 
 	private function createOptions(): MappingOptions
 	{
-		$options = new MappingOptions(
+		return new MappingOptions(
 			$this->gateway,
 			$this->sourceRepresentation,
 			$this->outputRepresentation,
@@ -156,12 +165,8 @@ final class MapBuilder
 			$this->resolverClasses,
 			$this->arguments,
 			$this->fieldMap,
+			collection: $this->collection,
+			shallow: $this->shallow,
 		);
-
-		if ($this->collection) {
-			$options = $options->asCollection();
-		}
-
-		return $options;
 	}
 }

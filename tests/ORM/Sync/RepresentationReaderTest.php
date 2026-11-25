@@ -4,6 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Sync;
 
+use ArrayIterator;
+use DateTimeImmutable;
+use ON\Data\Mapper\Attribute\Hidden;
+use ON\Data\Mapper\Attribute\MapTo;
+use ON\Data\Mapper\ConversionGateway;
+use ON\Data\Mapper\Mapper\MapperInterface;
+use ON\Data\Mapper\Mapping;
+use ON\Data\Mapper\MappingBranch;
+use ON\Data\Mapper\MappingOptions;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\Sync\PathReadStatus;
@@ -57,6 +66,96 @@ final class RepresentationReaderTest extends TestCase
 			'Hello',
 			$this->reader()->readPath($row, 'posts.0.title')->requireValue()
 		);
+	}
+
+	public function testMapperHidesPropertiesAndResolvesRenamedNestedPaths(): void
+	{
+		$author = new class () extends stdClass {
+			#[MapTo('name')]
+			public $displayName = 'Ada';
+
+			#[Hidden]
+			public string $email = 'ada@example.test';
+		};
+		$post = new stdClass();
+		$post->author = $author;
+
+		$read = $this->reader()->readPass($post);
+
+		self::assertSame($author, $read('author')->requireValue());
+		self::assertSame('Ada', $read('author.name')->requireValue());
+		self::assertTrue($read('author.displayName')->isMissing());
+		self::assertTrue($read('author.email')->isMissing());
+	}
+
+	public function testDynamicPropertiesAreReadFromEachInstance(): void
+	{
+		$source = new class () extends stdClass {};
+		$reader = $this->reader();
+		self::assertTrue($reader->readPath($source, 'name')->isMissing());
+
+		$other = clone $source;
+		$other->name = 'Ada';
+
+		self::assertSame('Ada', $reader->readPath($other, 'name')->requireValue());
+		self::assertTrue($reader->readPath($source, 'name')->isMissing());
+
+		$third = new class () extends stdClass {
+			public string $title = 'Developer';
+		};
+		$fourth = clone $third;
+		$third->name = 'Grace';
+
+		self::assertSame('Grace', $reader->readPath($third, 'name')->requireValue());
+		self::assertTrue($reader->readPath($fourth, 'name')->isMissing());
+	}
+
+	public function testReadPassMapsEachObjectOnceAndUsesTheConfiguredGateway(): void
+	{
+		$default = Mapping::getDefaultGateway();
+		$gateway = ConversionGateway::createDefault();
+		$gateway->getMapperManager()->prepend(ReaderBagMapper::class);
+		$reader = new RepresentationReader($gateway);
+		$author = (object) ['displayName' => 'Ada'];
+		$author->self = $author;
+		$author->profile = new stdClass();
+		$post = (object) ['author' => $author, 'editor' => $author];
+
+		$read = $reader->readPass($post);
+
+		self::assertSame('Ada', $read('author.name')->requireValue());
+		self::assertSame('Ada', $read('editor.self.name')->requireValue());
+		self::assertSame($author, $read('author.self')->requireValue());
+		$mapper = $gateway->getMapperManager()->getMapper(ReaderBagMapper::class);
+		self::assertInstanceOf(ReaderBagMapper::class, $mapper);
+		self::assertSame(1, $mapper->reads);
+		self::assertTrue($reader->readTarget($author, $this->profileRelationSchema(), $this->syncError(...))->isMissing());
+		self::assertSame(2, $mapper->reads);
+
+		$author->displayName = 'Grace';
+		self::assertSame('Grace', $reader->readPath($post, 'author.name')->requireValue());
+		self::assertSame(3, $mapper->reads);
+		self::assertSame($default, Mapping::getDefaultGateway());
+		self::assertTrue($this->reader()->readPath($post, 'author.name')->isMissing());
+	}
+
+	public function testReaderWithoutGatewayUsesTheCurrentDefault(): void
+	{
+		$reader = $this->reader();
+		$default = Mapping::getDefaultGateway();
+		$source = (object) ['displayName' => 'Ada', 'self' => null];
+		$gateway = ConversionGateway::createDefault();
+		$gateway->getMapperManager()->prepend(ReaderBagMapper::class);
+
+		Mapping::setDefaultGateway($gateway);
+
+		try {
+			self::assertSame('Ada', $reader->readPath($source, 'name')->requireValue());
+		} finally {
+			Mapping::setDefaultGateway($default);
+		}
+
+		self::assertTrue($reader->readPath($source, 'name')->isMissing());
 	}
 
 	public function testReadPathDistinguishesPresentNullMissingAndInvalidPaths(): void
@@ -139,7 +238,7 @@ final class RepresentationReaderTest extends TestCase
 	public function testReadsManyRelationItems(): void
 	{
 		$item = new stdClass();
-		$representation = $this->representation(['posts' => [$item]]);
+		$representation = $this->representation(['posts' => new ArrayIterator([$item])]);
 
 		self::assertSame([$item], $this->reader()->readItems($representation, $this->postsRelationSchema(), $this->syncError(...))->requireValue());
 	}
@@ -192,6 +291,66 @@ final class RepresentationReaderTest extends TestCase
 			$target,
 			$this->reader()->readTarget($dto, $this->profileRelationSchema(), $this->syncError(...))->requireValue()
 		);
+	}
+
+	public function testHiddenRelationsAreMissingJustLikeHiddenFields(): void
+	{
+		$representation = new class () {
+			#[Hidden]
+			public string $name = 'Owner';
+
+			#[Hidden]
+			public stdClass $profile;
+
+			#[Hidden]
+			public array $posts;
+		};
+		$representation->profile = new stdClass();
+		$representation->posts = [new stdClass()];
+
+		$reader = $this->reader();
+		self::assertTrue($reader->readPath($representation, 'name')->isMissing());
+		self::assertTrue($reader->readTarget($representation, $this->profileRelationSchema(), $this->syncError(...))->isMissing());
+		self::assertTrue($reader->readItems($representation, $this->postsRelationSchema(), $this->syncError(...))->isMissing());
+	}
+
+	public function testMapperResolvesRenamedRelationPathSegments(): void
+	{
+		$container = new class (new stdClass()) {
+			public function __construct(#[MapTo('profile')] public stdClass $details)
+			{
+			}
+		};
+		$representation = $this->representation(['relations' => $container]);
+		$schema = new RepresentationRelationSchema('relations.profile', $this->users(), 'profile', $this->profileSchema());
+
+		self::assertSame($container->details, $this->reader()->readTarget($representation, $schema, $this->syncError(...))->requireValue());
+	}
+
+	public function testScalarAndRelationReadsKeepLiveValuesInACyclicGraph(): void
+	{
+		$dto = new class () {
+			public string $name = 'Owner';
+			public stdClass $profile;
+			/** @var list<PublicPropertyPost|stdClass> */
+			public array $posts;
+			public DateTimeImmutable $date;
+			public ExampleStatus $status = ExampleStatus::Ready;
+		};
+		$profile = (object) ['owner' => $dto];
+		$profile->self = $profile;
+		$dto->profile = $profile;
+		$dto->posts = [$profile, new PublicPropertyPost()];
+		$dto->date = new DateTimeImmutable();
+
+		$reader = $this->reader();
+		$read = $reader->readPass($dto);
+		self::assertSame('Owner', $read('profile.self.owner.name')->requireValue());
+		self::assertSame($dto->posts, $read('posts')->requireValue());
+		self::assertSame($dto->date, $read('date')->requireValue());
+		self::assertSame(ExampleStatus::Ready, $read('status')->requireValue());
+		self::assertSame($profile, $reader->readTarget($dto, $this->profileRelationSchema(), $this->syncError(...))->requireValue());
+		self::assertSame($dto->posts, $reader->readItems($dto, $this->postsRelationSchema(), $this->syncError(...))->requireValue());
 	}
 
 	public function testTreatsNullSingleRelationAsNull(): void
@@ -299,4 +458,30 @@ final class PublicPropertyUserWithProfile
 final class PublicPropertyPost
 {
 	public PublicPropertyUser $author;
+}
+
+enum ExampleStatus: string
+{
+	case Ready = 'ready';
+}
+
+final class ReaderBagMapper implements MapperInterface
+{
+	public int $reads = 0;
+
+	public static function canMap(mixed $source, MappingOptions $options): bool
+	{
+		return $source instanceof stdClass && isset($source->displayName);
+	}
+
+	public function map(MappingBranch $context): mixed
+	{
+		/** @var stdClass $source */
+		$source = $context->getSource();
+		++$this->reads;
+		$context->write('name', $source->displayName);
+		$context->write('self', $source->self);
+
+		return $context->getResult();
+	}
 }
