@@ -6,7 +6,6 @@ namespace ON\Data\ORM\Persistence;
 
 use ON\Data\Database\TransactionStateAwareInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Representation\RepresentationInterface;
@@ -115,7 +114,7 @@ final class ConvertingCommandExecutor implements CommandExecutorInterface, Trans
 	): array {
 		$converted = [];
 		foreach ($values as $fieldName => $value) {
-			$field = $this->requireField($collection, (string) $fieldName);
+			$field = CommandValueResolver::requireField($collection, (string) $fieldName);
 			$converted[$field->getName()] = $this->gateway->to(
 				$from,
 				$value,
@@ -125,19 +124,5 @@ final class ConvertingCommandExecutor implements CommandExecutorInterface, Trans
 		}
 
 		return $converted;
-	}
-
-	private function requireField(CollectionInterface $collection, string $fieldName): FieldInterface
-	{
-		$field = $collection->getField($fieldName);
-		if ($field === null) {
-			throw new InvalidCommandException(sprintf(
-				"Persistence command for collection '%s' contains unknown field '%s'.",
-				$collection->getName(),
-				$fieldName,
-			));
-		}
-
-		return $field;
 	}
 }

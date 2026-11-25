@@ -28,22 +28,17 @@ final class SqlCommandExecutor implements CommandExecutorInterface, Transactiona
 
 	private readonly SqlCommandCompiler $compiler;
 
-	private readonly CommandValueResolver $commandValueResolver;
-
 	public function __construct(
 		private readonly ConnectionInterface $connection,
 		?CommandValueResolver $commandValueResolver = null,
 		?DialectInterface $dialect = null,
 	) {
 		$this->dialect = $dialect ?? DialectFactory::forConnection($connection);
-		$this->compiler = new SqlCommandCompiler($this->dialect, $connection->tablePrefix());
-		$this->commandValueResolver = $commandValueResolver ?? new CommandValueResolver();
+		$this->compiler = new SqlCommandCompiler($this->dialect, $connection->tablePrefix(), $commandValueResolver ?? new CommandValueResolver());
 	}
 
 	public function execute(CommandInterface $command): CommandResult
 	{
-		$this->commandValueResolver->assertReady($command);
-
 		return match (true) {
 			$command instanceof InsertCommand => $this->insert($command),
 			$command instanceof UpdateCommand => $this->update($command),

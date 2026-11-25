@@ -365,6 +365,29 @@ final class SqlCommandExecutorTest extends TestCase
 		]));
 	}
 
+	public function testDirectSqlExecutorResolvesReferencesAndRejectsUnreadyCommandsBeforeWriting(): void
+	{
+		$executor = new SqlCommandExecutor(new PdoConnection($this->pdo));
+		$source = RecordState::new($this->users(), ['id' => 1]);
+		$update = new UpdateCommand($this->users(), ['id' => $source->getValueRef('id')], [
+			'name' => $source->getValueRef('name'),
+		]);
+
+		try {
+			$executor->execute($update);
+			self::fail('Expected the unresolved reference to prevent the update.');
+		} catch (InvalidCommandException $exception) {
+			self::assertStringContainsString("changes field 'name'", $exception->getMessage());
+		}
+
+		self::assertSame('Ada', $this->fetchUser(1)['name']);
+		$source->setValue('name', 'Alice');
+		$executor->execute($update);
+		self::assertSame(['id' => 1], $update->getIdentity());
+		self::assertSame(['name' => 'Alice'], $update->getChanges());
+		self::assertSame('Alice', $this->fetchUser(1)['name']);
+	}
+
 	public function testRejectsInsertCommandWithUnresolvedValueRefBeforeSqlBuilderUse(): void
 	{
 		$record = RecordState::new($this->users());
