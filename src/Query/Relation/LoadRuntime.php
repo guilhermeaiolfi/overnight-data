@@ -8,13 +8,11 @@ use Closure;
 use ON\Data\Database\Exception\UnsupportedQueryException;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Query\DerivedOutputColumns;
 use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Exception\RelationSelectionException;
-use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
-use ON\Data\Query\Expression\SourceFieldExpression;
-use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
@@ -470,24 +468,10 @@ final class LoadRuntime
 
 		foreach ($this->rootQuery->getSelections()->getExplicit() as $selection) {
 			$expression = $selection->getExpression();
-			$inner = $expression instanceof AliasedExpression
-				? $expression->getExpression()
-				: $expression;
-
-			if ($inner instanceof StarExpression) {
-				$source = $inner->getSource();
-				$names = $source instanceof SelectQuery && ! $source->isDerivedSource()
-					? $source->getCollection()->getVisibleFields()
-					: [];
-			} elseif ($expression instanceof AliasedExpression) {
-				$names = [$expression->getAlias()];
-			} elseif ($inner instanceof FieldRef) {
-				$path = $inner->getPath();
-				$names = [count($path) === 1 ? $selection->getSelectionKey() : implode('.', $path)];
-			} elseif ($inner instanceof SourceFieldExpression) {
-				$names = [$inner->getName()];
+			if ($expression instanceof FieldRef && count($expression->getPath()) > 1) {
+				$names = [implode('.', $expression->getPath())];
 			} else {
-				continue;
+				$names = DerivedOutputColumns::namesForSelection($selection);
 			}
 
 			foreach ($names as $name) {
