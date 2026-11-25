@@ -163,7 +163,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 
 	public function innerKey(string|array $fieldName): self
 	{
-		$this->set('inner_keys', $this->normalizeKeys($fieldName, 'innerKey'));
+		$this->set('inner_keys', RelationKeyPairing::normalizeFields($fieldName, 'innerKey'));
 		$this->validateRelationKeys();
 		$this->resetKeyPairing();
 
@@ -202,7 +202,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 
 	public function outerKey(string|array $fieldName): self
 	{
-		$this->set('outer_keys', $this->normalizeKeys($fieldName, 'outerKey'));
+		$this->set('outer_keys', RelationKeyPairing::normalizeFields($fieldName, 'outerKey'));
 		$this->validateRelationKeys();
 		$this->resetKeyPairing();
 
@@ -339,11 +339,6 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 		}
 
 		return $parent;
-	}
-
-	protected function normalizeKeys(string|array $fieldNames, string $context): array
-	{
-		return RelationKeyPairing::normalizeFields($fieldNames, $context);
 	}
 
 	protected function validateRelationKeys(): void
