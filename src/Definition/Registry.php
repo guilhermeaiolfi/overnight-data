@@ -53,7 +53,7 @@ final class Registry extends Dot
 		$class ??= Collection::class;
 		$this->items['collections'][$name] = [];
 		$slot = &$this->items['collections'][$name];
-		$this->collections[$name] = DefinitionFactory::createCollection($this, $name, $slot, $class, [
+		$this->collections[$name] = DefinitionFactory::create($this, $name, $slot, $class, CollectionInterface::class, 'collection', [
 			'table' => $name,
 		]);
 
@@ -74,7 +74,7 @@ final class Registry extends Dot
 		}
 
 		$items = &$this->items['collections'][$name];
-		$this->collections[$name] = DefinitionFactory::restoreCollection($this, $name, $items);
+		$this->collections[$name] = DefinitionFactory::restore($this, $name, $items, CollectionInterface::class, 'collection');
 
 		return $this->collections[$name];
 	}

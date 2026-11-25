@@ -116,7 +116,7 @@ abstract class DefinitionNode extends Dot
 
 			$this->items['extend'][$class] = [];
 			$slot = &$this->items['extend'][$class];
-			$plugin = DefinitionFactory::createPlugin($this, $class, $slot, $class);
+			$plugin = DefinitionFactory::create($this, $class, $slot, $class, DefinitionPlugin::class, 'plugin');
 			$this->plugins[$class] = $plugin;
 		}
 
@@ -169,7 +169,7 @@ abstract class DefinitionNode extends Dot
 		$slot['class'] = $class;
 
 		/** @var T $plugin */
-		$plugin = $class::fromDefinition($this, $class, $slot);
+		$plugin = DefinitionFactory::restore($this, $class, $slot, $class, 'plugin');
 		$this->plugins[$class] = $plugin;
 
 		return $plugin;

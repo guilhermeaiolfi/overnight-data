@@ -47,7 +47,7 @@ final class RelationMap implements IteratorAggregate
 
 		if (! isset($this->relations[$name])) {
 			$items = &$this->items[$name];
-			$this->relations[$name] = DefinitionFactory::restoreRelation($this->parent, $name, $items);
+			$this->relations[$name] = DefinitionFactory::restore($this->parent, $name, $items, RelationInterface::class, 'relation');
 		}
 
 		return $this->relations[$name];
@@ -78,7 +78,7 @@ final class RelationMap implements IteratorAggregate
 
 		$this->items[$name] = [];
 		$items = &$this->items[$name];
-		$this->relations[$name] = DefinitionFactory::createRelation($this->parent, $name, $items, $class, $values);
+		$this->relations[$name] = DefinitionFactory::create($this->parent, $name, $items, $class, RelationInterface::class, 'relation', $values);
 
 		return $this->relations[$name];
 	}

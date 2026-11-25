@@ -4,15 +4,10 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Internal;
 
-use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Display\DisplayInterface;
 use ON\Data\Definition\Exception\InvalidDefinitionClassException;
-use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Interface\InterfaceInterface;
-use ON\Data\Definition\Plugin\DefinitionPlugin;
 use ON\Data\Definition\Registry;
-use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Support\DefinitionNode;
 
 /**
@@ -20,78 +15,6 @@ use ON\Data\Support\DefinitionNode;
  */
 final class DefinitionFactory
 {
-	/**
-	 * @param class-string<CollectionInterface> $class
-	 * @param array<string, mixed> $slot
-	 * @param array<string, mixed> $values
-	 */
-	public static function createCollection(Registry $owner, string $name, array &$slot, string $class, array $values = []): CollectionInterface
-	{
-		/** @var CollectionInterface $collection */
-		$collection = self::create($owner, $name, $slot, $class, CollectionInterface::class, 'collection', $values);
-
-		return $collection;
-	}
-
-	/**
-	 * @param array<string, mixed> $slot
-	 */
-	public static function restoreCollection(Registry $owner, string $name, array &$slot): CollectionInterface
-	{
-		/** @var CollectionInterface $collection */
-		$collection = self::restore($owner, $name, $slot, CollectionInterface::class, 'collection');
-
-		return $collection;
-	}
-
-	/**
-	 * @param class-string<FieldInterface> $class
-	 * @param array<string, mixed> $slot
-	 * @param array<string, mixed> $values
-	 */
-	public static function createField(DefinitionInterface $owner, string $name, array &$slot, string $class, array $values = []): FieldInterface
-	{
-		/** @var FieldInterface $field */
-		$field = self::create($owner, $name, $slot, $class, FieldInterface::class, 'field', $values);
-
-		return $field;
-	}
-
-	/**
-	 * @param array<string, mixed> $slot
-	 */
-	public static function restoreField(DefinitionInterface $owner, string $name, array &$slot): FieldInterface
-	{
-		/** @var FieldInterface $field */
-		$field = self::restore($owner, $name, $slot, FieldInterface::class, 'field');
-
-		return $field;
-	}
-
-	/**
-	 * @param class-string<RelationInterface> $class
-	 * @param array<string, mixed> $slot
-	 * @param array<string, mixed> $values
-	 */
-	public static function createRelation(DefinitionInterface $owner, string $name, array &$slot, string $class, array $values = []): RelationInterface
-	{
-		/** @var RelationInterface $relation */
-		$relation = self::create($owner, $name, $slot, $class, RelationInterface::class, 'relation', $values);
-
-		return $relation;
-	}
-
-	/**
-	 * @param array<string, mixed> $slot
-	 */
-	public static function restoreRelation(DefinitionInterface $owner, string $name, array &$slot): RelationInterface
-	{
-		/** @var RelationInterface $relation */
-		$relation = self::restore($owner, $name, $slot, RelationInterface::class, 'relation');
-
-		return $relation;
-	}
-
 	/**
 	 * @param class-string<DisplayInterface> $class
 	 * @param array<string, mixed> $slot
@@ -138,19 +61,6 @@ final class DefinitionFactory
 		$interface = self::restore($owner, $name, $slot, InterfaceInterface::class, 'interface');
 
 		return $interface;
-	}
-
-	/**
-	 * @param class-string<DefinitionPlugin> $class
-	 * @param array<string, mixed> $slot
-	 * @param array<string, mixed> $values
-	 */
-	public static function createPlugin(DefinitionNode $owner, string $name, array &$slot, string $class, array $values = []): DefinitionPlugin
-	{
-		/** @var DefinitionPlugin $plugin */
-		$plugin = self::create($owner, $name, $slot, $class, DefinitionPlugin::class, 'plugin', $values);
-
-		return $plugin;
 	}
 
 	/**

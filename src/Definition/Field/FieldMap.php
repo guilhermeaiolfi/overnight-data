@@ -86,7 +86,7 @@ final class FieldMap implements IteratorAggregate, Countable
 
 		if (! isset($this->fields[$name])) {
 			$items = &$this->items[$name];
-			$this->fields[$name] = DefinitionFactory::restoreField($this->parent, $name, $items);
+			$this->fields[$name] = DefinitionFactory::restore($this->parent, $name, $items, FieldInterface::class, 'field');
 		}
 
 		return $this->fields[$name];
@@ -117,7 +117,7 @@ final class FieldMap implements IteratorAggregate, Countable
 
 		$this->items[$name] = [];
 		$items = &$this->items[$name];
-		$this->fields[$name] = DefinitionFactory::createField($this->parent, $name, $items, $class, $values);
+		$this->fields[$name] = DefinitionFactory::create($this->parent, $name, $items, $class, FieldInterface::class, 'field', $values);
 
 		return $this->fields[$name];
 	}
