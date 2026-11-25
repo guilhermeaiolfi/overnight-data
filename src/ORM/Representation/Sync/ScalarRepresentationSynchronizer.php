@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Sync;
 
+use ON\Data\Mapper\ConversionGateway;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\State\RepresentationState;
-use ON\Data\ORM\Representation\State\RepresentationStateStore;
+use WeakMap;
 
 final class ScalarRepresentationSynchronizer
 {
@@ -22,24 +23,26 @@ final class ScalarRepresentationSynchronizer
 	}
 
 	/**
+	 * @param iterable<object, RepresentationState> $representations
+	 * @param WeakMap<ConversionGateway, WeakMap<object, array<array-key, mixed>>>|null $snapshots
 	 * @return list<SyncPlan>
 	 */
-	public function sync(RepresentationStateStore $representations): array
+	public function sync(iterable $representations, ?WeakMap $snapshots = null): array
 	{
-		$states = $representations->getAll();
+		$reader = $this->reader->forTraversal($snapshots);
 		$plans = [];
 		$plannedStates = [];
 		$plannedValues = [];
+		$updatesByTarget = [];
 
-		foreach ($states as $representation => $state) {
-			$currentValues = $this->readWritableValues($representation, $state);
-			$plans[] = $this->buildPlan($state, $currentValues);
+		foreach ($representations as $representation => $state) {
+			$currentValues = $this->readWritableValues($representation, $state, $reader);
+			$plans[] = $this->buildPlan($state, $currentValues, $updatesByTarget);
 			$plannedStates[] = $state;
 			$plannedValues[] = $currentValues;
 		}
 
 		$this->assertNoConflicts($plans);
-		$this->assertNoConflictingUpdates($plans);
 
 		foreach ($plannedStates as $index => $state) {
 			$plans[$index]->apply($state, $plannedValues[$index]);
@@ -48,25 +51,14 @@ final class ScalarRepresentationSynchronizer
 		return $plans;
 	}
 
-	/** @param list<SyncPlan> $plans */
-	private function assertNoConflictingUpdates(array $plans): void
-	{
-		$updatesByTarget = [];
-		foreach ($plans as $plan) {
-			foreach ($plan->getUpdates() as $update) {
-				$target = $update->getRecord()->getStateHash() . "\0" . $update->getField();
-				if (isset($updatesByTarget[$target])) {
-					$this->assertDuplicateTargetHasSameValue($updatesByTarget[$target], $update->getValue(), $update->getSchema()->getPath());
-				}
-				$updatesByTarget[$target] = $update;
-			}
-		}
-	}
-
-	/** @param array<string, mixed> $currentValues */
+	/**
+	 * @param array<string, mixed> $currentValues
+	 * @param array<string, SyncFieldUpdate> $updatesByTarget
+	 */
 	private function buildPlan(
 		RepresentationState $state,
 		array $currentValues,
+		array &$updatesByTarget,
 	): SyncPlan {
 		$conflicts = $this->conflicts->detect(
 			$state,
@@ -74,7 +66,7 @@ final class ScalarRepresentationSynchronizer
 		);
 
 		return new SyncPlan(
-			$this->buildUpdates($state, $currentValues, $this->conflictPaths($conflicts)),
+			$this->buildUpdates($state, $currentValues, $this->conflictPaths($conflicts), $updatesByTarget),
 			$conflicts
 		);
 	}
@@ -82,10 +74,10 @@ final class ScalarRepresentationSynchronizer
 	/**
 	 * @return array<string, mixed>
 	 */
-	private function readWritableValues(object $representation, RepresentationState $state): array
+	private function readWritableValues(object $representation, RepresentationState $state, RepresentationReader $reader): array
 	{
 		$values = [];
-		$readPath = $this->reader->readPass($representation);
+		$readPath = $reader->readPass($representation);
 
 		foreach ($state->getWritableFields() as $fieldSchema) {
 			$result = $readPath($fieldSchema->getPath());
@@ -101,6 +93,7 @@ final class ScalarRepresentationSynchronizer
 
 	/**
 	 * @param array<string, mixed> $currentValues
+	 * @param array<string, SyncFieldUpdate> $updatesByTarget
 	 * @param array<string, true> $conflictPaths
 	 *
 	 * @return list<SyncFieldUpdate>
@@ -109,9 +102,9 @@ final class ScalarRepresentationSynchronizer
 		RepresentationState $state,
 		array $currentValues,
 		array $conflictPaths,
+		array &$updatesByTarget,
 	): array {
 		$updates = [];
-		$updatesByTarget = [];
 
 		foreach ($state->getWritableFields() as $fieldSchema) {
 			$path = $fieldSchema->getPath();
@@ -133,16 +126,14 @@ final class ScalarRepresentationSynchronizer
 			$target = $record->getStateHash() . "\0" . $fieldName;
 			if (array_key_exists($target, $updatesByTarget)) {
 				$this->assertDuplicateTargetHasSameValue($updatesByTarget[$target], $currentValue, $path);
-
-				continue;
 			}
 
 			$update = new SyncFieldUpdate($record, $fieldName, $currentValue, $fieldSchema);
-			$updates[] = $update;
+			$updates[$target] ??= $update;
 			$updatesByTarget[$target] = $update;
 		}
 
-		return $updates;
+		return array_values($updates);
 	}
 
 	private function assertDuplicateTargetHasSameValue(SyncFieldUpdate $existing, mixed $currentValue, string $path): void
