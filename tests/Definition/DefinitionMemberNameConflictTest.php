@@ -9,9 +9,7 @@ use ON\Data\Definition\Exception\DefinitionNameConflictException;
 use ON\Data\Definition\Field\Field;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\HasManyRelation;
-use ON\Data\Definition\View\ViewDefinition;
 use PHPUnit\Framework\TestCase;
-use Tests\ON\Data\Fixture\CustomViewRelation;
 
 final class DefinitionMemberNameConflictTest extends TestCase
 {
@@ -119,30 +117,6 @@ final class DefinitionMemberNameConflictTest extends TestCase
 		$this->expectException(DefinitionNameConflictException::class);
 		$this->expectExceptionMessage("Definition 'users' member name 'posts' is used by both a field and a relation.");
 		$registry->getCollection('users');
-	}
-
-	public function testRestoredViewCollisionIsRejectedOnWrapperRestore(): void
-	{
-		$registry = new Registry([
-			'collections' => [],
-			'views' => [
-				'users' => [
-					'class' => ViewDefinition::class,
-					'source' => null,
-					'fields' => [
-						'posts' => ['class' => Field::class, 'type' => 'string'],
-					],
-					'relations' => [
-						'posts' => ['class' => CustomViewRelation::class],
-					],
-					'metadata' => [],
-				],
-			],
-		]);
-
-		$this->expectException(DefinitionNameConflictException::class);
-		$this->expectExceptionMessage("Definition 'users' member name 'posts' is used by both a field and a relation.");
-		$registry->getView('users');
 	}
 
 	public function testSameNameInSeparateDefinitionsRemainsValid(): void

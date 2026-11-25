@@ -5,6 +5,7 @@
 ## Definition and runtime changes after `b27b9e9`
 
 - Looking up a restored collection initializes missing or non-array `fields` and `relations` slots to empty arrays. Later additions to these collections persist in registry exports.
+- Use collection definitions for active registry lookups. Registry exports from earlier versions retain their raw `views` data on round trip. Applications that called the view builder or subclassed `ViewDefinition` must migrate those uses.
 
 ## What documentation means
 

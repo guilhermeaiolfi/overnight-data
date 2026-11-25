@@ -4,18 +4,110 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Collection;
 
-use ON\Data\Definition\AbstractDefinition;
+use ON\Data\Definition\Exception\DefinitionNameConflictException;
 use ON\Data\Definition\Exception\InvalidPrimaryKeyException;
 use ON\Data\Definition\Exception\PrimaryKeyNotDefinedException;
+use ON\Data\Definition\Field\Field;
 use ON\Data\Definition\Field\FieldInterface;
+use ON\Data\Definition\Field\FieldMap;
+use ON\Data\Definition\MetadataTrait;
+use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\BelongsToRelation;
 use ON\Data\Definition\Relation\HasManyRelation;
 use ON\Data\Definition\Relation\HasOneRelation;
 use ON\Data\Definition\Relation\RelationInterface;
+use ON\Data\Definition\Relation\RelationMap;
 use ON\Data\Key;
+use ON\Data\Support\DefinitionNode;
 
-class Collection extends AbstractDefinition implements CollectionInterface
+class Collection extends DefinitionNode implements CollectionInterface
 {
+	use MetadataTrait;
+
+	public FieldMap $fields;
+
+	public RelationMap $relations;
+
+	public function field(string $name, ?string $type = null, ?string $class = null): FieldInterface
+	{
+		return $this->fields->createOrReturn(
+			$name,
+			$class ?? $this->defaultFieldClass(),
+			$type === null ? [] : ['type' => $type],
+		);
+	}
+
+	public function getField(string $name): ?FieldInterface
+	{
+		return $this->getFields()->has($name) ? $this->getFields()->get($name) : null;
+	}
+
+	public function hasField(string $name): bool
+	{
+		return $this->getFields()->has($name);
+	}
+
+	public function getFields(): FieldMap
+	{
+		return $this->fields;
+	}
+
+	public function getRelation(string $name): ?RelationInterface
+	{
+		return $this->getRelations()->has($name) ? $this->getRelations()->get($name) : null;
+	}
+
+	public function hasRelation(string $name): bool
+	{
+		return $this->getRelations()->has($name);
+	}
+
+	public function getRelations(): RelationMap
+	{
+		return $this->relations;
+	}
+
+	public function end(): Registry
+	{
+		return $this->getRegistry();
+	}
+
+	/**
+	 * @return class-string<FieldInterface>
+	 */
+	protected function defaultFieldClass(): string
+	{
+		return Field::class;
+	}
+
+	protected function initializeRuntimeState(): void
+	{
+		parent::initializeRuntimeState();
+
+		if (! is_array($this->items['fields'] ?? null)) {
+			$this->items['fields'] = [];
+		}
+		if (! is_array($this->items['relations'] ?? null)) {
+			$this->items['relations'] = [];
+		}
+
+		$conflicts = array_intersect(array_keys($this->items['fields']), array_keys($this->items['relations']));
+		if ($conflicts !== []) {
+			$name = (string) array_values($conflicts)[0];
+
+			throw new DefinitionNameConflictException(
+				sprintf(
+					"Definition '%s' member name '%s' is used by both a field and a relation. Field and relation member names must be unique within a collection.",
+					$this->getName(),
+					$name
+				)
+			);
+		}
+
+		$this->fields = new FieldMap($this, $this->items['fields']);
+		$this->relations = new RelationMap($this, $this->items['relations']);
+	}
+
 	protected static function definitionDefaults(): array
 	{
 		return [
@@ -144,7 +236,7 @@ class Collection extends AbstractDefinition implements CollectionInterface
 	 */
 	public function relation(string $name, string $type = HasOneRelation::class): RelationInterface
 	{
-		return parent::relation($name, $type);
+		return $this->relations->createOrReturn($name, $type);
 	}
 
 	public function hasMany(string $name, string $targetCollection): HasManyRelation

@@ -7,8 +7,6 @@ namespace Tests\ON\Data\Definition;
 use ON\Data\Definition\Exception\InvalidDefinitionDataException;
 use ON\Data\Definition\Plugin\UiDefinitionPlugin;
 use ON\Data\Definition\Registry;
-use ON\Data\Definition\View\ViewDefinition;
-use ON\Data\Definition\View\ViewField;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Fixture\CustomCollection;
@@ -126,10 +124,10 @@ final class RegistryStorageTest extends TestCase
 			],
 			'views' => [
 				' report summary ' => [
-					'class' => ViewDefinition::class,
+					'class' => 'ON\\Data\\Definition\\View\\ViewDefinition',
 					'source' => ' post.user ',
 					'fields' => [
-						'label' => ['class' => ViewField::class, 'type' => 'string'],
+						'label' => ['class' => 'ON\\Data\\Definition\\View\\ViewField', 'type' => 'string'],
 					],
 					'relations' => [],
 					'metadata' => [],
@@ -137,7 +135,10 @@ final class RegistryStorageTest extends TestCase
 			],
 		];
 
-		$restored = (new Registry($canonical))->all();
+		$registry = new Registry($canonical);
+		self::assertFalse($registry->hasDefinition(' report summary '));
+		self::assertNotNull($registry->getCollection(' post.user '));
+		$restored = $registry->all();
 
 		self::assertSame($canonical, $restored);
 		self::assertArrayHasKey(' post.user ', $restored['collections']);

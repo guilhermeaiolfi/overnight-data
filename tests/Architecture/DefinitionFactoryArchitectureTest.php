@@ -14,8 +14,6 @@ use ON\Data\Definition\Plugin\UiDefinitionPlugin;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\AbstractRelation;
 use ON\Data\Definition\Relation\M2MThrough;
-use ON\Data\Definition\View\ViewDefinition;
-use ON\Data\Definition\View\ViewField;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
@@ -37,8 +35,6 @@ final class DefinitionFactoryArchitectureTest extends TestCase
 			RawDisplay::class,
 			AbstractInterface::class,
 			M2MThrough::class,
-			ViewDefinition::class,
-			ViewField::class,
 			UiDefinitionPlugin::class,
 			CycleCollectionPlugin::class,
 		];

@@ -1,11 +1,11 @@
 # Definition API
 
-`ON\Data` stores collection and view metadata in a single canonical `Registry` array. The public definition API is built around array-backed wrappers that read and write directly against that shared structure. This is shared step S1 in [`read-write.md`](./read-write.md).
+`ON\Data` stores collection metadata in a single canonical `Registry` array. The public definition API is built around array-backed wrappers that read and write directly against that shared structure. This is shared step S1 in [`read-write.md`](./read-write.md).
 
 ## Overview
 
-- `Registry` owns the root collection and view definitions.
-- `Collection` and `ViewDefinition` own fields, relations, and definition metadata.
+- `Registry` owns the collection definitions.
+- A `Collection` owns fields, relations, and definition metadata.
 - Child nodes such as fields, relations, and nested definition objects own their own defaults and nested arrays.
 - Plugins attach extra typed data through `extend()` / `getPlugin()` (UI widgets, Cycle collection bridges, and custom plugin classes).
 - Definitions are created through owner APIs such as `Registry::collection()`, `DefinitionInterface::field()`, and `DefinitionInterface::relation()`.
@@ -13,8 +13,8 @@
 
 ## Naming model
 
-Collection names and view names share one namespace within a registry.
-Field names and relation names share one member namespace within each collection or view.
+Registries restored from older exports preserve the raw `views` data on export. Definition lookups resolve collections.
+Field names and relation names share one member namespace within each collection.
 
 - Names must be strings.
 - Whitespace-only names are rejected.
@@ -57,7 +57,7 @@ Legacy caches that depended on registry-side normalization or field-level `pk` m
 
 ## Plugins
 
-Typed extras that are not part of query/ORM kernel live on plugins. `extend(PluginClass::class)` creates the plugin in place on the host (collection, field, relation, or view), the same way `display()` / `interface()` create widgets. A second `extend()` for the same class resumes that plugin. Restore with `getPlugin($class)`.
+Typed extras that are not part of query/ORM kernel live on plugins. `extend(PluginClass::class)` creates the plugin in place on the host (collection, field, or relation), the same way `display()` / `interface()` create widgets. A second `extend()` for the same class resumes that plugin. Restore with `getPlugin($class)`.
 
 Pass a second argument to set the plugin `value` and stay on the host. That is the one-value form; omit it to enter the plugin and configure named fields or nested widgets.
 

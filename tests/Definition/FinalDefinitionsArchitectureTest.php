@@ -6,13 +6,12 @@ namespace Tests\ON\Data\Definition;
 
 use ON\Data\Definition\Collection\Collection;
 use ON\Data\Definition\Exception\InvalidDefinitionClassException;
+use ON\Data\Definition\Field\Field;
 use ON\Data\Definition\Interface\TextareaInterface;
 use ON\Data\Definition\Plugin\UiDefinitionPlugin;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\M2MRelation;
 use ON\Data\Definition\Relation\M2MThrough;
-use ON\Data\Definition\View\ViewDefinition;
-use ON\Data\Definition\View\ViewField;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Fixture\CustomDisplay;
@@ -73,13 +72,11 @@ final class FinalDefinitionsArchitectureTest extends TestCase
 						],
 					],
 				],
-			],
-			'views' => [
 				'summary' => [
-					'class' => ViewDefinition::class,
+					'class' => Collection::class,
 					'fields' => [
 						'title' => [
-							'class' => ViewField::class,
+							'class' => Field::class,
 							'type' => 'string',
 							'extend' => [
 								UiDefinitionPlugin::class => [
@@ -95,7 +92,7 @@ final class FinalDefinitionsArchitectureTest extends TestCase
 		]);
 
 		self::assertNotNull($registry->getCollection('users'));
-		self::assertNotNull($registry->getView('summary'));
+		self::assertNotNull($registry->getCollection('summary'));
 
 		try {
 			$registry->getCollection('users')?->getField('id');
@@ -110,13 +107,13 @@ final class FinalDefinitionsArchitectureTest extends TestCase
 		}
 
 		try {
-			$registry->getView('summary')?->getField('title')?->getPlugin(UiDefinitionPlugin::class)?->getDisplay();
+			$registry->getCollection('summary')?->getField('title')?->getPlugin(UiDefinitionPlugin::class)?->getDisplay();
 			self::fail('Expected invalid display class discriminator to fail on access.');
 		} catch (InvalidDefinitionClassException) {
 		}
 
 		$this->expectException(InvalidDefinitionClassException::class);
-		$registry->getView('summary')?->getField('title')?->getPlugin(UiDefinitionPlugin::class)?->getInterface();
+		$registry->getCollection('summary')?->getField('title')?->getPlugin(UiDefinitionPlugin::class)?->getInterface();
 	}
 
 	public function testManyToManyThroughRestoresWithoutMutatingDefinitionArray(): void

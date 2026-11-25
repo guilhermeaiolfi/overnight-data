@@ -6,7 +6,6 @@ namespace Tests\ON\Data\Mapper;
 
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Registry;
-use ON\Data\Definition\View\ViewDefinitionInterface;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\MappingNode;
@@ -50,20 +49,6 @@ final class DefinitionNodeResolverTest extends TestCase
 		self::assertSame('int', $resolved->getType());
 		self::assertTrue($resolved->isNullable());
 		self::assertSame('id', $field->getName());
-	}
-
-	public function testResolvesViewDefinitionFieldsToo(): void
-	{
-		$view = $this->viewDefinition();
-		$field = $view->field('title', 'string');
-		$resolver = new DefinitionNodeResolver();
-		$node = $this->node('title', 123, [$view]);
-
-		$resolved = $resolver->resolve($node, $this->runtimeFor($node));
-
-		self::assertSame('title', $resolved?->getName());
-		self::assertSame('string', $resolved?->getType());
-		self::assertSame('title', $field->getName());
 	}
 
 	public function testMissingFieldReturnsNull(): void
@@ -169,13 +154,6 @@ final class DefinitionNodeResolverTest extends TestCase
 		$definition->field('active', 'bool');
 
 		return $definition;
-	}
-
-	private function viewDefinition(): ViewDefinitionInterface
-	{
-		$registry = new Registry();
-
-		return $registry->view('user_summary');
 	}
 
 	private function runtimeFor(MappingNode $node): MappingRuntime

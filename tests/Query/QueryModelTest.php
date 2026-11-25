@@ -1701,11 +1701,6 @@ final class QueryModelTest extends TestCase
 		$posts->field('amount', 'float');
 		$posts->field('published', 'bool');
 
-		$view = $registry->view('user_summary');
-		$view->source($users);
-		$view->field('id', 'int');
-		$view->field('title', 'string');
-
 		return $registry;
 	}
 }

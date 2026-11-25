@@ -39,8 +39,6 @@ You can still extend the definition layer with custom subclasses of:
 
 - `Collection`
 - `Field`
-- `ViewDefinition`
-- `ViewField`
 - relation definitions
 - display definitions
 - interface-definition nodes

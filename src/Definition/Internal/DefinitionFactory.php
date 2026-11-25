@@ -13,7 +13,6 @@ use ON\Data\Definition\Interface\InterfaceInterface;
 use ON\Data\Definition\Plugin\DefinitionPlugin;
 use ON\Data\Definition\Registry;
 use ON\Data\Definition\Relation\RelationInterface;
-use ON\Data\Definition\View\ViewDefinitionInterface;
 use ON\Data\Support\DefinitionNode;
 
 /**
@@ -35,19 +34,6 @@ final class DefinitionFactory
 	}
 
 	/**
-	 * @param class-string<ViewDefinitionInterface> $class
-	 * @param array<string, mixed> $slot
-	 * @param array<string, mixed> $values
-	 */
-	public static function createView(Registry $owner, string $name, array &$slot, string $class, array $values = []): ViewDefinitionInterface
-	{
-		/** @var ViewDefinitionInterface $view */
-		$view = self::create($owner, $name, $slot, $class, ViewDefinitionInterface::class, 'view', $values);
-
-		return $view;
-	}
-
-	/**
 	 * @param array<string, mixed> $slot
 	 */
 	public static function restoreCollection(Registry $owner, string $name, array &$slot): CollectionInterface
@@ -56,17 +42,6 @@ final class DefinitionFactory
 		$collection = self::restore($owner, $name, $slot, CollectionInterface::class, 'collection');
 
 		return $collection;
-	}
-
-	/**
-	 * @param array<string, mixed> $slot
-	 */
-	public static function restoreView(Registry $owner, string $name, array &$slot): ViewDefinitionInterface
-	{
-		/** @var ViewDefinitionInterface $view */
-		$view = self::restore($owner, $name, $slot, ViewDefinitionInterface::class, 'view');
-
-		return $view;
 	}
 
 	/**
