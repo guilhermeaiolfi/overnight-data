@@ -17,7 +17,6 @@ use stdClass;
 final class BranchTargetInferrer
 {
 	public function __construct(
-		private readonly ?MappingNodePropertyFinder $propertyFinder = null,
 		private readonly DocblockListTargetResolver $listTargetResolver = new DocblockListTargetResolver(),
 	) {
 	}
@@ -27,10 +26,9 @@ final class BranchTargetInferrer
 	 */
 	public function inferFromReflection(
 		MappingNode $node,
-		MappingNodePropertyFinder $propertyFinder,
+		?ReflectionProperty $sourceProperty,
+		?ReflectionProperty $targetProperty,
 	): ?array {
-		$finder = $this->propertyFinder ?? $propertyFinder;
-		$targetProperty = $finder->findTargetProperty($node);
 		if ($targetProperty !== null) {
 			$target = $this->getTargetPropertyNestedTarget($node, $targetProperty);
 			if ($target !== null) {
@@ -38,7 +36,6 @@ final class BranchTargetInferrer
 			}
 		}
 
-		$sourceProperty = $finder->findSourceProperty($node);
 		if ($sourceProperty !== null) {
 			return $this->getSourcePropertyNestedTarget($node, $sourceProperty);
 		}

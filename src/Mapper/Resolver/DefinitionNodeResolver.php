@@ -45,7 +45,8 @@ final class DefinitionNodeResolver implements CacheableNodeResolverInterface
 		$finder = $runtime->getSharedInstance(MappingNodePropertyFinder::class);
 		$reflectionTarget = $inferrer->inferFromReflection(
 			$node,
-			$finder,
+			$finder->findSourceProperty($node),
+			$finder->findTargetProperty($node),
 		);
 		$genericTarget = $inferrer->inferGenericTarget($node->getParentTarget());
 		$target = $reflectionTarget['target'] ?? $genericTarget;

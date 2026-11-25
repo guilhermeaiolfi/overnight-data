@@ -64,7 +64,7 @@ final class ReflectionPropertyNodeResolver implements CacheableNodeResolverInter
 
 		$inferrer = $runtime->getSharedInstance(BranchTargetInferrer::class);
 
-		$target = $inferrer->inferFromReflection($node, $propertyFinder);
+		$target = $inferrer->inferFromReflection($node, $sourceProperty, $targetProperty);
 		if ($target === null) {
 			return null;
 		}
