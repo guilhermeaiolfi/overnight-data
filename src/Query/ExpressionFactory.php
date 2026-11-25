@@ -17,7 +17,6 @@ use ON\Data\Query\Condition\NullCondition;
 use ON\Data\Query\Condition\NullOperator;
 use ON\Data\Query\Expression\AggregateExpression;
 use ON\Data\Query\Expression\AggregateFunction;
-use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\ExpressionOperandNormalizer;
 use ON\Data\Query\Expression\LiteralExpression;
 use ON\Data\Query\Expression\RawSqlExpression;
@@ -152,69 +151,31 @@ final class ExpressionFactory
 
 	public function count(ValueExpressionInterface|StarExpression $expression): AggregateExpression
 	{
-		if ($expression instanceof AliasedExpression) {
-			throw new InvalidArgumentException('AliasedExpression cannot be used as an aggregate operand.');
-		}
-
-		if ($expression instanceof ValueExpressionInterface) {
-			$this->assertAggregateInput($expression);
-		}
-
 		return new AggregateExpression(AggregateFunction::COUNT, $expression);
 	}
 
 	public function countDistinct(ValueExpressionInterface $expression): AggregateExpression
 	{
-		if ($expression instanceof AliasedExpression) {
-			throw new InvalidArgumentException('AliasedExpression cannot be used as an aggregate operand.');
-		}
-
-		$this->assertAggregateInput($expression);
-
 		return new AggregateExpression(AggregateFunction::COUNT_DISTINCT, $expression);
 	}
 
 	public function sum(ValueExpressionInterface $expression): AggregateExpression
 	{
-		if ($expression instanceof AliasedExpression) {
-			throw new InvalidArgumentException('AliasedExpression cannot be used as an aggregate operand.');
-		}
-
-		$this->assertAggregateInput($expression);
-
 		return new AggregateExpression(AggregateFunction::SUM, $expression);
 	}
 
 	public function avg(ValueExpressionInterface $expression): AggregateExpression
 	{
-		if ($expression instanceof AliasedExpression) {
-			throw new InvalidArgumentException('AliasedExpression cannot be used as an aggregate operand.');
-		}
-
-		$this->assertAggregateInput($expression);
-
 		return new AggregateExpression(AggregateFunction::AVG, $expression);
 	}
 
 	public function min(ValueExpressionInterface $expression): AggregateExpression
 	{
-		if ($expression instanceof AliasedExpression) {
-			throw new InvalidArgumentException('AliasedExpression cannot be used as an aggregate operand.');
-		}
-
-		$this->assertAggregateInput($expression);
-
 		return new AggregateExpression(AggregateFunction::MIN, $expression);
 	}
 
 	public function max(ValueExpressionInterface $expression): AggregateExpression
 	{
-		if ($expression instanceof AliasedExpression) {
-			throw new InvalidArgumentException('AliasedExpression cannot be used as an aggregate operand.');
-		}
-
-		$this->assertAggregateInput($expression);
-
 		return new AggregateExpression(AggregateFunction::MAX, $expression);
 	}
 
@@ -377,31 +338,5 @@ final class ExpressionFactory
 			fn (mixed $argument): ValueExpressionInterface => $this->normalizeOperand($argument, 'value operation'),
 			$arguments,
 		);
-	}
-
-	private function assertAggregateInput(ValueExpressionInterface $expression): void
-	{
-		if ($this->containsAggregateAtCurrentLevel($expression)) {
-			throw new InvalidArgumentException('Aggregate expressions cannot be aggregated directly.');
-		}
-	}
-
-	private function containsAggregateAtCurrentLevel(ValueExpressionInterface $expression): bool
-	{
-		if ($expression instanceof AggregateExpression) {
-			return true;
-		}
-
-		if (! $expression instanceof ValueOperationExpression) {
-			return false;
-		}
-
-		foreach ($expression->getArguments() as $argument) {
-			if ($this->containsAggregateAtCurrentLevel($argument)) {
-				return true;
-			}
-		}
-
-		return false;
 	}
 }
