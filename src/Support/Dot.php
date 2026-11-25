@@ -72,7 +72,7 @@ class Dot implements ArrayAccess, Countable, IteratorAggregate, JsonSerializable
 			return $this->items;
 		}
 
-		if ($this->exists($this->items, $key)) {
+		if (array_key_exists($key, $this->items)) {
 			return $this->items[$key];
 		}
 
@@ -83,7 +83,7 @@ class Dot implements ArrayAccess, Countable, IteratorAggregate, JsonSerializable
 		$items = $this->items;
 
 		foreach (explode($this->delimiter, $key) as $segment) {
-			if (! is_array($items) || ! $this->exists($items, $segment)) {
+			if (! is_array($items) || ! array_key_exists($segment, $items)) {
 				return $default;
 			}
 
@@ -107,7 +107,7 @@ class Dot implements ArrayAccess, Countable, IteratorAggregate, JsonSerializable
 		foreach ($keys as $key) {
 			$items = $this->items;
 
-			if ($this->exists($items, $key)) {
+			if (array_key_exists($key, $items)) {
 				continue;
 			}
 
@@ -116,7 +116,7 @@ class Dot implements ArrayAccess, Countable, IteratorAggregate, JsonSerializable
 			}
 
 			foreach (explode($this->delimiter, $key) as $segment) {
-				if (! is_array($items) || ! $this->exists($items, $segment)) {
+				if (! is_array($items) || ! array_key_exists($segment, $items)) {
 					return false;
 				}
 
@@ -167,7 +167,7 @@ class Dot implements ArrayAccess, Countable, IteratorAggregate, JsonSerializable
 	public function delete(array|int|string $keys): static
 	{
 		foreach ((array) $keys as $key) {
-			if ($this->exists($this->items, $key)) {
+			if (array_key_exists($key, $this->items)) {
 				unset($this->items[$key]);
 
 				continue;
@@ -214,14 +214,6 @@ class Dot implements ArrayAccess, Countable, IteratorAggregate, JsonSerializable
 		$this->items = &$items;
 
 		return $this;
-	}
-
-	/**
-	 * @param array<array-key, mixed> $array
-	 */
-	protected function exists(array $array, int|string $key): bool
-	{
-		return array_key_exists($key, $array);
 	}
 
 	/**

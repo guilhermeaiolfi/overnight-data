@@ -37,12 +37,7 @@ final class DefinitionParityTest extends TestCase
 			if (in_array($relative, ['Collection/PrimaryKeyDefinition.php', 'Collection/PrimaryKeyValue.php', 'Schema/SchemaInterface.php'], true)) {
 				continue;
 			}
-			$target = match ($relative) {
-				'Display/DateTimeDisplay.php' => 'Display/DatetimeDisplay.php',
-				'Field/SchemaTrait.php' => 'Field/Field.php',
-				default => $relative,
-			};
-			$expected[] = $targetRoot . '/' . $target;
+			$expected[] = str_replace('\\', '/', $targetRoot) . '/' . ($relative === 'Display/DateTimeDisplay.php' ? 'Display/DatetimeDisplay.php' : $relative);
 		}
 
 		foreach ($expected as $targetFile) {
