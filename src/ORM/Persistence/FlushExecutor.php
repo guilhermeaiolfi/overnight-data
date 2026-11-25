@@ -9,6 +9,7 @@ use ON\Data\Key;
 use ON\Data\ORM\Exception\NonTransactionalFlushException;
 use ON\Data\ORM\History\FlushCapture;
 use ON\Data\ORM\History\FlushHistory;
+use ON\Data\ORM\History\HistoryException;
 use ON\Data\ORM\Record\RecordLifecycle;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\Persistence\RelationPersistencePlanner;
@@ -61,14 +62,21 @@ final class FlushExecutor
 			));
 		}
 
-		if ($this->history !== null) {
-			return $this->history->whileWriting(
-				$executor,
-				fn (): FlushResult => $this->flushInTransaction($executor, $context, $prepare, new FlushCapture(), $label),
-			);
+		if ($this->history === null) {
+			return $this->flushInTransaction($executor, $context, $prepare);
 		}
 
-		return $this->flushInTransaction($executor, $context, $prepare);
+		$this->history->beginWrite();
+
+		try {
+			if ($executor->isInTransaction() === true) {
+				throw HistoryException::activeTransaction();
+			}
+
+			return $this->flushInTransaction($executor, $context, $prepare, new FlushCapture(), $label);
+		} finally {
+			$this->history->endWrite();
+		}
 	}
 
 	private function flushInTransaction(

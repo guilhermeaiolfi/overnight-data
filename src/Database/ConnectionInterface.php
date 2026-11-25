@@ -9,6 +9,9 @@ namespace ON\Data\Database;
  */
 interface ConnectionInterface extends DatabasePlatformInterface
 {
+	/** Returns null when the underlying adapter cannot report its transaction state. */
+	public function isInTransaction(): ?bool;
+
 	/** An unprefixed connection returns an empty string. */
 	public function tablePrefix(): string;
 

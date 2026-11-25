@@ -9,8 +9,6 @@ use Countable;
 use DateTimeImmutable;
 use DateTimeZone;
 use InvalidArgumentException;
-use ON\Data\Database\TransactionStateAwareInterface;
-use ON\Data\ORM\Persistence\TransactionalCommandExecutorInterface;
 
 final class FlushHistory implements Countable
 {
@@ -116,26 +114,17 @@ final class FlushHistory implements Countable
 		return array_map(static fn (FlushCommit $commit): array => $commit->toArray(), $this->all());
 	}
 
-	/**
-	 * @internal Serialize journal writes across overlapping calls (for example, from fibers).
-	 * @template T
-	 * @param callable(): T $operation
-	 * @return T
-	 */
-	public function whileWriting(TransactionalCommandExecutorInterface $executor, callable $operation): mixed
+	/** @internal Reserve this journal for a flush or revert, including listener notification. */
+	public function beginWrite(): void
 	{
 		$this->assertIdle();
 		$this->writing = true;
+	}
 
-		try {
-			if ($executor instanceof TransactionStateAwareInterface && $executor->isInTransaction() === true) {
-				throw new HistoryException('Flush history requires an outermost transaction; the executor already has an active transaction.');
-			}
-
-			return $operation();
-		} finally {
-			$this->writing = false;
-		}
+	/** @internal Release a successfully acquired journal in a finally block. */
+	public function endWrite(): void
+	{
+		$this->writing = false;
 	}
 
 	/**

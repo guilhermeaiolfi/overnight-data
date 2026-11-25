@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Support;
 
-use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\TransactionalCommandExecutorInterface;
 
-final class RecordingCommandExecutor implements CommandExecutorInterface, TransactionalCommandExecutorInterface
+final class RecordingCommandExecutor implements TransactionalCommandExecutorInterface
 {
 	/** @var list<CommandInterface> */
 	private array $commands = [];
@@ -28,6 +27,11 @@ final class RecordingCommandExecutor implements CommandExecutorInterface, Transa
 		$this->commands[] = $command;
 
 		return array_shift($this->results) ?? $this->result;
+	}
+
+	public function isInTransaction(): ?bool
+	{
+		return null;
 	}
 
 	public function transaction(callable $callback): mixed

@@ -17,7 +17,6 @@ use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\Writer\ArrayWriter;
 use ON\Data\Mapper\Writer\WriterInterface;
 use ON\Data\Mapper\Writer\WriterStateInterface;
-use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\TransactionalCommandExecutorInterface;
@@ -185,7 +184,7 @@ final class RecordingQueryExecutor implements QueryExecutorInterface
 	}
 }
 
-final class RecordingRuntimeCommandExecutor implements CommandExecutorInterface, TransactionalCommandExecutorInterface
+final class RecordingRuntimeCommandExecutor implements TransactionalCommandExecutorInterface
 {
 	public ?CommandInterface $lastCommand = null;
 
@@ -194,6 +193,11 @@ final class RecordingRuntimeCommandExecutor implements CommandExecutorInterface,
 		$this->lastCommand = $command;
 
 		return new CommandResult(1);
+	}
+
+	public function isInTransaction(): ?bool
+	{
+		return null;
 	}
 
 	public function transaction(callable $callback): mixed

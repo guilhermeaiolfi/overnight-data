@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Persistence;
 
-use ON\Data\Database\TransactionStateAwareInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Mapper\ConversionGateway;
@@ -20,7 +19,7 @@ use ON\Data\ORM\Exception\InvalidCommandException;
  *
  * Does not mutate the original command objects.
  */
-final class ConvertingCommandExecutor implements CommandExecutorInterface, TransactionalCommandExecutorInterface, TransactionStateAwareInterface
+final class ConvertingCommandExecutor implements TransactionalCommandExecutorInterface
 {
 	private readonly ConversionGateway $gateway;
 
@@ -46,7 +45,7 @@ final class ConvertingCommandExecutor implements CommandExecutorInterface, Trans
 
 	public function isInTransaction(): ?bool
 	{
-		return $this->inner instanceof TransactionStateAwareInterface ? $this->inner->isInTransaction() : null;
+		return $this->inner instanceof TransactionalCommandExecutorInterface ? $this->inner->isInTransaction() : null;
 	}
 
 	public function transaction(callable $callback): mixed

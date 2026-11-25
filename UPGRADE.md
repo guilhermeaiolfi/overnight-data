@@ -2,6 +2,10 @@
 
 `guilhermeaiolfi/overnight-data` is still evolving. This file is **not** a compatibility guarantee.
 
+## Definition and runtime changes after `b27b9e9`
+
+- Custom SQL connections and transactional command executors must implement `isInTransaction(): ?bool`. Return the adapter's actual transaction state when available, or `null` when unknown. A transactional command executor also implements the command execution contract.
+
 ## What documentation means
 
 Docs describe **how the code works today**, so you can use and debug it.

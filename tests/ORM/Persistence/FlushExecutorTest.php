@@ -271,7 +271,7 @@ final class FlushExecutorTest extends TestCase
 		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($tagRepresentation);
 		$records = $this->records($owner, $target);
-		$executor = new class () implements CommandExecutorInterface, TransactionalCommandExecutorInterface {
+		$executor = new class () implements TransactionalCommandExecutorInterface {
 			public int $transactions = 0;
 
 			/** @var list<CommandInterface> */
@@ -285,6 +285,11 @@ final class FlushExecutorTest extends TestCase
 					1 => new CommandResult(1, ['id' => 10]),
 					default => throw new LogicException('through insert failed'),
 				};
+			}
+
+			public function isInTransaction(): ?bool
+			{
+				return null;
 			}
 
 			public function transaction(callable $callback): mixed
@@ -319,7 +324,7 @@ final class FlushExecutorTest extends TestCase
 	public function testFlushPrefersTransactionalPathWheneverExecutorSupportsTransactions(): void
 	{
 		$record = RecordState::new($this->users(), ['name' => 'Ada']);
-		$executor = new class () implements CommandExecutorInterface, TransactionalCommandExecutorInterface {
+		$executor = new class () implements TransactionalCommandExecutorInterface {
 			public int $transactions = 0;
 
 			public bool $insideTransaction = false;
@@ -336,6 +341,11 @@ final class FlushExecutorTest extends TestCase
 				$this->commands[] = $command;
 
 				return new CommandResult(1);
+			}
+
+			public function isInTransaction(): ?bool
+			{
+				return null;
 			}
 
 			public function transaction(callable $callback): mixed
@@ -401,7 +411,7 @@ final class FlushExecutorTest extends TestCase
 		$collection = new ToManyRelationState($owner, 'tags', $this->schemaFor($target));
 		$collection->add($tagRepresentation);
 		$records = $this->records($owner, $target);
-		$executor = new class () implements CommandExecutorInterface, TransactionalCommandExecutorInterface {
+		$executor = new class () implements TransactionalCommandExecutorInterface {
 			public bool $insideTransaction = false;
 
 			/** @var list<CommandInterface> */
@@ -420,6 +430,11 @@ final class FlushExecutorTest extends TestCase
 					2 => new CommandResult(1, ['id' => 3]),
 					default => new CommandResult(1),
 				};
+			}
+
+			public function isInTransaction(): ?bool
+			{
+				return null;
 			}
 
 			public function transaction(callable $callback): mixed
@@ -465,7 +480,7 @@ final class FlushExecutorTest extends TestCase
 		$removed->markRemoved();
 		$records = $this->records($dirty, $removed);
 		$collection = $this->changedToManyRelationState($dirty);
-		$executor = new class () implements CommandExecutorInterface, TransactionalCommandExecutorInterface {
+		$executor = new class () implements TransactionalCommandExecutorInterface {
 			public int $transactions = 0;
 
 			/** @var list<CommandInterface> */
@@ -479,6 +494,11 @@ final class FlushExecutorTest extends TestCase
 				}
 
 				return new CommandResult(1);
+			}
+
+			public function isInTransaction(): ?bool
+			{
+				return null;
 			}
 
 			public function transaction(callable $callback): mixed

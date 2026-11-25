@@ -60,12 +60,17 @@ final class ConvertingCommandExecutorTest extends TestCase
 
 	public function testTransactionDelegatesToTransactionalInnerExecutor(): void
 	{
-		$inner = new class () implements CommandExecutorInterface, TransactionalCommandExecutorInterface {
+		$inner = new class () implements TransactionalCommandExecutorInterface {
 			public bool $transactionCalled = false;
 
 			public function execute(CommandInterface $command): CommandResult
 			{
 				return new CommandResult(0);
+			}
+
+			public function isInTransaction(): ?bool
+			{
+				return null;
 			}
 
 			public function transaction(callable $callback): mixed

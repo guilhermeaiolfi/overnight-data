@@ -328,7 +328,7 @@ final class SessionSaveApiSmokeTest extends TestCase
 		$harness->exec('CREATE TABLE posts (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT)');
 		$harness->exec('CREATE TABLE user_post (user_id INTEGER, post_id INTEGER, UNIQUE(user_id, post_id))');
 		[$users] = $this->m2mRegistry();
-		$executor = new class ($harness->commandExecutor) implements CommandExecutorInterface, TransactionalCommandExecutorInterface {
+		$executor = new class ($harness->commandExecutor) implements TransactionalCommandExecutorInterface {
 			private bool $fail = true;
 
 			public function __construct(private CommandExecutorInterface $inner)
@@ -338,6 +338,11 @@ final class SessionSaveApiSmokeTest extends TestCase
 			public function execute(CommandInterface $command): CommandResult
 			{
 				return $this->inner->execute($command);
+			}
+
+			public function isInTransaction(): ?bool
+			{
+				return null;
 			}
 
 			public function transaction(callable $callback): mixed

@@ -12,14 +12,13 @@ use InvalidArgumentException;
 use ON\Data\Database\ConnectionConfig;
 use ON\Data\Database\ConnectionInterface;
 use ON\Data\Database\DatabaseFamily;
-use ON\Data\Database\TransactionStateAwareInterface;
 use PDO;
 use PDOException;
 use PDOStatement;
 use RuntimeException;
 use Throwable;
 
-final class PdoConnection implements ConnectionInterface, TransactionStateAwareInterface
+final class PdoConnection implements ConnectionInterface
 {
 	private readonly DatabaseFamily $family;
 

@@ -11,7 +11,7 @@ use ON\Data\ORM\Persistence\TransactionalCommandExecutorInterface;
 
 final readonly class FlushReverter
 {
-	private CommandExecutorInterface&TransactionalCommandExecutorInterface $executor;
+	private TransactionalCommandExecutorInterface $executor;
 
 	public function __construct(private FlushHistory $history, CommandExecutorInterface $executor)
 	{
@@ -27,18 +27,32 @@ final readonly class FlushReverter
 
 	public function revertLast(): FlushCommit
 	{
-		return $this->history->whileWriting($this->executor, function (): FlushCommit {
+		$this->history->beginWrite();
+
+		try {
+			if ($this->executor->isInTransaction() === true) {
+				throw HistoryException::activeTransaction();
+			}
+
 			$latest = $this->history->latest() ?? throw new HistoryRollbackException('Cannot revert an empty flush history.');
 			$this->revert([$latest], $latest->sequence - 1);
 
 			return $latest;
-		});
+		} finally {
+			$this->history->endWrite();
+		}
 	}
 
 	/** @return list<FlushCommit> The undone commits, newest first. */
 	public function revertTo(int $sequence): array
 	{
-		return $this->history->whileWriting($this->executor, function () use ($sequence): array {
+		$this->history->beginWrite();
+
+		try {
+			if ($this->executor->isInTransaction() === true) {
+				throw HistoryException::activeTransaction();
+			}
+
 			if ($sequence !== $this->history->getBaseSequence() && $this->history->get($sequence) === null) {
 				throw new HistoryRollbackException(sprintf('Sequence %d is not retained in flush history.', $sequence));
 			}
@@ -49,7 +63,9 @@ final readonly class FlushReverter
 			}
 
 			return $commits;
-		});
+		} finally {
+			$this->history->endWrite();
+		}
 	}
 
 	/** @param non-empty-list<FlushCommit> $commits Newest first. */

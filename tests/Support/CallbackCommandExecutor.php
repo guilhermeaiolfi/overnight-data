@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Support;
 
 use Closure;
-use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
 use ON\Data\ORM\Persistence\TransactionalCommandExecutorInterface;
@@ -15,7 +14,7 @@ use ON\Data\ORM\Persistence\TransactionalCommandExecutorInterface;
  *
  * @phpstan-type ExecuteCallback Closure(CommandInterface, list<CommandInterface>): CommandResult
  */
-final class CallbackCommandExecutor implements CommandExecutorInterface, TransactionalCommandExecutorInterface
+final class CallbackCommandExecutor implements TransactionalCommandExecutorInterface
 {
 	/** @var list<CommandInterface> */
 	private array $commands = [];
@@ -35,6 +34,11 @@ final class CallbackCommandExecutor implements CommandExecutorInterface, Transac
 		$this->commands[] = $command;
 
 		return ($this->callback)($command, $this->commands);
+	}
+
+	public function isInTransaction(): ?bool
+	{
+		return null;
 	}
 
 	public function transaction(callable $callback): mixed
