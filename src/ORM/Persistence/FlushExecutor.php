@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Persistence;
 
+use Closure;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\NonTransactionalFlushException;
+use ON\Data\ORM\History\FlushCapture;
+use ON\Data\ORM\History\FlushHistory;
 use ON\Data\ORM\Record\RecordLifecycle;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\Persistence\RelationPersistencePlanner;
@@ -25,6 +28,7 @@ final class FlushExecutor
 		?RepresentationSyncer $syncer = null,
 		?FlushScheduler $scheduler = null,
 		?RelationPersistencePlanner $relationPlanner = null,
+		private ?FlushHistory $history = null,
 	) {
 		$this->executor = $executor;
 		$this->syncer = $syncer ?? new RepresentationSyncer();
@@ -32,9 +36,33 @@ final class FlushExecutor
 		$this->relationPlanner = $relationPlanner ?? new RelationPersistencePlanner();
 	}
 
-	public function flush(SessionContext $context): FlushResult
+	public function getHistory(): ?FlushHistory
 	{
-		if (! $this->executor instanceof TransactionalCommandExecutorInterface) {
+		return $this->history;
+	}
+
+	public function withHistory(FlushHistory $history): self
+	{
+		$flusher = clone $this;
+		$flusher->history = $history;
+
+		return $flusher;
+	}
+
+	/** @param (Closure(): void)|null $prepare Session preparation to run before persistence under the history guard. */
+	public function flush(SessionContext $context, ?string $label = null, ?Closure $prepare = null): FlushResult
+	{
+		$executor = $this->executor;
+		if ($this->history !== null && $executor instanceof TransactionalCommandExecutorInterface) {
+			return $this->history->whileWriting($executor, function () use ($executor, $context, $label, $prepare): FlushResult {
+				$prepare?->__invoke();
+
+				return $this->flushInTransaction($executor, $context, new FlushCapture(), $label);
+			});
+		}
+
+		$prepare?->__invoke();
+		if (! $executor instanceof TransactionalCommandExecutorInterface) {
 			throw new NonTransactionalFlushException(sprintf(
 				"Flush requires a command executor that implements %s; '%s' does not. Non-transactional flush is not supported.",
 				TransactionalCommandExecutorInterface::class,
@@ -42,12 +70,14 @@ final class FlushExecutor
 			));
 		}
 
-		return $this->flushInTransaction($this->executor, $context);
+		return $this->flushInTransaction($executor, $context);
 	}
 
 	private function flushInTransaction(
 		TransactionalCommandExecutorInterface $transactionalExecutor,
 		SessionContext $context,
+		?FlushCapture $capture = null,
+		?string $label = null,
 	): FlushResult {
 		$flush = null;
 		$relationResult = null;
@@ -60,19 +90,20 @@ final class FlushExecutor
 		try {
 			$result = $transactionalExecutor->transaction(function () use (
 				$context,
+				$capture,
 				&$flush,
 				&$relationResult,
 			): FlushResult {
 				$records = $context->getRecords();
 
 				// Sync already-tracked representations into RecordState / relation state.
-				// Session applies pending update/create intents before entering the flush transaction.
 				$syncResult = $this->syncer->sync($context);
 				$relationResult = $this->relationPlanner->plan($context);
 				$flush = $this->scheduler->run(
 					$records,
 					$relationResult->getCommands(),
 					true,
+					$capture,
 				);
 
 				return new FlushResult(
@@ -97,6 +128,9 @@ final class FlushExecutor
 			foreach ($relationResult->getChanges() as $change) {
 				$change->clearChanges();
 			}
+		}
+		if ($capture !== null) {
+			$this->history?->recordCommitted($capture->getChanges(), $label);
 		}
 
 		return $result;

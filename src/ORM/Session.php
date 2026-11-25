@@ -8,6 +8,7 @@ use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
+use ON\Data\ORM\History\FlushHistory;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\FlushExecutor;
 use ON\Data\ORM\Persistence\FlushResult;
@@ -49,12 +50,15 @@ final class Session implements WritableResultHandler
 		?FlushExecutor $flusher = null,
 		?RepresentationSyncer $syncer = null,
 		?SessionContext $context = null,
+		?FlushHistory $history = null,
 	) {
 		$this->context = $context ?? new SessionContext();
 		$this->reader = new RepresentationReader();
 		$this->adoptionEngine = new RepresentationAdoptionEngine($this->reader);
 		$this->syncer = $syncer ?? new RepresentationSyncer();
-		$this->flusher = $flusher ?? new FlushExecutor($executor, $this->syncer);
+		$this->flusher = $flusher === null
+			? new FlushExecutor($executor, $this->syncer, history: $history)
+			: ($history === null ? $flusher : $flusher->withHistory($history));
 	}
 
 	public function prepare(SelectQuery $query): WritablePreparation
@@ -295,11 +299,14 @@ final class Session implements WritableResultHandler
 		return $this->syncer->sync($this->context);
 	}
 
-	public function flush(): FlushResult
+	public function getHistory(): ?FlushHistory
 	{
-		$this->applyPendingIntents();
+		return $this->flusher->getHistory();
+	}
 
-		return $this->flusher->flush($this->context);
+	public function flush(?string $label = null): FlushResult
+	{
+		return $this->flusher->flush($this->context, $label, $this->applyPendingIntents(...));
 	}
 
 	private function applyPendingIntents(): void

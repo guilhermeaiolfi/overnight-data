@@ -8,6 +8,7 @@ use ON\Data\Database\ConnectionInterface;
 use ON\Data\Database\DatabaseFamily;
 use ON\Data\Database\Sql\Dialect\DialectFactory;
 use ON\Data\Database\Sql\Dialect\DialectInterface;
+use ON\Data\Database\TransactionStateAwareInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Definition\Field\Generator\When;
@@ -21,7 +22,7 @@ use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\TransactionalCommandExecutorInterface;
 use ON\Data\ORM\Persistence\UpdateCommand;
 
-final class SqlCommandExecutor implements CommandExecutorInterface, TransactionalCommandExecutorInterface
+final class SqlCommandExecutor implements CommandExecutorInterface, TransactionalCommandExecutorInterface, TransactionStateAwareInterface
 {
 	private readonly DialectInterface $dialect;
 
@@ -52,6 +53,11 @@ final class SqlCommandExecutor implements CommandExecutorInterface, Transactiona
 				$command::class,
 			)),
 		};
+	}
+
+	public function isInTransaction(): ?bool
+	{
+		return $this->connection instanceof TransactionStateAwareInterface ? $this->connection->isInTransaction() : null;
 	}
 
 	public function transaction(callable $callback): mixed

@@ -12,13 +12,14 @@ use InvalidArgumentException;
 use ON\Data\Database\ConnectionConfig;
 use ON\Data\Database\ConnectionInterface;
 use ON\Data\Database\DatabaseFamily;
+use ON\Data\Database\TransactionStateAwareInterface;
 use PDO;
 use PDOException;
 use PDOStatement;
 use RuntimeException;
 use Throwable;
 
-final class PdoConnection implements ConnectionInterface
+final class PdoConnection implements ConnectionInterface, TransactionStateAwareInterface
 {
 	private readonly DatabaseFamily $family;
 
@@ -136,6 +137,11 @@ final class PdoConnection implements ConnectionInterface
 	public function lastInsertId(?string $sequence = null): string|false
 	{
 		return $this->pdo->lastInsertId($sequence);
+	}
+
+	public function isInTransaction(): bool
+	{
+		return $this->pdo->inTransaction();
 	}
 
 	public function transaction(callable $callback): mixed

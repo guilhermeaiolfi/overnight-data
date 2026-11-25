@@ -259,6 +259,8 @@ Pending write admission happens in memory before persistence. If a transaction f
 
 `Session::flush()` always runs inside a database transaction via `TransactionalCommandExecutorInterface` (including `ConvertingCommandExecutor` wrapping `SqlCommandExecutor`). Executors that omit that interface are rejected with `NonTransactionalFlushException`. There is no separate transaction API on `Session`.
 
+For an optional, bounded journal of committed commands and transactional undo, see [Flush history](./history.md).
+
 ## Current Limits
 
 - Scalar insert/update/delete plus configured relation persistence planning only.

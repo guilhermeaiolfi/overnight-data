@@ -6,6 +6,7 @@ namespace ON\Data\ORM\Persistence;
 
 use ON\Data\Key;
 use ON\Data\ORM\Exception\InvalidCommandException;
+use ON\Data\ORM\History\FlushCapture;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Record\ValueRef;
@@ -34,6 +35,7 @@ final class FlushScheduler
 		RecordStateStore $states,
 		array $commands = [],
 		bool $deferFinalizers = false,
+		?FlushCapture $capture = null,
 	): DeferredFlushResult {
 		$results = [];
 		$finalizers = [];
@@ -90,6 +92,7 @@ final class FlushScheduler
 				$result = $this->executor->execute($command);
 				$this->affectedRows->validate($command, $result);
 				$results[] = $result;
+				$capture?->record($command, $result, $record);
 
 				if ($command instanceof InsertCommand) {
 					$this->applyRecoveredValues($record, $result);
@@ -136,6 +139,7 @@ final class FlushScheduler
 				$result = $this->executor->execute($command);
 				$this->affectedRows->validate($command, $result);
 				$results[] = $result;
+				$capture?->record($command, $result);
 
 				unset($pendingCommands[$index]);
 				$progress = true;
