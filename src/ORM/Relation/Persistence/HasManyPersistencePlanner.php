@@ -12,7 +12,7 @@ use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\RelationStateInterface;
 use ON\Data\ORM\Relation\ToManyRelationState;
 
-final class HasManyPersistencePlanner implements RelationPersistencePlannerInterface
+final class HasManyPersistencePlanner implements StatelessRelationPersistencePlannerInterface
 {
 	private TrackedRecordResolver $records;
 	private ForeignKeyWriter $keys;

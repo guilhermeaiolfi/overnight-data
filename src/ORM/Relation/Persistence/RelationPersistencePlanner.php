@@ -15,6 +15,9 @@ use ON\Data\ORM\SessionContext;
 
 final class RelationPersistencePlanner
 {
+	/** @var array<class-string, StatelessRelationPersistencePlannerInterface> */
+	private array $statelessPlanners = [];
+
 	public function plan(SessionContext $session): RelationPersistenceResult
 	{
 		$changed = $session->getRelations()->getChanged();
@@ -40,7 +43,7 @@ final class RelationPersistencePlanner
 				));
 			}
 
-			$planner = new $plannerClass();
+			$planner = $this->statelessPlanners[$plannerClass] ?? new $plannerClass();
 			if (! $planner instanceof RelationPersistencePlannerInterface) {
 				throw new RelationPersistenceException(sprintf(
 					"Relation persistence planner '%s' must implement %s.",
@@ -49,6 +52,9 @@ final class RelationPersistencePlanner
 				));
 			}
 
+			if ($planner instanceof StatelessRelationPersistencePlannerInterface) {
+				$this->statelessPlanners[$plannerClass] = $planner;
+			}
 			$planner->plan($context, $relation, $change);
 		}
 

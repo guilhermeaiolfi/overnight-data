@@ -162,6 +162,8 @@ The built-in `SqlCommandExecutor` runs parameterized insert, update, and delete 
 
 Command and `RecordState` values remain canonical PHP until `ConvertingCommandExecutor`. The SQL executor receives storage values and calls `CommandValueResolver::assertReady()` before compilation. An unresolved `ValueRef` raises `InvalidCommandException`. The executor delegates flush transactions to `ConnectionInterface`.
 
+Custom relation planners that implement `StatelessRelationPersistencePlannerInterface` can be reused across flushes. Other planner implementations are instantiated per relation change.
+
 Database executors must implement `TransactionalCommandExecutorInterface`. `FlushExecutor` runs the whole command wave inside one executor transaction and throws `NonTransactionalFlushException` when the executor does not implement that interface.
 
 ## Affected-row validation
