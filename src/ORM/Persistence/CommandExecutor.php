@@ -17,9 +17,9 @@ use ON\Data\ORM\Exception\InvalidCommandException;
  * Adapter-agnostic write boundary: projects command values from canonical PHP
  * to storage before delegating to a backend command executor.
  *
- * Does not mutate the original command objects.
+ * Resolves references on the original command and converts a separate command for storage.
  */
-final class ConvertingCommandExecutor implements CommandExecutorInterface, TransactionalCommandExecutorInterface, TransactionStateAwareInterface
+final class CommandExecutor implements CommandExecutorInterface, TransactionalCommandExecutorInterface, TransactionStateAwareInterface
 {
 	private readonly ConversionGateway $gateway;
 
@@ -114,7 +114,11 @@ final class ConvertingCommandExecutor implements CommandExecutorInterface, Trans
 	): array {
 		$converted = [];
 		foreach ($values as $fieldName => $value) {
-			$field = CommandValueResolver::requireField($collection, (string) $fieldName);
+			$field = $collection->getField((string) $fieldName) ?? throw new InvalidCommandException(sprintf(
+				"Persistence command for collection '%s' contains unknown field '%s'.",
+				$collection->getName(),
+				$fieldName,
+			));
 			$converted[$field->getName()] = $this->gateway->to(
 				$from,
 				$value,

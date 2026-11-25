@@ -4,42 +4,11 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Persistence;
 
-use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Record\ValueRef;
 
 final class CommandValueResolver
 {
-	/**
-	 * Yield field values in order, resolving deferred references before execution.
-	 *
-	 * @return iterable<string, mixed>
-	 */
-	public function readyValues(RowCommand $command, string $slot): iterable
-	{
-		$resolved = null;
-		foreach ($command->getValueSlots()[$slot] as $field => $value) {
-			if ($value instanceof ValueRef) {
-				if ($resolved === null) {
-					$this->assertReady($command);
-					$resolved = $command->getValueSlots()[$slot];
-				}
-				$value = $resolved[$field];
-			}
-			yield $field => $value;
-		}
-	}
-
-	public static function requireField(CollectionInterface $collection, string $name): FieldInterface
-	{
-		return $collection->getField($name) ?? throw new InvalidCommandException(sprintf(
-			"Persistence command for collection '%s' contains unknown field '%s'.",
-			$collection->getName(),
-			$name,
-		));
-	}
-
 	public function resolve(CommandInterface $command): bool
 	{
 		return $command instanceof RowCommand && $command->resolveValueRefs();

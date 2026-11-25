@@ -14,7 +14,7 @@ Keep `DataRuntime`, `QueryExecutorInterface`, `CommandExecutorInterface`, and `T
 
 `SqlRuntimeFactory` builds both executors from one `ConnectionInterface`. The connection handles typed parameters, cursor reads, affected-row counts, generated IDs, and transactions. `PdoConnection` is built in. Integrations that use another connection library can implement that interface and share the existing compiler. Applications can also supply their own executors to `DataRuntime`.
 
-`ConversionGateway` continues to own value conversion. The query compiler converts field-context literals to storage values, the result mapper converts query rows to PHP, and `ConvertingCommandExecutor` handles conversion on the write path.
+`ConversionGateway` continues to own value conversion. The query compiler converts field-context literals to storage values, the result mapper converts query rows to PHP, and `CommandExecutor` handles conversion on the write path.
 
 ## Consequences
 

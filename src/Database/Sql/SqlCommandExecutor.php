@@ -16,12 +16,12 @@ use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
-use ON\Data\ORM\Persistence\CommandValueResolver;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\TransactionalCommandExecutorInterface;
 use ON\Data\ORM\Persistence\UpdateCommand;
 
+/** Executes row commands containing storage values. */
 final class SqlCommandExecutor implements CommandExecutorInterface, TransactionalCommandExecutorInterface, TransactionStateAwareInterface
 {
 	private readonly DialectInterface $dialect;
@@ -30,11 +30,10 @@ final class SqlCommandExecutor implements CommandExecutorInterface, Transactiona
 
 	public function __construct(
 		private readonly ConnectionInterface $connection,
-		?CommandValueResolver $commandValueResolver = null,
 		?DialectInterface $dialect = null,
 	) {
 		$this->dialect = $dialect ?? DialectFactory::forConnection($connection);
-		$this->compiler = new SqlCommandCompiler($this->dialect, $connection->tablePrefix(), $commandValueResolver ?? new CommandValueResolver());
+		$this->compiler = new SqlCommandCompiler($this->dialect, $connection->tablePrefix());
 	}
 
 	public function execute(CommandInterface $command): CommandResult

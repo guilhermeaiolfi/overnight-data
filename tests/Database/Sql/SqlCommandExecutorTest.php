@@ -6,15 +6,16 @@ namespace Tests\ON\Data\Database\Sql;
 
 use DateTimeImmutable;
 use ON\Data\Database\Pdo\PdoConnection;
+use ON\Data\Database\Sql\SqlCommandCompiler;
 use ON\Data\Database\Sql\SqlCommandExecutor;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\Generator\DatabaseGenerator;
 use ON\Data\Definition\Field\Generator\When;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\InvalidCommandException;
+use ON\Data\ORM\Persistence\CommandExecutor;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
-use ON\Data\ORM\Persistence\ConvertingCommandExecutor;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\FlushExecutor;
 use ON\Data\ORM\Persistence\FlushScheduler;
@@ -35,7 +36,7 @@ final class SqlCommandExecutorTest extends TestCase
 {
 	private ?PDO $pdo = null;
 
-	private ?ConvertingCommandExecutor $executor = null;
+	private ?CommandExecutor $executor = null;
 
 	private ?CollectionInterface $users = null;
 
@@ -46,7 +47,7 @@ final class SqlCommandExecutorTest extends TestCase
 		$this->pdo = new PDO('sqlite::memory:');
 		$connection = new PdoConnection($this->pdo);
 		$this->seedDatabase($this->pdo);
-		$this->executor = new ConvertingCommandExecutor(new SqlCommandExecutor($connection));
+		$this->executor = new CommandExecutor(new SqlCommandExecutor($connection));
 		$this->users = $this->makeUsers();
 		$this->memberships = $this->makeMemberships();
 	}
@@ -365,9 +366,9 @@ final class SqlCommandExecutorTest extends TestCase
 		]));
 	}
 
-	public function testDirectSqlExecutorResolvesReferencesAndRejectsUnreadyCommandsBeforeWriting(): void
+	public function testOrmExecutorResolvesReferencesAndRejectsUnreadyCommandsBeforeWriting(): void
 	{
-		$executor = new SqlCommandExecutor(new PdoConnection($this->pdo));
+		$executor = $this->executor();
 		$source = RecordState::new($this->users(), ['id' => 1]);
 		$update = new UpdateCommand($this->users(), ['id' => $source->getValueRef('id')], [
 			'name' => $source->getValueRef('name'),
@@ -493,7 +494,7 @@ final class SqlCommandExecutorTest extends TestCase
 
 	public function testExecutorDoesNotDependOnOrmRuntimeStateClasses(): void
 	{
-		$source = $this->executorSource();
+		$source = $this->classSource(SqlCommandExecutor::class);
 
 		self::assertStringNotContainsString('ON\\Data\\ORM\\State\\', $source);
 		self::assertStringNotContainsString('ON\\Data\\ORM\\Sync\\', $source);
@@ -504,6 +505,15 @@ final class SqlCommandExecutorTest extends TestCase
 		self::assertStringNotContainsString('FlushScheduler', $source);
 		self::assertStringNotContainsString('FlushExecutor', $source);
 		self::assertStringNotContainsString('Registry', $source);
+	}
+
+	public function testSqlExecutorAndCompilerLeaveDeferredReferenceResolutionToOrm(): void
+	{
+		foreach ([SqlCommandExecutor::class, SqlCommandCompiler::class] as $class) {
+			$source = $this->classSource($class);
+			self::assertStringNotContainsString('CommandValueResolver', $source);
+			self::assertStringNotContainsString('ValueRef', $source);
+		}
 	}
 
 	public function testInsertReportsDriverAffectedRows(): void
@@ -625,9 +635,10 @@ final class SqlCommandExecutorTest extends TestCase
 		return is_string($role) ? $role : null;
 	}
 
-	private function executorSource(): string
+	/** @param class-string $class */
+	private function classSource(string $class): string
 	{
-		$reflection = new ReflectionClass(SqlCommandExecutor::class);
+		$reflection = new ReflectionClass($class);
 		$fileName = $reflection->getFileName();
 
 		self::assertIsString($fileName);
@@ -642,9 +653,9 @@ final class SqlCommandExecutorTest extends TestCase
 		return $this->users;
 	}
 
-	private function executor(): ConvertingCommandExecutor
+	private function executor(): CommandExecutor
 	{
-		self::assertInstanceOf(ConvertingCommandExecutor::class, $this->executor);
+		self::assertInstanceOf(CommandExecutor::class, $this->executor);
 
 		return $this->executor;
 	}

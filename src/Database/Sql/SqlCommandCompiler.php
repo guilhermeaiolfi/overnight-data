@@ -8,7 +8,6 @@ use ON\Data\Database\Sql\Dialect\DialectInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\ORM\Exception\InvalidCommandException;
-use ON\Data\ORM\Persistence\CommandValueResolver;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\UpdateCommand;
@@ -16,18 +15,15 @@ use ON\Data\ORM\Persistence\UpdateCommand;
 /** @internal */
 final readonly class SqlCommandCompiler
 {
-	public function __construct(
-		private DialectInterface $dialect,
-		private string $tablePrefix,
-		private CommandValueResolver $resolver,
-	) {
+	public function __construct(private DialectInterface $dialect, private string $tablePrefix)
+	{
 	}
 
 	/** @param list<FieldInterface> $returning */
 	public function insert(InsertCommand $command, array $returning): SqlFragment
 	{
 		$collection = $command->getCollection();
-		$values = $this->mapFieldValuesToColumns($collection, $this->resolver->readyValues($command, 'values'));
+		$values = $this->mapFieldValuesToColumns($collection, $command->getValues());
 		$sql = $this->dialect->compileInsert(
 			$this->table($collection),
 			array_keys($values),
@@ -41,13 +37,13 @@ final readonly class SqlCommandCompiler
 	public function update(UpdateCommand $command): SqlFragment
 	{
 		$collection = $command->getCollection();
-		$changes = $this->mapFieldValuesToColumns($collection, $this->resolver->readyValues($command, 'changes'));
+		$changes = $this->mapFieldValuesToColumns($collection, $command->getChanges());
 		if ($changes === []) {
 			throw new InvalidCommandException('Update command changes cannot be empty.');
 		}
 
 		$assignments = array_map(static fn (string $column): string => $column . ' = ?', array_keys($changes));
-		$where = $this->identity($collection, $this->resolver->readyValues($command, 'identity'));
+		$where = $this->identity($collection, $command->getIdentity());
 
 		return new SqlFragment(
 			'UPDATE ' . $this->table($collection) . ' SET ' . implode(', ', $assignments) . ' WHERE ' . $where->sql(),
@@ -58,7 +54,7 @@ final readonly class SqlCommandCompiler
 	public function delete(DeleteCommand $command): SqlFragment
 	{
 		$collection = $command->getCollection();
-		$where = $this->identity($collection, $this->resolver->readyValues($command, 'identity'));
+		$where = $this->identity($collection, $command->getIdentity());
 
 		return new SqlFragment(
 			'DELETE FROM ' . $this->table($collection) . ' WHERE ' . $where->sql(),
@@ -83,8 +79,12 @@ final readonly class SqlCommandCompiler
 	}
 
 	/** @param array<string, mixed> $identity */
-	private function identity(CollectionInterface $collection, iterable $identity): SqlFragment
+	private function identity(CollectionInterface $collection, array $identity): SqlFragment
 	{
+		if ($identity === []) {
+			throw new InvalidCommandException('Persistence command identity cannot be empty.');
+		}
+
 		$conditions = [];
 		$params = [];
 		foreach ($this->mapFieldValuesToColumns($collection, $identity) as $column => $value) {
@@ -94,10 +94,6 @@ final readonly class SqlCommandCompiler
 				$conditions[] = $column . ' = ?';
 				$params[] = $value;
 			}
-		}
-
-		if ($conditions === []) {
-			throw new InvalidCommandException('Persistence command identity cannot be empty.');
 		}
 
 		return SqlFragment::withParameters(implode(' AND ', $conditions), $params);
@@ -123,14 +119,22 @@ final readonly class SqlCommandCompiler
 	}
 
 	/**
-	 * @param iterable<string, mixed> $values
+	 * @param array<string, mixed> $values
 	 * @return array<string, mixed>
 	 */
-	private function mapFieldValuesToColumns(CollectionInterface $collection, iterable $values): array
+	private function mapFieldValuesToColumns(CollectionInterface $collection, array $values): array
 	{
 		$mapped = [];
 		foreach ($values as $fieldName => $value) {
-			$field = CommandValueResolver::requireField($collection, (string) $fieldName);
+			$field = $collection->getField((string) $fieldName);
+			if ($field === null) {
+				throw new InvalidCommandException(sprintf(
+					"Persistence command for collection '%s' contains unknown field '%s'.",
+					$collection->getName(),
+					$fieldName,
+				));
+			}
+
 			$mapped[$this->dialect->quoteIdentifier($field->getColumn())] = $value;
 		}
 
