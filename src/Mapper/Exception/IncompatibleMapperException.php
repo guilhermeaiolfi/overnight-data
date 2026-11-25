@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper\Exception;
 
-use RuntimeException;
-
-final class IncompatibleMapperException extends RuntimeException
+final class IncompatibleMapperException extends MappingException
 {
 }
