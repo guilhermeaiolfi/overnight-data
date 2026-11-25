@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Sync;
 
-enum RepresentationIntentLifecycle
+enum RepresentationIntentLifecycle: string
 {
-	case Update;
-	case Create;
+	case Update = 'update';
+	case Create = 'create';
 }

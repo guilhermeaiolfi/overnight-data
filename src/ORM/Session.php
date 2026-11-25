@@ -22,14 +22,11 @@ use ON\Data\ORM\Representation\State\Query\QueryResultHydrator;
 use ON\Data\ORM\Representation\State\RepresentationIdentifier;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
-use ON\Data\ORM\Representation\Sync\AdoptionPolicy;
-use ON\Data\ORM\Representation\Sync\RepresentationAdoptionContext;
 use ON\Data\ORM\Representation\Sync\RepresentationAdoptionEngine;
 use ON\Data\ORM\Representation\Sync\RepresentationAttachmentMode;
 use ON\Data\ORM\Representation\Sync\RepresentationIntentLifecycle;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
 use ON\Data\ORM\Representation\Sync\RepresentationSyncer;
-use ON\Data\ORM\Representation\Sync\StaticSourceIdentities;
 use ON\Data\ORM\Representation\Sync\SyncResult;
 use ON\Data\Query\Result\WritablePreparation;
 use ON\Data\Query\Result\WritableResultHandler;
@@ -275,7 +272,7 @@ final class Session implements WritableResultHandler
 	public function sync(?object $representation = null, ?RepresentationSchema $schema = null): SyncResult
 	{
 		if ($representation !== null) {
-			$this->applyIntent($representation, $schema);
+			$this->adoptionEngine->attach($representation, $schema, $this->context);
 
 			return $this->syncer->sync($this->context, $representation);
 		}
@@ -315,49 +312,13 @@ final class Session implements WritableResultHandler
 					continue;
 				}
 
-				$this->applyIntent($representation, null);
+				$this->adoptionEngine->attach($representation, null, $this->context);
 				unset($pending[$index]);
 			}
 
 			if (count($pending) === $before) {
 				throw new SyncException('Cannot apply pending write intents without a root RepresentationSchema. Supply a schema on update/create or stage an owning graph.');
 			}
-		}
-	}
-
-	private function applyIntent(object $representation, ?RepresentationSchema $schema): void
-	{
-		$intent = $this->context->getIntents()->get($representation);
-		$resolvedSchema = $schema
-			?? $intent?->getSchema()
-			?? ($this->getRepresentations()->has($representation)
-				? $this->getRepresentations()->get($representation)?->getSchema()
-				: null);
-
-		if (! $resolvedSchema instanceof RepresentationSchema) {
-			throw new SyncException('Cannot synchronize an untracked representation object without a root RepresentationSchema.');
-		}
-
-		$policy = $intent?->isCreate() === true
-			? AdoptionPolicy::Create
-			: ($intent?->isUpdate() === true ? AdoptionPolicy::Patch : AdoptionPolicy::Create);
-		$identities = $intent !== null
-			? StaticSourceIdentities::fromIntent($resolvedSchema, $intent)
-			: null;
-
-		$this->adoptionEngine->attach(
-			$representation,
-			new RepresentationAdoptionContext(
-				schema: $resolvedSchema,
-				policy: $policy,
-				identities: $identities,
-				intent: $intent,
-			),
-			$this->context,
-		);
-
-		if ($intent !== null) {
-			$this->context->getIntents()->remove($representation);
 		}
 	}
 

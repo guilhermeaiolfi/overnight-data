@@ -49,7 +49,7 @@ final class IntentBuilder
 	 */
 	public function update(string $path, Key|array|null $key = null): self
 	{
-		$this->intent->addFlatOp(new FlatIntentOp($path, 'update', $key));
+		$this->intent->addFlatOp(new FlatIntentOp($path, RepresentationIntentLifecycle::Update, $key));
 
 		return $this;
 	}
@@ -59,7 +59,7 @@ final class IntentBuilder
 	 */
 	public function create(string $path): self
 	{
-		$this->intent->addFlatOp(new FlatIntentOp($path, 'create'));
+		$this->intent->addFlatOp(new FlatIntentOp($path, RepresentationIntentLifecycle::Create));
 
 		return $this;
 	}

@@ -9,26 +9,25 @@ use ON\Data\Key;
 
 /**
  * Flat related-path intent recorded by IntentBuilder until sync().
- *
- * @param 'update'|'create' $operation
  */
 final class FlatIntentOp
 {
+	private RepresentationIntentLifecycle $operation;
+
 	/**
 	 * @param Key|array<string, mixed>|null $key
 	 */
 	public function __construct(
 		private string $path,
-		private string $operation,
+		RepresentationIntentLifecycle|string $operation,
 		private Key|array|null $key = null,
 	) {
 		if ($path === '') {
 			throw new InvalidArgumentException('Flat intent path cannot be empty.');
 		}
-
-		if ($operation !== 'update' && $operation !== 'create') {
-			throw new InvalidArgumentException(sprintf("Unknown flat intent operation '%s'.", $operation));
-		}
+		$this->operation = $operation instanceof RepresentationIntentLifecycle
+			? $operation
+			: (RepresentationIntentLifecycle::tryFrom($operation) ?? throw new InvalidArgumentException(sprintf("Unknown flat intent operation '%s'.", $operation)));
 	}
 
 	public function getPath(): string
@@ -37,6 +36,11 @@ final class FlatIntentOp
 	}
 
 	public function getOperation(): string
+	{
+		return $this->operation->value;
+	}
+
+	public function getLifecycle(): RepresentationIntentLifecycle
 	{
 		return $this->operation;
 	}
@@ -51,11 +55,11 @@ final class FlatIntentOp
 
 	public function isCreate(): bool
 	{
-		return $this->operation === 'create';
+		return $this->operation === RepresentationIntentLifecycle::Create;
 	}
 
 	public function isUpdate(): bool
 	{
-		return $this->operation === 'update';
+		return $this->operation === RepresentationIntentLifecycle::Update;
 	}
 }

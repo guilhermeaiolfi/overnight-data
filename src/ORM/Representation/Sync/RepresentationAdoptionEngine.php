@@ -6,6 +6,7 @@ namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
+use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Relation\RelationStateStore;
@@ -25,42 +26,47 @@ final class RepresentationAdoptionEngine
 
 	public function attach(
 		object $representation,
-		RepresentationAdoptionContext $context,
+		?RepresentationSchema $schema,
 		SessionContext $session,
 	): RepresentationState {
+		$intent = $session->getIntents()->get($representation);
+		$schema ??= $intent?->getSchema() ?? $session->getRepresentations()->get($representation)?->getSchema()
+			?? throw new SyncException('Cannot synchronize an untracked representation object without a root RepresentationSchema.');
 		$visited = [];
 
-		return $this->attachObject($representation, $context, $session, $visited, $session->getIntents()->get($representation));
+		return $this->attachObject(
+			$representation,
+			$schema,
+			$intent,
+			$intent?->getLifecycle() ?? RepresentationIntentLifecycle::Create,
+			$session,
+			$this->reader->forTraversal(),
+			$visited,
+		);
 	}
 
 	/** @param array<int, true> $visited */
 	private function attachObject(
 		object $representation,
-		RepresentationAdoptionContext $context,
+		RepresentationSchema $schema,
+		?RepresentationIntent $intent,
+		RepresentationIntentLifecycle $relatedPolicy,
 		SessionContext $session,
+		RepresentationReader $reader,
 		array &$visited,
-		?RepresentationIntent $storedIntent,
 	): RepresentationState {
 		$id = spl_object_id($representation);
-		$representations = $session->getRepresentations();
-		$tracked = $representations->get($representation);
+		$tracked = $session->getRepresentations()->get($representation);
 		if (isset($visited[$id])) {
 			return $tracked ?? throw new StateException('Visited representation is missing tracked state.');
 		}
 		$visited[$id] = true;
 
-		$intent = $context->getIntent();
 		$replace = $intent !== null && ($intent->getFlatOps() !== [] || $intent->getSchema() !== null);
-		if ($tracked === null || $replace) {
-			$rootPolicy = $this->rootPolicy($context, $storedIntent);
-			$state = $this->bindSources($representation, $context, $rootPolicy, $session);
-			foreach ($state->getUniqueRecords() as $record) {
-				$session->getRecords()->add($record);
-			}
-			if ($replace) {
-				$representations->remove($representation);
-			}
-			$representations->add($representation, $state);
+		if ($tracked === null || ($replace && ! $intent->isBoundTo($tracked))) {
+			$state = $this->bindSources($representation, $schema, $intent, $relatedPolicy, $session, $reader);
+			$session->attachRepresentation($representation, $state, $replace ? RepresentationAttachmentMode::Replace : RepresentationAttachmentMode::Add);
+			$intent?->setBoundState($state);
 		} else {
 			$state = $tracked;
 		}
@@ -68,25 +74,22 @@ final class RepresentationAdoptionEngine
 		$schema = $state->getSchema();
 		$this->assertRelationOwners($schema);
 		foreach ($schema->getRelations() as $relation) {
-			foreach ($this->reader->readRelatedObjects($representation, $relation, $this->relationError(...)) as $child) {
+			foreach ($reader->readRelatedObjects($representation, $relation, $this->relationError(...)) as $child) {
 				$childIntent = $session->getIntents()->get($child);
-				$childSchema = $childIntent?->getSchema() ?? $relation->getRelatedSchema();
 				$this->attachObject(
 					$child,
-					new RepresentationAdoptionContext(
-						schema: $childSchema,
-						policy: AdoptionPolicy::Create,
-						identities: $childIntent === null ? null : StaticSourceIdentities::fromIntent($childSchema, $childIntent),
-						intent: $childIntent,
-					),
-					$session,
-					$visited,
+					$childIntent?->getSchema() ?? $relation->getRelatedSchema(),
 					$childIntent,
+					RepresentationIntentLifecycle::Create,
+					$session,
+					$reader,
+					$visited,
 				);
 			}
 		}
 
 		if ($intent !== null) {
+			$intent->setBoundState(null);
 			$session->getIntents()->remove($representation);
 		}
 
@@ -95,11 +98,12 @@ final class RepresentationAdoptionEngine
 
 	private function bindSources(
 		object $representation,
-		RepresentationAdoptionContext $context,
-		AdoptionPolicy $rootPolicy,
+		RepresentationSchema $schema,
+		?RepresentationIntent $intent,
+		RepresentationIntentLifecycle $relatedPolicy,
 		SessionContext $session,
+		RepresentationReader $reader,
 	): RepresentationState {
-		$schema = $context->getSchema();
 		$sources = $schema->getSources();
 		if ($sources === [] && $schema->getRelations() === []) {
 			throw new StateException(
@@ -109,25 +113,28 @@ final class RepresentationAdoptionEngine
 		$this->assertRelationOwners($schema);
 
 		$ops = [];
-		foreach ($context->getIntent()?->getFlatOps() ?? [] as $op) {
+		foreach ($intent?->getFlatOps() ?? [] as $op) {
 			$ops[$op->getPath()] = $op;
 		}
 
+		$rootPolicy = $intent?->getLifecycle() ?? RepresentationIntentLifecycle::Create;
 		$records = $session->getRecords();
 		$bound = [];
 		$flatCreates = [];
 		if ($sources === []) {
-			$bound[''] = $this->bindEmptyRoot($context, $records);
+			$bound[''] = RecordState::new($schema->getCollection());
 		}
 
-		$readPath = $this->reader->readPass($representation);
+		$readPath = $reader->readPass($representation);
 		foreach ($sources as $source) {
 			$this->assertSourceFieldCollections($source);
 			$path = $source->getPathKey();
 			$op = $ops[$path] ?? null;
-			$policy = $this->sourcePolicy($source, $op, $rootPolicy, $context->getPolicy());
+			$policy = $op?->getLifecycle() ?? ($source->isRoot() ? $rootPolicy : $relatedPolicy);
+			$identity = $op?->getKey() ?? ($source->isRoot() ? $intent?->getIdentity() : null);
+			$key = $identity === null ? null : $source->getCollection()->getKey($identity);
 			[$reads, $values] = RepresentationSourceReader::read($source, $readPath);
-			$bound[$path] = $this->bindSource($source, $policy, $reads, $values, $context->getIdentities()?->getIdentity($path), $records);
+			$bound[$path] = $this->bindSource($source, $policy, $reads, $values, $key, $records);
 			if (! $source->isRoot() && $op?->isCreate() === true) {
 				$flatCreates[] = $source;
 			}
@@ -142,49 +149,13 @@ final class RepresentationAdoptionEngine
 		return RepresentationState::fromRecords($schema, $bound);
 	}
 
-	private function bindEmptyRoot(RepresentationAdoptionContext $context, RecordStateStore $records): RecordState
-	{
-		$identity = $context->getIdentities()?->getIdentity('');
-		if ($context->getPolicy() === AdoptionPolicy::Patch && $identity !== null) {
-			return $records->bindExisting(
-				$identity,
-				[],
-				sprintf("Cannot bind projection source '[root]' because key '%s' is already tracked as removed.", $identity->getDebugString()),
-			);
-		}
-
-		return RecordState::new($context->getSchema()->getCollection());
-	}
-
-	private function rootPolicy(RepresentationAdoptionContext $context, ?RepresentationIntent $storedIntent): AdoptionPolicy
-	{
-		if ($storedIntent !== null) {
-			return $storedIntent->isCreate() ? AdoptionPolicy::Create : AdoptionPolicy::Patch;
-		}
-
-		return $context->getIntent()?->isCreate() === true ? AdoptionPolicy::Create : $context->getPolicy();
-	}
-
-	private function sourcePolicy(
-		RepresentationSource $source,
-		?FlatIntentOp $op,
-		AdoptionPolicy $root,
-		AdoptionPolicy $related,
-	): AdoptionPolicy {
-		if ($op !== null) {
-			return $op->isCreate() ? AdoptionPolicy::Create : AdoptionPolicy::Patch;
-		}
-
-		return $source->isRoot() ? $root : $related;
-	}
-
 	/**
 	 * @param array<string, PathReadResult<mixed>> $reads
 	 * @param array<string, mixed> $values
 	 */
 	private function bindSource(
 		RepresentationSource $source,
-		AdoptionPolicy $policy,
+		RepresentationIntentLifecycle $policy,
 		array $reads,
 		array $values,
 		?Key $identity,
@@ -197,7 +168,7 @@ final class RepresentationAdoptionEngine
 			}
 		}
 
-		if ($policy === AdoptionPolicy::Create) {
+		if ($policy === RepresentationIntentLifecycle::Create) {
 			try {
 				$key = RepresentationSourceReader::resolveKey($source, $reads, $identity);
 			} catch (StateException) {
