@@ -38,7 +38,7 @@ final class DerivedSelectQuery implements QuerySourceInterface
 
 	public function getInnerQuery(): SelectQuery
 	{
-		return $this->inner;
+		return $this->getQuery();
 	}
 
 	public function getQuery(): SelectQuery
@@ -53,7 +53,7 @@ final class DerivedSelectQuery implements QuerySourceInterface
 
 	public function requireAlias(): string
 	{
-		return $this->alias;
+		return $this->getAlias();
 	}
 
 	/**
