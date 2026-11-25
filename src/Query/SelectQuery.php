@@ -1100,7 +1100,7 @@ final class SelectQuery implements QuerySourceInterface
 			return;
 		}
 
-		$schema = (new ClassRepresentationSchemaCompiler())->compile($this->source, $class);
+		$schema = (new ClassRepresentationSchemaCompiler())->compile($this->source, $reflection);
 		if (! $schema instanceof RepresentationSchema) {
 			return;
 		}
