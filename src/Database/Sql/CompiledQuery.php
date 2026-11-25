@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Database\Sql;
 
 /** @internal */
-final readonly class CompiledQuery extends SqlStatement
+final readonly class CompiledQuery extends SqlFragment
 {
 	/**
 	 * @param list<mixed> $params

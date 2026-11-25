@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\Definition\Field\Generator;
 
 use InvalidArgumentException;
-use ON\Data\Definition\Field\FieldInterface;
 use ReflectionClass;
 use ReflectionException;
 
@@ -28,7 +27,7 @@ final class FieldGeneratorFactory
 		}
 
 		if (is_a($class, DatabaseGenerator::class, true)) {
-			return new DatabaseGenerator($this->normalizeDatabaseSequence($arg));
+			return new DatabaseGenerator(DatabaseGenerator::sequenceFromArgument($arg));
 		}
 
 		try {
@@ -56,28 +55,5 @@ final class FieldGeneratorFactory
 		}
 
 		return $reflection->newInstance($arg);
-	}
-
-	public function createForField(FieldInterface $field): ?FieldGeneratorInterface
-	{
-		$config = $field->getGenerator();
-		if ($config === null) {
-			return null;
-		}
-
-		return $this->create($config['class'], $config['arg']);
-	}
-
-	private function normalizeDatabaseSequence(mixed $arg): ?string
-	{
-		if (is_string($arg) && $arg !== '') {
-			return $arg;
-		}
-
-		if (is_array($arg) && isset($arg['sequence']) && is_string($arg['sequence']) && $arg['sequence'] !== '') {
-			return $arg['sequence'];
-		}
-
-		return null;
 	}
 }
