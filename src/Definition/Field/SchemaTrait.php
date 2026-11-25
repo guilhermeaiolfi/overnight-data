@@ -13,7 +13,6 @@ use ON\Data\Definition\Field\Generator\NowGenerator;
 use ON\Data\Definition\Field\Generator\PhpFieldGeneratorInterface;
 use ON\Data\Definition\Field\Generator\UuidGenerator;
 use ON\Data\Definition\Field\Generator\When;
-use ON\Data\Definition\Relation\RelationInterface;
 
 trait SchemaTrait
 {
@@ -298,10 +297,5 @@ trait SchemaTrait
 	public function isIndexed(): bool
 	{
 		return (bool) $this->get('indexed');
-	}
-
-	public function end(): FieldInterface|RelationInterface
-	{
-		return $this->parent;
 	}
 }

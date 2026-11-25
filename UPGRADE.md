@@ -4,6 +4,7 @@
 
 ## Definition and runtime changes after `b27b9e9`
 
+- Looking up a restored collection initializes missing or non-array `fields` and `relations` slots to empty arrays. Later additions to these collections persist in registry exports.
 - A single-key `belongsTo(...)->innerKey(...)->outerKey(...)->end()` creates a missing local field using the referenced field's type and the relation's nullability. An explicitly declared field keeps its settings. If its type differs, correct the declaration using the field names and types in the exception.
 
 ## What documentation means
