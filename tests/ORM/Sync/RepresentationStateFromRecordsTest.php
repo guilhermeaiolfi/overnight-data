@@ -30,8 +30,8 @@ final class RepresentationStateFromRecordsTest extends TestCase
 		]);
 
 		self::assertSame($schema, $state->getSchema());
-		self::assertSame($record, $state->getFieldItem('name')->getRecord());
-		self::assertSame(2, $state->getFieldItem('name')->getBaselineRevision());
+		self::assertSame($record, $state->getRecordForField($state->getSchema()->getField('name')));
+		self::assertSame('Ada Lovelace', $state->getBaseline('name'));
 	}
 
 	public function testCreatesStateFromMultipleSourceRecords(): void
@@ -49,9 +49,9 @@ final class RepresentationStateFromRecordsTest extends TestCase
 			RepresentationFieldSchema::sourcePathKey(['company']) => $companyRecord,
 		]);
 
-		self::assertSame($userRecord, $state->getFieldItem('id')->getRecord());
-		self::assertSame($companyRecord, $state->getFieldItem('companyName')->getRecord());
-		self::assertSame(2, $state->getFieldItem('companyName')->getBaselineRevision());
+		self::assertSame($userRecord, $state->getRecordForField($state->getSchema()->getField('id')));
+		self::assertSame($companyRecord, $state->getRecordForField($state->getSchema()->getField('companyName')));
+		self::assertSame('Acme Ltd', $state->getBaseline('companyName'));
 	}
 
 	public function testRejectsMissingRequiredSourceRecord(): void
@@ -87,8 +87,8 @@ final class RepresentationStateFromRecordsTest extends TestCase
 			RepresentationFieldSchema::sourcePathKey([]) => RecordState::clean($users->getKey(1), ['id' => 1]),
 		]);
 
-		self::assertTrue($state->hasFieldItem('id'));
-		self::assertFalse($state->hasFieldItem('companyName'));
+		self::assertTrue($state->hasRecordForField($state->getSchema()->getField('id')));
+		self::assertFalse($state->hasRecordForField($state->getSchema()->getField('companyName')));
 	}
 
 	public function testRespectsSkipWhenMissingFromFieldSchema(): void
@@ -104,8 +104,8 @@ final class RepresentationStateFromRecordsTest extends TestCase
 			RepresentationFieldSchema::sourcePathKey([]) => RecordState::clean($users->getKey(1), ['id' => 1]),
 		]);
 
-		self::assertTrue($state->hasFieldItem('id'));
-		self::assertFalse($state->hasFieldItem('companyName'));
+		self::assertTrue($state->hasRecordForField($state->getSchema()->getField('id')));
+		self::assertFalse($state->hasRecordForField($state->getSchema()->getField('companyName')));
 	}
 
 	public function testRejectsSourceRecordWithWrongCollection(): void
@@ -124,7 +124,7 @@ final class RepresentationStateFromRecordsTest extends TestCase
 		]);
 	}
 
-	public function testCreatesRelationStateItemsFromRootRecord(): void
+	public function testResolvesRelationOwnerFromRootRecord(): void
 	{
 		$registry = $this->registry();
 		$users = $registry->getCollection('users');
@@ -139,8 +139,8 @@ final class RepresentationStateFromRecordsTest extends TestCase
 			RepresentationFieldSchema::sourcePathKey([]) => $record,
 		]);
 
-		self::assertSame($record, $state->getRelationItem('posts')->getOwnerRecord());
-		self::assertSame('posts', $state->getRelationItem('posts')->getRelationName());
+		self::assertSame($record, $state->getOwnerRecord('posts'));
+		self::assertSame('posts', $state->getSchema()->getRelation('posts')->getRelationName());
 	}
 
 	public function testRelationOnlySchemaRequiresRootRecord(): void
@@ -157,7 +157,7 @@ final class RepresentationStateFromRecordsTest extends TestCase
 		RepresentationState::fromRecords($schema, []);
 	}
 
-	public function testRelationOnlySchemaCreatesRelationItemsFromRootRecord(): void
+	public function testRelationOnlySchemaBindsRootRecord(): void
 	{
 		$registry = $this->registry();
 		$users = $registry->getCollection('users');
@@ -170,7 +170,7 @@ final class RepresentationStateFromRecordsTest extends TestCase
 			RepresentationFieldSchema::sourcePathKey([]) => $record,
 		]);
 
-		self::assertSame($record, $state->getRelationItem('posts')->getOwnerRecord());
+		self::assertSame($record, $state->getOwnerRecord('posts'));
 	}
 
 	private function projectionSchema(

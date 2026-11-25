@@ -8,9 +8,7 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\Sync\PathReadStatus;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
-use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationRelationSchema;
-use ON\Data\Schema\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\ORM\Support\OrmFixture;
@@ -24,16 +22,16 @@ final class RepresentationReaderTest extends TestCase
 		$row = new stdClass();
 		$row->name = 'A1';
 
-		self::assertSame(['name' => 'A1'], $this->reader()->read($row, $this->fieldSchema('name')));
+		self::assertSame('A1', $this->reader()->readPath($row, 'name')->requireValue());
 
 		$dto = new PublicPropertyUser();
 		$dto->name = 'A1';
 
-		self::assertSame(['name' => 'A1'], $this->reader()->read($dto, $this->fieldSchema('name')));
+		self::assertSame('A1', $this->reader()->readPath($dto, 'name')->requireValue());
 
 		$row->name = null;
 
-		self::assertSame(['name' => null], $this->reader()->read($row, $this->fieldSchema('name')));
+		self::assertNull($this->reader()->readPath($row, 'name')->requireValue());
 	}
 
 	public function testReadsNestedPath(): void
@@ -42,13 +40,13 @@ final class RepresentationReaderTest extends TestCase
 		$row->author = new stdClass();
 		$row->author->name = 'Ada';
 
-		self::assertSame(['author.name' => 'Ada'], $this->reader()->read($row, $this->fieldSchema('author.name')));
+		self::assertSame('Ada', $this->reader()->readPath($row, 'author.name')->requireValue());
 
 		$post = new PublicPropertyPost();
 		$post->author = new PublicPropertyUser();
 		$post->author->name = 'Ada';
 
-		self::assertSame(['author.name' => 'Ada'], $this->reader()->read($post, $this->fieldSchema('author.name')));
+		self::assertSame('Ada', $this->reader()->readPath($post, 'author.name')->requireValue());
 
 		$row = new stdClass();
 		$row->posts = [];
@@ -56,8 +54,8 @@ final class RepresentationReaderTest extends TestCase
 		$row->posts[0]->title = 'Hello';
 
 		self::assertSame(
-			['posts.0.title' => 'Hello'],
-			$this->reader()->read($row, $this->fieldSchema('posts.0.title'))
+			'Hello',
+			$this->reader()->readPath($row, 'posts.0.title')->requireValue()
 		);
 	}
 
@@ -113,7 +111,7 @@ final class RepresentationReaderTest extends TestCase
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('name');
 
-		$this->reader()->read(new stdClass(), $this->fieldSchema('name'));
+		$this->reader()->readPath(new stdClass(), 'name')->requireValue();
 	}
 
 	public function testRejectsMissingNestedPathSegment(): void
@@ -124,50 +122,7 @@ final class RepresentationReaderTest extends TestCase
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('author.name');
 
-		$this->reader()->read($row, $this->fieldSchema('author.name'));
-	}
-
-	public function testBaselineValuesStartsFromSeedAndMergesNonKeyFields(): void
-	{
-		$key = $this->posts()->getKey(['id' => 123]);
-		$representation = $this->representation(['id' => 123, 'title' => 'Draft']);
-		$schema = $this->postSchemaWithId();
-
-		$values = $this->reader()->baselineValues($representation, $schema, $key->getValues());
-
-		self::assertSame(['id' => 123, 'title' => 'Draft'], $values);
-	}
-
-	public function testBaselineValuesIgnoresMissingNonKeyPaths(): void
-	{
-		$key = $this->posts()->getKey(['id' => 123]);
-		$representation = $this->representation(['id' => 123]);
-		$schema = $this->postSchemaWithId();
-
-		$values = $this->reader()->baselineValues($representation, $schema, $key->getValues());
-
-		self::assertSame(['id' => 123], $values);
-	}
-
-	public function testBaselineValuesIgnoresInvalidNonKeyPaths(): void
-	{
-		$representation = $this->representation(['author' => 'Ada']);
-		$schema = $this->fieldSchema('author.name');
-
-		$values = $this->reader()->baselineValues($representation, $schema);
-
-		self::assertSame([], $values);
-	}
-
-	public function testBaselineValuesDoesNotOverwriteSeedKeys(): void
-	{
-		$key = $this->posts()->getKey(['id' => 123]);
-		$representation = $this->representation(['id' => 999, 'title' => 'Draft']);
-		$schema = $this->postSchemaWithId();
-
-		$values = $this->reader()->baselineValues($representation, $schema, $key->getValues());
-
-		self::assertSame(['id' => 123, 'title' => 'Draft'], $values);
+		$this->reader()->readPath($row, 'author.name')->requireValue();
 	}
 
 	public function testRejectsIntermediateNonObjectPathSegment(): void
@@ -178,7 +133,7 @@ final class RepresentationReaderTest extends TestCase
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('author.name');
 
-		$this->reader()->read($row, $this->fieldSchema('author.name'));
+		$this->reader()->readPath($row, 'author.name')->requireValue();
 	}
 
 	public function testReadsManyRelationItems(): void
@@ -239,20 +194,6 @@ final class RepresentationReaderTest extends TestCase
 		);
 	}
 
-	public function testMapBackedScalarReadDoesNotCloneRelationIntoFieldBag(): void
-	{
-		$target = new PublicPropertyUser();
-		$target->name = 'Ada';
-		$dto = new PublicPropertyUserWithProfile();
-		$dto->name = 'Root';
-		$dto->profile = $target;
-
-		$values = $this->reader()->read($dto, $this->fieldSchema('name'));
-
-		self::assertSame(['name' => 'Root'], $values);
-		self::assertSame($target, $dto->profile);
-	}
-
 	public function testTreatsNullSingleRelationAsNull(): void
 	{
 		$representation = $this->representation(['profile' => null]);
@@ -279,43 +220,13 @@ final class RepresentationReaderTest extends TestCase
 		}
 	}
 
-	public function testReadsWritableAndReadOnlySchemas(): void
-	{
-		$row = new stdClass();
-		$row->name = 'Ada';
-		$row->upperName = 'ADA';
-		$schema = new RepresentationSchema($this->users());
-		$schema->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
-		$schema->addField(new RepresentationFieldSchema('upperName', $this->users(), 'name', false));
-
-		self::assertSame(
-			['name' => 'Ada', 'upperName' => 'ADA'],
-			$this->reader()->read($row, $schema)
-		);
-	}
-
-	public function testPreservesSchemaInsertionOrder(): void
-	{
-		$row = new stdClass();
-		$row->email = 'ada@example.test';
-		$row->name = 'Ada';
-		$schema = new RepresentationSchema($this->users());
-		$schema->addField(new RepresentationFieldSchema('email', $this->users(), 'email'));
-		$schema->addField(new RepresentationFieldSchema('name', $this->users(), 'name'));
-
-		self::assertSame(
-			['email' => 'ada@example.test', 'name' => 'Ada'],
-			$this->reader()->read($row, $schema)
-		);
-	}
-
 	public function testDoesNotMutateRepresentation(): void
 	{
 		$row = new stdClass();
 		$row->name = 'Ada';
 		$before = clone $row;
 
-		$this->reader()->read($row, $this->fieldSchema('name'));
+		$this->reader()->readPath($row, 'name')->requireValue();
 
 		self::assertEquals($before, $row);
 	}
@@ -351,14 +262,6 @@ final class RepresentationReaderTest extends TestCase
 	private function adoptionError(string $message): StateException
 	{
 		return new StateException(rtrim($message, '.') . ' during graph adoption.');
-	}
-
-	private function fieldSchema(string $path): RepresentationSchema
-	{
-		$schema = new RepresentationSchema($this->users());
-		$schema->addField(new RepresentationFieldSchema($path, $this->users(), 'name'));
-
-		return $schema;
 	}
 
 	private function postsRelationSchema(): RepresentationRelationSchema

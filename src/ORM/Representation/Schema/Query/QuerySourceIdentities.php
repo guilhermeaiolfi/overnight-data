@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Schema\Query;
 
 use ON\Data\Key;
-use ON\Data\ORM\Representation\Sync\RepresentationSourceIdentities;
 use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationSource;
 
@@ -14,14 +13,14 @@ use ON\Data\Schema\RepresentationSource;
  *
  * {@see getIdentity()} reads primary-key values from the identity overlay using each
  * source's prepared PK paths (including source-qualified Implicit paths such as
- * `company.id`). Call it with that overlay when resolving Keys during adopt — the
- * map itself is not per row. Public non-PK fields are read from the object.
+ * `company.id`). Call it with that overlay when resolving keys during hydration — the
+ * map itself is not per row.
  *
  * This is NOT the session RecordState identity map: it does not hold RecordState
  * objects. Keying by source path (rather than collection name) lets root and
  * related sources share a terminal collection while remaining distinct records.
  */
-final class QuerySourceIdentities implements RepresentationSourceIdentities
+final class QuerySourceIdentities
 {
 	/** @var array<string, RepresentationSource> */
 	private array $sourcesByPathKey = [];

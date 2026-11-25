@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\ORM\Sync;
 
-use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
-use ON\Data\ORM\Representation\State\RepresentationFieldStateItem;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\Sync\SyncConflictDetector;
 use ON\Data\Schema\RepresentationFieldSchema;
@@ -21,8 +19,8 @@ final class SyncConflictDetectorTest extends TestCase
 	public function testA1A2A3CaseReturnsConflict(): void
 	{
 		$record = RecordState::clean($this->users()->getKey(10), ['name' => 'A1']);
-		$rep1 = $this->tracked($record, 1);
-		$rep2 = $this->tracked($record, 1);
+		$rep1 = $this->tracked($record);
+		$rep2 = $this->tracked($record);
 		$detector = new SyncConflictDetector();
 
 		self::assertSame([], $detector->detect($rep2, ['name' => 'A2']));
@@ -44,10 +42,10 @@ final class SyncConflictDetectorTest extends TestCase
 		self::assertSame([], (new SyncConflictDetector())->detect($tracked, ['name' => 'A1']));
 	}
 
-	public function testChangedPathHasNoConflictWhenRecordRevisionIsUnchanged(): void
+	public function testChangedPathHasNoConflictWhenRecordValueEqualsBaseline(): void
 	{
 		$record = RecordState::clean($this->users()->getKey(10), ['name' => 'A1']);
-		$tracked = $this->tracked($record, 1);
+		$tracked = $this->tracked($record);
 
 		self::assertSame([], (new SyncConflictDetector())->detect($tracked, ['name' => 'A2']));
 	}
@@ -55,7 +53,7 @@ final class SyncConflictDetectorTest extends TestCase
 	public function testChangedPathHasNoConflictWhenRecordChangedButFieldStillEqualsBaselineValue(): void
 	{
 		$record = RecordState::clean($this->users()->getKey(10), ['name' => 'A1', 'email' => 'a@example.test']);
-		$tracked = $this->tracked($record, 1);
+		$tracked = $this->tracked($record);
 		$record->setValue('email', 'b@example.test');
 
 		self::assertSame([], (new SyncConflictDetector())->detect($tracked, ['name' => 'A2']));
@@ -71,7 +69,7 @@ final class SyncConflictDetectorTest extends TestCase
 	public function testReadOnlySchemaIsIgnored(): void
 	{
 		$record = RecordState::clean($this->users()->getKey(10), ['name' => 'A1']);
-		$tracked = $this->tracked($record, 1, writable: false);
+		$tracked = $this->tracked($record, writable: false);
 
 		self::assertSame([], (new SyncConflictDetector())->detect($tracked, []));
 	}
@@ -83,20 +81,33 @@ final class SyncConflictDetectorTest extends TestCase
 		self::assertSame([], (new SyncConflictDetector())->detect($tracked, []));
 	}
 
-	public function testMissingHistoryRevisionThrowsClearException(): void
+	public function testMissingBaselineHasNoConflictWithLaterRecordValue(): void
 	{
-		$record = RecordState::clean($this->users()->getKey(10), ['name' => 'A1']);
-		$tracked = $this->tracked($record, 99);
+		$record = RecordState::clean($this->users()->getKey(10), []);
+		$tracked = $this->tracked($record);
+		$record->setValue('name', 'A2');
 
-		$this->expectException(StateException::class);
-		$tracked->getFieldItem('name')->getBaselineValue();
+		self::assertFalse($tracked->hasBaseline('name'));
+		self::assertSame([], (new SyncConflictDetector())->detect($tracked, ['name' => 'A3']));
+	}
+
+	public function testNullBaselineDetectsConflictWithLaterRecordValue(): void
+	{
+		$record = RecordState::clean($this->users()->getKey(10), ['name' => null]);
+		$tracked = $this->tracked($record);
+		$record->setValue('name', 'A2');
+
+		$conflict = (new SyncConflictDetector())->detect($tracked, ['name' => 'A3'])[0];
+
+		self::assertTrue($tracked->hasBaseline('name'));
+		self::assertNull($conflict->getBaselineValue());
 	}
 
 	public function testA1A2A3CaseReturnsConflictForNewRecord(): void
 	{
 		$record = RecordState::new($this->users(), ['name' => 'A1']);
-		$rep1 = $this->tracked($record, 1);
-		$rep2 = $this->tracked($record, 1);
+		$rep1 = $this->tracked($record);
+		$rep2 = $this->tracked($record);
 		$detector = new SyncConflictDetector();
 
 		self::assertSame([], $detector->detect($rep2, ['name' => 'A2']));
@@ -116,20 +127,18 @@ final class SyncConflictDetectorTest extends TestCase
 	private function changedRecordScenario(string $recordName): array
 	{
 		$record = RecordState::clean($this->users()->getKey(10), ['name' => 'A1']);
-		$tracked = $this->tracked($record, 1);
+		$tracked = $this->tracked($record);
 		$record->setValue('name', $recordName);
 
 		return [$record, $tracked];
 	}
 
-	private function tracked(RecordState $record, int $revision, bool $writable = true): RepresentationState
+	private function tracked(RecordState $record, bool $writable = true): RepresentationState
 	{
 		$schema = new RepresentationSchema($record->getCollection());
 		$field = new RepresentationFieldSchema('name', $record->getCollection(), 'name', $writable);
 		$schema->addField($field);
 
-		return new RepresentationState($schema, [
-			new RepresentationFieldStateItem($field, $record, 'name', $revision),
-		]);
+		return RepresentationState::fromRecords($schema, ['' => $record]);
 	}
 }

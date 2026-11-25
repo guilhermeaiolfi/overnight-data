@@ -44,6 +44,5 @@ final class SyncFieldUpdateTest extends TestCase
 		new SyncFieldUpdate($record, 'name', 'A2', $schema);
 
 		self::assertSame(['name' => 'A1'], $record->getValues());
-		self::assertSame(1, $record->getRevision());
 	}
 }

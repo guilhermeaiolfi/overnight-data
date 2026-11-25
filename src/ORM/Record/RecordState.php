@@ -14,8 +14,6 @@ final class RecordState
 	private ?Key $key;
 	private string $stateHash;
 	private RecordLifecycle $lifecycle;
-	private int $revision = 1;
-	private RecordHistory $history;
 	/** @var array<string, mixed> */
 	private array $originalValues;
 	/** @var array<string, mixed> */
@@ -34,8 +32,6 @@ final class RecordState
 		$this->values = $values;
 		$this->originalValues = $values;
 		$this->lifecycle = $lifecycle;
-		$this->history = new RecordHistory();
-		$this->history->record($this->revision, $values);
 	}
 
 	/**
@@ -97,16 +93,6 @@ final class RecordState
 	public function isRemoved(): bool
 	{
 		return $this->lifecycle === RecordLifecycle::REMOVED;
-	}
-
-	public function getRevision(): int
-	{
-		return $this->revision;
-	}
-
-	public function getHistory(): RecordHistory
-	{
-		return $this->history;
 	}
 
 	/**
@@ -296,7 +282,6 @@ final class RecordState
 	 * @return array{
 	 *     key: Key|null,
 	 *     lifecycle: RecordLifecycle,
-	 *     revision: int,
 	 *     originalValues: array<string, mixed>,
 	 *     values: array<string, mixed>
 	 * }
@@ -306,7 +291,6 @@ final class RecordState
 		return [
 			'key' => $this->key,
 			'lifecycle' => $this->lifecycle,
-			'revision' => $this->revision,
 			'originalValues' => $this->originalValues,
 			'values' => $this->values,
 		];
@@ -318,17 +302,14 @@ final class RecordState
 	 * @param array{
 	 *     key: Key|null,
 	 *     lifecycle: RecordLifecycle,
-	 *     revision: int,
 	 *     originalValues: array<string, mixed>,
 	 *     values: array<string, mixed>
 	 * } $snapshot
 	 */
 	public function restorePersistenceSnapshot(array $snapshot): void
 	{
-		$this->history->discardAfter($snapshot['revision']);
 		$this->key = $snapshot['key'];
 		$this->lifecycle = $snapshot['lifecycle'];
-		$this->revision = $snapshot['revision'];
 		$this->originalValues = $snapshot['originalValues'];
 		$this->values = $snapshot['values'];
 	}
@@ -339,8 +320,6 @@ final class RecordState
 	private function applyChangedValues(array $values): void
 	{
 		$this->values = $values;
-		++$this->revision;
-		$this->history->record($this->revision, $this->values);
 		if (! $this->isNew() && ! $this->isRemoved()) {
 			$this->lifecycle = RecordLifecycle::DIRTY;
 		}

@@ -123,7 +123,7 @@ final class BelongsToPersistencePlannerTest extends TestCase
 		$reference->set($item);
 		$schema = new RepresentationSchema($users);
 		$schema->addField(new RepresentationFieldSchema('id', $users, 'id'));
-		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($schema, []));
+		$tracked = RepresentationStateObjectRegistry::remember($item, RepresentationState::fromRecords(new RepresentationSchema($schema->getCollection()), []));
 
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('cannot be resolved to a record state');
@@ -317,7 +317,7 @@ final class BelongsToPersistencePlannerTest extends TestCase
 	{
 		return RepresentationStateObjectRegistry::remember(
 			$representation,
-			new RepresentationState($schema = $this->schemaFor($record), $this->fieldItemsFor($schema, [$record]))
+			RepresentationState::fromRecords($this->schemaFor($record), ['' => $record])
 		);
 	}
 

@@ -93,9 +93,9 @@ final class WritableQueryExportTest extends TestCase
 		self::assertTrue($schema->hasFieldForSource([], 'name'));
 		self::assertFalse($schema->hasField('postCount'));
 
-		self::assertTrue($state->hasFieldItem('id'));
-		self::assertTrue($state->hasFieldItem('name'));
-		self::assertFalse($state->hasFieldItem('postCount'));
+		self::assertTrue($state->hasRecordForField($state->getSchema()->getField('id')));
+		self::assertTrue($state->hasRecordForField($state->getSchema()->getField('name')));
+		self::assertFalse($state->hasBaseline('postCount'));
 	}
 
 	public function testWritableFetchAllTracksAllRootObjectsWithEquivalentSchemas(): void

@@ -21,7 +21,6 @@ final class RecordStateTest extends TestCase
 
 		self::assertTrue($state->isNew());
 		self::assertSame(RecordLifecycle::NEW, $state->getLifecycle());
-		self::assertSame(1, $state->getRevision());
 		self::assertFalse($state->hasKey());
 	}
 
@@ -29,7 +28,7 @@ final class RecordStateTest extends TestCase
 	{
 		$state = RecordState::new($this->users(), ['name' => 'A1']);
 
-		self::assertSame(['name' => 'A1'], $state->getHistory()->getSnapshot(1));
+		self::assertSame(['name' => 'A1'], $state->getOriginalValues());
 	}
 
 	public function testNewRecordHasNonEmptyStableStateHash(): void
@@ -64,7 +63,7 @@ final class RecordStateTest extends TestCase
 	{
 		$state = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'A1']);
 
-		self::assertSame(['id' => 10, 'name' => 'A1'], $state->getHistory()->getSnapshot(1));
+		self::assertSame(['id' => 10, 'name' => 'A1'], $state->getOriginalValues());
 	}
 
 	public function testCleanRecordHasNonEmptyStateHash(): void
@@ -82,7 +81,6 @@ final class RecordStateTest extends TestCase
 
 		$state->setValue('name', 'A1');
 
-		self::assertSame(1, $state->getRevision());
 		self::assertTrue($state->isClean());
 	}
 
@@ -92,18 +90,16 @@ final class RecordStateTest extends TestCase
 
 		$state->setValue('name', 'A2');
 
-		self::assertSame(2, $state->getRevision());
 		self::assertTrue($state->isDirty());
-		self::assertSame('A2', $state->getHistory()->getValue(2, 'name'));
+		self::assertSame('A2', $state->getValue('name'));
 	}
 
-	public function testSetValuesChangesMultipleFieldsInOneRevision(): void
+	public function testSetValuesChangesMultipleFields(): void
 	{
 		$state = RecordState::clean($this->users()->getKey(10), ['name' => 'A1', 'email' => 'a@example.test']);
 
 		$state->setValues(['name' => 'A2', 'email' => 'b@example.test']);
 
-		self::assertSame(2, $state->getRevision());
 		self::assertSame(['name' => 'A2', 'email' => 'b@example.test'], $state->getValues());
 	}
 
@@ -281,10 +277,10 @@ final class RecordStateTest extends TestCase
 		$target = RecordState::new($this->users());
 
 		$target->setValue('user_id', $source->getValueRef('id'));
-		$revision = $target->getRevision();
+		$valueRef = $target->getValue('user_id');
 		$target->setValue('user_id', $source->getValueRef('id'));
 
-		self::assertSame($revision, $target->getRevision());
+		self::assertSame($valueRef, $target->getValue('user_id'));
 	}
 
 	public function testDirtyValuesIncludeValueRefBeforeResolutionAndConcreteValueAfterResolution(): void

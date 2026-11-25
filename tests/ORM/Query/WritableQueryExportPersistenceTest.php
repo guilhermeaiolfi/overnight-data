@@ -46,6 +46,30 @@ final class WritableQueryExportPersistenceTest extends TestCase
 		self::assertSame(['name' => 'Ada Lovelace'], $command->getChanges());
 	}
 
+	public function testSyncingUntouchedWritableRefetchPreservesPendingEdit(): void
+	{
+		$users = $this->makeRegistry()->getCollection('users');
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$query = (new SelectQuery($users, new ScalarUserQueryExecutor()))->to(stdClass::class)->writable($session);
+
+		$first = $query->fetchOne();
+		self::assertInstanceOf(stdClass::class, $first);
+		$first->name = 'Ada Lovelace';
+		$session->sync($first);
+
+		$second = $query->fetchOne();
+		self::assertInstanceOf(stdClass::class, $second);
+		self::assertSame('Ada', $second->name);
+		$session->sync($second);
+		$session->flush();
+
+		self::assertCount(1, $executor->getCommands());
+		$command = $executor->getCommands()[0];
+		self::assertInstanceOf(UpdateCommand::class, $command);
+		self::assertSame(['name' => 'Ada Lovelace'], $command->getChanges());
+	}
+
 	public function testWritableRelatedObjectScalarEditFlushesUpdate(): void
 	{
 		$registry = $this->makeRegistry();

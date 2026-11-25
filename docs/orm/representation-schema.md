@@ -131,11 +131,11 @@ lineTotal → expression AST, path lineTotal
 
 ---
 
-## Attachment (one walk)
+## Attachment
 
-`RepresentationAdoptionEngine::attach()` binds **every source** on this schema (`getSources()`), then walks **relation children** (`getRelatedSchema()`). Root-only, loaded `posts`, and flat `authorName` are the same walk. Nested objects are separate representations; flat related fields are extra records on this representation.
+`RepresentationAdoptionEngine::attach()` binds declared sources for inbound Create and Patch and walks the related objects using their schemas. Nested objects get their own representation state. Flat related fields bind additional records on the same representation.
 
-Policy (`Hydrate` / `Identify` / `Patch` / `Create`) is the operation, not a layout choice. Writable query hydrate reads the identity overlay (`sourceRow`) for hidden source ids (`company.id`); `Session::sync()` still reads the live object. Hydrate constructs loaded relation state from the walked children (`ToManyRelationState::full` / `::partial`, `ToOneRelationState`), the same way it constructs `RecordState::clean` for rows. Writable `track()` does not call `sync()` afterward. If the fetched overlay has no identity, tracking throws (`writable()` does not invent primary-key columns, and results without identity are never tracked).
+For a writable query, `QueryResultHydrator` binds sources using the assembled row and its identity overlay, including hidden source IDs such as `company.id`. It tracks the returned objects and registers loaded relation membership and completeness. Tracking requires a fetched root identity.
 
 Writable prepare builds `QuerySourceIdentities` from schema sources (Implicit PK paths such as `company.id`). It does not add Query `INTERNAL` selections.
 
@@ -201,11 +201,11 @@ Shape conversion only; not persistence provenance.
 
 ### RepresentationState
 
-Attaches a schema to one object instance: field/relation state items + baselines. Multiple instances may share one schema.
+Binds a schema to one object instance through concrete records keyed by source path and baseline values keyed by field path. Multiple instances may share one schema.
 
 ### Sync
 
-- Scalar sync: writable **field** schemas (via state items)  
+- Scalar sync: writable **field** schemas with bound records
 - Relation sync: relation schemas only  
 - Expression paths: ignored  
 
@@ -213,10 +213,7 @@ Attaches a schema to one object instance: field/relation state items + baselines
 
 ### Query hydrate
 
-`RepresentationAdoptionEngine::attach()` with `AdoptionPolicy::Hydrate` and the identity overlay:
-
-- Bind `getSources()` (including flat related records) from `sourceRow` + the object  
-- Walk relation branches via `getRelatedSchema()`  
+`QueryResultHydrator` binds sources and tracks relation branches using the prepared schema and identity overlay.
 
 See [`session-save-api.md`](./session-save-api.md) and [`writable-select-query-projections.md`](./writable-select-query-projections.md).
 

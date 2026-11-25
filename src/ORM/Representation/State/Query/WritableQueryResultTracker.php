@@ -8,9 +8,6 @@ use InvalidArgumentException;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
-use ON\Data\ORM\Representation\Sync\AdoptionPolicy;
-use ON\Data\ORM\Representation\Sync\RepresentationAdoptionContext;
-use ON\Data\ORM\Representation\Sync\RepresentationAdoptionEngine;
 use ON\Data\ORM\Session;
 use ON\Data\Query\Result\WritablePreparation;
 use ON\Data\Query\Result\WritableResultHandler;
@@ -18,20 +15,17 @@ use ON\Data\Query\SelectQuery;
 
 /**
  * Writable query export bridge: compiles projections ({@see prepare()}) and routes
- * assembled rows into Session tracking via {@see RepresentationAdoptionEngine}.
+ * assembled rows into Session tracking via {@see QueryResultHydrator}.
  *
  * Stateless for preparations — the plan token is owned by the caller (SelectQuery
  * holds it for the duration of one fetch).
  */
 final class WritableQueryResultTracker implements WritableResultHandler
 {
-	private RepresentationAdoptionEngine $adoptionEngine;
-
 	public function __construct(
 		private readonly Session $session,
-		?RepresentationAdoptionEngine $adoptionEngine = null,
+		private readonly QueryResultHydrator $hydrator = new QueryResultHydrator(),
 	) {
-		$this->adoptionEngine = $adoptionEngine ?? new RepresentationAdoptionEngine();
 	}
 
 	public function prepare(SelectQuery $query): WritablePreparation
@@ -97,17 +91,12 @@ final class WritableQueryResultTracker implements WritableResultHandler
 			);
 		}
 
-		$this->adoptionEngine->attach(
+		$this->hydrator->hydrate(
 			$object,
-			new RepresentationAdoptionContext(
-				schema: $schema,
-				policy: AdoptionPolicy::Hydrate,
-				identities: $compilation->getIdentities(),
-				sourceRow: $sourceRow,
-			),
-			$this->session->getRecords(),
-			$this->session->getRepresentations(),
-			$this->session->getRelations(),
+			$schema,
+			$sourceRow,
+			$compilation->getIdentities(),
+			$this->session->getContext(),
 		);
 	}
 }

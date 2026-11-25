@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\ORM\Exception\SyncException;
-use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 
@@ -25,7 +24,7 @@ final class ScalarRepresentationSynchronizer
 	/**
 	 * @return list<SyncPlan>
 	 */
-	public function sync(RepresentationStateStore $representations, RecordStateStore $records): array
+	public function sync(RepresentationStateStore $representations): array
 	{
 		$states = $representations->getAll();
 		$plans = [];
@@ -34,7 +33,7 @@ final class ScalarRepresentationSynchronizer
 
 		foreach ($states as $representation => $state) {
 			$currentValues = $this->readWritableValues($representation, $state);
-			$plans[] = $this->buildPlan($state, $records, $currentValues);
+			$plans[] = $this->buildPlan($state, $currentValues);
 			$plannedStates[] = $state;
 			$plannedValues[] = $currentValues;
 		}
@@ -67,7 +66,6 @@ final class ScalarRepresentationSynchronizer
 	/** @param array<string, mixed> $currentValues */
 	private function buildPlan(
 		RepresentationState $state,
-		RecordStateStore $records,
 		array $currentValues,
 	): SyncPlan {
 		$conflicts = $this->conflicts->detect(
@@ -76,7 +74,7 @@ final class ScalarRepresentationSynchronizer
 		);
 
 		return new SyncPlan(
-			$this->buildUpdates($state, $records, $currentValues, $this->conflictPaths($conflicts)),
+			$this->buildUpdates($state, $currentValues, $this->conflictPaths($conflicts)),
 			$conflicts
 		);
 	}
@@ -88,13 +86,13 @@ final class ScalarRepresentationSynchronizer
 	{
 		$values = [];
 
-		foreach ($state->getWritableFieldItems() as $item) {
-			$result = $this->reader->readPath($representation, $item->getPath());
+		foreach ($state->getWritableFields() as $fieldSchema) {
+			$result = $this->reader->readPath($representation, $fieldSchema->getPath());
 			if ($result->isMissing()) {
 				continue;
 			}
 
-			$values[$item->getPath()] = $result->requireValue();
+			$values[$fieldSchema->getPath()] = $result->requireValue();
 		}
 
 		return $values;
@@ -108,16 +106,14 @@ final class ScalarRepresentationSynchronizer
 	 */
 	private function buildUpdates(
 		RepresentationState $state,
-		RecordStateStore $records,
 		array $currentValues,
 		array $conflictPaths,
 	): array {
 		$updates = [];
 		$updatesByTarget = [];
 
-		foreach ($state->getWritableFieldItems() as $item) {
-			$fieldSchema = $item->getSchema();
-			$path = $item->getPath();
+		foreach ($state->getWritableFields() as $fieldSchema) {
+			$path = $fieldSchema->getPath();
 			if (isset($conflictPaths[$path])) {
 				continue;
 			}
@@ -126,20 +122,10 @@ final class ScalarRepresentationSynchronizer
 				continue;
 			}
 
-			$record = $item->getRecord();
-			$fieldName = $item->getFieldName();
+			$record = $state->getRecordForField($fieldSchema);
+			$fieldName = $fieldSchema->getFieldName();
 			$currentValue = $currentValues[$path];
-			if (! $item->hasBaselineValue()) {
-				if ($currentValue === null && ! $item->hasCurrentRecordValue()) {
-					continue;
-				}
-
-				$baselineValue = null;
-			} else {
-				$baselineValue = $item->getBaselineValue();
-			}
-
-			if ($currentValue === $baselineValue) {
+			if ($currentValue === $state->getBaseline($path)) {
 				continue;
 			}
 

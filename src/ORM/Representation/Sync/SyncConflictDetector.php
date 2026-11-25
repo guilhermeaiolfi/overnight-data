@@ -17,35 +17,26 @@ final class SyncConflictDetector
 		array $currentValues,
 	): array {
 		$conflicts = [];
-		foreach ($tracked->getWritableFieldItems() as $item) {
-			$path = $item->getPath();
-			if (! array_key_exists($path, $currentValues)) {
+		foreach ($tracked->getWritableFields() as $field) {
+			$path = $field->getPath();
+			if (! array_key_exists($path, $currentValues) || ! $tracked->hasBaseline($path)) {
 				continue;
 			}
 
-			$recordState = $item->getRecord();
-			$baselineRevision = $item->getBaselineRevision();
-			if (! $item->hasBaselineValue()) {
-				continue;
-			}
-
-			$baselineValue = $item->getBaselineValue();
-			$recordValue = $item->getCurrentRecordValue();
+			$baselineValue = $tracked->getBaseline($path);
 			$representationValue = $currentValues[$path];
-
 			if ($representationValue === $baselineValue) {
 				continue;
 			}
 
-			if ($recordState->getRevision() === $baselineRevision) {
+			$record = $tracked->getRecordForField($field);
+			$fieldName = $field->getFieldName();
+			if (! $record->hasValue($fieldName)) {
 				continue;
 			}
 
-			if ($recordValue === $baselineValue) {
-				continue;
-			}
-
-			if ($recordValue === $representationValue) {
+			$recordValue = $record->getValue($fieldName);
+			if ($recordValue === $baselineValue || $recordValue === $representationValue) {
 				continue;
 			}
 

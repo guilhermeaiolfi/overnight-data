@@ -23,7 +23,7 @@ Mapping uses `map($source)->to(...)`; query object targets use the same directio
 
 ## RecordState
 
-A `RecordState` is the canonical in-memory state for one persistent record identity. It owns the current values and in-memory revision history, and it is the thing `flush()` writes.
+A `RecordState` is the canonical in-memory state for one persistent record identity. It owns the current and original field values that the flush pipeline uses to plan writes.
 
 It stores:
 
@@ -33,12 +33,11 @@ It stores:
 - current synchronized values;
 - dirty fields;
 - lifecycle state;
-- identity values through `ON\Data\Key`, including composite keys;
-- in-memory revision history used by representation baselines and rollback. Relation state is stored separately in `RelationStateStore`.
+- identity values through `ON\Data\Key`, including composite keys.
 
 Identity is first-class through the existing `ON\Data\Key` type. It includes the collection name, primary-key values in definition key order, composite-key support, and canonical PHP values.
 
-Each `RecordState` also has a stable ORM record target hash via `getStateHash()`. For clean persisted records this can be the `Key` hash. For new unsaved records it is a local in-memory tracking hash that stays stable if the record later receives a database key through `markClean($key)`. This hash is not database identity, persistence state, or optimistic locking; it exists so runtime state items can distinguish multiple unsaved records in the same PHP process/session.
+Each `RecordState` also has a stable ORM record target hash via `getStateHash()`. For clean persisted records this can be the `Key` hash. For new unsaved records it is a local in-memory tracking hash that stays stable if the record later receives a database key through `markClean($key)`. This hash is not database identity, persistence state, or optimistic locking; it lets the session distinguish multiple unsaved records in the same PHP process/session.
 
 ## Representation
 
@@ -48,20 +47,11 @@ Representations are not automatically the source of truth. They can drift from t
 
 ## RepresentationState
 
-A `RepresentationState` is concrete runtime state for an applied `RepresentationSchema`. It stores baseline record revisions for one representation object, but it does not store the object itself.
+A `RepresentationState` binds an applied `RepresentationSchema` to one tracked object. `RepresentationStateStore` holds that association in a `WeakMap`.
 
-It stores:
+The state maps each source path to its `RecordState` and stores baseline values by field path. The empty source path binds the root record, including for relation-only representations. The schema supplies field writability and relation definitions. `RelationStateStore` holds relation membership and completeness.
 
-- the structure-only `RepresentationSchema`;
-- `RepresentationFieldStateItem` entries that attach structural field schemas to concrete `RecordState` objects and baseline record revisions;
-- `RepresentationRelationStateItem` entries that attach structural relation schemas to concrete owner `RecordState` objects;
-- writable/read-only flags per mapped slot through field schemas.
-
-Relation membership and completeness live in `RelationStateStore`.
-
-It does not store baseline field values. When sync needs an old value, it asks the owning `RecordState` history for the value at the tracked baseline revision.
-
-Do not use `RepresentationState` as a template. It is only for concrete runtime state after a schema has been applied and baseline record revisions are known. The owning `RepresentationStateStore` keeps the association between the PHP object and its `RepresentationState`.
+A present `null` baseline means the field was observed with a null value. An absent baseline means there is no previously observed value to compare against. Writable query hydration records what the object loaded, even when another representation has pending edits on the same record.
 
 A single representation may map to multiple records and collections:
 
@@ -119,7 +109,7 @@ $session->flush();
 
 `identify($collection, $key)` attaches a key-only existing reference without querying or writing its fields. `detach($child, $owner, $relation)` expresses unlinking separately from deleting the child row.
 
-Write admission happens before the flush transaction. When persistence fails, admitted writes remain tracked for retry; record values, revision history, and tracked field baselines are restored together.
+Write admission happens before the flush transaction. When persistence fails, the flush executor restores record values, identity, lifecycle, and tracked field baselines together. Admitted writes stay tracked for retry.
 
 ## Conflict Detection
 
@@ -128,10 +118,10 @@ Synchronization is conflict-aware, whether requested explicitly or performed dur
 Field-level conflict rule:
 
 ```text
-If a representation changed field X,
-and the record value at the representation baseline revision for X is different from current `RecordState` value for X,
-and the representation current value for X is different from current RecordState value for X,
-then sync must reject with a representation conflict.
+If a baseline exists for field X,
+and both the representation and record have values that differ from that baseline,
+and their current values differ from each other,
+then sync rejects with a representation conflict.
 ```
 
 Example:
@@ -170,11 +160,11 @@ weak representation object -> staged RepresentationIntent
 
 Classic ORMs usually map identity to entity object. This ORM maps identity to record state, then allows many representations over that state.
 
-`RecordStateStore` is the record-state registry. It indexes each known state by its stable local state hash and, when available, by its database `ON\Data\Key` hash. A new record keeps its local state hash after it receives a generated database key through `RecordState::markClean($key)`; the state hash must not be rewritten to the key hash, because existing runtime state items use that stable local handle.
+`RecordStateStore` is the record-state registry. It indexes each known state by its stable local state hash and, when available, by its database `ON\Data\Key` hash. A new record keeps its local state hash after it receives a generated database key through `RecordState::markClean($key)`; the state hash must not be rewritten to the key hash, because existing bindings use that stable local handle.
 
 The store is responsible for aliasing both handles to the same `RecordState`. Scalar insert/flush logic calls `RecordStateStore::indexKey($state)` after assigning a generated key so keyed references can resolve the same state that was previously known only by local state hash.
 
-`QuerySourceIdentities` reads primary-key paths from the assembled identity overlay using prepared schema sources. It holds neither per-row records nor a second locator map. Source paths distinguish different occurrences of the same collection. Structural schemas have no concrete record to resolve until adoption creates state items.
+`QuerySourceIdentities` reads primary-key paths from the assembled identity overlay using prepared schema sources. It holds neither per-row records nor a second locator map. Source paths distinguish different occurrences of the same collection. Attachment resolves concrete records from structural schemas.
 
 `RecordStateStore` is not an object identity store. It strongly owns record state for the current session/unit of work. `RelationStateStore` also strongly owns to-many and to-one relation runtime state for the session. `RepresentationIntentStore` uses weak object keys for staged create/update intent and source operations.
 
@@ -286,7 +276,7 @@ RepresentationSchema
     reusable mapping shape
 
 RepresentationState
-    concrete record bindings + baseline record revisions (object association lives in the store)
+    records by source path + baseline field values (object association lives in the store)
 ```
 
 Concrete runtime attachment may need local record state that is more precise than collection + field + `sourcePath`. A structure-only schema is reusable, but it is ambiguous for multiple new child records:
@@ -300,9 +290,9 @@ posts[no-key].title
 
 - field schemas store representation path, collection, field, writability, and `sourcePath`;
 - relation schemas store representation path, owner collection, relation name, and the reusable related schema;
-- concrete records live in `RepresentationFieldStateItem` and `RepresentationRelationStateItem`.
+- concrete records are bound by source path in `RepresentationState`.
 
-State items point to concrete in-memory `RecordState` objects, including new unsaved records before any database key exists. Their stable local handle is `RecordState::getStateHash()`.
+Source bindings point to concrete in-memory `RecordState` objects, including new unsaved records before any database key exists. Their stable local handle is `RecordState::getStateHash()`.
 
 Sources of schema information:
 
@@ -402,8 +392,8 @@ Several field updates can target one record. Persistence planning reads that rec
 | Change | Starting point |
 | --- | --- |
 | Public write operations and staged intent admission | `Session` |
-| Bind schema sources and admit object graphs | `RepresentationAdoptionEngine` |
-| Prepare and track writable query results | `WritableQueryResultTracker` |
+| Admit inbound create and patch graphs | `RepresentationAdoptionEngine` |
+| Prepare and track writable query results | `WritableQueryResultTracker` / `QueryResultHydrator` |
 | Field conflicts, sync planning, and batch application | `ScalarRepresentationSynchronizer` |
 | Reconcile exposed relation values with runtime state | `RelationRepresentationSynchronizer` |
 | Translate relation deltas into persistence work | `RelationPersistencePlanner` and the relation's configured planner |
@@ -411,7 +401,7 @@ Several field updates can target one record. Persistence planning reads that rec
 | Schedule scalar/dependent commands and finalize record state | `FlushScheduler` |
 | Convert command values or execute backend commands | `ConvertingCommandExecutor` / `SqlCommandExecutor` |
 
-`WritableQueryResultTracker` passes results to `RepresentationAdoptionEngine::attach()` to bind sources and walk relation children. `Session::adopt()` stores ready state; it does not perform another graph walk, synchronize values, or execute writes.
+`WritableQueryResultTracker` passes results to `QueryResultHydrator` to bind sources and track loaded relations. `Session::identify()` attaches existing references by key. `Session::adopt()` registers an already-built state and its records.
 
 Normal callers use `Session::flush()`. `FlushScheduler::run()` is a lower-level scheduling operation, not a substitute for session synchronization, relation planning, or transactional orchestration. See [`persistence.md`](./persistence.md) for those boundaries.
 

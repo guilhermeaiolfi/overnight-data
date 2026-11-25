@@ -16,7 +16,7 @@ $session->update($dto, $map);
 $session->flush(); // no explicit sync required
 ```
 
-Staging applies in memory before the flush transaction. If persistence fails, admitted writes remain tracked for retry; record history and tracked field baselines are restored together with record values. Explicit `sync()` does not write or commit.
+Staging applies in memory before the flush transaction. If persistence fails, admitted writes remain tracked for retry. The flush executor restores record identity, values, lifecycle, and tracked field baselines together. Explicit `sync()` does not write or commit.
 
 ## Shape: `RepresentationSchema`
 

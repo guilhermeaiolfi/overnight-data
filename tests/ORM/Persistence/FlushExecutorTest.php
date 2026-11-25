@@ -25,8 +25,6 @@ use ON\Data\ORM\Record\ValueRef;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\Representation\State\RepresentationFieldStateItem;
-use ON\Data\ORM\Representation\State\RepresentationRelationStateItem;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\Schema\RepresentationFieldSchema;
@@ -142,7 +140,7 @@ final class FlushExecutorTest extends TestCase
 		(new FlushExecutor($executor))->flush($this->context(new RepresentationStateStore(), $this->records($record)));
 	}
 
-	public function testFailedFlushRestoresBaselinesAndHistorySoAnEditedObjectCanBeRetried(): void
+	public function testFailedFlushRestoresRecordValuesAndBaselinesSoAnEditedObjectCanBeRetried(): void
 	{
 		$record = RecordState::clean($this->users()->getKey(10), ['id' => 10, 'name' => 'Original']);
 		$object = $this->representation(['name' => 'Changed']);
@@ -165,9 +163,7 @@ final class FlushExecutorTest extends TestCase
 		}
 
 		self::assertSame('Original', $record->getValue('name'));
-		self::assertSame(1, $record->getRevision());
-		self::assertSame(1, $tracked->getFieldItem('name')->getBaselineRevision());
-		self::assertSame([1], $record->getHistory()->getRevisions());
+		self::assertSame('Original', $tracked->getBaseline('name'));
 
 		$result = $flusher->flush($context);
 		self::assertCount(1, $result->getCommandResults());
@@ -1275,10 +1271,12 @@ final class FlushExecutorTest extends TestCase
 		$schema = new RepresentationSchema($first[0]->getCollection());
 		$records = [];
 		foreach ($fields as $path => [$record, $fieldName]) {
-			$schema->addField(new RepresentationFieldSchema((string) $path, $record->getCollection(), $fieldName));
-			$records[$record->getStateHash()] = $record;
+			$sourcePath = $record === $first[0] ? [] : [$record->getStateHash()];
+			$field = new RepresentationFieldSchema((string) $path, $record->getCollection(), $fieldName, sourcePath: $sourcePath);
+			$schema->addField($field);
+			$records[$field->getSourcePathKey()] = $record;
 		}
-		$this->recordsBySchemaId[spl_object_id($schema)] = array_values($records);
+		$this->recordsBySchemaId[spl_object_id($schema)] = $records;
 
 		return $schema;
 	}
@@ -1286,35 +1284,10 @@ final class FlushExecutorTest extends TestCase
 	private function tracked(object $representation, RepresentationSchema $schema): RepresentationState
 	{
 		$records = $this->recordsBySchemaId[spl_object_id($schema)] ?? [];
-		$fieldItems = [];
-		foreach ($schema->getFields() as $fieldSchema) {
-			foreach ($records as $record) {
-				if ($record->getCollection()->getName() !== $fieldSchema->getCollectionName()) {
-					continue;
-				}
-
-				$fieldItems[] = new RepresentationFieldStateItem($fieldSchema, $record, $fieldSchema->getFieldName(), $record->getRevision());
-
-				break;
-			}
-		}
-
-		$relationItems = [];
-		foreach ($schema->getRelations() as $relationSchema) {
-			foreach ($records as $record) {
-				if ($record->getCollection()->getName() !== $relationSchema->getOwnerCollectionName()) {
-					continue;
-				}
-
-				$relationItems[] = new RepresentationRelationStateItem($relationSchema, $record, $relationSchema->getRelationName());
-
-				break;
-			}
-		}
 
 		return RepresentationStateObjectRegistry::remember(
 			$representation,
-			new RepresentationState($schema, $fieldItems, $relationItems)
+			RepresentationState::fromRecords($schema, $records)
 		);
 	}
 
@@ -1364,7 +1337,7 @@ final class FlushExecutorTest extends TestCase
 			'posts',
 			$this->postSchema()
 		));
-		$this->recordsBySchemaId[spl_object_id($schema)] = [$record];
+		$this->recordsBySchemaId[spl_object_id($schema)] = ['' => $record];
 
 		return $schema;
 	}
@@ -1379,7 +1352,7 @@ final class FlushExecutorTest extends TestCase
 			'profile',
 			$this->postSchema()
 		));
-		$this->recordsBySchemaId[spl_object_id($schema)] = [$record];
+		$this->recordsBySchemaId[spl_object_id($schema)] = ['' => $record];
 
 		return $schema;
 	}
@@ -1487,7 +1460,7 @@ final class FlushExecutorTest extends TestCase
 			$field = (string) $field;
 			$schema->addField(new RepresentationFieldSchema($field, $record->getCollection(), $field));
 		}
-		$this->recordsBySchemaId[spl_object_id($schema)] = [$record];
+		$this->recordsBySchemaId[spl_object_id($schema)] = ['' => $record];
 
 		return $schema;
 	}

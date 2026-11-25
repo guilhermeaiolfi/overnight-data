@@ -94,9 +94,9 @@ final class RepresentationArchitectureTest extends TestCase
 	public function testScalarSyncStillUsesExplicitFieldSchemasOnly(): void
 	{
 		$sources = [
-			dirname(__DIR__, 3) . '/src/ORM/Representation/Sync/RepresentationReader.php' => 'getFields()',
-			dirname(__DIR__, 3) . '/src/ORM/Representation/Sync/SyncConflictDetector.php' => 'getWritableFieldItems()',
-			dirname(__DIR__, 3) . '/src/ORM/Representation/Sync/ScalarRepresentationSynchronizer.php' => 'getWritableFieldItems()',
+			dirname(__DIR__, 3) . '/src/ORM/Representation/Sync/RepresentationSourceReader.php' => 'getFields()',
+			dirname(__DIR__, 3) . '/src/ORM/Representation/Sync/SyncConflictDetector.php' => 'getWritableFields()',
+			dirname(__DIR__, 3) . '/src/ORM/Representation/Sync/ScalarRepresentationSynchronizer.php' => 'getWritableFields()',
 		];
 
 		foreach ($sources as $path => $expectedCall) {

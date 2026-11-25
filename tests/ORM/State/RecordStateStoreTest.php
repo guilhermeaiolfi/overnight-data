@@ -9,8 +9,6 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
-use ON\Data\ORM\Representation\State\RepresentationFieldStateItem;
-use ON\Data\ORM\Representation\State\RepresentationRelationStateItem;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationRelationSchema;
@@ -153,7 +151,7 @@ final class RecordStateStoreTest extends TestCase
 
 	public function testGetSingleRecordReturnsNullWhenNoFieldItemsAttached(): void
 	{
-		$tracked = new RepresentationState(new RepresentationSchema($this->users()), []);
+		$tracked = RepresentationState::fromRecords(new RepresentationSchema($this->users()), []);
 
 		self::assertNull($tracked->getSingleRecord());
 	}
@@ -182,13 +180,10 @@ final class RecordStateStoreTest extends TestCase
 
 		$schema = new RepresentationSchema($users);
 		$firstField = new RepresentationFieldSchema('first', $users, 'name');
-		$secondField = new RepresentationFieldSchema('second', $users, 'name');
+		$secondField = new RepresentationFieldSchema('second', $users, 'name', sourcePath: ['manager']);
 		$schema->addField($firstField);
 		$schema->addField($secondField);
-		$tracked = new RepresentationState($schema, [
-			new RepresentationFieldStateItem($firstField, $first, 'name', $first->getRevision()),
-			new RepresentationFieldStateItem($secondField, $second, 'name', $second->getRevision()),
-		]);
+		$tracked = RepresentationState::fromRecords($schema, ['' => $first, 'manager' => $second]);
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('cannot be collapsed to one record');
@@ -207,11 +202,7 @@ final class RecordStateStoreTest extends TestCase
 		$relationSchema = new RepresentationRelationSchema('posts', $users, 'posts', new RepresentationSchema($this->posts()));
 		$schema->addRelation($relationSchema);
 
-		$tracked = new RepresentationState(
-			$schema,
-			[new RepresentationFieldStateItem($nameField, $state, 'name', $state->getRevision())],
-			[new RepresentationRelationStateItem($relationSchema, $state, 'posts')],
-		);
+		$tracked = RepresentationState::fromRecords($schema, ['' => $state]);
 
 		self::assertSame($state, $tracked->getSingleRecord());
 	}
@@ -275,13 +266,11 @@ final class RecordStateStoreTest extends TestCase
 	private function trackedFor(RecordState $record, array $fieldNames): RepresentationState
 	{
 		$schema = new RepresentationSchema($record->getCollection());
-		$items = [];
 		foreach ($fieldNames as $fieldName) {
 			$fieldSchema = new RepresentationFieldSchema($fieldName, $record->getCollection(), $fieldName);
 			$schema->addField($fieldSchema);
-			$items[] = new RepresentationFieldStateItem($fieldSchema, $record, $fieldName, $record->getRevision());
 		}
 
-		return new RepresentationState($schema, $items);
+		return RepresentationState::fromRecords($schema, ['' => $record]);
 	}
 }

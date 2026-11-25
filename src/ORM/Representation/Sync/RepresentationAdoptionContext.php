@@ -5,24 +5,19 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\Schema\RepresentationSchema;
-use ON\Data\Schema\RepresentationSource;
 
 /**
  * Input for {@see RepresentationAdoptionEngine::attach()}.
  *
  * Required: schema + policy.
- * Optional only when needed: identities, sourceRow (identity overlay / query lookup bag), intent (flat ops).
+ * Optional identities and flat operations come from the staged intent.
  */
 final class RepresentationAdoptionContext
 {
-	/**
-	 * @param array<string, mixed>|null $sourceRow
-	 */
 	public function __construct(
 		private RepresentationSchema $schema,
 		private AdoptionPolicy $policy,
-		private ?RepresentationSourceIdentities $identities = null,
-		private ?array $sourceRow = null,
+		private ?StaticSourceIdentities $identities = null,
 		private ?RepresentationIntent $intent = null,
 	) {
 	}
@@ -37,29 +32,13 @@ final class RepresentationAdoptionContext
 		return $this->policy;
 	}
 
-	public function getIdentities(): ?RepresentationSourceIdentities
+	public function getIdentities(): ?StaticSourceIdentities
 	{
 		return $this->identities;
-	}
-
-	/**
-	 * @return array<string, mixed>|null
-	 */
-	public function getSourceRow(): ?array
-	{
-		return $this->sourceRow;
 	}
 
 	public function getIntent(): ?RepresentationIntent
 	{
 		return $this->intent;
-	}
-
-	/**
-	 * @return list<RepresentationSource>
-	 */
-	public function getSources(): array
-	{
-		return $this->schema->getSources();
 	}
 }

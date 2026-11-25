@@ -16,7 +16,6 @@ use ON\Data\ORM\Persistence\UpdateCommand;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
-use ON\Data\ORM\Representation\State\RepresentationFieldStateItem;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\Sync\RepresentationSyncer;
 use ON\Data\ORM\Session;
@@ -135,6 +134,24 @@ final class SessionTest extends TestCase
 		self::assertSame(['id' => 123, 'title' => 'Existing'], $record->getValues());
 	}
 
+	public function testIdentifyTracksSuppliedGraphWithoutConsumingWriteIntents(): void
+	{
+		[$users, $posts] = $this->usersWithDefaultHasManyPosts();
+		$session = new Session(new RecordingCommandExecutor());
+		$post = $this->representation(['id' => 123, 'title' => 'Existing']);
+		$user = $this->representation(['id' => 1, 'name' => 'Owner', 'posts' => [$post]]);
+		$session->update($user);
+		$session->create($post);
+
+		$session->identify($users, ['id' => 1], $user, $this->ownerTemplateSchemaWithPosts($users, $posts));
+
+		self::assertTrue($session->getRecords()->getByKey($users->getKey(1))?->isClean());
+		self::assertSame(['id' => 123, 'title' => 'Existing'], $session->getRecords()->getByKey($posts->getKey(123))?->getValues());
+		self::assertTrue($session->getRecords()->getByKey($posts->getKey(123))?->isClean());
+		self::assertTrue($session->getContext()->getIntents()->get($user)?->isUpdate());
+		self::assertTrue($session->getContext()->getIntents()->get($post)?->isCreate());
+	}
+
 	public function testFailedIdentifyWithWrongSchemaDoesNotLeavePartialSessionState(): void
 	{
 		$session = new Session(new RecordingCommandExecutor());
@@ -222,10 +239,8 @@ final class SessionTest extends TestCase
 
 		self::assertSame($tracked, $session->getRepresentations()->get($representation));
 		self::assertSame($record, $session->getRecords()->getByStateHash($record->getStateHash()));
-		$fieldItems = $tracked->getFieldItems();
-		self::assertCount(1, $fieldItems);
-		self::assertSame($record, $fieldItems[0]->getRecord());
-		self::assertSame($record->getRevision(), $fieldItems[0]->getBaselineRevision());
+		self::assertSame($record, $tracked->requireRootRecord());
+		self::assertSame(['name' => $record->getValue('name')], $tracked->snapshotBaselines());
 	}
 
 	public function testFailedAdoptWithWrongSchemaDoesNotLeavePartialSessionState(): void
@@ -578,14 +593,8 @@ final class SessionTest extends TestCase
 		$representation = $this->representation(['name' => 'Owner Updated', 'title' => 'Post Updated']);
 		$schema = new RepresentationSchema($userRecord->getCollection());
 		$schema->addField(new RepresentationFieldSchema('name', $userRecord->getCollection(), 'name'));
-		$schema->addField(new RepresentationFieldSchema('title', $postRecord->getCollection(), 'title'));
-		$session->getRepresentations()->add($representation, new RepresentationState(
-			$schema,
-			[
-				new RepresentationFieldStateItem($schema->getField('name'), $userRecord, 'name', $userRecord->getRevision()),
-				new RepresentationFieldStateItem($schema->getField('title'), $postRecord, 'title', $postRecord->getRevision()),
-			]
-		));
+		$schema->addField(new RepresentationFieldSchema('title', $postRecord->getCollection(), 'title', sourcePath: ['posts']));
+		$session->getRepresentations()->add($representation, RepresentationState::fromRecords($schema, ['' => $userRecord, 'posts' => $postRecord]));
 
 		$result = $session->sync($representation, new RepresentationSchema($userRecord->getCollection()));
 
@@ -674,7 +683,7 @@ final class SessionTest extends TestCase
 	{
 		$session = new Session(new RecordingCommandExecutor());
 		$representation = new stdClass();
-		$session->getRepresentations()->add($representation, new RepresentationState(new RepresentationSchema($this->users()), []));
+		$session->getRepresentations()->add($representation, RepresentationState::fromRecords(new RepresentationSchema($this->users()), []));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('does not resolve to a concrete record state');
@@ -693,11 +702,8 @@ final class SessionTest extends TestCase
 		$representation = $this->representation(['name' => 'Owner', 'title' => 'Post']);
 		$schema = new RepresentationSchema($userRecord->getCollection());
 		$schema->addField(new RepresentationFieldSchema('name', $userRecord->getCollection(), 'name'));
-		$schema->addField(new RepresentationFieldSchema('title', $postRecord->getCollection(), 'title'));
-		$session->getRepresentations()->add($representation, new RepresentationState($schema, [
-			new RepresentationFieldStateItem($schema->getField('name'), $userRecord, 'name', $userRecord->getRevision()),
-			new RepresentationFieldStateItem($schema->getField('title'), $postRecord, 'title', $postRecord->getRevision()),
-		]));
+		$schema->addField(new RepresentationFieldSchema('title', $postRecord->getCollection(), 'title', sourcePath: ['posts']));
+		$session->getRepresentations()->add($representation, RepresentationState::fromRecords($schema, ['' => $userRecord, 'posts' => $postRecord]));
 
 		$this->expectException(StateException::class);
 		$this->expectExceptionMessage('multiple record states');

@@ -40,7 +40,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		$manyStates = new RelationStateStore();
 
 		$touched = $this->sync(
-			$this->representations($this->tracked($this->representation(['name' => 'Ada']), $schema)),
+			$this->representations($this->tracked($this->representation(['name' => 'Ada']), $schema, [$owner])),
 			$manyStates
 		);
 
@@ -387,7 +387,7 @@ final class RelationRepresentationSynchronizerTest extends TestCase
 		self::assertSame($existing, $manyStates->get($owner, 'posts'));
 	}
 
-	public function testCreatedToManyRelationStateUsesOwnerStateFromRepresentationRelationStateItem(): void
+	public function testCreatedToManyRelationStateUsesBoundRootRecord(): void
 	{
 		$owner = RecordState::new($this->users());
 		$touched = $this->syncOne($owner, []);

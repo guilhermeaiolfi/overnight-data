@@ -238,7 +238,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 		$collection->add($item);
 		$schema = new RepresentationSchema($tags);
 		$schema->addField(new RepresentationFieldSchema('id', $tags, 'id'));
-		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($schema, []));
+		$tracked = RepresentationStateObjectRegistry::remember($item, RepresentationState::fromRecords(new RepresentationSchema($schema->getCollection()), []));
 
 		$this->expectException(RelationPersistenceException::class);
 		$this->expectExceptionMessage('cannot be resolved to a record state');
@@ -427,7 +427,7 @@ final class ManyToManyPersistencePlannerTest extends TestCase
 	{
 		return RepresentationStateObjectRegistry::remember(
 			$representation,
-			new RepresentationState($schema = $this->schemaFor($record), $this->fieldItemsFor($schema, [$record]))
+			RepresentationState::fromRecords($this->schemaFor($record), ['' => $record])
 		);
 	}
 

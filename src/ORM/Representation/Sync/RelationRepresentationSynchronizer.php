@@ -6,10 +6,10 @@ namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\Definition\Relation\RelationCardinality;
 use ON\Data\ORM\Exception\SyncException;
+use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\RelationStateInterface;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
-use ON\Data\ORM\Representation\State\RepresentationRelationStateItem;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\Schema\RelationLoadKnowledge;
@@ -37,16 +37,16 @@ final class RelationRepresentationSynchronizer
 		$states ??= $reps;
 
 		foreach ($reps->getAll() as $representation => $state) {
-			foreach ($state->getRelationItems() as $relationItem) {
-				$relationSchema = $relationItem->getSchema();
+			foreach ($state->getSchema()->getRelations() as $relationSchema) {
+				$owner = $state->requireRootRecord();
 				if ($relationSchema->isMany()) {
-					$this->syncMany($representation, $relationItem, $relations, $states, $touched, $touchedIds);
+					$this->syncMany($representation, $relationSchema, $owner, $relations, $states, $touched, $touchedIds);
 
 					continue;
 				}
 
 				if ($relationSchema->isSingle()) {
-					$this->syncOne($representation, $relationItem, $relations, $states, $touched, $touchedIds);
+					$this->syncOne($representation, $relationSchema, $owner, $relations, $states, $touched, $touchedIds);
 				}
 			}
 		}
@@ -60,15 +60,14 @@ final class RelationRepresentationSynchronizer
 	 */
 	private function syncMany(
 		object $representation,
-		RepresentationRelationStateItem $relationItem,
+		RepresentationRelationSchema $relationSchema,
+		RecordState $owner,
 		RelationStateStore $relations,
 		RepresentationStateStore $states,
 		array &$touched,
 		array &$touchedIds,
 	): void {
-		$relationSchema = $relationItem->getSchema();
-		$owner = $relationItem->getOwnerRecord();
-		$relationName = $relationItem->getRelationName();
+		$relationName = $relationSchema->getRelationName();
 
 		$result = $this->reader->readItems($representation, $relationSchema, $this->syncError(...));
 		if ($result->isMissing() && $relationSchema->shouldSkipWhenMissing()) {
@@ -107,15 +106,14 @@ final class RelationRepresentationSynchronizer
 	 */
 	private function syncOne(
 		object $representation,
-		RepresentationRelationStateItem $relationItem,
+		RepresentationRelationSchema $relationSchema,
+		RecordState $owner,
 		RelationStateStore $relations,
 		RepresentationStateStore $states,
 		array &$touched,
 		array &$touchedIds,
 	): void {
-		$relationSchema = $relationItem->getSchema();
-		$owner = $relationItem->getOwnerRecord();
-		$relationName = $relationItem->getRelationName();
+		$relationName = $relationSchema->getRelationName();
 
 		$result = $this->reader->readTarget($representation, $relationSchema, $this->syncError(...));
 		if ($result->isMissing() && $relationSchema->shouldSkipWhenMissing()) {

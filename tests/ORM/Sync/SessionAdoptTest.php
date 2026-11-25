@@ -34,7 +34,7 @@ final class SessionAdoptTest extends TestCase
 
 		self::assertSame($record, $session->getRecords()->getByStateHash($record->getStateHash()));
 		self::assertSame($adopted, $session->getRepresentations()->get($representation));
-		self::assertSame($record, $adopted->getFieldItem('title')->getRecord());
+		self::assertSame($record, $adopted->getRecordForField($adopted->getSchema()->getField('title')));
 	}
 
 	public function testAddModeRejectsAlreadyTrackedRepresentation(): void
@@ -85,7 +85,7 @@ final class SessionAdoptTest extends TestCase
 
 		self::assertNotSame($oldState, $newState);
 		self::assertSame($newState, $session->getRepresentations()->get($representation));
-		self::assertSame($second, $newState->getFieldItem('title')->getRecord());
+		self::assertSame($second, $newState->getRecordForField($newState->getSchema()->getField('title')));
 	}
 
 	public function testReplaceModeDoesNotRemoveOldStateWhenNewStateWasNeverAdopted(): void

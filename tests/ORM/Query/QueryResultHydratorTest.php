@@ -7,78 +7,43 @@ namespace Tests\ON\Data\ORM\Query;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Record\RecordLifecycle;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\Schema\Query\QuerySourceIdentities;
+use ON\Data\ORM\Representation\State\Query\QueryResultHydrator;
 use ON\Data\ORM\Representation\State\RepresentationState;
-use ON\Data\ORM\Representation\State\RepresentationStateStore;
-use ON\Data\ORM\Representation\Sync\AdoptionPolicy;
-use ON\Data\ORM\Representation\Sync\RepresentationAdoptionContext;
-use ON\Data\ORM\Representation\Sync\RepresentationAdoptionEngine;
-use ON\Data\ORM\Representation\Sync\RepresentationIntent;
-use ON\Data\ORM\Representation\Sync\RepresentationIntentLifecycle;
-use ON\Data\ORM\Representation\Sync\RepresentationIntentStore;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\SessionContext;
 use ON\Data\Schema\RepresentationFieldRole;
 use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationRelationSchema;
 use ON\Data\Schema\RepresentationSchema;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
 
-final class RepresentationAdoptionEngineFlatTest extends TestCase
+final class QueryResultHydratorTest extends TestCase
 {
-	#[DataProvider('rootIntentPolicies')]
-	public function testRootIntentPrecedenceDoesNotOverrideFlatDefaults(
-		AdoptionPolicy $policy,
-		?RepresentationIntentLifecycle $storedLifecycle,
-		?RepresentationIntentLifecycle $contextLifecycle,
-		RecordLifecycle $expectedRoot,
-		RecordLifecycle $expectedRelated,
-	): void {
-		$users = $this->makeSelfRelationRegistry()->getCollection('users');
-		$schema = new RepresentationSchema($users);
-		$schema->addField(new RepresentationFieldSchema('id', $users, 'id'));
-		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
-		$schema->addField(new RepresentationFieldSchema('managerId', $users, 'id', sourcePath: ['manager']));
-		$schema->addField(new RepresentationFieldSchema('managerName', $users, 'name', sourcePath: ['manager']));
-		$object = (object) ['id' => 10, 'name' => 'User', 'managerId' => 20, 'managerName' => 'Manager'];
-		$intents = new RepresentationIntentStore();
-		if ($storedLifecycle !== null) {
-			$intents->set($object, new RepresentationIntent($storedLifecycle));
-		}
-
-		$state = (new RepresentationAdoptionEngine(intents: $intents))->attach(
-			$object,
-			new RepresentationAdoptionContext(
-				schema: $schema,
-				policy: $policy,
-				intent: $contextLifecycle !== null ? new RepresentationIntent($contextLifecycle) : null,
-			),
-			new RecordStateStore(),
-			new RepresentationStateStore(),
-		);
-
-		self::assertSame($expectedRoot, $state->requireRootRecord()->getLifecycle());
-		self::assertSame($expectedRelated, $state->getFieldItem('managerName')->getRecord()->getLifecycle());
-		self::assertSame('User', $state->requireRootRecord()->getValue('name'));
-		self::assertSame('Manager', $state->getFieldItem('managerName')->getRecord()->getValue('name'));
-	}
-
-	/** @return iterable<string, array{AdoptionPolicy, ?RepresentationIntentLifecycle, ?RepresentationIntentLifecycle, RecordLifecycle, RecordLifecycle}> */
-	public static function rootIntentPolicies(): iterable
+	public function testHydrationIgnoresStagedCreateWithoutConsumingIt(): void
 	{
-		yield 'stored update overrides create default' => [AdoptionPolicy::Create, RepresentationIntentLifecycle::Update, null, RecordLifecycle::DIRTY, RecordLifecycle::NEW];
-		yield 'stored create overrides patch default' => [AdoptionPolicy::Patch, RepresentationIntentLifecycle::Create, null, RecordLifecycle::NEW, RecordLifecycle::DIRTY];
-		yield 'hydrate ignores stored create' => [AdoptionPolicy::Hydrate, RepresentationIntentLifecycle::Create, null, RecordLifecycle::CLEAN, RecordLifecycle::CLEAN];
-		yield 'identify ignores stored update' => [AdoptionPolicy::Identify, RepresentationIntentLifecycle::Update, null, RecordLifecycle::CLEAN, RecordLifecycle::CLEAN];
-		yield 'stored update precedes supplied create' => [AdoptionPolicy::Create, RepresentationIntentLifecycle::Update, RepresentationIntentLifecycle::Create, RecordLifecycle::DIRTY, RecordLifecycle::NEW];
-		yield 'supplied create overrides patch default' => [AdoptionPolicy::Patch, null, RepresentationIntentLifecycle::Create, RecordLifecycle::NEW, RecordLifecycle::DIRTY];
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$companies = $registry->getCollection('companies');
+		$schema = $this->projectionSchema($users, $companies);
+		$object = $this->flatUser(1, 'Acme');
+		$session = new Session(new RecordingCommandExecutor());
+		$session->create($object);
+
+		$state = $this->adoptFlatProjection($object, $this->compilation($schema, $this->identitiesFor($schema)), [
+			'id' => 1,
+			'name' => 'Acme',
+			'company.id' => 5,
+		], $session);
+
+		self::assertTrue($state->requireRootRecord()->isClean());
+		self::assertTrue($state->getRecordForField($schema->getField('name'))->isClean());
+		self::assertTrue($session->getContext()->getIntents()->get($object)?->isCreate());
 	}
 
 	public function testBuildsFlatObjectWithFieldsFromTwoCollections(): void
@@ -126,7 +91,7 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		self::assertNotSame($userRecord, $companyRecord);
 	}
 
-	public function testRepresentationStateItemsAttachFieldsToBothCollections(): void
+	public function testRepresentationStateBindsFieldsToBothCollections(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
@@ -141,15 +106,15 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 			'company.id' => 5,
 		], $session);
 
-		$idItem = $state->getFieldItem('id');
-		$nameItem = $state->getFieldItem('name');
+		$idField = $state->getSchema()->getField('id');
+		$nameField = $state->getSchema()->getField('name');
 
-		self::assertSame('users', $idItem->getRecord()->getCollection()->getName());
-		self::assertSame('companies', $nameItem->getRecord()->getCollection()->getName());
-		self::assertNotSame($idItem->getRecord()->getStateHash(), $nameItem->getRecord()->getStateHash());
+		self::assertSame('users', $state->getRecordForField($idField)->getCollection()->getName());
+		self::assertSame('companies', $state->getRecordForField($nameField)->getCollection()->getName());
+		self::assertNotSame($state->getRecordForField($idField)->getStateHash(), $state->getRecordForField($nameField)->getStateHash());
 	}
 
-	public function testBaselineRevisionsIncludeBothRecordHashes(): void
+	public function testBaselinesCaptureValuesFromBothRecords(): void
 	{
 		$registry = $this->makeRegistry();
 		$users = $registry->getCollection('users');
@@ -169,12 +134,12 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 
 		self::assertInstanceOf(RecordState::class, $userRecord);
 		self::assertInstanceOf(RecordState::class, $companyRecord);
-		$idItem = $state->getFieldItem('id');
-		$nameItem = $state->getFieldItem('name');
-		self::assertSame($userRecord->getStateHash(), $idItem->getRecord()->getStateHash());
-		self::assertSame($companyRecord->getStateHash(), $nameItem->getRecord()->getStateHash());
-		self::assertSame($userRecord->getRevision(), $idItem->getBaselineRevision());
-		self::assertSame($companyRecord->getRevision(), $nameItem->getBaselineRevision());
+		$idField = $state->getSchema()->getField('id');
+		$nameField = $state->getSchema()->getField('name');
+		self::assertSame($userRecord->getStateHash(), $state->getRecordForField($idField)->getStateHash());
+		self::assertSame($companyRecord->getStateHash(), $state->getRecordForField($nameField)->getStateHash());
+		self::assertSame(1, $state->getBaseline('id'));
+		self::assertSame('Acme', $state->getBaseline('name'));
 	}
 
 	public function testHiddenIdentityValuesAreReadFromAssembledRow(): void
@@ -305,15 +270,15 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		$object->company = null;
 		$identities = $this->identitiesFor($schema);
 
-		$state = $this->attachFlat($object, $this->compilation($schema, $identities), [
+		$state = $this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
 			'id' => 1,
 			'name' => 'Acme',
 			'company.id' => 5,
 		], $session);
 
 		self::assertTrue($session->getRepresentations()->has($object));
-		self::assertSame('users', $state->getFieldItem('id')->getRecord()->getCollection()->getName());
-		self::assertSame('companies', $state->getFieldItem('name')->getRecord()->getCollection()->getName());
+		self::assertSame('users', $state->getRecordForField($state->getSchema()->getField('id'))->getCollection()->getName());
+		self::assertSame('companies', $state->getRecordForField($state->getSchema()->getField('name'))->getCollection()->getName());
 	}
 
 	public function testAttachStoresFlatProjectionRecords(): void
@@ -326,7 +291,7 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		$session = new Session(new RecordingCommandExecutor());
 		$identities = $this->identitiesFor($schema);
 
-		$state = $this->attachFlat($object, $this->compilation($schema, $identities), [
+		$state = $this->adoptFlatProjection($object, $this->compilation($schema, $identities), [
 			'id' => 1,
 			'name' => 'Acme',
 			'company.id' => 5,
@@ -376,13 +341,13 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		self::assertInstanceOf(RecordState::class, $managerRecord);
 		self::assertNotSame($rootRecord->getStateHash(), $managerRecord->getStateHash());
 
-		$nameItem = $state->getFieldItem('name');
-		$managerItem = $state->getFieldItem('managerName');
+		$nameField = $state->getSchema()->getField('name');
+		$managerField = $state->getSchema()->getField('managerName');
 
-		self::assertSame('users', $nameItem->getRecord()->getCollection()->getName());
-		self::assertSame('users', $managerItem->getRecord()->getCollection()->getName());
-		self::assertSame($rootRecord->getStateHash(), $nameItem->getRecord()->getStateHash());
-		self::assertSame($managerRecord->getStateHash(), $managerItem->getRecord()->getStateHash());
+		self::assertSame('users', $state->getRecordForField($nameField)->getCollection()->getName());
+		self::assertSame('users', $state->getRecordForField($managerField)->getCollection()->getName());
+		self::assertSame($rootRecord->getStateHash(), $state->getRecordForField($nameField)->getStateHash());
+		self::assertSame($managerRecord->getStateHash(), $state->getRecordForField($managerField)->getStateHash());
 	}
 
 	public function testGroupsFieldSchemasBySourcePathNotTerminalCollection(): void
@@ -414,12 +379,12 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 			'manager.id' => 9,
 		], $session);
 
-		$idItem = $state->getFieldItem('id');
-		$managerItem = $state->getFieldItem('managerName');
+		$idField = $state->getSchema()->getField('id');
+		$managerField = $state->getSchema()->getField('managerName');
 
-		self::assertNotSame($idItem->getRecord()->getStateHash(), $managerItem->getRecord()->getStateHash());
-		self::assertTrue($idItem->getSchema()->isRootSource());
-		self::assertSame(['manager'], $managerItem->getSchema()->getSourcePath());
+		self::assertNotSame($state->getRecordForField($idField)->getStateHash(), $state->getRecordForField($managerField)->getStateHash());
+		self::assertTrue($idField->isRootSource());
+		self::assertSame(['manager'], $managerField->getSourcePath());
 	}
 
 	public function testReusesExistingTrackedRecordState(): void
@@ -443,43 +408,20 @@ final class RepresentationAdoptionEngineFlatTest extends TestCase
 		self::assertSame($existing, $session->getRecords()->getByKey($companies->getKey(5)));
 	}
 
-	private function engine(): RepresentationAdoptionEngine
-	{
-		return new RepresentationAdoptionEngine();
-	}
-
-	/**
-	 * @param array<string, mixed> $sourceRow
-	 */
-	private function attachFlat(
-		object $object,
-		QueryRepresentationPlan $compilation,
-		array $sourceRow,
-		Session $session,
-	): RepresentationState {
-		return $this->engine()->attach(
-			$object,
-			new RepresentationAdoptionContext(
-				schema: $compilation->getSchema(),
-				policy: AdoptionPolicy::Hydrate,
-				identities: $compilation->getIdentities(),
-				sourceRow: $sourceRow,
-			),
-			$session->getRecords(),
-			$session->getRepresentations(),
-		);
-	}
-
-	/**
-	 * @param array<string, mixed> $sourceRow
-	 */
+	/** @param array<string, mixed> $sourceRow */
 	private function adoptFlatProjection(
 		object $object,
 		QueryRepresentationPlan $compilation,
 		array $sourceRow,
 		Session $session,
 	): RepresentationState {
-		return $this->attachFlat($object, $compilation, $sourceRow, $session);
+		return (new QueryResultHydrator())->hydrate(
+			$object,
+			$compilation->getSchema(),
+			$sourceRow,
+			$compilation->getIdentities(),
+			$session->getContext(),
+		);
 	}
 
 	private function compilation(

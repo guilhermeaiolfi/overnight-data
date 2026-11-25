@@ -57,18 +57,32 @@ final class SyncPlan
 	/**
 	 * Apply planned field writes into RecordState and acknowledge baselines on $state.
 	 *
-	 * @param array<string, mixed>|null $currentValues Captured representation values for field-level acknowledgement.
+	 * @param array<string, mixed> $currentValues Captured representation values for field-level acknowledgement.
 	 */
-	public function apply(RepresentationState $state, ?array $currentValues = null): void
+	public function apply(RepresentationState $state, array $currentValues): void
 	{
+		if ($this->updates === []) {
+			return;
+		}
+
 		$touchedRecords = [];
 
 		foreach ($this->updates as $update) {
 			$record = $update->getRecord();
 			$record->setValue($update->getField(), $update->getValue());
-			$touchedRecords[$record->getStateHash()] = $record;
+			$touchedRecords[$record->getStateHash()] = true;
 		}
 
-		$state->acceptSyncedRecords($touchedRecords, $currentValues);
+		$syncedValues = [];
+		foreach ($currentValues as $path => $value) {
+			$field = $state->getSchema()->getField($path);
+			$record = $state->getRecordForField($field);
+			$fieldName = $field->getFieldName();
+			if (isset($touchedRecords[$record->getStateHash()]) && $record->hasValue($fieldName) && $record->getValue($fieldName) === $value) {
+				$syncedValues[$path] = $value;
+			}
+		}
+
+		$state->acceptSyncedValues($syncedValues);
 	}
 }

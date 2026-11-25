@@ -9,8 +9,6 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Relation\RelationStateStore;
-use ON\Data\ORM\Representation\State\RepresentationFieldStateItem;
-use ON\Data\ORM\Representation\State\RepresentationRelationStateItem;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\ORM\Session;
@@ -227,60 +225,31 @@ trait OrmFixture
 	): RepresentationState {
 		return RepresentationStateObjectRegistry::remember(
 			$representation,
-			new RepresentationState($schema, $this->fieldItemsFor($schema, $records), $this->relationItemsFor($schema, $records))
+			RepresentationState::fromRecords($schema, $this->recordsForSources($schema, $records))
 		);
 	}
 
 	/**
 	 * @param list<RecordState> $records
-	 * @return list<RepresentationFieldStateItem>
+	 * @return array<string, RecordState>
 	 */
-	protected function fieldItemsFor(RepresentationSchema $schema, array $records): array
+	protected function recordsForSources(RepresentationSchema $schema, array $records): array
 	{
-		$items = [];
-		foreach ($schema->getFields() as $fieldSchema) {
-			foreach ($records as $record) {
-				if ($record->getCollection()->getName() !== $fieldSchema->getCollectionName()) {
-					continue;
-				}
-
-				$items[] = new RepresentationFieldStateItem(
-					$fieldSchema,
-					$record,
-					$fieldSchema->getFieldName(),
-					$record->getRevision()
-				);
-
-				break;
-			}
+		$byCollection = [];
+		foreach ($records as $record) {
+			$byCollection[$record->getCollection()->getName()] ??= $record;
 		}
 
-		return $items;
-	}
-
-	/**
-	 * @param list<RecordState> $records
-	 * @return list<RepresentationRelationStateItem>
-	 */
-	protected function relationItemsFor(RepresentationSchema $schema, array $records): array
-	{
-		$items = [];
-		foreach ($schema->getRelations() as $relationSchema) {
-			foreach ($records as $record) {
-				if ($record->getCollection()->getName() !== $relationSchema->getOwnerCollectionName()) {
-					continue;
-				}
-
-				$items[] = new RepresentationRelationStateItem(
-					$relationSchema,
-					$record,
-					$relationSchema->getRelationName()
-				);
-
-				break;
+		$bindings = [];
+		foreach ($schema->getFields() as $field) {
+			if (isset($byCollection[$field->getCollectionName()])) {
+				$bindings[$field->getSourcePathKey()] = $byCollection[$field->getCollectionName()];
 			}
 		}
+		if ($schema->getRelations() !== [] && isset($byCollection[$schema->getCollectionName()])) {
+			$bindings[''] = $byCollection[$schema->getCollectionName()];
+		}
 
-		return $items;
+		return $bindings;
 	}
 }

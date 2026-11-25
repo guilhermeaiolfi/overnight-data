@@ -72,3 +72,9 @@ If your application still uses Cycle for its own database access, retain its Com
 ## Reporting issues
 
 If a release breaks something that the docs still describe as current behavior, open a GitHub issue with the versions you upgraded from and to. That helps fix docs or code; it is not a claim that the old behavior was guaranteed.
+
+### ORM tracking internals
+
+`RecordHistory`, `RecordState::getRevision()`, `RecordState::getHistory()`, `RepresentationFieldStateItem`, and `RepresentationRelationStateItem` have been removed. Code that builds state for `Session::adopt()` should call `RepresentationState::fromRecords($schema, $recordsBySourceKey)`. Use the empty source key for the root record and schema source keys for flat related records. Use `hasBaseline()` and `getBaseline()` to inspect a field baseline by its representation path.
+
+`RepresentationAdoptionEngine` now handles inbound Create and Patch. `WritableQueryResultTracker` uses `QueryResultHydrator` for writable results, and `Session::identify()` handles existing references independently. Application calls to `Session` use the same signatures.

@@ -64,7 +64,7 @@ final class TrackedRecordResolverTest extends TestCase
 		$item = new stdClass();
 		$schema = new RepresentationSchema($posts);
 		$schema->addField(new RepresentationFieldSchema('id', $posts, 'id'));
-		$tracked = RepresentationStateObjectRegistry::remember($item, new RepresentationState($schema, []));
+		$tracked = RepresentationStateObjectRegistry::remember($item, RepresentationState::fromRecords(new RepresentationSchema($schema->getCollection()), []));
 		$context = new PersistenceContext(
 			$this->context($this->representations($tracked), $this->records($owner, $child)),
 			new CommandBuffer(),
@@ -97,7 +97,7 @@ final class TrackedRecordResolverTest extends TestCase
 	{
 		return RepresentationStateObjectRegistry::remember(
 			$representation,
-			new RepresentationState($schema = $this->schemaFor($record), $this->fieldItemsFor($schema, [$record]))
+			RepresentationState::fromRecords($this->schemaFor($record), ['' => $record])
 		);
 	}
 

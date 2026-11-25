@@ -32,13 +32,13 @@ final class RepresentationStateTest extends TestCase
 			RepresentationFieldSchema::sourcePathKey(['posts']) => $postRecord,
 		]);
 
-		self::assertSame($userRecord, $state->getFieldItem('userName')->getRecord());
-		self::assertSame($postRecord, $state->getFieldItem('postTitle')->getRecord());
+		self::assertSame($userRecord, $state->getRecordForField($state->getSchema()->getField('userName')));
+		self::assertSame($postRecord, $state->getRecordForField($state->getSchema()->getField('postTitle')));
 		self::assertSame([$userRecord], $state->getRecordsForCollection($users));
 		self::assertSame([$postRecord], $state->getRecordsForCollection($posts));
 	}
 
-	public function testRepresentationStateStoresBaselineRevisionsLineageAndWritableFlags(): void
+	public function testRepresentationStateStoresBaselinesAndWritableFields(): void
 	{
 		$users = $this->users();
 		$record = RecordState::clean($users->getKey(1), ['id' => 1, 'name' => 'Ada', 'email' => 'ada@example.test']);
@@ -50,15 +50,14 @@ final class RepresentationStateTest extends TestCase
 		$state = RepresentationState::fromRecords($schema, [
 			RepresentationFieldSchema::sourcePathKey([]) => $record,
 		]);
-		$nameItem = $state->getFieldItem('displayName');
-		$emailItem = $state->getFieldItem('email');
+		$nameField = $schema->getField('displayName');
+		$emailField = $schema->getField('email');
 
-		self::assertSame($record, $nameItem->getRecord());
-		self::assertSame('name', $nameItem->getFieldName());
-		self::assertSame(2, $nameItem->getBaselineRevision());
-		self::assertSame('Ada Lovelace', $nameItem->getBaselineValue());
-		self::assertSame([$nameItem], $state->getWritableFieldItems());
-		self::assertTrue($emailItem->getSchema()->isReadOnly());
+		self::assertSame($record, $state->getRecordForField($nameField));
+		self::assertSame('name', $nameField->getFieldName());
+		self::assertSame('Ada Lovelace', $state->getBaseline('displayName'));
+		self::assertSame([$nameField], $state->getWritableFields());
+		self::assertTrue($emailField->isReadOnly());
 	}
 
 	public function testRepresentationSchemaMayBeReusedAsChildOrRelationItemTemplate(): void
@@ -90,18 +89,18 @@ final class RepresentationStateTest extends TestCase
 		$state = RepresentationState::fromRecords($rootSchema, [
 			RepresentationFieldSchema::sourcePathKey([]) => $userRecord,
 		]);
-		$relationItem = $state->getRelationItem('posts');
+		$relation = $state->getSchema()->getRelation('posts');
 		$constructor = (new ReflectionClass(RepresentationRelationSchema::class))->getConstructor();
 
 		self::assertSame($userRecord, $state->getRootRecord());
-		self::assertSame($userRecord, $relationItem->getOwnerRecord());
-		self::assertSame($relatedSchema, $relationItem->getSchema()->getRelatedSchema());
+		self::assertSame($userRecord, $state->getOwnerRecord('posts'));
+		self::assertSame($relatedSchema, $relation->getRelatedSchema());
 		self::assertNotNull($constructor);
 		self::assertSame('relatedSchema', $constructor->getParameters()[3]->getName());
 		self::assertSame(RepresentationSchema::class, (string) $constructor->getParameters()[3]->getType());
 	}
 
-	public function testRepresentationStateItemsMayNeedLocalRecordHandlesForNewChildren(): void
+	public function testRepresentationStatesKeepDistinctRecordsForNewChildren(): void
 	{
 		$posts = $this->posts();
 		$schema = new RepresentationSchema($posts);
@@ -116,13 +115,13 @@ final class RepresentationStateTest extends TestCase
 			RepresentationFieldSchema::sourcePathKey([]) => $secondRecord,
 		]);
 
-		self::assertSame('title', $firstState->getFieldItem('title')->getPath());
-		self::assertSame('title', $secondState->getFieldItem('title')->getPath());
-		self::assertSame($firstRecord, $firstState->getFieldItem('title')->getRecord());
-		self::assertSame($secondRecord, $secondState->getFieldItem('title')->getRecord());
+		self::assertTrue($firstState->hasBaseline('title'));
+		self::assertTrue($secondState->hasBaseline('title'));
+		self::assertSame($firstRecord, $firstState->getRecordForField($firstState->getSchema()->getField('title')));
+		self::assertSame($secondRecord, $secondState->getRecordForField($secondState->getSchema()->getField('title')));
 		self::assertNotSame(
-			$firstState->getFieldItem('title')->getRecord(),
-			$secondState->getFieldItem('title')->getRecord(),
+			$firstState->getRecordForField($firstState->getSchema()->getField('title')),
+			$secondState->getRecordForField($secondState->getSchema()->getField('title')),
 		);
 	}
 }

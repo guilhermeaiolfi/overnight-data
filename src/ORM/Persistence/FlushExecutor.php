@@ -54,7 +54,7 @@ final class FlushExecutor
 		$recordSnapshots = $this->snapshotRecords($context);
 		$representationSnapshots = [];
 		foreach ($context->getRepresentations()->getAll() as $state) {
-			$representationSnapshots[] = [$state, clone $state];
+			$representationSnapshots[] = [$state, $state->snapshotBaselines()];
 		}
 
 		try {
@@ -83,7 +83,7 @@ final class FlushExecutor
 		} catch (Throwable $exception) {
 			$this->restoreRecords($recordSnapshots);
 			foreach ($representationSnapshots as [$state, $snapshot]) {
-				$state->restoreSyncBaselines($snapshot);
+				$state->restoreBaselines($snapshot);
 			}
 
 			throw $exception;
@@ -106,7 +106,6 @@ final class FlushExecutor
 	 * @return list<array{0: RecordState, 1: array{
 	 *     key: Key|null,
 	 *     lifecycle: RecordLifecycle,
-	 *     revision: int,
 	 *     originalValues: array<string, mixed>,
 	 *     values: array<string, mixed>
 	 * }}>
@@ -125,7 +124,6 @@ final class FlushExecutor
 	 * @param list<array{0: RecordState, 1: array{
 	 *     key: Key|null,
 	 *     lifecycle: RecordLifecycle,
-	 *     revision: int,
 	 *     originalValues: array<string, mixed>,
 	 *     values: array<string, mixed>
 	 * }}> $snapshots

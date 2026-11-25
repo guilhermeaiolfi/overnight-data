@@ -24,7 +24,6 @@ final class RepresentationSyncer
 		?object $representation = null,
 	): SyncResult {
 		$representations = $context->getRepresentations();
-		$records = $context->getRecords();
 		$relations = $context->getRelations();
 		$syncRepresentations = $representations;
 		if ($representation !== null) {
@@ -37,7 +36,7 @@ final class RepresentationSyncer
 			$syncRepresentations->add($representation, $state);
 		}
 
-		$syncPlans = $this->scalarSynchronizer->sync($syncRepresentations, $records);
+		$syncPlans = $this->scalarSynchronizer->sync($syncRepresentations);
 		$relationChanges = $this->relationSynchronizer->sync($syncRepresentations, $relations, $representations);
 
 		return new SyncResult($syncPlans, $relationChanges);

@@ -17,6 +17,7 @@ use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\RelationTarget;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Representation\State\Query\WritableQueryResultTracker;
+use ON\Data\ORM\Representation\State\RepresentationIdentifier;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\ORM\Representation\Sync\AdoptionPolicy;
@@ -51,10 +52,7 @@ final class Session implements WritableResultHandler
 	) {
 		$this->context = $context ?? new SessionContext();
 		$this->reader = new RepresentationReader();
-		$this->adoptionEngine = new RepresentationAdoptionEngine(
-			$this->reader,
-			intents: $this->context->getIntents(),
-		);
+		$this->adoptionEngine = new RepresentationAdoptionEngine($this->reader);
 		$this->syncer = $syncer ?? new RepresentationSyncer();
 		$this->flusher = $flusher ?? new FlushExecutor($executor, $this->syncer);
 	}
@@ -235,6 +233,7 @@ final class Session implements WritableResultHandler
 		?RepresentationSchema $schema = null,
 	): object {
 		$key = $collection->getKey($key);
+		$keyOnly = $representation === null && $schema === null;
 		$representation ??= RepresentationSchema::representationForKey($key);
 		$schema ??= RepresentationSchema::forPrimaryKey($collection);
 
@@ -248,16 +247,15 @@ final class Session implements WritableResultHandler
 			return $representation;
 		}
 
-		$this->adoptionEngine->attach(
-			$representation,
-			new RepresentationAdoptionContext(
-				schema: $schema,
-				policy: AdoptionPolicy::Identify,
-				identities: StaticSourceIdentities::forRoot($key),
-			),
-			$this->getRecords(),
-			$this->getRepresentations(),
-		);
+		if ($keyOnly) {
+			$record = $this->getRecords()->getActive($key, sprintf(
+				"Cannot identify representation because key '%s' is already tracked as removed.",
+				$key->getDebugString(),
+			)) ?? RecordState::clean($key, $key->getValues());
+			$this->adopt($representation, RepresentationState::fromRecords($schema, ['' => $record]));
+		} else {
+			(new RepresentationIdentifier($this->reader))->attach($representation, $schema, $key, $this->context);
+		}
 
 		return $representation;
 	}
@@ -362,9 +360,7 @@ final class Session implements WritableResultHandler
 				identities: $identities,
 				intent: $intent,
 			),
-			$this->getRecords(),
-			$this->getRepresentations(),
-			$this->getRelations(),
+			$this->context,
 		);
 
 		if ($intent !== null) {
@@ -442,9 +438,6 @@ final class Session implements WritableResultHandler
 
 	private function writableResultTracker(): WritableQueryResultTracker
 	{
-		return $this->writableResultTracker ??= new WritableQueryResultTracker(
-			$this,
-			adoptionEngine: $this->adoptionEngine,
-		);
+		return $this->writableResultTracker ??= new WritableQueryResultTracker($this);
 	}
 }

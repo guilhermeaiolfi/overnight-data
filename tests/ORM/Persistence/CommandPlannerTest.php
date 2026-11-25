@@ -127,7 +127,6 @@ final class CommandPlannerTest extends TestCase
 		$values = $record->getValues();
 		$originalValues = $record->getOriginalValues();
 		$recordKey = $record->getKey();
-		$revision = $record->getRevision();
 
 		(new CommandPlanner())->plan($record);
 
@@ -135,7 +134,6 @@ final class CommandPlannerTest extends TestCase
 		self::assertSame($values, $record->getValues());
 		self::assertSame($originalValues, $record->getOriginalValues());
 		self::assertSame($recordKey, $record->getKey());
-		self::assertSame($revision, $record->getRevision());
 	}
 
 	public function testInsertPlanningCanCarryUnresolvedValueRef(): void

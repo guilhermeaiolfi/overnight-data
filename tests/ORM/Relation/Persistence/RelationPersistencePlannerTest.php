@@ -504,7 +504,7 @@ final class RelationPersistencePlannerTest extends TestCase
 	{
 		return RepresentationStateObjectRegistry::remember(
 			$representation,
-			new RepresentationState($schema = $this->schemaFor($record), $this->fieldItemsFor($schema, [$record]))
+			RepresentationState::fromRecords($this->schemaFor($record), ['' => $record])
 		);
 	}
 

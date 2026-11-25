@@ -4,62 +4,14 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Sync;
 
-use function ON\Data\Mapper\map;
-use ON\Data\ORM\Session;
 use ON\Data\Schema\RepresentationRelationSchema;
-use ON\Data\Schema\RepresentationSchema;
-use stdClass;
 use Throwable;
 
 final class RepresentationReader
 {
 	/**
-	 * @return array<string, mixed>
-	 */
-	public function read(object $representation, RepresentationSchema $schema): array
-	{
-		$bag = $this->mappedScalarBag($representation);
-		$values = [];
-		foreach ($schema->getFields() as $fieldSchema) {
-			$path = $fieldSchema->getPath();
-			$values[$path] = $this->readPath($bag, $path)->requireValue();
-		}
-
-		return $values;
-	}
-
-	/**
-	 * Field-name values for clean baselines ({@see Session::identify()}, hydrate).
-	 *
-	 * Keeps names already present in $initialValues; soft-reads other schema fields.
-	 *
-	 * @param array<string, mixed> $initialValues
-	 *
-	 * @return array<string, mixed>
-	 */
-	public function baselineValues(
-		object $representation,
-		RepresentationSchema $schema,
-		array $initialValues = [],
-	): array {
-		$bag = $this->mappedScalarBag($representation);
-		$values = $initialValues;
-		foreach ($schema->getFields() as $fieldSchema) {
-			if (array_key_exists($fieldSchema->getFieldName(), $values)) {
-				continue;
-			}
-
-			$result = $this->readPath($bag, $fieldSchema->getPath());
-			if ($result->isPresent()) {
-				$values[$fieldSchema->getFieldName()] = $result->requireValue();
-			}
-		}
-
-		return $values;
-	}
-
-	/**
-	 * Resolve a dotted path on an object (live representation or mapped scalar bag).
+	 * Read initialized public properties directly from the live representation.
+	 * A literal dotted property takes precedence over traversal.
 	 *
 	 * @return PathReadResult<mixed>
 	 */
@@ -178,11 +130,18 @@ final class RepresentationReader
 		));
 	}
 
-	private function mappedScalarBag(object $representation): object
+	/**
+	 * @param callable(non-empty-string): Throwable $error
+	 * @return list<object>
+	 */
+	public function readRelatedObjects(object $representation, RepresentationRelationSchema $schema, callable $error): array
 	{
-		/** @var object $bag */
-		$bag = map($representation)->to(stdClass::class);
+		if ($schema->isMany()) {
+			return $this->readItems($representation, $schema, $error)->requireValue();
+		}
 
-		return $bag;
+		$target = $this->readTarget($representation, $schema, $error)->requireValue();
+
+		return $target === null ? [] : [$target];
 	}
 }

@@ -67,7 +67,7 @@ final class SyncConflictTest extends TestCase
 		} catch (SyncException $exception) {
 			self::assertStringContainsString('1 conflict', $exception->getMessage());
 			$tracked = $session->getRepresentations()->get($firstRepresentation);
-			self::assertSame('A1', $tracked?->getFieldItem('name')->getBaselineValue());
+			self::assertSame('A1', $tracked?->getBaseline('name'));
 			self::assertSame('A2', $record->getValue('name'));
 			self::assertSame('A3', $firstRepresentation->name);
 		}

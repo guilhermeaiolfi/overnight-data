@@ -18,7 +18,7 @@ final class RepresentationStateStoreTest extends TestCase
 	{
 		$users = (new Registry())->collection('users')->primaryKey('id')->field('id')->end();
 
-		return new RepresentationState(new RepresentationSchema($users), []);
+		return RepresentationState::fromRecords(new RepresentationSchema($users), []);
 	}
 
 	public function testRegisterAndGetByObjectIdentity(): void

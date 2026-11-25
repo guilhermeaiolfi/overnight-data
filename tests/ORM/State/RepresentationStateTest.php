@@ -6,9 +6,9 @@ namespace Tests\ON\Data\ORM\State;
 
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
-use ON\Data\ORM\Representation\State\RepresentationFieldStateItem;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\Schema\RepresentationFieldSchema;
+use ON\Data\Schema\RepresentationRelationSchema;
 use ON\Data\Schema\RepresentationSchema;
 use PHPUnit\Framework\TestCase;
 use Tests\ON\Data\ORM\Support\OrmFixture;
@@ -17,129 +17,91 @@ final class RepresentationStateTest extends TestCase
 {
 	use OrmFixture;
 
-	public function testExposesSchemaWithoutRepresentationObject(): void
+	public function testStoresSchemaAndResolvesBoundFields(): void
+	{
+		$users = $this->users();
+		$schema = new RepresentationSchema($users);
+		$field = new RepresentationFieldSchema('name', $users, 'name');
+		$schema->addField($field);
+		$record = RecordState::new($users, ['name' => 'A1']);
+		$state = RepresentationState::fromRecords($schema, ['' => $record]);
+
+		self::assertSame($schema, $state->getSchema());
+		self::assertTrue($state->hasRecordForField($field));
+		self::assertSame($record, $state->getRecordForField($field));
+		self::assertSame([$field], $state->getWritableFields());
+		self::assertSame($record, $state->getRootRecord());
+		self::assertSame($record, $state->requireRootRecord());
+	}
+
+	public function testGetRecordForFieldThrowsWhenOptionalSourceIsUnbound(): void
 	{
 		$schema = new RepresentationSchema($this->users());
-		$tracked = new RepresentationState($schema, []);
-
-		self::assertSame($schema, $tracked->getSchema());
-		self::assertFalse(method_exists($tracked, 'getRepresentation'));
-	}
-
-	public function testStoresPathKeyedFieldItems(): void
-	{
-		[$schema, $item] = $this->stateParts();
-		$state = new RepresentationState($schema, [$item]);
-
-		self::assertTrue($state->hasFieldItem('name'));
-		self::assertSame($item, $state->getFieldItem('name'));
-		self::assertSame([$item], $state->getFieldItems());
-		self::assertSame([$item], $state->getWritableFieldItems());
-	}
-
-	public function testMissingFieldItemThrows(): void
-	{
-		$state = new RepresentationState(new RepresentationSchema($this->users()), []);
+		$posts = $this->posts();
+		$field = new RepresentationFieldSchema('title', $posts, 'title', sourcePath: ['posts']);
+		$schema->addField($field);
+		$state = RepresentationState::fromRecords($schema, []);
 
 		$this->expectException(StateException::class);
-		$state->getFieldItem('missing');
+		$state->getRecordForField($field);
 	}
 
-	public function testGetRootRecordResolvesRecordMatchingSchemaRootCollection(): void
+	public function testGetRootRecordReturnsNullWhenNoRootSourceIsBound(): void
 	{
-		[$schema, $item] = $this->stateParts();
-		$state = new RepresentationState($schema, [$item]);
-
-		self::assertSame($item->getRecord(), $state->getRootRecord());
-		self::assertSame($item->getRecord(), $state->requireRootRecord());
-	}
-
-	public function testGetRootRecordReturnsNullWhenNoRootItemAttached(): void
-	{
-		$state = new RepresentationState(new RepresentationSchema($this->users()), []);
+		$state = RepresentationState::fromRecords(new RepresentationSchema($this->users()), []);
 
 		self::assertNull($state->getRootRecord());
 	}
 
-	public function testRequireRootRecordThrowsWhenNoRootItemAttached(): void
+	public function testRequireRootRecordThrowsWhenNoRootSourceIsBound(): void
 	{
-		$state = new RepresentationState(new RepresentationSchema($this->users()), []);
+		$state = RepresentationState::fromRecords(new RepresentationSchema($this->users()), []);
 
 		$this->expectException(StateException::class);
 		$state->requireRootRecord();
 	}
 
-	public function testGetRootRecordIgnoresFieldItemsFromNonRootSourcePath(): void
+	public function testGetRootRecordUsesRootSourceEvenWhenRelatedSourceHasSameCollection(): void
+	{
+		$users = $this->users();
+		$root = RecordState::new($users, ['name' => 'A1']);
+		$manager = RecordState::new($users, ['name' => 'B1']);
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('managerName', $users, 'name', sourcePath: ['manager']));
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+
+		$state = RepresentationState::fromRecords($schema, ['manager' => $manager, '' => $root]);
+
+		self::assertSame($root, $state->getRootRecord());
+	}
+
+	public function testRelationOwnerMustMatchSchemaCollection(): void
 	{
 		$users = $this->users();
 		$posts = $this->posts();
-		$rootRecord = RecordState::new($users, ['name' => 'A1']);
-		$foreignRecord = RecordState::new($posts, ['title' => 'T']);
-
 		$schema = new RepresentationSchema($users);
-		$rootField = new RepresentationFieldSchema('name', $users, 'name');
-		$foreignField = new RepresentationFieldSchema('companyTitle', $posts, 'title', sourcePath: ['company']);
-		$schema->addField($foreignField);
-		$schema->addField($rootField);
-
-		$state = new RepresentationState($schema, [
-			new RepresentationFieldStateItem($foreignField, $foreignRecord, 'title', $foreignRecord->getRevision()),
-			new RepresentationFieldStateItem($rootField, $rootRecord, 'name', $rootRecord->getRevision()),
-		]);
-
-		self::assertSame($rootRecord, $state->getRootRecord());
-	}
-
-	public function testGetRootRecordThrowsWhenRootSourceItemsDisagree(): void
-	{
-		$users = $this->users();
-		$recordOne = RecordState::new($users, ['name' => 'A1']);
-		$recordTwo = RecordState::new($users, ['name' => 'A2']);
-
-		$schema = new RepresentationSchema($users);
-		$fieldOne = new RepresentationFieldSchema('name', $users, 'name');
-		$fieldTwo = new RepresentationFieldSchema('nickname', $users, 'name');
-		$schema->addField($fieldOne);
-		$schema->addField($fieldTwo);
-
-		$state = new RepresentationState($schema, [
-			new RepresentationFieldStateItem($fieldOne, $recordOne, 'name', $recordOne->getRevision()),
-			new RepresentationFieldStateItem($fieldTwo, $recordTwo, 'name', $recordTwo->getRevision()),
-		]);
+		$schema->addRelation(new RepresentationRelationSchema('posts', $users, 'posts', new RepresentationSchema($posts)));
 
 		$this->expectException(StateException::class);
-		$state->getRootRecord();
+		$this->expectExceptionMessage("Representation relation path 'posts' targets collection 'users', not 'posts'.");
+		RepresentationState::fromRecords($schema, ['' => RecordState::new($posts)]);
 	}
 
-	public function testAcceptSyncedRecordsAdvancesOnlyTouchedItemBaselines(): void
+	public function testBaselineSnapshotPreservesNullAndMissingPathsAcrossRestore(): void
 	{
-		[$schema, $name] = $this->stateParts();
-		$emailSchema = new RepresentationFieldSchema('email', $this->users(), 'email');
-		$emailRecord = RecordState::new($this->users(), ['email' => 'a@example.test']);
-		$schema->addField($emailSchema);
-		$state = new RepresentationState($schema, [
-			$name,
-			new RepresentationFieldStateItem($emailSchema, $emailRecord, 'email', $emailRecord->getRevision()),
-		]);
+		$users = $this->users();
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$schema->addField(new RepresentationFieldSchema('email', $users, 'email'));
+		$state = RepresentationState::fromRecords($schema, ['' => RecordState::new($users, ['name' => null])]);
+		$snapshot = $state->snapshotBaselines();
 
-		$name->getRecord()->setValue('name', 'A2');
-		$emailRecord->setValue('email', 'b@example.test');
-		$state->acceptSyncedRecords([$name->getRecord()->getStateHash() => $name->getRecord()]);
+		$state->acceptSyncedValues(['email' => 'a@example.test']);
+		self::assertSame(['name' => null, 'email' => 'a@example.test'], $state->snapshotBaselines());
 
-		self::assertSame(2, $state->getFieldItem('name')->getBaselineRevision());
-		self::assertSame(1, $state->getFieldItem('email')->getBaselineRevision());
-	}
-
-	/**
-	 * @return array{RepresentationSchema, RepresentationFieldStateItem}
-	 */
-	private function stateParts(): array
-	{
-		$record = RecordState::new($this->users(), ['name' => 'A1']);
-		$schema = new RepresentationSchema($record->getCollection());
-		$field = new RepresentationFieldSchema('name', $record->getCollection(), 'name');
-		$schema->addField($field);
-
-		return [$schema, new RepresentationFieldStateItem($field, $record, 'name', $record->getRevision())];
+		$state->restoreBaselines($snapshot);
+		self::assertTrue($state->hasBaseline('name'));
+		self::assertNull($state->getBaseline('name'));
+		self::assertFalse($state->hasBaseline('email'));
 	}
 }

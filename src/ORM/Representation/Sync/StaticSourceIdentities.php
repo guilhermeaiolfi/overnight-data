@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\Key;
-use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationSchema;
 use ON\Data\Schema\RepresentationSource;
 
@@ -14,7 +13,7 @@ use ON\Data\Schema\RepresentationSource;
  *
  * Built once for an adoption (e.g. from Session intent). Not a per-row map.
  */
-final class StaticSourceIdentities implements RepresentationSourceIdentities
+final class StaticSourceIdentities
 {
 	/**
 	 * @param array<string, Key> $keysByPathKey
@@ -22,16 +21,6 @@ final class StaticSourceIdentities implements RepresentationSourceIdentities
 	public function __construct(
 		private array $keysByPathKey = [],
 	) {
-	}
-
-	/**
-	 * Single root-source identity (for example {@see Session::identify()}).
-	 */
-	public static function forRoot(Key $key): self
-	{
-		return new self([
-			RepresentationFieldSchema::sourcePathKey([]) => $key,
-		]);
 	}
 
 	public static function fromIntent(
@@ -46,7 +35,7 @@ final class StaticSourceIdentities implements RepresentationSourceIdentities
 		$keys = [];
 		$rootIdentity = $intent->getIdentity();
 		if ($rootIdentity !== null) {
-			$rootPathKey = RepresentationFieldSchema::sourcePathKey([]);
+			$rootPathKey = '';
 			$root = $sourcesByPathKey[$rootPathKey] ?? null;
 			if ($root instanceof RepresentationSource) {
 				$keys[$rootPathKey] = $root->getCollection()->getKey($rootIdentity);
@@ -69,8 +58,8 @@ final class StaticSourceIdentities implements RepresentationSourceIdentities
 		return new self($keys);
 	}
 
-	public function getIdentity(array $sourcePath, ?array $sourceRow = null): ?Key
+	public function getIdentity(string $sourcePathKey): ?Key
 	{
-		return $this->keysByPathKey[RepresentationFieldSchema::sourcePathKey($sourcePath)] ?? null;
+		return $this->keysByPathKey[$sourcePathKey] ?? null;
 	}
 }

@@ -12,36 +12,74 @@ use ON\Data\Schema\RepresentationSchema;
 
 final class RepresentationState
 {
-	/** @var array<string, RepresentationFieldStateItem> */
-	private array $fieldItems = [];
-	/** @var array<string, RepresentationRelationStateItem> */
-	private array $relationItems = [];
-
 	/**
-	 * @param array<string, RepresentationFieldStateItem>|list<RepresentationFieldStateItem> $fieldItems
-	 * @param array<string, RepresentationRelationStateItem>|list<RepresentationRelationStateItem> $relationItems
+	 * @param array<string, RecordState> $recordsBySourceKey
+	 * @param array<string, mixed> $baselines
 	 */
-	public function __construct(
+	private function __construct(
 		private RepresentationSchema $schema,
-		array $fieldItems,
-		array $relationItems = [],
+		private array $recordsBySourceKey,
+		private array $baselines,
 	) {
-		$this->fieldItems = $this->normalizeFieldItems($fieldItems);
-		$this->relationItems = $this->normalizeRelationItems($relationItems);
 	}
 
 	/**
 	 * @param array<string, RecordState> $recordsBySourceKey
+	 * @param array<string, mixed>|null $loadedBaselines Values observed on a newly hydrated representation.
 	 */
 	public static function fromRecords(
 		RepresentationSchema $schema,
 		array $recordsBySourceKey,
+		?array $loadedBaselines = null,
 	): self {
-		return new self(
-			$schema,
-			self::fieldItemsForRecords($schema, $recordsBySourceKey),
-			self::relationItemsForRecords($schema, $recordsBySourceKey),
-		);
+		$baselines = [];
+		foreach ($schema->getFields() as $field) {
+			$sourceKey = $field->getSourcePathKey();
+			$record = $recordsBySourceKey[$sourceKey] ?? null;
+			if ($record === null) {
+				if ($field->shouldSkipWhenMissing()) {
+					continue;
+				}
+
+				throw new StateException(sprintf(
+					"Cannot create representation state because source path '%s' is unresolved.",
+					$sourceKey
+				));
+			}
+
+			$collectionName = $record->getCollection()->getName();
+			if ($field->getCollectionName() !== $collectionName) {
+				throw new StateException(sprintf(
+					"Representation schema path '%s' targets collection '%s', not '%s'.",
+					$field->getPath(),
+					$field->getCollectionName(),
+					$collectionName
+				));
+			}
+
+			if ($loadedBaselines !== null && array_key_exists($field->getPath(), $loadedBaselines)) {
+				$baselines[$field->getPath()] = $loadedBaselines[$field->getPath()];
+			} elseif ($loadedBaselines === null && $record->hasValue($field->getFieldName())) {
+				$baselines[$field->getPath()] = $record->getValue($field->getFieldName());
+			}
+		}
+
+		foreach ($schema->getRelations() as $relation) {
+			$root = $recordsBySourceKey[''] ?? throw new StateException(
+				"Cannot create representation state because root source path '' is unresolved."
+			);
+			$collectionName = $root->getCollection()->getName();
+			if ($relation->getOwnerCollectionName() !== $collectionName) {
+				throw new StateException(sprintf(
+					"Representation relation path '%s' targets collection '%s', not '%s'.",
+					$relation->getPath(),
+					$relation->getOwnerCollectionName(),
+					$collectionName
+				));
+			}
+		}
+
+		return new self($schema, $recordsBySourceKey, $baselines);
 	}
 
 	public function getSchema(): RepresentationSchema
@@ -49,172 +87,73 @@ final class RepresentationState
 		return $this->schema;
 	}
 
-	/**
-	 * Resolves the record this representation is rooted at: the concrete record
-	 * owned by root source path [], never a same-collection related record.
-	 *
-	 * Returns null when no root-source item has been attached yet. Throws when
-	 * root-source field items disagree on which record they own, which signals an
-	 * inconsistent state.
-	 */
-	public function getRootRecord(): ?RecordState
+	public function hasRecordForField(RepresentationFieldSchema $field): bool
 	{
-		$rootRecord = null;
+		return isset($this->recordsBySourceKey[$field->getSourcePathKey()]);
+	}
 
-		foreach ($this->fieldItems as $item) {
-			if (! $item->getSchema()->isRootSource()) {
-				continue;
+	public function getRecordForField(RepresentationFieldSchema $field): RecordState
+	{
+		return $this->recordsBySourceKey[$field->getSourcePathKey()]
+			?? throw new StateException(sprintf("Representation state has no record for field path '%s'.", $field->getPath()));
+	}
+
+	/** @return list<RepresentationFieldSchema> */
+	public function getWritableFields(): array
+	{
+		$fields = [];
+		foreach ($this->schema->getFields() as $field) {
+			if ($field->isWritable() && $this->hasRecordForField($field)) {
+				$fields[] = $field;
 			}
-
-			$record = $item->getRecord();
-
-			if ($rootRecord instanceof RecordState && $rootRecord->getStateHash() !== $record->getStateHash()) {
-				throw new StateException(sprintf(
-					"Representation state has inconsistent root records for collection '%s'.",
-					$this->schema->getCollectionName()
-				));
-			}
-
-			$rootRecord = $record;
 		}
 
-		return $rootRecord;
+		return $fields;
+	}
+
+	public function getRootRecord(): ?RecordState
+	{
+		return $this->recordsBySourceKey[''] ?? null;
 	}
 
 	public function requireRootRecord(): RecordState
 	{
-		$record = $this->getRootRecord();
-		if (! $record instanceof RecordState) {
-			throw new StateException(sprintf(
-				"Representation state has no root record for collection '%s'.",
-				$this->schema->getCollectionName()
-			));
-		}
-
-		return $record;
-	}
-
-	public function hasFieldItem(string $path): bool
-	{
-		return array_key_exists($path, $this->fieldItems);
-	}
-
-	public function getFieldItem(string $path): RepresentationFieldStateItem
-	{
-		if (! array_key_exists($path, $this->fieldItems)) {
-			throw new StateException(sprintf("Representation state does not contain field item path '%s'.", $path));
-		}
-
-		return $this->fieldItems[$path];
-	}
-
-	/**
-	 * @return list<RepresentationFieldStateItem>
-	 */
-	public function getFieldItems(): array
-	{
-		return array_values($this->fieldItems);
-	}
-
-	/**
-	 * @return list<RepresentationFieldStateItem>
-	 */
-	public function getWritableFieldItems(): array
-	{
-		return array_values(array_filter(
-			$this->fieldItems,
-			static fn (RepresentationFieldStateItem $item): bool => $item->getSchema()->isWritable()
+		return $this->getRootRecord() ?? throw new StateException(sprintf(
+			"Representation state has no root record for collection '%s'.",
+			$this->schema->getCollectionName()
 		));
 	}
 
-	public function hasRelationItem(string $path): bool
-	{
-		return array_key_exists($path, $this->relationItems);
-	}
-
-	public function getRelationItem(string $path): RepresentationRelationStateItem
-	{
-		if (! array_key_exists($path, $this->relationItems)) {
-			throw new StateException(sprintf("Representation state does not contain relation item path '%s'.", $path));
-		}
-
-		return $this->relationItems[$path];
-	}
-
-	/**
-	 * @return list<RepresentationRelationStateItem>
-	 */
-	public function getRelationItems(): array
-	{
-		return array_values($this->relationItems);
-	}
-
-	/**
-	 * @return list<RecordState>
-	 */
-	public function getRecordsForCollection(CollectionInterface $collection): array
-	{
-		$records = [];
-		foreach ($this->fieldItems as $fieldItem) {
-			if ($fieldItem->getSchema()->getCollectionName() === $collection->getName()) {
-				$record = $fieldItem->getRecord();
-				$records[$record->getStateHash()] = $record;
-			}
-		}
-
-		foreach ($this->relationItems as $relationItem) {
-			if ($relationItem->getSchema()->getOwnerCollectionName() === $collection->getName()) {
-				$record = $relationItem->getOwnerRecord();
-				$records[$record->getStateHash()] = $record;
-			}
-		}
-
-		return array_values($records);
-	}
-
-	/**
-	 * All distinct RecordStates referenced by field and relation items.
-	 *
-	 * @return list<RecordState>
-	 */
+	/** @return list<RecordState> */
 	public function getUniqueRecords(): array
 	{
 		$records = [];
-		foreach ($this->fieldItems as $item) {
-			$record = $item->getRecord();
-			$records[$record->getStateHash()] = $record;
-		}
-
-		foreach ($this->relationItems as $item) {
-			$record = $item->getOwnerRecord();
+		foreach ($this->recordsBySourceKey as $record) {
 			$records[$record->getStateHash()] = $record;
 		}
 
 		return array_values($records);
 	}
 
-	/**
-	 * Collapse this representation to one record, or null when no items are attached.
-	 *
-	 * @throws StateException when field/relation items resolve to multiple records
-	 */
+	/** @return list<RecordState> */
+	public function getRecordsForCollection(CollectionInterface $collection): array
+	{
+		return array_values(array_filter(
+			$this->getUniqueRecords(),
+			static fn (RecordState $record): bool => $record->getCollection()->getName() === $collection->getName(),
+		));
+	}
+
 	public function getSingleRecord(): ?RecordState
 	{
 		$records = $this->getUniqueRecords();
-		if ($records === []) {
-			return null;
-		}
-
 		if (count($records) > 1) {
 			throw new StateException('Representation state cannot be collapsed to one record.');
 		}
 
-		return $records[0];
+		return $records[0] ?? null;
 	}
 
-	/**
-	 * Require exactly one concrete record (e.g. Session::remove).
-	 */
 	public function requireSingleRecord(): RecordState
 	{
 		$records = $this->getUniqueRecords();
@@ -229,27 +168,10 @@ final class RepresentationState
 		return $records[0];
 	}
 
-	/**
-	 * Owner RecordState for a named relation on this representation (detach / relation ops).
-	 */
 	public function getOwnerRecord(string $relation): RecordState
 	{
-		if ($this->schema->hasRelation($relation)) {
-			$relationSchema = $this->schema->getRelation($relation);
-			foreach ($this->relationItems as $item) {
-				if ($item->getSchema()->getPath() === $relationSchema->getPath()) {
-					return $item->getOwnerRecord();
-				}
-			}
-
-			$root = $this->getRootRecord();
-			if ($root instanceof RecordState) {
-				return $root;
-			}
-		}
-
 		$root = $this->getRootRecord();
-		if ($root instanceof RecordState && $root->getCollection()->hasRelation($relation)) {
+		if ($root !== null && ($this->schema->hasRelation($relation) || $root->getCollection()->hasRelation($relation))) {
 			return $root;
 		}
 
@@ -264,127 +186,33 @@ final class RepresentationState
 		));
 	}
 
-	/** Restore baselines from a pre-flush clone after a transaction failure. @internal */
-	public function restoreSyncBaselines(self $snapshot): void
+	public function hasBaseline(string $path): bool
 	{
-		$this->fieldItems = $snapshot->fieldItems;
+		return array_key_exists($path, $this->baselines);
 	}
 
-	/**
-	 * Deliberate post-sync acknowledgement only.
-	 *
-	 * @param array<string, RecordState> $touchedRecords
-	 * @param array<string, mixed>|null $currentValues When supplied, acknowledge only values confirmed by this representation.
-	 */
-	public function acceptSyncedRecords(array $touchedRecords, ?array $currentValues = null): void
+	public function getBaseline(string $path): mixed
 	{
-		foreach ($this->fieldItems as $path => $item) {
-			$record = $item->getRecord();
-			if (! array_key_exists($record->getStateHash(), $touchedRecords)) {
-				continue;
-			}
-			if ($currentValues !== null && (
-				! array_key_exists($path, $currentValues)
-				|| ! $item->hasCurrentRecordValue()
-				|| $currentValues[$path] !== $item->getCurrentRecordValue()
-			)) {
-				continue;
-			}
-
-			$this->fieldItems[$path] = $item->withBaselineRevision($record->getRevision());
-		}
+		return $this->baselines[$path] ?? null;
 	}
 
-	/**
-	 * @param array<string, RecordState> $recordsBySourceKey
-	 * @return list<RepresentationFieldStateItem>
-	 */
-	private static function fieldItemsForRecords(
-		RepresentationSchema $schema,
-		array $recordsBySourceKey,
-	): array {
-		$items = [];
-		foreach ($schema->getFields() as $fieldSchema) {
-			$sourceKey = $fieldSchema->getSourcePathKey();
-			$record = $recordsBySourceKey[$sourceKey] ?? null;
-
-			if (! $record instanceof RecordState) {
-				if ($fieldSchema->shouldSkipWhenMissing()) {
-					continue;
-				}
-
-				throw new StateException(sprintf(
-					"Cannot create representation state because source path '%s' is unresolved.",
-					$sourceKey
-				));
-			}
-
-			$items[] = RepresentationFieldStateItem::createOne($fieldSchema, $record);
-		}
-
-		return $items;
+	/** @return array<string, mixed> */
+	public function snapshotBaselines(): array
+	{
+		return $this->baselines;
 	}
 
-	/**
-	 * @param array<string, RecordState> $recordsBySourceKey
-	 * @return list<RepresentationRelationStateItem>
-	 */
-	private static function relationItemsForRecords(RepresentationSchema $schema, array $recordsBySourceKey): array
+	/** @param array<string, mixed> $baselines */
+	public function restoreBaselines(array $baselines): void
 	{
-		if ($schema->getRelations() === []) {
-			return [];
-		}
-
-		$rootKey = RepresentationFieldSchema::sourcePathKey([]);
-		$rootRecord = $recordsBySourceKey[$rootKey] ?? null;
-		if (! $rootRecord instanceof RecordState) {
-			throw new StateException(sprintf(
-				"Cannot create representation state because root source path '%s' is unresolved.",
-				$rootKey
-			));
-		}
-
-		$items = [];
-		foreach ($schema->getRelations() as $relationSchema) {
-			$items[] = RepresentationRelationStateItem::createOne($relationSchema, $rootRecord);
-		}
-
-		return $items;
+		$this->baselines = $baselines;
 	}
 
-	/**
-	 * @param array<string, RepresentationFieldStateItem>|list<RepresentationFieldStateItem> $items
-	 * @return array<string, RepresentationFieldStateItem>
-	 */
-	private function normalizeFieldItems(array $items): array
+	/** @param array<string, mixed> $syncedValuesByPath */
+	public function acceptSyncedValues(array $syncedValuesByPath): void
 	{
-		$normalized = [];
-		foreach ($items as $item) {
-			if (! $item instanceof RepresentationFieldStateItem) {
-				throw new StateException('Representation state field items must be RepresentationFieldStateItem instances.');
-			}
-
-			$normalized[$item->getPath()] = $item;
+		foreach ($syncedValuesByPath as $path => $value) {
+			$this->baselines[$path] = $value;
 		}
-
-		return $normalized;
-	}
-
-	/**
-	 * @param array<string, RepresentationRelationStateItem>|list<RepresentationRelationStateItem> $items
-	 * @return array<string, RepresentationRelationStateItem>
-	 */
-	private function normalizeRelationItems(array $items): array
-	{
-		$normalized = [];
-		foreach ($items as $item) {
-			if (! $item instanceof RepresentationRelationStateItem) {
-				throw new StateException('Representation state relation items must be RepresentationRelationStateItem instances.');
-			}
-
-			$normalized[$item->getPath()] = $item;
-		}
-
-		return $normalized;
 	}
 }

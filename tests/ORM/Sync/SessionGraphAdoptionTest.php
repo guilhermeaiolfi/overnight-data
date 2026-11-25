@@ -54,7 +54,7 @@ final class SessionGraphAdoptionTest extends TestCase
 		$state = $session->getRepresentations()->get($child);
 		self::assertInstanceOf(RepresentationState::class, $state);
 		$childRecord = $state->requireRootRecord();
-		$managerRecord = $state->getFieldItem('managerName')->getRecord();
+		$managerRecord = $state->getRecordForField($state->getSchema()->getField('managerName'));
 		self::assertSame($createChild, $childRecord->isNew());
 		self::assertSame(! $createChild, $childRecord->isDirty());
 		self::assertSame($flatOperation !== 'update', $managerRecord->isNew());
@@ -100,7 +100,7 @@ final class SessionGraphAdoptionTest extends TestCase
 	public function testAdoptRootWithNoRelationSchemasReturnsEmptyResult(): void
 	{
 		$root = $this->representation(['name' => 'Root']);
-		$representations = $this->representations($this->tracked($root, $this->userSchemaFor(RecordState::new($this->users()))));
+		$representations = $this->representations($this->tracked($root, new RepresentationSchema($this->users())));
 
 		$this->session($representations)->sync($root);
 
@@ -402,7 +402,7 @@ final class SessionGraphAdoptionTest extends TestCase
 		$root = $this->representation(['posts' => [$item]]);
 		$representations = $this->representations(
 			$this->trackedRootWithPosts($root),
-			$this->tracked($item, $this->postSchemaFor(RecordState::new($this->posts())))
+			$this->tracked($item, new RepresentationSchema($this->posts()))
 		);
 
 		$this->session($representations)->sync($root);
@@ -422,7 +422,7 @@ final class SessionGraphAdoptionTest extends TestCase
 			'comments',
 			$this->commentSchema()
 		));
-		$representations = $this->representations($this->trackedRootWithPosts($root), $this->tracked($post, $postSchema));
+		$representations = $this->representations($this->trackedRootWithPosts($root), $this->tracked($post, $postSchema, [RecordState::new($postSchema->getCollection())]));
 
 		$this->session($representations)->sync($root);
 
@@ -448,7 +448,7 @@ final class SessionGraphAdoptionTest extends TestCase
 			'posts',
 			$postSchema
 		));
-		$representations = $this->representations($this->tracked($root, $rootSchema));
+		$representations = $this->representations($this->tracked($root, $rootSchema, [RecordState::new($rootSchema->getCollection())]));
 
 		$this->session($representations)->sync($root);
 
@@ -474,7 +474,7 @@ final class SessionGraphAdoptionTest extends TestCase
 			'profile',
 			$profileSchema
 		));
-		$representations = $this->representations($this->tracked($root, $rootSchema));
+		$representations = $this->representations($this->tracked($root, $rootSchema, [RecordState::new($rootSchema->getCollection())]));
 
 		$this->session($representations)->sync($root);
 
@@ -502,7 +502,7 @@ final class SessionGraphAdoptionTest extends TestCase
 			'posts',
 			$postSchema
 		));
-		$representations = $this->representations($this->tracked($root, $rootSchema));
+		$representations = $this->representations($this->tracked($root, $rootSchema, [RecordState::new($rootSchema->getCollection())]));
 
 		$this->session($representations)->sync($root);
 
@@ -573,7 +573,7 @@ final class SessionGraphAdoptionTest extends TestCase
 			$this->postSchema()
 		));
 
-		return $this->tracked($root, $schema);
+		return $this->tracked($root, $schema, [RecordState::new($schema->getCollection())]);
 	}
 
 	private function trackedRootWithPostsAndPostIds(object $root): RepresentationState
@@ -586,7 +586,7 @@ final class SessionGraphAdoptionTest extends TestCase
 			$this->postSchemaWithId()
 		));
 
-		return $this->tracked($root, $schema);
+		return $this->tracked($root, $schema, [RecordState::new($schema->getCollection())]);
 	}
 
 	private function trackedRootWithProfile(object $root): RepresentationState
@@ -599,6 +599,6 @@ final class SessionGraphAdoptionTest extends TestCase
 			$this->profileSchema()
 		));
 
-		return $this->tracked($root, $schema);
+		return $this->tracked($root, $schema, [RecordState::new($schema->getCollection())]);
 	}
 }
