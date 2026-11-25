@@ -4,78 +4,54 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Result;
 
+use ON\Data\Mapper\Exception\NoWriterFoundException;
+use ON\Data\Mapper\MapperManager;
+use ON\Data\Mapper\Mapping;
+use ON\Data\Mapper\MappingOptions;
+use ON\Data\Mapper\Writer\ObjectWriter;
 use ON\Data\Query\Exception\ObjectExportException;
 use ReflectionClass;
-use ReflectionProperty;
-use stdClass;
+use ReflectionException;
 
 final class ObjectExportClassValidator
 {
-	public static function assertSupported(string $class): void
+	public static function assertSupported(string $class, ?MapperManager $manager = null): void
 	{
-		if ($class === stdClass::class) {
-			return;
-		}
+		$manager ??= Mapping::getDefaultGateway()->getMapperManager();
 
-		if (trait_exists($class)) {
-			throw ObjectExportException::traitNotSupported($class);
-		}
-
-		if (interface_exists($class)) {
-			throw ObjectExportException::interfaceNotSupported($class);
-		}
-
-		if (! class_exists($class)) {
-			throw ObjectExportException::classNotFound($class);
-		}
-
-		$reflection = new ReflectionClass($class);
-
-		if ($reflection->isTrait()) {
-			throw ObjectExportException::traitNotSupported($class);
-		}
-
-		if ($reflection->isInterface()) {
-			throw ObjectExportException::interfaceNotSupported($class);
-		}
-
-		if ($reflection->isAbstract()) {
-			throw ObjectExportException::abstractClassNotSupported($class);
+		if (! $manager->canWrite($class)) {
+			throw self::unsupportedTarget($class);
 		}
 	}
 
-	/**
-	 * Writable export: stdClass or a concrete non-readonly class (mutable public-property bag).
-	 */
-	public static function assertWritable(string $class): void
+	public static function assertWritable(string $class, ?MapperManager $manager = null): void
 	{
-		self::assertSupported($class);
+		$manager ??= Mapping::getDefaultGateway()->getMapperManager();
 
-		if ($class === stdClass::class) {
-			return;
+		try {
+			$writer = $manager->resolveWriter($class, new MappingOptions($manager->getGateway()));
+		} catch (NoWriterFoundException) {
+			throw self::unsupportedTarget($class);
 		}
 
-		$reflection = new ReflectionClass($class);
-		if (self::isReadonlyTarget($reflection)) {
+		if ($writer instanceof ObjectWriter && ObjectWriter::isReadonlyTarget(new ReflectionClass($class))) {
 			throw ObjectExportException::writableReadonlyNotSupported($class);
 		}
 	}
 
-	/**
-	 * @param ReflectionClass<object> $reflection
-	 */
-	private static function isReadonlyTarget(ReflectionClass $reflection): bool
+	private static function unsupportedTarget(string $class): ObjectExportException
 	{
-		if (method_exists($reflection, 'isReadOnly') && $reflection->isReadOnly()) {
-			return true;
+		try {
+			$reflection = new ReflectionClass($class);
+		} catch (ReflectionException) {
+			return ObjectExportException::classNotFound($class);
 		}
 
-		foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
-			if (! $property->isStatic() && $property->isReadOnly()) {
-				return true;
-			}
-		}
-
-		return false;
+		return match (true) {
+			$reflection->isTrait() => ObjectExportException::traitNotSupported($class),
+			$reflection->isInterface() => ObjectExportException::interfaceNotSupported($class),
+			$reflection->isAbstract() => ObjectExportException::abstractClassNotSupported($class),
+			default => ObjectExportException::targetNotSupported($class),
+		};
 	}
 }

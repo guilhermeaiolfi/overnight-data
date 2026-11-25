@@ -9,6 +9,7 @@ use ON\Data\Database\Sql\Dialect\SqliteDialect;
 use ON\Data\Database\Sql\SqlQueryCompiler;
 use ON\Data\Definition\Registry;
 use ON\Data\Mapper\Attribute\Hidden;
+use ON\Data\Mapper\Attribute\MapCollection;
 use ON\Data\Mapper\Attribute\MapFrom;
 use ON\Data\Mapper\Attribute\MapTo;
 use ON\Data\Mapper\ConversionGateway;
@@ -180,6 +181,23 @@ final class DtoDrivenQueryProjectionTest extends TestCase
 		self::assertNull($cards[1]->countryCode);
 		self::assertCount(1, $cards[1]->posts);
 		self::assertSame('Compiler', $cards[1]->posts[0]->title);
+	}
+
+	#[RequiresPhpExtension('pdo_sqlite')]
+	public function testMapCollectionProjectsAndHydratesRelationWithoutDocblocks(): void
+	{
+		$harness = $this->makeSqliteHarness();
+		$posts = $this->makeRegistry()->getCollection('posts');
+		$posts->hasMany('authors', 'users')->innerKey('userId')->outerKey('id');
+		$query = $harness->database->query($posts);
+		$rows = $query->to(DtoPostWithAuthors::class)->orderBy($query->id->asc())->fetchAll();
+
+		self::assertSame(['id', 'name'], $query->projection()->getRelation('authors')->getRelatedSchema()->getPublicScalarPaths());
+		self::assertCount(3, $rows);
+		self::assertInstanceOf(DtoPostWithAuthors::class, $rows[0]);
+		self::assertCount(1, $rows[0]->authors);
+		self::assertInstanceOf(DtoUserSummary::class, $rows[0]->authors[0]);
+		self::assertSame('Ada', $rows[0]->authors[0]->name);
 	}
 
 	#[RequiresPhpExtension('pdo_sqlite')]
@@ -431,6 +449,16 @@ final class DtoPostRow
 
 	#[MapFrom('author.name')]
 	public string $authorName;
+}
+
+final readonly class DtoPostWithAuthors
+{
+	public function __construct(
+		public int $id,
+		#[MapCollection(DtoUserSummary::class)]
+		public array $authors,
+	) {
+	}
 }
 
 final class DtoUserCard

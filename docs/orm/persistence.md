@@ -37,7 +37,9 @@ During inbound adoption, identification, writable query hydration, and sync, the
 
 `$runtime->session()` uses the runtime's command executor and the same gateway as `$runtime->query(...)`. Pass a `FlushHistory` to `$runtime->session($history)` to journal writes. `SqlRuntimeFactory::create($pdo, $gateway)` and `connect($config, $gateway)` share the supplied gateway across SQL value conversion, query object export, and sessions created by the runtime. `$runtime->getGateway()` returns that instance.
 
-Relation paths refer to live public properties. Expose relation targets there so the session can resolve each original PHP instance to its tracked state.
+Expose live relation targets through public properties with the default object mapper, or through a custom mapper. The session uses the original PHP instances to resolve their tracked state.
+
+A writable query can hydrate a custom entity through a writer registered on the runtime gateway. Prepend the writer and its matching mapper when they need to take priority over the defaults. The mapper must expose the scalar and relation paths selected by the query so the session can track the entity and flush changes.
 
 `RecordState` is the persistence source of truth. It stores canonical PHP values keyed by collection field name, the original clean snapshot, lifecycle state, and identity through `ON\Data\Key`.
 
@@ -289,6 +291,6 @@ For an optional, bounded journal of committed commands and transactional undo, s
 - No `Session::refresh()` of an existing row; omitted insert columns and `DatabaseGenerator` update columns are recovered on the write path via `RETURNING` or a follow-up select as documented above.
 - No batch command execution.
 - No public SQL command API.
-- Writable export supports `stdClass` and mutable public-property classes. It rejects readonly classes and properties.
+- With the default object writer, writable export supports `stdClass` and mutable public-property classes. Readonly classes and classes with readonly public properties require a custom writer and a mapper that exposes the tracked paths.
 - Writable iteration is not supported yet.
-- Flat projection provenance is for writable query export (`stdClass` or mutable DTO).
+- Flat projection provenance is for writable query export.

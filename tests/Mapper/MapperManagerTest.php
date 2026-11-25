@@ -46,6 +46,7 @@ use ON\Data\Mapper\Writer\ObjectWriter;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use stdClass;
+use Tests\ON\Data\Fixture\AbstractUserDto;
 use Tests\ON\Data\Fixture\ApiRepresentation;
 use Tests\ON\Data\Fixture\ComponentTestState;
 use Tests\ON\Data\Fixture\ContractDto;
@@ -66,10 +67,12 @@ use Tests\ON\Data\Fixture\ReplacementTrackingWireCodec;
 use Tests\ON\Data\Fixture\SpyArrayMapper;
 use Tests\ON\Data\Fixture\SpyArrayWriter;
 use Tests\ON\Data\Fixture\SpyResolver;
+use Tests\ON\Data\Fixture\StatusEnum;
 use Tests\ON\Data\Fixture\TrackingApiCodec;
 use Tests\ON\Data\Fixture\TrackingCustomFieldType;
 use Tests\ON\Data\Fixture\TrackingWireCodec;
 use Tests\ON\Data\Fixture\UserContract;
+use Tests\ON\Data\PlainDataAsserts;
 
 final class MapperManagerTest extends TestCase
 {
@@ -111,6 +114,46 @@ final class MapperManagerTest extends TestCase
 		self::assertTrue($manager->has(SpyResolver::class));
 		self::assertTrue($manager->has(CustomFieldType::class));
 		self::assertTrue($manager->has(TrackingWireCodec::class));
+	}
+
+	public function testCapabilitiesInspectReadAndWriteComponentsIndependently(): void
+	{
+		$manager = (new ConversionGateway())->getMapperManager();
+		$source = new stdClass();
+		$manager->register(PrependingStdClassMapper::class);
+
+		self::assertTrue($manager->canMap($source));
+		self::assertFalse($manager->canWrite($source));
+		self::assertFalse($manager->supports($source, UserContract::class));
+
+		$manager->register(PrependingContractWriter::class);
+
+		self::assertTrue($manager->canWrite(UserContract::class));
+		self::assertFalse($manager->canMap(UserContract::class));
+		self::assertTrue($manager->supports($source, UserContract::class));
+		self::assertFalse($manager->supports([], UserContract::class));
+		self::assertSame([], ComponentTestState::$constructed);
+	}
+
+	public function testDefaultCapabilitiesAndOptionOverrides(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+		$manager = $gateway->getMapperManager();
+
+		self::assertTrue($manager->supports([], stdClass::class));
+		self::assertTrue($manager->supports(new stdClass(), []));
+		self::assertFalse($manager->canMap(stdClass::class));
+		self::assertFalse($manager->canMap(StatusEnum::Active));
+		self::assertFalse($manager->canMap(new PhpRepresentation()));
+		foreach ([PlainDataAsserts::class, UserContract::class, AbstractUserDto::class, StatusEnum::class, PhpRepresentation::class] as $target) {
+			self::assertFalse($manager->canWrite($target), $target);
+		}
+
+		$options = new MappingOptions($gateway);
+		self::assertTrue($manager->canMap(StatusEnum::Active, $options->withShallow()));
+		self::assertFalse($manager->canMap([], $options->withMapperClass(NeverMapper::class)));
+		self::assertFalse($manager->canWrite([], $options->withWriterClass(NeverWriter::class)));
+		self::assertTrue($manager->supports([], UserContract::class, $options->withWriterClass(PrependingContractWriter::class)));
 	}
 
 	public function testDuplicateRegistrationFails(): void

@@ -424,55 +424,79 @@ final class MapperManager
 		return $resolved;
 	}
 
+	public function canMap(mixed $source, ?MappingOptions $options = null): bool
+	{
+		return $this->findMapperClass($source, $options ?? new MappingOptions($this->gateway)) !== null;
+	}
+
+	public function canWrite(mixed $target, ?MappingOptions $options = null): bool
+	{
+		return $this->findWriterClass($target, $options ?? new MappingOptions($this->gateway)) !== null;
+	}
+
+	public function supports(mixed $source, mixed $target, ?MappingOptions $options = null): bool
+	{
+		return $this->canMap($source, $options) && $this->canWrite($target, $options);
+	}
+
 	public function resolveMapper(
 		mixed $source,
 		MappingOptions $options,
 	): MapperInterface {
-		$mapperClass = $options->getMapperClass();
+		$mapperClass = $this->findMapperClass($source, $options);
 		if ($mapperClass !== null) {
-			$this->assertRoleOrThrow($mapperClass, MapperInterface::class);
-			if (! $mapperClass::canMap($source, $options)) {
-				throw new IncompatibleMapperException(
-					sprintf("Mapper '%s' cannot map the given source.", $mapperClass),
-				);
-			}
-
 			return $this->has($mapperClass)
 				? $this->getMapper($mapperClass)
 				: $this->constructMapper($mapperClass);
 		}
 
-		foreach ($this->mappers as $candidate) {
-			if ($candidate::canMap($source, $options)) {
-				return $this->getMapper($candidate);
-			}
+		$override = $options->getMapperClass();
+		if ($override !== null) {
+			throw new IncompatibleMapperException(
+				sprintf("Mapper '%s' cannot map the given source.", $override),
+			);
 		}
 
 		throw new NoMapperFoundException('No registered mapper can handle the requested source.');
+	}
+
+	/**
+	 * @return class-string<MapperInterface>|null
+	 */
+	private function findMapperClass(mixed $source, MappingOptions $options): ?string
+	{
+		$override = $options->getMapperClass();
+		if ($override !== null) {
+			$this->assertRoleOrThrow($override, MapperInterface::class);
+
+			return $override::canMap($source, $options) ? $override : null;
+		}
+
+		foreach ($this->mappers as $candidate) {
+			if ($candidate::canMap($source, $options)) {
+				return $candidate;
+			}
+		}
+
+		return null;
 	}
 
 	public function resolveWriter(
 		mixed $target,
 		MappingOptions $options,
 	): WriterInterface {
-		$writerClass = $options->getWriterClass();
+		$writerClass = $this->findWriterClass($target, $options);
 		if ($writerClass !== null) {
-			$this->assertRoleOrThrow($writerClass, WriterInterface::class);
-			if (! $writerClass::canWrite($target, $options)) {
-				throw new IncompatibleWriterException(
-					sprintf("Writer '%s' cannot write the given target.", $writerClass),
-				);
-			}
-
 			return $this->has($writerClass)
 				? $this->getWriter($writerClass)
 				: $this->constructWriter($writerClass);
 		}
 
-		foreach ($this->writers as $candidate) {
-			if ($candidate::canWrite($target, $options)) {
-				return $this->getWriter($candidate);
-			}
+		$override = $options->getWriterClass();
+		if ($override !== null) {
+			throw new IncompatibleWriterException(
+				sprintf("Writer '%s' cannot write the given target.", $override),
+			);
 		}
 
 		throw new NoWriterFoundException(
@@ -481,6 +505,27 @@ final class MapperManager
 				$this->describeTarget($target),
 			),
 		);
+	}
+
+	/**
+	 * @return class-string<WriterInterface>|null
+	 */
+	private function findWriterClass(mixed $target, MappingOptions $options): ?string
+	{
+		$override = $options->getWriterClass();
+		if ($override !== null) {
+			$this->assertRoleOrThrow($override, WriterInterface::class);
+
+			return $override::canWrite($target, $options) ? $override : null;
+		}
+
+		foreach ($this->writers as $candidate) {
+			if ($candidate::canWrite($target, $options)) {
+				return $candidate;
+			}
+		}
+
+		return null;
 	}
 
 	private function construct(string $component): object

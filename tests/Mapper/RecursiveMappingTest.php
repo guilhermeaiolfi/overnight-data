@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\ON\Data\Mapper;
 
 use ON\Data\Definition\Registry;
+use ON\Data\Mapper\Attribute\MapCollection;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Exception\MappingException;
 use function ON\Data\Mapper\map;
@@ -73,6 +74,19 @@ final class RecursiveMappingTest extends TestCase
 		self::assertSame('Ada', $result->author->name);
 		self::assertContainsOnlyInstancesOf(ReadonlyPromotedAuthorDto::class, $result->authors);
 		self::assertSame('Grace', $result->authors[1]->name);
+	}
+
+	public function testMapCollectionTakesPrecedenceOverPropertyAndConstructorDocblocks(): void
+	{
+		$row = ['authors' => [['id' => 2, 'name' => 'Ada']]];
+		$mutable = map($row)->to(AttributedPostDto::class);
+		$readonly = map($row)->to(ReadonlyAttributedPostDto::class);
+
+		foreach ([$mutable, $readonly] as $post) {
+			self::assertCount(1, $post->authors);
+			self::assertInstanceOf(AuthorDto::class, $post->authors[0]);
+			self::assertSame('Ada', $post->authors[0]->name);
+		}
 	}
 
 	public function testDottedKeysExpandByDefaultForArrayDtoAndStdClassTargets(): void
@@ -539,5 +553,22 @@ final class RecursiveMappingTest extends TestCase
 		$posts->belongsTo('author', 'users');
 
 		return $posts;
+	}
+}
+
+final class AttributedPostDto
+{
+	/** @var list<ReadonlyPromotedAuthorDto> */
+	#[MapCollection(AuthorDto::class)]
+	public array $authors = [];
+}
+
+final readonly class ReadonlyAttributedPostDto
+{
+	/** @param iterable<ReadonlyPromotedAuthorDto> $authors */
+	public function __construct(
+		#[MapCollection(AuthorDto::class)]
+		public iterable $authors,
+	) {
 	}
 }

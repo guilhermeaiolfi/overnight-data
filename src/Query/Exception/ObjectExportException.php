@@ -40,6 +40,11 @@ final class ObjectExportException extends InvalidArgumentException
 		));
 	}
 
+	public static function targetNotSupported(string $class): self
+	{
+		return new self(sprintf('No registered writer supports object export class "%s".', $class));
+	}
+
 	public static function writableClassNotSupported(string $class): self
 	{
 		return new self(sprintf(

@@ -58,6 +58,8 @@ Bound queries return arrays by default. Object export is opt-in through `to(...)
 
 Queries created by `DataRuntime::query()` use the runtime's `ConversionGateway` for object export, including when reopened from a `RepresentationSchema`. Standalone `SelectQuery` instances accept an optional `gateway:` argument and use `Mapping::getDefaultGateway()` when it is omitted.
 
+`to($class)` accepts targets supported by a writer on that gateway, including interfaces and abstract classes handled by custom writers. Prepend a custom writer if it should take priority over a built-in writer that also accepts the target.
+
 `SelectQuery::count()` always executes as a scalar aggregate path: it does not apply `to(...)`, `writable(...)`, or relation loading on the count copy. See [`query-model.md`](./query-model.md#counting-matching-rows).
 
 | Call | Result |
@@ -71,7 +73,9 @@ Queries created by `DataRuntime::query()` use the runtime's `ConversionGateway` 
 | `$query->to(stdClass::class)->writable($session)->fetchAll()` | tracked writable `stdClass` objects |
 | `$query->to(UserRow::class)->writable($session)->fetchAll()` | tracked writable mutable public-property DTOs (including DTO-derived flat fields and nested relations) |
 
-When `to(Dto::class)` is called on a collection-root query that still has only its default root selection (no explicit `select()` and no relation selections), `SelectQuery` derives the projection directly from the DTO's visible public properties (`#[MapFrom('company.name')]` for aliases and flat related fields, nested class types and `@var list<ChildDto>` / `@param list<ChildDto>` docblocks for relations, skipping `#[Hidden]` and unmapped defaulted properties). `stdClass` and classes with no declared visible public properties keep the default root scalar selection; explicit `select()` or relation selections before `to(...)` always take precedence.
+On a collection-root query with its default root selection, `to(Dto::class)` derives the projection from the DTO's visible public properties. Use `#[MapFrom('company.name')]` for aliases and flat related fields, a nested DTO type for a to-one relation, and `#[MapCollection(ChildDto::class)]` for a to-many relation. The collection attribute also works on readonly promoted properties and takes precedence over `@var list<ChildDto>` or `@param list<ChildDto>`. The compiler skips `#[Hidden]` and unmapped defaulted properties.
+
+`stdClass`, interfaces, abstract classes, and classes with no declared visible public properties keep the default root scalar selection. Explicit `select()` or relation selections before `to(...)` take precedence.
 
 Read-only object export also supports lazy iteration: `to(...)->iterate()` yields objects one row at a time. `writable(...)->iterate()` is intentionally unsupported; use `fetchAll()` or `fetchOne()`.
 
@@ -92,7 +96,7 @@ When assemble runs (aliases, flats, or relation loads), implicit source primary 
 
 Writable export requirements:
 
-- requires `to(stdClass::class)` or `to(MutableDto::class)` where the class is concrete and not readonly (mutable public properties);
+- Requires `to(...)`. The default object writer requires a mutable target for writable export. A custom writer can hydrate its own targets when the session's mapper can read their schema paths.
 - requires an explicit `Session`;
 - tracks the same object instance returned to the caller (no shadow copy);
 - requires the root primary key to be present on the fetched row (`writable()` does not add it; results without identity are never tracked);

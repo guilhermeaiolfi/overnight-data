@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Mapper;
 
-use ON\Data\Mapper\Support\BranchTargetInferrer;
+use InvalidArgumentException;
+use ON\Data\Mapper\Attribute\MapCollection;
+use ON\Data\Mapper\Support\DocblockListTargetResolver;
 use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
 use ReflectionProperty;
 use Tests\ON\Data\Fixture\AuthorDto;
 
@@ -56,15 +57,17 @@ final class BranchTargetInferrerTest extends TestCase
 		));
 	}
 
+	public function testExplicitCollectionItemClassMustExist(): void
+	{
+		$this->expectException(InvalidArgumentException::class);
+		$this->expectExceptionMessage('MapCollection item class "" does not exist.');
+
+		new MapCollection('');
+	}
+
 	private function resolvePhpDocListTarget(ReflectionProperty $property): ?string
 	{
-		$method = new ReflectionMethod(
-			BranchTargetInferrer::class,
-			'resolvePhpDocListTarget',
-		);
-		$method->setAccessible(true);
-
-		return $method->invoke(new BranchTargetInferrer(), $property);
+		return (new DocblockListTargetResolver())->resolve($property);
 	}
 }
 

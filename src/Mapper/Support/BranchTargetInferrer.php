@@ -162,16 +162,19 @@ final class BranchTargetInferrer
 			return $this->nestedTarget($class, false, $this->withoutDirectDefinitions($node->getArguments()));
 		}
 
-		if ($type->getName() === 'array') {
-			$listTarget = $this->resolvePhpDocListTarget($property);
+		$name = $type->getName();
+		if ($name === 'array' || $name === 'iterable') {
+			$listTarget = $this->listTargetResolver->resolve($property);
 			if ($listTarget !== null) {
 				return $this->nestedTarget($listTarget, true, $this->withoutDirectDefinitions($node->getArguments()));
 			}
 
-			return $this->nestedTarget([], false, $this->withoutDirectDefinitions($node->getArguments()));
+			return $name === 'array'
+				? $this->nestedTarget([], false, $this->withoutDirectDefinitions($node->getArguments()))
+				: null;
 		}
 
-		if ($type->getName() === 'object') {
+		if ($name === 'object') {
 			return $this->nestedTarget(stdClass::class, false, $this->withoutDirectDefinitions($node->getArguments()));
 		}
 
@@ -207,13 +210,16 @@ final class BranchTargetInferrer
 			return $this->nestedTarget($genericTarget, false, $node->getArguments());
 		}
 
-		if ($type->getName() === 'array') {
-			$listTarget = $this->resolvePhpDocListTarget($property);
+		$name = $type->getName();
+		if ($name === 'array' || $name === 'iterable') {
+			$listTarget = $this->listTargetResolver->resolve($property);
 
-			return $this->nestedTarget($genericTarget, $listTarget !== null, $node->getArguments());
+			if ($name === 'array' || $listTarget !== null) {
+				return $this->nestedTarget($genericTarget, $listTarget !== null, $node->getArguments());
+			}
 		}
 
-		if ($type->getName() === 'object') {
+		if ($name === 'object') {
 			return $this->nestedTarget($genericTarget, false, $node->getArguments());
 		}
 
@@ -257,10 +263,5 @@ final class BranchTargetInferrer
 			$arguments,
 			static fn (mixed $argument): bool => ! $argument instanceof DefinitionInterface,
 		));
-	}
-
-	private function resolvePhpDocListTarget(ReflectionProperty $property): ?string
-	{
-		return $this->listTargetResolver->resolve($property);
 	}
 }

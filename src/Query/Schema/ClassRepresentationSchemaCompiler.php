@@ -9,6 +9,7 @@ use DateTimeInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Mapper\Attribute\Hidden;
+use ON\Data\Mapper\Attribute\MapCollection;
 use ON\Data\Mapper\Attribute\MapFrom;
 use ON\Data\Mapper\Attribute\MapTo;
 use ON\Data\Mapper\Representation\RepresentationInterface;
@@ -28,7 +29,7 @@ use stdClass;
 /**
  * Compiles a DTO class into a structural {@see RepresentationSchema} against a
  * root collection using public properties, {@see MapFrom}, {@see Hidden}, and
- * nested class / docblock list types.
+ * nested class types, {@see MapCollection}, or docblock list types.
  *
  * Returns null when the class has no declared visible public properties (such as
  * {@see stdClass} or a private-property class backed by a custom mapper).

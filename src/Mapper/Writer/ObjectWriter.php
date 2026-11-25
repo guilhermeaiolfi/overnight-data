@@ -262,13 +262,13 @@ final class ObjectWriter implements WriterInterface
 		}
 
 		return $constructor->getNumberOfParameters() > 0
-			|| $this->isReadonlyTarget($reflection);
+			|| self::isReadonlyTarget($reflection);
 	}
 
 	/**
 	 * @param ReflectionClass<object> $reflection
 	 */
-	private function isReadonlyTarget(ReflectionClass $reflection): bool
+	public static function isReadonlyTarget(ReflectionClass $reflection): bool
 	{
 		if (method_exists($reflection, 'isReadOnly') && $reflection->isReadOnly()) {
 			return true;

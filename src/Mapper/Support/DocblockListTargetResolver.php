@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper\Support;
 
+use ON\Data\Mapper\Attribute\MapCollection;
 use ReflectionProperty;
 
+/** Resolves explicit collection item types with PHPDoc as a fallback. */
 final class DocblockListTargetResolver
 {
 	/**
@@ -30,8 +32,11 @@ final class DocblockListTargetResolver
 			return $this->listTargets[$class][$name];
 		}
 
-		return $this->listTargets[$class][$name]
-			= $this->parseListTarget($property);
+		// PHP exposes attributes on promoted parameters through their properties too.
+		$attribute = $property->getAttributes(MapCollection::class)[0] ?? null;
+
+		return $this->listTargets[$class][$name] = $attribute?->newInstance()->getItemClass()
+			?? $this->parseListTarget($property);
 	}
 
 	/**

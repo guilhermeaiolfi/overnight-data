@@ -13,6 +13,8 @@ use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Key;
 use ON\Data\Mapper\ConversionGateway;
 use function ON\Data\Mapper\map;
+use ON\Data\Mapper\MapperManager;
+use ON\Data\Mapper\Mapping;
 use ON\Data\Query\Condition\ConditionInterface;
 use ON\Data\Query\Condition\ConditionList;
 use ON\Data\Query\Condition\ConditionTag;
@@ -44,6 +46,7 @@ use ON\Data\Query\Sort\Sort;
 use ON\Data\Schema\RelationLoadKnowledge;
 use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationSchema;
+use ReflectionClass;
 use stdClass;
 
 final class SelectQuery implements QuerySourceInterface
@@ -427,7 +430,7 @@ final class SelectQuery implements QuerySourceInterface
 
 	public function to(string $class): self
 	{
-		ObjectExportClassValidator::assertSupported($class);
+		ObjectExportClassValidator::assertSupported($class, $this->getMapperManager());
 
 		$this->resultClass = $class;
 		$this->applyTargetClassProjection($class);
@@ -455,7 +458,7 @@ final class SelectQuery implements QuerySourceInterface
 			throw ObjectExportException::requiresObjectExport();
 		}
 
-		ObjectExportClassValidator::assertWritable($this->resultClass);
+		ObjectExportClassValidator::assertWritable($this->resultClass, $this->getMapperManager());
 
 		$this->writableHandler = $handler;
 
@@ -1073,9 +1076,11 @@ final class SelectQuery implements QuerySourceInterface
 		return $field;
 	}
 
-	/**
-	 * @param class-string $class
-	 */
+	private function getMapperManager(): MapperManager
+	{
+		return ($this->gateway ?? Mapping::getDefaultGateway())->getMapperManager();
+	}
+
 	private function applyTargetClassProjection(string $class): void
 	{
 		if (! $this->source instanceof CollectionInterface || $class === stdClass::class) {
@@ -1083,6 +1088,15 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		if (! $this->hasImplicitDefaultProjection()) {
+			return;
+		}
+
+		if (! class_exists($class)) {
+			return;
+		}
+
+		$reflection = new ReflectionClass($class);
+		if ($reflection->isAbstract() || $reflection->isEnum()) {
 			return;
 		}
 

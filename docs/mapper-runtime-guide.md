@@ -222,6 +222,8 @@ $runtime = $gateway->getMapperManager();
 
 `MapperManager::createDefault($gateway)` configures and returns that same manager. It adds missing built-in components without replacing the manager or recreating cached mappers and writers. Existing field type aliases and codecs retain precedence over defaults, including registrations made before default initialization. Later explicit registrations still override earlier ones. An optional component constructor is applied through `setConstructor()`, which still rejects changes after reusable components have been created; omitting it keeps the current constructor.
 
+`canMap($source)` checks for a mapper that accepts the source. `canWrite($target)` checks for a writer that accepts the target. `supports($source, $target)` requires both capabilities. These checks use the same component order and optional `MappingOptions` overrides as mapping and return `false` when no component matches. They inspect capabilities without constructing components or validating individual field values.
+
 Default registered runtime components:
 
 - mappers: `ArrayMapper`, `ObjectMapper`
@@ -328,9 +330,28 @@ Recursive traversal throws `MappingException` with the current path when it revi
 - Missing required constructor parameters throw `MappingException`.
 - Readonly targets force constructor-style creation when delayed instantiation is required.
 
+Use `#[MapCollection(ItemDto::class)]` to declare the item type of a public array or iterable property, including a readonly promoted constructor property:
+
+```php
+use ON\Data\Mapper\Attribute\MapCollection;
+use function ON\Data\Mapper\map;
+
+final readonly class PostDto
+{
+    public function __construct(
+        #[MapCollection(AuthorDto::class)]
+        public array $authors,
+    ) {}
+}
+
+$post = map($row)->to(PostDto::class);
+```
+
+The attribute takes precedence over property `@var` and constructor `@param` list types. With the attribute present, Mapper skips PHPDoc parsing and source-file scanning. Existing PHPDoc list types continue to work when the attribute is absent.
+
 ## Definition-aware resolution
 
-When one direct `DefinitionInterface` is supplied through `->args($definition)`, the default `DefinitionNodeResolver` can derive `LeafNodeResolution` values for fields and `BranchNodeResolution` values for relations. Definition collections describe metadata; runtime collection cardinality comes from relation cardinality, PHPDoc list metadata, or explicit root collection mapping.
+When one direct `DefinitionInterface` is supplied through `->args($definition)`, the default `DefinitionNodeResolver` can derive `LeafNodeResolution` values for fields and `BranchNodeResolution` values for relations. Runtime collection cardinality can come from the relation definition, `#[MapCollection]` or PHPDoc list metadata, or an explicit root `collection()` call.
 
 ## FieldMap support
 
