@@ -5,6 +5,7 @@
 ## Definition and runtime changes after `b27b9e9`
 
 - Use `Session::prepare()` and `Session::track()` for direct writable-query tracking. `QueryRepresentationPlan::getFetchSchema()` returns the prepared schema.
+- An update whose schema contains only relations now uses the supplied owner identity. Previously it could schedule an insert for a new owner.
 
 ## What documentation means
 

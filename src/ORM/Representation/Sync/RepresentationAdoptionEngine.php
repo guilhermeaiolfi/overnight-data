@@ -122,7 +122,14 @@ final class RepresentationAdoptionEngine
 		$bound = [];
 		$flatCreates = [];
 		if ($sources === []) {
-			$bound[''] = RecordState::new($schema->getCollection());
+			$owner = $schema->getCollection();
+			$identity = $intent?->getIdentity();
+			if ($rootPolicy === RepresentationIntentLifecycle::Update && $identity !== null) {
+				$key = $owner->getKey($identity);
+				$bound[''] = $records->bindClean($key, $key->getValues());
+			} else {
+				$bound[''] = RecordState::new($owner);
+			}
 		}
 
 		$readPath = $reader->readPass($representation);
