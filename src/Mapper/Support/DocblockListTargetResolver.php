@@ -151,10 +151,26 @@ final class DocblockListTargetResolver
 		$tokens = token_get_all($contents);
 		$imports = [];
 		$depth = 0;
+		$namespaceDepth = 0;
+		$classLine = $property->getDeclaringClass()->getStartLine();
 		$count = count($tokens);
 
 		for ($index = 0; $index < $count; $index++) {
 			$token = $tokens[$index];
+
+			if (is_array($token) && $classLine !== false && $token[2] > $classLine) {
+				break;
+			}
+
+			if (is_array($token) && $token[0] === T_NAMESPACE) {
+				$imports = [];
+				while (++$index < $count && $tokens[$index] !== ';' && $tokens[$index] !== '{') {
+					// Skip the namespace name.
+				}
+				$namespaceDepth = ($tokens[$index] ?? null) === '{' ? ++$depth : $depth;
+
+				continue;
+			}
 
 			if ($token === '{') {
 				$depth++;
@@ -168,7 +184,7 @@ final class DocblockListTargetResolver
 				continue;
 			}
 
-			if (! is_array($token) || $depth !== 0 || $token[0] !== T_USE) {
+			if (! is_array($token) || $depth !== $namespaceDepth || $token[0] !== T_USE) {
 				continue;
 			}
 

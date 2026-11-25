@@ -43,6 +43,12 @@ final class BranchTargetInferrerTest extends TestCase
 		);
 	}
 
+	public function testImportsUseTheDeclaringNamespaceWhenAFileHasTwoNamespaces(): void
+	{
+		$property = new ReflectionProperty(SecondNamespace\ListTarget::class, 'items');
+		self::assertSame(\DateTimeImmutable::class, $this->resolvePhpDocListTarget($property));
+	}
+
 	public function testMissingPhpDocListDeclarationReturnsNull(): void
 	{
 		self::assertNull($this->resolvePhpDocListTarget(
@@ -98,4 +104,14 @@ final class PhpDocUnknownTargetDto
 {
 	/** @var list<MissingAuthorDto> */
 	public array $authors = [];
+}
+
+namespace Tests\ON\Data\Mapper\SecondNamespace;
+
+use DateTimeImmutable as AuthorDto;
+
+final class ListTarget
+{
+	/** @var list<AuthorDto> */
+	public array $items = [];
 }
