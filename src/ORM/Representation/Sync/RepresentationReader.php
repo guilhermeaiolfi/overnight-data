@@ -15,14 +15,36 @@ use WeakMap;
 
 final class RepresentationReader
 {
+	/** @var WeakMap<object, array<array-key, mixed>> */
+	private WeakMap $properties;
+
 	public function __construct(private readonly ?ConversionGateway $gateway = null)
 	{
+	}
+
+	/**
+	 * A snapshot scoped to this traversal. Synchronizers using the same gateway share property reads.
+	 * @param WeakMap<ConversionGateway, WeakMap<object, array<array-key, mixed>>>|null $snapshots
+	 */
+	public function forTraversal(?WeakMap $snapshots = null): self
+	{
+		$gateway = $this->gateway ?? Mapping::getDefaultGateway();
+		$reader = new self($gateway);
+		$reader->properties = $snapshots === null ? new WeakMap() : ($snapshots[$gateway] ??= new WeakMap());
+
+		return $reader;
 	}
 
 	/** @return PathReadResult<mixed> */
 	public function readPath(object $source, string $path): PathReadResult
 	{
-		return ($this->readPass($source))($path);
+		$reader = isset($this->properties) ? $this : $this->forTraversal();
+		$root = $reader->propertiesOf($source);
+		if (array_key_exists($path, $root)) {
+			return PathReadResult::present($root[$path]);
+		}
+
+		return self::traversePath($root, $path, $reader->propertiesOf(...));
 	}
 
 	/**
@@ -32,38 +54,24 @@ final class RepresentationReader
 	 */
 	public function readPass(object $source): Closure
 	{
-		$gateway = $this->gateway ?? Mapping::getDefaultGateway();
-		$mapProperties = static function (object $object) use ($gateway): array {
-			$result = map($object, gateway: $gateway)->shallow()->to([]);
-			if (! is_array($result)) {
-				throw new MappingException('Reading representation properties requires an array mapping result.');
-			}
+		$reader = isset($this->properties) ? $this : $this->forTraversal();
 
-			return $result;
-		};
-		$root = null;
-		$readNested = null;
-		/** @var WeakMap<object, array<string|int, mixed>>|null $properties */
-		$properties = null;
+		return static fn (string $path): PathReadResult => $reader->readPath($source, $path);
+	}
 
-		return static function (string $path) use ($source, $mapProperties, &$root, &$readNested, &$properties): PathReadResult {
-			$root ??= $mapProperties($source);
-			if (array_key_exists($path, $root)) {
-				return PathReadResult::present($root[$path]);
-			}
+	/** @return array<array-key, mixed> */
+	private function propertiesOf(object $source): array
+	{
+		if (isset($this->properties[$source])) {
+			return $this->properties[$source];
+		}
 
-			$readNested ??= static function (object $object) use ($source, $mapProperties, $root, &$properties): array {
-				if ($object === $source) {
-					return $root;
-				}
+		$result = map($source, gateway: $this->gateway)->shallow()->to([]);
+		if (! is_array($result)) {
+			throw new MappingException('Reading representation properties requires an array mapping result.');
+		}
 
-				$properties ??= new WeakMap();
-
-				return $properties[$object] ??= $mapProperties($object);
-			};
-
-			return self::traversePath($root, $path, $readNested);
-		};
+		return $this->properties[$source] = $result;
 	}
 
 	/**

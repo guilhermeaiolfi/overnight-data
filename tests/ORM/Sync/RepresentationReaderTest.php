@@ -139,6 +139,25 @@ final class RepresentationReaderTest extends TestCase
 		self::assertTrue($this->reader()->readPath($post, 'author.name')->isMissing());
 	}
 
+	public function testTraversalSharesScalarAndRelationReadsUntilTheNextOperation(): void
+	{
+		$gateway = ConversionGateway::createDefault();
+		$gateway->getMapperManager()->prepend(ReaderBagMapper::class);
+		$reader = new RepresentationReader($gateway);
+		$author = (object) ['displayName' => 'Ada', 'self' => null];
+		$pass = $reader->forTraversal();
+		self::assertSame('Ada', $pass->readPath($author, 'name')->requireValue());
+		self::assertTrue($pass->readItems($author, $this->postsRelationSchema(), $this->syncError(...))->isMissing());
+		self::assertTrue($pass->readTarget($author, $this->profileRelationSchema(), $this->syncError(...))->isMissing());
+
+		$mapper = $gateway->getMapperManager()->getMapper(ReaderBagMapper::class);
+		self::assertInstanceOf(ReaderBagMapper::class, $mapper);
+		self::assertSame(1, $mapper->reads);
+		$author->displayName = 'Grace';
+		self::assertSame('Grace', $reader->forTraversal()->readPath($author, 'name')->requireValue());
+		self::assertSame(2, $mapper->reads);
+	}
+
 	public function testReaderWithoutGatewayUsesTheCurrentDefault(): void
 	{
 		$reader = $this->reader();
