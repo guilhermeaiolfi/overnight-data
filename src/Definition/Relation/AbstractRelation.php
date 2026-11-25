@@ -343,24 +343,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 
 	protected function normalizeKeys(string|array $fieldNames, string $context): array
 	{
-		$keys = is_array($fieldNames) ? array_values($fieldNames) : [$fieldNames];
-		if ($keys === []) {
-			throw new InvalidArgumentException("{$context} cannot be empty.");
-		}
-
-		$normalized = [];
-		foreach ($keys as $fieldName) {
-			$fieldName = (string) $fieldName;
-			if ($fieldName === '') {
-				throw new InvalidArgumentException("{$context} cannot contain empty key names.");
-			}
-			if (in_array($fieldName, $normalized, true)) {
-				throw new InvalidArgumentException("{$context} cannot contain duplicate key '{$fieldName}'.");
-			}
-			$normalized[] = $fieldName;
-		}
-
-		return $normalized;
+		return RelationKeyPairing::normalizeFields($fieldNames, $context);
 	}
 
 	protected function validateRelationKeys(): void
