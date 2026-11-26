@@ -6,9 +6,9 @@ namespace ON\Data\Mapper\Writer;
 
 use LogicException;
 use ON\Data\Mapper\Exception\MappingException;
-use ON\Data\Mapper\Exception\UnknownMappingKeyException;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
+use ON\Data\Mapper\Policy\UnknownKeyPolicyInterface;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Support\ObjectPropertyMatcher;
 use ReflectionClass;
@@ -106,7 +106,7 @@ final class ObjectWriter implements WriterInterface
 	): void {
 		$objectState = $this->requireState($state);
 		if ($objectState->target !== null) {
-			$this->applyWrite($objectState->target, $name, $value, $node);
+			$this->applyWrite($objectState->target, $name, $value, $node, $node->getOptions()->getUnknownKeyPolicy());
 
 			return;
 		}
@@ -134,11 +134,13 @@ final class ObjectWriter implements WriterInterface
 		}
 
 		$reflection = $this->getReflection($target);
-		if ($node->getOptions()->shouldRejectUnknownKeys()) {
-			$this->assertKnownBufferedKeys($objectState, $reflection);
+		$unknownKeyPolicy = $node->getOptions()->getUnknownKeyPolicy();
+		if ($unknownKeyPolicy !== null) {
+			$this->handleUnknownBufferedKeys($objectState, $reflection, $unknownKeyPolicy);
 		}
 		[$object, $consumed] = $this->instantiateUsingResolvedValues($reflection, $objectState->values);
 
+		// The policy has already seen any unknown keys in these buffered writes.
 		foreach ($objectState->writes as $write) {
 			if (isset($consumed[(string) $write['name']])) {
 				continue;
@@ -278,8 +280,11 @@ final class ObjectWriter implements WriterInterface
 	}
 
 	/** @param ReflectionClass<object> $reflection */
-	private function assertKnownBufferedKeys(ObjectWriterState $state, ReflectionClass $reflection): void
-	{
+	private function handleUnknownBufferedKeys(
+		ObjectWriterState $state,
+		ReflectionClass $reflection,
+		UnknownKeyPolicyInterface $policy,
+	): void {
 		$parameterNames = [];
 		foreach ($reflection->getConstructor()?->getParameters() ?? [] as $parameter) {
 			$parameterNames[$parameter->getName()] = true;
@@ -290,7 +295,7 @@ final class ObjectWriter implements WriterInterface
 		foreach ($state->writes as $write) {
 			$name = $write['name'];
 			if (! isset($parameterNames[$name]) && $matcher->match($name) === null) {
-				throw new UnknownMappingKeyException($write['node']->getPath(), $class);
+				$policy->handle($write['node']->getPath(), $class);
 			}
 		}
 	}
@@ -354,6 +359,7 @@ final class ObjectWriter implements WriterInterface
 		string|int $name,
 		mixed $value,
 		MappingNode $node,
+		?UnknownKeyPolicyInterface $unknownKeyPolicy = null,
 	): void {
 		if ($target instanceof stdClass) {
 			$target->{(string) $name} = $value;
@@ -364,9 +370,7 @@ final class ObjectWriter implements WriterInterface
 		$reflection = $this->getReflection($target);
 		$property = $this->getPropertyMatcher($target)->match($name);
 		if ($property === null) {
-			if ($node->getOptions()->shouldRejectUnknownKeys()) {
-				throw new UnknownMappingKeyException($node->getPath(), $target::class);
-			}
+			$unknownKeyPolicy?->handle($node->getPath(), $target::class);
 
 			return;
 		}

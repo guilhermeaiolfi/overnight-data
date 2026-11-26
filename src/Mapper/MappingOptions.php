@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Mapper;
 
 use ON\Data\Mapper\Mapper\MapperInterface;
+use ON\Data\Mapper\Policy\UnknownKeyPolicyInterface;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
 use ON\Data\Mapper\Writer\WriterInterface;
@@ -30,7 +31,7 @@ final class MappingOptions
 		private ?FieldMap $fieldMap = null,
 		private bool $collection = false,
 		private bool $shallow = false,
-		private bool $rejectUnknownKeys = false,
+		private ?UnknownKeyPolicyInterface $unknownKeyPolicy = null,
 	) {
 	}
 
@@ -102,9 +103,9 @@ final class MappingOptions
 		return $this->shallow;
 	}
 
-	public function shouldRejectUnknownKeys(): bool
+	public function getUnknownKeyPolicy(): ?UnknownKeyPolicyInterface
 	{
-		return $this->rejectUnknownKeys;
+		return $this->unknownKeyPolicy;
 	}
 
 	/**
@@ -213,10 +214,10 @@ final class MappingOptions
 		return $clone;
 	}
 
-	public function withRejectUnknownKeys(bool $reject): self
+	public function withUnknownKeyPolicy(?UnknownKeyPolicyInterface $policy): self
 	{
 		$clone = clone $this;
-		$clone->rejectUnknownKeys = $reject;
+		$clone->unknownKeyPolicy = $policy;
 
 		return $clone;
 	}

@@ -8,6 +8,8 @@ use ON\Data\Mapper\Attribute\MapCollection;
 use ON\Data\Mapper\Attribute\MapFrom;
 use ON\Data\Mapper\Exception\UnknownMappingKeyException;
 use function ON\Data\Mapper\map;
+use ON\Data\Mapper\Policy\RejectUnknownKeysPolicy;
+use ON\Data\Mapper\Policy\UnknownKeyPolicyInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
@@ -16,10 +18,10 @@ final class RejectUnknownKeysTest extends TestCase
 	public function testRejectionIsLocalToTheMappingThatEnablesIt(): void
 	{
 		$builder = map(['name' => 'Ada', 'nmae' => 'typo']);
-		$strict = $builder->rejectUnknownKeys();
+		$strict = $builder->unknownKeyPolicy(RejectUnknownKeysPolicy::class);
 
 		self::assertSame('Ada', $builder->to(UnknownKeyAuthorDto::class)->name);
-		self::assertSame('Ada', $strict->rejectUnknownKeys(false)->to(UnknownKeyAuthorDto::class)->name);
+		self::assertSame('Ada', $strict->unknownKeyPolicy(null)->to(UnknownKeyAuthorDto::class)->name);
 
 		$this->expectException(UnknownMappingKeyException::class);
 		$this->expectExceptionMessage("Unknown input key at path 'nmae'");
@@ -29,7 +31,7 @@ final class RejectUnknownKeysTest extends TestCase
 	public function testMapFromAndConstructorOnlyKeysAreAccepted(): void
 	{
 		$dto = map(['display_name' => 'Ada', 'externalId' => 42])
-			->rejectUnknownKeys()
+			->unknownKeyPolicy(RejectUnknownKeysPolicy::class)
 			->to(UnknownKeyConstructorDto::class);
 
 		self::assertSame('Ada', $dto->name);
@@ -42,7 +44,7 @@ final class RejectUnknownKeysTest extends TestCase
 		$this->expectExceptionMessage("Unknown input key at path 'externalID'");
 
 		map(['display_name' => 'Ada', 'externalID' => 42])
-			->rejectUnknownKeys()
+			->unknownKeyPolicy(RejectUnknownKeysPolicy::class)
 			->to(UnknownKeyConstructorDto::class);
 	}
 
@@ -50,7 +52,7 @@ final class RejectUnknownKeysTest extends TestCase
 	{
 		try {
 			map((object) ['contributors' => [['name' => 'Ada'], ['nmae' => 'Linus']]])
-				->rejectUnknownKeys()
+				->unknownKeyPolicy(RejectUnknownKeysPolicy::class)
 				->to(UnknownKeyArticleDto::class);
 		} catch (UnknownMappingKeyException $exception) {
 			self::assertSame('contributors.1.nmae', $exception->getPath());
@@ -65,10 +67,34 @@ final class RejectUnknownKeysTest extends TestCase
 	public function testFreeFormTargetsStillAcceptArbitraryKeys(): void
 	{
 		$input = ['source' => ['any' => 'value']];
-		$builder = map($input)->rejectUnknownKeys();
+		$builder = map($input)->unknownKeyPolicy(RejectUnknownKeysPolicy::class);
 
 		self::assertSame($input, $builder->to([]));
 		self::assertSame('value', $builder->to(stdClass::class)->source->any);
+	}
+
+	public function testCustomPolicyCanCollectEachUnknownKeyOnceAndContinue(): void
+	{
+		$policy = new class () implements UnknownKeyPolicyInterface {
+			/** @var list<array{string, class-string}> */
+			public array $keys = [];
+
+			public function handle(string $path, string $targetClass): void
+			{
+				$this->keys[] = [$path, $targetClass];
+			}
+		};
+
+		$dto = map(['display_name' => 'Ada', 'externalId' => 42, 'extra' => null, 'another' => false])
+			->unknownKeyPolicy($policy)
+			->to(UnknownKeyConstructorDto::class);
+
+		self::assertSame('Ada', $dto->name);
+		self::assertSame(42, $dto->id);
+		self::assertSame([
+			['extra', UnknownKeyConstructorDto::class],
+			['another', UnknownKeyConstructorDto::class],
+		], $policy->keys);
 	}
 }
 

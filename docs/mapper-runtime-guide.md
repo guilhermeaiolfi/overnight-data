@@ -374,22 +374,27 @@ $post = map($row, gateway: $gateway)->to(PostDto::class);
 
 By default, item type results are cached for one mapping or one query projection. The explicit decorator above reuses successful PHPDoc lookups for as long as that decorator is kept. Its default limit is 256 properties, with the oldest entry evicted when full. Make the gateway local to a job to release the decorator when the job releases the gateway. Pass the same gateway when creating a SQL runtime if you want DTO queries to use that extractor list for both projection and hydration.
 
-### Rejecting unknown input keys
+### Handling unknown input keys
 
-Enable `rejectUnknownKeys()` when mapping a payload whose keys should all be used by the target DTO.
+Choose `RejectUnknownKeysPolicy` when mapping a payload whose keys should all be used by the target DTO.
 
 ```php
 use ON\Data\Mapper\Exception\UnknownMappingKeyException;
+use ON\Data\Mapper\Policy\RejectUnknownKeysPolicy;
 use function ON\Data\Mapper\map;
 
 try {
-    $article = map($payload)->rejectUnknownKeys()->to(ArticleInput::class);
+    $article = map($payload)
+        ->unknownKeyPolicy(RejectUnknownKeysPolicy::class)
+        ->to(ArticleInput::class);
 } catch (UnknownMappingKeyException $exception) {
     $path = $exception->getPath(); // For example, 'authors.0.nmae'.
 }
 ```
 
-The built-in DTO writer throws on the first unknown key it receives. It accepts constructor parameters, public instance properties, and their usual mapping aliases. The exception contains the original input path and the target class. Enable the option on each mapping that needs it. Ordinary `map()` calls still ignore unmatched keys.
+The built-in DTO writer accepts constructor parameters, public instance properties, and existing mapping aliases. The reject policy throws on the first unmatched key, with its input path and the target class. Ordinary `map()` calls skip unmatched keys.
+
+Implement `UnknownKeyPolicyInterface` to handle unmatched keys differently. Its `handle($path, $targetClass)` method can throw or return to skip the key and continue. Pass a class name to use the mapper's component constructor, or pass a policy instance to supply dependencies or inspect what it collected. A configured builder reuses the policy instance when mapped again.
 
 The option carries into nested DTOs and collection items the mapper traverses. Arrays and `stdClass` targets accept arbitrary keys, and `shallow()` leaves nested values as supplied. Custom writers keep control over the keys they accept.
 

@@ -29,6 +29,7 @@ use ON\Data\Mapper\Field\UrlFieldType;
 use ON\Data\Mapper\Mapper\ArrayMapper;
 use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\Mapper\ObjectMapper;
+use ON\Data\Mapper\Policy\UnknownKeyPolicyInterface;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
@@ -219,6 +220,21 @@ final class MapperManager
 		$this->constructor = $constructor;
 
 		return $this;
+	}
+
+	/**
+	 * @internal
+	 * @param class-string<UnknownKeyPolicyInterface> $policyClass
+	 */
+	public function createUnknownKeyPolicy(string $policyClass): UnknownKeyPolicyInterface
+	{
+		$this->assertRoleOrThrow($policyClass, UnknownKeyPolicyInterface::class);
+
+		return $this->constructTypedComponent(
+			$policyClass,
+			UnknownKeyPolicyInterface::class,
+			'unknown-key policy',
+		);
 	}
 
 	public function map(
