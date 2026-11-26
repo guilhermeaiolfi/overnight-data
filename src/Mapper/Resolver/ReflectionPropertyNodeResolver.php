@@ -22,11 +22,6 @@ use stdClass;
 
 final class ReflectionPropertyNodeResolver implements CacheableNodeResolverInterface
 {
-	public function __construct(
-		private readonly ?BranchTargetInferrer $inferrer = null,
-	) {
-	}
-
 	public function resolve(
 		MappingNode $node,
 		MappingRuntime $runtime,
@@ -35,7 +30,7 @@ final class ReflectionPropertyNodeResolver implements CacheableNodeResolverInter
 			return null;
 		}
 
-		$propertyFinder = $this->getPropertyFinder($runtime);
+		$propertyFinder = $runtime->getSharedInstance(MappingNodePropertyFinder::class);
 		$sourceProperty = $propertyFinder->findSourceProperty($node);
 		$mappedSourceName = $propertyFinder->getMappedSourceName($node, $sourceProperty);
 		$targetProperty = $propertyFinder->findTargetProperty($node, $mappedSourceName);
@@ -67,7 +62,7 @@ final class ReflectionPropertyNodeResolver implements CacheableNodeResolverInter
 			return null;
 		}
 
-		$inferrer = $this->getInferrer($runtime);
+		$inferrer = $runtime->getSharedInstance(BranchTargetInferrer::class);
 
 		$target = $inferrer->inferFromReflection($node, $propertyFinder);
 		if ($target === null) {
@@ -123,18 +118,5 @@ final class ReflectionPropertyNodeResolver implements CacheableNodeResolverInter
 
 		return (is_object($target) && ! $target instanceof stdClass)
 			|| (is_string($target) && $target !== stdClass::class && class_exists($target));
-	}
-
-	private function getPropertyFinder(
-		MappingRuntime $runtime,
-	): MappingNodePropertyFinder {
-		return $runtime->getSharedInstance(MappingNodePropertyFinder::class);
-	}
-
-	private function getInferrer(
-		MappingRuntime $runtime,
-	): BranchTargetInferrer {
-		return $this->inferrer
-			?? $runtime->getSharedInstance(BranchTargetInferrer::class);
 	}
 }

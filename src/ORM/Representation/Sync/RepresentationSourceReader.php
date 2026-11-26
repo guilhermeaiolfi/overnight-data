@@ -63,7 +63,7 @@ final class RepresentationSourceReader
 		$values = self::primaryKeyValues($source, static function (string $path) use ($readsByPath): mixed {
 			$result = $readsByPath[$path] ?? null;
 
-			return $result?->isPresent() ? $result->requireValue() : null;
+			return $result?->isPresent() ? $result->getValue() : null;
 		});
 
 		if ($identity !== null && ($conflict = $identity->conflictingIdentityField($values)) !== null) {
@@ -107,7 +107,7 @@ final class RepresentationSourceReader
 					$writable,
 					$writablePaths,
 					$fieldSchema,
-					$result->requireValue(),
+					$result->getValue(),
 				);
 
 				continue;
@@ -118,7 +118,7 @@ final class RepresentationSourceReader
 				$readOnly,
 				$readOnlyPaths,
 				$fieldSchema,
-				$result->requireValue(),
+				$result->getValue(),
 			);
 		}
 

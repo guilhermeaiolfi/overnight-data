@@ -14,11 +14,6 @@ use stdClass;
 
 final class GenericNodeResolver implements NodeResolverInterface
 {
-	public function __construct(
-		private readonly ?BranchTargetInferrer $inferrer = null,
-	) {
-	}
-
 	public function resolve(
 		MappingNode $node,
 		MappingRuntime $runtime,
@@ -45,7 +40,7 @@ final class GenericNodeResolver implements NodeResolverInterface
 			return null;
 		}
 
-		$inferrer = $this->getInferrer($runtime);
+		$inferrer = $runtime->getSharedInstance(BranchTargetInferrer::class);
 
 		$target = $inferrer->inferGenericTarget($parentTarget);
 		if ($target === null) {
@@ -104,12 +99,5 @@ final class GenericNodeResolver implements NodeResolverInterface
 		}
 
 		return true;
-	}
-
-	private function getInferrer(
-		MappingRuntime $runtime,
-	): BranchTargetInferrer {
-		return $this->inferrer
-			?? $runtime->getSharedInstance(BranchTargetInferrer::class);
 	}
 }

@@ -18,7 +18,6 @@ use ON\Data\Mapper\Resolver\GenericNodeResolver;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
 use ON\Data\Mapper\Resolver\ReflectionPropertyNodeResolver;
 use ON\Data\Mapper\Support\BranchTargetInferrer;
-use ON\Data\Mapper\Support\DefinitionArgumentLocator;
 use ON\Data\Mapper\Support\MappingNodePropertyFinder;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -144,7 +143,7 @@ final class MappingRuntimeSharedInstanceTest extends TestCase
 		$resolver = new $resolverClass();
 		self::assertInstanceOf(BranchNodeResolutionInterface::class, $resolver->resolve($node, $runtime));
 		$helpers = [];
-		foreach ([BranchTargetInferrer::class, DefinitionArgumentLocator::class, MappingNodePropertyFinder::class] as $helperClass) {
+		foreach ([BranchTargetInferrer::class, MappingNodePropertyFinder::class] as $helperClass) {
 			$helpers[$helperClass] = WeakReference::create($runtime->getSharedInstance($helperClass));
 		}
 

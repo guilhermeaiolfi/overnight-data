@@ -32,18 +32,7 @@ class Field extends DefinitionNode implements FieldInterface
 			'description' => null,
 			'typecast' => null,
 			'metadata' => [],
-			'nullable' => false,
-			'hidden' => false,
-			'unique' => false,
-			'indexed' => false,
-			'max_length' => 255,
-			'numeric_precision' => 2,
-			'default_value' => null,
-			'data_type' => null,
-			'auto_increment' => false,
-			'generator' => null,
-			'filterable' => true,
-		];
+		] + self::schemaDefaults();
 	}
 
 	public function setGeneratedFromRelation(?string $relation_name): self
