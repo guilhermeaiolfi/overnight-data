@@ -204,6 +204,22 @@ final class DtoDrivenQueryProjectionTest extends TestCase
 	}
 
 	#[RequiresPhpExtension('pdo_sqlite')]
+	public function testCollectionItemTypeProjectsAndHydratesAnArrayInAStdClassUnion(): void
+	{
+		$harness = $this->makeSqliteHarness();
+		$posts = $this->makeRegistry()->getCollection('posts');
+		$posts->hasMany('authors', 'users')->innerKey('userId')->outerKey('id');
+		$query = $harness->database->query($posts)->to(DtoPostWithUnionAuthors::class);
+
+		self::assertSame(['id', 'name'], $query->projection()->getRelation('authors')->getRelatedSchema()->getPublicScalarPaths());
+		$post = $query->fetchOne(10);
+		self::assertInstanceOf(DtoPostWithUnionAuthors::class, $post);
+		self::assertIsArray($post->authors);
+		self::assertInstanceOf(DtoUserSummary::class, $post->authors[0]);
+		self::assertSame('Ada', $post->authors[0]->name);
+	}
+
+	#[RequiresPhpExtension('pdo_sqlite')]
 	public function testGatewayExtractorSuppliesItemTypeForBothProjectionAndHydration(): void
 	{
 		$harness = $this->makeSqliteHarness();
@@ -480,6 +496,16 @@ final readonly class DtoPostWithAuthors
 		public int $id,
 		#[MapCollection(DtoUserSummary::class)]
 		public array $authors,
+	) {
+	}
+}
+
+final readonly class DtoPostWithUnionAuthors
+{
+	public function __construct(
+		public int $id,
+		#[MapCollection(DtoUserSummary::class)]
+		public array|stdClass $authors,
 	) {
 	}
 }

@@ -89,6 +89,24 @@ final class RecursiveMappingTest extends TestCase
 		}
 	}
 
+	public function testCollectionItemTypeAppliesToArrayValuesInAStdClassUnion(): void
+	{
+		$authors = [['id' => 2, 'name' => 'Ada']];
+		$bag = (object) ['primary' => $authors[0]];
+		[$post, $withBag, $withoutAuthors] = map([
+			['authors' => $authors, 'rawAuthors' => $authors],
+			['authors' => $bag],
+			['authors' => null],
+		])->collection()->to(UnionAttributedPostDto::class);
+
+		self::assertSame($bag, $withBag->authors);
+		self::assertNull($withoutAuthors->authors);
+		self::assertSame($authors, $post->rawAuthors);
+		self::assertIsArray($post->authors);
+		self::assertInstanceOf(AuthorDto::class, $post->authors[0]);
+		self::assertSame('Ada', $post->authors[0]->name);
+	}
+
 	public function testDottedKeysExpandByDefaultForArrayDtoAndStdClassTargets(): void
 	{
 		$row = [
@@ -561,6 +579,14 @@ final class AttributedPostDto
 	/** @var list<ReadonlyPromotedAuthorDto> */
 	#[MapCollection(AuthorDto::class)]
 	public array $authors = [];
+}
+
+final class UnionAttributedPostDto
+{
+	#[MapCollection(AuthorDto::class)]
+	public array|stdClass|null $authors = null;
+
+	public array|stdClass $rawAuthors = [];
 }
 
 final readonly class ReadonlyAttributedPostDto
