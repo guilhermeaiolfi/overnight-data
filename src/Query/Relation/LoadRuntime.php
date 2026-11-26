@@ -13,6 +13,7 @@ use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Expression\FieldRef;
+use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SelectQuery;
@@ -468,7 +469,12 @@ final class LoadRuntime
 
 		foreach ($this->rootQuery->getSelections()->getExplicit() as $selection) {
 			$expression = $selection->getExpression();
-			if ($expression instanceof FieldRef && count($expression->getPath()) > 1) {
+			if ($expression instanceof StarExpression) {
+				$source = $expression->getSource();
+				$names = $source instanceof SelectQuery && ! $source->isDerivedSource()
+					? $source->getCollection()->getVisibleFields()
+					: [];
+			} elseif ($expression instanceof FieldRef && count($expression->getPath()) > 1) {
 				$names = [implode('.', $expression->getPath())];
 			} else {
 				$names = DerivedOutputColumns::namesForSelection($selection);
