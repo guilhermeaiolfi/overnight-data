@@ -63,20 +63,16 @@ final class MappingBranch
 			? $this->resolutionCache?->find($this->resolutionShape, $name)
 			: null;
 
+		$child = $this->node->createChildNode(name: $name, value: $value);
 		if ($cached instanceof LeafNodeResolutionInterface) {
-			$child = $this->node->createChildNode(name: $name, value: $value);
 			$this->writeResolved($child, $value, $cached);
 
 			return;
 		}
 
-		$child = $this->node->createChildNode(name: $name, value: $value);
-
-		if ($cached === false || $this->resolutionShape === null) {
-			$resolution = $this->resolveNode($child);
-		} else {
-			[$resolution, $cacheable] = $this->resolveNodeForCache($child);
-
+		$inspectCacheability = $cached !== false && $this->resolutionShape !== null;
+		[$resolution, $cacheable] = $this->resolveNode($child, $inspectCacheability);
+		if ($inspectCacheability) {
 			if ($cacheable && $resolution instanceof LeafNodeResolutionInterface) {
 				$this->resolutionCache?->remember($this->resolutionShape, $name, $resolution);
 			} else {
@@ -92,30 +88,14 @@ final class MappingBranch
 		return $this->writer->getResult($this->state, $this->node);
 	}
 
-	private function resolveNode(
-		MappingNode $node,
-	): LeafNodeResolutionInterface|BranchNodeResolutionInterface {
-		foreach ($this->resolvers as $resolver) {
-			$resolution = $resolver->resolve(node: $node, runtime: $this->runtime);
-
-			if ($resolution !== null) {
-				return $resolution;
-			}
-		}
-
-		return LeafNodeResolution::passthrough((string) $node->getName());
-	}
-
 	/**
 	 * @return array{
 	 *     0: LeafNodeResolutionInterface|BranchNodeResolutionInterface,
 	 *     1: bool
 	 * }
 	 */
-	private function resolveNodeForCache(MappingNode $node): array
+	private function resolveNode(MappingNode $node, bool $cacheable): array
 	{
-		$cacheable = true;
-
 		foreach ($this->resolvers as $resolver) {
 			$resolution = $resolver->resolve(node: $node, runtime: $this->runtime);
 

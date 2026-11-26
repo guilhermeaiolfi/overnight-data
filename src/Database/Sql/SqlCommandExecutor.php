@@ -16,34 +16,28 @@ use ON\Data\ORM\Exception\InvalidCommandException;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
-use ON\Data\ORM\Persistence\CommandValueResolver;
 use ON\Data\ORM\Persistence\DeleteCommand;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\TransactionalCommandExecutorInterface;
 use ON\Data\ORM\Persistence\UpdateCommand;
 
+/** Executes row commands containing storage values. */
 final class SqlCommandExecutor implements CommandExecutorInterface, TransactionalCommandExecutorInterface, TransactionStateAwareInterface
 {
 	private readonly DialectInterface $dialect;
 
 	private readonly SqlCommandCompiler $compiler;
 
-	private readonly CommandValueResolver $commandValueResolver;
-
 	public function __construct(
 		private readonly ConnectionInterface $connection,
-		?CommandValueResolver $commandValueResolver = null,
 		?DialectInterface $dialect = null,
 	) {
 		$this->dialect = $dialect ?? DialectFactory::forConnection($connection);
 		$this->compiler = new SqlCommandCompiler($this->dialect, $connection->tablePrefix());
-		$this->commandValueResolver = $commandValueResolver ?? new CommandValueResolver();
 	}
 
 	public function execute(CommandInterface $command): CommandResult
 	{
-		$this->commandValueResolver->assertReady($command);
-
 		return match (true) {
 			$command instanceof InsertCommand => $this->insert($command),
 			$command instanceof UpdateCommand => $this->update($command),
@@ -119,7 +113,7 @@ final class SqlCommandExecutor implements CommandExecutorInterface, Transactiona
 		return new CommandResult($affected, $generated);
 	}
 
-	private function executeStatement(SqlStatement $stmt): int
+	private function executeStatement(SqlFragment $stmt): int
 	{
 		return max(0, $this->connection->execute($stmt->sql, $stmt->params));
 	}

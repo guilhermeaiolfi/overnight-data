@@ -8,7 +8,7 @@ use ArrayIterator;
 use Countable;
 use IteratorAggregate;
 use ON\Data\Query\Exception\RelationSelectionException;
-use ON\Data\Query\Selection\SelectionList;
+use ON\Data\Query\SelectQuery;
 use Traversable;
 
 /**
@@ -21,11 +21,21 @@ final class RelationSelectionTree implements IteratorAggregate, Countable
 	 */
 	private array $relations = [];
 
+	/** @var array<string, array<string, RelationSelection>> */
+	private array $children = [];
+
+	private ?SelectQuery $owner = null;
+
 	public function add(RelationRef $relation): void
 	{
 		if (! $relation->isVisible()) {
 			throw RelationSelectionException::hiddenTerminalRelation($relation->getPath());
 		}
+
+		if ($this->owner !== null && $this->owner !== $relation->getQuery()) {
+			throw RelationSelectionException::foreignQueryRelation($relation, $this->owner);
+		}
+		$this->owner = $relation->getQuery();
 
 		$segments = [];
 
@@ -34,37 +44,25 @@ final class RelationSelectionTree implements IteratorAggregate, Countable
 		}
 
 		$segments = array_reverse($segments);
-		$terminalIndex = count($segments) - 1;
+		foreach ($segments as $segment) {
+			$key = RelationSelection::pathKey($segment->getPath());
+			$previous = $this->relations[$key] ?? null;
+			$loaded = $segment === $relation || $segment->isLoaded() || $previous?->isLoaded();
 
-		foreach ($segments as $index => $segment) {
-			$key = $this->identityFor($segment);
-			$selections = $segment->hasDefaultSelection()
-				? null
-				: $this->copySelections($segment);
 			$selection = new RelationSelection(
 				$segment,
-				$index === $terminalIndex ? true : $segment->isLoaded(),
-				$index === $terminalIndex ? true : $segment->isVisible(),
-				$selections,
+				$loaded,
+				$loaded || $segment->isVisible() || $previous?->isVisible(),
+				$segment->hasDefaultSelection() ? null : clone $segment->getSelections(),
 				$segment->getConditions(),
 				$segment->getSorts(),
 				$segment->getLimit(),
 				$segment->hasOffset() ? $segment->getOffset() : null,
 				$segment->getStrategy(),
 			);
-
-			$this->relations[$key] = isset($this->relations[$key])
-				? $this->relations[$key]->merge($selection)
-				: $selection;
+			$this->relations[$key] = $selection;
+			$this->children[$selection->getParentPathKey() ?? ''][$selection->getName()] = $selection;
 		}
-	}
-
-	private function copySelections(RelationRef $segment): SelectionList
-	{
-		$copy = new SelectionList();
-		$copy->merge($segment->getSelections());
-
-		return $copy;
 	}
 
 	/**
@@ -82,29 +80,7 @@ final class RelationSelectionTree implements IteratorAggregate, Countable
 	 */
 	public function childrenOf(?RelationSelection $parent = null): array
 	{
-		$parentPath = $parent?->getPath();
-		$children = [];
-
-		foreach ($this->relations as $selection) {
-			$path = $selection->getPath();
-
-			if ($parentPath === null) {
-				if (count($path) === 1) {
-					$children[$selection->getName()] = $selection;
-				}
-
-				continue;
-			}
-
-			if (
-				count($path) === count($parentPath) + 1
-				&& array_slice($path, 0, -1) === $parentPath
-			) {
-				$children[$selection->getName()] = $selection;
-			}
-		}
-
-		return $children;
+		return $this->children[$parent === null ? '' : RelationSelection::pathKey($parent->getPath())] ?? [];
 	}
 
 	public function isEmpty(): bool
@@ -123,10 +99,5 @@ final class RelationSelectionTree implements IteratorAggregate, Countable
 	public function getIterator(): Traversable
 	{
 		return new ArrayIterator($this->getAll());
-	}
-
-	private function identityFor(RelationRef $relation): string
-	{
-		return RelationSelection::pathKey($relation->getPath());
 	}
 }

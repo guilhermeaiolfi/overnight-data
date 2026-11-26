@@ -420,9 +420,7 @@ final class QueryArchitectureTest extends TestCase
 		self::assertStringNotContainsString('stripTaggedPrivateKeys', $selectQuery);
 
 		foreach ([
-			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasOneLoader.php',
-			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasManyLoader.php',
-			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/FirstOfManyLoader.php',
+			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/AbstractLoader.php',
 			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/M2MLoader.php',
 		] as $path) {
 			$contents = (string) file_get_contents($path);
@@ -509,19 +507,10 @@ final class QueryArchitectureTest extends TestCase
 
 	public function testBuiltInLoadersUseRelationKeyPairingsForPairedOperations(): void
 	{
-		$simpleLoaderPaths = [
-			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasOneLoader.php',
-			dirname(__DIR__, 2) . '/src/Query/Relation/Loader/HasManyLoader.php',
-		];
-
-		foreach ($simpleLoaderPaths as $path) {
-			$contents = (string) file_get_contents($path);
-			self::assertStringContainsString('getKeyPairing()', $contents, $path);
-			self::assertStringContainsString('getRightFields()', $contents, $path);
-			self::assertStringContainsString('getLeftFields()', $contents, $path);
-		}
-
 		$abstractLoaderContents = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Query/Relation/Loader/AbstractLoader.php');
+		self::assertStringContainsString('getKeyPairing()', $abstractLoaderContents);
+		self::assertStringContainsString('getLeftFields()', $abstractLoaderContents);
+		self::assertStringContainsString('getRightFields()', $abstractLoaderContents);
 		self::assertStringContainsString('RelationKeyQuery::addJoinConditions(', $abstractLoaderContents);
 		self::assertStringContainsString('RelationKeyQuery::filterRightByLeftReferences(', $abstractLoaderContents);
 		self::assertStringContainsString('executeSeparateByReferences(', $abstractLoaderContents);

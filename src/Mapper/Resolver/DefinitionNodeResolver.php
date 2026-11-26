@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper\Resolver;
 
-use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingRuntime;
 use ON\Data\Mapper\Resolution\BranchNodeResolution;
@@ -13,22 +12,16 @@ use ON\Data\Mapper\Resolution\LeafNodeResolution;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 use ON\Data\Mapper\Resolution\ResolutionNodeInterface;
 use ON\Data\Mapper\Support\BranchTargetInferrer;
-use ON\Data\Mapper\Support\DefinitionArgumentLocator;
+use ON\Data\Mapper\Support\MappingArguments;
 use ON\Data\Mapper\Support\MappingNodePropertyFinder;
 
 final class DefinitionNodeResolver implements CacheableNodeResolverInterface
 {
-	public function __construct(
-		private readonly ?DefinitionArgumentLocator $locator = null,
-		private readonly ?BranchTargetInferrer $inferrer = null,
-	) {
-	}
-
 	public function resolve(
 		MappingNode $node,
 		MappingRuntime $runtime,
 	): LeafNodeResolutionInterface|BranchNodeResolutionInterface|null {
-		$definition = $this->getDefinition($node, $runtime);
+		$definition = MappingArguments::definition($node->getArguments());
 		if ($definition === null || ! is_string($node->getName())) {
 			return null;
 		}
@@ -47,11 +40,12 @@ final class DefinitionNodeResolver implements CacheableNodeResolverInterface
 			return null;
 		}
 
-		$inferrer = $this->getInferrer($runtime);
+		$inferrer = $runtime->getSharedInstance(BranchTargetInferrer::class);
 
+		$finder = $runtime->getSharedInstance(MappingNodePropertyFinder::class);
 		$reflectionTarget = $inferrer->inferFromReflection(
 			$node,
-			$this->getPropertyFinder($runtime),
+			$finder,
 		);
 		$genericTarget = $inferrer->inferGenericTarget($node->getParentTarget());
 		$target = $reflectionTarget['target'] ?? $genericTarget;
@@ -84,7 +78,7 @@ final class DefinitionNodeResolver implements CacheableNodeResolverInterface
 			return false;
 		}
 
-		$definition = $this->getDefinition($node, $runtime);
+		$definition = MappingArguments::definition($node->getArguments());
 		if ($definition === null || ! is_string($node->getName())) {
 			return true;
 		}
@@ -94,33 +88,5 @@ final class DefinitionNodeResolver implements CacheableNodeResolverInterface
 		}
 
 		return $definition->getRelation($node->getName()) === null;
-	}
-
-	private function getDefinition(
-		MappingNode $node,
-		MappingRuntime $runtime,
-	): ?DefinitionInterface {
-		return $this->getLocator($runtime)
-			->getDefinition($node->getArguments());
-	}
-
-	private function getLocator(
-		MappingRuntime $runtime,
-	): DefinitionArgumentLocator {
-		return $this->locator
-			?? $runtime->getSharedInstance(DefinitionArgumentLocator::class);
-	}
-
-	private function getInferrer(
-		MappingRuntime $runtime,
-	): BranchTargetInferrer {
-		return $this->inferrer
-			?? $runtime->getSharedInstance(BranchTargetInferrer::class);
-	}
-
-	private function getPropertyFinder(
-		MappingRuntime $runtime,
-	): MappingNodePropertyFinder {
-		return $runtime->getSharedInstance(MappingNodePropertyFinder::class);
 	}
 }

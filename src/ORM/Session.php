@@ -15,8 +15,8 @@ use ON\Data\ORM\Persistence\FlushExecutor;
 use ON\Data\ORM\Persistence\FlushResult;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Relation\RelationMemberIdentity;
 use ON\Data\ORM\Relation\RelationStateStore;
-use ON\Data\ORM\Relation\RelationTarget;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Representation\State\Query\QueryResultHydrator;
 use ON\Data\ORM\Representation\State\Query\WritableQueryResultTracker;
@@ -43,7 +43,6 @@ final class Session implements WritableResultHandler
 	private SessionContext $context;
 	private FlushExecutor $flusher;
 	private RepresentationSyncer $syncer;
-	private RepresentationReader $reader;
 	private RepresentationAdoptionEngine $adoptionEngine;
 	private ?WritableQueryResultTracker $writableResultTracker = null;
 
@@ -53,12 +52,11 @@ final class Session implements WritableResultHandler
 		?RepresentationSyncer $syncer = null,
 		?SessionContext $context = null,
 		?FlushHistory $history = null,
-		?ConversionGateway $gateway = null,
+		private readonly ?ConversionGateway $gateway = null,
 	) {
 		$this->context = $context ?? new SessionContext();
-		$this->reader = new RepresentationReader($gateway);
-		$this->adoptionEngine = new RepresentationAdoptionEngine($this->reader);
-		$this->syncer = $syncer ?? new RepresentationSyncer(reader: $this->reader);
+		$this->adoptionEngine = new RepresentationAdoptionEngine($gateway);
+		$this->syncer = $syncer ?? new RepresentationSyncer(gateway: $gateway);
 		$this->flusher = $flusher === null
 			? new FlushExecutor($executor, $this->syncer, history: $history)
 			: ($history === null ? $flusher : $flusher->withHistory($history));
@@ -198,25 +196,15 @@ final class Session implements WritableResultHandler
 			$relationSchema->getRelatedSchema(),
 		);
 
-		if ($state instanceof ToManyRelationState) {
-			$targetRecord = $this->recordForDetachTarget($targetObject);
-			if ($targetRecord instanceof RecordState) {
-				$state->removeTarget(RelationTarget::record($targetRecord));
-			} else {
-				$state->remove($targetObject);
-			}
-
-			return;
-		}
-
-		$current = $state->getTargetRelation();
-		if ($current === null) {
-			return;
-		}
-
-		$want = RelationTarget::representation($targetObject);
 		$targetRecord = $this->recordForDetachTarget($targetObject);
-		if ($current->equals($want) || ($targetRecord instanceof RecordState && $current->equals(RelationTarget::record($targetRecord)))) {
+		if ($state instanceof ToManyRelationState) {
+			$state->remove($targetRecord ?? $targetObject);
+
+			return;
+		}
+
+		$current = $state->getTarget();
+		if ($current === $targetObject || ($targetRecord !== null && RelationMemberIdentity::same($current, $targetRecord))) {
 			$state->clear();
 		}
 	}
@@ -261,7 +249,7 @@ final class Session implements WritableResultHandler
 			)) ?? RecordState::clean($key, $key->getValues());
 			$this->adopt($representation, RepresentationState::fromRecords($schema, ['' => $record]));
 		} else {
-			(new RepresentationIdentifier($this->reader))->attach($representation, $schema, $key, $this->context);
+			(new RepresentationIdentifier())->attach($representation, $schema, $key, $this->context, new RepresentationReader($this->gateway));
 		}
 
 		return $representation;
@@ -448,6 +436,9 @@ final class Session implements WritableResultHandler
 
 	private function writableResultTracker(): WritableQueryResultTracker
 	{
-		return $this->writableResultTracker ??= new WritableQueryResultTracker($this, new QueryResultHydrator($this->reader));
+		return $this->writableResultTracker ??= new WritableQueryResultTracker(
+			$this,
+			new QueryResultHydrator(fn (): RepresentationReader => new RepresentationReader($this->gateway)),
+		);
 	}
 }

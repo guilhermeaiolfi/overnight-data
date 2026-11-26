@@ -70,7 +70,7 @@ final class FlushScheduler
 					continue;
 				}
 
-				if (! $this->isReadyForPlanning($record)) {
+				if ($this->getBlockingValueRefs($record) !== []) {
 					continue;
 				}
 
@@ -94,22 +94,7 @@ final class FlushScheduler
 				$results[] = $result;
 				$capture?->record($command, $result, $record);
 
-				if ($command instanceof InsertCommand) {
-					$this->applyRecoveredValues($record, $result);
-					if ($deferFinalizers) {
-						$finalizers[] = function () use ($states, $record): void {
-							$this->markCleanAndIndex($states, $record);
-						};
-					} else {
-						$this->markCleanAndIndex($states, $record);
-					}
-					unset($pendingRecords[$stateHash]);
-					$progress = true;
-
-					continue;
-				}
-
-				if ($command instanceof UpdateCommand) {
+				if ($command instanceof InsertCommand || $command instanceof UpdateCommand) {
 					$this->applyRecoveredValues($record, $result);
 					$this->finalize($finalizers, function () use ($states, $record): void {
 						$this->markCleanAndIndex($states, $record);
@@ -157,24 +142,6 @@ final class FlushScheduler
 		}
 
 		return new DeferredFlushResult($results, $finalizers);
-	}
-
-	private function isReadyForPlanning(RecordState $record): bool
-	{
-		if ($record->isNew()) {
-			return $this->getUnresolvedValueRefsIn($record->getValues()) === [];
-		}
-
-		if ($record->isDirty()) {
-			return $this->getUnresolvedValueRefsIn($record->getDirtyValues()) === []
-				&& $this->getUnresolvedValueRefsIn($this->getIdentityValues($record)) === [];
-		}
-
-		if ($record->isRemoved()) {
-			return $this->getUnresolvedValueRefsIn($this->getIdentityValues($record)) === [];
-		}
-
-		return true;
 	}
 
 	/**

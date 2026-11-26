@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Definition\Relation;
 
+use InvalidArgumentException;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\ORM\Relation\Persistence\BelongsToPersistencePlanner;
@@ -37,14 +38,29 @@ class BelongsToRelation extends AbstractRelation
 			return null;
 		}
 
-		$innerField = $this->getInnerField();
-		$type = $this->getOuterField()->getType();
-		$field = $parentCollection->field($innerField->getName());
-		$field
-			->setGeneratedFromRelation($parentCollection->getName())
-			->type($type);
+		$innerName = $innerKeys[0];
+		$outerField = $this->getOuterField();
+		$innerField = $parentCollection->getField($innerName);
+		if ($innerField === null) {
+			return $parentCollection->field($innerName, $outerField->getType())
+				->nullable($this->isNullable())
+				->setGeneratedFromRelation($this->getName());
+		}
 
-		return $field;
+		if ($innerField->getType() !== $outerField->getType()) {
+			throw new InvalidArgumentException(sprintf(
+				'Relation %1$s.%2$s expects %1$s.%3$s (%4$s) to match %5$s.%6$s (%7$s).',
+				$parentCollection->getName(),
+				$this->getName(),
+				$innerName,
+				$innerField->getType(),
+				$this->getCollectionName(),
+				$outerField->getName(),
+				$outerField->getType(),
+			));
+		}
+
+		return $innerField;
 	}
 
 	protected function initializeRuntimeState(): void

@@ -6,7 +6,6 @@ namespace ON\Data\ORM\Persistence;
 
 use ON\Data\Database\TransactionStateAwareInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Representation\RepresentationInterface;
@@ -18,9 +17,9 @@ use ON\Data\ORM\Exception\InvalidCommandException;
  * Adapter-agnostic write boundary: projects command values from canonical PHP
  * to storage before delegating to a backend command executor.
  *
- * Does not mutate the original command objects.
+ * Resolves references on the original command and converts a separate command for storage.
  */
-final class ConvertingCommandExecutor implements CommandExecutorInterface, TransactionalCommandExecutorInterface, TransactionStateAwareInterface
+final class CommandExecutor implements CommandExecutorInterface, TransactionalCommandExecutorInterface, TransactionStateAwareInterface
 {
 	private readonly ConversionGateway $gateway;
 
@@ -115,7 +114,11 @@ final class ConvertingCommandExecutor implements CommandExecutorInterface, Trans
 	): array {
 		$converted = [];
 		foreach ($values as $fieldName => $value) {
-			$field = $this->requireField($collection, (string) $fieldName);
+			$field = $collection->getField((string) $fieldName) ?? throw new InvalidCommandException(sprintf(
+				"Persistence command for collection '%s' contains unknown field '%s'.",
+				$collection->getName(),
+				$fieldName,
+			));
 			$converted[$field->getName()] = $this->gateway->to(
 				$from,
 				$value,
@@ -125,19 +128,5 @@ final class ConvertingCommandExecutor implements CommandExecutorInterface, Trans
 		}
 
 		return $converted;
-	}
-
-	private function requireField(CollectionInterface $collection, string $fieldName): FieldInterface
-	{
-		$field = $collection->getField($fieldName);
-		if ($field === null) {
-			throw new InvalidCommandException(sprintf(
-				"Persistence command for collection '%s' contains unknown field '%s'.",
-				$collection->getName(),
-				$fieldName,
-			));
-		}
-
-		return $field;
 	}
 }
