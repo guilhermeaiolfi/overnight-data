@@ -2,48 +2,33 @@
 
 declare(strict_types=1);
 
-namespace ON\Data\Mapper\Support;
+namespace ON\Data\Mapper\Metadata;
 
-use ON\Data\Mapper\Attribute\MapCollection;
+use Closure;
 use ParseError;
 use ReflectionProperty;
 
-/** Resolves explicit collection item types with PHPDoc as a fallback. */
-final class DocblockListTargetResolver
+final class PhpDocListItemTypeExtractor implements ListItemTypeExtractorInterface
 {
-	/**
-	 * @var array<class-string, array<string, class-string|null>>
-	 */
-	private array $listTargets = [];
+	/** @var (Closure(ReflectionProperty): array<string, class-string>)|null */
+	private ?Closure $readImports = null;
 
-	/**
-	 * @var array<class-string, array<string, class-string>>
-	 */
-	private array $importMaps = [];
-
-	/**
-	 * @return class-string|null
-	 */
-	public function resolve(ReflectionProperty $property): ?string
+	/** @internal */
+	public static function forOperation(): self
 	{
-		$class = $property->getDeclaringClass()->getName();
-		$name = $property->getName();
+		$extractor = new self();
+		$imports = [];
+		$extractor->readImports = static function (ReflectionProperty $property) use (&$imports): array {
+			return $imports[$property->getDeclaringClass()->getName()] ??= self::parseImports($property);
+		};
 
-		if (array_key_exists($name, $this->listTargets[$class] ?? [])) {
-			return $this->listTargets[$class][$name];
-		}
-
-		// PHP exposes attributes on promoted parameters through their properties too.
-		$attribute = $property->getAttributes(MapCollection::class)[0] ?? null;
-
-		return $this->listTargets[$class][$name] = $attribute?->newInstance()->getItemClass()
-			?? $this->parseListTarget($property);
+		return $extractor;
 	}
 
 	/**
 	 * @return class-string|null
 	 */
-	private function parseListTarget(ReflectionProperty $property): ?string
+	public function extract(ReflectionProperty $property): ?string
 	{
 		$doc = $property->getDocComment();
 		if (is_string($doc)) {
@@ -128,8 +113,7 @@ final class DocblockListTargetResolver
 			return null;
 		}
 
-		$class = $property->getDeclaringClass()->getName();
-		$imports = $this->importMaps[$class] ??= $this->parseImports($property);
+		$imports = $this->readImports === null ? self::parseImports($property) : ($this->readImports)($property);
 
 		return $imports[$type] ?? null;
 	}
@@ -137,7 +121,7 @@ final class DocblockListTargetResolver
 	/**
 	 * @return array<string, class-string>
 	 */
-	private function parseImports(ReflectionProperty $property): array
+	private static function parseImports(ReflectionProperty $property): array
 	{
 		$file = $property->getDeclaringClass()->getFileName();
 		if (! is_string($file) || $file === '') {

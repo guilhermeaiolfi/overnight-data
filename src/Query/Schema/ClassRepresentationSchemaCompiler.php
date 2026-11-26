@@ -12,8 +12,9 @@ use ON\Data\Mapper\Attribute\Hidden;
 use ON\Data\Mapper\Attribute\MapCollection;
 use ON\Data\Mapper\Attribute\MapFrom;
 use ON\Data\Mapper\Attribute\MapTo;
+use ON\Data\Mapper\Metadata\ListItemTypeExtractorChain;
+use ON\Data\Mapper\Metadata\ListItemTypeExtractorInterface;
 use ON\Data\Mapper\Representation\RepresentationInterface;
-use ON\Data\Mapper\Support\DocblockListTargetResolver;
 use ON\Data\Schema\Exception\InvalidSchemaException;
 use ON\Data\Schema\RelationLoadKnowledge;
 use ON\Data\Schema\RepresentationFieldSchema;
@@ -36,9 +37,11 @@ use stdClass;
  */
 final class ClassRepresentationSchemaCompiler
 {
-	public function __construct(
-		private readonly DocblockListTargetResolver $listTargetResolver = new DocblockListTargetResolver(),
-	) {
+	private readonly ListItemTypeExtractorInterface $listItemTypes;
+
+	public function __construct(?ListItemTypeExtractorInterface $listItemTypes = null)
+	{
+		$this->listItemTypes = $listItemTypes ?? ListItemTypeExtractorChain::forOperation();
 	}
 
 	/**
@@ -323,14 +326,14 @@ final class ClassRepresentationSchemaCompiler
 			}
 
 			if ($hasListType) {
-				return $this->normalizeDtoClass($this->listTargetResolver->resolve($property));
+				return $this->normalizeDtoClass($this->listItemTypes->extract($property));
 			}
 
 			return null;
 		}
 
 		if ($type === null) {
-			return $this->normalizeDtoClass($this->listTargetResolver->resolve($property));
+			return $this->normalizeDtoClass($this->listItemTypes->extract($property));
 		}
 
 		return null;
@@ -347,7 +350,7 @@ final class ClassRepresentationSchemaCompiler
 
 		$name = $type->getName();
 		if ($name === 'array' || $name === 'iterable') {
-			return $this->normalizeDtoClass($this->listTargetResolver->resolve($property));
+			return $this->normalizeDtoClass($this->listItemTypes->extract($property));
 		}
 
 		return null;

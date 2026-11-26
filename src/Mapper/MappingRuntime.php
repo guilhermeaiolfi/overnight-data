@@ -9,6 +9,7 @@ use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
+use ON\Data\Mapper\Support\BranchTargetInferrer;
 use ON\Data\Mapper\Writer\WriterInterface;
 
 final class MappingRuntime
@@ -48,7 +49,12 @@ final class MappingRuntime
 		}
 
 		/** @var T $instance */
-		$instance = new $class();
+		$instance = match ($class) {
+			BranchTargetInferrer::class => new BranchTargetInferrer(
+				listItemTypes: $this->mapperManager->getGateway()->createListItemTypeExtractor(),
+			),
+			default => new $class(),
+		};
 		$this->sharedInstances[$class] = $instance;
 
 		return $instance;

@@ -9,6 +9,8 @@ use DateTimeInterface;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Mapper\Mapper\ObjectMapperOptions;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\Metadata\ListItemTypeExtractorChain;
+use ON\Data\Mapper\Metadata\ListItemTypeExtractorInterface;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ReflectionNamedType;
 use ReflectionProperty;
@@ -16,10 +18,13 @@ use stdClass;
 
 final class BranchTargetInferrer
 {
+	private readonly ListItemTypeExtractorInterface $listItemTypes;
+
 	public function __construct(
 		private readonly ?MappingNodePropertyFinder $propertyFinder = null,
-		private readonly DocblockListTargetResolver $listTargetResolver = new DocblockListTargetResolver(),
+		?ListItemTypeExtractorInterface $listItemTypes = null,
 	) {
+		$this->listItemTypes = $listItemTypes ?? ListItemTypeExtractorChain::forOperation();
 	}
 
 	/**
@@ -164,7 +169,7 @@ final class BranchTargetInferrer
 
 		$name = $type->getName();
 		if ($name === 'array' || $name === 'iterable') {
-			$listTarget = $this->listTargetResolver->resolve($property);
+			$listTarget = $this->listItemTypes->extract($property);
 			if ($listTarget !== null) {
 				return $this->nestedTarget($listTarget, true, $this->withoutDirectDefinitions($node->getArguments()));
 			}
@@ -212,7 +217,7 @@ final class BranchTargetInferrer
 
 		$name = $type->getName();
 		if ($name === 'array' || $name === 'iterable') {
-			$listTarget = $this->listTargetResolver->resolve($property);
+			$listTarget = $this->listItemTypes->extract($property);
 
 			if ($name === 'array' || $listTarget !== null) {
 				return $this->nestedTarget($genericTarget, $listTarget !== null, $node->getArguments());

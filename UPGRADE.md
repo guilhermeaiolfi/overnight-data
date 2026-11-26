@@ -7,6 +7,7 @@
 - Looking up a restored collection initializes missing or non-array `fields` and `relations` slots to empty arrays. Later additions to these collections persist in registry exports.
 - A single-key `belongsTo(...)->innerKey(...)->outerKey(...)->end()` creates a missing local field using the referenced field's type and the relation's nullability. An explicitly declared field keeps its settings. If its type differs, correct the declaration using the field names and types in the exception.
 - The mapper's concrete error types can now also be caught as `MappingException`.
+- Replace direct `DocblockListTargetResolver::resolve()` calls with `PhpDocListItemTypeExtractor::extract()` for PHPDoc-only lookup, or configure the gateway's `listItemTypeExtractors` for mapping and DTO queries. The default gateway still tries `#[MapCollection]` before PHPDoc.
 - Relation-state methods accept DTOs and `RecordState` instances directly.
 - Rename imports and instantiations of `ConvertingCommandExecutor` to `CommandExecutor`. Pass any custom `CommandValueResolver` to `CommandExecutor` or `SqlRuntimeFactory`. Direct callers of `SqlCommandExecutor` must supply storage values and can pass a custom dialect as the second argument.
 - Create one `RepresentationReader` per operation and bind DTOs with `withObject()` before reading paths or relations. Use `PathReadResult::getValue()` to get a present value. It throws `SyncException` for a missing or invalid path.
