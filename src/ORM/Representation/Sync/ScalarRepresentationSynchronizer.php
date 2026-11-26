@@ -24,15 +24,18 @@ final class ScalarRepresentationSynchronizer
 	/**
 	 * @return list<SyncPlan>
 	 */
-	public function sync(RepresentationStateStore $representations): array
-	{
+	public function sync(
+		RepresentationStateStore $representations,
+		?RepresentationReadOperation $operation = null,
+	): array {
+		$reader = $this->reader->forOperation($operation);
 		$states = $representations->getAll();
 		$plans = [];
 		$plannedStates = [];
 		$plannedValues = [];
 
 		foreach ($states as $representation => $state) {
-			$currentValues = $this->readWritableValues($representation, $state);
+			$currentValues = $this->readWritableValues($reader->withObject($representation), $state);
 			$plans[] = $this->buildPlan($state, $currentValues);
 			$plannedStates[] = $state;
 			$plannedValues[] = $currentValues;
@@ -82,18 +85,17 @@ final class ScalarRepresentationSynchronizer
 	/**
 	 * @return array<string, mixed>
 	 */
-	private function readWritableValues(object $representation, RepresentationState $state): array
+	private function readWritableValues(ObjectRepresentationReader $reader, RepresentationState $state): array
 	{
 		$values = [];
-		$readPath = $this->reader->readPass($representation);
 
 		foreach ($state->getWritableFields() as $fieldSchema) {
-			$result = $readPath($fieldSchema->getPath());
+			$result = $reader->readPath($fieldSchema->getPath());
 			if ($result->isMissing()) {
 				continue;
 			}
 
-			$values[$fieldSchema->getPath()] = $result->requireValue();
+			$values[$fieldSchema->getPath()] = $result->getValue();
 		}
 
 		return $values;

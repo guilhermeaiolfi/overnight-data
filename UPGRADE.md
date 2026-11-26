@@ -9,6 +9,7 @@
 - The mapper's concrete error types can now also be caught as `MappingException`.
 - Relation-state methods accept DTOs and `RecordState` instances directly.
 - Rename imports and instantiations of `ConvertingCommandExecutor` to `CommandExecutor`. Pass any custom `CommandValueResolver` to `CommandExecutor` or `SqlRuntimeFactory`. Direct callers of `SqlCommandExecutor` must supply storage values and can pass a custom dialect as the second argument.
+- Bind a DTO with `withObject()` on the operation reader before reading paths or relations. Use `PathReadResult::getValue()` to get a present value. It throws `SyncException` for a missing or invalid path.
 
 ## What documentation means
 

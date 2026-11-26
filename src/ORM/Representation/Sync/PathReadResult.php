@@ -59,7 +59,7 @@ final class PathReadResult
 	}
 
 	/** @return TValue */
-	public function requireValue(): mixed
+	public function getValue(): mixed
 	{
 		if (! $this->isPresent()) {
 			throw new SyncException($this->error ?? 'Cannot read representation path.');
