@@ -351,7 +351,7 @@ By default, the attribute takes precedence over property `@var` and constructor 
 
 ### Collection item type extractors
 
-The native PHP property type and the collection item class answer separate questions. For `#[MapCollection(AuthorDto::class)] public ?array $authors`, PHP supplies the nullable array type and the attribute supplies `AuthorDto`. The mapper uses both when mapping a value. A DTO query uses the item class to decide which fields and relations to select.
+For `#[MapCollection(AuthorDto::class)] public ?array $authors`, `ReflectionProperty::getType()` gives the mapper and query compiler the nullable array type. A collection item extractor in `Mapper\Metadata` reads the declaration and gives them `AuthorDto`. The query compiler uses that class to decide which fields to select for the relation. During mapping, a node resolver in `Mapper\Resolver` handles a live value. `ReflectionPropertyNodeResolver` asks `BranchTargetInferrer` for the nested target, then resolves an array of author rows as a branch that maps each row to `AuthorDto`.
 
 The default order is `MapCollectionAttributeExtractor` followed by `PhpDocListItemTypeExtractor`. Set `listItemTypeExtractors:` on a gateway to supply an ordered replacement. Each extractor implements `ListItemTypeExtractorInterface` and receives a `ReflectionProperty`. Return a class name to answer the lookup or `null` to let the next extractor try.
 

@@ -9,7 +9,8 @@ use DateTimeInterface;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Mapper\Mapper\ObjectMapperOptions;
 use ON\Data\Mapper\MappingNode;
-use ON\Data\Mapper\Metadata\PropertyMetadataReader;
+use ON\Data\Mapper\Metadata\ListItemTypeExtractorChain;
+use ON\Data\Mapper\Metadata\ListItemTypeExtractorInterface;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ReflectionNamedType;
 use ReflectionProperty;
@@ -17,14 +18,13 @@ use stdClass;
 
 final class BranchTargetInferrer
 {
-	private readonly PropertyMetadataReader $propertyMetadata;
+	private readonly ListItemTypeExtractorInterface $listItemTypes;
 
 	public function __construct(
 		private readonly ?MappingNodePropertyFinder $propertyFinder = null,
-		?DocblockListTargetResolver $listTargetResolver = null,
-		?PropertyMetadataReader $propertyMetadata = null,
+		?ListItemTypeExtractorInterface $listItemTypes = null,
 	) {
-		$this->propertyMetadata = $propertyMetadata ?? $listTargetResolver?->getPropertyMetadata() ?? new PropertyMetadataReader();
+		$this->listItemTypes = $listItemTypes ?? ListItemTypeExtractorChain::forOperation();
 	}
 
 	/**
@@ -152,7 +152,7 @@ final class BranchTargetInferrer
 		MappingNode $node,
 		ReflectionProperty $property,
 	): ?array {
-		$type = $this->propertyMetadata->nativeType($property);
+		$type = $property->getType();
 		if (! $type instanceof ReflectionNamedType) {
 			return null;
 		}
@@ -169,7 +169,7 @@ final class BranchTargetInferrer
 
 		$name = $type->getName();
 		if ($name === 'array' || $name === 'iterable') {
-			$listTarget = $this->propertyMetadata->collectionItemClass($property);
+			$listTarget = $this->listItemTypes->extract($property);
 			if ($listTarget !== null) {
 				return $this->nestedTarget($listTarget, true, $this->withoutDirectDefinitions($node->getArguments()));
 			}
@@ -206,7 +206,7 @@ final class BranchTargetInferrer
 			return null;
 		}
 
-		$type = $this->propertyMetadata->nativeType($property);
+		$type = $property->getType();
 		if (! $type instanceof ReflectionNamedType) {
 			return $this->nestedTarget($genericTarget, false, $node->getArguments());
 		}
@@ -217,7 +217,7 @@ final class BranchTargetInferrer
 
 		$name = $type->getName();
 		if ($name === 'array' || $name === 'iterable') {
-			$listTarget = $this->propertyMetadata->collectionItemClass($property);
+			$listTarget = $this->listItemTypes->extract($property);
 
 			if ($name === 'array' || $listTarget !== null) {
 				return $this->nestedTarget($genericTarget, $listTarget !== null, $node->getArguments());

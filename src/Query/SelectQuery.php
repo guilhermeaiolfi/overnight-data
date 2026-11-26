@@ -1100,9 +1100,8 @@ final class SelectQuery implements QuerySourceInterface
 			return;
 		}
 
-		$compiler = new ClassRepresentationSchemaCompiler(
-			propertyMetadata: $this->getMapperManager()->getGateway()->createPropertyMetadataReader(),
-		);
+		$gateway = $this->gateway ?? Mapping::getDefaultGateway();
+		$compiler = new ClassRepresentationSchemaCompiler($gateway->createListItemTypeExtractor());
 		$schema = $compiler->compile($this->source, $reflection);
 		if (! $schema instanceof RepresentationSchema) {
 			return;

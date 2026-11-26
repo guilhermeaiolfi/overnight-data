@@ -7,8 +7,8 @@ namespace ON\Data\Mapper;
 use ON\Data\Mapper\Exception\ConversionException;
 use ON\Data\Mapper\Exception\FieldTypeNotFoundException;
 use ON\Data\Mapper\Exception\UnsupportedConversionException;
+use ON\Data\Mapper\Metadata\ListItemTypeExtractorChain;
 use ON\Data\Mapper\Metadata\ListItemTypeExtractorInterface;
-use ON\Data\Mapper\Metadata\PropertyMetadataReader;
 use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
@@ -53,9 +53,9 @@ final class ConversionGateway
 	}
 
 	/** @internal */
-	public function createPropertyMetadataReader(): PropertyMetadataReader
+	public function createListItemTypeExtractor(): ListItemTypeExtractorInterface
 	{
-		return new PropertyMetadataReader($this->listItemTypeExtractors);
+		return ListItemTypeExtractorChain::forOperation($this->listItemTypeExtractors);
 	}
 
 	public function clearRoutes(): void

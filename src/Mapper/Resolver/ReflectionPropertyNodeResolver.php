@@ -9,7 +9,6 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingRuntime;
-use ON\Data\Mapper\Metadata\PropertyMetadataReader;
 use ON\Data\Mapper\Resolution\BranchNodeResolution;
 use ON\Data\Mapper\Resolution\BranchNodeResolutionInterface;
 use ON\Data\Mapper\Resolution\LeafNodeResolution;
@@ -43,7 +42,7 @@ final class ReflectionPropertyNodeResolver implements CacheableNodeResolverInter
 		$name = $targetProperty !== null
 			? $targetProperty->getName()
 			: $mappedSourceName;
-		$type = $runtime->getSharedInstance(PropertyMetadataReader::class)->nativeType($property);
+		$type = $property->getType();
 		if ($type instanceof ReflectionNamedType) {
 			$resolvedType = $this->resolveLeafType($type);
 			if ($resolvedType !== null) {

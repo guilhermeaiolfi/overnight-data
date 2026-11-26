@@ -6,7 +6,6 @@ namespace ON\Data\Mapper;
 
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\Mapper\MapperInterface;
-use ON\Data\Mapper\Metadata\PropertyMetadataReader;
 use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
@@ -51,9 +50,8 @@ final class MappingRuntime
 
 		/** @var T $instance */
 		$instance = match ($class) {
-			PropertyMetadataReader::class => $this->mapperManager->getGateway()->createPropertyMetadataReader(),
 			BranchTargetInferrer::class => new BranchTargetInferrer(
-				propertyMetadata: $this->getSharedInstance(PropertyMetadataReader::class),
+				listItemTypes: $this->mapperManager->getGateway()->createListItemTypeExtractor(),
 			),
 			default => new $class(),
 		};

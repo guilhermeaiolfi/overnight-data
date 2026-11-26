@@ -4,16 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Mapper;
 
-use InvalidArgumentException;
-use ON\Data\Mapper\Attribute\MapCollection;
-use ON\Data\Mapper\Support\DocblockListTargetResolver;
+use ON\Data\Mapper\Metadata\PhpDocListItemTypeExtractor;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use Tests\ON\Data\Fixture\AuthorDto;
 use Tests\ON\Data\Fixture\BracketedFirst;
 use Tests\ON\Data\Fixture\BracketedSecond;
 
-final class BranchTargetInferrerTest extends TestCase
+final class PhpDocListItemTypeExtractorTest extends TestCase
 {
 	public function testResolvesBracketArrayPhpDocListTarget(): void
 	{
@@ -81,17 +79,9 @@ final class BranchTargetInferrerTest extends TestCase
 		));
 	}
 
-	public function testExplicitCollectionItemClassMustExist(): void
-	{
-		$this->expectException(InvalidArgumentException::class);
-		$this->expectExceptionMessage('MapCollection item class "" does not exist.');
-
-		new MapCollection('');
-	}
-
 	private function resolvePhpDocListTarget(ReflectionProperty $property): ?string
 	{
-		return (new DocblockListTargetResolver())->resolve($property);
+		return (new PhpDocListItemTypeExtractor())->extract($property);
 	}
 }
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\ON\Data\Mapper;
 
+use InvalidArgumentException;
+use ON\Data\Mapper\Attribute\MapCollection;
 use ON\Data\Mapper\ConversionGateway;
 use function ON\Data\Mapper\map;
 use ON\Data\Mapper\Metadata\CachedListItemTypeExtractor;
@@ -14,6 +16,14 @@ use Tests\ON\Data\Fixture\AuthorDto;
 
 final class ListItemTypeExtractorTest extends TestCase
 {
+	public function testExplicitCollectionItemClassMustExist(): void
+	{
+		$this->expectException(InvalidArgumentException::class);
+		$this->expectExceptionMessage('MapCollection item class "" does not exist.');
+
+		new MapCollection('');
+	}
+
 	public function testGatewayTriesConfiguredExtractorsInOrderAndCachesForOneMapping(): void
 	{
 		$first = $this->createMock(ListItemTypeExtractorInterface::class);
