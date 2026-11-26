@@ -38,7 +38,7 @@ final class RepresentationSourceReader
 		foreach ($source->getPrimaryKeyPaths() as $index => $path) {
 			$result = $path === null ? null : ($readsByPath[$path] ?? null);
 			if ($result !== null && $result->isPresent()) {
-				$value = $result->requireValue();
+				$value = $result->getValue();
 				if ($value !== null) {
 					$values[$primaryKey[$index]] = $value;
 				}
@@ -87,7 +87,7 @@ final class RepresentationSourceReader
 					$writable,
 					$writablePaths,
 					$fieldSchema,
-					$result->requireValue(),
+					$result->getValue(),
 				);
 
 				continue;
@@ -98,7 +98,7 @@ final class RepresentationSourceReader
 				$readOnly,
 				$readOnlyPaths,
 				$fieldSchema,
-				$result->requireValue(),
+				$result->getValue(),
 			);
 		}
 

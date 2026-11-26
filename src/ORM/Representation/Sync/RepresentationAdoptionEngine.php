@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\Key;
+use ON\Data\Mapper\ConversionGateway;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
@@ -18,7 +19,7 @@ use ON\Data\Schema\RepresentationSource;
 /** Binds inbound objects and staged write intents before synchronization. */
 final class RepresentationAdoptionEngine
 {
-	public function __construct(private RepresentationReader $reader = new RepresentationReader())
+	public function __construct(private readonly ?ConversionGateway $gateway = null)
 	{
 	}
 
@@ -29,7 +30,14 @@ final class RepresentationAdoptionEngine
 	): RepresentationState {
 		$visited = [];
 
-		return $this->attachObject($representation, $context, $session, $visited, $session->getIntents()->get($representation));
+		return $this->attachObject(
+			$representation,
+			$context,
+			$session,
+			$visited,
+			$session->getIntents()->get($representation),
+			new RepresentationReader($this->gateway),
+		);
 	}
 
 	/** @param array<int, true> $visited */
@@ -39,6 +47,7 @@ final class RepresentationAdoptionEngine
 		SessionContext $session,
 		array &$visited,
 		?RepresentationIntent $storedIntent,
+		RepresentationReader $operation,
 	): RepresentationState {
 		$id = spl_object_id($representation);
 		$representations = $session->getRepresentations();
@@ -47,12 +56,13 @@ final class RepresentationAdoptionEngine
 			return $tracked ?? throw new StateException('Visited representation is missing tracked state.');
 		}
 		$visited[$id] = true;
+		$reader = $operation->withObject($representation);
 
 		$intent = $context->getIntent();
 		$replace = $intent !== null && ($intent->getFlatOps() !== [] || $intent->getSchema() !== null);
 		if ($tracked === null || $replace) {
 			$rootPolicy = $this->rootPolicy($context, $storedIntent);
-			$state = $this->bindSources($representation, $context, $rootPolicy, $session);
+			$state = $this->bindSources($reader, $context, $rootPolicy, $session);
 			foreach ($state->getUniqueRecords() as $record) {
 				$session->getRecords()->add($record);
 			}
@@ -67,7 +77,7 @@ final class RepresentationAdoptionEngine
 		$schema = $state->getSchema();
 		$this->assertRelationOwners($schema);
 		foreach ($schema->getRelations() as $relation) {
-			foreach ($this->reader->readRelatedObjects($representation, $relation, $this->relationError(...)) as $child) {
+			foreach ($reader->readRelatedObjects($relation, $this->relationError(...)) as $child) {
 				$childIntent = $session->getIntents()->get($child);
 				$childSchema = $childIntent?->getSchema() ?? $relation->getRelatedSchema();
 				$this->attachObject(
@@ -81,6 +91,7 @@ final class RepresentationAdoptionEngine
 					$session,
 					$visited,
 					$childIntent,
+					$operation,
 				);
 			}
 		}
@@ -93,7 +104,7 @@ final class RepresentationAdoptionEngine
 	}
 
 	private function bindSources(
-		object $representation,
+		ObjectRepresentationReader $reader,
 		RepresentationAdoptionContext $context,
 		AdoptionPolicy $rootPolicy,
 		SessionContext $session,
@@ -119,13 +130,12 @@ final class RepresentationAdoptionEngine
 			$bound[''] = $this->bindEmptyRoot($context, $records);
 		}
 
-		$readPath = $this->reader->readPass($representation);
 		foreach ($sources as $source) {
 			$this->assertSourceFieldCollections($source);
 			$path = $source->getPathKey();
 			$op = $ops[$path] ?? null;
 			$policy = $this->sourcePolicy($source, $op, $rootPolicy, $context->getPolicy());
-			[$reads, $values] = RepresentationSourceReader::read($source, $readPath);
+			[$reads, $values] = RepresentationSourceReader::read($source, $reader->readPath(...));
 			$bound[$path] = $this->bindSource($source, $policy, $reads, $values, $context->getIdentities()?->getIdentity($path), $records);
 			if (! $source->isRoot() && $op?->isCreate() === true) {
 				$flatCreates[] = $source;
