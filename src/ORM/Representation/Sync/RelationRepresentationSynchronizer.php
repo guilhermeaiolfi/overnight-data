@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\Definition\Relation\RelationCardinality;
+use ON\Data\Mapper\ConversionGateway;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\RelationStateInterface;
@@ -17,11 +18,8 @@ use ON\Data\Schema\RepresentationRelationSchema;
 
 final class RelationRepresentationSynchronizer
 {
-	private RepresentationReader $reader;
-
-	public function __construct(?RepresentationReader $reader = null)
+	public function __construct(private readonly ?ConversionGateway $gateway = null)
 	{
-		$this->reader = $reader ?? new RepresentationReader();
 	}
 
 	/**
@@ -31,22 +29,25 @@ final class RelationRepresentationSynchronizer
 		RepresentationStateStore $reps,
 		RelationStateStore $relations,
 		?RepresentationStateStore $states = null,
+		?RepresentationReader $operation = null,
 	): array {
 		$touched = [];
 		$touchedIds = [];
 		$states ??= $reps;
+		$reader = $operation?->forGateway($this->gateway) ?? new RepresentationReader($this->gateway);
 
 		foreach ($reps->getAll() as $representation => $state) {
+			$objectReader = $reader->withObject($representation);
 			foreach ($state->getSchema()->getRelations() as $relationSchema) {
 				$owner = $state->requireRootRecord();
 				if ($relationSchema->isMany()) {
-					$this->syncMany($representation, $relationSchema, $owner, $relations, $states, $touched, $touchedIds);
+					$this->syncMany($objectReader, $relationSchema, $owner, $relations, $states, $touched, $touchedIds);
 
 					continue;
 				}
 
 				if ($relationSchema->isSingle()) {
-					$this->syncOne($representation, $relationSchema, $owner, $relations, $states, $touched, $touchedIds);
+					$this->syncOne($objectReader, $relationSchema, $owner, $relations, $states, $touched, $touchedIds);
 				}
 			}
 		}
@@ -59,7 +60,7 @@ final class RelationRepresentationSynchronizer
 	 * @param array<int, true> $touchedIds
 	 */
 	private function syncMany(
-		object $representation,
+		ObjectRepresentationReader $reader,
 		RepresentationRelationSchema $relationSchema,
 		RecordState $owner,
 		RelationStateStore $relations,
@@ -69,11 +70,11 @@ final class RelationRepresentationSynchronizer
 	): void {
 		$relationName = $relationSchema->getRelationName();
 
-		$result = $this->reader->readItems($representation, $relationSchema, $this->syncError(...));
+		$result = $reader->readItems($relationSchema, $this->syncError(...));
 		if ($result->isMissing() && $relationSchema->shouldSkipWhenMissing()) {
 			return;
 		}
-		$items = $result->requireValue();
+		$items = $result->getValue();
 		foreach ($items as $item) {
 			$this->requireTrackedRepresentation($states, $item, $relationSchema->getPath());
 		}
@@ -105,7 +106,7 @@ final class RelationRepresentationSynchronizer
 	 * @param array<int, true> $touchedIds
 	 */
 	private function syncOne(
-		object $representation,
+		ObjectRepresentationReader $reader,
 		RepresentationRelationSchema $relationSchema,
 		RecordState $owner,
 		RelationStateStore $relations,
@@ -115,11 +116,11 @@ final class RelationRepresentationSynchronizer
 	): void {
 		$relationName = $relationSchema->getRelationName();
 
-		$result = $this->reader->readTarget($representation, $relationSchema, $this->syncError(...));
+		$result = $reader->readTarget($relationSchema, $this->syncError(...));
 		if ($result->isMissing() && $relationSchema->shouldSkipWhenMissing()) {
 			return;
 		}
-		$target = $result->requireValue();
+		$target = $result->getValue();
 		if ($target !== null) {
 			$this->requireTrackedRepresentation($states, $target, $relationSchema->getPath());
 		}

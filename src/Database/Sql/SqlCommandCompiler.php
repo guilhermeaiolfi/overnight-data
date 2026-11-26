@@ -20,7 +20,7 @@ final readonly class SqlCommandCompiler
 	}
 
 	/** @param list<FieldInterface> $returning */
-	public function insert(InsertCommand $command, array $returning): SqlStatement
+	public function insert(InsertCommand $command, array $returning): SqlFragment
 	{
 		$collection = $command->getCollection();
 		$values = $this->mapFieldValuesToColumns($collection, $command->getValues());
@@ -31,10 +31,10 @@ final readonly class SqlCommandCompiler
 			$this->quoteColumns($returning),
 		);
 
-		return new SqlStatement($sql, array_values($values));
+		return new SqlFragment($sql, array_values($values));
 	}
 
-	public function update(UpdateCommand $command): SqlStatement
+	public function update(UpdateCommand $command): SqlFragment
 	{
 		$collection = $command->getCollection();
 		$changes = $this->mapFieldValuesToColumns($collection, $command->getChanges());
@@ -45,18 +45,18 @@ final readonly class SqlCommandCompiler
 		$assignments = array_map(static fn (string $column): string => $column . ' = ?', array_keys($changes));
 		$where = $this->identity($collection, $command->getIdentity());
 
-		return new SqlStatement(
+		return new SqlFragment(
 			'UPDATE ' . $this->table($collection) . ' SET ' . implode(', ', $assignments) . ' WHERE ' . $where->sql(),
 			[...array_values($changes), ...$where->parameters()],
 		);
 	}
 
-	public function delete(DeleteCommand $command): SqlStatement
+	public function delete(DeleteCommand $command): SqlFragment
 	{
 		$collection = $command->getCollection();
 		$where = $this->identity($collection, $command->getIdentity());
 
-		return new SqlStatement(
+		return new SqlFragment(
 			'DELETE FROM ' . $this->table($collection) . ' WHERE ' . $where->sql(),
 			$where->parameters(),
 		);
@@ -66,12 +66,12 @@ final readonly class SqlCommandCompiler
 	 * @param non-empty-list<FieldInterface> $fields
 	 * @param array<string, mixed> $identity
 	 */
-	public function selectReadback(CollectionInterface $collection, array $fields, array $identity): SqlStatement
+	public function selectReadback(CollectionInterface $collection, array $fields, array $identity): SqlFragment
 	{
 		$where = $this->identity($collection, $identity);
 		$limit = $this->dialect->compileLimitOffset(1, null, false);
 
-		return new SqlStatement(
+		return new SqlFragment(
 			'SELECT ' . implode(', ', $this->quoteColumns($fields))
 				. ' FROM ' . $this->table($collection) . ' WHERE ' . $where->sql() . ' ' . $limit->sql(),
 			[...$where->parameters(), ...$limit->parameters()],

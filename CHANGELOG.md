@@ -11,7 +11,7 @@ Version tags use MAJOR.MINOR.PATCH numbering for identification; this package do
 
 - **Definition plugins** — `extend(PluginClass::class)` / `getPlugin()` on definition nodes, same in-place class-string create as `display()` / `interface()`. `extend($class, $value)` sets the plugin `value` and stays on the host. `UiDefinitionPlugin` owns `interface()` / `display()` and the widget classes (`DropdownInterface`, `ImageDisplay`, …). `CycleCollectionPlugin` holds collection `entity` / `repository` / `mapper` / `scope`. Docs: [`docs/definition-api.md`](docs/definition-api.md), [`docs/definition-extension-guide.md`](docs/definition-extension-guide.md).
 - **Direct SQL runtime** compiles parameterized statements for SQLite, PostgreSQL, MySQL, MariaDB, and SQL Server. Use `SqlRuntimeFactory` with an existing PDO handle, a DSN, or your own `ConnectionInterface` adapter. The package no longer requires `cycle/database`.
-- **Write-path database value recovery** reads omitted insert columns and database-generated update values. `ConvertingCommandExecutor` converts recovered storage values to PHP before `FlushScheduler` merges them into the record.
+- **Write-path database value recovery** reads omitted insert columns and database-generated update values. `CommandExecutor` converts recovered storage values to PHP before `FlushScheduler` merges them into the record.
 
 ### Fixed
 

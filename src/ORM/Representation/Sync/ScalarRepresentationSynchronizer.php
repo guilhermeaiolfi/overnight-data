@@ -4,35 +4,37 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Sync;
 
+use ON\Data\Mapper\ConversionGateway;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 
 final class ScalarRepresentationSynchronizer
 {
-	private RepresentationReader $reader;
 	private SyncConflictDetector $conflicts;
 
 	public function __construct(
-		?RepresentationReader $reader = null,
+		private readonly ?ConversionGateway $gateway = null,
 		?SyncConflictDetector $conflicts = null,
 	) {
-		$this->reader = $reader ?? new RepresentationReader();
 		$this->conflicts = $conflicts ?? new SyncConflictDetector();
 	}
 
 	/**
 	 * @return list<SyncPlan>
 	 */
-	public function sync(RepresentationStateStore $representations): array
-	{
+	public function sync(
+		RepresentationStateStore $representations,
+		?RepresentationReader $operation = null,
+	): array {
+		$reader = $operation?->forGateway($this->gateway) ?? new RepresentationReader($this->gateway);
 		$states = $representations->getAll();
 		$plans = [];
 		$plannedStates = [];
 		$plannedValues = [];
 
 		foreach ($states as $representation => $state) {
-			$currentValues = $this->readWritableValues($representation, $state);
+			$currentValues = $this->readWritableValues($reader->withObject($representation), $state);
 			$plans[] = $this->buildPlan($state, $currentValues);
 			$plannedStates[] = $state;
 			$plannedValues[] = $currentValues;
@@ -82,18 +84,17 @@ final class ScalarRepresentationSynchronizer
 	/**
 	 * @return array<string, mixed>
 	 */
-	private function readWritableValues(object $representation, RepresentationState $state): array
+	private function readWritableValues(ObjectRepresentationReader $reader, RepresentationState $state): array
 	{
 		$values = [];
-		$readPath = $this->reader->readPass($representation);
 
 		foreach ($state->getWritableFields() as $fieldSchema) {
-			$result = $readPath($fieldSchema->getPath());
+			$result = $reader->readPath($fieldSchema->getPath());
 			if ($result->isMissing()) {
 				continue;
 			}
 
-			$values[$fieldSchema->getPath()] = $result->requireValue();
+			$values[$fieldSchema->getPath()] = $result->getValue();
 		}
 
 		return $values;

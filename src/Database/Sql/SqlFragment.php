@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace ON\Data\Database\Sql;
 
 /** @internal */
-final readonly class SqlFragment
+readonly class SqlFragment
 {
-	/** @param list<mixed> $parameters */
-	private function __construct(
-		private string $sql,
-		private array $parameters,
+	/** @param list<mixed> $params */
+	public function __construct(
+		public string $sql,
+		public array $params,
 	) {
 	}
 
@@ -32,7 +32,7 @@ final readonly class SqlFragment
 		$params = [];
 		foreach ($parts as $part) {
 			$sql[] = $part->sql;
-			array_push($params, ...$part->parameters);
+			array_push($params, ...$part->params);
 		}
 
 		return new self(implode($separator, $sql), $params);
@@ -46,6 +46,6 @@ final readonly class SqlFragment
 	/** @return list<mixed> */
 	public function parameters(): array
 	{
-		return $this->parameters;
+		return $this->params;
 	}
 }

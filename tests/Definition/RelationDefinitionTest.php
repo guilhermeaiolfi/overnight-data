@@ -70,10 +70,46 @@ final class RelationDefinitionTest extends TestCase
 		self::assertSame(['user_id'], $relation->getInnerKeys());
 		self::assertSame(['id'], $relation->getOuterKeys());
 		self::assertSame('user_id', $relation->getInnerField()->getName());
-		self::assertSame('post', $relation->getInnerField()->getGeneratedFromRelation());
+		self::assertNull($relation->getInnerField()->getGeneratedFromRelation());
 		self::assertSame('id', $relation->getOuterField()->getName());
 		self::assertSame(RelationCardinality::SINGLE, $relation->getCardinality());
 		self::assertFalse($relation->isJunction());
+	}
+
+	public function testBelongsToGeneratesMissingFieldAndRestoresIt(): void
+	{
+		$registry = new Registry();
+		$registry->collection('user')->primaryKey('id')->field('id', 'int');
+		$posts = $registry->collection('post');
+		$posts->belongsTo('author', 'user')->innerKey('author_id')->outerKey('id')->end();
+
+		$field = (new Registry($registry->all()))->getCollection('post')?->getField('author_id');
+		self::assertNotNull($field);
+		self::assertSame('int', $field->getType());
+		self::assertSame('author', $field->getGeneratedFromRelation());
+		self::assertTrue($field->isNullable());
+
+		$posts->belongsTo('editor', 'user')->nullable(false)->innerKey('editor_id')->outerKey('id')->end();
+		self::assertFalse($posts->getFields()->get('editor_id')->isNullable());
+	}
+
+	public function testBelongsToReportsMismatchedFieldWithoutMutatingIt(): void
+	{
+		$registry = new Registry();
+		$registry->collection('user')->primaryKey('id')->field('id', 'int');
+		$posts = $registry->collection('post');
+		$field = $posts->field('author_id', 'string')->column('writer');
+
+		try {
+			$posts->belongsTo('author', 'user')->innerKey('author_id')->outerKey('id')->end();
+			self::fail('Expected a field type mismatch.');
+		} catch (InvalidArgumentException $exception) {
+			self::assertSame('Relation post.author expects post.author_id (string) to match user.id (int).', $exception->getMessage());
+		}
+
+		self::assertSame('string', $field->getType());
+		self::assertSame('writer', $field->getColumn());
+		self::assertNull($field->getGeneratedFromRelation());
 	}
 
 	public function testCompositeRelationLegacyFieldAccessThrows(): void

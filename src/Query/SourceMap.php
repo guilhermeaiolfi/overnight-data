@@ -33,10 +33,10 @@ final class SourceMap
 
 	public static function of(QuerySourceInterface $from, QuerySourceInterface $to): self
 	{
-		$builder = new SourceMapBuilder();
-		$builder->map($from, $to);
+		$sources = new SplObjectStorage();
+		$sources[$from] = $to;
 
-		return $builder->seal();
+		return new self($sources);
 	}
 
 	public function remap(QuerySourceInterface $source): QuerySourceInterface
@@ -54,26 +54,18 @@ final class SourceMap
 
 	public function with(QuerySourceInterface $from, QuerySourceInterface $to): self
 	{
-		$builder = new SourceMapBuilder();
-		foreach ($this->sources as $source) {
-			$builder->map($source, $this->sources[$source]);
-		}
-		$builder->map($from, $to);
+		$sources = clone $this->sources;
+		$sources[$from] = $to;
 
-		return $builder->seal();
+		return new self($sources);
 	}
 
 	public function merge(self $other): self
 	{
-		$builder = new SourceMapBuilder();
-		foreach ($this->sources as $from) {
-			$builder->map($from, $this->sources[$from]);
-		}
-		foreach ($other->sources as $from) {
-			$builder->map($from, $other->sources[$from]);
-		}
+		$sources = clone $this->sources;
+		$sources->addAll($other->sources);
 
-		return $builder->seal();
+		return new self($sources);
 	}
 
 	/** @internal @param SplObjectStorage<QuerySourceInterface, QuerySourceInterface> $sources */

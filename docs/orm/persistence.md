@@ -118,7 +118,7 @@ For scalar foreign-key relation shapes, the has-many, belongs-to, and has-one pl
 
 `ValueRef` is an internal ORM state value used to represent a temporary dependency on another `RecordState` field. A `RecordState` may temporarily hold a `ValueRef` in its current values and dirty values. When the referenced field later contains a concrete non-null value, `RecordState::resolveValueRefs()` collapses the reference into that concrete value.
 
-Neutral ORM persistence commands may also temporarily carry `ValueRef` values while they remain inside the flush pipeline. `CommandPlanner` and relation planners can build `InsertCommand`, `UpdateCommand`, and `DeleteCommand` instances that still contain unresolved references. `CommandValueResolver` collapses resolved command references in place before execution and rejects unresolved references at the adapter boundary.
+Neutral ORM persistence commands may also temporarily carry `ValueRef` values while they remain inside the flush pipeline. `CommandPlanner` and relation planners can build `InsertCommand`, `UpdateCommand`, and `DeleteCommand` instances that still contain unresolved references. The ORM resolves ready references in place before converting command values for the storage adapter.
 
 `FlushScheduler` flushes records in waves. Before each planning attempt it resolves any now-ready references and only plans records whose command-relevant values are concrete. This allows generated-key dependencies such as a new user with a new has-many post, a new belongs-to target with a new owner, or a new has-one owner with a new target to flush as parent/source insert first, generated value merge second, dependent record command third.
 
@@ -153,14 +153,14 @@ Composite identity remains first-class. Update and delete identities are keyed b
 public function execute(CommandInterface $command): CommandResult;
 ```
 
-`ConvertingCommandExecutor` is the adapter-agnostic write boundary. It projects command field values from canonical PHP to storage through `ConversionGateway` (`PhpRepresentation` → `StorageRepresentation`), using the same conversion authority as query literal binding and result mapping. It does not mutate the original command objects.
+`CommandExecutor` is the adapter-agnostic write boundary. It prepares a separate storage command by converting field values from canonical PHP through `ConversionGateway` (`PhpRepresentation` → `StorageRepresentation`), using the same conversion authority as query literal binding and result mapping.
 
 The built-in `SqlCommandExecutor` runs parameterized insert, update, and delete statements. `SqlCommandCompiler` resolves the physical SQL names.
 
 - The table comes from `CollectionInterface::getTable()` with the connection's table prefix.
 - Column names come from the field definitions. An unknown command field raises `InvalidCommandException`.
 
-Command and `RecordState` values remain canonical PHP until `ConvertingCommandExecutor`. The SQL executor receives storage values and calls `CommandValueResolver::assertReady()` before compilation. An unresolved `ValueRef` raises `InvalidCommandException`. The executor delegates flush transactions to `ConnectionInterface`.
+`CommandExecutor` calls `CommandValueResolver::assertReady()` before conversion. Ready references are resolved on the original command, and unresolved references raise `InvalidCommandException` before any command is sent to the backend. `SqlCommandExecutor` receives storage values and delegates flush transactions to `ConnectionInterface`.
 
 Database executors must implement `TransactionalCommandExecutorInterface`. `FlushExecutor` runs the whole command wave inside one executor transaction and throws `NonTransactionalFlushException` when the executor does not implement that interface.
 
@@ -205,7 +205,7 @@ use ON\Data\Definition\Field\Generator\When;
 ```
 
 - `DatabaseGenerator` — database-owned (identity / sequence / DB default). Optional `$arg` is a sequence name (string) or `['sequence' => '...']` used as schema metadata for the column default (and passed through to `lastInsertId($sequence)` on the non-RETURNING path). Executors fill `CommandResult`:
-  - The insert and update readback rules below determine which values are recovered. `ConvertingCommandExecutor` converts them back to canonical PHP.
+  - The insert and update readback rules below determine which values are recovered. `CommandExecutor` converts them back to canonical PHP.
 - `UuidGenerator` — PHP-owned RFC 4122 UUID v4 string (`xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`). No constructor arg.
 - `NowGenerator` — PHP-owned `DateTimeImmutable('now')`. Optional `$arg` is a timezone name (e.g. `UTC`) or pass `new NowGenerator('UTC')` / `new NowGenerator(new DateTimeZone('UTC'))`.
 - `PhpFieldGeneratorInterface` — PHP-owned; `CommandPlanner` runs `generate()` above adapters before INSERT/UPDATE (`When` bitmask). `$arg` may be a scalar, a list of constructor args, or a single constructor value.
@@ -218,7 +218,7 @@ PostgreSQL, SQLite 3.35+, and MariaDB 10.5+ support `INSERT ... RETURNING`. SQL 
 
 MySQL and older SQLite or MariaDB use a single generated primary key from `lastInsertId($sequence)` and then `SELECT` any remaining values when a complete identity is available. An application-assigned key also works for the follow-up query. SQLite `RETURNING` exposes values from before AFTER triggers. SQL Server `OUTPUT` exposes pre-trigger values and fails on tables with enabled INSERT triggers. Set `insertReturning: false` in `ConnectionConfig` or `PdoConnection` to select the fallback on either engine. Supply a key for SQL Server inserts on this path because the driver's last identity can come from a table written by a trigger.
 
-Generated values use field names as keys. A requested column returned as SQL `NULL` appears with a PHP `null` value. `ConvertingCommandExecutor` converts storage values before `FlushScheduler` merges them into `RecordState`.
+Generated values use field names as keys. A requested column returned as SQL `NULL` appears with a PHP `null` value. `CommandExecutor` converts storage values before `FlushScheduler` merges them into `RecordState`.
 
 Generated values are merged into in-memory record state as soon as the insert command succeeds so later dependent commands in the same flush can resolve concrete foreign-key values. When the flush transaction fails, `FlushExecutor` restores in-memory record snapshots so rolled-back generated values are not left exposed after failure. Relation change markers remain pending so a full retry can plan again.
 
@@ -253,7 +253,7 @@ $session->flush();
 $generatedId = $record->getValue('id');
 ```
 
-`SqlRuntimeFactory` wires `ConvertingCommandExecutor` around `SqlCommandExecutor` automatically.
+`SqlRuntimeFactory` wires `CommandExecutor` around `SqlCommandExecutor` automatically.
 
 ## Public Runtime
 
@@ -270,7 +270,7 @@ This is deliberately not an `EntityManager`. There is no repository API, object 
 
 Pending write admission happens in memory before persistence. If a transaction fails, the flush executor restores record identity, values, lifecycle, and tracked representation baselines together. Admitted writes stay tracked for retry.
 
-`Session::flush()` always runs inside a database transaction via `TransactionalCommandExecutorInterface` (including `ConvertingCommandExecutor` wrapping `SqlCommandExecutor`). Executors that omit that interface are rejected with `NonTransactionalFlushException`. There is no separate transaction API on `Session`.
+`Session::flush()` always runs inside a database transaction via `TransactionalCommandExecutorInterface` (including `CommandExecutor` wrapping `SqlCommandExecutor`). Executors that omit that interface are rejected with `NonTransactionalFlushException`. There is no separate transaction API on `Session`.
 
 For an optional, bounded journal of committed commands and transactional undo, see [Flush history](./history.md).
 
