@@ -24,7 +24,9 @@ final class RepresentationIdentifier
 			throw new StateException('Cannot identify representation with a schema for a different collection.');
 		}
 		$visited = [];
-		$this->attachObject($representation, $schema, $key, $session, $visited, $reader ?? new RepresentationReader());
+		$binder = new CleanRepresentationBinder($session);
+		$this->attachObject($representation, $schema, $key, $binder, $visited, $reader ?? new RepresentationReader());
+		$binder->commit();
 	}
 
 	/** @param array<int, true> $visited */
@@ -32,7 +34,7 @@ final class RepresentationIdentifier
 		object $representation,
 		RepresentationSchema $schema,
 		?Key $rootKey,
-		SessionContext $session,
+		CleanRepresentationBinder $binder,
 		array &$visited,
 		RepresentationReader $operation,
 	): void {
@@ -43,20 +45,19 @@ final class RepresentationIdentifier
 		$visited[$id] = true;
 		$reader = $operation->withObject($representation);
 
-		$representations = $session->getRepresentations();
-		$state = $representations->get($representation);
+		$state = $binder->getRepresentation($representation);
 		if ($state === null) {
 			if ($schema->getSources() === [] && $schema->getRelations() === []) {
 				throw new StateException('Cannot identify representation with an empty schema.');
 			}
-			$records = CleanRepresentationBinder::bind($schema, $session->getRecords(), $reader->readPath(...), $rootKey);
+			$records = $binder->bind($schema, $reader->readPath(...), $rootKey);
 			$state = RepresentationState::fromRecords($schema, $records);
-			$session->attachRepresentation($representation, $state);
+			$binder->stageRepresentation($representation, $state);
 		}
 
 		foreach ($state->getSchema()->getRelations() as $relation) {
 			foreach ($reader->readRelatedObjects($relation, $this->relationError(...)) as $child) {
-				$this->attachObject($child, $relation->getRelatedSchema(), null, $session, $visited, $operation);
+				$this->attachObject($child, $relation->getRelatedSchema(), null, $binder, $visited, $operation);
 			}
 		}
 	}
