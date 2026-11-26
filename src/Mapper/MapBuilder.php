@@ -114,6 +114,11 @@ final class MapBuilder
 		return $this->withOptions($this->options->withShallow($shallow));
 	}
 
+	public function rejectUnknownKeys(bool $reject = true): self
+	{
+		return $this->withOptions($this->options->withRejectUnknownKeys($reject));
+	}
+
 	public function to(mixed $target): mixed
 	{
 		if (is_string($target) && class_exists($target) && is_a($target, RepresentationInterface::class, true)) {

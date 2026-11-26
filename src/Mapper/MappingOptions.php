@@ -30,6 +30,7 @@ final class MappingOptions
 		private ?FieldMap $fieldMap = null,
 		private bool $collection = false,
 		private bool $shallow = false,
+		private bool $rejectUnknownKeys = false,
 	) {
 	}
 
@@ -99,6 +100,11 @@ final class MappingOptions
 	public function isShallow(): bool
 	{
 		return $this->shallow;
+	}
+
+	public function shouldRejectUnknownKeys(): bool
+	{
+		return $this->rejectUnknownKeys;
 	}
 
 	/**
@@ -203,6 +209,14 @@ final class MappingOptions
 	{
 		$clone = clone $this;
 		$clone->shallow = $shallow;
+
+		return $clone;
+	}
+
+	public function withRejectUnknownKeys(bool $reject): self
+	{
+		$clone = clone $this;
+		$clone->rejectUnknownKeys = $reject;
 
 		return $clone;
 	}

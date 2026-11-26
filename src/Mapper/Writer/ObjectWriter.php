@@ -6,6 +6,7 @@ namespace ON\Data\Mapper\Writer;
 
 use LogicException;
 use ON\Data\Mapper\Exception\MappingException;
+use ON\Data\Mapper\Exception\UnknownMappingKeyException;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\Representation\RepresentationInterface;
@@ -133,6 +134,9 @@ final class ObjectWriter implements WriterInterface
 		}
 
 		$reflection = $this->getReflection($target);
+		if ($node->getOptions()->shouldRejectUnknownKeys()) {
+			$this->assertKnownBufferedKeys($objectState, $reflection);
+		}
 		[$object, $consumed] = $this->instantiateUsingResolvedValues($reflection, $objectState->values);
 
 		foreach ($objectState->writes as $write) {
@@ -185,9 +189,9 @@ final class ObjectWriter implements WriterInterface
 		$this->validatedTargets[$class] = true;
 	}
 
-	private function getPropertyMatcher(object $target): ObjectPropertyMatcher
+	private function getPropertyMatcher(object|string $target): ObjectPropertyMatcher
 	{
-		$class = $target::class;
+		$class = $this->getTargetClass($target);
 
 		return $this->propertyMatchers[$class]
 			??= new ObjectPropertyMatcher($this->getReflection($target));
@@ -273,6 +277,24 @@ final class ObjectWriter implements WriterInterface
 		return false;
 	}
 
+	/** @param ReflectionClass<object> $reflection */
+	private function assertKnownBufferedKeys(ObjectWriterState $state, ReflectionClass $reflection): void
+	{
+		$parameterNames = [];
+		foreach ($reflection->getConstructor()?->getParameters() ?? [] as $parameter) {
+			$parameterNames[$parameter->getName()] = true;
+		}
+
+		$class = $reflection->getName();
+		$matcher = $this->getPropertyMatcher($class);
+		foreach ($state->writes as $write) {
+			$name = $write['name'];
+			if (! isset($parameterNames[$name]) && $matcher->match($name) === null) {
+				throw new UnknownMappingKeyException($write['node']->getPath(), $class);
+			}
+		}
+	}
+
 	/**
 	 * @param array<string|int, mixed> $valuesByName
 	 *
@@ -342,6 +364,10 @@ final class ObjectWriter implements WriterInterface
 		$reflection = $this->getReflection($target);
 		$property = $this->getPropertyMatcher($target)->match($name);
 		if ($property === null) {
+			if ($node->getOptions()->shouldRejectUnknownKeys()) {
+				throw new UnknownMappingKeyException($node->getPath(), $target::class);
+			}
+
 			return;
 		}
 
