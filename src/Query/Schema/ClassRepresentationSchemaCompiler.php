@@ -16,10 +16,10 @@ use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Support\DocblockListTargetResolver;
 use ON\Data\Schema\Exception\InvalidSchemaException;
 use ON\Data\Schema\RelationLoadKnowledge;
-use ON\Data\Schema\RepresentationFieldRole;
 use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationRelationSchema;
 use ON\Data\Schema\RepresentationSchema;
+use ON\Data\Schema\SchemaFields;
 use ReflectionClass;
 use ReflectionNamedType;
 use ReflectionProperty;
@@ -42,29 +42,29 @@ final class ClassRepresentationSchemaCompiler
 	}
 
 	/**
-	 * @param class-string $class
+	 * @param class-string|ReflectionClass<object> $class
 	 */
-	public function compile(CollectionInterface $collection, string $class): ?RepresentationSchema
+	public function compile(CollectionInterface $collection, string|ReflectionClass $class): ?RepresentationSchema
 	{
-		if ($class === stdClass::class) {
+		$reflection = is_string($class) ? new ReflectionClass($class) : $class;
+		if ($reflection->getName() === stdClass::class) {
 			return null;
 		}
 
-		return $this->compileClass($collection, $class, [
-			$this->stackKey($collection, $class) => true,
+		return $this->compileClass($collection, $reflection, [
+			$this->stackKey($collection, $reflection->getName()) => true,
 		]);
 	}
 
 	/**
-	 * @param class-string $class
+	 * @param ReflectionClass<object> $reflection
 	 * @param array<string, true> $visited
 	 */
 	private function compileClass(
 		CollectionInterface $collection,
-		string $class,
+		ReflectionClass $reflection,
 		array $visited,
 	): ?RepresentationSchema {
-		$reflection = new ReflectionClass($class);
 		$properties = $this->visibleProperties($reflection);
 
 		if ($properties === []) {
@@ -80,13 +80,13 @@ final class ClassRepresentationSchemaCompiler
 		if ($schema->getPaths() === []) {
 			throw new InvalidSchemaException(sprintf(
 				"DTO class '%s' has no properties matching any field or relation on collection '%s'.",
-				$class,
+				$reflection->getName(),
 				$collection->getName(),
 			));
 		}
 
-		$this->assembleFlatSourcePrimaryKeys($schema);
-		$this->assemblePrimaryKeyFields($schema, $collection);
+		SchemaFields::assembleFlatSourcePrimaryKeys($schema);
+		SchemaFields::assemblePrimaryKeyFields($schema, $collection);
 
 		return $schema;
 	}
@@ -260,10 +260,10 @@ final class ClassRepresentationSchemaCompiler
 				));
 			}
 
-			$relatedSchema = $this->compileClass($targetCollection, $nestedClass, $visited + [$key => true])
-				?? $this->defaultSchema($targetCollection);
+			$relatedSchema = $this->compileClass($targetCollection, new ReflectionClass($nestedClass), $visited + [$key => true])
+				?? SchemaFields::defaultSchema($targetCollection);
 		} else {
-			$relatedSchema = $this->defaultSchema($targetCollection);
+			$relatedSchema = SchemaFields::defaultSchema($targetCollection);
 		}
 
 		$schema->addRelation(new RepresentationRelationSchema(
@@ -430,92 +430,6 @@ final class ClassRepresentationSchemaCompiler
 		}
 
 		return false;
-	}
-
-	private function defaultSchema(CollectionInterface $collection): RepresentationSchema
-	{
-		$schema = new RepresentationSchema($collection);
-
-		foreach ($collection->getFields() as $field) {
-			if ($field->isHidden()) {
-				continue;
-			}
-
-			$schema->addField(new RepresentationFieldSchema(
-				$field->getName(),
-				$collection,
-				$field->getName(),
-				writable: true,
-			));
-		}
-
-		$this->assemblePrimaryKeyFields($schema, $collection);
-
-		return $schema;
-	}
-
-	private function assembleFlatSourcePrimaryKeys(RepresentationSchema $schema): void
-	{
-		$seen = [];
-
-		foreach ($schema->getFields() as $field) {
-			if ($field->getSourcePath() === []) {
-				continue;
-			}
-
-			$key = $field->getSourcePathKey();
-			if (isset($seen[$key])) {
-				continue;
-			}
-
-			$seen[$key] = true;
-			$this->assemblePrimaryKeyFields($schema, $field->getCollection(), $field->getSourcePath());
-		}
-	}
-
-	/**
-	 * @param list<string> $sourcePath
-	 */
-	private function assemblePrimaryKeyFields(
-		RepresentationSchema $schema,
-		CollectionInterface $collection,
-		array $sourcePath = [],
-	): void {
-		foreach ($collection->getPrimaryKey() as $fieldName) {
-			if ($schema->hasFieldForSource($sourcePath, $fieldName)) {
-				continue;
-			}
-
-			$schema->addField(new RepresentationFieldSchema(
-				$this->identityPath($schema, $sourcePath, $fieldName),
-				$collection,
-				$fieldName,
-				writable: false,
-				sourcePath: $sourcePath,
-				role: RepresentationFieldRole::Implicit,
-			));
-		}
-	}
-
-	/**
-	 * @param list<string> $sourcePath
-	 */
-	private function identityPath(RepresentationSchema $schema, array $sourcePath, string $fieldName): string
-	{
-		$path = $sourcePath === []
-			? $fieldName
-			: implode('.', [...$sourcePath, $fieldName]);
-
-		if (! $schema->hasPath($path)) {
-			return $path;
-		}
-
-		$n = 2;
-		do {
-			$fallback = $path . '_' . $n++;
-		} while ($schema->hasPath($fallback));
-
-		return $fallback;
 	}
 
 	private function stackKey(CollectionInterface $collection, string $class): string
