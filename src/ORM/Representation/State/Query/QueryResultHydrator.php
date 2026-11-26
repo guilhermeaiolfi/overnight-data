@@ -57,6 +57,7 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 		}
 
 		$operation = ($this->newReader)();
+		$binder = new CleanRepresentationBinder($this->session);
 		foreach ($objects as $index => $object) {
 			$row = $rawRows[$index] ?? [];
 			$key = $root === null ? null : RepresentationSourceReader::keyFromRow($root, $row);
@@ -64,8 +65,9 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 				throw StateException::writableResultMissingIdentity($schema->getCollectionName(), $schema->getCollection()->getPrimaryKey());
 			}
 			$visited = [];
-			$this->hydrateObject($object, $schema, $row, $operation, $visited, $key);
+			$this->hydrateObject($object, $schema, $row, $operation, $binder, $visited, $key);
 		}
+		$binder->commit();
 	}
 
 	/** @param array<string, mixed> $sourceRow */
@@ -76,8 +78,11 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 		?Key $rootKey = null,
 	): RepresentationState {
 		$visited = [];
+		$binder = new CleanRepresentationBinder($this->session);
+		$state = $this->hydrateObject($representation, $schema, $sourceRow, ($this->newReader)(), $binder, $visited, $rootKey);
+		$binder->commit();
 
-		return $this->hydrateObject($representation, $schema, $sourceRow, ($this->newReader)(), $visited, $rootKey);
+		return $state;
 	}
 
 	/**
@@ -89,15 +94,15 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 		RepresentationSchema $schema,
 		array $sourceRow,
 		RepresentationReader $operation,
+		CleanRepresentationBinder $binder,
 		array &$visited,
 		?Key $rootKey = null,
 	): RepresentationState {
 		$reader = $operation->withObject($representation);
-		$representations = $this->session->getRepresentations();
-		$state = $representations->get($representation);
+		$state = $binder->getRepresentation($representation);
 		if ($state === null) {
-			$state = $this->bind($reader, $schema, $sourceRow, $rootKey);
-			$this->session->attachRepresentation($representation, $state);
+			$state = $this->bind($reader, $schema, $sourceRow, $binder, $rootKey);
+			$binder->stageRepresentation($representation, $state);
 		}
 
 		$id = spl_object_id($representation);
@@ -106,7 +111,6 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 		}
 		$visited[$id] = true;
 
-		$relations = $this->session->getRelations();
 		foreach ($state->getSchema()->getRelations() as $relation) {
 			$owner = $state->requireRootRecord();
 			$name = $relation->getRelationName();
@@ -117,10 +121,10 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 				$items = $reader->readItems($relation, $this->relationError(...))->getValue();
 				foreach ($items as $index => $item) {
 					$childRow = is_array($rawChildren) ? ($rawChildren[$index] ?? null) : null;
-					$this->hydrateObject($item, $childSchema, $this->childRow($childRow), $operation, $visited);
+					$this->hydrateObject($item, $childSchema, $this->childRow($childRow), $operation, $binder, $visited);
 				}
-				if (! $relations->has($owner, $name)) {
-					$relations->add(match ($relation->getLoadKnowledge()) {
+				if (! $binder->hasRelation($owner, $name)) {
+					$binder->stageRelation(match ($relation->getLoadKnowledge()) {
 						RelationLoadKnowledge::Full => ToManyRelationState::full($owner, $name, $childSchema, $items),
 						RelationLoadKnowledge::Partial => ToManyRelationState::partial($owner, $name, $childSchema, $items),
 						RelationLoadKnowledge::Unknown => new ToManyRelationState($owner, $name, $childSchema, $items),
@@ -132,10 +136,10 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 
 			$target = $reader->readTarget($relation, $this->relationError(...))->getValue();
 			if ($target !== null) {
-				$this->hydrateObject($target, $childSchema, $this->childRow($rawChildren), $operation, $visited);
+				$this->hydrateObject($target, $childSchema, $this->childRow($rawChildren), $operation, $binder, $visited);
 			}
-			if (! $relations->has($owner, $name)) {
-				$relations->add(new ToOneRelationState($owner, $name, $childSchema, $target));
+			if (! $binder->hasRelation($owner, $name)) {
+				$binder->stageRelation(new ToOneRelationState($owner, $name, $childSchema, $target));
 			}
 		}
 
@@ -147,6 +151,7 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 		ObjectRepresentationReader $reader,
 		RepresentationSchema $schema,
 		array $sourceRow,
+		CleanRepresentationBinder $binder,
 		?Key $rootKey,
 	): RepresentationState {
 		$baselines = [];
@@ -163,7 +168,7 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 			return $loaded;
 		};
 
-		$bound = CleanRepresentationBinder::bind($schema, $this->session->getRecords(), $readPath, $rootKey);
+		$bound = $binder->bind($schema, $readPath, $rootKey);
 
 		return RepresentationState::fromRecords($schema, $bound, $baselines);
 	}

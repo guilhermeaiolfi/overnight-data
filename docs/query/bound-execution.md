@@ -52,6 +52,20 @@ Use `new SqlRuntimeFactory(insertReturning: false)` if a custom SQLite, MariaDB,
 
 The compiler supplies dialects for SQLite, PostgreSQL, MySQL, MariaDB, and SQL Server. PDO execution requires the corresponding PHP extension (`pdo_sqlite`, `pdo_pgsql`, `pdo_mysql`, or `pdo_sqlsrv`). PDO yields rows lazily to ON\Data, and the driver may buffer its result set.
 
+### Custom SQL dialects
+
+Implement `ON\Data\Database\Sql\Dialect\DialectInterface` to supply custom quoting or SQL syntax. Pass the implementation to either executor using its `dialect:` argument.
+
+```php
+use ON\Data\Database\Sql\SqlCommandExecutor;
+use ON\Data\Database\Sql\SqlQueryExecutor;
+
+$queries = new SqlQueryExecutor($connection, $gateway, dialect: $customDialect);
+$commands = new SqlCommandExecutor($connection, dialect: $customDialect);
+```
+
+Return an `ON\Data\Database\Sql\SqlFragment` from the SELECT prefix and pagination methods. The fragment pairs SQL text with its positional parameters in placeholder order.
+
 ## Result modes
 
 Bound queries return arrays by default. Object export is opt-in through `to(...)`.

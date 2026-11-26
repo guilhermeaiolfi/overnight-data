@@ -87,6 +87,25 @@ final class SqlJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testJoinedStarCanBeFetchedWithAndWithoutRowAssembly(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$company = $users->join($this->registry->getCollection('companies'), JoinType::LEFT, 'company');
+		$company->on(x()->eq($users->companyId, $company->id));
+
+		$users->select($users->id, $company->star())->where(x()->eq($users->id, 1));
+
+		self::assertSame([
+			['id' => 1],
+		], $users->fetchAll());
+
+		$users->select($users->name->as('user_name'));
+
+		self::assertSame([
+			['id' => 1, 'user_name' => 'Ada'],
+		], $users->fetchAll());
+	}
+
 	public function testDerivedRejectsCollidingRootAndRelatedFieldNames(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
@@ -930,6 +949,17 @@ final class SqlJoinExecutionTest extends TestCase
 		$users->posts->strategy(LoadStrategy::JOIN)->strategy(LoadStrategy::SEPARATE_QUERY);
 
 		self::assertSame(LoadStrategy::SEPARATE_QUERY, $users->getRelationSelections()->getAll()[0]->getStrategy());
+	}
+
+	public function testM2MJoinPreservesAnExistingThroughAlias(): void
+	{
+		$roles = $this->registry->getCollection('roles');
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->join($roles, name: 'roles@through');
+		$users->roles->getJoinedSource();
+
+		$names = array_map(static fn ($join): string => $join->getName(), $users->getJoins());
+		self::assertSame(['roles@through', 'roles@through_2', 'roles'], $names);
 	}
 
 	public function testItProjectsM2MTargetsWithoutExposingThroughRows(): void

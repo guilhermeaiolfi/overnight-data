@@ -37,7 +37,7 @@ final class SourceMapBuilder
 		$this->assertOpen();
 		$this->sealed = true;
 
-		return SourceMap::fromStorage(clone $this->sources);
+		return SourceMap::fromStorage($this->sources);
 	}
 
 	private function assertOpen(): void

@@ -8,24 +8,73 @@ use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Relation\RelationStateInterface;
+use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Representation\Sync\PathReadResult;
 use ON\Data\ORM\Representation\Sync\RepresentationSourceReader;
+use ON\Data\ORM\SessionContext;
 use ON\Data\Schema\RepresentationSchema;
+use SplObjectStorage;
 
-/** @internal Bind all source paths before the caller registers the representation. */
+/** @internal Stage clean bindings until the operation has validated every representation. */
 final class CleanRepresentationBinder
 {
+	private RecordStateStore $records;
+	/** @var SplObjectStorage<object, RepresentationState> */
+	private SplObjectStorage $representations;
+	private RelationStateStore $relations;
+
+	public function __construct(private readonly SessionContext $session)
+	{
+		$this->records = new RecordStateStore();
+		$this->representations = new SplObjectStorage();
+		$this->relations = new RelationStateStore();
+	}
+
+	public function getRepresentation(object $representation): ?RepresentationState
+	{
+		return $this->representations[$representation] ?? $this->session->getRepresentations()->get($representation);
+	}
+
+	public function stageRepresentation(object $representation, RepresentationState $state): void
+	{
+		foreach ($state->getUniqueRecords() as $record) {
+			$this->records->add($record);
+		}
+		$this->representations[$representation] = $state;
+	}
+
+	public function hasRelation(RecordState $owner, string $name): bool
+	{
+		return $this->relations->has($owner, $name) || $this->session->getRelations()->has($owner, $name);
+	}
+
+	public function stageRelation(RelationStateInterface $relation): void
+	{
+		$this->relations->add($relation);
+	}
+
+	public function commit(): void
+	{
+		foreach ($this->representations as $representation) {
+			$this->session->attachRepresentation($representation, $this->representations[$representation]);
+		}
+		foreach ($this->relations->getAll() as $relation) {
+			$this->session->getRelations()->add($relation);
+		}
+	}
+
 	/**
 	 * @param callable(string): PathReadResult<mixed> $read
 	 * @return array<string, RecordState>
 	 */
-	public static function bind(RepresentationSchema $schema, RecordStateStore $records, callable $read, ?Key $rootKey): array
+	public function bind(RepresentationSchema $schema, callable $read, ?Key $rootKey): array
 	{
 		$sources = $schema->getSources();
 		if ($sources === [] && $schema->getRelations() !== []) {
 			$key = $rootKey ?? throw StateException::writableResultMissingIdentity($schema->getCollectionName(), $schema->getCollection()->getPrimaryKey());
 
-			return ['' => $records->bindClean($key, $key->getValues())];
+			return ['' => $this->bindClean($key, $key->getValues())];
 		}
 
 		$keys = [];
@@ -37,6 +86,16 @@ final class CleanRepresentationBinder
 			$keys[$source->getPathKey()] = $key;
 			$hash = $key->getHash();
 			if (isset($valuesByKey[$hash])) {
+				foreach (array_intersect_key($values, $valuesByKey[$hash]) as $field => $value) {
+					if ($value !== $valuesByKey[$hash][$field]) {
+						throw new StateException(sprintf(
+							"Sources for collection '%s' with key '%s' disagree on field '%s'.",
+							$source->getCollection()->getName(),
+							$key->getDebugString(),
+							$field,
+						));
+					}
+				}
 				$valuesByKey[$hash] += $values;
 			} else {
 				$valuesByKey[$hash] = $values;
@@ -48,9 +107,15 @@ final class CleanRepresentationBinder
 		$byKey = [];
 		foreach ($keys as $path => $key) {
 			$hash = $key->getHash();
-			$bound[$path] = $byKey[$hash] ??= $records->bindClean($key, $valuesByKey[$hash]);
+			$bound[$path] = $byKey[$hash] ??= $this->bindClean($key, $valuesByKey[$hash]);
 		}
 
 		return $bound;
+	}
+
+	/** @param array<string, mixed> $values */
+	private function bindClean(Key $key, array $values): RecordState
+	{
+		return $this->records->getByKey($key) ?? $this->session->getRecords()->bindClean($key, $values);
 	}
 }

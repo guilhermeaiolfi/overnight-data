@@ -11,7 +11,10 @@
 - Rename imports and instantiations of `ConvertingCommandExecutor` to `CommandExecutor`. Pass any custom `CommandValueResolver` to `CommandExecutor` or `SqlRuntimeFactory`. Direct callers of `SqlCommandExecutor` must supply storage values and can pass a custom dialect as the second argument.
 - Create one `RepresentationReader` per operation and bind DTOs with `withObject()` before reading paths or relations. Use `PathReadResult::getValue()` to get a present value. It throws `SyncException` for a missing or invalid path.
 - To customize mapping in low-level ORM helpers, pass the gateway to synchronizer and adoption constructors, a fresh reader to `RepresentationIdentifier::attach()`, or a reader factory to `QueryResultHydrator`. `Session` handles this wiring.
+- Build each relation selection tree from a single query. Visible intermediate relations participate in output alias collision checks.
 - Use `Session::prepare()` and `Session::track()` for direct writable-query tracking. `QueryRepresentationPlan::getFetchSchema()` returns the prepared schema.
+- Direct `QueryResultHydrator` callers now pass `SessionContext` to the constructor, before the optional reader factory. Replace `hydrate($object, $schema, $row, $identities, $context)` with `hydrate($object, $schema, $row, $rootKey)` where `$rootKey` is optional. The hydrator reads other identities from the schema and row.
+- If two paths in the same projection identify the same row, their values for any shared field must agree under PHP strict comparison. An alias conflict during `Session::identify()` or writable query tracking raises an exception naming the collection, key, and field. Correct the conflicting values and retry the operation with the same session.
 
 ## What documentation means
 

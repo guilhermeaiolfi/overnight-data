@@ -7,7 +7,7 @@ namespace ON\Data\Database\Sql\Dialect;
 use ON\Data\Database\DatabaseFamily;
 use ON\Data\Database\Sql\SqlFragment;
 
-/** @internal */
+/** SQL dialect contract for built-in and custom implementations used by the SQL executors. */
 interface DialectInterface
 {
 	public function family(): DatabaseFamily;

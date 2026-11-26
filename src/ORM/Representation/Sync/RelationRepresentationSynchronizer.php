@@ -23,20 +23,26 @@ final class RelationRepresentationSynchronizer
 	}
 
 	/**
+	 * @param iterable<object, RepresentationState> $reps
 	 * @return list<RelationStateInterface>
 	 */
 	public function sync(
-		RepresentationStateStore $reps,
+		iterable $reps,
 		RelationStateStore $relations,
 		?RepresentationStateStore $states = null,
 		?RepresentationReader $operation = null,
 	): array {
 		$touched = [];
 		$touchedIds = [];
-		$states ??= $reps;
 		$reader = $operation?->forGateway($this->gateway) ?? new RepresentationReader($this->gateway);
+		if ($states === null) {
+			if (! $reps instanceof RepresentationStateStore) {
+				throw new SyncException('A tracked representation store is required when synchronizing a subset.');
+			}
+			$states = $reps;
+		}
 
-		foreach ($reps->getAll() as $representation => $state) {
+		foreach ($reps as $representation => $state) {
 			$objectReader = $reader->withObject($representation);
 			foreach ($state->getSchema()->getRelations() as $relationSchema) {
 				$owner = $state->requireRootRecord();

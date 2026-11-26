@@ -6,7 +6,6 @@ namespace ON\Data\Query\Relation\Loader;
 
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\QuerySourceInterface;
-use ON\Data\Query\Relation\KeyPairCollector;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationLoadBranch;
@@ -19,17 +18,9 @@ final class FirstOfManyLoader extends AbstractLoader
 {
 	private const DERIVED_ALIAS = '__ondata_first_of_many';
 
-	public function getDefaultLoadStrategy(): LoadStrategy
-	{
-		return LoadStrategy::SEPARATE_QUERY;
-	}
-
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 		$relationRef = $branch->getRelationRef();
-		$definition = $relationRef->getDefinition();
-		$parentToChild = $definition->getKeyPairing();
-		$parentBranch = $branch->getParent();
 		$strategy = $runtime->getLoadStrategy($branch);
 
 		if ($strategy === LoadStrategy::JOIN) {
@@ -40,16 +31,7 @@ final class FirstOfManyLoader extends AbstractLoader
 			throw RelationLoaderException::firstOfManySelectionOrderByNotSupported($relationRef);
 		}
 
-		$runtime->collectWith($branch, new KeyPairCollector(
-			$parentToChild->getLeftFields(),
-			$parentToChild->getRightFields(),
-		));
-		$query = $runtime->createQuery($relationRef->getCollection());
-		$runtime->setQueryContext($branch, $query, $query);
-		$branch->requireFields($relationRef->getCollection()->getPrimaryKey());
-		$branch->requireFields($parentToChild->getRightFields());
-		$parentBranch->requireFields($parentToChild->getLeftFields());
-		$runtime->continueWith($branch, $this->loadData(...));
+		$this->configureSeparateQuery($branch, $runtime, $this->loadData(...));
 	}
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
@@ -95,7 +77,6 @@ final class FirstOfManyLoader extends AbstractLoader
 		}
 
 		$query = $branch->getQuery();
-		$orderedFields = [];
 		$sorts = [];
 
 		foreach ($orderBy as $fieldName => $direction) {
@@ -106,20 +87,11 @@ final class FirstOfManyLoader extends AbstractLoader
 
 			$fieldName = (string) $fieldName;
 			$direction = strtolower((string) $direction);
-			$orderedFields[$fieldName] = true;
 			$sorts[] = $direction === SortDirection::DESC->value
 				? $query->field($fieldName)->desc()
 				: $query->field($fieldName)->asc();
 		}
 
-		foreach ($relationRef->getCollection()->getPrimaryKey() as $fieldName) {
-			if (isset($orderedFields[$fieldName])) {
-				continue;
-			}
-
-			$sorts[] = $query->field($fieldName)->asc();
-		}
-
-		return $sorts;
+		return $this->withPrimaryKeyOrder($query, $sorts);
 	}
 }

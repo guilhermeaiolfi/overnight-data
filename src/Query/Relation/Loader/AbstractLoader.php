@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation\Loader;
 
+use Closure;
 use LogicException;
 use ON\Data\Definition\Relation\RelationKeyPairing;
 use ON\Data\Query\Condition\ConditionInterface;
@@ -15,6 +16,7 @@ use ON\Data\Query\Expression\StarExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\JoinType;
 use ON\Data\Query\QuerySourceInterface;
+use ON\Data\Query\Relation\KeyPairCollector;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationKeyQuery;
@@ -67,6 +69,49 @@ abstract class AbstractLoader implements LoaderInterface
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 		throw RelationLoaderException::loadingNotImplemented($branch->getRelationRef());
+	}
+
+	/** @param Closure(RelationLoadBranch, LoadRuntime): void $load */
+	protected function configureSeparateQuery(RelationLoadBranch $branch, LoadRuntime $runtime, Closure $load): void
+	{
+		$collection = $branch->getRelationRef()->getCollection();
+		$query = $runtime->createQuery($collection);
+		$runtime->setQueryContext($branch, $query, $query);
+		$this->collectByKeyPairing($branch, $runtime);
+		$runtime->continueWith($branch, $load);
+	}
+
+	protected function collectByKeyPairing(RelationLoadBranch $branch, LoadRuntime $runtime): void
+	{
+		$relation = $branch->getRelationRef();
+		$pairing = $relation->getDefinition()->getKeyPairing();
+		$runtime->collectWith($branch, new KeyPairCollector($pairing->getLeftFields(), $pairing->getRightFields()));
+		$branch->requireFields($relation->getCollection()->getPrimaryKey());
+		$branch->requireFields($pairing->getRightFields());
+		$branch->getParent()->requireFields($pairing->getLeftFields());
+	}
+
+	/**
+	 * @param list<Sort> $sorts
+	 * @return list<Sort>
+	 */
+	protected function withPrimaryKeyOrder(SelectQuery $query, array $sorts): array
+	{
+		$ordered = [];
+		foreach ($sorts as $sort) {
+			$expression = $sort->getExpression();
+			if ($expression instanceof FieldRef && $expression->getSource() === $query) {
+				$ordered[$expression->getName()] = true;
+			}
+		}
+
+		foreach ($query->getCollection()->getPrimaryKey() as $field) {
+			if (! isset($ordered[$field])) {
+				$sorts[] = $query->field($field)->asc();
+			}
+		}
+
+		return $sorts;
 	}
 
 	protected function assertSupportedRelationPath(RelationRef $relation): void

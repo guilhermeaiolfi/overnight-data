@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Query\Relation\Loader;
 
 use ON\Data\Query\Exception\RelationLoaderException;
-use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\QuerySourceInterface;
-use ON\Data\Query\Relation\KeyPairCollector;
 use ON\Data\Query\Relation\LoadRuntime;
 use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\Relation\RelationLoadBranch;
@@ -23,9 +21,6 @@ final class HasManyLoader extends AbstractLoader
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 		$relationRef = $branch->getRelationRef();
-		$definition = $relationRef->getDefinition();
-		$parentToChild = $definition->getKeyPairing();
-		$parentBranch = $branch->getParent();
 
 		if ($runtime->getLoadStrategy($branch) === LoadStrategy::JOIN) {
 			if ($this->usesLimitOffset($branch)) {
@@ -35,17 +30,7 @@ final class HasManyLoader extends AbstractLoader
 			throw RelationLoaderException::joinedLoadingNotImplemented($relationRef);
 		}
 
-		$runtime->collectWith($branch, new KeyPairCollector(
-			$parentToChild->getLeftFields(),
-			$parentToChild->getRightFields(),
-		));
-		$query = $runtime->createQuery($relationRef->getCollection());
-		$runtime->setQueryContext($branch, $query, $query);
-
-		$branch->requireFields($relationRef->getCollection()->getPrimaryKey());
-		$branch->requireFields($parentToChild->getRightFields());
-		$parentBranch->requireFields($parentToChild->getLeftFields());
-		$runtime->continueWith($branch, $this->loadData(...));
+		$this->configureSeparateQuery($branch, $runtime, $this->loadData(...));
 	}
 
 	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
@@ -124,31 +109,13 @@ final class HasManyLoader extends AbstractLoader
 			throw RelationLoaderException::hasManyLimitOffsetOrderRequired($relationRef);
 		}
 
-		$orderedPrimaryKeys = [];
+		$sources = SourceMap::of($relationRef, $query);
 		$sorts = array_map(
-			static fn (Sort $sort): Sort => $sort->rebind(SourceMap::of($relationRef, $query)),
+			static fn (Sort $sort): Sort => $sort->rebind($sources),
 			$orderBy,
 		);
 
-		foreach ($orderBy as $sort) {
-			$expression = $sort->getExpression();
-
-			if (! $expression instanceof FieldRef || $expression->getSource() !== $relationRef) {
-				continue;
-			}
-
-			$orderedPrimaryKeys[$expression->getField()->getName()] = true;
-		}
-
-		foreach ($relationRef->getCollection()->getPrimaryKey() as $fieldName) {
-			if (isset($orderedPrimaryKeys[$fieldName])) {
-				continue;
-			}
-
-			$sorts[] = $query->field($fieldName)->asc();
-		}
-
-		return $sorts;
+		return $this->withPrimaryKeyOrder($query, $sorts);
 	}
 
 	public function join(RelationRef $relation): QuerySourceInterface

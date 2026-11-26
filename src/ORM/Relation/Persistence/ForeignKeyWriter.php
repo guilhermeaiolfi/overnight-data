@@ -4,11 +4,30 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Relation\Persistence;
 
+use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Record\RecordState;
 
 final class ForeignKeyWriter
 {
+	public function copyOwnerKeys(RelationInterface $relation, RecordState $owner, RecordState $target): void
+	{
+		$ownerCollection = $owner->getCollection()->getName();
+		$this->copyValues(
+			$relation->getName(),
+			$relation->getInnerKeys(),
+			$relation->getOuterKeys(),
+			$owner,
+			$target,
+			static fn (string $relationName, string $sourceField, int|string $index): RelationPersistenceException => new RelationPersistenceException(sprintf(
+				"Relation '%s' is missing an outer key field for owner collection '%s' field '%s'.",
+				$relationName,
+				$ownerCollection,
+				$sourceField,
+			)),
+		);
+	}
+
 	/**
 	 * @param array<int|string, mixed> $sourceFields
 	 * @param array<int|string, mixed> $targetFields
@@ -22,15 +41,7 @@ final class ForeignKeyWriter
 		RecordState $target,
 		callable $missingTargetField,
 	): void {
-		foreach ($sourceFields as $index => $sourceField) {
-			$sourceField = (string) $sourceField;
-			$targetField = $targetFields[$index] ?? null;
-			if (! is_string($targetField) || $targetField === '') {
-				throw $missingTargetField($relationName, $sourceField, $index);
-			}
-
-			$target->setValue($targetField, $source->getValueRef($sourceField));
-		}
+		$target->setValues($this->buildValues($relationName, $sourceFields, $targetFields, $source, $missingTargetField));
 	}
 
 	/**

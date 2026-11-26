@@ -9,10 +9,12 @@ use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\State\Query\QueryResultHydrator;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Session;
 use ON\Data\ORM\SessionContext;
+use ON\Data\Query\SelectQuery;
 use ON\Data\Schema\RepresentationFieldRole;
 use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationRelationSchema;
@@ -398,6 +400,99 @@ final class QueryResultHydratorTest extends TestCase
 		self::assertSame('Ada', $root->getValue('name'));
 	}
 
+	public function testIdentifyRejectsConflictingAliasesOfTheSameRowBeforeRegisteringIt(): void
+	{
+		$users = $this->makeSelfRelationRegistry()->getCollection('users');
+		$schema = $this->selfJoinSchema($users);
+		$object = (object) ['id' => 1, 'name' => 'Ada', 'managerId' => 1, 'managerName' => 'Bob'];
+		$session = new Session(new RecordingCommandExecutor());
+
+		try {
+			$session->identify($users, ['id' => 1], $object, $schema);
+			self::fail('Expected conflicting names for the same row to be rejected.');
+		} catch (StateException $exception) {
+			self::assertStringContainsString("disagree on field 'name'", $exception->getMessage());
+		}
+		self::assertSame([], $session->getRecords()->getAll());
+		self::assertFalse($session->getRepresentations()->has($object));
+
+		$object->managerName = 'Ada';
+		$session->identify($users, ['id' => 1], $object, $schema);
+		self::assertFalse($session->sync($object)->hasChanges());
+		self::assertSame('Ada', $session->getRecords()->getByKey($users->getKey(1))->getValue('name'));
+	}
+
+	public function testIdentifyCanRetryAfterAConflictingChildWithoutLeavingAttachments(): void
+	{
+		$users = $this->makeSelfRelationRegistry()->getCollection('users');
+		$childSchema = $this->selfJoinSchema($users);
+		$parentSchema = new RepresentationSchema($users);
+		$parentSchema->addField(new RepresentationFieldSchema('id', $users, 'id'));
+		$parentSchema->addRelation(new RepresentationRelationSchema('manager', $users, 'manager', $childSchema));
+		$child = (object) ['id' => 1, 'name' => 'Ada', 'managerId' => 1, 'managerName' => 'Bob'];
+		$parent = (object) ['id' => 2, 'manager' => $child];
+		$session = new Session(new RecordingCommandExecutor());
+
+		try {
+			$session->identify($users, ['id' => 2], $parent, $parentSchema);
+			self::fail('Expected conflicting child aliases to be rejected.');
+		} catch (StateException $exception) {
+			self::assertStringContainsString("disagree on field 'name'", $exception->getMessage());
+		}
+
+		self::assertFalse($session->getRepresentations()->has($parent));
+		self::assertFalse($session->getRepresentations()->has($child));
+		self::assertSame([], $session->getRecords()->getAll());
+
+		$child->managerName = 'Ada';
+		$session->identify($users, ['id' => 2], $parent, $parentSchema);
+
+		self::assertTrue($session->getRepresentations()->has($parent));
+		$state = $session->getRepresentations()->get($child);
+		self::assertInstanceOf(RepresentationState::class, $state);
+		self::assertSame($state->requireRootRecord(), $state->getRecordForField($childSchema->getField('managerName')));
+		self::assertFalse($session->sync($child)->hasChanges());
+	}
+
+	public function testTrackCanRetryAfterALaterRowHasConflictingAliases(): void
+	{
+		$users = $this->makeSelfRelationRegistry()->getCollection('users');
+		$schema = $this->selfJoinSchema($users);
+		$managerSchema = new RepresentationSchema($users);
+		$managerSchema->addField(new RepresentationFieldSchema('id', $users, 'id'));
+		$schema->addRelation(new RepresentationRelationSchema('manager', $users, 'manager', $managerSchema));
+		$query = new SelectQuery($users);
+		$plan = new QueryRepresentationPlan($schema);
+		$rows = [
+			['id' => 1, 'name' => 'Ada', 'managerId' => 1, 'managerName' => 'Ada', 'manager' => null],
+			['id' => 2, 'name' => 'Grace', 'managerId' => 2, 'managerName' => 'Bob', 'manager' => null],
+		];
+		$first = (object) $rows[0];
+		$second = (object) $rows[1];
+		$session = new Session(new RecordingCommandExecutor());
+
+		try {
+			$session->track($query, $plan, $rows, [$first, $second]);
+			self::fail('Expected conflicting aliases in the second row to be rejected.');
+		} catch (StateException $exception) {
+			self::assertStringContainsString("disagree on field 'name'", $exception->getMessage());
+		}
+
+		self::assertFalse($session->getRepresentations()->has($first));
+		self::assertFalse($session->getRepresentations()->has($second));
+		self::assertSame([], $session->getRecords()->getAll());
+		self::assertSame([], $session->getRelations()->getAll());
+
+		$rows[1]['managerName'] = $second->managerName = 'Grace';
+		$session->track($query, $plan, $rows, [$first, $second]);
+
+		self::assertTrue($session->getRepresentations()->has($first));
+		self::assertTrue($session->getRepresentations()->has($second));
+		self::assertCount(2, $session->getRecords()->getAll());
+		self::assertCount(2, $session->getRelations()->getAll());
+		self::assertFalse($session->sync()->hasChanges());
+	}
+
 	public function testReusesExistingTrackedRecordState(): void
 	{
 		$registry = $this->makeRegistry();
@@ -476,6 +571,17 @@ final class QueryResultHydratorTest extends TestCase
 			->outerKey('id');
 
 		return $registry;
+	}
+
+	private function selfJoinSchema(CollectionInterface $users): RepresentationSchema
+	{
+		$schema = new RepresentationSchema($users);
+		$schema->addField(new RepresentationFieldSchema('id', $users, 'id'));
+		$schema->addField(new RepresentationFieldSchema('name', $users, 'name'));
+		$schema->addField(new RepresentationFieldSchema('managerId', $users, 'id', sourcePath: ['manager']));
+		$schema->addField(new RepresentationFieldSchema('managerName', $users, 'name', sourcePath: ['manager']));
+
+		return $schema;
 	}
 
 	private function makeRegistry(): Registry
