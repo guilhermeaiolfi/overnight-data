@@ -12,32 +12,22 @@ use ON\Data\Key;
  */
 final class FlatIntentOp
 {
-	private RepresentationIntentLifecycle $operation;
-
 	/**
 	 * @param Key|array<string, mixed>|null $key
 	 */
 	public function __construct(
 		private string $path,
-		RepresentationIntentLifecycle|string $operation,
+		private RepresentationIntentLifecycle $operation,
 		private Key|array|null $key = null,
 	) {
 		if ($path === '') {
 			throw new InvalidArgumentException('Flat intent path cannot be empty.');
 		}
-		$this->operation = $operation instanceof RepresentationIntentLifecycle
-			? $operation
-			: (RepresentationIntentLifecycle::tryFrom($operation) ?? throw new InvalidArgumentException(sprintf("Unknown flat intent operation '%s'.", $operation)));
 	}
 
 	public function getPath(): string
 	{
 		return $this->path;
-	}
-
-	public function getOperation(): string
-	{
-		return $this->operation->value;
 	}
 
 	public function getLifecycle(): RepresentationIntentLifecycle
