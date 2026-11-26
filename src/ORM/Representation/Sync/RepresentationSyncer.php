@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Sync;
 
+use ON\Data\Mapper\ConversionGateway;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
@@ -14,10 +15,10 @@ final class RepresentationSyncer
 	public function __construct(
 		private ?ScalarRepresentationSynchronizer $scalarSynchronizer = null,
 		private ?RelationRepresentationSynchronizer $relationSynchronizer = null,
-		?RepresentationReader $reader = null,
+		private readonly ?ConversionGateway $gateway = null,
 	) {
-		$this->scalarSynchronizer ??= new ScalarRepresentationSynchronizer($reader);
-		$this->relationSynchronizer ??= new RelationRepresentationSynchronizer($reader);
+		$this->scalarSynchronizer ??= new ScalarRepresentationSynchronizer($gateway);
+		$this->relationSynchronizer ??= new RelationRepresentationSynchronizer($gateway);
 	}
 
 	public function sync(
@@ -37,8 +38,9 @@ final class RepresentationSyncer
 			$syncRepresentations->add($representation, $state);
 		}
 
-		$syncPlans = $this->scalarSynchronizer->sync($syncRepresentations);
-		$relationChanges = $this->relationSynchronizer->sync($syncRepresentations, $relations, $representations);
+		$operation = new RepresentationReader($this->gateway);
+		$syncPlans = $this->scalarSynchronizer->sync($syncRepresentations, $operation);
+		$relationChanges = $this->relationSynchronizer->sync($syncRepresentations, $relations, $representations, $operation);
 
 		return new SyncResult($syncPlans, $relationChanges);
 	}

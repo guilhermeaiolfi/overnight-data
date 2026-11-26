@@ -94,6 +94,21 @@ final class RegistryStorageTest extends TestCase
 		self::assertFalse($registry->all()['collections']['posts']['fields']['title']['required']);
 	}
 
+	public function testMissingRestoredMemberMapsWriteToCollectionStorage(): void
+	{
+		$registry = new Registry([
+			'collections' => ['items' => ['class' => CustomCollection::class]],
+			'views' => [],
+		]);
+		$items = $registry->collection('items');
+		$items->field('id', 'int');
+		$items->hasOne('parent', 'items');
+
+		$restored = (new Registry($registry->all()))->collection('items');
+		self::assertNotNull($restored->getField('id'));
+		self::assertNotNull($restored->getRelation('parent'));
+	}
+
 	public function testCanonicalRegistryArrayRoundTripsIdempotently(): void
 	{
 		$canonical = [

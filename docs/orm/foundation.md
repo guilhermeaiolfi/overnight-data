@@ -404,7 +404,7 @@ Several field updates can target one record. Persistence planning reads that rec
 | Translate relation deltas into persistence work | `RelationPersistencePlanner` and the relation's configured planner |
 | Transactional flush orchestration and rollback | `FlushExecutor` |
 | Schedule scalar/dependent commands and finalize record state | `FlushScheduler` |
-| Convert command values or execute backend commands | `ConvertingCommandExecutor` / `SqlCommandExecutor` |
+| Convert command values or execute backend commands | `CommandExecutor` / `SqlCommandExecutor` |
 
 `WritableQueryResultTracker` passes results to `QueryResultHydrator` to bind sources and track loaded relations. `Session::identify()` attaches existing references by key. `Session::adopt()` registers an already-built state and its records.
 
