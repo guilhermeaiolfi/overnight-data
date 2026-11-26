@@ -12,8 +12,10 @@ use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
 use ON\Data\ORM\Representation\State\CleanRepresentationBinder;
 use ON\Data\ORM\Representation\State\RepresentationState;
+use ON\Data\ORM\Representation\Sync\ObjectRepresentationReader;
 use ON\Data\ORM\Representation\Sync\PathReadResult;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
+use ON\Data\ORM\Representation\Sync\RepresentationReadOperation;
 use ON\Data\ORM\Representation\Sync\RepresentationSourceReader;
 use ON\Data\ORM\SessionContext;
 use ON\Data\Query\Result\WritablePreparation;
@@ -49,13 +51,15 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 			}
 		}
 
+		$operation = $this->reader->forOperation();
 		foreach ($objects as $index => $object) {
 			$row = $rawRows[$index] ?? [];
 			$key = $root === null ? null : RepresentationSourceReader::keyFromRow($root, $row);
 			if ($key === null) {
 				throw StateException::writableResultMissingIdentity($schema->getCollectionName(), $schema->getCollection()->getPrimaryKey());
 			}
-			$this->hydrate($object, $schema, $row, $key);
+			$visited = [];
+			$this->hydrateObject($object, $schema, $row, $operation, $visited, $key);
 		}
 	}
 
@@ -68,7 +72,7 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 	): RepresentationState {
 		$visited = [];
 
-		return $this->hydrateObject($representation, $schema, $sourceRow, $this->reader->forTraversal(), $visited, $rootKey);
+		return $this->hydrateObject($representation, $schema, $sourceRow, $this->reader->forOperation(), $visited, $rootKey);
 	}
 
 	/**
@@ -79,14 +83,15 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 		object $representation,
 		RepresentationSchema $schema,
 		array $sourceRow,
-		RepresentationReader $reader,
+		RepresentationReadOperation $operation,
 		array &$visited,
 		?Key $rootKey = null,
 	): RepresentationState {
+		$reader = $operation->withObject($representation);
 		$representations = $this->session->getRepresentations();
 		$state = $representations->get($representation);
 		if ($state === null) {
-			$state = $this->bind($representation, $schema, $sourceRow, $rootKey, $reader);
+			$state = $this->bind($reader, $schema, $sourceRow, $rootKey);
 			$this->session->attachRepresentation($representation, $state);
 		}
 
@@ -104,10 +109,10 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 			$rawChildren = $sourceRow[$relation->getPath()] ?? null;
 
 			if ($relation->isMany()) {
-				$items = $reader->readItems($representation, $relation, $this->relationError(...))->requireValue();
+				$items = $reader->readItems($relation, $this->relationError(...))->getValue();
 				foreach ($items as $index => $item) {
 					$childRow = is_array($rawChildren) ? ($rawChildren[$index] ?? null) : null;
-					$this->hydrateObject($item, $childSchema, $this->childRow($childRow), $reader, $visited);
+					$this->hydrateObject($item, $childSchema, $this->childRow($childRow), $operation, $visited);
 				}
 				if (! $relations->has($owner, $name)) {
 					$relations->add(match ($relation->getLoadKnowledge()) {
@@ -120,9 +125,9 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 				continue;
 			}
 
-			$target = $reader->readTarget($representation, $relation, $this->relationError(...))->requireValue();
+			$target = $reader->readTarget($relation, $this->relationError(...))->getValue();
 			if ($target !== null) {
-				$this->hydrateObject($target, $childSchema, $this->childRow($rawChildren), $reader, $visited);
+				$this->hydrateObject($target, $childSchema, $this->childRow($rawChildren), $operation, $visited);
 			}
 			if (! $relations->has($owner, $name)) {
 				$relations->add(new ToOneRelationState($owner, $name, $childSchema, $target));
@@ -134,22 +139,20 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 
 	/** @param array<string, mixed> $sourceRow */
 	private function bind(
-		object $representation,
+		ObjectRepresentationReader $reader,
 		RepresentationSchema $schema,
 		array $sourceRow,
 		?Key $rootKey,
-		RepresentationReader $reader,
 	): RepresentationState {
 		$baselines = [];
-		$readVisiblePath = $reader->readPass($representation);
-		$readPath = static function (string $path) use ($readVisiblePath, $sourceRow, &$baselines): PathReadResult {
-			$visible = $readVisiblePath($path);
+		$readPath = static function (string $path) use ($reader, $sourceRow, &$baselines): PathReadResult {
+			$visible = $reader->readPath($path);
 			$loaded = array_key_exists($path, $sourceRow) ? PathReadResult::present($sourceRow[$path]) : $visible;
 			// The shared record can already contain a pending edit. A new object starts from what it sees.
 			if ($visible->isPresent()) {
-				$baselines[$path] = $visible->requireValue();
+				$baselines[$path] = $visible->getValue();
 			} elseif ($loaded->isPresent()) {
-				$baselines[$path] = $loaded->requireValue();
+				$baselines[$path] = $loaded->getValue();
 			}
 
 			return $loaded;

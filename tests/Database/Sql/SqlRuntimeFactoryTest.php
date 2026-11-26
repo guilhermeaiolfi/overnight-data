@@ -16,7 +16,7 @@ use ON\Data\Mapper\Mapper\MapperInterface;
 use ON\Data\Mapper\MappingBranch;
 use ON\Data\Mapper\MappingOptions;
 use ON\Data\ORM\History\FlushHistory;
-use ON\Data\ORM\Persistence\ConvertingCommandExecutor;
+use ON\Data\ORM\Persistence\CommandExecutor;
 use ON\Data\ORM\Persistence\InsertCommand;
 use PDO;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
@@ -30,7 +30,7 @@ final class SqlRuntimeFactoryTest extends TestCase
 	{
 		$runtime = (new SqlRuntimeFactory())->connect(new ConnectionConfig('sqlite::memory:'));
 
-		self::assertInstanceOf(ConvertingCommandExecutor::class, $runtime->getCommandExecutor());
+		self::assertInstanceOf(CommandExecutor::class, $runtime->getCommandExecutor());
 	}
 
 	public function testCreateUsesTheSuppliedPdo(): void

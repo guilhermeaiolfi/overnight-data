@@ -7,6 +7,7 @@ namespace ON\Data\ORM\Representation\State;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
+use ON\Data\ORM\Representation\Sync\RepresentationReadOperation;
 use ON\Data\ORM\SessionContext;
 use ON\Data\Schema\RepresentationSchema;
 
@@ -23,7 +24,7 @@ final class RepresentationIdentifier
 			throw new StateException('Cannot identify representation with a schema for a different collection.');
 		}
 		$visited = [];
-		$this->attachObject($representation, $schema, $key, $session, $visited, $this->reader->forTraversal());
+		$this->attachObject($representation, $schema, $key, $session, $visited, $this->reader->forOperation());
 	}
 
 	/** @param array<int, true> $visited */
@@ -33,13 +34,14 @@ final class RepresentationIdentifier
 		?Key $rootKey,
 		SessionContext $session,
 		array &$visited,
-		RepresentationReader $reader,
+		RepresentationReadOperation $operation,
 	): void {
 		$id = spl_object_id($representation);
 		if (isset($visited[$id])) {
 			return;
 		}
 		$visited[$id] = true;
+		$reader = $operation->withObject($representation);
 
 		$representations = $session->getRepresentations();
 		$state = $representations->get($representation);
@@ -47,14 +49,14 @@ final class RepresentationIdentifier
 			if ($schema->getSources() === [] && $schema->getRelations() === []) {
 				throw new StateException('Cannot identify representation with an empty schema.');
 			}
-			$records = CleanRepresentationBinder::bind($schema, $session->getRecords(), $reader->readPass($representation), $rootKey);
+			$records = CleanRepresentationBinder::bind($schema, $session->getRecords(), $reader->readPath(...), $rootKey);
 			$state = RepresentationState::fromRecords($schema, $records);
 			$session->attachRepresentation($representation, $state);
 		}
 
 		foreach ($state->getSchema()->getRelations() as $relation) {
-			foreach ($reader->readRelatedObjects($representation, $relation, $this->relationError(...)) as $child) {
-				$this->attachObject($child, $relation->getRelatedSchema(), null, $session, $visited, $reader);
+			foreach ($reader->readRelatedObjects($relation, $this->relationError(...)) as $child) {
+				$this->attachObject($child, $relation->getRelatedSchema(), null, $session, $visited, $operation);
 			}
 		}
 	}

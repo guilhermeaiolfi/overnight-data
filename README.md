@@ -29,7 +29,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for release history and [`docs/quickstart.md`
 
 The result object is flat, but writable query export remembers where each property came from. A property aliased from a related field still updates the underlying table column after `sync()` and `flush()`. This works through writable query provenance and flat projection adoption.
 
-Given a bound query and a `Session` backed by a command executor (for example from `SqlRuntimeFactory` / `ConvertingCommandExecutor`):
+Given a bound query and a `Session` backed by a command executor (for example from `SqlRuntimeFactory` / `CommandExecutor`):
 
 ```php
 $user = $q
@@ -124,7 +124,7 @@ Public-property class export requirements:
 - Structured relation loading supports the built-in `BelongsTo`, `HasOne`, `HasMany`, `FirstOfMany`, and `M2M` relation types.
 - Built-in `FirstOfMany` loading is separate-query-only, uses windowed ranking on supported SQL backends, and requires deterministic relation-level `orderBy` metadata; JOIN loading is intentionally unsupported.
 - No automatic relation cascade writes or broad orphan-removal policy unless explicitly implemented by a relation planner. Relation definition `cascade()` / `load()` metadata is stored for interoperability with external Cycle ORM schema tools; `ON\Data` Session persistence does not interpret those flags. Use `exclusive()` for owned-child unlink deletion.
-- `Session::flush()` requires `TransactionalCommandExecutorInterface` and always runs inside that executor-backed transaction (including `ConvertingCommandExecutor` wrapping `SqlCommandExecutor`). Non-transactional executors are rejected. There is no separate transaction API on `Session`.
+- `Session::flush()` requires `TransactionalCommandExecutorInterface` and always runs inside that executor-backed transaction (including `CommandExecutor` wrapping `SqlCommandExecutor`). Non-transactional executors are rejected. There is no separate transaction API on `Session`.
 - No optimistic locking or stale-row revision conflict handling beyond representation sync baseline checks.
 - No lazy loading.
 - No repositories, `EntityManager`, `UnitOfWork`, events, proxies, or generated model layer.

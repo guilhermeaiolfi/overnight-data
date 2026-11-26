@@ -7,28 +7,21 @@ namespace ON\Data\ORM\Persistence;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\InvalidCommandException;
 
-final class DeleteCommand implements CommandInterface
+final class DeleteCommand extends RowCommand
 {
-	private ExpectedAffectedRows $expectedAffectedRows;
-
 	/**
 	 * @param array<string, mixed> $identity
 	 */
 	public function __construct(
-		private CollectionInterface $collection,
-		private array $identity,
+		CollectionInterface $collection,
+		array $identity,
 		?ExpectedAffectedRows $expectedAffectedRows = null,
 	) {
 		if ($identity === []) {
 			throw new InvalidCommandException('Delete command identity cannot be empty.');
 		}
 
-		$this->expectedAffectedRows = $expectedAffectedRows ?? ExpectedAffectedRows::exactly(1);
-	}
-
-	public function getCollection(): CollectionInterface
-	{
-		return $this->collection;
+		parent::__construct($collection, 'Delete', ['identity' => $identity], $expectedAffectedRows);
 	}
 
 	/**
@@ -36,7 +29,7 @@ final class DeleteCommand implements CommandInterface
 	 */
 	public function getIdentity(): array
 	{
-		return $this->identity;
+		return $this->slots['identity'];
 	}
 
 	/**
@@ -44,11 +37,6 @@ final class DeleteCommand implements CommandInterface
 	 */
 	public function setIdentity(array $identity): void
 	{
-		$this->identity = $identity;
-	}
-
-	public function getExpectedAffectedRows(): ExpectedAffectedRows
-	{
-		return $this->expectedAffectedRows;
+		$this->slots['identity'] = $identity;
 	}
 }
