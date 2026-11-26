@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\Key;
+use ON\Data\Mapper\ConversionGateway;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
@@ -18,7 +19,7 @@ use ON\Data\Schema\RepresentationSource;
 /** Binds inbound objects and staged write intents before synchronization. */
 final class RepresentationAdoptionEngine
 {
-	public function __construct(private RepresentationReader $reader = new RepresentationReader())
+	public function __construct(private readonly ?ConversionGateway $gateway = null)
 	{
 	}
 
@@ -35,7 +36,7 @@ final class RepresentationAdoptionEngine
 			$session,
 			$visited,
 			$session->getIntents()->get($representation),
-			$this->reader->forOperation(),
+			new RepresentationReader($this->gateway),
 		);
 	}
 
@@ -46,7 +47,7 @@ final class RepresentationAdoptionEngine
 		SessionContext $session,
 		array &$visited,
 		?RepresentationIntent $storedIntent,
-		RepresentationReadOperation $operation,
+		RepresentationReader $operation,
 	): RepresentationState {
 		$id = spl_object_id($representation);
 		$representations = $session->getRepresentations();

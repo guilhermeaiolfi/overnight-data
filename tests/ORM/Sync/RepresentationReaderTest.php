@@ -17,7 +17,6 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\Sync\PathReadStatus;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
-use ON\Data\ORM\Representation\Sync\RepresentationReadOperation;
 use ON\Data\Schema\RepresentationRelationSchema;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -122,8 +121,7 @@ final class RepresentationReaderTest extends TestCase
 		$author->profile = new stdClass();
 		$post = (object) ['author' => $author, 'editor' => $author];
 
-		$operation = $reader->forOperation();
-		$read = $operation->withObject($post);
+		$read = $reader->withObject($post);
 
 		self::assertSame('Ada', $read->readPath('author.name')->getValue());
 		self::assertSame('Ada', $read->readPath('editor.self.name')->getValue());
@@ -131,12 +129,12 @@ final class RepresentationReaderTest extends TestCase
 		$mapper = $gateway->getMapperManager()->getMapper(ReaderBagMapper::class);
 		self::assertInstanceOf(ReaderBagMapper::class, $mapper);
 		self::assertSame(1, $mapper->reads);
-		self::assertTrue($operation->withObject($author)->readTarget($this->profileRelationSchema(), $this->syncError(...))->isMissing());
+		self::assertTrue($reader->withObject($author)->readTarget($this->profileRelationSchema(), $this->syncError(...))->isMissing());
 		self::assertSame(1, $mapper->reads);
 
 		$author->displayName = 'Grace';
 		self::assertSame('Ada', $read->readPath('author.name')->getValue());
-		self::assertSame('Grace', $reader->forOperation()->withObject($post)->readPath('author.name')->getValue());
+		self::assertSame('Grace', (new RepresentationReader($gateway))->withObject($post)->readPath('author.name')->getValue());
 		self::assertSame(2, $mapper->reads);
 		self::assertSame($default, Mapping::getDefaultGateway());
 		self::assertTrue($this->reader()->withObject($post)->readPath('author.name')->isMissing());
@@ -150,30 +148,28 @@ final class RepresentationReaderTest extends TestCase
 		$author = (object) ['displayName' => 'Ada', 'self' => null];
 		$post = (object) ['author' => $author];
 		$otherPost = (object) ['author' => $author];
-		$operation = $reader->forOperation();
-		self::assertSame('Ada', $operation->withObject($post)->readPath('author.name')->getValue());
+		self::assertSame('Ada', $reader->withObject($post)->readPath('author.name')->getValue());
 
-		$secondReader = new RepresentationReader($gateway);
-		$sharedOperation = $secondReader->forOperation($operation);
-		self::assertSame('Ada', $sharedOperation->withObject($otherPost)->readPath('author.name')->getValue());
-		$authorReader = $sharedOperation->withObject($author);
+		$sharedReader = $reader->forGateway($gateway);
+		self::assertSame('Ada', $sharedReader->withObject($otherPost)->readPath('author.name')->getValue());
+		$authorReader = $sharedReader->withObject($author);
 		self::assertTrue($authorReader->readItems($this->postsRelationSchema(), $this->syncError(...))->isMissing());
 		self::assertTrue($authorReader->readTarget($this->profileRelationSchema(), $this->syncError(...))->isMissing());
 
-		$defaultReader = new RepresentationReader(ConversionGateway::createDefault());
-		self::assertTrue($defaultReader->forOperation($operation)->withObject($author)->readPath('name')->isMissing());
+		$defaultReader = $reader->forGateway(ConversionGateway::createDefault());
+		self::assertTrue($defaultReader->withObject($author)->readPath('name')->isMissing());
+		self::assertSame('Ada', $defaultReader->forGateway($gateway)->withObject($author)->readPath('name')->getValue());
 
 		$mapper = $gateway->getMapperManager()->getMapper(ReaderBagMapper::class);
 		self::assertInstanceOf(ReaderBagMapper::class, $mapper);
 		self::assertSame(1, $mapper->reads);
 		$author->displayName = 'Grace';
-		self::assertSame('Grace', $reader->forOperation()->withObject($author)->readPath('name')->getValue());
+		self::assertSame('Grace', (new RepresentationReader($gateway))->withObject($author)->readPath('name')->getValue());
 		self::assertSame(2, $mapper->reads);
 	}
 
 	public function testReaderWithoutGatewayUsesTheCurrentDefault(): void
 	{
-		$reader = new RepresentationReader();
 		$default = Mapping::getDefaultGateway();
 		$source = (object) ['displayName' => 'Ada', 'self' => null];
 		$gateway = ConversionGateway::createDefault();
@@ -182,14 +178,14 @@ final class RepresentationReaderTest extends TestCase
 		Mapping::setDefaultGateway($gateway);
 
 		try {
-			$operation = $reader->forOperation();
+			$operation = new RepresentationReader();
 			self::assertSame('Ada', $operation->withObject($source)->readPath('name')->getValue());
 		} finally {
 			Mapping::setDefaultGateway($default);
 		}
 
-		self::assertSame('Ada', $operation->withObject($source)->readPath('name')->getValue());
-		self::assertTrue($reader->forOperation()->withObject($source)->readPath('name')->isMissing());
+		self::assertSame('Ada', $operation->withObject(clone $source)->readPath('name')->getValue());
+		self::assertTrue((new RepresentationReader())->withObject($source)->readPath('name')->isMissing());
 	}
 
 	public function testReadPathDistinguishesPresentNullMissingAndInvalidPaths(): void
@@ -436,9 +432,9 @@ final class RepresentationReaderTest extends TestCase
 		$this->reader()->withObject($representation)->readItems($this->postsRelationSchema(), $this->adoptionError(...));
 	}
 
-	private function reader(): RepresentationReadOperation
+	private function reader(): RepresentationReader
 	{
-		return (new RepresentationReader())->forOperation();
+		return new RepresentationReader();
 	}
 
 	/**

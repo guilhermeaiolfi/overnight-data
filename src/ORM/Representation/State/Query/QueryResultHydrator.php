@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\State\Query;
 
+use Closure;
 use InvalidArgumentException;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
@@ -15,7 +16,6 @@ use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\Sync\ObjectRepresentationReader;
 use ON\Data\ORM\Representation\Sync\PathReadResult;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
-use ON\Data\ORM\Representation\Sync\RepresentationReadOperation;
 use ON\Data\ORM\Representation\Sync\RepresentationSourceReader;
 use ON\Data\ORM\SessionContext;
 use ON\Data\Query\Result\WritablePreparation;
@@ -26,8 +26,13 @@ use ON\Data\Schema\RepresentationSchema;
 
 final readonly class QueryResultHydrator implements WritableResultHandler
 {
-	public function __construct(private SessionContext $session, private RepresentationReader $reader = new RepresentationReader())
+	/** @var Closure(): RepresentationReader */
+	private Closure $newReader;
+
+	/** @param (Closure(): RepresentationReader)|null $newReader */
+	public function __construct(private SessionContext $session, ?Closure $newReader = null)
 	{
+		$this->newReader = $newReader ?? static fn (): RepresentationReader => new RepresentationReader();
 	}
 
 	public function prepare(SelectQuery $query): QueryRepresentationPlan
@@ -51,7 +56,7 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 			}
 		}
 
-		$operation = $this->reader->forOperation();
+		$operation = ($this->newReader)();
 		foreach ($objects as $index => $object) {
 			$row = $rawRows[$index] ?? [];
 			$key = $root === null ? null : RepresentationSourceReader::keyFromRow($root, $row);
@@ -72,7 +77,7 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 	): RepresentationState {
 		$visited = [];
 
-		return $this->hydrateObject($representation, $schema, $sourceRow, $this->reader->forOperation(), $visited, $rootKey);
+		return $this->hydrateObject($representation, $schema, $sourceRow, ($this->newReader)(), $visited, $rootKey);
 	}
 
 	/**
@@ -83,7 +88,7 @@ final readonly class QueryResultHydrator implements WritableResultHandler
 		object $representation,
 		RepresentationSchema $schema,
 		array $sourceRow,
-		RepresentationReadOperation $operation,
+		RepresentationReader $operation,
 		array &$visited,
 		?Key $rootKey = null,
 	): RepresentationState {
