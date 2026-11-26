@@ -72,25 +72,7 @@ final class HasOnePersistencePlanner implements RelationPersistencePlannerInterf
 		}
 
 		if ($currentRecord instanceof RecordState) {
-			$this->copyOwnerKeysIntoTarget($relation, $owner, $currentRecord);
+			$this->keys->copyOwnerKeys($relation, $owner, $currentRecord);
 		}
-	}
-
-	private function copyOwnerKeysIntoTarget(HasOneRelation $relation, RecordState $owner, RecordState $target): void
-	{
-		$ownerCollection = $owner->getCollection()->getName();
-		$this->keys->copyValues(
-			$relation->getName(),
-			$relation->getInnerKeys(),
-			$relation->getOuterKeys(),
-			$owner,
-			$target,
-			static fn (string $relationName, string $sourceField, int|string $index): RelationPersistenceException => new RelationPersistenceException(sprintf(
-				"Relation '%s' is missing an outer key field for owner collection '%s' field '%s'.",
-				$relationName,
-				$ownerCollection,
-				$sourceField,
-			)),
-		);
 	}
 }
