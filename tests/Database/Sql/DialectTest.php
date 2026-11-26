@@ -13,17 +13,49 @@ use ON\Data\Database\Sql\Dialect\MySqlDialect;
 use ON\Data\Database\Sql\Dialect\PostgresDialect;
 use ON\Data\Database\Sql\Dialect\SqliteDialect;
 use ON\Data\Database\Sql\Dialect\SqlServerDialect;
+use ON\Data\Database\Sql\SqlCommandExecutor;
 use ON\Data\Database\Sql\SqlQueryCompiler;
+use ON\Data\Database\Sql\SqlQueryExecutor;
 use ON\Data\Definition\Registry;
 use ON\Data\Mapper\ConversionGateway;
+use ON\Data\ORM\Persistence\DeleteCommand;
 use function ON\Data\Query\query;
 use function ON\Data\Query\x;
 use PDO;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
 
 final class DialectTest extends TestCase
 {
+	#[RequiresPhpExtension('pdo_sqlite')]
+	public function testExecutorsAcceptACustomDialectWithItsOwnTableQuoting(): void
+	{
+		$connection = new PdoConnection(new PDO('sqlite::memory:'));
+		$connection->execute('CREATE TABLE "archive.notes" (id INTEGER PRIMARY KEY)');
+		$connection->execute('INSERT INTO "archive.notes" (id) VALUES (7)');
+
+		$sqlite = new SqliteDialect();
+		$dialect = $this->createStub(DialectInterface::class);
+		$dialect->method('family')->willReturn(DatabaseFamily::Sqlite);
+		$dialect->method('quoteIdentifier')->willReturnCallback($sqlite->quoteIdentifier(...));
+		$dialect->method('quoteTable')->willReturnCallback(
+			static fn (string $table, string $prefix): string => $sqlite->quoteIdentifier($prefix . $table),
+		);
+		$dialect->method('compileSelectPrefix')->willReturnCallback($sqlite->compileSelectPrefix(...));
+		$dialect->method('compileLimitOffset')->willReturnCallback($sqlite->compileLimitOffset(...));
+
+		$notes = (new Registry())->collection('notes')->table('archive.notes')->field('id', 'int')->end();
+		$query = query($notes);
+		$query->select($query->id);
+		$queries = new SqlQueryExecutor($connection, ConversionGateway::createDefault(), dialect: $dialect);
+		$commands = new SqlCommandExecutor($connection, dialect: $dialect);
+
+		self::assertSame([['id' => 7]], $queries->fetchAll($query));
+		self::assertSame(1, $commands->execute(new DeleteCommand($notes, ['id' => 7]))->getAffectedRows());
+		self::assertSame([], $queries->fetchAll($query));
+	}
+
 	#[DataProvider('mariaDbVersions')]
 	public function testMariaDbVersionDeterminesInsertReturning(string $version, bool $expected): void
 	{
