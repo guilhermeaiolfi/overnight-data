@@ -12,8 +12,10 @@ use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Relation\ToOneRelationState;
 use ON\Data\ORM\Representation\Schema\Query\QuerySourceIdentities;
 use ON\Data\ORM\Representation\State\RepresentationState;
+use ON\Data\ORM\Representation\Sync\ObjectRepresentationReader;
 use ON\Data\ORM\Representation\Sync\PathReadResult;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
+use ON\Data\ORM\Representation\Sync\RepresentationReadOperation;
 use ON\Data\ORM\Representation\Sync\RepresentationSourceReader;
 use ON\Data\ORM\SessionContext;
 use ON\Data\Schema\RelationLoadKnowledge;
@@ -35,7 +37,7 @@ final class QueryResultHydrator
 	): RepresentationState {
 		$visited = [];
 
-		return $this->hydrateObject($representation, $schema, $sourceRow, $identities, $session, $visited);
+		return $this->hydrateObject($representation, $schema, $sourceRow, $identities, $session, $visited, $this->reader->forOperation());
 	}
 
 	/**
@@ -49,11 +51,13 @@ final class QueryResultHydrator
 		QuerySourceIdentities $identities,
 		SessionContext $session,
 		array &$visited,
+		RepresentationReadOperation $operation,
 	): RepresentationState {
+		$reader = $operation->withObject($representation);
 		$representations = $session->getRepresentations();
 		$state = $representations->get($representation);
 		if ($state === null) {
-			$state = $this->bind($representation, $schema, $sourceRow, $identities, $session->getRecords());
+			$state = $this->bind($reader, $schema, $sourceRow, $identities, $session->getRecords());
 			foreach ($state->getUniqueRecords() as $record) {
 				$session->getRecords()->add($record);
 			}
@@ -75,10 +79,10 @@ final class QueryResultHydrator
 			$childIdentities = new QuerySourceIdentities($childSchema->getSources());
 
 			if ($relation->isMany()) {
-				$items = $this->reader->readItems($representation, $relation, $this->relationError(...))->requireValue();
+				$items = $reader->readItems($relation, $this->relationError(...))->getValue();
 				foreach ($items as $index => $item) {
 					$childRow = is_array($rawChildren) ? ($rawChildren[$index] ?? null) : null;
-					$this->hydrateObject($item, $childSchema, $this->childRow($childRow), $childIdentities, $session, $visited);
+					$this->hydrateObject($item, $childSchema, $this->childRow($childRow), $childIdentities, $session, $visited, $operation);
 				}
 				if (! $relations->has($owner, $name)) {
 					$relations->add(match ($relation->getLoadKnowledge()) {
@@ -91,9 +95,9 @@ final class QueryResultHydrator
 				continue;
 			}
 
-			$target = $this->reader->readTarget($representation, $relation, $this->relationError(...))->requireValue();
+			$target = $reader->readTarget($relation, $this->relationError(...))->getValue();
 			if ($target !== null) {
-				$this->hydrateObject($target, $childSchema, $this->childRow($rawChildren), $childIdentities, $session, $visited);
+				$this->hydrateObject($target, $childSchema, $this->childRow($rawChildren), $childIdentities, $session, $visited, $operation);
 			}
 			if (! $relations->has($owner, $name)) {
 				$relations->add(new ToOneRelationState($owner, $name, $childSchema, $target));
@@ -105,7 +109,7 @@ final class QueryResultHydrator
 
 	/** @param array<string, mixed> $sourceRow */
 	private function bind(
-		object $representation,
+		ObjectRepresentationReader $reader,
 		RepresentationSchema $schema,
 		array $sourceRow,
 		QuerySourceIdentities $identities,
@@ -114,15 +118,14 @@ final class QueryResultHydrator
 		$sources = $schema->getSources();
 		$bound = [];
 		$baselines = [];
-		$readVisiblePath = $this->reader->readPass($representation);
-		$readPath = static function (string $path) use ($readVisiblePath, $sourceRow, &$baselines): PathReadResult {
-			$visible = $readVisiblePath($path);
+		$readPath = static function (string $path) use ($reader, $sourceRow, &$baselines): PathReadResult {
+			$visible = $reader->readPath($path);
 			$loaded = array_key_exists($path, $sourceRow) ? PathReadResult::present($sourceRow[$path]) : $visible;
 			// The shared record can already contain a pending edit. A new object starts from what it sees.
 			if ($visible->isPresent()) {
-				$baselines[$path] = $visible->requireValue();
+				$baselines[$path] = $visible->getValue();
 			} elseif ($loaded->isPresent()) {
-				$baselines[$path] = $loaded->requireValue();
+				$baselines[$path] = $loaded->getValue();
 			}
 
 			return $loaded;

@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Sync;
 
-use ON\Data\Mapper\ConversionGateway;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\State\RepresentationState;
-use WeakMap;
 
 final class ScalarRepresentationSynchronizer
 {
@@ -24,19 +22,20 @@ final class ScalarRepresentationSynchronizer
 
 	/**
 	 * @param iterable<object, RepresentationState> $representations
-	 * @param WeakMap<ConversionGateway, WeakMap<object, array<array-key, mixed>>>|null $snapshots
 	 * @return list<SyncPlan>
 	 */
-	public function sync(iterable $representations, ?WeakMap $snapshots = null): array
-	{
-		$reader = $this->reader->forTraversal($snapshots);
+	public function sync(
+		iterable $representations,
+		?RepresentationReadOperation $operation = null,
+	): array {
+		$reader = $this->reader->forOperation($operation);
 		$plans = [];
 		$plannedStates = [];
 		$plannedValues = [];
 		$updatesByTarget = [];
 
 		foreach ($representations as $representation => $state) {
-			$currentValues = $this->readWritableValues($representation, $state, $reader);
+			$currentValues = $this->readWritableValues($reader->withObject($representation), $state);
 			$plans[] = $this->buildPlan($state, $currentValues, $updatesByTarget);
 			$plannedStates[] = $state;
 			$plannedValues[] = $currentValues;
@@ -74,18 +73,17 @@ final class ScalarRepresentationSynchronizer
 	/**
 	 * @return array<string, mixed>
 	 */
-	private function readWritableValues(object $representation, RepresentationState $state, RepresentationReader $reader): array
+	private function readWritableValues(ObjectRepresentationReader $reader, RepresentationState $state): array
 	{
 		$values = [];
-		$readPath = $reader->readPass($representation);
 
 		foreach ($state->getWritableFields() as $fieldSchema) {
-			$result = $readPath($fieldSchema->getPath());
+			$result = $reader->readPath($fieldSchema->getPath());
 			if ($result->isMissing()) {
 				continue;
 			}
 
-			$values[$fieldSchema->getPath()] = $result->requireValue();
+			$values[$fieldSchema->getPath()] = $result->getValue();
 		}
 
 		return $values;

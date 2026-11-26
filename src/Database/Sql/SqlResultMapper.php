@@ -40,10 +40,6 @@ final class SqlResultMapper
 				);
 			}
 
-			if (! $column->visible()) {
-				continue;
-			}
-
 			$mapped[$column->logicalName()] = $value;
 		}
 

@@ -5,12 +5,10 @@ declare(strict_types=1);
 namespace ON\Data\Database\Sql;
 
 use ON\Data\Database\DatabasePlatformInterface;
-use ON\Data\Query\Expression\FunctionCallExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Join;
 use ON\Data\Query\QueryFunction\CompiledExpression;
 use ON\Data\Query\QueryFunction\FunctionCompilationContextInterface;
-use ON\Data\Query\QueryFunction\FunctionCompilationException;
 
 /**
  * @internal
@@ -22,7 +20,6 @@ final class SqlFunctionCompilationContext implements FunctionCompilationContextI
 		private readonly SqlTranslationContext $translationContext,
 		private readonly DatabasePlatformInterface $platform,
 		private readonly ?Join $joinContext,
-		private readonly SqlFunctionCompilationStack $stack,
 	) {
 	}
 
@@ -33,15 +30,10 @@ final class SqlFunctionCompilationContext implements FunctionCompilationContextI
 
 	public function compile(ValueExpressionInterface $expression): CompiledExpression
 	{
-		if ($expression instanceof FunctionCallExpression && $this->stack->contains($expression)) {
-			throw FunctionCompilationException::recursion($expression->getFunction());
-		}
-
 		$fragment = $this->translator->translateExpressionForFunction(
 			$expression,
 			$this->translationContext,
 			$this->joinContext,
-			$this->stack,
 		);
 
 		return new CompiledExpression(

@@ -11,13 +11,16 @@ use WeakMap;
 
 final class RepresentationSyncer
 {
+	private RepresentationReader $reader;
+
 	public function __construct(
 		private ?ScalarRepresentationSynchronizer $scalarSynchronizer = null,
 		private ?RelationRepresentationSynchronizer $relationSynchronizer = null,
 		?RepresentationReader $reader = null,
 	) {
-		$this->scalarSynchronizer ??= new ScalarRepresentationSynchronizer($reader);
-		$this->relationSynchronizer ??= new RelationRepresentationSynchronizer($reader);
+		$this->reader = $reader ?? new RepresentationReader();
+		$this->scalarSynchronizer ??= new ScalarRepresentationSynchronizer($this->reader);
+		$this->relationSynchronizer ??= new RelationRepresentationSynchronizer($this->reader);
 	}
 
 	public function sync(
@@ -37,9 +40,9 @@ final class RepresentationSyncer
 			$states[$representation] = $state;
 		}
 
-		$snapshots = new WeakMap();
-		$syncPlans = $this->scalarSynchronizer->sync($states, $snapshots);
-		$relationChanges = $this->relationSynchronizer->sync($states, $relations, $representations, $snapshots);
+		$operation = $this->reader->forOperation();
+		$syncPlans = $this->scalarSynchronizer->sync($states, $operation);
+		$relationChanges = $this->relationSynchronizer->sync($states, $relations, $representations, $operation);
 
 		return new SyncResult($syncPlans, $relationChanges);
 	}

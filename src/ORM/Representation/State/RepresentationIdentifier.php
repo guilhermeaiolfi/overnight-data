@@ -7,7 +7,9 @@ namespace ON\Data\ORM\Representation\State;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
+use ON\Data\ORM\Representation\Sync\ObjectRepresentationReader;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
+use ON\Data\ORM\Representation\Sync\RepresentationReadOperation;
 use ON\Data\ORM\Representation\Sync\RepresentationSourceReader;
 use ON\Data\ORM\SessionContext;
 use ON\Data\Schema\RepresentationSchema;
@@ -25,7 +27,7 @@ final class RepresentationIdentifier
 			throw new StateException('Cannot identify representation with a schema for a different collection.');
 		}
 		$visited = [];
-		$this->attachObject($representation, $schema, $key, $session, $visited);
+		$this->attachObject($representation, $schema, $key, $session, $visited, $this->reader->forOperation());
 	}
 
 	/** @param array<int, true> $visited */
@@ -35,17 +37,19 @@ final class RepresentationIdentifier
 		?Key $rootKey,
 		SessionContext $session,
 		array &$visited,
+		RepresentationReadOperation $operation,
 	): void {
 		$id = spl_object_id($representation);
 		if (isset($visited[$id])) {
 			return;
 		}
 		$visited[$id] = true;
+		$reader = $operation->withObject($representation);
 
 		$representations = $session->getRepresentations();
 		$state = $representations->get($representation);
 		if ($state === null) {
-			$state = $this->bind($representation, $schema, $rootKey, $session);
+			$state = $this->bind($reader, $schema, $rootKey, $session);
 			foreach ($state->getUniqueRecords() as $record) {
 				$session->getRecords()->add($record);
 			}
@@ -53,14 +57,14 @@ final class RepresentationIdentifier
 		}
 
 		foreach ($state->getSchema()->getRelations() as $relation) {
-			foreach ($this->reader->readRelatedObjects($representation, $relation, $this->relationError(...)) as $child) {
-				$this->attachObject($child, $relation->getRelatedSchema(), null, $session, $visited);
+			foreach ($reader->readRelatedObjects($relation, $this->relationError(...)) as $child) {
+				$this->attachObject($child, $relation->getRelatedSchema(), null, $session, $visited, $operation);
 			}
 		}
 	}
 
 	private function bind(
-		object $representation,
+		ObjectRepresentationReader $reader,
 		RepresentationSchema $schema,
 		?Key $rootKey,
 		SessionContext $session,
@@ -75,9 +79,8 @@ final class RepresentationIdentifier
 			$bound[''] = $this->cleanRecord($session, $key, $key->getValues());
 		}
 
-		$readPath = $this->reader->readPass($representation);
 		foreach ($sources as $source) {
-			[$reads, $values] = RepresentationSourceReader::read($source, $readPath);
+			[$reads, $values] = RepresentationSourceReader::read($source, $reader->readPath(...));
 			$key = RepresentationSourceReader::resolveKey($source, $reads, $source->isRoot() ? $rootKey : null)
 				?? throw StateException::writableResultMissingIdentity($source->getCollection()->getName(), $source->getCollection()->getPrimaryKey());
 			$bound[$source->getPathKey()] = $this->cleanRecord($session, $key, $values);

@@ -6,16 +6,16 @@ namespace Tests\ON\Data\ORM\Persistence;
 
 use DateTimeImmutable;
 use ON\Data\Definition\Registry;
+use ON\Data\ORM\Persistence\CommandExecutor;
 use ON\Data\ORM\Persistence\CommandExecutorInterface;
 use ON\Data\ORM\Persistence\CommandInterface;
 use ON\Data\ORM\Persistence\CommandResult;
-use ON\Data\ORM\Persistence\ConvertingCommandExecutor;
 use ON\Data\ORM\Persistence\InsertCommand;
 use ON\Data\ORM\Persistence\TransactionalCommandExecutorInterface;
 use ON\Data\ORM\Persistence\UpdateCommand;
 use PHPUnit\Framework\TestCase;
 
-final class ConvertingCommandExecutorTest extends TestCase
+final class CommandExecutorTest extends TestCase
 {
 	public function testExecuteProjectsPhpValuesToStorageWithoutMutatingOriginalCommand(): void
 	{
@@ -46,7 +46,7 @@ final class ConvertingCommandExecutorTest extends TestCase
 			}
 		};
 
-		$executor = new ConvertingCommandExecutor($inner);
+		$executor = new CommandExecutor($inner);
 		$executor->execute($command);
 
 		self::assertSame($publishedAt, $command->getValues()['publishedAt']);
@@ -76,7 +76,7 @@ final class ConvertingCommandExecutorTest extends TestCase
 			}
 		};
 
-		$executor = new ConvertingCommandExecutor($inner);
+		$executor = new CommandExecutor($inner);
 		$result = $executor->transaction(static fn (): string => 'ok');
 
 		self::assertTrue($inner->transactionCalled);
@@ -108,7 +108,7 @@ final class ConvertingCommandExecutorTest extends TestCase
 			}
 		};
 
-		(new ConvertingCommandExecutor($inner))->execute($command);
+		(new CommandExecutor($inner))->execute($command);
 
 		self::assertInstanceOf(UpdateCommand::class, $inner->lastCommand);
 		self::assertSame(['id' => 1], $inner->lastCommand->getIdentity());
@@ -139,7 +139,7 @@ final class ConvertingCommandExecutorTest extends TestCase
 			}
 		};
 
-		$result = (new ConvertingCommandExecutor($inner))->execute($command);
+		$result = (new CommandExecutor($inner))->execute($command);
 
 		self::assertInstanceOf(DateTimeImmutable::class, $result->getGeneratedValues()['createdAt']);
 		self::assertSame(

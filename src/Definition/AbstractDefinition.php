@@ -85,17 +85,15 @@ abstract class AbstractDefinition extends DefinitionNode implements DefinitionIn
 	{
 		parent::initializeRuntimeState();
 
-		if (isset($this->items['fields']) && is_array($this->items['fields'])) {
-			$fieldItems = &$this->items['fields'];
-		} else {
-			$fieldItems = [];
+		if (! is_array($this->items['fields'] ?? null)) {
+			$this->items['fields'] = [];
 		}
+		$fieldItems = &$this->items['fields'];
 
-		if (isset($this->items['relations']) && is_array($this->items['relations'])) {
-			$relationItems = &$this->items['relations'];
-		} else {
-			$relationItems = [];
+		if (! is_array($this->items['relations'] ?? null)) {
+			$this->items['relations'] = [];
 		}
+		$relationItems = &$this->items['relations'];
 
 		$conflicts = array_intersect(array_keys($fieldItems), array_keys($relationItems));
 		if ($conflicts !== []) {

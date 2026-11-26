@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\Mapper\Exception;
 
-use RuntimeException;
-
-final class NoWriterFoundException extends RuntimeException
+final class NoWriterFoundException extends MappingException
 {
 }

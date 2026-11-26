@@ -53,15 +53,6 @@ final class FlushExecutor
 	public function flush(SessionContext $context, ?string $label = null, ?Closure $prepare = null): FlushResult
 	{
 		$executor = $this->executor;
-		if ($this->history !== null && $executor instanceof TransactionalCommandExecutorInterface) {
-			return $this->history->whileWriting($executor, function () use ($executor, $context, $label, $prepare): FlushResult {
-				$prepare?->__invoke();
-
-				return $this->flushInTransaction($executor, $context, new FlushCapture(), $label);
-			});
-		}
-
-		$prepare?->__invoke();
 		if (! $executor instanceof TransactionalCommandExecutorInterface) {
 			throw new NonTransactionalFlushException(sprintf(
 				"Flush requires a command executor that implements %s; '%s' does not. Non-transactional flush is not supported.",
@@ -70,30 +61,43 @@ final class FlushExecutor
 			));
 		}
 
-		return $this->flushInTransaction($executor, $context);
+		if ($this->history !== null) {
+			return $this->history->whileWriting(
+				$executor,
+				fn (): FlushResult => $this->flushInTransaction($executor, $context, $prepare, new FlushCapture(), $label),
+			);
+		}
+
+		return $this->flushInTransaction($executor, $context, $prepare);
 	}
 
 	private function flushInTransaction(
 		TransactionalCommandExecutorInterface $transactionalExecutor,
 		SessionContext $context,
+		?Closure $prepare,
 		?FlushCapture $capture = null,
 		?string $label = null,
 	): FlushResult {
 		$flush = null;
 		$relationResult = null;
-		$recordSnapshots = $this->snapshotRecords($context);
+		$recordSnapshots = [];
 		$representationSnapshots = [];
-		foreach ($context->getRepresentations()->getAll() as $state) {
-			$representationSnapshots[] = [$state, $state->snapshotBaselines()];
-		}
 
 		try {
 			$result = $transactionalExecutor->transaction(function () use (
 				$context,
 				$capture,
+				$prepare,
+				&$recordSnapshots,
+				&$representationSnapshots,
 				&$flush,
 				&$relationResult,
 			): FlushResult {
+				$prepare?->__invoke();
+				$recordSnapshots = $this->snapshotRecords($context);
+				foreach ($context->getRepresentations()->getAll() as $state) {
+					$representationSnapshots[] = [$state, $state->snapshotBaselines()];
+				}
 				$records = $context->getRecords();
 
 				// Sync already-tracked representations into RecordState / relation state.

@@ -89,7 +89,8 @@ final class SqlQueryCompiler
 
 		$columns = [];
 		$resultColumns = [];
-		$usedNames = [];
+		$publicNames = [];
+		$starBackendNames = [];
 		$implicitCounter = 0;
 
 		if ($derived) {
@@ -106,37 +107,55 @@ final class SqlQueryCompiler
 				$expression = $selectionExpression instanceof AliasedExpression
 					? $selectionExpression->getExpression()
 					: $selectionExpression;
-				$logicalNames = $expression instanceof StarExpression
-					? array_map(
-						static fn (SqlResultColumn $column): string => $column->logicalName(),
-						$this->starResultColumns($expression),
-					)
-					: [$this->resolveRootResultName($query, $selection, $expression)];
+				if ($expression instanceof StarExpression) {
+					$logicalNames = [];
+					foreach ($this->starResultColumns($expression) as $column) {
+						$logicalNames[] = $column->logicalName();
+					}
+					foreach ($this->starBackendFields($expression->getSource()) as $name) {
+						$starBackendNames[$name] = true;
+					}
+				} else {
+					$logicalNames = [$this->resolveRootResultName($query, $selection, $expression)];
+				}
 
 				foreach ($logicalNames as $logicalName) {
-					if (isset($usedNames[$logicalName])) {
+					if (isset($publicNames[$logicalName])) {
 						throw UnsupportedQueryException::forQuery($query, sprintf(
 							"duplicate root result name '%s' is not supported",
 							$logicalName,
 						));
 					}
 
-					$usedNames[$logicalName] = true;
+					$publicNames[$logicalName] = true;
 				}
 			}
 		}
 
-		foreach ($selections as $index => $selection) {
+		$usedNames = $publicNames + $starBackendNames;
+		foreach ($selections as $selection) {
 			$selectionExpression = $selection->getExpression();
 			$aliased = $selectionExpression instanceof AliasedExpression;
 			$expression = $aliased ? $selectionExpression->getExpression() : $selectionExpression;
-			$logicalName = null;
 			$backendName = null;
-			$field = $expression instanceof FieldRef ? $expression->getField() : null;
-			$visible = ! $root || $selection->isExplicit();
+			$publicColumn = $root && $selection->isExplicit();
 
 			if ($expression instanceof StarExpression) {
-				if (
+				if ($root && ! $publicColumn && $publicNames !== []) {
+					$source = $this->resolveFieldSource($expression->getSource(), $query);
+					$sourceAlias = $context->aliasFor($source);
+					$fields = $this->starBackendFields($source);
+					if ($fields === []) {
+						throw UnsupportedQueryException::forQuery($query, 'a hidden star alongside public selections requires named source columns');
+					}
+
+					foreach ($fields as $name) {
+						$columns[] = SqlFragment::raw(
+							$this->quoteQualified($sourceAlias, $name) . ' AS '
+							. $this->quote($this->allocateImplicitAlias($usedNames, $implicitCounter)),
+						);
+					}
+				} elseif (
 					$derived
 					&& $expression->getSource() instanceof SelectQuery
 					&& $expression->getSource()->getFrom() instanceof CollectionInterface
@@ -153,7 +172,7 @@ final class SqlQueryCompiler
 					$columns[] = $this->translateStar($expression, $context);
 				}
 
-				if ($root) {
+				if ($publicColumn) {
 					foreach ($this->starResultColumns($expression) as $resultColumn) {
 						$resultColumns[] = $resultColumn;
 					}
@@ -162,19 +181,22 @@ final class SqlQueryCompiler
 				continue;
 			}
 
-			if ($root && $selection->isExplicit()) {
+			if ($publicColumn) {
 				$logicalName = $this->resolveRootResultName($query, $selection, $expression);
-				$backendName = $logicalName;
+				$backendName = isset($starBackendNames[$logicalName])
+					? $this->allocateImplicitAlias($usedNames, $implicitCounter)
+					: $logicalName;
+				$resultColumns[] = new SqlResultColumn(
+					$backendName,
+					$logicalName,
+					$expression instanceof FieldRef ? $expression->getField() : null,
+				);
 			}
 
 			$sql = $this->translateExpression($expression, $context);
 
 			if ($root || $aliased || $derived) {
 				if ($root && ! $selection->isExplicit() && $backendName === null) {
-					if ($aliased) {
-						$logicalName = $selection->getSelectionKey();
-					}
-
 					$backendName = $this->allocateImplicitAlias($usedNames, $implicitCounter);
 				}
 
@@ -189,15 +211,6 @@ final class SqlQueryCompiler
 				);
 			} else {
 				$columns[] = $sql;
-			}
-
-			if ($root) {
-				$resultColumns[] = new SqlResultColumn(
-					$backendName ?? sprintf('__ondata_implicit_%d', $index),
-					$logicalName ?? sprintf('__ondata_implicit_%d', $index),
-					$visible,
-					$field,
-				);
 			}
 		}
 
@@ -413,12 +426,7 @@ final class SqlQueryCompiler
 		ValueExpressionInterface $expression,
 		SqlTranslationContext $context,
 		?Join $joinContext,
-		SqlFunctionCompilationStack $stack,
 	): SqlFragment {
-		if ($expression instanceof FunctionCallExpression) {
-			return $this->translateFunctionCall($expression, $context, $joinContext, $stack);
-		}
-
 		return $this->translateExpression($expression, $context, null, $joinContext);
 	}
 
@@ -431,12 +439,8 @@ final class SqlQueryCompiler
 		FunctionCallExpression $expression,
 		SqlTranslationContext $context,
 		?Join $joinContext = null,
-		?SqlFunctionCompilationStack $stack = null,
 	): SqlFragment {
-		$stack ??= new SqlFunctionCompilationStack();
-		$stack->enter($expression);
-
-		try {
+		return $context->withinFunction($expression, function () use ($expression, $context, $joinContext): SqlFragment {
 			$function = $expression->getFunction();
 			$implementation = new $function();
 
@@ -449,7 +453,6 @@ final class SqlQueryCompiler
 				$context,
 				$this->platform,
 				$joinContext,
-				$stack,
 			);
 
 			$compiled = $implementation->compile(
@@ -461,9 +464,7 @@ final class SqlQueryCompiler
 				$compiled->getSql(),
 				$compiled->getParameters(),
 			);
-		} finally {
-			$stack->leave($expression);
-		}
+		});
 	}
 
 	private function translateStar(StarExpression $expression, SqlTranslationContext $context): SqlFragment
@@ -516,6 +517,25 @@ final class SqlQueryCompiler
 		return $columns;
 	}
 
+	/** @return list<string> */
+	private function starBackendFields(QuerySourceInterface $source): array
+	{
+		$from = $source instanceof SelectQuery ? $source->getFrom() : $source;
+		if ($from instanceof DerivedSelectQuery) {
+			return $from->selectionNames();
+		}
+
+		$collection = $from instanceof Join || $from instanceof RelationRef ? $from->getCollection() : $from;
+		$names = [];
+		if ($collection instanceof CollectionInterface) {
+			foreach ($collection->getFields() as $field) {
+				$names[] = $field->getColumn();
+			}
+		}
+
+		return $names;
+	}
+
 	/**
 	 * @return list<SqlResultColumn>
 	 */
@@ -528,7 +548,7 @@ final class SqlQueryCompiler
 
 			foreach ($source->getCollection()->getVisibleFields() as $fieldName) {
 				$field = $source->getCollection()->getField($fieldName);
-				$columns[] = new SqlResultColumn($field->getColumn(), $field->getName(), true, $field);
+				$columns[] = new SqlResultColumn($field->getColumn(), $field->getName(), $field);
 			}
 
 			return $columns;
@@ -536,7 +556,7 @@ final class SqlQueryCompiler
 
 		if ($source instanceof SelectQuery || $source instanceof DerivedSelectQuery) {
 			return array_map(
-				static fn (string $name): SqlResultColumn => new SqlResultColumn($name, $name, true),
+				static fn (string $name): SqlResultColumn => new SqlResultColumn($name, $name),
 				$this->derivedSelectionNames($source),
 			);
 		}

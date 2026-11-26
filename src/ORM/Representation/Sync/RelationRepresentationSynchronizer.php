@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\Definition\Relation\RelationCardinality;
-use ON\Data\Mapper\ConversionGateway;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\RelationStateInterface;
@@ -15,7 +14,6 @@ use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\Schema\RelationLoadKnowledge;
 use ON\Data\Schema\RepresentationRelationSchema;
-use WeakMap;
 
 final class RelationRepresentationSynchronizer
 {
@@ -28,18 +26,17 @@ final class RelationRepresentationSynchronizer
 
 	/**
 	 * @param iterable<object, RepresentationState> $reps
-	 * @param WeakMap<ConversionGateway, WeakMap<object, array<array-key, mixed>>>|null $snapshots
 	 * @return list<RelationStateInterface>
 	 */
 	public function sync(
 		iterable $reps,
 		RelationStateStore $relations,
 		?RepresentationStateStore $states = null,
-		?WeakMap $snapshots = null,
+		?RepresentationReadOperation $operation = null,
 	): array {
 		$touched = [];
 		$touchedIds = [];
-		$reader = $this->reader->forTraversal($snapshots);
+		$reader = $this->reader->forOperation($operation);
 		if ($states === null) {
 			if (! $reps instanceof RepresentationStateStore) {
 				throw new SyncException('A tracked representation store is required when synchronizing a subset.');
@@ -48,16 +45,17 @@ final class RelationRepresentationSynchronizer
 		}
 
 		foreach ($reps as $representation => $state) {
+			$objectReader = $reader->withObject($representation);
 			foreach ($state->getSchema()->getRelations() as $relationSchema) {
 				$owner = $state->requireRootRecord();
 				if ($relationSchema->isMany()) {
-					$this->syncMany($representation, $relationSchema, $owner, $relations, $states, $touched, $touchedIds, $reader);
+					$this->syncMany($objectReader, $relationSchema, $owner, $relations, $states, $touched, $touchedIds);
 
 					continue;
 				}
 
 				if ($relationSchema->isSingle()) {
-					$this->syncOne($representation, $relationSchema, $owner, $relations, $states, $touched, $touchedIds, $reader);
+					$this->syncOne($objectReader, $relationSchema, $owner, $relations, $states, $touched, $touchedIds);
 				}
 			}
 		}
@@ -70,22 +68,21 @@ final class RelationRepresentationSynchronizer
 	 * @param array<int, true> $touchedIds
 	 */
 	private function syncMany(
-		object $representation,
+		ObjectRepresentationReader $reader,
 		RepresentationRelationSchema $relationSchema,
 		RecordState $owner,
 		RelationStateStore $relations,
 		RepresentationStateStore $states,
 		array &$touched,
 		array &$touchedIds,
-		RepresentationReader $reader,
 	): void {
 		$relationName = $relationSchema->getRelationName();
 
-		$result = $reader->readItems($representation, $relationSchema, $this->syncError(...));
+		$result = $reader->readItems($relationSchema, $this->syncError(...));
 		if ($result->isMissing() && $relationSchema->shouldSkipWhenMissing()) {
 			return;
 		}
-		$items = $result->requireValue();
+		$items = $result->getValue();
 		foreach ($items as $item) {
 			$this->requireTrackedRepresentation($states, $item, $relationSchema->getPath());
 		}
@@ -117,22 +114,21 @@ final class RelationRepresentationSynchronizer
 	 * @param array<int, true> $touchedIds
 	 */
 	private function syncOne(
-		object $representation,
+		ObjectRepresentationReader $reader,
 		RepresentationRelationSchema $relationSchema,
 		RecordState $owner,
 		RelationStateStore $relations,
 		RepresentationStateStore $states,
 		array &$touched,
 		array &$touchedIds,
-		RepresentationReader $reader,
 	): void {
 		$relationName = $relationSchema->getRelationName();
 
-		$result = $reader->readTarget($representation, $relationSchema, $this->syncError(...));
+		$result = $reader->readTarget($relationSchema, $this->syncError(...));
 		if ($result->isMissing() && $relationSchema->shouldSkipWhenMissing()) {
 			return;
 		}
-		$target = $result->requireValue();
+		$target = $result->getValue();
 		if ($target !== null) {
 			$this->requireTrackedRepresentation($states, $target, $relationSchema->getPath());
 		}

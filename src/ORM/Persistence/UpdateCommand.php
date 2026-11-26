@@ -7,18 +7,16 @@ namespace ON\Data\ORM\Persistence;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\ORM\Exception\InvalidCommandException;
 
-final class UpdateCommand implements CommandInterface
+final class UpdateCommand extends RowCommand
 {
-	private ExpectedAffectedRows $expectedAffectedRows;
-
 	/**
 	 * @param array<string, mixed> $identity
 	 * @param array<string, mixed> $changes
 	 */
 	public function __construct(
-		private CollectionInterface $collection,
-		private array $identity,
-		private array $changes,
+		CollectionInterface $collection,
+		array $identity,
+		array $changes,
 		?ExpectedAffectedRows $expectedAffectedRows = null,
 	) {
 		if ($identity === []) {
@@ -38,12 +36,7 @@ final class UpdateCommand implements CommandInterface
 			));
 		}
 
-		$this->expectedAffectedRows = $expectedAffectedRows ?? ExpectedAffectedRows::exactly(1);
-	}
-
-	public function getCollection(): CollectionInterface
-	{
-		return $this->collection;
+		parent::__construct($collection, 'Update', ['identity' => $identity, 'changes' => $changes], $expectedAffectedRows);
 	}
 
 	/**
@@ -51,7 +44,7 @@ final class UpdateCommand implements CommandInterface
 	 */
 	public function getIdentity(): array
 	{
-		return $this->identity;
+		return $this->slots['identity'];
 	}
 
 	/**
@@ -59,7 +52,7 @@ final class UpdateCommand implements CommandInterface
 	 */
 	public function setIdentity(array $identity): void
 	{
-		$this->identity = $identity;
+		$this->slots['identity'] = $identity;
 	}
 
 	/**
@@ -67,7 +60,7 @@ final class UpdateCommand implements CommandInterface
 	 */
 	public function getChanges(): array
 	{
-		return $this->changes;
+		return $this->slots['changes'];
 	}
 
 	/**
@@ -75,11 +68,6 @@ final class UpdateCommand implements CommandInterface
 	 */
 	public function setChanges(array $changes): void
 	{
-		$this->changes = $changes;
-	}
-
-	public function getExpectedAffectedRows(): ExpectedAffectedRows
-	{
-		return $this->expectedAffectedRows;
+		$this->slots['changes'] = $changes;
 	}
 }
