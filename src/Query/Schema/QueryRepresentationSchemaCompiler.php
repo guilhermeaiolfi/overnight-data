@@ -6,7 +6,6 @@ namespace ON\Data\Query\Schema;
 
 use InvalidArgumentException;
 use ON\Data\Definition\Collection\CollectionInterface;
-use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
@@ -20,10 +19,10 @@ use ON\Data\Query\SelectQuery;
 use ON\Data\Schema\Exception\InvalidSchemaException;
 use ON\Data\Schema\RelationLoadKnowledge;
 use ON\Data\Schema\RepresentationExpressionSchema;
-use ON\Data\Schema\RepresentationFieldRole;
 use ON\Data\Schema\RepresentationFieldSchema;
 use ON\Data\Schema\RepresentationRelationSchema;
 use ON\Data\Schema\RepresentationSchema;
+use ON\Data\Schema\SchemaFields;
 
 /**
  * Compiles a SelectQuery selection graph into a structural RepresentationSchema
@@ -40,147 +39,34 @@ final class QueryRepresentationSchemaCompiler
 		$collection = $query->getCollection();
 		$schema = new RepresentationSchema($collection);
 
-		$this->compileRootScalarFields($schema, $query, $collection);
-		$this->compileRelationSourcedFlatFields($schema, $query);
+		$explicit = $query->getSelections()->getExplicit();
+		$rootFields = [];
+		$relatedFields = [];
+		foreach ($explicit as $selection) {
+			$expression = $selection->getExpression();
+			if ($expression instanceof AliasedExpression) {
+				$expression = $expression->getExpression();
+			}
+			if (! $expression instanceof FieldRef && ! $expression instanceof StarExpression) {
+				continue;
+			}
+
+			$source = $expression->getSource();
+			if ($source === $query) {
+				$rootFields[] = $selection;
+			} elseif ($expression instanceof FieldRef && $source instanceof RelationRef && $source->getQuery() === $query) {
+				$relatedFields[] = $selection;
+			}
+		}
+
+		$this->addFields($schema, $this->fieldsFromSelections($query, $rootFields));
+		$this->addExpressions($schema, $this->expressionsFromSelections($query, $explicit));
+		SchemaFields::assemblePrimaryKeyFields($schema, $collection);
+		$this->addFields($schema, $this->fieldsFromSelections($query, $relatedFields));
+		SchemaFields::assembleFlatSourcePrimaryKeys($schema);
 		$this->compileRelationSelections($schema, $query);
 
 		return $schema;
-	}
-
-	private function compileRootScalarFields(
-		RepresentationSchema $schema,
-		SelectQuery $query,
-		CollectionInterface $collection,
-	): void {
-		$fields = $this->hasExplicitRootStarSelection($query)
-			? $this->defaultFields($collection)
-			: $this->fieldsFromSelections($query, $this->getRootExplicitScalarSelections($query));
-
-		$this->addFields($schema, $fields);
-		$this->addExpressions(
-			$schema,
-			$this->expressionsFromSelections($query, $query->getSelections()->getExplicit()),
-		);
-		$this->assemblePrimaryKeyFields($schema, $collection);
-	}
-
-	/**
-	 * Adds primary-key fields that are not already bound for the given source path.
-	 *
-	 * @param list<string> $sourcePath
-	 */
-	private function assemblePrimaryKeyFields(
-		RepresentationSchema $schema,
-		CollectionInterface $collection,
-		array $sourcePath = [],
-	): void {
-		foreach ($collection->getPrimaryKey() as $fieldName) {
-			if ($schema->hasFieldForSource($sourcePath, $fieldName)) {
-				continue;
-			}
-
-			$schema->addField(new RepresentationFieldSchema(
-				$this->identityPath($schema, $sourcePath, $fieldName),
-				$collection,
-				$fieldName,
-				writable: false,
-				sourcePath: $sourcePath,
-				role: RepresentationFieldRole::Implicit,
-			));
-		}
-	}
-
-	/**
-	 * @return list<SelectionItem>
-	 */
-	private function getRootExplicitScalarSelections(SelectQuery $query): array
-	{
-		$selections = [];
-
-		foreach ($query->getSelections()->getExplicit() as $selection) {
-			if ($selection->getExpression() instanceof StarExpression) {
-				continue;
-			}
-
-			if ($this->resolveRootFieldRef($query, $selection) !== null) {
-				$selections[] = $selection;
-			}
-		}
-
-		return $selections;
-	}
-
-	private function hasExplicitRootStarSelection(SelectQuery $query): bool
-	{
-		foreach ($query->getSelections()->getExplicit() as $selection) {
-			$expression = $selection->getExpression();
-
-			if (! $expression instanceof StarExpression) {
-				continue;
-			}
-
-			if ($expression->getSource() === $query) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	private function resolveRootFieldRef(SelectQuery $query, SelectionItem $selection): ?FieldRef
-	{
-		$expression = $selection->getExpression();
-
-		if ($expression instanceof AliasedExpression) {
-			$expression = $expression->getExpression();
-		}
-
-		if (! $expression instanceof FieldRef) {
-			return null;
-		}
-
-		if ($expression->getSource() !== $query) {
-			return null;
-		}
-
-		return $expression;
-	}
-
-	private function compileRelationSourcedFlatFields(
-		RepresentationSchema $schema,
-		SelectQuery $query,
-	): void {
-		foreach ($query->getSelections()->getExplicit() as $selection) {
-			if (! $this->isRelationSourcedFieldSelection($query, $selection)) {
-				continue;
-			}
-
-			$fields = $this->fieldsFromSelections($query, [$selection]);
-			$this->addFields($schema, $fields);
-		}
-
-		$this->assembleFlatSourcePrimaryKeys($schema);
-	}
-
-	private function isRelationSourcedFieldSelection(SelectQuery $query, SelectionItem $selection): bool
-	{
-		$expression = $selection->getExpression();
-
-		if ($expression instanceof AliasedExpression) {
-			$expression = $expression->getExpression();
-		}
-
-		if (! $expression instanceof FieldRef) {
-			return false;
-		}
-
-		if ($this->resolveRootFieldRef($query, $selection) !== null) {
-			return false;
-		}
-
-		$source = $expression->getSource();
-
-		return $source instanceof RelationRef && $source->getQuery() === $query;
 	}
 
 	private function compileRelationSelections(RepresentationSchema $rootSchema, SelectQuery $query): void
@@ -202,7 +88,7 @@ final class QueryRepresentationSchemaCompiler
 			$parentSchema = $parentPathKey === null
 				? $rootSchema
 				: $schemasByPath[$parentPathKey];
-			$ownerCollection = $this->resolveOwnerCollection($query, $path);
+			$ownerCollection = $selection->getRelationRef()->getParentRelation()?->getCollection() ?? $query->getCollection();
 			$relationName = $selection->getName();
 			$relatedSchema = $this->compileRelationSchema($selection);
 
@@ -238,26 +124,6 @@ final class QueryRepresentationSchemaCompiler
 		return RelationLoadKnowledge::Full;
 	}
 
-	/**
-	 * @param list<string> $path
-	 */
-	private function resolveOwnerCollection(SelectQuery $query, array $path): CollectionInterface
-	{
-		$collection = $query->getCollection();
-
-		foreach (array_slice($path, 0, -1) as $segment) {
-			$relation = $collection->getRelation($segment);
-
-			if (! $relation instanceof RelationInterface) {
-				break;
-			}
-
-			$collection = $relation->getCollection();
-		}
-
-		return $collection;
-	}
-
 	private function compileRelationSchema(RelationSelection $selection): RepresentationSchema
 	{
 		$relationRef = $selection->getRelationRef();
@@ -265,61 +131,17 @@ final class QueryRepresentationSchemaCompiler
 		$schema = new RepresentationSchema($targetCollection);
 
 		if ($selection->hasDefaultSelection()) {
-			$this->addFields($schema, $this->defaultFields($targetCollection));
+			$this->addFields($schema, SchemaFields::defaultFields($targetCollection));
 		} else {
 			$explicit = $selection->getSelections()->getExplicit();
 			$this->addFields($schema, $this->fieldsFromSelections($relationRef, $explicit));
 			$this->addExpressions($schema, $this->expressionsFromSelections($relationRef, $explicit));
-			$this->assembleFlatSourcePrimaryKeys($schema);
+			SchemaFields::assembleFlatSourcePrimaryKeys($schema);
 		}
 
-		$this->assemblePrimaryKeyFields($schema, $targetCollection);
+		SchemaFields::assemblePrimaryKeyFields($schema, $targetCollection);
 
 		return $schema;
-	}
-
-	private function assembleFlatSourcePrimaryKeys(RepresentationSchema $schema): void
-	{
-		$seen = [];
-
-		foreach ($schema->getFields() as $field) {
-			if ($field->getSourcePath() === []) {
-				continue;
-			}
-
-			$key = $field->getSourcePathKey();
-			if (isset($seen[$key])) {
-				continue;
-			}
-
-			$seen[$key] = true;
-			$this->assemblePrimaryKeyFields($schema, $field->getCollection(), $field->getSourcePath());
-		}
-	}
-
-	/**
-	 * Row key for an implicit source primary key. Root uses the field name;
-	 * related sources qualify with source path (`company.id`) so they do not
-	 * collide with the root `id`. If that path is already taken, suffix `_2`.
-	 *
-	 * @param list<string> $sourcePath
-	 */
-	private function identityPath(RepresentationSchema $schema, array $sourcePath, string $fieldName): string
-	{
-		$path = $sourcePath === []
-			? $fieldName
-			: implode('.', [...$sourcePath, $fieldName]);
-
-		if (! $schema->hasPath($path)) {
-			return $path;
-		}
-
-		$n = 2;
-		do {
-			$fallback = $path . '_' . $n++;
-		} while ($schema->hasPath($fallback));
-
-		return $fallback;
 	}
 
 	/**
@@ -351,32 +173,6 @@ final class QueryRepresentationSchemaCompiler
 	}
 
 	/**
-	 * @param list<string> $sourcePath
-	 *
-	 * @return list<RepresentationFieldSchema>
-	 */
-	private function defaultFields(CollectionInterface $collection, array $sourcePath = []): array
-	{
-		$fields = [];
-
-		foreach ($collection->getFields() as $field) {
-			if ($field->isHidden()) {
-				continue;
-			}
-
-			$fields[] = new RepresentationFieldSchema(
-				$field->getName(),
-				$collection,
-				$field->getName(),
-				writable: true,
-				sourcePath: $sourcePath,
-			);
-		}
-
-		return $fields;
-	}
-
-	/**
 	 * @param list<SelectionItem> $selections
 	 *
 	 * @return list<RepresentationFieldSchema>
@@ -389,7 +185,7 @@ final class QueryRepresentationSchemaCompiler
 			$expression = $selection->getExpression();
 
 			if ($expression instanceof StarExpression && $expression->getSource() === $level) {
-				return $this->defaultFields($level->getCollection());
+				return SchemaFields::defaultFields($level->getCollection());
 			}
 
 			$field = $this->fieldFromSelection($level, $selection);
