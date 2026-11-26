@@ -6,6 +6,7 @@ namespace ON\Data\Mapper\Mapper;
 
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\MapBuilder;
+use ON\Data\Mapper\Support\MappingArguments;
 
 /**
  * Mapping argument controlling how concrete objects nest under stdClass targets.
@@ -36,13 +37,7 @@ final readonly class ObjectMapperOptions
 	 */
 	public static function fromArguments(array $arguments): self
 	{
-		$options = [];
-
-		foreach ($arguments as $argument) {
-			if ($argument instanceof self) {
-				$options[] = $argument;
-			}
-		}
+		$options = MappingArguments::ofType($arguments, self::class);
 
 		if ($options === []) {
 			return new self();
