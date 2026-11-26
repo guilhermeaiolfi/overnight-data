@@ -14,6 +14,8 @@ use Throwable;
 
 final class ConversionGateway
 {
+	private readonly FieldTypeRegistry $fieldTypes;
+
 	private MapperManager $mapperManager;
 
 	/**
@@ -29,7 +31,8 @@ final class ConversionGateway
 
 	public function __construct()
 	{
-		$this->mapperManager = new MapperManager($this);
+		$this->fieldTypes = new FieldTypeRegistry();
+		$this->mapperManager = new MapperManager($this, fieldTypes: $this->fieldTypes);
 	}
 
 	public static function createDefault(): self
@@ -96,7 +99,7 @@ final class ConversionGateway
 	 */
 	private function resolveConverter(string $fieldType, string $representation): string
 	{
-		return $this->mapperManager->resolveFieldTypeCodec($fieldType, $representation) ?? $fieldType;
+		return $this->fieldTypes->resolveFieldTypeCodec($fieldType, $representation) ?? $fieldType;
 	}
 
 	/**
@@ -118,7 +121,7 @@ final class ConversionGateway
 			return $this->routes[$routeKey];
 		}
 
-		$fieldType = $this->mapperManager->resolveFieldType($field);
+		$fieldType = $this->fieldTypes->resolveFieldType($field);
 		if ($fieldType === null) {
 			throw new FieldTypeNotFoundException(
 				sprintf("Field '%s' uses unknown FieldType '%s'.", $field->getName(), $field->getType())

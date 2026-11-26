@@ -158,6 +158,8 @@ $rows = $u
 
 Assemble may still fetch hidden required fields for identity. Implicit source primary keys land on the identity overlay for writable `track()`, not on public results. Root selections tagged `SelectionTag::INTERNAL` or `SQL_ONLY` are masked from public array and object results.
 
+When a low-level SQL query selects both public values and a hidden `*`, the compiler gives each declared source column its own private SQL alias. For a collection, this includes hidden field definitions. Physical columns absent from the definition are outside that expansion. A derived source uses its named output columns.
+
 Relation loading remains explicit through `RelationRef` branches. Prefer including them in `select()`:
 
 ```php

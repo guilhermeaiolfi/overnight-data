@@ -15,8 +15,8 @@ use ON\Data\ORM\Persistence\FlushExecutor;
 use ON\Data\ORM\Persistence\FlushResult;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
+use ON\Data\ORM\Relation\RelationMemberIdentity;
 use ON\Data\ORM\Relation\RelationStateStore;
-use ON\Data\ORM\Relation\RelationTarget;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Representation\State\Query\QueryResultHydrator;
 use ON\Data\ORM\Representation\State\RepresentationIdentifier;
@@ -181,25 +181,15 @@ final class Session implements WritableResultHandler
 			$relationSchema->getRelatedSchema(),
 		);
 
-		if ($state instanceof ToManyRelationState) {
-			$targetRecord = $this->recordForDetachTarget($targetObject);
-			if ($targetRecord instanceof RecordState) {
-				$state->removeTarget(RelationTarget::record($targetRecord));
-			} else {
-				$state->remove($targetObject);
-			}
-
-			return;
-		}
-
-		$current = $state->getTargetRelation();
-		if ($current === null) {
-			return;
-		}
-
-		$want = RelationTarget::representation($targetObject);
 		$targetRecord = $this->recordForDetachTarget($targetObject);
-		if ($current->equals($want) || ($targetRecord instanceof RecordState && $current->equals(RelationTarget::record($targetRecord)))) {
+		if ($state instanceof ToManyRelationState) {
+			$state->remove($targetRecord ?? $targetObject);
+
+			return;
+		}
+
+		$current = $state->getTarget();
+		if ($current === $targetObject || ($targetRecord !== null && RelationMemberIdentity::same($current, $targetRecord))) {
 			$state->clear();
 		}
 	}

@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
-use ON\Data\Query\Exception\LoadRuntimeException;
 use ON\Data\Query\Exception\RelationSelectionException;
-use ON\Data\Schema\RepresentationSchema;
 
 /**
  * @phpstan-type ProjectedRow array{public: array<string, mixed>, identity: array<string, mixed>}
@@ -16,20 +14,11 @@ use ON\Data\Schema\RepresentationSchema;
  */
 final class RelationOutputProcessor
 {
-	public function __construct(
-		private readonly ?RepresentationSchema $schema = null,
-	) {
-	}
-
 	/**
 	 * @return array{0: list<array<string, mixed>>, 1: list<array<string, mixed>>}
 	 */
 	public function processRoot(RootLoadBranch $root): array
 	{
-		if (! $this->schema instanceof RepresentationSchema) {
-			throw LoadRuntimeException::schemaMissing();
-		}
-
 		$publicPaths = $this->publicScalarPathsFor($root);
 		$projected = [];
 
@@ -50,10 +39,6 @@ final class RelationOutputProcessor
 	 */
 	public function processRawRows(RootLoadBranch $root, array $rows): array
 	{
-		if (! $this->schema instanceof RepresentationSchema) {
-			throw LoadRuntimeException::schemaMissing();
-		}
-
 		$publicPaths = $this->publicScalarPathsFor($root);
 		$projected = [];
 

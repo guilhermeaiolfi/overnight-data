@@ -6,24 +6,17 @@ namespace ON\Data\ORM\Persistence;
 
 use ON\Data\Definition\Collection\CollectionInterface;
 
-final class InsertCommand implements CommandInterface
+final class InsertCommand extends RowCommand
 {
-	private ExpectedAffectedRows $expectedAffectedRows;
-
 	/**
 	 * @param array<string, mixed> $values
 	 */
 	public function __construct(
-		private CollectionInterface $collection,
-		private array $values,
+		CollectionInterface $collection,
+		array $values,
 		?ExpectedAffectedRows $expectedAffectedRows = null,
 	) {
-		$this->expectedAffectedRows = $expectedAffectedRows ?? ExpectedAffectedRows::exactly(1);
-	}
-
-	public function getCollection(): CollectionInterface
-	{
-		return $this->collection;
+		parent::__construct($collection, 'Insert', ['values' => $values], $expectedAffectedRows);
 	}
 
 	/**
@@ -31,7 +24,7 @@ final class InsertCommand implements CommandInterface
 	 */
 	public function getValues(): array
 	{
-		return $this->values;
+		return $this->slots['values'];
 	}
 
 	/**
@@ -39,11 +32,6 @@ final class InsertCommand implements CommandInterface
 	 */
 	public function setValues(array $values): void
 	{
-		$this->values = $values;
-	}
-
-	public function getExpectedAffectedRows(): ExpectedAffectedRows
-	{
-		return $this->expectedAffectedRows;
+		$this->slots['values'] = $values;
 	}
 }
