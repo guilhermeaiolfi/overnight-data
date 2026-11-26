@@ -349,6 +349,8 @@ $post = map($row)->to(PostDto::class);
 
 By default, the attribute takes precedence over property `@var` and constructor `@param` list types. When the attribute supplies the item class, the mapper skips PHPDoc parsing and source-file scanning. Existing PHPDoc list types continue to work when the attribute is absent.
 
+An `array|stdClass` property, including a nullable one, uses the declared item class when the input value is an array. A `stdClass` or `null` value follows its normal mapping path.
+
 ### Collection item type extractors
 
 For `#[MapCollection(AuthorDto::class)] public ?array $authors`, `ReflectionProperty::getType()` gives the mapper and query compiler the nullable array type. A collection item extractor in `Mapper\Metadata` reads the declaration and gives them `AuthorDto`. The query compiler uses that class to decide which fields to select for the relation. During mapping, a node resolver in `Mapper\Resolver` handles a live value. `ReflectionPropertyNodeResolver` asks `BranchTargetInferrer` for the nested target, then resolves an array of author rows as a branch that maps each row to `AuthorDto`.

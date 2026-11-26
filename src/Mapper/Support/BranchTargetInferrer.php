@@ -14,6 +14,7 @@ use ON\Data\Mapper\Metadata\ListItemTypeExtractorInterface;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ReflectionNamedType;
 use ReflectionProperty;
+use ReflectionUnionType;
 use stdClass;
 
 final class BranchTargetInferrer
@@ -153,6 +154,14 @@ final class BranchTargetInferrer
 		ReflectionProperty $property,
 	): ?array {
 		$type = $property->getType();
+		if ($type instanceof ReflectionUnionType && is_array($node->getValue()) && $this->isArrayOrStdClass($type)) {
+			$listTarget = $this->listItemTypes->extract($property);
+
+			return $listTarget === null
+				? null
+				: $this->nestedTarget($listTarget, true, $this->withoutDirectDefinitions($node->getArguments()));
+		}
+
 		if (! $type instanceof ReflectionNamedType) {
 			return null;
 		}
@@ -184,6 +193,15 @@ final class BranchTargetInferrer
 		}
 
 		return null;
+	}
+
+	private function isArrayOrStdClass(ReflectionUnionType $type): bool
+	{
+		$members = array_map(strval(...), $type->getTypes());
+
+		return in_array('array', $members, true)
+			&& in_array(stdClass::class, $members, true)
+			&& array_diff($members, ['array', stdClass::class, 'null']) === [];
 	}
 
 	/**
