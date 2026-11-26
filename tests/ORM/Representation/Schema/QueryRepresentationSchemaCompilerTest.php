@@ -6,7 +6,6 @@ namespace Tests\ON\Data\ORM\Representation\Schema;
 
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Representation\Schema\Query\QueryRepresentationPlan;
-use ON\Data\ORM\Representation\Schema\Query\QuerySourceIdentities;
 use function ON\Data\Query\query;
 use ON\Data\Query\Schema\QueryRepresentationSchemaCompiler;
 use ON\Data\Query\SelectQuery;
@@ -130,7 +129,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 			->select($query->id, $query->company->name->as('name')));
 
 		$compilation = $this->preparePlan($query);
-		$schema = $compilation->getSchema();
+		$schema = $compilation->getFetchSchema();
 
 		self::assertTrue($schema->hasField('id'));
 		self::assertTrue($schema->hasField('name'));
@@ -144,7 +143,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertSame('company.id', $companyIdPath);
 		self::assertTrue($schema->getField($companyIdPath)->isImplicit());
 		self::assertCount(2, $query->getSelections()->getAll());
-		$companySource = $this->sourceAt($compilation->getSources(), ['company']);
+		$companySource = $this->sourceAt($compilation->getFetchSchema()->getSources(), ['company']);
 		self::assertSame($companyIdPath, $companySource->getFieldPath('id'));
 	}
 
@@ -181,8 +180,8 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 
 		self::assertCount(2, $resultQuery->getSelections()->getAll());
 		self::assertSame(
-			$this->implicitSourceFieldPath($compilation->getSchema(), ['company'], 'id'),
-			$this->sourceAt($compilation->getSources(), ['company'])->getFieldPath('id'),
+			$this->implicitSourceFieldPath($compilation->getFetchSchema(), ['company'], 'id'),
+			$this->sourceAt($compilation->getFetchSchema()->getSources(), ['company'])->getFieldPath('id'),
 		);
 	}
 
@@ -196,11 +195,10 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		$compilation = $this->preparePlan($query);
 
 		self::assertInstanceOf(QueryRepresentationPlan::class, $compilation);
-		self::assertSame($compilation->getSchema()->getSources(), $compilation->getSources());
-		self::assertTrue($compilation->getSchema()->getField('name')->getSourcePath() === ['company']);
+		self::assertTrue($compilation->getFetchSchema()->getField('name')->getSourcePath() === ['company']);
 		self::assertSame(
-			$this->implicitSourceFieldPath($compilation->getSchema(), ['company'], 'id'),
-			$this->sourceAt($compilation->getSources(), ['company'])->getFieldPath('id'),
+			$this->implicitSourceFieldPath($compilation->getFetchSchema(), ['company'], 'id'),
+			$this->sourceAt($compilation->getFetchSchema()->getSources(), ['company'])->getFieldPath('id'),
 		);
 	}
 
@@ -216,7 +214,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 			));
 
 		$compilation = $this->preparePlan($query);
-		$sources = $compilation->getSources();
+		$sources = $compilation->getFetchSchema()->getSources();
 
 		self::assertCount(2, $sources);
 		self::assertTrue(RepresentationSource::listHasNonRoot($sources));
@@ -228,8 +226,8 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 		self::assertFalse($sources[1]->hasField('companyName'));
 		self::assertSame('companyName', $sources[1]->getFieldPath('name'));
 		self::assertSame('companyId', $sources[1]->getFieldPath('id'));
-		self::assertFalse($compilation->getSchema()->getField('id')->shouldSkipWhenMissing());
-		self::assertTrue($compilation->getSchema()->getField('companyName')->shouldSkipWhenMissing());
+		self::assertFalse($compilation->getFetchSchema()->getField('id')->shouldSkipWhenMissing());
+		self::assertTrue($compilation->getFetchSchema()->getField('companyName')->shouldSkipWhenMissing());
 	}
 
 	public function testComputedExpressionsDoNotCreateRepresentationSourceFields(): void
@@ -240,9 +238,9 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 
 		$compilation = $this->preparePlan($query);
 
-		self::assertFalse($compilation->getSchema()->hasField('post_count'));
-		self::assertCount(1, $compilation->getSources());
-		self::assertNull($compilation->getSources()[0]->getFieldPath('post_count'));
+		self::assertFalse($compilation->getFetchSchema()->hasField('post_count'));
+		self::assertCount(1, $compilation->getFetchSchema()->getSources());
+		self::assertNull($compilation->getFetchSchema()->getSources()[0]->getFieldPath('post_count'));
 	}
 
 	public function testSameTerminalCollectionFlatProjectionKeepsDistinctSourcePaths(): void
@@ -253,7 +251,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 			->select($query->name, $query->manager->name->as('managerName')));
 
 		$compilation = $this->preparePlan($query);
-		$schema = $compilation->getSchema();
+		$schema = $compilation->getFetchSchema();
 
 		self::assertSame('users', $schema->getField('name')->getCollectionName());
 		self::assertSame('users', $schema->getField('managerName')->getCollectionName());
@@ -272,7 +270,7 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 			->select($query->company->name->as('company_name')));
 
 		$compilation = $this->preparePlan($query);
-		$schema = $compilation->getSchema();
+		$schema = $compilation->getFetchSchema();
 
 		self::assertTrue($schema->hasField('company_name'));
 		self::assertTrue($schema->hasField('company.id'));
@@ -622,9 +620,8 @@ final class QueryRepresentationSchemaCompilerTest extends TestCase
 	private function preparePlan(SelectQuery $query): QueryRepresentationPlan
 	{
 		$schema = $this->compiler->compile($query);
-		$identities = new QuerySourceIdentities($schema->getSources());
 
-		return new QueryRepresentationPlan($schema, $identities);
+		return new QueryRepresentationPlan($schema);
 	}
 
 	/**

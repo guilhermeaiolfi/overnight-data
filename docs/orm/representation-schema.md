@@ -137,7 +137,7 @@ lineTotal → expression AST, path lineTotal
 
 For a writable query, `QueryResultHydrator` binds sources using the assembled row and its identity overlay, including hidden source IDs such as `company.id`. It tracks the returned objects and registers loaded relation membership and completeness. Tracking requires a fetched root identity.
 
-Writable prepare builds `QuerySourceIdentities` from schema sources (Implicit PK paths such as `company.id`). It does not add Query `INTERNAL` selections.
+Writable prepare captures the schema for the fetch. Hydration reads each source's primary key from its bound paths, including implicit paths such as `company.id`.
 
 ---
 
@@ -173,7 +173,6 @@ identity overlay, not the public row.
 
 Plain own-field reads skip assemble and skip schema compile (executor column
 names already match paths).
-
 
 ### `forPrimaryKey()`
 

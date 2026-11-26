@@ -122,7 +122,7 @@ final class RepresentationArchitectureTest extends TestCase
 
 	public function testWritablePrepareCompilesViaSelectQueryProjection(): void
 	{
-		$contents = file_get_contents(dirname(__DIR__, 3) . '/src/ORM/Representation/State/Query/WritableQueryResultTracker.php');
+		$contents = file_get_contents(dirname(__DIR__, 3) . '/src/ORM/Representation/State/Query/QueryResultHydrator.php');
 
 		self::assertIsString($contents);
 		self::assertStringContainsString('$query->projection()', $contents);

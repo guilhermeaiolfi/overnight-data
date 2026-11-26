@@ -7,7 +7,6 @@ namespace Tests\ON\Data\ORM\Query;
 use ON\Data\Database\QueryExecutorInterface;
 use ON\Data\Definition\Registry;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Representation\State\Query\WritableQueryResultTracker;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Session;
 use ON\Data\Query\Exception\ObjectExportException;
@@ -149,9 +148,8 @@ final class WritableQueryExportTest extends TestCase
 		$user->posts = [$post];
 
 		$session = new Session(new RecordingCommandExecutor());
-		$tracker = new WritableQueryResultTracker($session);
-		$compilation = $tracker->prepare($query);
-		$tracker->trackOne($compilation, $user, ['id' => 1, 'name' => 'Ada']);
+		$compilation = $session->prepare($query);
+		$session->track($query, $compilation, [['id' => 1, 'name' => 'Ada']], [$user]);
 
 		self::assertTrue($session->getRepresentations()->has($user));
 		self::assertTrue($session->getRepresentations()->has($post));
@@ -226,6 +224,115 @@ final class WritableQueryExportTest extends TestCase
 		$query->to('App\\User')->writable($this->session());
 	}
 
+	public function testTrackAllReusesCompiledTemplateForRelatedSchemas(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = new SelectQuery($users);
+		$query->select($query->name);
+		$query->posts->select('title');
+
+		$session = new Session(new RecordingCommandExecutor());
+		$compilation = $session->prepare($query);
+
+		$first = $this->userWithPosts(1, 'Ada', 10, 'Hello');
+		$second = $this->userWithPosts(2, 'Grace', 11, 'World');
+
+		$session->track($query, $compilation, [
+			['id' => 1, 'name' => 'Ada'],
+			['id' => 2, 'name' => 'Grace'],
+		], [$first, $second]);
+
+		$firstState = $session->getRepresentations()->get($first);
+		$secondState = $session->getRepresentations()->get($second);
+		self::assertInstanceOf(RepresentationState::class, $firstState);
+		self::assertInstanceOf(RepresentationState::class, $secondState);
+
+		self::assertSame(
+			$firstState->getSchema()->getRelation('posts')->getRelatedSchema(),
+			$secondState->getSchema()->getRelation('posts')->getRelatedSchema(),
+		);
+	}
+
+	public function testTrackAllCreatesDistinctRepresentationStates(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = new SelectQuery($users);
+		$query->select($query->name);
+
+		$session = new Session(new RecordingCommandExecutor());
+		$compilation = $session->prepare($query);
+
+		$first = $this->userObject(1, 'Ada');
+		$second = $this->userObject(2, 'Grace');
+
+		$session->track($query, $compilation, [
+			['id' => 1, 'name' => 'Ada'],
+			['id' => 2, 'name' => 'Grace'],
+		], [$first, $second]);
+
+		$firstState = $session->getRepresentations()->get($first);
+		$secondState = $session->getRepresentations()->get($second);
+
+		self::assertInstanceOf(RepresentationState::class, $firstState);
+		self::assertInstanceOf(RepresentationState::class, $secondState);
+		self::assertNotSame($firstState, $secondState);
+	}
+
+	public function testTrackOneTracksObjectWithPrecompiledSchema(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = new SelectQuery($users);
+		$query->select($query->name);
+
+		$session = new Session(new RecordingCommandExecutor());
+		$user = $this->userObject(1, 'Ada');
+		$compilation = $session->prepare($query);
+
+		$session->track($query, $compilation, [['id' => 1, 'name' => 'Ada']], [$user]);
+
+		self::assertTrue($session->getRepresentations()->has($user));
+		self::assertTrue($session->getRepresentations()->get($user)?->getSchema()->hasField('name'));
+	}
+
+	public function testTrackWithoutFetchedIdentityThrows(): void
+	{
+		$registry = $this->makeRegistry();
+		$users = $registry->getCollection('users');
+		$query = new SelectQuery($users);
+		$query->select($query->name);
+
+		$session = new Session(new RecordingCommandExecutor());
+		$compilation = $session->prepare($query);
+
+		$this->expectException(StateException::class);
+		$this->expectExceptionMessage("writable() does not add them, and results without identity are never tracked");
+
+		$session->track($query, $compilation, [['name' => 'Ada']], [$this->userObject(1, 'Ada')]);
+	}
+
+	private function userWithPosts(int $userId, string $name, int $postId, string $title): stdClass
+	{
+		$user = $this->userObject($userId, $name);
+		$post = new stdClass();
+		$post->id = $postId;
+		$post->title = $title;
+		$user->posts = [$post];
+
+		return $user;
+	}
+
+	private function userObject(int $id, string $name): stdClass
+	{
+		$user = new stdClass();
+		$user->id = $id;
+		$user->name = $name;
+
+		return $user;
+	}
+
 	private function session(): Session
 	{
 		return new Session(new RecordingCommandExecutor());
@@ -268,150 +375,6 @@ final class WritableQueryExportTest extends TestCase
 		}
 
 		return $states;
-	}
-}
-
-final class WritableQueryResultTrackerTest extends TestCase
-{
-	public function testTrackAllReusesCompiledTemplateForRelatedSchemas(): void
-	{
-		$registry = $this->makeRegistryWithPosts();
-		$users = $registry->getCollection('users');
-		$query = new SelectQuery($users);
-		$query->select($query->name);
-		$query->posts->select('title');
-
-		$session = new Session(new RecordingCommandExecutor());
-		$tracker = new WritableQueryResultTracker($session);
-		$compilation = $tracker->prepare($query);
-
-		$first = $this->userWithPosts(1, 'Ada', 10, 'Hello');
-		$second = $this->userWithPosts(2, 'Grace', 11, 'World');
-
-		$tracker->trackAll($compilation, [$first, $second], [
-			['id' => 1, 'name' => 'Ada'],
-			['id' => 2, 'name' => 'Grace'],
-		]);
-
-		$firstState = $session->getRepresentations()->get($first);
-		$secondState = $session->getRepresentations()->get($second);
-		self::assertInstanceOf(RepresentationState::class, $firstState);
-		self::assertInstanceOf(RepresentationState::class, $secondState);
-
-		self::assertSame(
-			$firstState->getSchema()->getRelation('posts')->getRelatedSchema(),
-			$secondState->getSchema()->getRelation('posts')->getRelatedSchema(),
-		);
-	}
-
-	public function testTrackAllCreatesDistinctRepresentationStates(): void
-	{
-		$registry = $this->makeRegistry();
-		$users = $registry->getCollection('users');
-		$query = new SelectQuery($users);
-		$query->select($query->name);
-
-		$session = new Session(new RecordingCommandExecutor());
-		$tracker = new WritableQueryResultTracker($session);
-		$compilation = $tracker->prepare($query);
-
-		$first = $this->userObject(1, 'Ada');
-		$second = $this->userObject(2, 'Grace');
-
-		$tracker->trackAll($compilation, [$first, $second], [
-			['id' => 1, 'name' => 'Ada'],
-			['id' => 2, 'name' => 'Grace'],
-		]);
-
-		$firstState = $session->getRepresentations()->get($first);
-		$secondState = $session->getRepresentations()->get($second);
-
-		self::assertInstanceOf(RepresentationState::class, $firstState);
-		self::assertInstanceOf(RepresentationState::class, $secondState);
-		self::assertNotSame($firstState, $secondState);
-	}
-
-	public function testTrackOneTracksObjectWithPrecompiledSchema(): void
-	{
-		$registry = $this->makeRegistry();
-		$users = $registry->getCollection('users');
-		$query = new SelectQuery($users);
-		$query->select($query->name);
-
-		$session = new Session(new RecordingCommandExecutor());
-		$tracker = new WritableQueryResultTracker($session);
-		$user = $this->userObject(1, 'Ada');
-		$compilation = $tracker->prepare($query);
-
-		$tracker->trackOne($compilation, $user, ['id' => 1, 'name' => 'Ada']);
-
-		self::assertTrue($session->getRepresentations()->has($user));
-		self::assertTrue($session->getRepresentations()->get($user)?->getSchema()->hasField('name'));
-	}
-
-	public function testTrackWithoutFetchedIdentityThrows(): void
-	{
-		$registry = $this->makeRegistry();
-		$users = $registry->getCollection('users');
-		$query = new SelectQuery($users);
-		$query->select($query->name);
-
-		$session = new Session(new RecordingCommandExecutor());
-		$tracker = new WritableQueryResultTracker($session);
-		$compilation = $tracker->prepare($query);
-
-		$this->expectException(StateException::class);
-		$this->expectExceptionMessage("writable() does not add them, and results without identity are never tracked");
-
-		$tracker->trackOne($compilation, $this->userObject(1, 'Ada'), ['name' => 'Ada']);
-	}
-
-	private function makeRegistry(): Registry
-	{
-		$registry = new Registry();
-
-		$registry->collection('users')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('name', 'string')->end();
-
-		$registry->collection('posts')
-			->primaryKey('id')
-			->field('id', 'int')->end()
-			->field('title', 'string')->end()
-			->field('user_id', 'int')->end();
-
-		$registry->getCollection('users')
-			->hasMany('posts', 'posts')
-			->innerKey('id')
-			->outerKey('user_id');
-
-		return $registry;
-	}
-
-	private function makeRegistryWithPosts(): Registry
-	{
-		return $this->makeRegistry();
-	}
-
-	private function userWithPosts(int $userId, string $name, int $postId, string $title): stdClass
-	{
-		$user = $this->userObject($userId, $name);
-		$post = new stdClass();
-		$post->id = $postId;
-		$post->title = $title;
-		$user->posts = [$post];
-
-		return $user;
-	}
-
-	private function userObject(int $id, string $name): stdClass
-	{
-		$user = new stdClass();
-		$user->id = $id;
-		$user->name = $name;
-
-		return $user;
 	}
 }
 

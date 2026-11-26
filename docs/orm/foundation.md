@@ -164,7 +164,7 @@ Classic ORMs usually map identity to entity object. This ORM maps identity to re
 
 The store is responsible for aliasing both handles to the same `RecordState`. Scalar insert/flush logic calls `RecordStateStore::indexKey($state)` after assigning a generated key so keyed references can resolve the same state that was previously known only by local state hash.
 
-`QuerySourceIdentities` reads primary-key paths from the assembled identity overlay using prepared schema sources. It holds neither per-row records nor a second locator map. Source paths distinguish different occurrences of the same collection. Attachment resolves concrete records from structural schemas.
+`RepresentationSourceReader` reads primary keys from the assembled identity overlay at the paths bound by each schema source. Source paths distinguish different occurrences of the same collection. Attachment resolves concrete records from structural schemas.
 
 `RecordStateStore` is not an object identity store. It strongly owns record state for the current session/unit of work. `RelationStateStore` also strongly owns to-many and to-one relation runtime state for the session. `RepresentationIntentStore` uses weak object keys for staged create/update intent and source operations.
 
@@ -398,7 +398,7 @@ Several field updates can target one record. Persistence planning reads that rec
 | --- | --- |
 | Public write operations and staged intent admission | `Session` |
 | Admit inbound create and patch graphs | `RepresentationAdoptionEngine` |
-| Prepare and track writable query results | `WritableQueryResultTracker` / `QueryResultHydrator` |
+| Prepare and track writable query results | `QueryResultHydrator` |
 | Field conflicts, sync planning, and batch application | `ScalarRepresentationSynchronizer` |
 | Reconcile exposed relation values with runtime state | `RelationRepresentationSynchronizer` |
 | Translate relation deltas into persistence work | `RelationPersistencePlanner` and the relation's configured planner |
@@ -406,7 +406,7 @@ Several field updates can target one record. Persistence planning reads that rec
 | Schedule scalar/dependent commands and finalize record state | `FlushScheduler` |
 | Convert command values or execute backend commands | `CommandExecutor` / `SqlCommandExecutor` |
 
-`WritableQueryResultTracker` passes results to `QueryResultHydrator` to bind sources and track loaded relations. `Session::identify()` attaches existing references by key. `Session::adopt()` registers an already-built state and its records.
+`QueryResultHydrator` binds query results to sources and tracks loaded relations. `Session::identify()` attaches existing references by key. `Session::adopt()` registers an already-built state and its records.
 
 Normal callers use `Session::flush()`. `FlushScheduler::run()` is a lower-level scheduling operation, not a substitute for session synchronization, relation planning, or transactional orchestration. See [`persistence.md`](./persistence.md) for those boundaries.
 

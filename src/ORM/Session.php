@@ -19,7 +19,6 @@ use ON\Data\ORM\Relation\RelationMemberIdentity;
 use ON\Data\ORM\Relation\RelationStateStore;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Representation\State\Query\QueryResultHydrator;
-use ON\Data\ORM\Representation\State\Query\WritableQueryResultTracker;
 use ON\Data\ORM\Representation\State\RepresentationIdentifier;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
@@ -44,7 +43,7 @@ final class Session implements WritableResultHandler
 	private FlushExecutor $flusher;
 	private RepresentationSyncer $syncer;
 	private RepresentationAdoptionEngine $adoptionEngine;
-	private ?WritableQueryResultTracker $writableResultTracker = null;
+	private QueryResultHydrator $hydrator;
 
 	public function __construct(
 		CommandExecutorInterface $executor,
@@ -55,6 +54,10 @@ final class Session implements WritableResultHandler
 		private readonly ?ConversionGateway $gateway = null,
 	) {
 		$this->context = $context ?? new SessionContext();
+		$this->hydrator = new QueryResultHydrator(
+			$this->context,
+			static fn (): RepresentationReader => new RepresentationReader($gateway),
+		);
 		$this->adoptionEngine = new RepresentationAdoptionEngine($gateway);
 		$this->syncer = $syncer ?? new RepresentationSyncer(gateway: $gateway);
 		$this->flusher = $flusher === null
@@ -64,7 +67,7 @@ final class Session implements WritableResultHandler
 
 	public function prepare(SelectQuery $query): WritablePreparation
 	{
-		return $this->writableResultTracker()->prepare($query);
+		return $this->hydrator->prepare($query);
 	}
 
 	public function track(
@@ -73,7 +76,7 @@ final class Session implements WritableResultHandler
 		array $rawRows,
 		array $objects,
 	): void {
-		$this->writableResultTracker()->track($query, $preparation, $rawRows, $objects);
+		$this->hydrator->track($query, $preparation, $rawRows, $objects);
 	}
 
 	public function getRecords(): RecordStateStore
@@ -112,24 +115,7 @@ final class Session implements WritableResultHandler
 		RepresentationState $state,
 		RepresentationAttachmentMode $mode = RepresentationAttachmentMode::Add,
 	): RepresentationState {
-		$reps = $this->getRepresentations();
-		$records = $this->getRecords();
-
-		if ($mode === RepresentationAttachmentMode::Add && $reps->has($representation)) {
-			throw new SyncException('Cannot attach representation because it is already tracked.');
-		}
-
-		foreach ($state->getUniqueRecords() as $record) {
-			$records->add($record);
-		}
-
-		if ($mode === RepresentationAttachmentMode::Replace && $reps->has($representation)) {
-			$reps->remove($representation);
-		}
-
-		$reps->add($representation, $state);
-
-		return $state;
+		return $this->context->attachRepresentation($representation, $state, $mode);
 	}
 
 	public function update(
@@ -431,14 +417,6 @@ final class Session implements WritableResultHandler
 			$ownerRecord->getCollection(),
 			$relation,
 			$related,
-		);
-	}
-
-	private function writableResultTracker(): WritableQueryResultTracker
-	{
-		return $this->writableResultTracker ??= new WritableQueryResultTracker(
-			$this,
-			new QueryResultHydrator(fn (): RepresentationReader => new RepresentationReader($this->gateway)),
 		);
 	}
 }

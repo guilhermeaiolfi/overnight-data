@@ -6,10 +6,7 @@ namespace ON\Data\ORM\Representation\State;
 
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
-use ON\Data\ORM\Record\RecordState;
-use ON\Data\ORM\Representation\Sync\ObjectRepresentationReader;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
-use ON\Data\ORM\Representation\Sync\RepresentationSourceReader;
 use ON\Data\ORM\SessionContext;
 use ON\Data\Schema\RepresentationSchema;
 
@@ -27,7 +24,9 @@ final class RepresentationIdentifier
 			throw new StateException('Cannot identify representation with a schema for a different collection.');
 		}
 		$visited = [];
-		$this->attachObject($representation, $schema, $key, $session, $visited, $reader ?? new RepresentationReader());
+		$binder = new CleanRepresentationBinder($session);
+		$this->attachObject($representation, $schema, $key, $binder, $visited, $reader ?? new RepresentationReader());
+		$binder->commit();
 	}
 
 	/** @param array<int, true> $visited */
@@ -35,7 +34,7 @@ final class RepresentationIdentifier
 		object $representation,
 		RepresentationSchema $schema,
 		?Key $rootKey,
-		SessionContext $session,
+		CleanRepresentationBinder $binder,
 		array &$visited,
 		RepresentationReader $operation,
 	): void {
@@ -46,57 +45,21 @@ final class RepresentationIdentifier
 		$visited[$id] = true;
 		$reader = $operation->withObject($representation);
 
-		$representations = $session->getRepresentations();
-		$state = $representations->get($representation);
+		$state = $binder->getRepresentation($representation);
 		if ($state === null) {
-			$state = $this->bind($reader, $schema, $rootKey, $session);
-			foreach ($state->getUniqueRecords() as $record) {
-				$session->getRecords()->add($record);
+			if ($schema->getSources() === [] && $schema->getRelations() === []) {
+				throw new StateException('Cannot identify representation with an empty schema.');
 			}
-			$representations->add($representation, $state);
+			$records = $binder->bind($schema, $reader->readPath(...), $rootKey);
+			$state = RepresentationState::fromRecords($schema, $records);
+			$binder->stageRepresentation($representation, $state);
 		}
 
 		foreach ($state->getSchema()->getRelations() as $relation) {
 			foreach ($reader->readRelatedObjects($relation, $this->relationError(...)) as $child) {
-				$this->attachObject($child, $relation->getRelatedSchema(), null, $session, $visited, $operation);
+				$this->attachObject($child, $relation->getRelatedSchema(), null, $binder, $visited, $operation);
 			}
 		}
-	}
-
-	private function bind(
-		ObjectRepresentationReader $reader,
-		RepresentationSchema $schema,
-		?Key $rootKey,
-		SessionContext $session,
-	): RepresentationState {
-		$sources = $schema->getSources();
-		$bound = [];
-		if ($sources === []) {
-			if ($schema->getRelations() === []) {
-				throw new StateException('Cannot identify representation with an empty schema.');
-			}
-			$key = $rootKey ?? throw StateException::writableResultMissingIdentity($schema->getCollectionName(), $schema->getCollection()->getPrimaryKey());
-			$bound[''] = $this->cleanRecord($session, $key, $key->getValues());
-		}
-
-		foreach ($sources as $source) {
-			[$reads, $values] = RepresentationSourceReader::read($source, $reader->readPath(...));
-			$key = RepresentationSourceReader::resolveKey($source, $reads, $source->isRoot() ? $rootKey : null)
-				?? throw StateException::writableResultMissingIdentity($source->getCollection()->getName(), $source->getCollection()->getPrimaryKey());
-			$bound[$source->getPathKey()] = $this->cleanRecord($session, $key, $values);
-		}
-
-		return RepresentationState::fromRecords($schema, $bound);
-	}
-
-	/** @param array<string, mixed> $values */
-	private function cleanRecord(SessionContext $session, Key $key, array $values): RecordState
-	{
-		return $session->getRecords()->getActive($key, sprintf(
-			"Cannot build projection representation for collection '%s' because key '%s' is already tracked as removed.",
-			$key->getCollection()->getName(),
-			$key->getDebugString(),
-		)) ?? RecordState::clean($key, $values);
 	}
 
 	private function relationError(string $message): StateException
