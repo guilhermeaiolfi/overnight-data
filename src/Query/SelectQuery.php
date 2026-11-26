@@ -1164,7 +1164,7 @@ final class SelectQuery implements QuerySourceInterface
 		}
 
 		foreach ($relationSelections->getAll() as $relation) {
-			$this->assertNoLevelSelectionCollision($relation);
+			$this->assertNoLevelSelectionCollision($relation, $relationSelections);
 		}
 	}
 
@@ -1173,30 +1173,23 @@ final class SelectQuery implements QuerySourceInterface
 	 * explicit alias/path at that level cannot collide with one of its own
 	 * selected child relation names.
 	 */
-	private function assertNoLevelSelectionCollision(RelationSelection $relation): void
+	private function assertNoLevelSelectionCollision(RelationSelection $relation, RelationSelectionTree $tree): void
 	{
-		$relationRef = $relation->getRelationRef();
-		$childNames = [];
-
-		foreach ($relationRef->getRelationRefs() as $child) {
-			if ($child->isSelected()) {
-				$childNames[$child->getName()] = true;
-			}
-		}
+		$childNames = $tree->childrenOf($relation);
 
 		if ($childNames === []) {
 			return;
 		}
 
-		foreach ($relationRef->getSelections()->getExplicit() as $selection) {
+		foreach ($relation->getSelections()->getExplicit() as $selection) {
 			$expression = $selection->getExpression();
 
 			if (! $expression instanceof AliasedExpression) {
 				continue;
 			}
 
-			if (isset($childNames[$expression->getAlias()])) {
-				throw RelationSelectionException::levelAliasCollision($relationRef->getPath(), $expression->getAlias());
+			if (($childNames[$expression->getAlias()] ?? null)?->isVisible()) {
+				throw RelationSelectionException::levelAliasCollision($relation->getPath(), $expression->getAlias());
 			}
 		}
 	}

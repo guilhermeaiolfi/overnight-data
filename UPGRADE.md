@@ -11,6 +11,7 @@
 - Rename imports and instantiations of `ConvertingCommandExecutor` to `CommandExecutor`. Pass any custom `CommandValueResolver` to `CommandExecutor` or `SqlRuntimeFactory`. Direct callers of `SqlCommandExecutor` must supply storage values and can pass a custom dialect as the second argument.
 - Create one `RepresentationReader` per operation and bind DTOs with `withObject()` before reading paths or relations. Use `PathReadResult::getValue()` to get a present value. It throws `SyncException` for a missing or invalid path.
 - To customize mapping in low-level ORM helpers, pass the gateway to synchronizer and adoption constructors, a fresh reader to `RepresentationIdentifier::attach()`, or a reader factory to `QueryResultHydrator`. `Session` handles this wiring.
+- Build each relation selection tree from a single query. Visible intermediate relations participate in output alias collision checks.
 
 ## What documentation means
 
