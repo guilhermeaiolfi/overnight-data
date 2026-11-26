@@ -15,6 +15,7 @@
 - Use `Session::prepare()` and `Session::track()` for direct writable-query tracking. `QueryRepresentationPlan::getFetchSchema()` returns the prepared schema.
 - Direct `QueryResultHydrator` callers now pass `SessionContext` to the constructor, before the optional reader factory. Replace `hydrate($object, $schema, $row, $identities, $context)` with `hydrate($object, $schema, $row, $rootKey)` where `$rootKey` is optional. The hydrator reads other identities from the schema and row.
 - If two paths in the same projection identify the same row, their values for any shared field must agree under PHP strict comparison. An alias conflict during `Session::identify()` or writable query tracking raises an exception naming the collection, key, and field. Correct the conflicting values and retry the operation with the same session.
+- An update whose schema contains only relations now uses the supplied owner identity. Previously it could schedule an insert for a new owner.
 
 ## What documentation means
 
