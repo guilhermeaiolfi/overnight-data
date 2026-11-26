@@ -8,6 +8,7 @@ use LogicException;
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
+use ON\Data\Mapper\Policy\UnknownKeyPolicyInterface;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Support\ObjectPropertyMatcher;
 use ReflectionClass;
@@ -105,7 +106,7 @@ final class ObjectWriter implements WriterInterface
 	): void {
 		$objectState = $this->requireState($state);
 		if ($objectState->target !== null) {
-			$this->applyWrite($objectState->target, $name, $value, $node);
+			$this->applyWrite($objectState->target, $name, $value, $node, $node->getOptions()->getUnknownKeyPolicy());
 
 			return;
 		}
@@ -133,8 +134,13 @@ final class ObjectWriter implements WriterInterface
 		}
 
 		$reflection = $this->getReflection($target);
+		$unknownKeyPolicy = $node->getOptions()->getUnknownKeyPolicy();
+		if ($unknownKeyPolicy !== null) {
+			$this->handleUnknownBufferedKeys($objectState, $reflection, $unknownKeyPolicy);
+		}
 		[$object, $consumed] = $this->instantiateUsingResolvedValues($reflection, $objectState->values);
 
+		// The policy has already seen any unknown keys in these buffered writes.
 		foreach ($objectState->writes as $write) {
 			if (isset($consumed[(string) $write['name']])) {
 				continue;
@@ -185,9 +191,9 @@ final class ObjectWriter implements WriterInterface
 		$this->validatedTargets[$class] = true;
 	}
 
-	private function getPropertyMatcher(object $target): ObjectPropertyMatcher
+	private function getPropertyMatcher(object|string $target): ObjectPropertyMatcher
 	{
-		$class = $target::class;
+		$class = $this->getTargetClass($target);
 
 		return $this->propertyMatchers[$class]
 			??= new ObjectPropertyMatcher($this->getReflection($target));
@@ -273,6 +279,27 @@ final class ObjectWriter implements WriterInterface
 		return false;
 	}
 
+	/** @param ReflectionClass<object> $reflection */
+	private function handleUnknownBufferedKeys(
+		ObjectWriterState $state,
+		ReflectionClass $reflection,
+		UnknownKeyPolicyInterface $policy,
+	): void {
+		$parameterNames = [];
+		foreach ($reflection->getConstructor()?->getParameters() ?? [] as $parameter) {
+			$parameterNames[$parameter->getName()] = true;
+		}
+
+		$class = $reflection->getName();
+		$matcher = $this->getPropertyMatcher($class);
+		foreach ($state->writes as $write) {
+			$name = $write['name'];
+			if (! isset($parameterNames[$name]) && $matcher->match($name) === null) {
+				$policy->handle($write['node']->getPath(), $class);
+			}
+		}
+	}
+
 	/**
 	 * @param array<string|int, mixed> $valuesByName
 	 *
@@ -332,6 +359,7 @@ final class ObjectWriter implements WriterInterface
 		string|int $name,
 		mixed $value,
 		MappingNode $node,
+		?UnknownKeyPolicyInterface $unknownKeyPolicy = null,
 	): void {
 		if ($target instanceof stdClass) {
 			$target->{(string) $name} = $value;
@@ -342,6 +370,8 @@ final class ObjectWriter implements WriterInterface
 		$reflection = $this->getReflection($target);
 		$property = $this->getPropertyMatcher($target)->match($name);
 		if ($property === null) {
+			$unknownKeyPolicy?->handle($node->getPath(), $target::class);
+
 			return;
 		}
 

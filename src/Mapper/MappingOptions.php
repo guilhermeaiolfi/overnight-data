@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Mapper;
 
 use ON\Data\Mapper\Mapper\MapperInterface;
+use ON\Data\Mapper\Policy\UnknownKeyPolicyInterface;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
 use ON\Data\Mapper\Writer\WriterInterface;
@@ -30,6 +31,7 @@ final class MappingOptions
 		private ?FieldMap $fieldMap = null,
 		private bool $collection = false,
 		private bool $shallow = false,
+		private ?UnknownKeyPolicyInterface $unknownKeyPolicy = null,
 	) {
 	}
 
@@ -99,6 +101,11 @@ final class MappingOptions
 	public function isShallow(): bool
 	{
 		return $this->shallow;
+	}
+
+	public function getUnknownKeyPolicy(): ?UnknownKeyPolicyInterface
+	{
+		return $this->unknownKeyPolicy;
 	}
 
 	/**
@@ -203,6 +210,14 @@ final class MappingOptions
 	{
 		$clone = clone $this;
 		$clone->shallow = $shallow;
+
+		return $clone;
+	}
+
+	public function withUnknownKeyPolicy(?UnknownKeyPolicyInterface $policy): self
+	{
+		$clone = clone $this;
+		$clone->unknownKeyPolicy = $policy;
 
 		return $clone;
 	}

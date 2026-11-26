@@ -8,6 +8,7 @@ use JsonException;
 use ON\Data\Mapper\Exception\InvalidMapTargetException;
 use ON\Data\Mapper\Exception\MappingException;
 use ON\Data\Mapper\Mapper\MapperInterface;
+use ON\Data\Mapper\Policy\UnknownKeyPolicyInterface;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
 use ON\Data\Mapper\Writer\WriterInterface;
@@ -112,6 +113,16 @@ final class MapBuilder
 	public function shallow(bool $shallow = true): self
 	{
 		return $this->withOptions($this->options->withShallow($shallow));
+	}
+
+	/** @param class-string<UnknownKeyPolicyInterface>|UnknownKeyPolicyInterface|null $policy */
+	public function unknownKeyPolicy(string|UnknownKeyPolicyInterface|null $policy): self
+	{
+		if (is_string($policy)) {
+			$policy = $this->options->getGateway()->getMapperManager()->createUnknownKeyPolicy($policy);
+		}
+
+		return $this->withOptions($this->options->withUnknownKeyPolicy($policy));
 	}
 
 	public function to(mixed $target): mixed
