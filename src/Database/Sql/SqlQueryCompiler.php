@@ -832,7 +832,7 @@ final class SqlQueryCompiler
 			);
 
 			return SqlFragment::withParameters(
-				'(' . $inner->sql() . ') AS ' . $this->quote($from->requireAlias()),
+				'(' . $inner->sql() . ') AS ' . $this->quote($from->getAlias()),
 				$inner->parameters(),
 			);
 		}
