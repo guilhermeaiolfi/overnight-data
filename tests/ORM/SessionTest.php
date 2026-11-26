@@ -161,7 +161,7 @@ final class SessionTest extends TestCase
 		$user = new SessionMappedUser(11, 'Owner', $profile, [$post]);
 		$gateway = ConversionGateway::createDefault();
 		$gateway->getMapperManager()->prepend(SessionUserMapper::class);
-		$reader = (new RepresentationReader($gateway))->forOperation()->withObject($user);
+		$reader = (new RepresentationReader($gateway))->withObject($user);
 		$error = static fn (string $message): SyncException => new SyncException($message);
 		self::assertSame($profile, $reader->readTarget($profileRelation, $error)->getValue());
 		self::assertSame([$post], $reader->readItems($postsRelation, $error)->getValue());

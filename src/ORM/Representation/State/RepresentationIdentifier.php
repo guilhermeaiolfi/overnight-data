@@ -7,24 +7,24 @@ namespace ON\Data\ORM\Representation\State;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
-use ON\Data\ORM\Representation\Sync\RepresentationReadOperation;
 use ON\Data\ORM\SessionContext;
 use ON\Data\Schema\RepresentationSchema;
 
 /** Attaches supplied schemas and object graphs as clean existing references. */
 final class RepresentationIdentifier
 {
-	public function __construct(private RepresentationReader $reader)
-	{
-	}
-
-	public function attach(object $representation, RepresentationSchema $schema, Key $key, SessionContext $session): void
-	{
+	public function attach(
+		object $representation,
+		RepresentationSchema $schema,
+		Key $key,
+		SessionContext $session,
+		?RepresentationReader $reader = null,
+	): void {
 		if ($schema->getCollectionName() !== $key->getCollection()->getName()) {
 			throw new StateException('Cannot identify representation with a schema for a different collection.');
 		}
 		$visited = [];
-		$this->attachObject($representation, $schema, $key, $session, $visited, $this->reader->forOperation());
+		$this->attachObject($representation, $schema, $key, $session, $visited, $reader ?? new RepresentationReader());
 	}
 
 	/** @param array<int, true> $visited */
@@ -34,7 +34,7 @@ final class RepresentationIdentifier
 		?Key $rootKey,
 		SessionContext $session,
 		array &$visited,
-		RepresentationReadOperation $operation,
+		RepresentationReader $operation,
 	): void {
 		$id = spl_object_id($representation);
 		if (isset($visited[$id])) {

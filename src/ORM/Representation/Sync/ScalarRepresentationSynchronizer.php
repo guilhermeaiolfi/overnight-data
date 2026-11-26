@@ -4,20 +4,19 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\Sync;
 
+use ON\Data\Mapper\ConversionGateway;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\State\RepresentationStateStore;
 
 final class ScalarRepresentationSynchronizer
 {
-	private RepresentationReader $reader;
 	private SyncConflictDetector $conflicts;
 
 	public function __construct(
-		?RepresentationReader $reader = null,
+		private readonly ?ConversionGateway $gateway = null,
 		?SyncConflictDetector $conflicts = null,
 	) {
-		$this->reader = $reader ?? new RepresentationReader();
 		$this->conflicts = $conflicts ?? new SyncConflictDetector();
 	}
 
@@ -26,9 +25,9 @@ final class ScalarRepresentationSynchronizer
 	 */
 	public function sync(
 		RepresentationStateStore $representations,
-		?RepresentationReadOperation $operation = null,
+		?RepresentationReader $operation = null,
 	): array {
-		$reader = $this->reader->forOperation($operation);
+		$reader = $operation?->forGateway($this->gateway) ?? new RepresentationReader($this->gateway);
 		$states = $representations->getAll();
 		$plans = [];
 		$plannedStates = [];
