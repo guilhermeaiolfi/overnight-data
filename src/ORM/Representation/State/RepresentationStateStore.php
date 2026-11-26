@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\State;
 
+use IteratorAggregate;
 use ON\Data\ORM\Exception\StateException;
+use Traversable;
 use WeakMap;
 
-final class RepresentationStateStore
+/** @implements IteratorAggregate<object, RepresentationState> */
+final class RepresentationStateStore implements IteratorAggregate
 {
 	/** @var WeakMap<object, RepresentationState> */
 	private WeakMap $states;
@@ -48,6 +51,12 @@ final class RepresentationStateStore
 	public function clear(): void
 	{
 		$this->states = new WeakMap();
+	}
+
+	/** @return Traversable<object, RepresentationState> */
+	public function getIterator(): Traversable
+	{
+		return $this->states;
 	}
 
 	/**
