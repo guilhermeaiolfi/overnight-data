@@ -10,7 +10,6 @@ use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Record\RecordStateStore;
 use ON\Data\ORM\Relation\RelationStateStore;
-use ON\Data\ORM\Relation\RelationTarget;
 use ON\Data\ORM\Relation\ToManyRelationState;
 use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\SessionContext;
@@ -40,7 +39,7 @@ final class RepresentationAdoptionEngine
 			$intent,
 			$intent?->getLifecycle() ?? RepresentationIntentLifecycle::Create,
 			$session,
-			$this->reader->forTraversal(),
+			$this->reader->forOperation(),
 			$visited,
 		);
 	}
@@ -52,7 +51,7 @@ final class RepresentationAdoptionEngine
 		?RepresentationIntent $intent,
 		RepresentationIntentLifecycle $relatedPolicy,
 		SessionContext $session,
-		RepresentationReader $reader,
+		RepresentationReadOperation $operation,
 		array &$visited,
 	): RepresentationState {
 		$id = spl_object_id($representation);
@@ -61,10 +60,11 @@ final class RepresentationAdoptionEngine
 			return $tracked ?? throw new StateException('Visited representation is missing tracked state.');
 		}
 		$visited[$id] = true;
+		$reader = $operation->withObject($representation);
 
 		$replace = $intent !== null && ($intent->getFlatOps() !== [] || $intent->getSchema() !== null);
 		if ($tracked === null || ($replace && ! $intent->isBoundTo($tracked))) {
-			$state = $this->bindSources($representation, $schema, $intent, $relatedPolicy, $session, $reader);
+			$state = $this->bindSources($reader, $schema, $intent, $relatedPolicy, $session);
 			$session->attachRepresentation($representation, $state, $replace ? RepresentationAttachmentMode::Replace : RepresentationAttachmentMode::Add);
 			$intent?->setBoundState($state);
 		} else {
@@ -74,7 +74,7 @@ final class RepresentationAdoptionEngine
 		$schema = $state->getSchema();
 		$this->assertRelationOwners($schema);
 		foreach ($schema->getRelations() as $relation) {
-			foreach ($reader->readRelatedObjects($representation, $relation, $this->relationError(...)) as $child) {
+			foreach ($reader->readRelatedObjects($relation, $this->relationError(...)) as $child) {
 				$childIntent = $session->getIntents()->get($child);
 				$this->attachObject(
 					$child,
@@ -82,7 +82,7 @@ final class RepresentationAdoptionEngine
 					$childIntent,
 					RepresentationIntentLifecycle::Create,
 					$session,
-					$reader,
+					$operation,
 					$visited,
 				);
 			}
@@ -97,12 +97,11 @@ final class RepresentationAdoptionEngine
 	}
 
 	private function bindSources(
-		object $representation,
+		ObjectRepresentationReader $reader,
 		RepresentationSchema $schema,
 		?RepresentationIntent $intent,
 		RepresentationIntentLifecycle $relatedPolicy,
 		SessionContext $session,
-		RepresentationReader $reader,
 	): RepresentationState {
 		$sources = $schema->getSources();
 		if ($sources === [] && $schema->getRelations() === []) {
@@ -125,7 +124,6 @@ final class RepresentationAdoptionEngine
 			$bound[''] = RecordState::new($schema->getCollection());
 		}
 
-		$readPath = $reader->readPass($representation);
 		foreach ($sources as $source) {
 			$this->assertSourceFieldCollections($source);
 			$path = $source->getPathKey();
@@ -133,7 +131,7 @@ final class RepresentationAdoptionEngine
 			$policy = $op?->getLifecycle() ?? ($source->isRoot() ? $rootPolicy : $relatedPolicy);
 			$identity = $op?->getKey() ?? ($source->isRoot() ? $intent?->getIdentity() : null);
 			$key = $identity === null ? null : $source->getCollection()->getKey($identity);
-			[$reads, $values] = RepresentationSourceReader::read($source, $readPath);
+			[$reads, $values] = RepresentationSourceReader::read($source, $reader->readPath(...));
 			$bound[$path] = $this->bindSource($source, $policy, $reads, $values, $key, $records);
 			if (! $source->isRoot() && $op?->isCreate() === true) {
 				$flatCreates[] = $source;
@@ -258,7 +256,6 @@ final class RepresentationAdoptionEngine
 
 		$definition = $ownerCollection->getRelation($relationName);
 		$relatedSchema = RepresentationSchema::forPrimaryKey($relatedRecord->getCollection());
-		$target = RelationTarget::record($relatedRecord);
 		$state = $relations->getOrCreate(
 			$owner,
 			$relationName,
@@ -267,12 +264,12 @@ final class RepresentationAdoptionEngine
 		);
 
 		if ($state instanceof ToManyRelationState) {
-			$state->addTarget($target);
+			$state->add($relatedRecord);
 
 			return;
 		}
 
-		$state->setTarget($target);
+		$state->set($relatedRecord);
 	}
 
 	/**

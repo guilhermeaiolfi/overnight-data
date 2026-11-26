@@ -17,6 +17,7 @@ use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\Sync\PathReadStatus;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
+use ON\Data\ORM\Representation\Sync\RepresentationReadOperation;
 use ON\Data\Schema\RepresentationRelationSchema;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -31,16 +32,16 @@ final class RepresentationReaderTest extends TestCase
 		$row = new stdClass();
 		$row->name = 'A1';
 
-		self::assertSame('A1', $this->reader()->readPath($row, 'name')->requireValue());
+		self::assertSame('A1', $this->reader()->withObject($row)->readPath('name')->getValue());
 
 		$dto = new PublicPropertyUser();
 		$dto->name = 'A1';
 
-		self::assertSame('A1', $this->reader()->readPath($dto, 'name')->requireValue());
+		self::assertSame('A1', $this->reader()->withObject($dto)->readPath('name')->getValue());
 
 		$row->name = null;
 
-		self::assertNull($this->reader()->readPath($row, 'name')->requireValue());
+		self::assertNull($this->reader()->withObject($row)->readPath('name')->getValue());
 	}
 
 	public function testReadsNestedPath(): void
@@ -49,13 +50,13 @@ final class RepresentationReaderTest extends TestCase
 		$row->author = new stdClass();
 		$row->author->name = 'Ada';
 
-		self::assertSame('Ada', $this->reader()->readPath($row, 'author.name')->requireValue());
+		self::assertSame('Ada', $this->reader()->withObject($row)->readPath('author.name')->getValue());
 
 		$post = new PublicPropertyPost();
 		$post->author = new PublicPropertyUser();
 		$post->author->name = 'Ada';
 
-		self::assertSame('Ada', $this->reader()->readPath($post, 'author.name')->requireValue());
+		self::assertSame('Ada', $this->reader()->withObject($post)->readPath('author.name')->getValue());
 
 		$row = new stdClass();
 		$row->posts = [];
@@ -64,7 +65,7 @@ final class RepresentationReaderTest extends TestCase
 
 		self::assertSame(
 			'Hello',
-			$this->reader()->readPath($row, 'posts.0.title')->requireValue()
+			$this->reader()->withObject($row)->readPath('posts.0.title')->getValue()
 		);
 	}
 
@@ -80,25 +81,25 @@ final class RepresentationReaderTest extends TestCase
 		$post = new stdClass();
 		$post->author = $author;
 
-		$read = $this->reader()->readPass($post);
+		$read = $this->reader()->withObject($post);
 
-		self::assertSame($author, $read('author')->requireValue());
-		self::assertSame('Ada', $read('author.name')->requireValue());
-		self::assertTrue($read('author.displayName')->isMissing());
-		self::assertTrue($read('author.email')->isMissing());
+		self::assertSame($author, $read->readPath('author')->getValue());
+		self::assertSame('Ada', $read->readPath('author.name')->getValue());
+		self::assertTrue($read->readPath('author.displayName')->isMissing());
+		self::assertTrue($read->readPath('author.email')->isMissing());
 	}
 
 	public function testDynamicPropertiesAreReadFromEachInstance(): void
 	{
 		$source = new class () extends stdClass {};
 		$reader = $this->reader();
-		self::assertTrue($reader->readPath($source, 'name')->isMissing());
+		self::assertTrue($reader->withObject($source)->readPath('name')->isMissing());
 
 		$other = clone $source;
 		$other->name = 'Ada';
 
-		self::assertSame('Ada', $reader->readPath($other, 'name')->requireValue());
-		self::assertTrue($reader->readPath($source, 'name')->isMissing());
+		self::assertSame('Ada', $reader->withObject($other)->readPath('name')->getValue());
+		self::assertTrue($reader->withObject($source)->readPath('name')->isMissing());
 
 		$third = new class () extends stdClass {
 			public string $title = 'Developer';
@@ -106,11 +107,11 @@ final class RepresentationReaderTest extends TestCase
 		$fourth = clone $third;
 		$third->name = 'Grace';
 
-		self::assertSame('Grace', $reader->readPath($third, 'name')->requireValue());
-		self::assertTrue($reader->readPath($fourth, 'name')->isMissing());
+		self::assertSame('Grace', $reader->withObject($third)->readPath('name')->getValue());
+		self::assertTrue($reader->withObject($fourth)->readPath('name')->isMissing());
 	}
 
-	public function testReadPassMapsEachObjectOnceAndUsesTheConfiguredGateway(): void
+	public function testBoundReaderMapsEachObjectOnceAndUsesTheConfiguredGateway(): void
 	{
 		$default = Mapping::getDefaultGateway();
 		$gateway = ConversionGateway::createDefault();
@@ -121,46 +122,58 @@ final class RepresentationReaderTest extends TestCase
 		$author->profile = new stdClass();
 		$post = (object) ['author' => $author, 'editor' => $author];
 
-		$read = $reader->readPass($post);
+		$operation = $reader->forOperation();
+		$read = $operation->withObject($post);
 
-		self::assertSame('Ada', $read('author.name')->requireValue());
-		self::assertSame('Ada', $read('editor.self.name')->requireValue());
-		self::assertSame($author, $read('author.self')->requireValue());
+		self::assertSame('Ada', $read->readPath('author.name')->getValue());
+		self::assertSame('Ada', $read->readPath('editor.self.name')->getValue());
+		self::assertSame($author, $read->readPath('author.self')->getValue());
 		$mapper = $gateway->getMapperManager()->getMapper(ReaderBagMapper::class);
 		self::assertInstanceOf(ReaderBagMapper::class, $mapper);
 		self::assertSame(1, $mapper->reads);
-		self::assertTrue($reader->readTarget($author, $this->profileRelationSchema(), $this->syncError(...))->isMissing());
-		self::assertSame(2, $mapper->reads);
+		self::assertTrue($operation->withObject($author)->readTarget($this->profileRelationSchema(), $this->syncError(...))->isMissing());
+		self::assertSame(1, $mapper->reads);
 
 		$author->displayName = 'Grace';
-		self::assertSame('Grace', $reader->readPath($post, 'author.name')->requireValue());
-		self::assertSame(3, $mapper->reads);
+		self::assertSame('Ada', $read->readPath('author.name')->getValue());
+		self::assertSame('Grace', $reader->forOperation()->withObject($post)->readPath('author.name')->getValue());
+		self::assertSame(2, $mapper->reads);
 		self::assertSame($default, Mapping::getDefaultGateway());
-		self::assertTrue($this->reader()->readPath($post, 'author.name')->isMissing());
+		self::assertTrue($this->reader()->withObject($post)->readPath('author.name')->isMissing());
 	}
 
-	public function testTraversalSharesScalarAndRelationReadsUntilTheNextOperation(): void
+	public function testOperationSharesScalarAndRelationReadsAcrossRootsAndIsolatesGateways(): void
 	{
 		$gateway = ConversionGateway::createDefault();
 		$gateway->getMapperManager()->prepend(ReaderBagMapper::class);
 		$reader = new RepresentationReader($gateway);
 		$author = (object) ['displayName' => 'Ada', 'self' => null];
-		$pass = $reader->forTraversal();
-		self::assertSame('Ada', $pass->readPath($author, 'name')->requireValue());
-		self::assertTrue($pass->readItems($author, $this->postsRelationSchema(), $this->syncError(...))->isMissing());
-		self::assertTrue($pass->readTarget($author, $this->profileRelationSchema(), $this->syncError(...))->isMissing());
+		$post = (object) ['author' => $author];
+		$otherPost = (object) ['author' => $author];
+		$operation = $reader->forOperation();
+		self::assertSame('Ada', $operation->withObject($post)->readPath('author.name')->getValue());
+
+		$secondReader = new RepresentationReader($gateway);
+		$sharedOperation = $secondReader->forOperation($operation);
+		self::assertSame('Ada', $sharedOperation->withObject($otherPost)->readPath('author.name')->getValue());
+		$authorReader = $sharedOperation->withObject($author);
+		self::assertTrue($authorReader->readItems($this->postsRelationSchema(), $this->syncError(...))->isMissing());
+		self::assertTrue($authorReader->readTarget($this->profileRelationSchema(), $this->syncError(...))->isMissing());
+
+		$defaultReader = new RepresentationReader(ConversionGateway::createDefault());
+		self::assertTrue($defaultReader->forOperation($operation)->withObject($author)->readPath('name')->isMissing());
 
 		$mapper = $gateway->getMapperManager()->getMapper(ReaderBagMapper::class);
 		self::assertInstanceOf(ReaderBagMapper::class, $mapper);
 		self::assertSame(1, $mapper->reads);
 		$author->displayName = 'Grace';
-		self::assertSame('Grace', $reader->forTraversal()->readPath($author, 'name')->requireValue());
+		self::assertSame('Grace', $reader->forOperation()->withObject($author)->readPath('name')->getValue());
 		self::assertSame(2, $mapper->reads);
 	}
 
 	public function testReaderWithoutGatewayUsesTheCurrentDefault(): void
 	{
-		$reader = $this->reader();
+		$reader = new RepresentationReader();
 		$default = Mapping::getDefaultGateway();
 		$source = (object) ['displayName' => 'Ada', 'self' => null];
 		$gateway = ConversionGateway::createDefault();
@@ -169,12 +182,14 @@ final class RepresentationReaderTest extends TestCase
 		Mapping::setDefaultGateway($gateway);
 
 		try {
-			self::assertSame('Ada', $reader->readPath($source, 'name')->requireValue());
+			$operation = $reader->forOperation();
+			self::assertSame('Ada', $operation->withObject($source)->readPath('name')->getValue());
 		} finally {
 			Mapping::setDefaultGateway($default);
 		}
 
-		self::assertTrue($reader->readPath($source, 'name')->isMissing());
+		self::assertSame('Ada', $operation->withObject($source)->readPath('name')->getValue());
+		self::assertTrue($reader->forOperation()->withObject($source)->readPath('name')->isMissing());
 	}
 
 	public function testReadPathDistinguishesPresentNullMissingAndInvalidPaths(): void
@@ -183,17 +198,17 @@ final class RepresentationReaderTest extends TestCase
 		$row->author = new stdClass();
 		$row->author->name = null;
 
-		$present = $this->reader()->readPath($row, 'author.name');
+		$present = $this->reader()->withObject($row)->readPath('author.name');
 		self::assertSame(PathReadStatus::Present, $present->getStatus());
 		self::assertTrue($present->isPresent());
-		self::assertNull($present->requireValue());
+		self::assertNull($present->getValue());
 
-		$missing = $this->reader()->readPath($row, 'author.email');
+		$missing = $this->reader()->withObject($row)->readPath('author.email');
 		self::assertSame(PathReadStatus::Missing, $missing->getStatus());
 		self::assertTrue($missing->isMissing());
 
 		$row->author = 'Ada';
-		$invalid = $this->reader()->readPath($row, 'author.name');
+		$invalid = $this->reader()->withObject($row)->readPath('author.name');
 		self::assertSame(PathReadStatus::Invalid, $invalid->getStatus());
 		self::assertTrue($invalid->isInvalid());
 	}
@@ -204,24 +219,24 @@ final class RepresentationReaderTest extends TestCase
 		$row->{'author.name'} = 'Literal';
 		$row->author = ['name' => 'Nested'];
 
-		self::assertSame('Literal', $this->reader()->readPath($row, 'author.name')->requireValue());
+		self::assertSame('Literal', $this->reader()->withObject($row)->readPath('author.name')->getValue());
 
 		$row = new stdClass();
 		$row->posts = [new stdClass()];
 		$row->posts[0]->title = 'Hello';
-		self::assertSame('Hello', $this->reader()->readPath($row, 'posts.0.title')->requireValue());
-		self::assertTrue($this->reader()->readPath($row, 'posts.first.title')->isInvalid());
-		self::assertTrue($this->reader()->readPath($row, 'posts.1.title')->isMissing());
+		self::assertSame('Hello', $this->reader()->withObject($row)->readPath('posts.0.title')->getValue());
+		self::assertTrue($this->reader()->withObject($row)->readPath('posts.first.title')->isInvalid());
+		self::assertTrue($this->reader()->withObject($row)->readPath('posts.1.title')->isMissing());
 	}
 
 	public function testUnsuccessfulReadPathRetainsStrictReadError(): void
 	{
-		$result = $this->reader()->readPath(new stdClass(), 'name');
+		$result = $this->reader()->withObject(new stdClass())->readPath('name');
 
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage("segment 'name' is missing");
 
-		$result->requireValue();
+		$result->getValue();
 	}
 
 	public function testRejectsMissingPathSegment(): void
@@ -229,7 +244,7 @@ final class RepresentationReaderTest extends TestCase
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('name');
 
-		$this->reader()->readPath(new stdClass(), 'name')->requireValue();
+		$this->reader()->withObject(new stdClass())->readPath('name')->getValue();
 	}
 
 	public function testRejectsMissingNestedPathSegment(): void
@@ -240,7 +255,7 @@ final class RepresentationReaderTest extends TestCase
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('author.name');
 
-		$this->reader()->readPath($row, 'author.name')->requireValue();
+		$this->reader()->withObject($row)->readPath('author.name')->getValue();
 	}
 
 	public function testRejectsIntermediateNonObjectPathSegment(): void
@@ -251,7 +266,7 @@ final class RepresentationReaderTest extends TestCase
 		$this->expectException(SyncException::class);
 		$this->expectExceptionMessage('author.name');
 
-		$this->reader()->readPath($row, 'author.name')->requireValue();
+		$this->reader()->withObject($row)->readPath('author.name')->getValue();
 	}
 
 	public function testReadsManyRelationItems(): void
@@ -259,14 +274,14 @@ final class RepresentationReaderTest extends TestCase
 		$item = new stdClass();
 		$representation = $this->representation(['posts' => new ArrayIterator([$item])]);
 
-		self::assertSame([$item], $this->reader()->readItems($representation, $this->postsRelationSchema(), $this->syncError(...))->requireValue());
+		self::assertSame([$item], $this->reader()->withObject($representation)->readItems($this->postsRelationSchema(), $this->syncError(...))->getValue());
 	}
 
 	public function testTreatsNullManyRelationAsEmptyList(): void
 	{
 		$representation = $this->representation(['posts' => null]);
 
-		self::assertSame([], $this->reader()->readItems($representation, $this->postsRelationSchema(), $this->syncError(...))->requireValue());
+		self::assertSame([], $this->reader()->withObject($representation)->readItems($this->postsRelationSchema(), $this->syncError(...))->getValue());
 	}
 
 	public function testRejectsNonIterableManyRelationValue(): void
@@ -277,7 +292,7 @@ final class RepresentationReaderTest extends TestCase
 		$this->expectExceptionMessage('posts');
 		$this->expectExceptionMessage('iterable');
 
-		$this->reader()->readItems($representation, $this->postsRelationSchema(), $this->syncError(...));
+		$this->reader()->withObject($representation)->readItems($this->postsRelationSchema(), $this->syncError(...));
 	}
 
 	public function testRejectsNonObjectManyRelationItem(): void
@@ -288,7 +303,7 @@ final class RepresentationReaderTest extends TestCase
 		$this->expectExceptionMessage('posts');
 		$this->expectExceptionMessage('only contain objects');
 
-		$this->reader()->readItems($representation, $this->postsRelationSchema(), $this->syncError(...));
+		$this->reader()->withObject($representation)->readItems($this->postsRelationSchema(), $this->syncError(...));
 	}
 
 	public function testReadsSingleRelationTarget(): void
@@ -296,7 +311,7 @@ final class RepresentationReaderTest extends TestCase
 		$target = new stdClass();
 		$representation = $this->representation(['profile' => $target]);
 
-		self::assertSame($target, $this->reader()->readTarget($representation, $this->profileRelationSchema(), $this->syncError(...))->requireValue());
+		self::assertSame($target, $this->reader()->withObject($representation)->readTarget($this->profileRelationSchema(), $this->syncError(...))->getValue());
 	}
 
 	public function testRelationTargetPreservesLiveObjectIdentityOnDto(): void
@@ -308,7 +323,7 @@ final class RepresentationReaderTest extends TestCase
 
 		self::assertSame(
 			$target,
-			$this->reader()->readTarget($dto, $this->profileRelationSchema(), $this->syncError(...))->requireValue()
+			$this->reader()->withObject($dto)->readTarget($this->profileRelationSchema(), $this->syncError(...))->getValue()
 		);
 	}
 
@@ -328,9 +343,9 @@ final class RepresentationReaderTest extends TestCase
 		$representation->posts = [new stdClass()];
 
 		$reader = $this->reader();
-		self::assertTrue($reader->readPath($representation, 'name')->isMissing());
-		self::assertTrue($reader->readTarget($representation, $this->profileRelationSchema(), $this->syncError(...))->isMissing());
-		self::assertTrue($reader->readItems($representation, $this->postsRelationSchema(), $this->syncError(...))->isMissing());
+		self::assertTrue($reader->withObject($representation)->readPath('name')->isMissing());
+		self::assertTrue($reader->withObject($representation)->readTarget($this->profileRelationSchema(), $this->syncError(...))->isMissing());
+		self::assertTrue($reader->withObject($representation)->readItems($this->postsRelationSchema(), $this->syncError(...))->isMissing());
 	}
 
 	public function testMapperResolvesRenamedRelationPathSegments(): void
@@ -343,7 +358,7 @@ final class RepresentationReaderTest extends TestCase
 		$representation = $this->representation(['relations' => $container]);
 		$schema = new RepresentationRelationSchema('relations.profile', $this->users(), 'profile', $this->profileSchema());
 
-		self::assertSame($container->details, $this->reader()->readTarget($representation, $schema, $this->syncError(...))->requireValue());
+		self::assertSame($container->details, $this->reader()->withObject($representation)->readTarget($schema, $this->syncError(...))->getValue());
 	}
 
 	public function testScalarAndRelationReadsKeepLiveValuesInACyclicGraph(): void
@@ -363,20 +378,20 @@ final class RepresentationReaderTest extends TestCase
 		$dto->date = new DateTimeImmutable();
 
 		$reader = $this->reader();
-		$read = $reader->readPass($dto);
-		self::assertSame('Owner', $read('profile.self.owner.name')->requireValue());
-		self::assertSame($dto->posts, $read('posts')->requireValue());
-		self::assertSame($dto->date, $read('date')->requireValue());
-		self::assertSame(ExampleStatus::Ready, $read('status')->requireValue());
-		self::assertSame($profile, $reader->readTarget($dto, $this->profileRelationSchema(), $this->syncError(...))->requireValue());
-		self::assertSame($dto->posts, $reader->readItems($dto, $this->postsRelationSchema(), $this->syncError(...))->requireValue());
+		$read = $reader->withObject($dto);
+		self::assertSame('Owner', $read->readPath('profile.self.owner.name')->getValue());
+		self::assertSame($dto->posts, $read->readPath('posts')->getValue());
+		self::assertSame($dto->date, $read->readPath('date')->getValue());
+		self::assertSame(ExampleStatus::Ready, $read->readPath('status')->getValue());
+		self::assertSame($profile, $reader->withObject($dto)->readTarget($this->profileRelationSchema(), $this->syncError(...))->getValue());
+		self::assertSame($dto->posts, $reader->withObject($dto)->readItems($this->postsRelationSchema(), $this->syncError(...))->getValue());
 	}
 
 	public function testTreatsNullSingleRelationAsNull(): void
 	{
 		$representation = $this->representation(['profile' => null]);
 
-		self::assertNull($this->reader()->readTarget($representation, $this->profileRelationSchema(), $this->syncError(...))->requireValue());
+		self::assertNull($this->reader()->withObject($representation)->readTarget($this->profileRelationSchema(), $this->syncError(...))->getValue());
 	}
 
 	public function testRejectsInvalidSingleRelationTarget(): void
@@ -389,7 +404,7 @@ final class RepresentationReaderTest extends TestCase
 			['profile' => ['bad']],
 		] as $values) {
 			try {
-				$this->reader()->readTarget($this->representation($values), $schema, $this->syncError(...));
+				$this->reader()->withObject($this->representation($values))->readTarget($schema, $this->syncError(...));
 				self::fail('Expected SyncException for invalid single relation target.');
 			} catch (SyncException $exception) {
 				self::assertStringContainsString('profile', $exception->getMessage());
@@ -404,7 +419,7 @@ final class RepresentationReaderTest extends TestCase
 		$row->name = 'Ada';
 		$before = clone $row;
 
-		$this->reader()->readPath($row, 'name')->requireValue();
+		$this->reader()->withObject($row)->readPath('name')->getValue();
 
 		self::assertEquals($before, $row);
 	}
@@ -418,12 +433,12 @@ final class RepresentationReaderTest extends TestCase
 		$this->expectExceptionMessage('iterable');
 		$this->expectExceptionMessage('during graph adoption');
 
-		$this->reader()->readItems($representation, $this->postsRelationSchema(), $this->adoptionError(...));
+		$this->reader()->withObject($representation)->readItems($this->postsRelationSchema(), $this->adoptionError(...));
 	}
 
-	private function reader(): RepresentationReader
+	private function reader(): RepresentationReadOperation
 	{
-		return new RepresentationReader();
+		return (new RepresentationReader())->forOperation();
 	}
 
 	/**

@@ -11,13 +11,16 @@ use ON\Data\ORM\SessionContext;
 
 final class RepresentationSyncer
 {
+	private RepresentationReader $reader;
+
 	public function __construct(
 		private ?ScalarRepresentationSynchronizer $scalarSynchronizer = null,
 		private ?RelationRepresentationSynchronizer $relationSynchronizer = null,
 		?RepresentationReader $reader = null,
 	) {
-		$this->scalarSynchronizer ??= new ScalarRepresentationSynchronizer($reader);
-		$this->relationSynchronizer ??= new RelationRepresentationSynchronizer($reader);
+		$this->reader = $reader ?? new RepresentationReader();
+		$this->scalarSynchronizer ??= new ScalarRepresentationSynchronizer($this->reader);
+		$this->relationSynchronizer ??= new RelationRepresentationSynchronizer($this->reader);
 	}
 
 	public function sync(
@@ -37,8 +40,9 @@ final class RepresentationSyncer
 			$syncRepresentations->add($representation, $state);
 		}
 
-		$syncPlans = $this->scalarSynchronizer->sync($syncRepresentations);
-		$relationChanges = $this->relationSynchronizer->sync($syncRepresentations, $relations, $representations);
+		$operation = $this->reader->forOperation();
+		$syncPlans = $this->scalarSynchronizer->sync($syncRepresentations, $operation);
+		$relationChanges = $this->relationSynchronizer->sync($syncRepresentations, $relations, $representations, $operation);
 
 		return new SyncResult($syncPlans, $relationChanges);
 	}
