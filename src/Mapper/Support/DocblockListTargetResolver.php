@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\Mapper\Support;
 
 use ON\Data\Mapper\Attribute\MapCollection;
+use ParseError;
 use ReflectionProperty;
 
 /** Resolves explicit collection item types with PHPDoc as a fallback. */
@@ -148,7 +149,11 @@ final class DocblockListTargetResolver
 			return [];
 		}
 
-		$tokens = token_get_all($contents);
+		try {
+			$tokens = token_get_all($contents, TOKEN_PARSE);
+		} catch (ParseError) {
+			return [];
+		}
 		$imports = [];
 		$depth = 0;
 		$namespaceDepth = 0;
@@ -162,7 +167,7 @@ final class DocblockListTargetResolver
 				break;
 			}
 
-			if (is_array($token) && $token[0] === T_NAMESPACE) {
+			if ($depth === 0 && is_array($token) && $token[0] === T_NAMESPACE) {
 				$imports = [];
 				while (++$index < $count && $tokens[$index] !== ';' && $tokens[$index] !== '{') {
 					// Skip the namespace name.
@@ -172,7 +177,7 @@ final class DocblockListTargetResolver
 				continue;
 			}
 
-			if ($token === '{') {
+			if ($token === '{' || (is_array($token) && in_array($token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true))) {
 				$depth++;
 
 				continue;

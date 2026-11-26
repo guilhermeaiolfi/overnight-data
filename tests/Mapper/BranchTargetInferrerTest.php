@@ -10,6 +10,8 @@ use ON\Data\Mapper\Support\DocblockListTargetResolver;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use Tests\ON\Data\Fixture\AuthorDto;
+use Tests\ON\Data\Fixture\BracketedFirst;
+use Tests\ON\Data\Fixture\BracketedSecond;
 
 final class BranchTargetInferrerTest extends TestCase
 {
@@ -47,6 +49,22 @@ final class BranchTargetInferrerTest extends TestCase
 	{
 		$property = new ReflectionProperty(SecondNamespace\ListTarget::class, 'items');
 		self::assertSame(\DateTimeImmutable::class, $this->resolvePhpDocListTarget($property));
+	}
+
+	public function testNamespaceMethodAndStaticCallPreserveImports(): void
+	{
+		$property = new ReflectionProperty(SecondNamespace\NamespaceMethodTarget::class, 'items');
+		self::assertSame(\DateTimeImmutable::class, $this->resolvePhpDocListTarget($property));
+	}
+
+	public function testInterpolationPreservesImportsInBracketedNamespaces(): void
+	{
+		require_once __DIR__ . '/../Fixture/PhpDocBracketedNamespaces.php';
+
+		$first = new ReflectionProperty(BracketedFirst\ListTarget::class, 'items');
+		$second = new ReflectionProperty(BracketedSecond\ListTarget::class, 'items');
+		self::assertSame(\DateTimeImmutable::class, $this->resolvePhpDocListTarget($first));
+		self::assertSame(AuthorDto::class, $this->resolvePhpDocListTarget($second));
 	}
 
 	public function testMissingPhpDocListDeclarationReturnsNull(): void
@@ -111,6 +129,22 @@ namespace Tests\ON\Data\Mapper\SecondNamespace;
 use DateTimeImmutable as AuthorDto;
 
 final class ListTarget
+{
+	/** @var list<AuthorDto> */
+	public array $items = [];
+}
+
+final class NamespaceMethod
+{
+	public static function namespace(): string
+	{
+		return __NAMESPACE__;
+	}
+}
+
+NamespaceMethod::namespace();
+
+final class NamespaceMethodTarget
 {
 	/** @var list<AuthorDto> */
 	public array $items = [];
