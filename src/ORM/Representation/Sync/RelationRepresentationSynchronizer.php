@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ON\Data\ORM\Representation\Sync;
 
 use ON\Data\Definition\Relation\RelationCardinality;
+use ON\Data\Mapper\ConversionGateway;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Record\RecordState;
 use ON\Data\ORM\Relation\RelationStateInterface;
@@ -17,11 +18,8 @@ use ON\Data\Schema\RepresentationRelationSchema;
 
 final class RelationRepresentationSynchronizer
 {
-	private RepresentationReader $reader;
-
-	public function __construct(?RepresentationReader $reader = null)
+	public function __construct(private readonly ?ConversionGateway $gateway = null)
 	{
-		$this->reader = $reader ?? new RepresentationReader();
 	}
 
 	/**
@@ -32,11 +30,11 @@ final class RelationRepresentationSynchronizer
 		iterable $reps,
 		RelationStateStore $relations,
 		?RepresentationStateStore $states = null,
-		?RepresentationReadOperation $operation = null,
+		?RepresentationReader $operation = null,
 	): array {
 		$touched = [];
 		$touchedIds = [];
-		$reader = $this->reader->forOperation($operation);
+		$reader = $operation?->forGateway($this->gateway) ?? new RepresentationReader($this->gateway);
 		if ($states === null) {
 			if (! $reps instanceof RepresentationStateStore) {
 				throw new SyncException('A tracked representation store is required when synchronizing a subset.');

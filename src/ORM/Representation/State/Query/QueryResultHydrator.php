@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\ORM\Representation\State\Query;
 
+use Closure;
 use ON\Data\Key;
 use ON\Data\ORM\Exception\StateException;
 use ON\Data\ORM\Record\RecordState;
@@ -15,7 +16,6 @@ use ON\Data\ORM\Representation\State\RepresentationState;
 use ON\Data\ORM\Representation\Sync\ObjectRepresentationReader;
 use ON\Data\ORM\Representation\Sync\PathReadResult;
 use ON\Data\ORM\Representation\Sync\RepresentationReader;
-use ON\Data\ORM\Representation\Sync\RepresentationReadOperation;
 use ON\Data\ORM\Representation\Sync\RepresentationSourceReader;
 use ON\Data\ORM\SessionContext;
 use ON\Data\Schema\RelationLoadKnowledge;
@@ -23,8 +23,13 @@ use ON\Data\Schema\RepresentationSchema;
 
 final class QueryResultHydrator
 {
-	public function __construct(private RepresentationReader $reader = new RepresentationReader())
+	/** @var Closure(): RepresentationReader */
+	private readonly Closure $newReader;
+
+	/** @param (Closure(): RepresentationReader)|null $newReader */
+	public function __construct(?Closure $newReader = null)
 	{
+		$this->newReader = $newReader ?? static fn (): RepresentationReader => new RepresentationReader();
 	}
 
 	/** @param array<string, mixed> $sourceRow */
@@ -37,7 +42,7 @@ final class QueryResultHydrator
 	): RepresentationState {
 		$visited = [];
 
-		return $this->hydrateObject($representation, $schema, $sourceRow, $identities, $session, $visited, $this->reader->forOperation());
+		return $this->hydrateObject($representation, $schema, $sourceRow, $identities, $session, $visited, ($this->newReader)());
 	}
 
 	/**
@@ -51,7 +56,7 @@ final class QueryResultHydrator
 		QuerySourceIdentities $identities,
 		SessionContext $session,
 		array &$visited,
-		RepresentationReadOperation $operation,
+		RepresentationReader $operation,
 	): RepresentationState {
 		$reader = $operation->withObject($representation);
 		$representations = $session->getRepresentations();
