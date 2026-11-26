@@ -7,8 +7,8 @@ namespace ON\Data\ORM\Representation\Sync;
 use ON\Data\Mapper\ConversionGateway;
 use ON\Data\ORM\Exception\SyncException;
 use ON\Data\ORM\Representation\State\RepresentationState;
-use ON\Data\ORM\Representation\State\RepresentationStateStore;
 use ON\Data\ORM\SessionContext;
+use WeakMap;
 
 final class RepresentationSyncer
 {
@@ -27,20 +27,20 @@ final class RepresentationSyncer
 	): SyncResult {
 		$representations = $context->getRepresentations();
 		$relations = $context->getRelations();
-		$syncRepresentations = $representations;
+		$states = $representations;
 		if ($representation !== null) {
 			$state = $representations->get($representation);
 			if (! $state instanceof RepresentationState) {
 				throw new SyncException('Cannot synchronize an untracked representation object.');
 			}
 
-			$syncRepresentations = new RepresentationStateStore();
-			$syncRepresentations->add($representation, $state);
+			$states = new WeakMap();
+			$states[$representation] = $state;
 		}
 
 		$operation = new RepresentationReader($this->gateway);
-		$syncPlans = $this->scalarSynchronizer->sync($syncRepresentations, $operation);
-		$relationChanges = $this->relationSynchronizer->sync($syncRepresentations, $relations, $representations, $operation);
+		$syncPlans = $this->scalarSynchronizer->sync($states, $operation);
+		$relationChanges = $this->relationSynchronizer->sync($states, $relations, $representations, $operation);
 
 		return new SyncResult($syncPlans, $relationChanges);
 	}
