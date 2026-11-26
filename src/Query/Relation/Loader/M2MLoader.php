@@ -31,26 +31,18 @@ final class M2MLoader extends AbstractLoader
 			throw RelationLoaderException::joinedLoadingNotImplemented($relation);
 		}
 
-		$definition = $relation->getDefinition();
-
-		if (! $definition instanceof M2MRelation) {
-			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');
-		}
+		$definition = $this->definition($relation);
 
 		$through = $this->through($relation, $definition);
 		$parentToThrough = $definition->getKeyPairing();
 		$throughToTarget = $through->getKeyPairing();
 		$parent = $branch->getParent();
 
-		if ($through->getWhere() !== []) {
-			throw RelationLoaderException::throughWhereNotSupported($relation);
-		}
-
 		$query = $runtime->createQuery($relation->getCollection());
 		$throughSource = $query->join(
 			$through->getCollection(),
 			$definition->isNullable() ? JoinType::LEFT : JoinType::INNER,
-			$this->throughJoinName($relation),
+			$this->throughJoinName($relation, $query),
 		);
 
 		RelationKeyQuery::addJoinConditions($throughToTarget->reverse(), $throughSource, $query);
@@ -90,25 +82,10 @@ final class M2MLoader extends AbstractLoader
 		);
 		$branch->requireFields($relation->getCollection()->getPrimaryKey());
 		$parent->requireFields($parentFields);
-		$runtime->continueWith($branch, $this->loadData(...));
-	}
-
-	public function loadData(RelationLoadBranch $branch, LoadRuntime $runtime): void
-	{
-		$relation = $branch->getRelationRef();
-		$definition = $relation->getDefinition();
-
-		if (! $definition instanceof M2MRelation) {
-			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');
-		}
-
-		$this->applySeparateQueryOptions($branch);
-		$this->executeSeparateByReferences(
-			$branch,
-			$runtime,
-			$definition->getKeyPairing(),
-			rightSource: fn (SelectQuery $query): QuerySourceInterface => $this->throughSource($relation, $query),
-		);
+		$runtime->continueWith($branch, function (RelationLoadBranch $branch, LoadRuntime $runtime) use ($throughSource, $parentToThrough): void {
+			$this->applySeparateQueryOptions($branch);
+			$this->executeSeparateByReferences($branch, $runtime, $parentToThrough, rightSource: static fn () => $throughSource);
+		});
 	}
 
 	public function join(RelationRef $relation): QuerySourceInterface
@@ -116,19 +93,11 @@ final class M2MLoader extends AbstractLoader
 		$this->assertSupportedRelationPath($relation);
 		$this->assertSupportedRelationConstraints($relation);
 
-		$definition = $relation->getDefinition();
-
-		if (! $definition instanceof M2MRelation) {
-			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');
-		}
+		$definition = $this->definition($relation);
 
 		$through = $this->through($relation, $definition);
 		$parentToThrough = $definition->getKeyPairing();
 		$throughToTarget = $through->getKeyPairing();
-
-		if ($through->getWhere() !== []) {
-			throw RelationLoaderException::throughWhereNotSupported($relation);
-		}
 
 		$source = $relation->getParentSource();
 		$type = $definition->isNullable() ? JoinType::LEFT : JoinType::INNER;
@@ -137,7 +106,7 @@ final class M2MLoader extends AbstractLoader
 		$throughSource = $query->join(
 			$through->getCollection(),
 			$type,
-			implode('.', $relation->getPath()) . '@through',
+			$this->throughJoinName($relation, $query),
 			$source,
 		);
 
@@ -158,27 +127,40 @@ final class M2MLoader extends AbstractLoader
 	private function through(RelationRef $relation, M2MRelation $definition): M2MThrough
 	{
 		try {
-			return $definition->getThrough();
+			$through = $definition->getThrough();
 		} catch (LogicException) {
 			throw RelationLoaderException::missingThrough($relation);
 		}
-	}
-
-	private function throughSource(RelationRef $relation, SelectQuery $query): QuerySourceInterface
-	{
-		$name = $this->throughJoinName($relation);
-
-		foreach ($query->getJoins() as $join) {
-			if ($join->getName() === $name) {
-				return $join;
-			}
+		if ($through->getWhere() !== []) {
+			throw RelationLoaderException::throughWhereNotSupported($relation);
 		}
 
-		throw RelationLoaderException::loadingNotImplemented($relation);
+		return $through;
 	}
 
-	private function throughJoinName(RelationRef $relation): string
+	private function definition(RelationRef $relation): M2MRelation
 	{
-		return implode('.', $relation->getPath()) . '@through';
+		$definition = $relation->getDefinition();
+		if (! $definition instanceof M2MRelation) {
+			throw RelationLoaderException::malformedThrough($relation, 'does not use an M2M relation definition.');
+		}
+
+		return $definition;
+	}
+
+	private function throughJoinName(RelationRef $relation, SelectQuery $query): string
+	{
+		$base = implode('.', $relation->getPath()) . '@through';
+		$used = [];
+		foreach ($query->getJoins() as $join) {
+			$used[$join->getName()] = true;
+		}
+
+		$name = $base;
+		for ($suffix = 2; isset($used[$name]); ++$suffix) {
+			$name = $base . '_' . $suffix;
+		}
+
+		return $name;
 	}
 }

@@ -351,6 +351,27 @@ final class RelationRefTest extends TestCase
 		$users->getRelationSelections();
 	}
 
+	public function testScalarAliasCannotHideAnIntermediateVisibleChild(): void
+	{
+		$users = $this->makeQuery('users');
+		$users->posts->select($users->posts->title->as('author'));
+		$users->posts->author->manager->select('id');
+
+		$this->expectException(RelationSelectionException::class);
+		$users->getRelationSelections();
+	}
+
+	public function testHiddenIntermediateRelationIsExcludedFromLevelAliasValidation(): void
+	{
+		$users = $this->makeQuery('users');
+		$users->posts->select($users->posts->title->as('author'));
+		$users->posts->author->hidden();
+		$users->posts->author->manager->select('id');
+
+		$tree = $users->getRelationSelections();
+		self::assertFalse($tree->childrenOf($tree->getAll()[0])['author']->isVisible());
+	}
+
 	public function testNestedConfiguredRelationIsCollectedWithParentBranch(): void
 	{
 		$users = $this->makeQuery('users');
