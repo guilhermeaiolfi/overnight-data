@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Database\Sql;
 
-/** @internal */
+/** SQL text and its positional parameters, including fragments returned by custom dialects. */
 readonly class SqlFragment
 {
 	/** @param list<mixed> $params */
