@@ -12,6 +12,7 @@ use ON\Data\Mapper\Attribute\Hidden;
 use ON\Data\Mapper\Attribute\MapCollection;
 use ON\Data\Mapper\Attribute\MapFrom;
 use ON\Data\Mapper\Attribute\MapTo;
+use ON\Data\Mapper\Metadata\PropertyMetadataReader;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Support\DocblockListTargetResolver;
 use ON\Data\Schema\Exception\InvalidSchemaException;
@@ -36,9 +37,13 @@ use stdClass;
  */
 final class ClassRepresentationSchemaCompiler
 {
+	private readonly PropertyMetadataReader $propertyMetadata;
+
 	public function __construct(
-		private readonly DocblockListTargetResolver $listTargetResolver = new DocblockListTargetResolver(),
+		?DocblockListTargetResolver $listTargetResolver = null,
+		?PropertyMetadataReader $propertyMetadata = null,
 	) {
+		$this->propertyMetadata = $propertyMetadata ?? $listTargetResolver?->getPropertyMetadata() ?? new PropertyMetadataReader();
 	}
 
 	/**
@@ -280,7 +285,7 @@ final class ClassRepresentationSchemaCompiler
 	 */
 	private function resolveNestedDtoClass(ReflectionProperty $property): ?string
 	{
-		$type = $property->getType();
+		$type = $this->propertyMetadata->nativeType($property);
 
 		if ($type instanceof ReflectionNamedType) {
 			return $this->resolveNamedNestedClass($property, $type);
@@ -323,14 +328,14 @@ final class ClassRepresentationSchemaCompiler
 			}
 
 			if ($hasListType) {
-				return $this->normalizeDtoClass($this->listTargetResolver->resolve($property));
+				return $this->normalizeDtoClass($this->propertyMetadata->collectionItemClass($property));
 			}
 
 			return null;
 		}
 
 		if ($type === null) {
-			return $this->normalizeDtoClass($this->listTargetResolver->resolve($property));
+			return $this->normalizeDtoClass($this->propertyMetadata->collectionItemClass($property));
 		}
 
 		return null;
@@ -347,7 +352,7 @@ final class ClassRepresentationSchemaCompiler
 
 		$name = $type->getName();
 		if ($name === 'array' || $name === 'iterable') {
-			return $this->normalizeDtoClass($this->listTargetResolver->resolve($property));
+			return $this->normalizeDtoClass($this->propertyMetadata->collectionItemClass($property));
 		}
 
 		return null;

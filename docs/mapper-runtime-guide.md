@@ -347,7 +347,30 @@ final readonly class PostDto
 $post = map($row)->to(PostDto::class);
 ```
 
-The attribute takes precedence over property `@var` and constructor `@param` list types. With the attribute present, Mapper skips PHPDoc parsing and source-file scanning. Existing PHPDoc list types continue to work when the attribute is absent.
+By default, the attribute takes precedence over property `@var` and constructor `@param` list types. When the attribute supplies the item class, the mapper skips PHPDoc parsing and source-file scanning. Existing PHPDoc list types continue to work when the attribute is absent.
+
+### Collection item type extractors
+
+The native PHP property type and the collection item class answer separate questions. For `#[MapCollection(AuthorDto::class)] public ?array $authors`, PHP supplies the nullable array type and the attribute supplies `AuthorDto`. The mapper uses both when mapping a value. A DTO query uses the item class to decide which fields and relations to select.
+
+The default order is `MapCollectionAttributeExtractor` followed by `PhpDocListItemTypeExtractor`. Set `listItemTypeExtractors:` on a gateway to supply an ordered replacement. Each extractor implements `ListItemTypeExtractorInterface` and receives a `ReflectionProperty`. Return a class name to answer the lookup or `null` to let the next extractor try.
+
+```php
+use ON\Data\Mapper\ConversionGateway;
+use function ON\Data\Mapper\map;
+use ON\Data\Mapper\Metadata\CachedListItemTypeExtractor;
+use ON\Data\Mapper\Metadata\MapCollectionAttributeExtractor;
+use ON\Data\Mapper\Metadata\PhpDocListItemTypeExtractor;
+
+$gateway = ConversionGateway::createDefault(listItemTypeExtractors: [
+    new MapCollectionAttributeExtractor(),
+    new CachedListItemTypeExtractor(new PhpDocListItemTypeExtractor()),
+]);
+
+$post = map($row, gateway: $gateway)->to(PostDto::class);
+```
+
+By default, item type results are cached for one mapping or one query projection. The explicit decorator above reuses successful PHPDoc lookups for as long as that decorator is kept. Its default limit is 256 properties, with the oldest entry evicted when full. Make the gateway local to a job to release the decorator when the job releases the gateway. Pass the same gateway when creating a SQL runtime if you want DTO queries to use that extractor list for both projection and hydration.
 
 ## Definition-aware resolution
 

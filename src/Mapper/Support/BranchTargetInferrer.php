@@ -9,6 +9,7 @@ use DateTimeInterface;
 use ON\Data\Definition\DefinitionInterface;
 use ON\Data\Mapper\Mapper\ObjectMapperOptions;
 use ON\Data\Mapper\MappingNode;
+use ON\Data\Mapper\Metadata\PropertyMetadataReader;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ReflectionNamedType;
 use ReflectionProperty;
@@ -16,10 +17,14 @@ use stdClass;
 
 final class BranchTargetInferrer
 {
+	private readonly PropertyMetadataReader $propertyMetadata;
+
 	public function __construct(
 		private readonly ?MappingNodePropertyFinder $propertyFinder = null,
-		private readonly DocblockListTargetResolver $listTargetResolver = new DocblockListTargetResolver(),
+		?DocblockListTargetResolver $listTargetResolver = null,
+		?PropertyMetadataReader $propertyMetadata = null,
 	) {
+		$this->propertyMetadata = $propertyMetadata ?? $listTargetResolver?->getPropertyMetadata() ?? new PropertyMetadataReader();
 	}
 
 	/**
@@ -147,7 +152,7 @@ final class BranchTargetInferrer
 		MappingNode $node,
 		ReflectionProperty $property,
 	): ?array {
-		$type = $property->getType();
+		$type = $this->propertyMetadata->nativeType($property);
 		if (! $type instanceof ReflectionNamedType) {
 			return null;
 		}
@@ -164,7 +169,7 @@ final class BranchTargetInferrer
 
 		$name = $type->getName();
 		if ($name === 'array' || $name === 'iterable') {
-			$listTarget = $this->listTargetResolver->resolve($property);
+			$listTarget = $this->propertyMetadata->collectionItemClass($property);
 			if ($listTarget !== null) {
 				return $this->nestedTarget($listTarget, true, $this->withoutDirectDefinitions($node->getArguments()));
 			}
@@ -201,7 +206,7 @@ final class BranchTargetInferrer
 			return null;
 		}
 
-		$type = $property->getType();
+		$type = $this->propertyMetadata->nativeType($property);
 		if (! $type instanceof ReflectionNamedType) {
 			return $this->nestedTarget($genericTarget, false, $node->getArguments());
 		}
@@ -212,7 +217,7 @@ final class BranchTargetInferrer
 
 		$name = $type->getName();
 		if ($name === 'array' || $name === 'iterable') {
-			$listTarget = $this->listTargetResolver->resolve($property);
+			$listTarget = $this->propertyMetadata->collectionItemClass($property);
 
 			if ($name === 'array' || $listTarget !== null) {
 				return $this->nestedTarget($genericTarget, $listTarget !== null, $node->getArguments());

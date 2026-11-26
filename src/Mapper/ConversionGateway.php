@@ -7,6 +7,8 @@ namespace ON\Data\Mapper;
 use ON\Data\Mapper\Exception\ConversionException;
 use ON\Data\Mapper\Exception\FieldTypeNotFoundException;
 use ON\Data\Mapper\Exception\UnsupportedConversionException;
+use ON\Data\Mapper\Metadata\ListItemTypeExtractorInterface;
+use ON\Data\Mapper\Metadata\PropertyMetadataReader;
 use ON\Data\Mapper\Representation\PhpRepresentation;
 use ON\Data\Mapper\Representation\RepresentationInterface;
 use ON\Data\Mapper\Resolution\LeafNodeResolutionInterface;
@@ -29,15 +31,17 @@ final class ConversionGateway
 	 */
 	private array $routes = [];
 
-	public function __construct()
+	/** @param list<ListItemTypeExtractorInterface>|null $listItemTypeExtractors */
+	public function __construct(private readonly ?array $listItemTypeExtractors = null)
 	{
 		$this->fieldTypes = new FieldTypeRegistry();
 		$this->mapperManager = new MapperManager($this, fieldTypes: $this->fieldTypes);
 	}
 
-	public static function createDefault(): self
+	/** @param list<ListItemTypeExtractorInterface>|null $listItemTypeExtractors */
+	public static function createDefault(?array $listItemTypeExtractors = null): self
 	{
-		$gateway = new self();
+		$gateway = new self($listItemTypeExtractors);
 		MapperManager::createDefault($gateway);
 
 		return $gateway;
@@ -46,6 +50,12 @@ final class ConversionGateway
 	public function getMapperManager(): MapperManager
 	{
 		return $this->mapperManager;
+	}
+
+	/** @internal */
+	public function createPropertyMetadataReader(): PropertyMetadataReader
+	{
+		return new PropertyMetadataReader($this->listItemTypeExtractors);
 	}
 
 	public function clearRoutes(): void

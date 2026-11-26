@@ -7,12 +7,14 @@ namespace Tests\ON\Data\Query\Schema;
 use ON\Data\Database\DatabasePlatformInterface;
 use ON\Data\Database\Sql\Dialect\SqliteDialect;
 use ON\Data\Database\Sql\SqlQueryCompiler;
+use ON\Data\Database\SqlRuntimeFactory;
 use ON\Data\Definition\Registry;
 use ON\Data\Mapper\Attribute\Hidden;
 use ON\Data\Mapper\Attribute\MapCollection;
 use ON\Data\Mapper\Attribute\MapFrom;
 use ON\Data\Mapper\Attribute\MapTo;
 use ON\Data\Mapper\ConversionGateway;
+use ON\Data\Mapper\Metadata\ListItemTypeExtractorInterface;
 use ON\Data\ORM\Session;
 use ON\Data\Query\Exception\ObjectExportException;
 use function ON\Data\Query\query;
@@ -22,6 +24,7 @@ use ON\Data\Schema\RelationLoadKnowledge;
 use ON\Data\Schema\RepresentationFieldRole;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
+use ReflectionProperty;
 use stdClass;
 use Tests\ON\Data\Smoke\Support\SqliteMemoryHarness;
 
@@ -198,6 +201,26 @@ final class DtoDrivenQueryProjectionTest extends TestCase
 		self::assertCount(1, $rows[0]->authors);
 		self::assertInstanceOf(DtoUserSummary::class, $rows[0]->authors[0]);
 		self::assertSame('Ada', $rows[0]->authors[0]->name);
+	}
+
+	#[RequiresPhpExtension('pdo_sqlite')]
+	public function testGatewayExtractorSuppliesItemTypeForBothProjectionAndHydration(): void
+	{
+		$harness = $this->makeSqliteHarness();
+		$users = $this->makeRegistry()->getCollection('users');
+		$extractor = $this->createMock(ListItemTypeExtractorInterface::class);
+		$extractor->expects(self::exactly(2))->method('extract')->willReturnCallback(
+			static fn (ReflectionProperty $property): ?string => $property->getName() === 'posts' ? DtoPostRow::class : null,
+		);
+		$gateway = ConversionGateway::createDefault(listItemTypeExtractors: [$extractor]);
+		$database = (new SqlRuntimeFactory())->create($harness->connection, $gateway);
+		$query = $database->query($users)->to(DtoUserWithUntypedPosts::class);
+
+		self::assertSame(['id', 'title', 'authorName'], $query->projection()->getRelation('posts')->getRelatedSchema()->getPublicScalarPaths());
+		$user = $query->fetchOne(1);
+		self::assertInstanceOf(DtoUserWithUntypedPosts::class, $user);
+		self::assertInstanceOf(DtoPostRow::class, $user->posts[0]);
+		self::assertSame('Ada', $user->posts[0]->authorName);
 	}
 
 	#[RequiresPhpExtension('pdo_sqlite')]
@@ -513,6 +536,13 @@ final class DtoUserWithRawPosts
 	public int $id;
 
 	/** @var list<stdClass> */
+	public array $posts = [];
+}
+
+final class DtoUserWithUntypedPosts
+{
+	public int $id;
+
 	public array $posts = [];
 }
 
