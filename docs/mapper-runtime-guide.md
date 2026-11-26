@@ -242,7 +242,9 @@ Ownership follows these lifetimes:
 | `MappingBranch` | One branch's output state, created by its writer |
 | `ConversionGateway` | Scalar conversion routes through field types and codecs |
 
-The runtime owns helpers for one mapping operation. Declared property metadata and PHPDoc import maps are cached by class across operations. Source values, target instances and custom resolver state stay local to their operation.
+`MappingRuntime` owns helpers and resolver state for one mapping operation. `MapperManager` shares declared property metadata and PHPDoc imports across operations through a cache that holds up to 256 classes. When the cache fills, it evicts the class that was added earliest.
+
+Pass the same explicit `ConversionGateway` to each `map()` call in a job to reuse its metadata. The cache can be collected when the job releases the gateway and its manager. For a gateway you plan to reuse, call `MapperManager::clear()` to clear the metadata alongside the other mapper caches.
 
 `MappingRuntime::convert()` owns mapping-specific conversion: it skips untyped values and mappings without representations, supplies the PHP representation for an unspecified side, and adds the failing node path to conversion errors. It delegates scalar conversion to the manager's gateway (`MapperManager::getGateway()`). `FieldConversionCoordinator` and `MapperManager::createFieldConversionCoordinator()` have been removed.
 

@@ -38,6 +38,7 @@ use ON\Data\Mapper\Resolver\GenericNodeResolver;
 use ON\Data\Mapper\Resolver\NodeResolverInterface;
 use ON\Data\Mapper\Resolver\PassthroughNodeResolver;
 use ON\Data\Mapper\Resolver\ReflectionPropertyNodeResolver;
+use ON\Data\Mapper\Support\ReflectionMetadataCache;
 use ON\Data\Mapper\Writer\ArrayWriter;
 use ON\Data\Mapper\Writer\ObjectWriter;
 use ON\Data\Mapper\Writer\WriterInterface;
@@ -87,6 +88,8 @@ final class MapperManager
 	 */
 	private array $registeredComponents = [];
 
+	private readonly ReflectionMetadataCache $reflectionMetadata;
+
 	/**
 	 * @param null|Closure(string, ConversionGateway): object $constructor
 	 */
@@ -95,11 +98,13 @@ final class MapperManager
 		private ?Closure $constructor = null,
 		private readonly FieldTypeRegistry $fieldTypes = new FieldTypeRegistry(),
 	) {
+		$this->reflectionMetadata = new ReflectionMetadataCache();
 	}
 
 	public function __clone()
 	{
 		$this->fieldTypes = clone $this->fieldTypes;
+		$this->reflectionMetadata = new ReflectionMetadataCache();
 	}
 
 	/**
@@ -268,8 +273,15 @@ final class MapperManager
 	{
 		$this->mapperInstances = [];
 		$this->writerInstances = [];
+		$this->reflectionMetadata->clear();
 		$this->fieldTypes->clearCache();
 		$this->gateway->clearRoutes();
+	}
+
+	/** @internal */
+	public function getReflectionMetadata(): ReflectionMetadataCache
+	{
+		return $this->reflectionMetadata;
 	}
 
 	public function warmUp(): void

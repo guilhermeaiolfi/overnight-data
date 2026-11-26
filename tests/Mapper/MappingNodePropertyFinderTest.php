@@ -52,6 +52,15 @@ final class MappingNodePropertyFinderTest extends TestCase
 		self::assertSame('score', $property->getName());
 	}
 
+	public function testStdClassSubclassKeepsItsDeclaredSourceMetadata(): void
+	{
+		$source = new FinderStdClassSource();
+		$node = MappingNode::root($source, [], $this->context())
+			->createChildNode('name', $source->name);
+
+		self::assertSame('external_name', $this->finder()->getMappedSourceName($node));
+	}
+
 	public function testTargetPropertyLookupPrefersMapFromBeforeActualPropertyName(): void
 	{
 		$target = new FinderPrecedenceTarget();
@@ -127,6 +136,12 @@ final class FinderPrecedenceTarget
 
 	#[MapFrom('external_name')]
 	public string $aliasedName;
+}
+
+final class FinderStdClassSource extends stdClass
+{
+	#[MapTo('external_name')]
+	public string $name = 'Ada';
 }
 
 final class FinderFirstSource

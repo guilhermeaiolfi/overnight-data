@@ -16,10 +16,9 @@ final class DocblockListTargetResolver
 	 */
 	private array $listTargets = [];
 
-	/**
-	 * @var array<class-string, array<string, class-string>>
-	 */
-	private static array $importMaps = [];
+	public function __construct(private readonly ReflectionMetadataCache $metadata = new ReflectionMetadataCache())
+	{
+	}
 
 	/**
 	 * @return class-string|null
@@ -129,7 +128,8 @@ final class DocblockListTargetResolver
 		}
 
 		$class = $property->getDeclaringClass()->getName();
-		$imports = self::$importMaps[$class] ??= $this->parseImports($property);
+		$metadata = $this->metadata->forClass($class);
+		$imports = $metadata->imports ??= $this->parseImports($property);
 
 		return $imports[$type] ?? null;
 	}
