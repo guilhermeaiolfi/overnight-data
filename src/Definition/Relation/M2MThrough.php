@@ -49,7 +49,7 @@ class M2MThrough extends DefinitionNode
 
 	public function innerKey(string|array $fieldName): self
 	{
-		$this->set('inner_keys', $this->normalizeKeys($fieldName, 'throughInnerKey'));
+		$this->set('inner_keys', RelationKeyPairing::normalizeFields($fieldName, 'throughInnerKey'));
 		$this->validateKeyCounts();
 		$this->relation()->resetKeyPairing();
 
@@ -78,7 +78,7 @@ class M2MThrough extends DefinitionNode
 
 	public function outerKey(string|array $fieldName): self
 	{
-		$this->set('outer_keys', $this->normalizeKeys($fieldName, 'throughOuterKey'));
+		$this->set('outer_keys', RelationKeyPairing::normalizeFields($fieldName, 'throughOuterKey'));
 		$this->validateKeyCounts();
 		$this->resetKeyPairing();
 
@@ -170,28 +170,6 @@ class M2MThrough extends DefinitionNode
 		return $owner instanceof M2MRelation
 			? $owner
 			: throw new LogicException('Many-to-many through owner is invalid.');
-	}
-
-	private function normalizeKeys(string|array $fieldNames, string $context): array
-	{
-		$keys = is_array($fieldNames) ? array_values($fieldNames) : [$fieldNames];
-		if ($keys === []) {
-			throw new InvalidArgumentException("{$context} cannot be empty.");
-		}
-
-		$normalized = [];
-		foreach ($keys as $fieldName) {
-			$fieldName = (string) $fieldName;
-			if ($fieldName === '') {
-				throw new InvalidArgumentException("{$context} cannot contain empty key names.");
-			}
-			if (in_array($fieldName, $normalized, true)) {
-				throw new InvalidArgumentException("{$context} cannot contain duplicate key '{$fieldName}'.");
-			}
-			$normalized[] = $fieldName;
-		}
-
-		return $normalized;
 	}
 
 	private function validateKeyCounts(): void

@@ -54,7 +54,7 @@ final class LoadRuntime
 		private readonly ?RepresentationSchema $schema = null,
 	) {
 		$this->rootBranch = new RootLoadBranch($rootQuery);
-		$this->outputProcessor = new RelationOutputProcessor($schema);
+		$this->outputProcessor = new RelationOutputProcessor();
 		$this->mapping = new FetchMapping();
 	}
 

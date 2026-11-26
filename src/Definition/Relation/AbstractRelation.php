@@ -163,7 +163,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 
 	public function innerKey(string|array $fieldName): self
 	{
-		$this->set('inner_keys', $this->normalizeKeys($fieldName, 'innerKey'));
+		$this->set('inner_keys', RelationKeyPairing::normalizeFields($fieldName, 'innerKey'));
 		$this->validateRelationKeys();
 		$this->resetKeyPairing();
 
@@ -202,7 +202,7 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 
 	public function outerKey(string|array $fieldName): self
 	{
-		$this->set('outer_keys', $this->normalizeKeys($fieldName, 'outerKey'));
+		$this->set('outer_keys', RelationKeyPairing::normalizeFields($fieldName, 'outerKey'));
 		$this->validateRelationKeys();
 		$this->resetKeyPairing();
 
@@ -339,28 +339,6 @@ abstract class AbstractRelation extends DefinitionNode implements RelationInterf
 		}
 
 		return $parent;
-	}
-
-	protected function normalizeKeys(string|array $fieldNames, string $context): array
-	{
-		$keys = is_array($fieldNames) ? array_values($fieldNames) : [$fieldNames];
-		if ($keys === []) {
-			throw new InvalidArgumentException("{$context} cannot be empty.");
-		}
-
-		$normalized = [];
-		foreach ($keys as $fieldName) {
-			$fieldName = (string) $fieldName;
-			if ($fieldName === '') {
-				throw new InvalidArgumentException("{$context} cannot contain empty key names.");
-			}
-			if (in_array($fieldName, $normalized, true)) {
-				throw new InvalidArgumentException("{$context} cannot contain duplicate key '{$fieldName}'.");
-			}
-			$normalized[] = $fieldName;
-		}
-
-		return $normalized;
 	}
 
 	protected function validateRelationKeys(): void

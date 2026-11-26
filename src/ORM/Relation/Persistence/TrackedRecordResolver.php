@@ -8,7 +8,6 @@ use ON\Data\Definition\Relation\RelationInterface;
 use ON\Data\ORM\Exception\RelationPersistenceException;
 use ON\Data\ORM\Persistence\PersistenceContext;
 use ON\Data\ORM\Record\RecordState;
-use ON\Data\ORM\Relation\RelationTarget;
 
 final class TrackedRecordResolver
 {
@@ -18,19 +17,13 @@ final class TrackedRecordResolver
 		object $item,
 		string $role,
 	): RecordState {
-		$target = RelationTarget::from($item);
-		if ($target->isRecord()) {
-			$record = $target->getRecord();
-			assert($record instanceof RecordState);
-			$this->assertRecordInStore($context, $relation, $record, $role);
+		if ($item instanceof RecordState) {
+			$this->assertRecordInStore($context, $relation, $item, $role);
 
-			return $record;
+			return $item;
 		}
 
-		$representation = $target->getRepresentation();
-		assert($representation !== null);
-
-		$tracked = $context->getRepresentations()->get($representation);
+		$tracked = $context->getRepresentations()->get($item);
 		if ($tracked === null) {
 			throw new RelationPersistenceException(sprintf(
 				"Relation '%s' %s item is not tracked.",

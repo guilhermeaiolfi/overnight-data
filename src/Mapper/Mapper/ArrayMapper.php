@@ -9,6 +9,7 @@ use ON\Data\Mapper\MappingBranch;
 use ON\Data\Mapper\MappingNode;
 use ON\Data\Mapper\MappingOptions;
 use ON\Data\Mapper\Support\ArrayPathExpander;
+use ON\Data\Mapper\Support\MappingArguments;
 
 final class ArrayMapper implements MapperInterface
 {
@@ -42,13 +43,7 @@ final class ArrayMapper implements MapperInterface
 
 	private function shouldExpandDottedKeys(MappingNode $node): bool
 	{
-		$options = [];
-
-		foreach ($node->getArguments() as $argument) {
-			if ($argument instanceof ArrayMapperOptions) {
-				$options[] = $argument;
-			}
-		}
+		$options = MappingArguments::ofType($node->getArguments(), ArrayMapperOptions::class);
 
 		if ($options === []) {
 			return true;

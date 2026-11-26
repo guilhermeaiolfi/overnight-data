@@ -82,6 +82,18 @@ final class MapperManagerTest extends TestCase
 		TrackingCustomFieldType::reset();
 	}
 
+	public function testClonedManagerKeepsItsRegistrationsSeparate(): void
+	{
+		$gateway = new ConversionGateway();
+		$manager = $gateway->getMapperManager();
+		$copy = clone $manager;
+		$copy->register(CustomFieldType::class);
+
+		self::assertSame(CustomFieldType::class, $copy->getFieldType('custom'));
+		self::assertFalse($manager->has(CustomFieldType::class));
+		self::assertArrayNotHasKey('custom', $manager->getRegisteredFieldTypes());
+	}
+
 	public function testRegistrationClassifiesComponentsWithoutInstantiation(): void
 	{
 		$manager = new MapperManager($this->gateway());
@@ -674,9 +686,10 @@ final class MapperManagerTest extends TestCase
 
 	private function resolvedCodecCache(MapperManager $manager): array
 	{
-		$reflection = new ReflectionProperty($manager, 'resolvedFieldTypeCodecs');
+		$registry = (new ReflectionProperty($manager, 'fieldTypes'))->getValue($manager);
+		$reflection = new ReflectionProperty($registry, 'resolvedFieldTypeCodecs');
 
-		return $reflection->getValue($manager);
+		return $reflection->getValue($registry);
 	}
 }
 

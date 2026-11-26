@@ -162,6 +162,21 @@ final class SqlFunctionCompilationTest extends TestCase
 		}
 	}
 
+	public function testRecursionThroughACompoundExpressionIsRejected(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$expression = x()->fn()->call(RecursiveCompound::class, $users->firstName);
+		RecursiveCompound::$node = $expression;
+
+		try {
+			$this->expectException(FunctionCompilationException::class);
+			$this->expectExceptionMessage('Recursive compilation');
+			$this->compileSql($users->select($expression->as('value')));
+		} finally {
+			RecursiveCompound::$node = null;
+		}
+	}
+
 	public function testUnsupportedPlatformErrorsIdentifyFunctionAndPlatform(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
@@ -287,6 +302,21 @@ final class RecursiveSelf implements QueryFunctionInterface
 		FunctionArguments $arguments,
 	): CompiledExpression {
 		return $context->compile(self::$node ?? x()->fn()->call(self::class, $arguments->expression(0)));
+	}
+}
+
+final class RecursiveCompound implements QueryFunctionInterface
+{
+	public static ?FunctionCallExpression $node = null;
+
+	public function compile(
+		FunctionCompilationContextInterface $context,
+		FunctionArguments $arguments,
+	): CompiledExpression {
+		$node = self::$node;
+		self::$node = null;
+
+		return $context->compile(x()->concat($node ?? $arguments->expression(0), '!'));
 	}
 }
 
