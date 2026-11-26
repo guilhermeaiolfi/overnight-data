@@ -73,6 +73,53 @@ final class SessionGraphAdoptionTest extends TestCase
 		yield 'create child, explicit flat update' => [true, 'update'];
 	}
 
+	public function testUpdatingARelationOnlySchemaWithAnExplicitOwnerIdentityDoesNotInsertTheOwner(): void
+	{
+		$users = $this->users();
+		$users->hasMany('reports', 'users')->innerKey('id')->outerKey('manager_id');
+		$schema = new RepresentationSchema($users);
+		$schema->addRelation(new RepresentationRelationSchema('reports', $users, 'reports', $this->userSchemaWithId()));
+		$owner = (object) ['reports' => []];
+		$executor = new RecordingCommandExecutor();
+		$session = new Session($executor);
+		$session->update($owner, $schema)->identity(['id' => 7]);
+
+		$session->flush();
+
+		$record = $session->getRepresentations()->get($owner)->requireRootRecord();
+		self::assertSame($record, $session->getRecords()->getByKey($users->getKey(7)));
+		self::assertTrue($record->isClean());
+		self::assertSame([], $executor->getCommands());
+	}
+
+	public function testFailedChildCanBeCorrectedAndRetriedWithoutCreatingTheOwnerTwice(): void
+	{
+		$users = $this->users();
+		$users->hasMany('reports', 'users')->innerKey('id')->outerKey('manager_id');
+		$schema = $this->userSchemaWithId();
+		$schema->addRelation(new RepresentationRelationSchema('reports', $users, 'reports', $this->userSchemaWithId()));
+		$child = (object) ['name' => 'Child'];
+		$owner = (object) ['name' => 'Owner', 'reports' => [$child]];
+		$session = new Session(new RecordingCommandExecutor());
+		$session->create($owner, $schema);
+		$session->update($child);
+
+		try {
+			$session->sync();
+			self::fail('An update requires the child identity.');
+		} catch (StateException $exception) {
+			self::assertStringContainsString('primary key', $exception->getMessage());
+			self::assertTrue($session->getContext()->getIntents()->has($owner));
+			self::assertTrue($session->getContext()->getIntents()->has($child));
+		}
+
+		$child->id = 2;
+		$session->sync();
+		self::assertCount(2, $session->getRecords()->getAll());
+		self::assertFalse($session->getContext()->getIntents()->has($owner));
+		self::assertFalse($session->getContext()->getIntents()->has($child));
+	}
+
 	public function testStagedCyclicGraphBindsEachObjectOnlyOnceWithExplicitSchemas(): void
 	{
 		$users = $this->users();

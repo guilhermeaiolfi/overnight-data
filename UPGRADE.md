@@ -12,6 +12,7 @@
 - Create one `RepresentationReader` per operation and bind DTOs with `withObject()` before reading paths or relations. Use `PathReadResult::getValue()` to get a present value. It throws `SyncException` for a missing or invalid path.
 - To customize mapping in low-level ORM helpers, pass the gateway to synchronizer and adoption constructors, a fresh reader to `RepresentationIdentifier::attach()`, or a reader factory to `QueryResultHydrator`. `Session` handles this wiring.
 - Use `Session::prepare()` and `Session::track()` for direct writable-query tracking. `QueryRepresentationPlan::getFetchSchema()` returns the prepared schema.
+- An update whose schema contains only relations now uses the supplied owner identity. Previously it could schedule an insert for a new owner.
 
 ## What documentation means
 
