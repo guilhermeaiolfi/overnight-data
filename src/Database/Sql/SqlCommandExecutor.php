@@ -6,8 +6,8 @@ namespace ON\Data\Database\Sql;
 
 use ON\Data\Database\ConnectionInterface;
 use ON\Data\Database\DatabaseFamily;
-use ON\Data\Database\Sql\Dialect\AbstractDialect;
 use ON\Data\Database\Sql\Dialect\DialectFactory;
+use ON\Data\Database\Sql\Dialect\DialectInterface;
 use ON\Data\Database\TransactionStateAwareInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
@@ -24,7 +24,7 @@ use ON\Data\ORM\Persistence\UpdateCommand;
 
 final class SqlCommandExecutor implements CommandExecutorInterface, TransactionalCommandExecutorInterface, TransactionStateAwareInterface
 {
-	private readonly AbstractDialect $dialect;
+	private readonly DialectInterface $dialect;
 
 	private readonly SqlCommandCompiler $compiler;
 
@@ -33,7 +33,7 @@ final class SqlCommandExecutor implements CommandExecutorInterface, Transactiona
 	public function __construct(
 		private readonly ConnectionInterface $connection,
 		?CommandValueResolver $commandValueResolver = null,
-		?AbstractDialect $dialect = null,
+		?DialectInterface $dialect = null,
 	) {
 		$this->dialect = $dialect ?? DialectFactory::forConnection($connection);
 		$this->compiler = new SqlCommandCompiler($this->dialect, $connection->tablePrefix());

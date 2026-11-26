@@ -7,8 +7,8 @@ namespace Tests\ON\Data\Database\Sql;
 use ON\Data\Database\DatabaseFamily;
 use ON\Data\Database\DatabasePlatformInterface;
 use ON\Data\Database\Pdo\PdoConnection;
-use ON\Data\Database\Sql\Dialect\AbstractDialect;
 use ON\Data\Database\Sql\Dialect\DialectFactory;
+use ON\Data\Database\Sql\Dialect\DialectInterface;
 use ON\Data\Database\Sql\Dialect\MySqlDialect;
 use ON\Data\Database\Sql\Dialect\PostgresDialect;
 use ON\Data\Database\Sql\Dialect\SqliteDialect;
@@ -87,7 +87,7 @@ final class DialectTest extends TestCase
 
 	#[DataProvider('dialects')]
 	public function testDml(
-		AbstractDialect $dialect,
+		DialectInterface $dialect,
 		string $alias,
 		string $table,
 		string $emptyInsert,

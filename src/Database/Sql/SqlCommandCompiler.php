@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Database\Sql;
 
-use ON\Data\Database\Sql\Dialect\AbstractDialect;
+use ON\Data\Database\Sql\Dialect\DialectInterface;
 use ON\Data\Definition\Collection\CollectionInterface;
 use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\ORM\Exception\InvalidCommandException;
@@ -15,7 +15,7 @@ use ON\Data\ORM\Persistence\UpdateCommand;
 /** @internal */
 final readonly class SqlCommandCompiler
 {
-	public function __construct(private AbstractDialect $dialect, private string $tablePrefix)
+	public function __construct(private DialectInterface $dialect, private string $tablePrefix)
 	{
 	}
 

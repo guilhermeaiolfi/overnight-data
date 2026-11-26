@@ -12,7 +12,7 @@ use ON\Data\Database\Pdo\PdoConnection;
 /** @internal */
 final class DialectFactory
 {
-	public static function forConnection(ConnectionInterface $connection, ?bool $insertReturning = null): AbstractDialect
+	public static function forConnection(ConnectionInterface $connection, ?bool $insertReturning = null): DialectInterface
 	{
 		$version = $connection instanceof PdoConnection ? $connection->serverVersion() : null;
 		$returning = $insertReturning ?? ($connection instanceof PdoConnection ? $connection->insertReturningOverride() : null);
