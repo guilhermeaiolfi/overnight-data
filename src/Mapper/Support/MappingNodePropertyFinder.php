@@ -49,6 +49,31 @@ final class MappingNodePropertyFinder
 		MappingNode $node,
 		?string $mappedSourceName = null,
 	): ?ReflectionProperty {
+		return $this->targetMatcherFor($node)?->match(
+			$mappedSourceName ?? $this->getMappedSourceName($node),
+		);
+	}
+
+	/** @return array{ReflectionProperty|null, ReflectionProperty|null} */
+	public function findSourceAndTargetProperties(MappingNode $node): array
+	{
+		$sourceProperty = $this->findSourceProperty($node);
+		$targetProperty = $this->targetMatcherFor($node)?->match(
+			$this->mappedSourceName($node, $sourceProperty),
+		);
+
+		return [$sourceProperty, $targetProperty];
+	}
+
+	public function getMappedSourceName(
+		MappingNode $node,
+		?ReflectionProperty $sourceProperty = null,
+	): string {
+		return $this->mappedSourceName($node, $sourceProperty ?? $this->findSourceProperty($node));
+	}
+
+	private function targetMatcherFor(MappingNode $node): ?ObjectPropertyMatcher
+	{
 		$target = $node->getParentTarget();
 		if ($target instanceof stdClass || $target === stdClass::class) {
 			return null;
@@ -61,16 +86,14 @@ final class MappingNodePropertyFinder
 			return null;
 		}
 
-		return $this->matcherFor($class)->match(
-			$mappedSourceName ?? $this->getMappedSourceName($node),
-		);
+		return $this->targetMatchers[$class]
+			??= new ObjectPropertyMatcher(new ReflectionClass($class));
 	}
 
-	public function getMappedSourceName(
+	private function mappedSourceName(
 		MappingNode $node,
-		?ReflectionProperty $sourceProperty = null,
+		?ReflectionProperty $sourceProperty,
 	): string {
-		$sourceProperty ??= $this->findSourceProperty($node);
 		if ($sourceProperty === null) {
 			return (string) $node->getName();
 		}
@@ -96,14 +119,5 @@ final class MappingNodePropertyFinder
 		}
 
 		return $mappedSourceName;
-	}
-
-	/**
-	 * @param class-string $class
-	 */
-	private function matcherFor(string $class): ObjectPropertyMatcher
-	{
-		return $this->targetMatchers[$class]
-			??= new ObjectPropertyMatcher(new ReflectionClass($class));
 	}
 }
