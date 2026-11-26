@@ -87,6 +87,25 @@ final class SqlJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testJoinedStarCanBeFetchedWithAndWithoutRowAssembly(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$company = $users->join($this->registry->getCollection('companies'), JoinType::LEFT, 'company');
+		$company->on(x()->eq($users->companyId, $company->id));
+
+		$users->select($users->id, $company->star())->where(x()->eq($users->id, 1));
+
+		self::assertSame([
+			['id' => 1],
+		], $users->fetchAll());
+
+		$users->select($users->name->as('user_name'));
+
+		self::assertSame([
+			['id' => 1, 'user_name' => 'Ada'],
+		], $users->fetchAll());
+	}
+
 	public function testDerivedRejectsCollidingRootAndRelatedFieldNames(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
