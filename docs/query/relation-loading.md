@@ -117,6 +117,8 @@ The public configuration API on `RelationRef` is:
 
 Built-in `HasMany` limit/offset also requires deterministic selection-level `orderBy(...)`. If no selection order is configured, the loader rejects the relation because per-parent ranking would be ambiguous. The loader appends any missing target primary-key fields as stable tie breakers.
 
+Built-in many-to-many separate loads also page per parent. Each target takes one page position. If the sort joins multiple rows for a target, its first row in the requested order determines that position. Missing target primary-key fields break ties and provide the default order when no sort is supplied.
+
 `strategy(null)` clears an explicit strategy override and falls back to the loader default. `join()` and `separate()` are convenience wrappers for `strategy(LoadStrategy::JOIN)` and `strategy(LoadStrategy::SEPARATE_QUERY)`. Repeated strategy calls on the same cached ref use the latest call.
 
 ## Visible and Hidden Branches

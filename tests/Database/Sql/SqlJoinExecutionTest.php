@@ -1148,6 +1148,89 @@ final class SqlJoinExecutionTest extends TestCase
 		$users->relation('posts', as: 'name');
 	}
 
+	public function testM2MStructuredPaginationRanksDistinctTargetsPerParent(): void
+	{
+		$this->pdo->exec('INSERT INTO user_roles (user_id, role_id) VALUES (1, 11), (2, 11)');
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$roles = $users->roles;
+		$roles->select('name')->orderBy($roles->name->desc())->offset(1)->limit(1);
+
+		$rows = $users->select($users->name)->orderBy($users->id->asc())->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'roles' => [['name' => 'Admin']]],
+			['name' => 'Grace', 'roles' => [['name' => 'Admin']]],
+			['name' => 'Linus', 'roles' => []],
+		], $rows);
+	}
+
+	public function testM2MStructuredPaginationUsesPrimaryKeyOrderByDefault(): void
+	{
+		$this->pdo->exec('ALTER TABLE roles ADD COLUMN active INTEGER NOT NULL DEFAULT 1');
+		$this->registry->getCollection('roles')->field('active', 'bool');
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->roles->select('name', 'active')->limit(1);
+
+		$rows = $users->select($users->name)->orderBy($users->id->asc())->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'roles' => [['name' => 'Admin', 'active' => true]]],
+			['name' => 'Grace', 'roles' => [['name' => 'Admin', 'active' => true]]],
+			['name' => 'Linus', 'roles' => []],
+		], $rows);
+	}
+
+	public function testM2MStructuredPaginationCountsEachTargetOnceWhenSortingByToManyFields(): void
+	{
+		foreach ([['Admin'], ['Editor'], []] as $offset => $expected) {
+			$users = $this->database->query($this->registry->getCollection('users'));
+			$roles = $users->roles;
+			$roles->select('name')->orderBy($roles->permissions->id->asc())->offset($offset)->limit(1);
+			$row = $users->select($users->id)->where($users->id->eq(1))->fetchOne();
+
+			self::assertSame($expected, array_column($row['roles'], 'name'), "Unexpected page at offset {$offset}.");
+		}
+	}
+
+	public function testM2MStructuredPaginationPartitionsByEveryParentKeyField(): void
+	{
+		$this->pdo->exec("INSERT INTO composite_articles VALUES (2, 'joins', 'Other')");
+		$this->pdo->exec("INSERT INTO composite_tags VALUES (2, 'sqlite', 'sqlite')");
+		$this->pdo->exec("INSERT INTO composite_article_tag VALUES (2, 'joins', 2, 'sqlite')");
+		$articles = $this->database->query($this->registry->getCollection('composite_articles'));
+		$articles->tags->select('name')->limit(1);
+
+		$rows = $articles
+			->select($articles->tenantId, $articles->slug)
+			->orderBy($articles->tenantId->asc(), $articles->slug->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['tenantId' => 1, 'slug' => 'joins', 'tags' => [['name' => 'orm']]],
+			['tenantId' => 1, 'slug' => 'lonely', 'tags' => []],
+			['tenantId' => 2, 'slug' => 'joins', 'tags' => [['name' => 'sqlite']]],
+		], $rows);
+	}
+
+	public function testM2MAliasesLoadIndependentPagesWithTypedFields(): void
+	{
+		$this->pdo->exec('ALTER TABLE roles ADD COLUMN active INTEGER NOT NULL DEFAULT 1');
+		$this->pdo->exec('UPDATE roles SET active = 0 WHERE id = 11');
+		$this->registry->getCollection('roles')->field('active', 'bool');
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$first = $users->relation('roles', as: 'firstRole');
+		$next = $users->relation('roles', as: 'nextRole');
+		$first->select('name', 'active')->orderBy($first->relation('permissions', as: 'permissionSort')->id->asc())->limit(1);
+		$next->select('name', 'active')->orderBy($next->permissions->id->asc())->offset(1)->limit(1);
+
+		$rows = $users->select($users->name)->orderBy($users->id->asc())->copy()->fetchAll();
+		self::assertSame([
+			['name' => 'Ada', 'firstRole' => [['name' => 'Admin', 'active' => true]], 'nextRole' => [['name' => 'Editor', 'active' => false]]],
+			['name' => 'Grace', 'firstRole' => [['name' => 'Admin', 'active' => true]], 'nextRole' => []],
+			['name' => 'Linus', 'firstRole' => [], 'nextRole' => []],
+		], $rows);
+	}
+
 	public function testItLoadsNestedRelationsBelowM2MTargetBranches(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
