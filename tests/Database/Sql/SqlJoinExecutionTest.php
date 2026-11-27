@@ -26,6 +26,7 @@ use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\SourceMap;
 use function ON\Data\Query\x;
+use ON\Data\Schema\Exception\InvalidSchemaException;
 use PDO;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\Attributes\TestWith;
@@ -1045,6 +1046,63 @@ final class SqlJoinExecutionTest extends TestCase
 
 		$this->expectException(RelationSelectionException::class);
 		$this->expectExceptionMessage('only supported for read-only queries');
+		$users->projection();
+	}
+
+	#[TestWith(['update'])]
+	#[TestWith(['create'])]
+	#[TestWith(['sync'])]
+	#[TestWith(['identify'])]
+	#[TestWith(['withSchema'])]
+	public function testAliasedFetchSchemasCannotBeUsedBySessions(string $operation): void
+	{
+		$collection = $this->registry->getCollection('users');
+		$users = $this->database->query($collection);
+		$users->relation('company', as: 'employer')->select('id', 'name');
+		$users->relation('company', as: 'billing')->select('id', 'name');
+		$row = $users->select($users->id)->where($users->id->eq(1))->fetchOne();
+		$item = (object) [
+			'id' => $row['id'],
+			'employer' => (object) ['id' => $row['employer']['id'], 'name' => 'First edit'],
+			'billing' => (object) ['id' => $row['billing']['id'], 'name' => 'Second edit'],
+		];
+		$schema = $users->getFetchSchema();
+		self::assertNotNull($schema);
+		$session = $this->database->session();
+
+		$this->expectException(InvalidSchemaException::class);
+		$this->expectExceptionMessage('Read-only representation schemas cannot be used for writes.');
+		match ($operation) {
+			'update' => $session->update($item, $schema),
+			'create' => $session->create($item, $schema),
+			'sync' => $session->sync($item, $schema),
+			'identify' => $session->identify($collection, ['id' => 1], $item, $schema),
+			'withSchema' => $session->update($item)->withSchema($schema),
+		};
+	}
+
+	public function testFlatAliasedFetchSchemaCannotBeUsedBySessions(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$employer = $users->relation('company', as: 'employer');
+		$item = (object) $users->select($users->id, $employer->name->as('employerName'))
+			->where($users->id->eq(1))->fetchOne();
+		self::assertSame('Acme', $item->employerName);
+		$schema = $users->getFetchSchema();
+		self::assertNotNull($schema);
+
+		$this->expectException(InvalidSchemaException::class);
+		$this->database->session()->update($item, $schema);
+	}
+
+	public function testNestedStarDoesNotBypassTheWritableAliasGuard(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$posts = $users->relation('posts');
+		$writer = $posts->relation('author', as: 'writer');
+		$posts->select($posts->all(), $writer->name->as('writerName'));
+
+		$this->expectException(RelationSelectionException::class);
 		$users->projection();
 	}
 

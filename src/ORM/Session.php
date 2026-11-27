@@ -122,6 +122,7 @@ final class Session implements WritableResultHandler
 		object $representation,
 		?RepresentationSchema $schema = null,
 	): IntentBuilder {
+		$schema?->assertWritable();
 		$intent = $this->context->getIntents()->ensure(
 			$representation,
 			RepresentationIntentLifecycle::Update,
@@ -135,6 +136,7 @@ final class Session implements WritableResultHandler
 
 	public function create(object $representation, ?RepresentationSchema $schema = null): IntentBuilder
 	{
+		$schema?->assertWritable();
 		$intent = $this->context->getIntents()->ensure(
 			$representation,
 			RepresentationIntentLifecycle::Create,
@@ -213,6 +215,7 @@ final class Session implements WritableResultHandler
 		?object $representation = null,
 		?RepresentationSchema $schema = null,
 	): object {
+		$schema?->assertWritable();
 		$key = $collection->getKey($key);
 		$keyOnly = $representation === null && $schema === null;
 		$representation ??= RepresentationSchema::representationForKey($key);

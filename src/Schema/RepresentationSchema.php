@@ -37,6 +37,7 @@ final class RepresentationSchema
 	private array $paths = [];
 	/** @var list<RepresentationSource>|null */
 	private ?array $sourcesCache = null;
+	private bool $readOnly = false;
 
 	public function __construct(
 		private CollectionInterface $collection,
@@ -71,6 +72,32 @@ final class RepresentationSchema
 	public function getCollectionName(): string
 	{
 		return $this->collection->getName();
+	}
+
+	/** @internal Record that this schema came from a read-only projection. */
+	public function markReadOnly(): void
+	{
+		$this->readOnly = true;
+	}
+
+	public function assertWritable(): void
+	{
+		$pending = [$this];
+		$visited = [];
+		while ($pending !== []) {
+			$schema = array_pop($pending);
+			if ($schema->readOnly) {
+				throw new InvalidSchemaException('Read-only representation schemas cannot be used for writes.');
+			}
+			$id = spl_object_id($schema);
+			if (isset($visited[$id])) {
+				continue;
+			}
+			$visited[$id] = true;
+			foreach ($schema->relations as $relation) {
+				$pending[] = $relation->getRelatedSchema();
+			}
+		}
 	}
 
 	public function addField(RepresentationFieldSchema $fieldSchema): void

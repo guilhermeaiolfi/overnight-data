@@ -66,6 +66,7 @@ final class IntentBuilder
 
 	public function withSchema(RepresentationSchema $schema): self
 	{
+		$schema->assertWritable();
 		$this->intent->setSchema($schema);
 
 		return $this;

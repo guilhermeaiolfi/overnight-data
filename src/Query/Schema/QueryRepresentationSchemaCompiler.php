@@ -60,10 +60,10 @@ final class QueryRepresentationSchemaCompiler
 			}
 		}
 
-		$this->addFields($schema, $this->fieldsFromSelections($query, $rootFields, $forWrite));
+		$this->addFields($schema, $this->fieldsFromSelections($schema, $query, $rootFields, $forWrite));
 		$this->addExpressions($schema, $this->expressionsFromSelections($query, $explicit));
 		SchemaFields::assemblePrimaryKeyFields($schema, $collection);
-		$this->addFields($schema, $this->fieldsFromSelections($query, $relatedFields, $forWrite));
+		$this->addFields($schema, $this->fieldsFromSelections($schema, $query, $relatedFields, $forWrite));
 		SchemaFields::assembleFlatSourcePrimaryKeys($schema);
 		$this->compileRelationSelections($schema, $query, $forWrite);
 
@@ -133,12 +133,15 @@ final class QueryRepresentationSchemaCompiler
 		$relationRef = $selection->getRelationRef();
 		$targetCollection = $relationRef->getDefinition()->getCollection();
 		$schema = new RepresentationSchema($targetCollection);
+		if ($relationRef->hasAliasedPath()) {
+			$schema->markReadOnly();
+		}
 
 		if ($selection->hasDefaultSelection()) {
 			$this->addFields($schema, SchemaFields::defaultFields($targetCollection));
 		} else {
 			$explicit = $selection->getSelections()->getExplicit();
-			$this->addFields($schema, $this->fieldsFromSelections($relationRef, $explicit, $forWrite));
+			$this->addFields($schema, $this->fieldsFromSelections($schema, $relationRef, $explicit, $forWrite));
 			$this->addExpressions($schema, $this->expressionsFromSelections($relationRef, $explicit));
 			SchemaFields::assembleFlatSourcePrimaryKeys($schema);
 		}
@@ -181,28 +184,40 @@ final class QueryRepresentationSchemaCompiler
 	 *
 	 * @return list<RepresentationFieldSchema>
 	 */
-	private function fieldsFromSelections(SelectQuery|RelationRef $level, array $selections, bool $forWrite): array
-	{
+	private function fieldsFromSelections(
+		RepresentationSchema $schema,
+		SelectQuery|RelationRef $level,
+		array $selections,
+		bool $forWrite,
+	): array {
 		$fields = [];
+		$usesDefaultFields = false;
 
 		foreach ($selections as $selection) {
 			$expression = $selection->getExpression();
 
 			if ($expression instanceof StarExpression && $expression->getSource() === $level) {
-				return SchemaFields::defaultFields($level->getCollection());
+				$usesDefaultFields = true;
 			}
 
 			$source = $selection->getFieldRef()?->getSource();
-			if ($forWrite && $source instanceof RelationRef && $source->hasAliasedPath()) {
-				throw RelationSelectionException::aliasRequiresReadOnlyQuery($source);
+			if ($source instanceof RelationRef && $source->hasAliasedPath()) {
+				if ($forWrite) {
+					throw RelationSelectionException::aliasRequiresReadOnlyQuery($source);
+				}
+				$schema->markReadOnly();
 			}
+			if ($usesDefaultFields) {
+				continue;
+			}
+
 			$field = $this->fieldFromSelection($level, $selection);
 			if ($field instanceof RepresentationFieldSchema) {
 				$fields[] = $field;
 			}
 		}
 
-		return $fields;
+		return $usesDefaultFields ? SchemaFields::defaultFields($level->getCollection()) : $fields;
 	}
 
 	/**

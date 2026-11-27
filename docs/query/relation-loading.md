@@ -85,7 +85,9 @@ $rows = $users->select($users->id)->fetchAll();
 Aliases are available at every level of a read query. Choose a unique name
 starting with a letter or underscore. Aliased relations cannot be used in a
 writable projection because multiple result branches can represent different
-subsets of the same relationship.
+subsets of the same relationship. Fetch schemas containing aliased relations or
+flat fields sourced through an alias are read-only and cannot be passed to a
+write session.
 
 ## Load Options
 

@@ -56,6 +56,7 @@ final class SessionContext
 		RepresentationState $state,
 		RepresentationAttachmentMode $mode = RepresentationAttachmentMode::Add,
 	): RepresentationState {
+		$state->getSchema()->assertWritable();
 		if ($mode === RepresentationAttachmentMode::Add && $this->representations->has($representation)) {
 			throw new SyncException('Cannot attach representation because it is already tracked.');
 		}
