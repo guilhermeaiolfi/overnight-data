@@ -639,7 +639,7 @@ final class SqlJoinExecutionTest extends TestCase
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 		$users->posts
-			->select('title')
+			->select('title', 'published')
 			->orderBy($users->posts->title->desc())
 			->limit(1);
 
@@ -649,8 +649,8 @@ final class SqlJoinExecutionTest extends TestCase
 			->fetchAll();
 
 		self::assertSame([
-			['name' => 'Ada', 'posts' => [['title' => 'World']]],
-			['name' => 'Grace', 'posts' => [['title' => 'Graph']]],
+			['name' => 'Ada', 'posts' => [['title' => 'World', 'published' => false]]],
+			['name' => 'Grace', 'posts' => [['title' => 'Graph', 'published' => true]]],
 			['name' => 'Linus', 'posts' => []],
 		], $rows);
 	}
@@ -1028,14 +1028,16 @@ final class SqlJoinExecutionTest extends TestCase
 
 	public function testM2MStructuredPaginationUsesPrimaryKeyOrderByDefault(): void
 	{
+		$this->pdo->exec('ALTER TABLE roles ADD COLUMN active INTEGER NOT NULL DEFAULT 1');
+		$this->registry->getCollection('roles')->field('active', 'bool');
 		$users = $this->database->query($this->registry->getCollection('users'));
-		$users->roles->select('name')->limit(1);
+		$users->roles->select('name', 'active')->limit(1);
 
 		$rows = $users->select($users->name)->orderBy($users->id->asc())->fetchAll();
 
 		self::assertSame([
-			['name' => 'Ada', 'roles' => [['name' => 'Admin']]],
-			['name' => 'Grace', 'roles' => [['name' => 'Admin']]],
+			['name' => 'Ada', 'roles' => [['name' => 'Admin', 'active' => true]]],
+			['name' => 'Grace', 'roles' => [['name' => 'Admin', 'active' => true]]],
 			['name' => 'Linus', 'roles' => []],
 		], $rows);
 	}

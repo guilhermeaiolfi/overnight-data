@@ -48,6 +48,13 @@ final class PartitionedRelationQuery
 		$inner = $childQuery->copy();
 		$inner->getSelections()->removeByTag(SelectionTag::DEFAULT);
 		$carryAliases = DerivedOutputColumns::names($inner);
+		$carryFields = [];
+		foreach ($inner->getSelections()->getAll() as $selection) {
+			$field = $selection->getFieldRef();
+			if ($field !== null) {
+				$carryFields[$selection->getSelectionKey()] = $field->getField();
+			}
+		}
 		$sources = SourceMap::of($childQuery, $inner);
 		$innerJoins = $inner->getJoins();
 		foreach ($childQuery->getJoins() as $index => $join) {
@@ -92,7 +99,7 @@ final class PartitionedRelationQuery
 
 		if ($carryAliases !== []) {
 			$outer->getSelections()->addExplicit(array_map(
-				static fn (string $alias) => $outer->field($alias)->as($alias),
+				static fn (string $alias) => (new SourceFieldExpression($ranked, $alias, $carryFields[$alias] ?? null))->as($alias),
 				$carryAliases,
 			));
 		}
