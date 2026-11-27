@@ -639,7 +639,7 @@ final class SqlJoinExecutionTest extends TestCase
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
 		$users->posts
-			->select('title')
+			->select('title', 'published')
 			->orderBy($users->posts->title->desc())
 			->limit(1);
 
@@ -649,8 +649,8 @@ final class SqlJoinExecutionTest extends TestCase
 			->fetchAll();
 
 		self::assertSame([
-			['name' => 'Ada', 'posts' => [['title' => 'World']]],
-			['name' => 'Grace', 'posts' => [['title' => 'Graph']]],
+			['name' => 'Ada', 'posts' => [['title' => 'World', 'published' => false]]],
+			['name' => 'Grace', 'posts' => [['title' => 'Graph', 'published' => true]]],
 			['name' => 'Linus', 'posts' => []],
 		], $rows);
 	}

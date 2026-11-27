@@ -189,7 +189,7 @@ final class SqlQueryCompiler
 				$resultColumns[] = new SqlResultColumn(
 					$backendName,
 					$logicalName,
-					$expression instanceof FieldRef ? $expression->getField() : null,
+					$expression instanceof FieldRef || $expression instanceof SourceFieldExpression ? $expression->getField() : null,
 				);
 			}
 

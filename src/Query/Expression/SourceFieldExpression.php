@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Expression;
 
+use ON\Data\Definition\Field\FieldInterface;
 use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\SourceMap;
 
@@ -12,6 +13,7 @@ final class SourceFieldExpression extends AbstractAggregateableExpression
 	public function __construct(
 		private readonly QuerySourceInterface $source,
 		private readonly string $name,
+		private readonly ?FieldInterface $field = null,
 	) {
 	}
 
@@ -23,6 +25,11 @@ final class SourceFieldExpression extends AbstractAggregateableExpression
 	public function getName(): string
 	{
 		return $this->name;
+	}
+
+	public function getField(): ?FieldInterface
+	{
+		return $this->field;
 	}
 
 	public function getSelectionKey(): string
@@ -45,6 +52,6 @@ final class SourceFieldExpression extends AbstractAggregateableExpression
 	{
 		$source = $sources->remap($this->source);
 
-		return $source === $this->source ? $this : new self($source, $this->name);
+		return $source === $this->source ? $this : new self($source, $this->name, $this->field);
 	}
 }
