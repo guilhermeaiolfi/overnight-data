@@ -1010,6 +1010,50 @@ final class SqlJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testRelationAliasesIndependentlyLoadTheSameDefinition(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$published = $users->relation('posts', as: 'publishedPosts');
+		$drafts = $users->relation('posts', as: 'draftPosts');
+		$published->select('title')->where($published->published->eq(true));
+		$drafts->select('title')->where($drafts->published->eq(false));
+		$published->relation('comments', as: 'replies')->select('body');
+		$drafts->relation('comments', as: 'replies')->select('body');
+
+		$users->select($users->name)->orderBy($users->id->asc());
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'publishedPosts' => [['title' => 'Hello', 'replies' => [['body' => 'First']]]],
+				'draftPosts' => [['title' => 'World', 'replies' => [['body' => 'Second']]]],
+			],
+			[
+				'name' => 'Grace',
+				'publishedPosts' => [['title' => 'Graph', 'replies' => [['body' => 'Third']]]],
+				'draftPosts' => [],
+			],
+			['name' => 'Linus', 'publishedPosts' => [], 'draftPosts' => []],
+		], $users->copy()->fetchAll());
+	}
+
+	public function testAliasedRelationsCannotBeUsedAsWritableProjections(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->relation('posts', as: 'recentPosts')->select('title');
+
+		$this->expectException(RelationSelectionException::class);
+		$this->expectExceptionMessage('only supported for read-only queries');
+		$users->projection();
+	}
+
+	public function testRelationAliasCannotShadowAField(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$this->expectException(RelationSelectionException::class);
+		$users->relation('posts', as: 'name');
+	}
+
 	public function testItLoadsNestedRelationsBelowM2MTargetBranches(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));

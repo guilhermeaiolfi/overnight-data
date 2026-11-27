@@ -11,6 +11,16 @@ use ON\Data\Query\SelectQuery;
 
 final class RelationSelectionException extends InvalidArgumentException
 {
+	public static function invalidRelationAlias(string $alias): self
+	{
+		return new self(sprintf('Relation alias "%s" must be a unique query result name.', $alias));
+	}
+
+	public static function aliasRequiresReadOnlyQuery(RelationRef $relation): self
+	{
+		return new self(sprintf('Aliased relation "%s" is only supported for read-only queries.', implode('.', $relation->getPath())));
+	}
+
 	public static function foreignQueryRelation(RelationRef $relation, SelectQuery $owner): self
 	{
 		return new self(sprintf(

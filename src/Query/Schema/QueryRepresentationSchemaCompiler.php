@@ -6,6 +6,7 @@ namespace ON\Data\Query\Schema;
 
 use InvalidArgumentException;
 use ON\Data\Definition\Collection\CollectionInterface;
+use ON\Data\Query\Exception\RelationSelectionException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\StarExpression;
@@ -34,7 +35,7 @@ use ON\Data\Schema\SchemaFields;
  */
 final class QueryRepresentationSchemaCompiler
 {
-	public function compile(SelectQuery $query): RepresentationSchema
+	public function compile(SelectQuery $query, bool $forWrite = true): RepresentationSchema
 	{
 		$collection = $query->getCollection();
 		$schema = new RepresentationSchema($collection);
@@ -59,17 +60,17 @@ final class QueryRepresentationSchemaCompiler
 			}
 		}
 
-		$this->addFields($schema, $this->fieldsFromSelections($query, $rootFields));
+		$this->addFields($schema, $this->fieldsFromSelections($query, $rootFields, $forWrite));
 		$this->addExpressions($schema, $this->expressionsFromSelections($query, $explicit));
 		SchemaFields::assemblePrimaryKeyFields($schema, $collection);
-		$this->addFields($schema, $this->fieldsFromSelections($query, $relatedFields));
+		$this->addFields($schema, $this->fieldsFromSelections($query, $relatedFields, $forWrite));
 		SchemaFields::assembleFlatSourcePrimaryKeys($schema);
-		$this->compileRelationSelections($schema, $query);
+		$this->compileRelationSelections($schema, $query, $forWrite);
 
 		return $schema;
 	}
 
-	private function compileRelationSelections(RepresentationSchema $rootSchema, SelectQuery $query): void
+	private function compileRelationSelections(RepresentationSchema $rootSchema, SelectQuery $query, bool $forWrite): void
 	{
 		$relationSelections = $query->getRelationSelections()->getAll();
 
@@ -82,20 +83,23 @@ final class QueryRepresentationSchemaCompiler
 		$schemasByPath = [];
 
 		foreach ($relationSelections as $selection) {
+			$relation = $selection->getRelationRef();
+			if ($forWrite && $relation->getAlias() !== null) {
+				throw RelationSelectionException::aliasRequiresReadOnlyQuery($relation);
+			}
 			$path = $selection->getPath();
 			$pathKey = RelationSelection::pathKey($path);
 			$parentPathKey = $selection->getParentPathKey();
 			$parentSchema = $parentPathKey === null
 				? $rootSchema
 				: $schemasByPath[$parentPathKey];
-			$ownerCollection = $selection->getRelationRef()->getParentRelation()?->getCollection() ?? $query->getCollection();
-			$relationName = $selection->getName();
-			$relatedSchema = $this->compileRelationSchema($selection);
+			$ownerCollection = $relation->getParentRelation()?->getCollection() ?? $query->getCollection();
+			$relatedSchema = $this->compileRelationSchema($selection, $forWrite);
 
 			$parentSchema->addRelation(new RepresentationRelationSchema(
-				$relationName,
+				$selection->getName(),
 				$ownerCollection,
-				$relationName,
+				$relation->getDefinition()->getName(),
 				$relatedSchema,
 				loadKnowledge: $this->loadKnowledgeForSelection($selection),
 				visible: $selection->isVisible(),
@@ -124,7 +128,7 @@ final class QueryRepresentationSchemaCompiler
 		return RelationLoadKnowledge::Full;
 	}
 
-	private function compileRelationSchema(RelationSelection $selection): RepresentationSchema
+	private function compileRelationSchema(RelationSelection $selection, bool $forWrite): RepresentationSchema
 	{
 		$relationRef = $selection->getRelationRef();
 		$targetCollection = $relationRef->getDefinition()->getCollection();
@@ -134,7 +138,7 @@ final class QueryRepresentationSchemaCompiler
 			$this->addFields($schema, SchemaFields::defaultFields($targetCollection));
 		} else {
 			$explicit = $selection->getSelections()->getExplicit();
-			$this->addFields($schema, $this->fieldsFromSelections($relationRef, $explicit));
+			$this->addFields($schema, $this->fieldsFromSelections($relationRef, $explicit, $forWrite));
 			$this->addExpressions($schema, $this->expressionsFromSelections($relationRef, $explicit));
 			SchemaFields::assembleFlatSourcePrimaryKeys($schema);
 		}
@@ -177,7 +181,7 @@ final class QueryRepresentationSchemaCompiler
 	 *
 	 * @return list<RepresentationFieldSchema>
 	 */
-	private function fieldsFromSelections(SelectQuery|RelationRef $level, array $selections): array
+	private function fieldsFromSelections(SelectQuery|RelationRef $level, array $selections, bool $forWrite): array
 	{
 		$fields = [];
 
@@ -188,6 +192,10 @@ final class QueryRepresentationSchemaCompiler
 				return SchemaFields::defaultFields($level->getCollection());
 			}
 
+			$source = $selection->getFieldRef()?->getSource();
+			if ($forWrite && $source instanceof RelationRef && $source->hasAliasedPath()) {
+				throw RelationSelectionException::aliasRequiresReadOnlyQuery($source);
+			}
 			$field = $this->fieldFromSelection($level, $selection);
 			if ($field instanceof RepresentationFieldSchema) {
 				$fields[] = $field;

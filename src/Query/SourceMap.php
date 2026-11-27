@@ -90,7 +90,7 @@ final class SourceMap
 				return $relation;
 			}
 
-			return $this->relationChild($parentCounterpart, $relation->getName());
+			return $this->relationChild($parentCounterpart, $relation);
 		}
 
 		$query = $relation->getQuery();
@@ -100,18 +100,18 @@ final class SourceMap
 			return $relation;
 		}
 
-		return $this->relationChild($queryCounterpart, $relation->getName());
+		return $this->relationChild($queryCounterpart, $relation);
 	}
 
-	private function relationChild(QuerySourceInterface $parent, string $name): RelationRef
+	private function relationChild(QuerySourceInterface $parent, RelationRef $relation): RelationRef
 	{
 		if ($parent instanceof SelectQuery || $parent instanceof RelationRef) {
-			return $parent->relation($name);
+			return $parent->relation($relation->getDefinition()->getName(), $relation->getAlias());
 		}
 
 		throw new LogicException(sprintf(
 			'Cannot resolve relation "%s" under remounted source of type %s.',
-			$name,
+			$relation->getName(),
 			$parent::class,
 		));
 	}

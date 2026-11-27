@@ -67,6 +67,26 @@ $u->select($u->id, $u->name);
 
 Relation-only `select($u->posts)` keeps default root fields.
 
+### Independent aliases
+
+Use the second argument to `relation()` to load a definition under a separate
+result name. Each alias can select its own fields, filters, and pagination.
+
+```php
+$latest = $users->relation('posts', as: 'latestPosts');
+$latest->select('title')->orderBy($latest->createdAt->desc())->limit(3);
+
+$drafts = $users->relation('posts', as: 'draftPosts');
+$drafts->select('title')->where($drafts->published->eq(false));
+
+$rows = $users->select($users->id)->fetchAll();
+```
+
+Aliases are available at every level of a read query. Choose a unique name
+starting with a letter or underscore. Aliased relations cannot be used in a
+writable projection because multiple result branches can represent different
+subsets of the same relationship.
+
 ## Load Options
 
 The public configuration API on `RelationRef` is:
