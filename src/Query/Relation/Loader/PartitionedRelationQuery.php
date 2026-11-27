@@ -8,7 +8,9 @@ use ON\Data\Query\DerivedOutputColumns;
 use ON\Data\Query\DerivedSelectQuery;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\SourceFieldExpression;
+use ON\Data\Query\Join;
 use function ON\Data\Query\query;
+use ON\Data\Query\QuerySourceInterface;
 use ON\Data\Query\Selection\SelectionTag;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\Sort\Sort;
@@ -16,10 +18,7 @@ use ON\Data\Query\SourceMap;
 use function ON\Data\Query\x;
 
 /**
- * Shared ROW_NUMBER wrap for per-parent relation ranking.
- *
- * Loaders supply already-resolved partition fields and order. They keep
- * rank filters and outer ordering.
+ * Shared window query for per-parent relation ranking.
  */
 final class PartitionedRelationQuery
 {
@@ -44,18 +43,25 @@ final class PartitionedRelationQuery
 		array $partitionFieldNames,
 		array $orderBy,
 		string $derivedAlias,
+		?Join $through = null,
 	): self {
 		$inner = $childQuery->copy();
 		$inner->getSelections()->removeByTag(SelectionTag::DEFAULT);
 		$carryAliases = DerivedOutputColumns::names($inner);
+		$sources = SourceMap::of($childQuery, $inner);
+		$innerJoins = $inner->getJoins();
+		foreach ($childQuery->getJoins() as $index => $join) {
+			$sources = $sources->with($join, $innerJoins[$index]);
+		}
+		$partitionSource = $through === null ? $inner : $sources->remap($through);
 
 		$partitionBy = [];
 		$partitionAliases = [];
 
 		foreach ($partitionFieldNames as $fieldName) {
-			$field = $inner->field($fieldName);
+			$field = $partitionSource->field($fieldName);
 			$partitionBy[] = $field;
-			$existingAlias = self::findOwnFieldAlias($inner, $fieldName);
+			$existingAlias = self::findFieldAlias($inner, $partitionSource, $fieldName);
 
 			if ($existingAlias !== null) {
 				$partitionAliases[$fieldName] = $existingAlias;
@@ -68,11 +74,13 @@ final class PartitionedRelationQuery
 			$partitionAliases[$fieldName] = $partAlias;
 		}
 
+		// Duplicate junction rows attach the same target and must share one page position.
+		$rank = $through === null ? x()->fn()->rowNumber() : x()->fn()->denseRank();
 		$inner->getSelections()->addExplicit([
-			x()->fn()->rowNumber()->over(
+			$rank->over(
 				partitionBy: $partitionBy,
 				orderBy: array_map(
-					static fn (Sort $sort): Sort => $sort->rebind(SourceMap::of($childQuery, $inner)),
+					static fn (Sort $sort): Sort => $sort->rebind($sources),
 					$orderBy,
 				),
 			)->as(self::RANK_ALIAS),
@@ -97,6 +105,21 @@ final class PartitionedRelationQuery
 		return $this->query;
 	}
 
+	public function page(int $offset, ?int $limit): SelectQuery
+	{
+		if ($offset > 0) {
+			$this->query->where($this->rank()->gt($offset));
+		}
+		if ($limit !== null) {
+			$this->query->where($this->rank()->lte($offset + $limit));
+		}
+		foreach (array_keys($this->partitionAliases) as $fieldName) {
+			$this->query->orderBy($this->partitionField($fieldName)->asc());
+		}
+
+		return $this->query->orderBy($this->rank()->asc());
+	}
+
 	public function rank(): SourceFieldExpression
 	{
 		return $this->rankedField(self::RANK_ALIAS);
@@ -115,12 +138,12 @@ final class PartitionedRelationQuery
 		return $field;
 	}
 
-	private static function findOwnFieldAlias(SelectQuery $query, string $fieldName): ?string
+	private static function findFieldAlias(SelectQuery $query, QuerySourceInterface $source, string $fieldName): ?string
 	{
 		foreach ($query->getSelections()->getAll() as $selection) {
 			$fieldRef = $selection->getFieldRef();
 
-			if ($fieldRef instanceof FieldRef && $fieldRef->getSource() === $query && $fieldRef->getField()->getName() === $fieldName) {
+			if ($fieldRef instanceof FieldRef && $fieldRef->getSource() === $source && $fieldRef->getField()->getName() === $fieldName) {
 				return $selection->getSelectionKey();
 			}
 		}

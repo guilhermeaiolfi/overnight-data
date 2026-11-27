@@ -18,9 +18,13 @@ use ON\Data\Query\Relation\RelationLoadBranch;
 use ON\Data\Query\Relation\RelationRef;
 use ON\Data\Query\Relation\ResultRecord;
 use ON\Data\Query\SelectQuery;
+use ON\Data\Query\Sort\Sort;
+use ON\Data\Query\SourceMap;
 
 final class M2MLoader extends AbstractLoader
 {
+	private const DERIVED_ALIAS = '__ondata_limited_many_to_many';
+
 	public function load(RelationLoadBranch $branch, LoadRuntime $runtime): void
 	{
 		$relation = $branch->getRelationRef();
@@ -83,8 +87,32 @@ final class M2MLoader extends AbstractLoader
 		$branch->requireFields($relation->getCollection()->getPrimaryKey());
 		$parent->requireFields($parentFields);
 		$runtime->continueWith($branch, function (RelationLoadBranch $branch, LoadRuntime $runtime) use ($throughSource, $parentToThrough): void {
-			$this->applySeparateQueryOptions($branch);
-			$this->executeSeparateByReferences($branch, $runtime, $parentToThrough, rightSource: static fn () => $throughSource);
+			$selection = $branch->getSelection();
+			$rightSource = static fn () => $throughSource;
+			if ($selection->getLimit() === null && ! $selection->hasOffset()) {
+				$this->applySeparateQueryOptions($branch);
+				$this->executeSeparateByReferences($branch, $runtime, $parentToThrough, rightSource: $rightSource);
+
+				return;
+			}
+
+			$this->applySeparateQueryConditions($branch);
+			$sources = SourceMap::of($branch->getRelationRef(), $branch->getQuery());
+			$sorts = array_map(static fn (Sort $sort): Sort => $sort->rebind($sources), $selection->getSorts());
+			$orderBy = $this->withPrimaryKeyOrder($branch->getQuery(), $sorts);
+			$this->executeSeparateByReferences(
+				$branch,
+				$runtime,
+				$parentToThrough,
+				rightSource: $rightSource,
+				finalize: static fn (SelectQuery $query): SelectQuery => PartitionedRelationQuery::wrap(
+					$query,
+					$parentToThrough->getRightFields(),
+					$orderBy,
+					self::DERIVED_ALIAS,
+					through: $throughSource,
+				)->page($selection->getOffset(), $selection->getLimit()),
+			);
 		});
 	}
 

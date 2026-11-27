@@ -74,25 +74,8 @@ final class HasManyLoader extends AbstractLoader
 			$orderBy,
 			self::DERIVED_ALIAS,
 		);
-		$outer = $partitioned->getQuery();
-		$offset = $selection->getOffset();
-		$limit = $selection->getLimit();
 
-		if ($offset > 0) {
-			$outer->where($partitioned->rank()->gt($offset));
-		}
-
-		if ($limit !== null) {
-			$outer->where($partitioned->rank()->lte($offset + $limit));
-		}
-
-		foreach ($relationKeyFields as $fieldName) {
-			$outer->orderBy($partitioned->partitionField($fieldName)->asc());
-		}
-
-		$outer->orderBy($partitioned->rank()->asc());
-
-		return $outer;
+		return $partitioned->page($selection->getOffset(), $selection->getLimit());
 	}
 
 	/**

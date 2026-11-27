@@ -1010,6 +1010,56 @@ final class SqlJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testM2MStructuredPaginationRanksDistinctTargetsPerParent(): void
+	{
+		$this->pdo->exec('INSERT INTO user_roles (user_id, role_id) VALUES (1, 11), (2, 11)');
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$roles = $users->roles;
+		$roles->select('name')->orderBy($roles->name->desc())->offset(1)->limit(1);
+
+		$rows = $users->select($users->name)->orderBy($users->id->asc())->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'roles' => [['name' => 'Admin']]],
+			['name' => 'Grace', 'roles' => [['name' => 'Admin']]],
+			['name' => 'Linus', 'roles' => []],
+		], $rows);
+	}
+
+	public function testM2MStructuredPaginationUsesPrimaryKeyOrderByDefault(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->roles->select('name')->limit(1);
+
+		$rows = $users->select($users->name)->orderBy($users->id->asc())->fetchAll();
+
+		self::assertSame([
+			['name' => 'Ada', 'roles' => [['name' => 'Admin']]],
+			['name' => 'Grace', 'roles' => [['name' => 'Admin']]],
+			['name' => 'Linus', 'roles' => []],
+		], $rows);
+	}
+
+	public function testM2MStructuredPaginationPartitionsByEveryParentKeyField(): void
+	{
+		$this->pdo->exec("INSERT INTO composite_articles VALUES (2, 'joins', 'Other')");
+		$this->pdo->exec("INSERT INTO composite_tags VALUES (2, 'sqlite', 'sqlite')");
+		$this->pdo->exec("INSERT INTO composite_article_tag VALUES (2, 'joins', 2, 'sqlite')");
+		$articles = $this->database->query($this->registry->getCollection('composite_articles'));
+		$articles->tags->select('name')->limit(1);
+
+		$rows = $articles
+			->select($articles->tenantId, $articles->slug)
+			->orderBy($articles->tenantId->asc(), $articles->slug->asc())
+			->fetchAll();
+
+		self::assertSame([
+			['tenantId' => 1, 'slug' => 'joins', 'tags' => [['name' => 'orm']]],
+			['tenantId' => 1, 'slug' => 'lonely', 'tags' => []],
+			['tenantId' => 2, 'slug' => 'joins', 'tags' => [['name' => 'sqlite']]],
+		], $rows);
+	}
+
 	public function testItLoadsNestedRelationsBelowM2MTargetBranches(): void
 	{
 		$users = $this->database->query($this->registry->getCollection('users'));
