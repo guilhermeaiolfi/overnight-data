@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ON\Data\Query\Relation;
 
-use LogicException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\QuerySourceInterface;
@@ -271,25 +270,20 @@ final class FetchMapping
 	 */
 	private function resolveFlatSource(LoadBranch $branch, array $sourcePath): QuerySourceInterface
 	{
-		$current = $branch->getQueryLocalRelation() ?? $branch->getQuery();
+		$projection = $branch->getProjectionLevel();
+		$source = $projection;
 
 		foreach ($sourcePath as $segment) {
-			if (! $current instanceof SelectQuery && ! $current instanceof RelationRef) {
-				throw new LogicException(sprintf(
-					"Cannot resolve flat relation segment '%s' from source of type %s.",
-					$segment,
-					$current::class,
-				));
-			}
-
-			$current = $current->relation($segment);
+			$source = $source->findRelationRef($segment) ?? $source->relation($segment);
 		}
 
-		if ($current instanceof RelationRef && $current->hasJoinedSource()) {
-			return $current->getJoinedSource();
+		$target = $branch->getQueryLocalRelation() ?? $branch->getQuery();
+		$source = SourceMap::of($projection, $target)->remap($source);
+		if ($source instanceof RelationRef && $source->hasJoinedSource()) {
+			return $source->getJoinedSource();
 		}
 
-		return $current;
+		return $source;
 	}
 
 	/**

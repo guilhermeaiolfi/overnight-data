@@ -344,8 +344,10 @@ final class RelationRef implements QuerySourceInterface
 		$output = $as ?? $name;
 		if (isset($this->relationRefs[$output])) {
 			$existing = $this->relationRefs[$output];
-			if ($as !== null && $existing->getDefinition()->getName() !== $name) {
-				throw RelationSelectionException::invalidRelationAlias($output);
+			if ($existing->getDefinition()->getName() !== $name) {
+				throw $as === null
+					? UnknownQueryRelationException::forDefinition($name, $this->getCollection()->getName())
+					: RelationSelectionException::invalidRelationAlias($output);
 			}
 
 			return $existing;
@@ -358,6 +360,12 @@ final class RelationRef implements QuerySourceInterface
 		}
 
 		return $this->relationRefs[$output] = new self($this->query, $relation, $this, $as);
+	}
+
+	/** @internal Look up an existing relation by its output name. */
+	public function findRelationRef(string $output): ?self
+	{
+		return $this->relationRefs[$output] ?? null;
 	}
 
 	public function all(): StarExpression

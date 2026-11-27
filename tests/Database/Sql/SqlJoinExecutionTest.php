@@ -16,6 +16,7 @@ use ON\Data\Query\DerivedSelectQuery;
 use ON\Data\Query\Exception\DuplicateDerivedOutputColumnException;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Exception\RelationSelectionException;
+use ON\Data\Query\Exception\UnknownQueryRelationException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Join;
@@ -27,6 +28,7 @@ use ON\Data\Query\SourceMap;
 use function ON\Data\Query\x;
 use PDO;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
@@ -1044,6 +1046,40 @@ final class SqlJoinExecutionTest extends TestCase
 		$this->expectException(RelationSelectionException::class);
 		$this->expectExceptionMessage('only supported for read-only queries');
 		$users->projection();
+	}
+
+	public function testItProjectsFlatFieldsThroughAliasedRelationsInSeparateQueries(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$company = $users->relation('company', as: 'employer');
+		$published = $users->relation('posts', as: 'publishedPosts')->separate();
+		$writer = $published->relation('author', as: 'writer');
+		$published->select($published->title, $writer->name->as('writerName'))
+			->where($published->published->eq(true));
+
+		$rows = $users->select($users->name, $company->name->as('employerName'))
+			->where($users->id->eq(1))->fetchAll();
+
+		self::assertSame([[
+			'name' => 'Ada',
+			'employerName' => 'Acme',
+			'publishedPosts' => [['title' => 'Hello', 'writerName' => 'Ada']],
+		]], $rows);
+	}
+
+	#[TestWith([false])]
+	#[TestWith([true])]
+	public function testRelationLookupRequiresTheDefinitionName(bool $nested): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$source = $nested ? $users->relation('posts') : $users;
+		$name = $nested ? 'author' : 'posts';
+		$aliased = $source->relation($name, as: 'alternate');
+
+		self::assertSame($aliased, $source->relation($name, as: 'alternate'));
+		$this->expectException(UnknownQueryRelationException::class);
+		$this->expectExceptionMessage("Unknown query relation 'alternate'");
+		$source->relation('alternate');
 	}
 
 	public function testRelationAliasCannotShadowAField(): void
