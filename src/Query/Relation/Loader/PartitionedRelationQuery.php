@@ -8,6 +8,7 @@ use ON\Data\Query\DerivedOutputColumns;
 use ON\Data\Query\DerivedSelectQuery;
 use ON\Data\Query\Expression\FieldRef;
 use ON\Data\Query\Expression\SourceFieldExpression;
+use ON\Data\Query\Expression\ValueExpressionInterface;
 use ON\Data\Query\Join;
 use function ON\Data\Query\query;
 use ON\Data\Query\QuerySourceInterface;
@@ -23,6 +24,7 @@ use function ON\Data\Query\x;
 final class PartitionedRelationQuery
 {
 	public const RANK_ALIAS = '__ondata_rank';
+	private const MEMBERSHIP_RANK_ALIAS = '__ondata_membership_rank';
 
 	/**
 	 * @param array<string, string> $partitionAliases field name => derived column alias
@@ -81,16 +83,14 @@ final class PartitionedRelationQuery
 			$partitionAliases[$fieldName] = $partAlias;
 		}
 
-		// Duplicate junction rows attach the same target and must share one page position.
-		$rank = $through === null ? x()->fn()->rowNumber() : x()->fn()->denseRank();
+		$orderBy = array_map(static fn (Sort $sort): Sort => $sort->rebind($sources), $orderBy);
+		if ($through !== null) {
+			// Take the first sorted row of each membership before numbering the page.
+			[$inner, $partitionBy, $orderBy] = self::distinctMemberships($inner, $partitionBy, $partitionAliases, $orderBy);
+		}
+
 		$inner->getSelections()->addExplicit([
-			$rank->over(
-				partitionBy: $partitionBy,
-				orderBy: array_map(
-					static fn (Sort $sort): Sort => $sort->rebind($sources),
-					$orderBy,
-				),
-			)->as(self::RANK_ALIAS),
+			x()->fn()->rowNumber()->over(partitionBy: $partitionBy, orderBy: $orderBy)->as(self::RANK_ALIAS),
 		]);
 
 		$ranked = $inner->as($derivedAlias);
@@ -105,6 +105,42 @@ final class PartitionedRelationQuery
 		}
 
 		return new self($outer, $ranked, $partitionAliases);
+	}
+
+	/**
+	 * @param list<ValueExpressionInterface> $partitionBy
+	 * @param array<string, string> $partitionAliases
+	 * @param list<Sort> $orderBy
+	 * @return array{SelectQuery, list<ValueExpressionInterface>, list<Sort>}
+	 */
+	private static function distinctMemberships(
+		SelectQuery $inner,
+		array $partitionBy,
+		array $partitionAliases,
+		array $orderBy,
+	): array {
+		foreach ($inner->getCollection()->getPrimaryKey() as $field) {
+			$partitionBy[] = $inner->field($field);
+		}
+		$inner->getSelections()->addExplicit([
+			x()->fn()->rowNumber()->over(partitionBy: $partitionBy, orderBy: $orderBy)->as(self::MEMBERSHIP_RANK_ALIAS),
+		]);
+
+		$sortDirections = [];
+		foreach ($orderBy as $index => $sort) {
+			$alias = '__ondata_sort_' . $index;
+			$inner->getSelections()->addExplicit([$sort->getExpression()->as($alias)]);
+			$sortDirections[$alias] = $sort->getDirection();
+		}
+		$memberships = $inner->as('__ondata_memberships');
+		$distinct = query($memberships)->where($memberships->field(self::MEMBERSHIP_RANK_ALIAS)->eq(1));
+		$partitionBy = array_map($memberships->field(...), array_values($partitionAliases));
+		$sorts = [];
+		foreach ($sortDirections as $alias => $direction) {
+			$sorts[] = new Sort($memberships->field($alias), $direction);
+		}
+
+		return [$distinct, $partitionBy, $sorts];
 	}
 
 	public function getQuery(): SelectQuery

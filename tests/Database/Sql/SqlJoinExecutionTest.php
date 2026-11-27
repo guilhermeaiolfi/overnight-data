@@ -1042,6 +1042,18 @@ final class SqlJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testM2MStructuredPaginationCountsEachTargetOnceWhenSortingByToManyFields(): void
+	{
+		foreach ([['Admin'], ['Editor'], []] as $offset => $expected) {
+			$users = $this->database->query($this->registry->getCollection('users'));
+			$roles = $users->roles;
+			$roles->select('name')->orderBy($roles->permissions->id->asc())->offset($offset)->limit(1);
+			$row = $users->select($users->id)->where($users->id->eq(1))->fetchOne();
+
+			self::assertSame($expected, array_column($row['roles'], 'name'), "Unexpected page at offset {$offset}.");
+		}
+	}
+
 	public function testM2MStructuredPaginationPartitionsByEveryParentKeyField(): void
 	{
 		$this->pdo->exec("INSERT INTO composite_articles VALUES (2, 'joins', 'Other')");
