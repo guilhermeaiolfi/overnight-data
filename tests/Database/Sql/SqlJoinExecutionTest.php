@@ -16,6 +16,7 @@ use ON\Data\Query\DerivedSelectQuery;
 use ON\Data\Query\Exception\DuplicateDerivedOutputColumnException;
 use ON\Data\Query\Exception\RelationLoaderException;
 use ON\Data\Query\Exception\RelationSelectionException;
+use ON\Data\Query\Exception\UnknownQueryRelationException;
 use ON\Data\Query\Expression\AliasedExpression;
 use ON\Data\Query\Expression\SubqueryExpression;
 use ON\Data\Query\Join;
@@ -25,8 +26,10 @@ use ON\Data\Query\Relation\LoadStrategy;
 use ON\Data\Query\SelectQuery;
 use ON\Data\Query\SourceMap;
 use function ON\Data\Query\x;
+use ON\Data\Schema\Exception\InvalidSchemaException;
 use PDO;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Tests\ON\Data\Support\RecordingCommandExecutor;
@@ -1010,6 +1013,141 @@ final class SqlJoinExecutionTest extends TestCase
 		], $rows);
 	}
 
+	public function testRelationAliasesIndependentlyLoadTheSameDefinition(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$published = $users->relation('posts', as: 'publishedPosts');
+		$drafts = $users->relation('posts', as: 'draftPosts');
+		$published->select('title')->where($published->published->eq(true));
+		$drafts->select('title')->where($drafts->published->eq(false));
+		$published->relation('comments', as: 'replies')->select('body');
+		$drafts->relation('comments', as: 'replies')->select('body');
+
+		$users->select($users->name)->orderBy($users->id->asc());
+		self::assertSame([
+			[
+				'name' => 'Ada',
+				'publishedPosts' => [['title' => 'Hello', 'replies' => [['body' => 'First']]]],
+				'draftPosts' => [['title' => 'World', 'replies' => [['body' => 'Second']]]],
+			],
+			[
+				'name' => 'Grace',
+				'publishedPosts' => [['title' => 'Graph', 'replies' => [['body' => 'Third']]]],
+				'draftPosts' => [],
+			],
+			['name' => 'Linus', 'publishedPosts' => [], 'draftPosts' => []],
+		], $users->copy()->fetchAll());
+	}
+
+	public function testAliasedRelationsCannotBeUsedAsWritableProjections(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$users->relation('posts', as: 'recentPosts')->select('title');
+
+		$this->expectException(RelationSelectionException::class);
+		$this->expectExceptionMessage('only supported for read-only queries');
+		$users->projection();
+	}
+
+	#[TestWith(['update'])]
+	#[TestWith(['create'])]
+	#[TestWith(['sync'])]
+	#[TestWith(['identify'])]
+	#[TestWith(['withSchema'])]
+	public function testAliasedFetchSchemasCannotBeUsedBySessions(string $operation): void
+	{
+		$collection = $this->registry->getCollection('users');
+		$users = $this->database->query($collection);
+		$users->relation('company', as: 'employer')->select('id', 'name');
+		$users->relation('company', as: 'billing')->select('id', 'name');
+		$row = $users->select($users->id)->where($users->id->eq(1))->fetchOne();
+		$item = (object) [
+			'id' => $row['id'],
+			'employer' => (object) ['id' => $row['employer']['id'], 'name' => 'First edit'],
+			'billing' => (object) ['id' => $row['billing']['id'], 'name' => 'Second edit'],
+		];
+		$schema = $users->getFetchSchema();
+		self::assertNotNull($schema);
+		$session = $this->database->session();
+
+		$this->expectException(InvalidSchemaException::class);
+		$this->expectExceptionMessage('Read-only representation schemas cannot be used for writes.');
+		match ($operation) {
+			'update' => $session->update($item, $schema),
+			'create' => $session->create($item, $schema),
+			'sync' => $session->sync($item, $schema),
+			'identify' => $session->identify($collection, ['id' => 1], $item, $schema),
+			'withSchema' => $session->update($item)->withSchema($schema),
+		};
+	}
+
+	public function testFlatAliasedFetchSchemaCannotBeUsedBySessions(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$employer = $users->relation('company', as: 'employer');
+		$item = (object) $users->select($users->id, $employer->name->as('employerName'))
+			->where($users->id->eq(1))->fetchOne();
+		self::assertSame('Acme', $item->employerName);
+		$schema = $users->getFetchSchema();
+		self::assertNotNull($schema);
+
+		$this->expectException(InvalidSchemaException::class);
+		$this->database->session()->update($item, $schema);
+	}
+
+	public function testNestedStarDoesNotBypassTheWritableAliasGuard(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$posts = $users->relation('posts');
+		$writer = $posts->relation('author', as: 'writer');
+		$posts->select($posts->all(), $writer->name->as('writerName'));
+
+		$this->expectException(RelationSelectionException::class);
+		$users->projection();
+	}
+
+	public function testItProjectsFlatFieldsThroughAliasedRelationsInSeparateQueries(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$company = $users->relation('company', as: 'employer');
+		$published = $users->relation('posts', as: 'publishedPosts')->separate();
+		$writer = $published->relation('author', as: 'writer');
+		$published->select($published->title, $writer->name->as('writerName'))
+			->where($published->published->eq(true));
+
+		$rows = $users->select($users->name, $company->name->as('employerName'))
+			->where($users->id->eq(1))->fetchAll();
+
+		self::assertSame([[
+			'name' => 'Ada',
+			'employerName' => 'Acme',
+			'publishedPosts' => [['title' => 'Hello', 'writerName' => 'Ada']],
+		]], $rows);
+	}
+
+	#[TestWith([false])]
+	#[TestWith([true])]
+	public function testRelationLookupRequiresTheDefinitionName(bool $nested): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$source = $nested ? $users->relation('posts') : $users;
+		$name = $nested ? 'author' : 'posts';
+		$aliased = $source->relation($name, as: 'alternate');
+
+		self::assertSame($aliased, $source->relation($name, as: 'alternate'));
+		$this->expectException(UnknownQueryRelationException::class);
+		$this->expectExceptionMessage("Unknown query relation 'alternate'");
+		$source->relation('alternate');
+	}
+
+	public function testRelationAliasCannotShadowAField(): void
+	{
+		$users = $this->database->query($this->registry->getCollection('users'));
+
+		$this->expectException(RelationSelectionException::class);
+		$users->relation('posts', as: 'name');
+	}
+
 	public function testM2MStructuredPaginationRanksDistinctTargetsPerParent(): void
 	{
 		$this->pdo->exec('INSERT INTO user_roles (user_id, role_id) VALUES (1, 11), (2, 11)');
@@ -1071,6 +1209,25 @@ final class SqlJoinExecutionTest extends TestCase
 			['tenantId' => 1, 'slug' => 'joins', 'tags' => [['name' => 'orm']]],
 			['tenantId' => 1, 'slug' => 'lonely', 'tags' => []],
 			['tenantId' => 2, 'slug' => 'joins', 'tags' => [['name' => 'sqlite']]],
+		], $rows);
+	}
+
+	public function testM2MAliasesLoadIndependentPagesWithTypedFields(): void
+	{
+		$this->pdo->exec('ALTER TABLE roles ADD COLUMN active INTEGER NOT NULL DEFAULT 1');
+		$this->pdo->exec('UPDATE roles SET active = 0 WHERE id = 11');
+		$this->registry->getCollection('roles')->field('active', 'bool');
+		$users = $this->database->query($this->registry->getCollection('users'));
+		$first = $users->relation('roles', as: 'firstRole');
+		$next = $users->relation('roles', as: 'nextRole');
+		$first->select('name', 'active')->orderBy($first->relation('permissions', as: 'permissionSort')->id->asc())->limit(1);
+		$next->select('name', 'active')->orderBy($next->permissions->id->asc())->offset(1)->limit(1);
+
+		$rows = $users->select($users->name)->orderBy($users->id->asc())->copy()->fetchAll();
+		self::assertSame([
+			['name' => 'Ada', 'firstRole' => [['name' => 'Admin', 'active' => true]], 'nextRole' => [['name' => 'Editor', 'active' => false]]],
+			['name' => 'Grace', 'firstRole' => [['name' => 'Admin', 'active' => true]], 'nextRole' => []],
+			['name' => 'Linus', 'firstRole' => [], 'nextRole' => []],
 		], $rows);
 	}
 

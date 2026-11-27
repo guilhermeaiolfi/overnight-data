@@ -67,12 +67,21 @@ final class RelationRef implements QuerySourceInterface
 	private ?int $offset = null;
 
 	private ?LoadStrategy $strategy = null;
+	private readonly ?string $alias;
 
 	public function __construct(
 		private readonly SelectQuery $query,
 		private readonly RelationInterface $relation,
 		private readonly ?self $parentRelation = null,
+		?string $alias = null,
 	) {
+		$this->alias = $alias === $relation->getName() ? null : $alias;
+		if ($this->alias !== null) {
+			$owner = $parentRelation?->getCollection() ?? $query->getCollection();
+			if (! preg_match('/^[a-z_][a-z0-9_-]*$/iD', $this->alias) || $owner->hasField($this->alias) || $owner->hasRelation($this->alias)) {
+				throw RelationSelectionException::invalidRelationAlias($this->alias);
+			}
+		}
 		$this->selections = new SelectionList();
 		$this->selections->add($this->all(), [SelectionTag::DEFAULT, SelectionTag::EXPLICIT]);
 	}
@@ -261,7 +270,17 @@ final class RelationRef implements QuerySourceInterface
 
 	public function getName(): string
 	{
-		return $this->getDefinition()->getName();
+		return $this->alias ?? $this->getDefinition()->getName();
+	}
+
+	public function getAlias(): ?string
+	{
+		return $this->alias;
+	}
+
+	public function hasAliasedPath(): bool
+	{
+		return $this->alias !== null || ($this->parentRelation?->hasAliasedPath() ?? false);
 	}
 
 	/**
@@ -320,10 +339,18 @@ final class RelationRef implements QuerySourceInterface
 		return $this->fieldRefs[$name] = new FieldRef($this, $field);
 	}
 
-	public function relation(string $name): self
+	public function relation(string $name, ?string $as = null): self
 	{
-		if (isset($this->relationRefs[$name])) {
-			return $this->relationRefs[$name];
+		$output = $as ?? $name;
+		if (isset($this->relationRefs[$output])) {
+			$existing = $this->relationRefs[$output];
+			if ($existing->getDefinition()->getName() !== $name) {
+				throw $as === null
+					? UnknownQueryRelationException::forDefinition($name, $this->getCollection()->getName())
+					: RelationSelectionException::invalidRelationAlias($output);
+			}
+
+			return $existing;
 		}
 
 		$relation = $this->getCollection()->getRelation($name);
@@ -332,7 +359,13 @@ final class RelationRef implements QuerySourceInterface
 			throw UnknownQueryRelationException::forDefinition($name, $this->getCollection()->getName());
 		}
 
-		return $this->relationRefs[$name] = new self($this->query, $relation, $this);
+		return $this->relationRefs[$output] = new self($this->query, $relation, $this, $as);
+	}
+
+	/** @internal Look up an existing relation by its output name. */
+	public function findRelationRef(string $output): ?self
+	{
+		return $this->relationRefs[$output] ?? null;
 	}
 
 	public function all(): StarExpression

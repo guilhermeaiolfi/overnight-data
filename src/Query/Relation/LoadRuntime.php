@@ -179,14 +179,10 @@ final class LoadRuntime
 			throw RelationLoaderException::joinedLoadRequiresParentQuery($branch->getRelationRef());
 		}
 
-		$query = $parent->getQuery();
+		$source = $parent->getQueryLocalRelation() ?? $parent->getQuery();
+		$relation = $branch->getRelationRef();
 
-		if ($parent->getQueryLocalRelation() === null) {
-			return $query->relation($branch->getRelationRef()->getName());
-		}
-
-		return $parent->getQueryLocalRelation()
-			->relation($branch->getRelationRef()->getName());
+		return $source->relation($relation->getDefinition()->getName(), $relation->getAlias());
 	}
 
 	public function createQuery(CollectionInterface $collection): SelectQuery

@@ -28,6 +28,7 @@ final class RepresentationAdoptionEngine
 		RepresentationAdoptionContext $context,
 		SessionContext $session,
 	): RepresentationState {
+		$context->getSchema()->assertWritable();
 		$visited = [];
 
 		return $this->attachObject(

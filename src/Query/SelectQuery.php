@@ -201,14 +201,22 @@ final class SelectQuery implements QuerySourceInterface
 		return $this->fieldRefs[$name] = new FieldRef($this, $field);
 	}
 
-	public function relation(string $name): RelationRef
+	public function relation(string $name, ?string $as = null): RelationRef
 	{
 		if (! $this->canLoadRelations()) {
 			throw new InvalidArgumentException('Derived query sources do not support relation loading.');
 		}
 
-		if (isset($this->relationRefs[$name])) {
-			return $this->relationRefs[$name];
+		$output = $as ?? $name;
+		if (isset($this->relationRefs[$output])) {
+			$existing = $this->relationRefs[$output];
+			if ($existing->getDefinition()->getName() !== $name) {
+				throw $as === null
+					? UnknownQueryRelationException::forDefinition($name, $this->source->getName())
+					: RelationSelectionException::invalidRelationAlias($output);
+			}
+
+			return $existing;
 		}
 
 		$relation = $this->source->getRelation($name);
@@ -217,7 +225,13 @@ final class SelectQuery implements QuerySourceInterface
 			throw UnknownQueryRelationException::forDefinition($name, $this->source->getName());
 		}
 
-		return $this->relationRefs[$name] = new RelationRef($this, $relation);
+		return $this->relationRefs[$output] = new RelationRef($this, $relation, alias: $as);
+	}
+
+	/** @internal Look up an existing relation by its output name. */
+	public function findRelationRef(string $output): ?RelationRef
+	{
+		return $this->relationRefs[$output] ?? null;
 	}
 
 	public function __get(string $name): FieldRef|RelationRef|ValueExpressionInterface
@@ -753,7 +767,7 @@ final class SelectQuery implements QuerySourceInterface
 			return null;
 		}
 
-		$this->fetchSchema = $this->projection();
+		$this->fetchSchema = (new QueryRepresentationSchemaCompiler())->compile($this, forWrite: false);
 
 		return null;
 	}
